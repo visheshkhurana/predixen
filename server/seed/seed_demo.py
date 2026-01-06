@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import json
+import logging
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
@@ -12,7 +13,10 @@ from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.core.security import get_password_hash
 
+logger = logging.getLogger(__name__)
+
 def seed_demo_data(db: Session):
+    logger.info("Starting demo data seeding...")
     existing = db.query(User).filter(User.email == "demo@predixen.ai").first()
     if existing:
         demo_user = existing
@@ -20,6 +24,7 @@ def seed_demo_data(db: Session):
         if company:
             existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
             if existing_scenario:
+                logger.info("Demo data already exists, skipping seed")
                 return demo_user
             demo_company = company
         else:
@@ -286,4 +291,5 @@ def seed_demo_data(db: Session):
     db.add(decision)
     db.commit()
     
+    logger.info("Demo data seeding completed successfully")
     return demo_user
