@@ -1,14 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { MetricCard } from '@/components/MetricCard';
 import { DecisionCard } from '@/components/DecisionCard';
-import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
+
+const COPILOT_PROMPTS = [
+  "How do I extend runway by 6 months?",
+  "What's the riskiest assumption?",
+  "What if fundraise slips 3 months?",
+];
 
 export default function OverviewPage() {
   const [, setLocation] = useLocation();
@@ -256,6 +263,46 @@ export default function OverviewPage() {
           </Card>
         )}
       </div>
+      
+      <Card className="overflow-visible">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Ask Copilot
+          </CardTitle>
+          <CardDescription>Get AI-powered insights grounded in your data</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ask about your metrics, scenarios, or decisions..."
+              className="flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setLocation('/copilot');
+                }
+              }}
+              data-testid="input-copilot-quick"
+            />
+            <Button onClick={() => setLocation('/copilot')} data-testid="button-copilot-go">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {COPILOT_PROMPTS.map((prompt, i) => (
+              <Button
+                key={i}
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation('/copilot')}
+                data-testid={`button-copilot-prompt-${i}`}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

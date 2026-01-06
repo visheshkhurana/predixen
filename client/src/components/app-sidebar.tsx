@@ -16,6 +16,7 @@ import {
   Search,
   TrendingUp,
   Lightbulb,
+  Sparkles,
   LogOut,
   Zap,
 } from "lucide-react";
@@ -43,6 +44,11 @@ const menuItems = [
     title: "Decisions",
     url: "/decisions",
     icon: Lightbulb,
+  },
+  {
+    title: "Copilot",
+    url: "/copilot",
+    icon: Sparkles,
   },
 ];
 
