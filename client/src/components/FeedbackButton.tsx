@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ThumbsUp, ThumbsDown, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface FeedbackButtonProps {
   onFeedback?: (feedback: 'positive' | 'negative') => void;
@@ -34,28 +33,22 @@ export function FeedbackButton({ onFeedback, testId }: FeedbackButtonProps) {
   return (
     <div className="flex items-center gap-1" data-testid={testId}>
       <Button
-        variant="ghost"
-        size="sm"
-        className={cn(
-          'h-7 px-2',
-          feedback === 'positive' && 'bg-emerald-500/20 text-emerald-500'
-        )}
+        variant={feedback === 'positive' ? 'default' : 'ghost'}
+        size="icon"
         onClick={() => handleFeedback('positive')}
         data-testid={`${testId}-up`}
+        aria-label="Helpful"
       >
-        <ThumbsUp className="h-3.5 w-3.5" />
+        <ThumbsUp className="h-4 w-4" />
       </Button>
       <Button
-        variant="ghost"
-        size="sm"
-        className={cn(
-          'h-7 px-2',
-          feedback === 'negative' && 'bg-red-500/20 text-red-500'
-        )}
+        variant={feedback === 'negative' ? 'default' : 'ghost'}
+        size="icon"
         onClick={() => handleFeedback('negative')}
         data-testid={`${testId}-down`}
+        aria-label="Not helpful"
       >
-        <ThumbsDown className="h-3.5 w-3.5" />
+        <ThumbsDown className="h-4 w-4" />
       </Button>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,6 +18,7 @@ export function CompanySwitcher() {
   const { currentCompany, setCurrentCompany } = useFounderStore();
   const { data: companies, isLoading } = useCompanies();
   const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
 
   if (isLoading) {
     return <Skeleton className="h-9 w-40" />;
@@ -71,7 +73,8 @@ export function CompanySwitcher() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
-            window.location.href = '/onboarding';
+            setOpen(false);
+            navigate('/onboarding');
           }}
           data-testid="button-add-company"
         >
