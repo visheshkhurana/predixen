@@ -13,48 +13,71 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
-  FlaskConical,
-  Settings,
-  Upload,
+  Search,
   TrendingUp,
+  Lightbulb,
+  LogOut,
+  Zap,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { useFounderStore } from "@/store/founderStore";
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Overview",
     url: "/",
     icon: LayoutDashboard,
   },
   {
-    title: "Scenario Builder",
-    url: "/scenarios",
-    icon: FlaskConical,
+    title: "Truth Scan",
+    url: "/truth",
+    icon: Search,
   },
   {
-    title: "Data Input",
-    url: "/data",
-    icon: Upload,
+    title: "Simulation",
+    url: "/scenarios",
+    icon: TrendingUp,
+  },
+  {
+    title: "Decisions",
+    url: "/decisions",
+    icon: Lightbulb,
   },
 ];
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { currentCompany, logout } = useFounderStore();
+
+  const handleLogout = () => {
+    localStorage.removeItem('predixen-token');
+    logout();
+    window.location.href = '/auth';
+  };
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-md bg-primary">
-            <TrendingUp className="h-5 w-5 text-primary-foreground" />
+            <Zap className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-semibold text-sm">RunwayAI</h1>
-            <p className="text-xs text-muted-foreground">Financial Simulator</p>
+            <h1 className="font-semibold text-sm">Predixen</h1>
+            <p className="text-xs text-muted-foreground">Intelligence OS</p>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
+        {currentCompany && (
+          <div className="px-4 py-2 mb-2">
+            <p className="text-xs text-muted-foreground">Current Company</p>
+            <p className="text-sm font-medium truncate" data-testid="text-sidebar-company">
+              {currentCompany.name}
+            </p>
+          </div>
+        )}
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -64,7 +87,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase().replace(" ", "-")}`}
+                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                   >
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
@@ -77,11 +100,21 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={handleLogout}
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );

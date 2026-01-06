@@ -1,8 +1,8 @@
-# RunwayAI - Startup Financial Simulator
+# Predixen Intelligence OS
 
 ## Overview
 
-RunwayAI is an AI-powered financial simulation tool designed for startup founders and CEOs. The application enables users to model "what-if" scenarios around key business levers like pricing, hiring, burn rate, and growth to understand how strategic decisions impact their startup's finances and runway. Users can input financial data manually or via file uploads (CSV/PDF), run simulations with various scenario parameters, and visualize projected cash flow, runway, and key metrics through charts and data tables.
+Predixen Intelligence OS is an AI-powered financial intelligence platform for startups that merges investor-grade diligence (Truth Scan + benchmarks + data validation) with probabilistic simulation and ranked decision recommendations. The platform follows the flow: Truth → Simulation → Decision → Copilot.
 
 ## User Preferences
 
@@ -13,70 +13,105 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 - **Framework**: React 18 with TypeScript
 - **Routing**: Wouter (lightweight React router)
-- **State Management**: TanStack React Query for server state
-- **Styling**: Tailwind CSS with CSS variables for theming (light/dark mode support)
+- **State Management**: Zustand for global state, TanStack React Query for server state
+- **Styling**: Tailwind CSS with dark mode default
 - **UI Components**: shadcn/ui component library built on Radix UI primitives
-- **Charts**: Recharts for data visualization
+- **Charts**: Recharts for data visualization (survival curves, bands, distributions)
 - **Forms**: React Hook Form with Zod validation
 - **Build Tool**: Vite with hot module replacement
 
 ### Backend Architecture
-- **Framework**: Express.js with TypeScript
-- **API Design**: RESTful JSON API with `/api` prefix
-- **Database ORM**: Drizzle ORM configured for PostgreSQL
-- **Schema Validation**: Zod with drizzle-zod integration
-- **Storage**: Memory-based storage implementation (IStorage interface) with PostgreSQL-ready schema
+- **Framework**: FastAPI (Python 3.11)
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Migrations**: Alembic for database migrations
+- **Auth**: JWT-based authentication with bcrypt password hashing
+- **Validation**: Pydantic models for request/response validation
+- **Jobs**: FastAPI BackgroundTasks for async operations
 
-### Data Flow Pattern
-1. Client components use React Query to fetch/mutate data via API endpoints
-2. Express routes validate input using Zod schemas
-3. Simulation engine processes financial inputs and scenario parameters
-4. Results are stored and returned to the client for visualization
+### Key Modules
+1. **Ingestion**: CSV upload + manual baseline fallback
+2. **Truth Scan**: 24 metrics computation, benchmarking, confidence scoring
+3. **Simulation**: Monte Carlo engine with 24-month projections
+4. **Decision Engine**: Deterministic action library, scoring, top 3 recommendations
+5. **Copilot**: Multi-agent router with context pack grounding
 
-### Key Design Decisions
-- **Shared Schema**: TypeScript types and Zod schemas in `/shared/schema.ts` ensure type safety across client and server
-- **In-Memory Storage with DB-Ready Schema**: Uses MemStorage class implementing IStorage interface, allowing easy swap to PostgreSQL when needed
-- **Component-Based UI**: Reusable components for KPI cards, charts, data tables, and forms
-- **Scenario Simulation Engine**: Server-side calculation of monthly projections based on financial inputs and scenario modifiers (pricing changes, hiring, cost cuts, funding rounds)
+### Feature Flags
+- `FEATURE_INVESTOR_MODE`: When false (default), investor routes return 403 and UI hides investor navigation
 
 ### Project Structure
-```
+\`\`\`
 ├── client/src/          # React frontend
-│   ├── components/      # UI components (app-specific and shadcn/ui)
-│   ├── pages/           # Route pages (dashboard, scenarios, data-input)
-│   ├── hooks/           # Custom React hooks
-│   └── lib/             # Utilities and query client
-├── server/              # Express backend
-│   ├── routes.ts        # API endpoint definitions
-│   ├── simulation.ts    # Financial simulation engine
-│   └── storage.ts       # Data persistence layer
-├── shared/              # Shared types and schemas
-│   └── schema.ts        # Drizzle schema + Zod validation
-└── migrations/          # Database migrations (Drizzle Kit)
-```
+│   ├── components/      # UI components
+│   ├── pages/           # Route pages
+│   ├── store/           # Zustand stores
+│   ├── api/             # API hooks and client
+│   └── lib/             # Utilities
+├── server/              # FastAPI backend
+│   ├── main.py          # FastAPI app entry
+│   ├── core/            # Config, DB, security
+│   ├── models/          # SQLAlchemy models
+│   ├── api/             # API route handlers
+│   ├── ingest/          # CSV parsing
+│   ├── truth/           # Truth scan engine
+│   ├── simulate/        # Monte Carlo simulation
+│   ├── decision/        # Decision engine
+│   ├── copilot/         # Context pack + router
+│   └── seed/            # Benchmark seeding
+└── shared/              # Shared types
+\`\`\`
 
-## External Dependencies
+## Database Schema
 
-### Database
-- **PostgreSQL**: Primary database (configured via DATABASE_URL environment variable)
-- **Drizzle ORM**: Database toolkit for schema definition and queries
-- **Drizzle Kit**: Migration tooling (`npm run db:push`)
+### Core Tables
+- users (id, email, password_hash, created_at)
+- companies (id, user_id, name, website, industry, stage, currency, created_at)
+- datasets (id, company_id, type, file_name, row_count, created_at)
+- financial_records, transaction_records, customer_records
 
-### UI Framework
-- **Radix UI**: Accessible component primitives (dialogs, dropdowns, forms, etc.)
-- **Recharts**: React charting library for financial visualizations
-- **Lucide React**: Icon library
-- **Tailwind CSS**: Utility-first CSS framework
+### Analytics Tables
+- benchmarks (seeded with SaaS industry benchmarks)
+- truth_scans (outputs_json stores computed metrics)
+- scenarios, simulation_runs (Monte Carlo outputs)
+- decisions (recommended_actions_json)
+- chat_sessions, chat_messages
 
-### Form & Validation
-- **React Hook Form**: Form state management
-- **Zod**: Schema validation for both client and server
-- **@hookform/resolvers**: Zod resolver for React Hook Form
+## API Endpoints
 
-### Development
-- **Vite**: Frontend build tool with HMR
-- **TSX**: TypeScript execution for development server
-- **esbuild**: Production bundling for server code
+### Auth
+- POST /auth/register
+- POST /auth/login
 
-### Fonts
-- Google Fonts: Inter, DM Sans, Fira Code, Geist Mono (loaded via CDN in index.html)
+### Companies
+- POST/GET /companies
+- GET /companies/{id}
+
+### Datasets
+- POST /companies/{id}/datasets/upload
+- POST /companies/{id}/datasets/manual_baseline
+
+### Truth Scan
+- POST /companies/{id}/truth/run
+- GET /companies/{id}/truth/latest
+
+### Simulation
+- POST /companies/{id}/scenarios
+- POST /scenarios/{id}/simulate
+- GET /scenarios/{id}/simulation/latest
+
+### Decisions
+- POST /simulation/{run_id}/decisions/generate
+- GET /companies/{id}/decisions/latest
+
+### Copilot
+- GET /companies/{id}/context
+- POST /companies/{id}/simulate
+- POST /companies/{id}/decision/compare
+
+## Running the Application
+
+Development server runs on port 5000:
+- Frontend: Vite dev server with proxy to backend
+- Backend: FastAPI with uvicorn
+
+## Fonts
+- Google Fonts: Inter (primary), IBM Plex Mono (financial figures)

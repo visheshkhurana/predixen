@@ -1,0 +1,149 @@
+[
+  {
+    "id": "extend_runway_conservative",
+    "title": "Extend Runway (Conservative)",
+    "bucket": "runway",
+    "description": "Reduce burn by 15% through operational efficiency",
+    "scenario_deltas": {
+      "burn_reduction_pct": 15,
+      "pricing_change_pct": 0,
+      "growth_uplift_pct": -2
+    },
+    "applicability": ["all"]
+  },
+  {
+    "id": "aggressive_burn_cut",
+    "title": "Aggressive Cost Restructure",
+    "bucket": "runway",
+    "description": "Cut burn by 30% with significant team/expense changes",
+    "scenario_deltas": {
+      "burn_reduction_pct": 30,
+      "pricing_change_pct": 0,
+      "growth_uplift_pct": -5
+    },
+    "applicability": ["low_runway"]
+  },
+  {
+    "id": "freeze_hiring",
+    "title": "Freeze All Hiring",
+    "bucket": "runway",
+    "description": "Stop all new hires to preserve runway",
+    "scenario_deltas": {
+      "burn_reduction_pct": 10,
+      "hiring_plan": []
+    },
+    "applicability": ["low_runway"]
+  },
+  {
+    "id": "pricing_increase_5",
+    "title": "Price Increase 5%",
+    "bucket": "pricing",
+    "description": "Modest price increase to improve unit economics",
+    "scenario_deltas": {
+      "pricing_change_pct": 5,
+      "growth_uplift_pct": -1
+    },
+    "applicability": ["all"]
+  },
+  {
+    "id": "pricing_increase_10",
+    "title": "Price Increase 10%",
+    "bucket": "pricing",
+    "description": "Significant price increase with some churn risk",
+    "scenario_deltas": {
+      "pricing_change_pct": 10,
+      "growth_uplift_pct": -3
+    },
+    "applicability": ["strong_retention"]
+  },
+  {
+    "id": "pricing_increase_15",
+    "title": "Price Increase 15%",
+    "bucket": "pricing",
+    "description": "Aggressive pricing with higher churn risk",
+    "scenario_deltas": {
+      "pricing_change_pct": 15,
+      "growth_uplift_pct": -5
+    },
+    "applicability": ["strong_retention", "high_confidence"]
+  },
+  {
+    "id": "fundraise_m3",
+    "title": "Fundraise in 3 Months",
+    "bucket": "fundraise",
+    "description": "Raise capital in Q1 to extend runway",
+    "scenario_deltas": {
+      "fundraise_month": 3,
+      "fundraise_amount": 2000000
+    },
+    "applicability": ["all"]
+  },
+  {
+    "id": "fundraise_m6",
+    "title": "Fundraise in 6 Months",
+    "bucket": "fundraise",
+    "description": "Raise capital in H1 to extend runway",
+    "scenario_deltas": {
+      "fundraise_month": 6,
+      "fundraise_amount": 3000000
+    },
+    "applicability": ["all"]
+  },
+  {
+    "id": "bridge_burn_combo",
+    "title": "Bridge Round + 10% Burn Cut",
+    "bucket": "runway",
+    "description": "Small bridge with modest expense reduction",
+    "scenario_deltas": {
+      "fundraise_month": 2,
+      "fundraise_amount": 500000,
+      "burn_reduction_pct": 10
+    },
+    "applicability": ["low_runway"]
+  },
+  {
+    "id": "growth_marketing_push",
+    "title": "Growth Marketing Push",
+    "bucket": "growth",
+    "description": "Increase marketing spend to accelerate growth",
+    "scenario_deltas": {
+      "growth_uplift_pct": 8,
+      "burn_reduction_pct": -15
+    },
+    "applicability": ["high_confidence", "good_retention", "low_concentration"]
+  },
+  {
+    "id": "product_led_growth",
+    "title": "Product-Led Growth Investment",
+    "bucket": "growth",
+    "description": "Invest in self-serve and viral mechanics",
+    "scenario_deltas": {
+      "growth_uplift_pct": 5,
+      "burn_reduction_pct": -8
+    },
+    "applicability": ["all"]
+  },
+  {
+    "id": "margin_improvement",
+    "title": "Gross Margin Improvement",
+    "bucket": "efficiency",
+    "description": "Optimize COGS and improve unit economics",
+    "scenario_deltas": {
+      "gross_margin_delta_pct": 5,
+      "growth_uplift_pct": 0
+    },
+    "applicability": ["low_margin"]
+  },
+  {
+    "id": "combo_burn_raise",
+    "title": "20% Burn Cut + Emergency Raise",
+    "bucket": "runway",
+    "description": "Aggressive runway extension combining cuts and capital",
+    "scenario_deltas": {
+      "burn_reduction_pct": 20,
+      "fundraise_month": 1,
+      "fundraise_amount": 1000000
+    },
+    "applicability": ["critical_runway"]
+  }
+]
