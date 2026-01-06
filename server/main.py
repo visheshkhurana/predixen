@@ -1,21 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 from server.core.db import engine, Base, SessionLocal
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    
-    db = SessionLocal()
     try:
-        seed_benchmarks(db)
-        seed_demo_data(db)
-    finally:
-        db.close()
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+        
+        db = SessionLocal()
+        try:
+            logger.info("Running seed scripts...")
+            seed_benchmarks(db)
+            seed_demo_data(db)
+            logger.info("Seed scripts completed successfully")
+        except Exception as e:
+            logger.error(f"Error during seeding: {e}")
+            raise
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+        raise
     
     yield
 
