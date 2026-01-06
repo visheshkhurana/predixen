@@ -19,16 +19,23 @@ import {
   Sparkles,
   LogOut,
   Zap,
+  Upload,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useFounderStore } from "@/store/founderStore";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 
 const menuItems = [
   {
     title: "Overview",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Data Input",
+    url: "/data",
+    icon: Upload,
   },
   {
     title: "Truth Scan",
@@ -76,14 +83,10 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {currentCompany && (
-          <div className="px-4 py-2 mb-2">
-            <p className="text-xs text-muted-foreground">Current Company</p>
-            <p className="text-sm font-medium truncate" data-testid="text-sidebar-company">
-              {currentCompany.name}
-            </p>
-          </div>
-        )}
+        <div className="px-4 py-2 mb-2">
+          <p className="text-xs text-muted-foreground mb-2">Company</p>
+          <CompanySwitcher />
+        </div>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>

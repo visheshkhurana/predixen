@@ -6,11 +6,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from '@/components/MetricCard';
 import { BenchmarkBar } from '@/components/BenchmarkBar';
 import { MetricDetailModal } from '@/components/MetricDetailModal';
+import { ExportButton } from '@/components/ExportButton';
 import { AlertTriangle, TrendingUp, RefreshCw, Info } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatTruthScanForExport } from '@/lib/exportUtils';
 
 export default function TruthScanPage() {
   const { currentCompany } = useFounderStore();
@@ -67,15 +69,26 @@ export default function TruthScanPage() {
           <h1 className="text-2xl font-bold">Truth Scan</h1>
           <p className="text-muted-foreground">24 metrics benchmarked against industry standards</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={handleRefresh}
-          disabled={runTruthScanMutation.isPending}
-          data-testid="button-refresh-truth"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${runTruthScanMutation.isPending ? 'animate-spin' : ''}`} />
-          Refresh Scan
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {truthScan && (
+            <ExportButton
+              data={truthScan}
+              filename={`truth-scan-${currentCompany.name.toLowerCase().replace(/\s+/g, '-')}`}
+              formatForCSV={formatTruthScanForExport}
+              testId="export-truth-scan"
+            />
+          )}
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={runTruthScanMutation.isPending}
+            data-testid="button-refresh-truth"
+            aria-label="Refresh Truth Scan analysis"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${runTruthScanMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh Scan
+          </Button>
+        </div>
       </div>
       
       {flags.filter((f: any) => f.severity === 'high').length > 0 && (

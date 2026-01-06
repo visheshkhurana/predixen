@@ -7,12 +7,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
 import { BandsChart } from '@/components/BandsChart';
 import { AnnotatedSlider } from '@/components/AnnotatedSlider';
+import { ExportButton } from '@/components/ExportButton';
 import { Play, Plus, Info } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatSimulationForExport } from '@/lib/exportUtils';
 
 const SCENARIO_TEMPLATES = [
   { name: 'Conservative Cut', deltas: { burn_reduction_pct: 20, growth_uplift_pct: -3 } },
