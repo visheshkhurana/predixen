@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from server.core.db import engine, Base, SessionLocal
 from server.seed.seed_benchmarks import seed_benchmarks
+from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor
 
 @asynccontextmanager
@@ -12,6 +13,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_benchmarks(db)
+        seed_demo_data(db)
     finally:
         db.close()
     
