@@ -35,10 +35,10 @@ export function downloadJSON(data: any, filename: string) {
 }
 
 export function formatTruthScanForExport(truthScan: any) {
-  if (!truthScan?.outputs_json) return [];
+  if (!truthScan) return [];
   
-  const metrics = truthScan.outputs_json.metrics || {};
-  const flags = truthScan.outputs_json.flags || [];
+  const metrics = truthScan.metrics || truthScan.outputs_json?.metrics || {};
+  const flags = truthScan.flags || truthScan.outputs_json?.flags || [];
   
   const metricsData = Object.entries(metrics).map(([key, value]) => ({
     metric: key,
