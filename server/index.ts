@@ -2,9 +2,31 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { spawn } from "child_process";
 
 const app = express();
 const httpServer = createServer(app);
+
+function startFastAPIServer() {
+  const fastapi = spawn("python", ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8001"], {
+    stdio: "inherit",
+    shell: true,
+  });
+  
+  fastapi.on("error", (err) => {
+    console.error("Failed to start FastAPI server:", err);
+  });
+  
+  fastapi.on("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`FastAPI server exited with code ${code}`);
+    }
+  });
+  
+  return fastapi;
+}
+
+const fastapiProcess = startFastAPIServer();
 
 declare module "http" {
   interface IncomingMessage {
