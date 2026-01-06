@@ -1,17 +1,27 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from '@/components/MetricCard';
 import { BenchmarkBar } from '@/components/BenchmarkBar';
-import { AlertTriangle, TrendingUp, RefreshCw } from 'lucide-react';
+import { MetricDetailModal } from '@/components/MetricDetailModal';
+import { AlertTriangle, TrendingUp, RefreshCw, Info } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
+import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function TruthScanPage() {
   const { currentCompany } = useFounderStore();
   const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
   const runTruthScanMutation = useRunTruthScan();
+  
+  const [selectedMetric, setSelectedMetric] = useState<{
+    definition: MetricDefinition | null;
+    value?: number | string;
+    benchmark?: { value: number; p25: number; p50: number; p75: number };
+  }>({ definition: null });
   
   if (!currentCompany) {
     return (
@@ -156,14 +166,87 @@ export default function TruthScanPage() {
             ))
           ) : (
             <>
-              <MetricCard title="Monthly Revenue" value={formatCurrency(metrics.monthly_revenue)} testId="metric-revenue" />
-              <MetricCard title="Net Burn" value={formatCurrency(metrics.net_burn)} testId="metric-burn" />
-              <MetricCard title="Cash Balance" value={formatCurrency(metrics.cash_balance)} testId="metric-cash" />
-              <MetricCard title="Runway (P50)" value={`${metrics.runway_p50?.toFixed(1) || 0} months`} testId="metric-runway" />
-              <MetricCard title="Gross Margin" value={formatPercent(metrics.gross_margin)} testId="metric-margin" />
-              <MetricCard title="Revenue Growth" value={formatPercent(metrics.revenue_growth_mom)} subtitle="MoM" testId="metric-growth" />
-              <MetricCard title="Burn Multiple" value={metrics.burn_multiple?.toFixed(1) || 'N/A'} testId="metric-burn-mult" />
-              <MetricCard title="Operating Margin" value={formatPercent(metrics.operating_margin)} testId="metric-op-margin" />
+              <MetricCard 
+                title="Monthly Revenue" 
+                value={formatCurrency(metrics.monthly_revenue)} 
+                testId="metric-revenue"
+                tooltip={METRIC_DEFINITIONS.mrr?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('mrr') || null, 
+                  value: formatCurrency(metrics.monthly_revenue) 
+                })}
+              />
+              <MetricCard 
+                title="Net Burn" 
+                value={formatCurrency(metrics.net_burn)} 
+                testId="metric-burn"
+                tooltip={METRIC_DEFINITIONS.net_burn?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('net_burn') || null, 
+                  value: formatCurrency(metrics.net_burn) 
+                })}
+              />
+              <MetricCard 
+                title="Cash Balance" 
+                value={formatCurrency(metrics.cash_balance)} 
+                testId="metric-cash"
+                tooltip={METRIC_DEFINITIONS.cash_balance?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('cash_balance') || null, 
+                  value: formatCurrency(metrics.cash_balance) 
+                })}
+              />
+              <MetricCard 
+                title="Runway (P50)" 
+                value={`${metrics.runway_p50?.toFixed(1) || 0} months`} 
+                testId="metric-runway"
+                tooltip={METRIC_DEFINITIONS.runway_months?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('runway_months') || null, 
+                  value: `${metrics.runway_p50?.toFixed(1) || 0} months` 
+                })}
+              />
+              <MetricCard 
+                title="Gross Margin" 
+                value={formatPercent(metrics.gross_margin)} 
+                testId="metric-margin"
+                tooltip={METRIC_DEFINITIONS.gross_margin?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('gross_margin') || null, 
+                  value: formatPercent(metrics.gross_margin) 
+                })}
+              />
+              <MetricCard 
+                title="Revenue Growth" 
+                value={formatPercent(metrics.revenue_growth_mom)} 
+                subtitle="MoM" 
+                testId="metric-growth"
+                tooltip={METRIC_DEFINITIONS.revenue_growth_mom?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('revenue_growth_mom') || null, 
+                  value: formatPercent(metrics.revenue_growth_mom) 
+                })}
+              />
+              <MetricCard 
+                title="Burn Multiple" 
+                value={metrics.burn_multiple?.toFixed(1) || 'N/A'} 
+                testId="metric-burn-mult"
+                tooltip={METRIC_DEFINITIONS.burn_multiple?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('burn_multiple') || null, 
+                  value: metrics.burn_multiple?.toFixed(1) || 'N/A' 
+                })}
+              />
+              <MetricCard 
+                title="Operating Margin" 
+                value={formatPercent(metrics.operating_margin)} 
+                testId="metric-op-margin"
+                tooltip={METRIC_DEFINITIONS.operating_margin?.shortDescription}
+                onClick={() => setSelectedMetric({ 
+                  definition: getMetricDefinition('operating_margin') || null, 
+                  value: formatPercent(metrics.operating_margin) 
+                })}
+              />
             </>
           )}
         </div>
@@ -210,6 +293,14 @@ export default function TruthScanPage() {
           </div>
         </div>
       )}
+      
+      <MetricDetailModal
+        open={selectedMetric.definition !== null}
+        onOpenChange={(open) => !open && setSelectedMetric({ definition: null })}
+        metric={selectedMetric.definition}
+        currentValue={selectedMetric.value}
+        benchmarkData={selectedMetric.benchmark}
+      />
     </div>
   );
 }
