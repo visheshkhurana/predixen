@@ -15,6 +15,7 @@ import OverviewPage from "@/pages/overview";
 import TruthScanPage from "@/pages/truth-scan";
 import ScenariosPage from "@/pages/scenarios";
 import DecisionsPage from "@/pages/decisions";
+import CopilotPage from "@/pages/copilot";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -43,6 +44,9 @@ function Router() {
       </Route>
       <Route path="/decisions">
         {() => <AuthenticatedRoute component={DecisionsPage} />}
+      </Route>
+      <Route path="/copilot">
+        {() => <AuthenticatedRoute component={CopilotPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>
