@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { spawn } from "child_process";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 const httpServer = createServer(app);
@@ -27,6 +28,28 @@ function startFastAPIServer() {
 }
 
 const fastapiProcess = startFastAPIServer();
+
+const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8001";
+
+app.use(
+  "/api",
+  createProxyMiddleware({
+    target: FASTAPI_URL,
+    changeOrigin: true,
+    pathRewrite: {
+      "^/api": "",
+    },
+    on: {
+      error: (err: Error, req, res) => {
+        console.error("Proxy error:", err.message);
+        if ('writeHead' in res && typeof res.writeHead === 'function') {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Backend service unavailable", detail: err.message }));
+        }
+      },
+    },
+  })
+);
 
 declare module "http" {
   interface IncomingMessage {
