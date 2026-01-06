@@ -61,6 +61,23 @@ export default function AuthPage() {
     }
   };
   
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+    try {
+      const result = await api.auth.login('demo@predixen.ai', 'demo123');
+      localStorage.setItem('predixen-token', result.access_token);
+      setToken(result.access_token);
+      setUser({ id: result.user_id, email: result.email });
+      toast({ title: 'Welcome to the demo!' });
+      setLocation('/');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Demo login failed';
+      toast({ title: 'Demo login failed', description: message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -136,6 +153,24 @@ export default function AuthPage() {
               </form>
             </TabsContent>
           </Tabs>
+          
+          <div className="mt-6 pt-4 border-t">
+            <p className="text-sm text-muted-foreground text-center mb-3">
+              Want to explore first?
+            </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleDemoLogin}
+              disabled={isLoading}
+              data-testid="button-demo-login"
+            >
+              Try Demo Account
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Pre-loaded with sample company data
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
