@@ -1,104 +1,152 @@
-# Design Guidelines: AI-Powered Startup Financial Simulator
+# Design Guidelines: Predixen Intelligence OS
 
 ## Design Approach
 
-**Selected System**: Hybrid approach combining Linear's modern aesthetic, Stripe's data clarity, and Carbon Design's enterprise patterns
-
-**Rationale**: This is a utility-focused, data-intensive productivity tool requiring precision, clarity, and trust. The design must prioritize information hierarchy, data visualization excellence, and efficient workflows over decorative elements.
+**Selected System**: Modern "AI-tech" minimal design
+**Rationale**: This is an investor-grade financial intelligence platform requiring precision, clarity, and trust. Dark mode default with electric blue/teal accents.
 
 ## Core Design Elements
 
-### A. Typography
-- **Primary Font**: Inter or SF Pro (via Google Fonts CDN)
-- **Secondary/Monospace**: IBM Plex Mono for financial figures and data tables
-- **Hierarchy**:
-  - Page Titles: text-2xl to text-3xl, font-semibold
-  - Section Headers: text-xl, font-medium
-  - Body Text: text-base, font-normal
-  - Labels/Captions: text-sm, font-medium
-  - Financial Figures: text-lg to text-2xl, font-mono, font-semibold
-  - Small Data/Metrics: text-xs, font-mono
+### A. Color Palette
 
-### B. Layout System
-**Spacing Units**: Consistent use of Tailwind units: 2, 4, 6, 8, 12, 16, 24
-- Component padding: p-4 to p-6
-- Section margins: mb-8 to mb-12
-- Card spacing: gap-6 to gap-8
-- Form field gaps: space-y-4
+#### Dark Mode (Default)
+- Background: `hsl(222 47% 8%)` - Deep navy
+- Card: `hsl(222 40% 12%)` - Slightly elevated surface
+- Primary: `hsl(199 89% 55%)` - Electric teal accent
+- Secondary: `hsl(222 30% 18%)` - Soft dark
+- Foreground: `hsl(210 20% 98%)` - Off-white text
+- Muted: `hsl(210 15% 60%)` - Secondary text
+
+#### Light Mode
+- Background: `hsl(210 20% 98%)` - Clean off-white
+- Card: `hsl(0 0% 100%)` - Pure white
+- Primary: `hsl(199 89% 48%)` - Electric blue/teal
+- Secondary: `hsl(210 15% 92%)` - Soft gray
+- Foreground: `hsl(222 47% 11%)` - Near black
+- Muted: `hsl(210 15% 40%)` - Gray text
+
+#### Status Colors
+- Success: `hsl(142 70% 45%)` - Green (healthy metrics)
+- Warning: `hsl(38 92% 50%)` - Amber (caution)
+- Danger: `hsl(0 84% 60%)` - Red (critical flags)
+
+### B. Typography
+- **Primary Font**: Inter (via Google Fonts CDN)
+- **Monospace**: IBM Plex Mono for financial figures and metrics
+- **Hierarchy**:
+  - Page Titles: text-2xl, font-semibold
+  - Section Headers: text-lg, font-medium
+  - Body Text: text-sm, font-normal
+  - Labels/Captions: text-xs, font-medium
+  - Financial Figures: text-xl to text-3xl, font-mono, font-semibold
+  - Small Metrics: text-sm, font-mono
+
+### C. Layout System
+**Spacing Units**: Consistent use of Tailwind units
+- Small: 0.5rem (8px) - tight gaps
+- Medium: 1rem (16px) - standard gaps
+- Large: 1.5rem (24px) - section separation
+- XL: 2rem (32px) - major sections
 
 **Grid Structure**:
-- Dashboard: 12-column grid for metric cards (3-4 columns on desktop, stack on mobile)
-- Scenario Builder: 2-column split (60/40) - inputs left, preview right
-- Data tables: Full-width with horizontal scroll on mobile
+- Dashboard: 6 KPI cards in 2 rows x 3 columns
+- Scenario Builder: 2-column split (left: knobs, right: preview)
+- Main content: max-w-7xl centered with p-6 padding
 
-### C. Component Library
+### D. Component Library
 
-**Core UI Elements**:
-- Cards: Subtle borders (border border-gray-200), rounded-lg, minimal shadow, bg-white
-- Buttons: Primary (solid), Secondary (outline), Tertiary (ghost) - rounded-md, px-4 py-2
-- Input Fields: Consistent height (h-10), rounded-md borders, focus rings
-- Tabs: Underline style for section switching
-- Badges: Rounded-full for status indicators (runway warnings, confidence levels)
+**Cards**:
+- Border radius: rounded-2xl (1rem)
+- Subtle border: 1px solid with low opacity
+- Soft shadow for elevation
+- High whitespace (p-6)
 
-**Navigation**:
-- Top nav bar: Sticky, bg-white with bottom border, contains logo, main nav, AI assistant trigger
-- Sidebar (optional): Left-aligned navigation for Dashboard, Scenarios, Data, Settings
-- Breadcrumbs: For deep navigation in scenario editing
+**Buttons**:
+- Primary: Electric teal background
+- Secondary/Ghost: Transparent with hover elevation
+- Size "icon" for icon-only buttons
 
-**Data Displays**:
-- Metric Cards: Large numbers with context labels, trend indicators (↑↓), sparkline charts
-- Data Tables: Zebra striping, sortable columns, fixed headers on scroll
-- Charts: Line charts for projections, bar charts for comparisons, range areas for confidence intervals
-- Timeline View: Horizontal month-by-month runway visualization
+**MetricCard (KPI Cards)**:
+- Value in font-mono for financial data
+- Direction arrows for trends (up/down)
+- Benchmark badges (Above p50, Below p25)
+- Status color coding
 
-**Forms**:
-- Multi-step wizard for data input (Step indicators at top)
-- Grouped form sections with clear labels
-- Upload zones: Drag-and-drop areas with CSV/PDF icons, file type indicators
-- Inline validation with green checkmarks/red warnings
+**BenchmarkBar**:
+- Visual p25/p50/p75 markers
+- Company value dot position
+- Direction label (higher/lower is better)
 
-**AI Assistant**:
-- Floating chat bubble (bottom-right) or slide-out panel
-- Message bubbles with clear AI vs User distinction
-- Code/data snippets in monospace with copy buttons
-- Suggestion chips for quick actions
+**Data Confidence Pill**:
+- Red: < 60 (critical)
+- Amber: 60-80 (caution)
+- Green: > 80 (healthy)
 
-### D. Layout Patterns
+**Charts**:
+- Use Recharts with consistent color scheme
+- P10/P50/P90 bands with gradients
+- Survival curves with clear labeling
+- Tooltips with currency formatting
 
-**Dashboard**:
-- Hero metrics row: 3-4 key KPIs (Cash on Hand, Monthly Burn, Runway, MRR)
-- Chart section: Primary cash balance projection (full-width)
-- Scenario comparison grid: 2-3 columns comparing active scenarios
-- Recent activity feed: Sidebar or bottom section
+### E. Layout Patterns
 
-**Scenario Builder**:
-- Left panel: Accordion-style input sections (Pricing, Hiring, Costs, Growth, Funding)
-- Right panel: Live preview of impact with mini-charts
-- Bottom: Primary action button "Run Simulation"
+**AppShell**:
+- Left sidebar (collapsible, 280px default)
+- Top bar with stepper + confidence pill + user menu
+- Main content area with max-w-7xl
 
-**Results View**:
-- Full-width interactive chart with zoom/pan
-- Metrics summary cards above chart
-- Confidence interval visualization (shaded ranges)
-- Tabbed detailed views: Cash Flow Table, P&L Projection, Assumptions
-- AI insights panel: Recommendations and risk flags
+**Sidebar**:
+- Logo at top (Predixen)
+- Company switcher dropdown
+- Navigation menu with icons
+- Investor items hidden when FEATURE_INVESTOR_MODE=false
 
-**Data Input**:
-- Three-tab interface: Manual Entry | CSV Upload | PDF Upload
-- Manual: Form grid with logical grouping (Current State | Assumptions | Scenarios)
-- Upload: Large drop zones with format specifications and example downloads
-- Confirmation step: Editable table showing parsed data
+**Stepper (in Topbar)**:
+- Truth → Simulation → Decision
+- Current step highlighted with accent color
+- Previous steps show checkmark
+- Future steps dimmed
 
-## Images
-No hero images needed - this is a productivity tool focused on data and functionality. Use icons from Heroicons for:
-- Financial metrics (chart icons, currency symbols)
-- Upload states (document, cloud-upload)
-- Status indicators (warning, check-circle, information)
-- Navigation (dashboard, settings, data)
+**Onboarding Wizard**:
+- Progress indicator at top (6 steps)
+- Single-column centered form
+- Clear CTAs for each step
 
-## Accessibility
-- High contrast ratios for all financial data (WCAG AAA for numbers)
-- Keyboard navigation for all interactive elements
-- Screen reader labels for charts and data visualizations
-- Focus indicators on all form inputs and controls
-- Color-blind safe palettes for chart lines and status indicators
+### F. Interactions
+- Hover states with subtle elevation (hover-elevate class)
+- Loading skeletons for async states (never blank)
+- Smooth transitions (200ms ease)
+- No layout shift on hover
+
+### G. Accessibility
+- High contrast ratios for financial data
+- Focus rings visible on all interactive elements
+- data-testid on all interactive elements
+- Semantic HTML structure
+
+## Page-Specific Guidelines
+
+### Overview Dashboard
+- 6 KPI cards: Runway, Burn, Growth, Margin, Retention, Concentration
+- Top 3 recommendations section
+- Copilot quick input
+
+### Truth Scan
+- Two large score cards: Quality of Growth, Data Confidence
+- Benchmark bars for each metric
+- Risk flags panel with severity badges
+
+### Scenarios
+- Template cards for quick start
+- Left panel: Scenario knobs (sliders)
+- Right panel: Instant preview
+
+### Decisions
+- 3 ranked DecisionCards with impact metrics
+- Comparison table
+- Survival curve + bands charts
+
+### Copilot
+- Split view: chat left, context panel right
+- Quick action buttons
+- Evidence citations in responses

@@ -1,0 +1,502 @@
+You are my senior full-stack engineer + product engineer + product designer. Implement “Predixen Intelligence OS” MVP:
+Truth → Simulation → Decision → Copilot
+This merges Termina-like investor-grade diligence (Truth Scan + benchmarks + data validation) with Predixen-like probabilistic simulation + ranked decisions.
+
+CRITICAL:
+Investor mode exists in code but MUST be hidden behind a feature flag FEATURE_INVESTOR_MODE=false by default. Do NOT delete investor code.
+
+STACK:
+Frontend: React + TypeScript + Vite, Tailwind, Zustand, React Query, Recharts.
+Backend: FastAPI (Python), Pydantic, SQLAlchemy ORM, Alembic migrations.
+DB: PostgreSQL preferred (fallback SQLite with same models).
+Jobs: FastAPI BackgroundTasks.
+Auth: basic email/password with JWT sessions (MVP).
+File uploads: store dataset metadata in DB; parse immediately into DB.
+
+MVP MODULES:
+A) Ingestion: upload CSV (financials, transactions, customers) + manual baseline fallback.
+B) Truth Scan: compute diagnostics + benchmark comparisons + confidence score + Quality of Growth Index.
+C) Simulation: Monte Carlo monthly for 24 months; outputs distributions + survival curves + p10/p50/p90 bands.
+D) Decision Engine: deterministic candidate action library (no randomness), select 8–12 candidates, simulate/compare, return top 3 actions with impact and explanation.
+E) Copilot: multi-agent router (Truth Analyst, Simulation Engineer, Decision Strategist, CFO Planner, Risk & Controls) grounded strictly on Context Pack; can run simulate tool; cannot hallucinate numbers.
+F) UX: explicit stepper Truth → Simulation → Decision, modern clean AI-tech UI. Founder mode primary. Investor mode hidden behind feature flag.
+
+FEATURE FLAG:
+- Env var FEATURE_INVESTOR_MODE default false.
+- When false: hide Investor nav + routes and block investor API endpoints with 403.
+- Keep investor pages/components and backend code present.
+
+DATABASE TABLES (SQLAlchemy + Alembic):
+- users(id, email, password_hash, created_at)
+- companies(id, user_id, name, website, industry, stage, currency, created_at)
+- datasets(id, company_id, type [financial|transactions|customers], file_name, created_at)
+
+- financial_records(id, company_id, period_start, period_end, revenue, cogs, opex, payroll, other_costs, cash_balance)
+- transaction_records(id, company_id, txn_date, customer_id, product, amount, cost, channel)
+- customer_records(id, company_id, customer_id, segment, signup_date, region, plan)
+
+- benchmarks(id, industry, stage, metric_name, p25, p50, p75, direction, updated_at)  // seed static values for MVP
+- truth_scans(id, company_id, created_at, outputs_json)
+
+- scenarios(id, company_id, name, inputs_json, created_at)
+- simulation_runs(id, scenario_id, n_sims, seed, outputs_json, created_at)
+- decisions(id, simulation_run_id, recommended_actions_json, created_at)
+
+- chat_sessions(id, company_id, created_at)
+- chat_messages(id, session_id, role, content, created_at)
+
+DIRECTORY / FILES TO CREATE:
+Backend:
+server/
+  main.py
+  core/
+    config.py               # feature flags + env
+    security.py             # JWT auth
+    db.py                   # session, engine
+  models/
+    __init__.py
+    user.py
+    company.py
+    dataset.py
+    financial.py
+    transaction.py
+    customer.py
+    benchmark.py
+    truth_scan.py
+    scenario.py
+    simulation_run.py
+    decision.py
+    chat.py
+  migrations/ (alembic)
+  ingest/
+    csv_schemas.py
+    parsers.py
+    mapping.py              # mapping helpers
+  truth/
+    truth_scan.py           # compute metrics + flags + scores + benchmarks
+  simulate/
+    simulation_engine.py    # monte carlo
+  decision/
+    action_library.json     # embedded below
+    decision_engine.py      # selection + scoring + top 3
+  copilot/
+    context_pack.py         # builds context response matching schema below
+    router.py               # routes intent to agents
+    prompts.py              # embedded prompts below
+  api/
+    auth.py
+    companies.py
+    datasets.py
+    truth_scan.py
+    scenarios.py
+    simulations.py
+    decisions.py
+    copilot.py
+  seed/
+    seed_benchmarks.py
+Frontend:
+client/
+  src/
+    App.tsx
+    routes.tsx
+    store/
+      founderStore.ts
+    api/
+      client.ts
+      hooks.ts
+    components/
+      Layout/
+        AppShell.tsx
+        Sidebar.tsx
+        Topbar.tsx
+      Stepper.tsx
+      MetricCard.tsx
+      BenchmarkBar.tsx
+      FlagCard.tsx
+      SurvivalCurveChart.tsx
+      BandsChart.tsx
+      RunwayDistribution.tsx
+      DecisionCard.tsx
+      CopilotChat.tsx
+      DataMappingTable.tsx
+      ScenarioTemplateCards.tsx
+      ScenarioKnobPanel.tsx
+      CompareTable.tsx
+      EmptyState.tsx
+      Skeletons.tsx
+    pages/
+      Auth.tsx
+      Onboarding.tsx
+      FounderOverview.tsx
+      TruthScan.tsx
+      Scenarios.tsx
+      Decisions.tsx
+      Copilot.tsx
+      investor/
+        InvestorDiligence.tsx
+        InvestorBenchmarks.tsx
+        InvestorMemo.tsx
+
+API ENDPOINTS (FastAPI):
+Auth:
+- POST /auth/register
+- POST /auth/login
+Companies:
+- POST /companies
+- GET /companies
+- GET /companies/{id}
+Datasets:
+- POST /companies/{id}/datasets/upload (multipart)
+- POST /companies/{id}/datasets/manual_baseline
+Truth Scan:
+- POST /companies/{id}/truth/run
+- GET /companies/{id}/truth/latest
+Scenarios:
+- POST /companies/{id}/scenarios
+- GET /companies/{id}/scenarios
+Simulations:
+- POST /scenarios/{id}/simulate
+- GET /scenarios/{id}/simulation/latest
+Decisions:
+- POST /simulation/{run_id}/decisions/generate
+- GET /companies/{id}/decisions/latest
+Copilot:
+- GET /companies/{id}/context
+- POST /companies/{id}/simulate  (scenario deltas, runs sim, stores run)
+- POST /companies/{id}/decision/compare (select candidates, run sims, store decisions)
+Investor (gated by FEATURE_INVESTOR_MODE):
+- /investor/* endpoints exist but return 403 when flag false
+
+TRUTH SCAN METRICS (Termina-lite):
+Compute from uploaded data if available; else from manual baseline:
+- revenue growth (MoM, QoQ)
+- gross margin %, operating margin %
+- net burn (monthly), burn multiple
+- cash balance + runway p10/p50/p90 months (if cash known)
+- concentration: top1/top5 revenue share (from transactions)
+- retention: logo + revenue retention 6m/12m (if customer + transactions exist)
+- unit econ: LTV, CAC, LTV/CAC, payback (CAC manual if missing)
+
+Scores:
+1) Data Confidence Score 0-100:
+   - coverage of required fields
+   - consistency checks (sum(txn) approx revenue if both exist)
+   - outlier checks, missingness
+2) Quality of Growth Index 0-100:
+   - growth + retention stability
+   - margin health
+   - burn efficiency
+   - concentration penalty
+   - confidence penalty
+
+Benchmarking:
+- Use benchmarks table seeded for MVP. If industry/stage unknown, use “general_saas / unknown_stage”.
+- For each metric: show p25/p50/p75 and position.
+
+SIMULATION ENGINE (Monte Carlo):
+- Monthly time steps; horizon 24 months.
+- baseline from truth scan values.
+- knobs: pricing_change_pct, growth_uplift_pct, burn_reduction_pct, hiring plan, fundraise, collections_improvement_days (optional), gross_margin_delta_pct (optional).
+- stochastic:
+  - growth_rate_t ~ Normal(mean=baseline_growth + uplift, sigma configurable)
+  - margin varies with sigma
+- cashflow:
+  cash[t+1] = cash[t] + (rev[t]*gm - opex - payroll - other_costs) + optional_fundraise
+- outputs:
+  - runway distribution (months to cash<=0)
+  - survival probabilities at 6/12/18/24
+  - p10/p50/p90 bands for revenue, burn, cash
+  - survival curve points
+
+DECISION ENGINE:
+- MUST use deterministic candidate action library below (do not randomize).
+- Select 8–12 actions deterministically based on truth metrics:
+  - If confidence < 60: only conservative runway + fundraise + pricing (3/5) + burn cuts; exclude marketing push & aggressive growth.
+  - If runway_p50 < 6: include opex20/30, freeze hiring, fundraise M1/M3, bridge+burn10, combo burn20+raise.
+  - If concentration > 50%: deprioritize marketing push; prefer pricing/GM/burn actions.
+  - If retention 12m low: deprioritize marketing push; include engineering/platform and GM improvements.
+- For each candidate action, generate scenario deltas, run simulation (or cache identical), compute scores:
+  survival_score = P(survive 18m)
+  runway_score = clamp(runway_p50/24, 0..1)
+  growth_score = clamp(revenue18m_median/baseline_revenue18m,0..2)/2
+  efficiency_score = map burn_multiple improvement to 0..1
+  risk_penalty deterministic:
+    - if confidence<60 and bucket=growth => +0.15
+    - if runway<9 and adds hires => +0.10
+    - if burn_reduction_pct>25 => +0.05
+    - if pricing_change_pct>=8 => +0.05 unless confidence>75 and retention strong
+  total = 0.45*survival + 0.20*runway + 0.15*efficiency + 0.20*growth - risk_penalty
+- Return top 3 actions with:
+  title, rationale, expected impact vs baseline (delta survival_18m, delta runway_p50), risks, key assumption, next validation scenario delta.
+
+COPILOT MULTI-AGENT:
+- Implement router intent:
+  - “what’s true / what’s wrong” => Truth Analyst
+  - “what happens if” => Simulation Engineer (calls /simulate tool)
+  - “what should I do” => Decision Strategist (calls compare decisions if missing)
+  - “how to execute” => CFO Planner
+  - Always pass through Risk & Controls checks; if risky, block and propose safer alternative.
+- Hard grounding rule:
+  - Agents MUST only use numbers present in Context Pack (schema below).
+  - If missing: explicitly say missing and request minimal inputs.
+  - Never invent benchmarks.
+
+CONTEXT PACK:
+- Implement GET /companies/{id}/context returning exactly this schema (embedded below).
+
+=====================================================================
+DETAILED UI/UX SPEC (LOOK, FEEL, FLOW) — IMPLEMENT EXACTLY
+=====================================================================
+
+DESIGN LANGUAGE:
+- Modern “AI-tech” minimal.
+- Dark + light mode supported (default: dark). Accent: electric blue or teal.
+- Use 2xl rounded cards, subtle borders, soft shadows, high whitespace.
+- Typography: clear hierarchy: page title (text-2xl), section headings (text-lg), body (text-sm).
+- Micro-interactions: hover states, loading skeletons, smooth transitions.
+- Layout: AppShell with left Sidebar + top Topbar + main content area.
+
+GLOBAL LAYOUT:
+1) Sidebar (left, collapsible):
+   - Logo: Predixen
+   - Company switcher dropdown (if multiple companies)
+   - Menu:
+     - Overview
+     - Truth Scan
+     - Scenarios
+     - Decisions
+     - Copilot
+     - Settings
+   - Investor items must exist but HIDDEN when FEATURE_INVESTOR_MODE=false.
+2) Topbar:
+   - Stepper: Truth → Simulation → Decision (shows current step highlighted)
+   - “Data Confidence” pill (0–100 with color: red<60, amber 60–80, green>80)
+   - “Last scan/run time”
+   - User menu (logout)
+3) Main canvas:
+   - Standard: max-w-7xl, center aligned, padding 6, grid-based sections.
+
+PRIMARY USER JOURNEY (5–7 MIN ONBOARDING):
+Page: /auth
+- Simple email/password login/register.
+- After login: if no company, redirect to /onboarding.
+
+Page: /onboarding (wizard with progress)
+Wizard steps shown at top:
+1) Create company
+2) Add data
+3) Map columns
+4) Run Truth Scan
+5) First scenario + simulation
+6) Decisions
+
+Step 1: Create Company
+- Fields: Name*, Website, Industry, Stage, Currency
+- Primary CTA: “Continue”
+
+Step 2: Add Data
+- Two tabs:
+  A) Upload CSVs
+     - Upload cards: Financials CSV, Transactions CSV, Customers CSV (optional)
+     - Show file status + row count
+  B) Manual Baseline (fallback)
+     - Monthly Revenue, Gross Margin %, Opex, Payroll, Other Costs, Cash Balance
+- Show “What you’ll unlock” callout:
+  - Uploading transactions enables concentration + LTV
+  - Customers enables retention cohorts
+- CTA: “Continue”
+
+Step 3: Map Columns (Data Mapping UI)
+- For each uploaded file type, show a mapping table:
+  - left: detected column names
+  - right: required field dropdown
+  - auto-suggest mapping by fuzzy match
+- Show live “Data Confidence preview” meter + missing fields list.
+- Validation rules:
+  - cannot proceed if essential financial fields missing (revenue + costs or cash)
+- CTA: “Save mappings”
+
+Step 4: Run Truth Scan
+- Big CTA: “Run Truth Scan (24 metrics)”
+- Show animated progress list:
+  - parsing data
+  - computing margins
+  - computing burn/runway
+  - computing concentration/retention
+  - benchmarking
+  - generating flags
+- After completion: redirect to /founder/truth-scan
+
+FOUNDATION DASHBOARDS (FOUNDERS)
+
+Page: /founder/overview (Executive Snapshot)
+Top section: “Executive Snapshot”
+- 6 KPI cards (2 rows x 3):
+  - Runway (p50 months) + p10/p90
+  - Net Burn (monthly)
+  - Revenue Growth (MoM)
+  - Gross Margin %
+  - Retention (12m revenue or logo)
+  - Concentration (Top5 share)
+Each card shows:
+- Value
+- Direction arrow vs previous scan (if available)
+- Benchmark badge (“Above p50”, “Below p25”)
+- Tiny sparkline (optional)
+
+Mid section: “What Predixen recommends right now”
+- Show top 3 actions (DecisionCard compact)
+- Each shows: title + delta survival + delta runway (if computed)
+- CTA: “Open Decisions”
+
+Bottom: “Ask Copilot”
+- One-line input with suggested prompts:
+  - “How do I extend runway by 6 months?”
+  - “What’s the riskiest assumption in my model?”
+  - “What should I do if fundraise slips by 3 months?”
+
+Page: /founder/truth-scan (Truth & Benchmarks)
+Section A: Scores
+- Two big score cards:
+  - Quality of Growth Index (0–100)
+  - Data Confidence Score (0–100)
+- Each has “What this means” tooltip.
+
+Section B: Benchmarks (must be visual)
+- For each key metric, show BenchmarkBar:
+  - p25/p50/p75 markers + company value dot
+  - label “higher is better” / “lower is better”
+
+Section C: Flags (Risk Panel)
+- Right-side (or below) list of top flags:
+  - severity badge (high/med/low)
+  - title + 1-line description
+  - “Metrics involved” chips
+- Clicking a flag opens drawer with:
+  - what it means
+  - why it matters
+  - recommended next data to upload / checks to run
+
+Page: /founder/scenarios (Scenario Builder)
+Top: Scenario templates (cards)
+- Extend runway
+- Grow faster
+- Prep fundraise
+- Pricing change
+- Cost restructure
+- Each template pre-fills knobs.
+
+Scenario editor layout: 2-column
+Left: Knobs panel (ScenarioKnobPanel)
+- Pricing slider (-10 to +15)
+- Burn reduction slider (0 to 35)
+- Growth uplift slider (-5 to +20)
+- Hiring plan widget:
+  - add roles + counts + start month
+  - shows incremental monthly payroll
+- Fundraise widget:
+  - month (1–12)
+  - amount
+  - probability
+- IMPORTANT: sliders default to baseline-derived values. Never default to 100.
+Right: “Instant preview”
+- show a small preview panel:
+  - estimated net burn change
+  - estimated runway p50 (rough preview if available)
+CTA buttons:
+- “Run Simulation”
+- “Save Scenario”
+After run: redirect to /founder/decisions with the scenario selected
+
+Page: /founder/decisions (Ranked Recommendations)
+Top: “Recommended actions (ranked)”
+- Display 3 large DecisionCards
+Each DecisionCard must include:
+- Title
+- Why it wins (1–2 lines)
+- Expected Impact:
+  - delta survival 18m (%)
+  - delta runway p50 (months)
+- Risks & Assumptions (bullets)
+- Button: “Run validation scenario” (auto-applies delta and runs sim)
+- Button: “Make this my plan” (saves as chosen strategy)
+
+Second section: Scenario comparison table
+- Compare baseline vs current vs top action scenarios:
+  - survival_18m
+  - runway_p50
+  - revenue_18m median
+  - burn_multiple
+- highlight best cells
+
+Third section: Charts
+- Survival curve chart
+- Bands chart (revenue, burn, cash p10/p50/p90)
+- Runway distribution chart (p10/p50/p90 clearly labeled)
+
+Page: /founder/copilot (Chat + Actions)
+Layout: split view
+Left: Chat thread
+Right: “Context panel”
+- shows:
+  - Confidence score
+  - QoG score
+  - current scenario knobs
+  - latest survival/runway summary
+Chat behaviors:
+- Copilot responses MUST have:
+  1) Answer
+  2) Evidence metrics used (list keys)
+  3) Suggested next experiment (button)
+- Provide quick buttons:
+  - “Run what-if: pricing +5%”
+  - “Run what-if: burn cut 20%”
+  - “Run what-if: raise in 3 months”
+When user clicks button: call POST /companies/{id}/simulate, then refresh context & charts.
+
+EMPTY STATES + ERROR HANDLING:
+- If no datasets uploaded, show clear empty state with “Upload data” CTA.
+- If confidence score low, show “Improve Confidence” panel:
+  - missing fields checklist with upload guidance.
+- Always show loading skeletons; never blank screens.
+- Always provide user-friendly errors for mapping failures.
+
+UI PERFORMANCE + CONSISTENCY:
+- Use React Query caching for context, truth, simulation, decisions.
+- Use consistent component library and spacing.
+- Chart tooltips show p10/p50/p90 with currency formatting.
+
+INVESTOR MODE UX (HIDDEN):
+- Pages exist but hidden behind flag.
+- If accessed when disabled: show “Feature not enabled” page.
+
+=====================================================================
+NOW EMBED THESE EXACT ARTIFACTS INTO THE REPO
+=====================================================================
+
+1) ACTION LIBRARY JSON: create file server/decision/action_library.json with exact contents (same JSON as below):
+[KEEP THE JSON EXACTLY AS PROVIDED IN THE PREVIOUS PROMPT — DO NOT MODIFY]
+
+2) CONTEXT PACK SCHEMA JSON: create file server/copilot/context_pack_schema.json with exact contents (same schema as below):
+[KEEP THE JSON EXACTLY AS PROVIDED IN THE PREVIOUS PROMPT — DO NOT MODIFY]
+
+3) AGENT SYSTEM PROMPTS: create server/copilot/prompts.py containing the exact prompts (same as below):
+[KEEP THE PROMPTS EXACTLY AS PROVIDED IN THE PREVIOUS PROMPT — DO NOT MODIFY]
+
+=====================================================================
+IMPLEMENTATION ORDER (DO THIS):
+=====================================================================
+1) DB models + Alembic migration + seed benchmarks
+2) Auth + company CRUD
+3) Ingestion (CSV upload + parsers + mapping UI)
+4) Truth scan module + endpoints + Truth UI
+5) Scenario builder UI + simulation engine + charts
+6) Decision engine using action_library.json + Decisions UI
+7) Context pack endpoint + Copilot UI + agent router with grounding enforcement
+8) Feature flag gating investor mode (frontend + backend)
+9) Polish: empty states, skeletons, slider fixes, responsive layout
+
+DELIVERABLES:
+- Working app end-to-end
+- File list + summary of what you implemented
+- Confirm Investor mode is hidden but code remains present
