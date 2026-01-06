@@ -9,6 +9,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Info } from 'lucide-react';
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface BandsChartProps {
   data: {
@@ -20,6 +22,7 @@ interface BandsChartProps {
   yAxisLabel?: string;
   formatValue?: (value: number) => string;
   testId?: string;
+  description?: string;
 }
 
 export function BandsChart({
@@ -28,6 +31,7 @@ export function BandsChart({
   yAxisLabel = 'Value',
   formatValue = (v) => `$${(v / 1000).toFixed(0)}k`,
   testId = 'bands-chart',
+  description = 'Shows P10, P50 (median), and P90 projections from Monte Carlo simulation. P10 is the pessimistic case, P90 is optimistic.',
 }: BandsChartProps) {
   const chartData = data.p50.map((_, index) => ({
     month: index + 1,
@@ -39,7 +43,19 @@ export function BandsChart({
   return (
     <Card className="overflow-visible" data-testid={testId}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-lg">{title}</CardTitle>
+          <UITooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className="inline-flex">
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <p className="text-sm">{description}</p>
+            </TooltipContent>
+          </UITooltip>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="h-64">
@@ -71,9 +87,38 @@ export function BandsChart({
                   backgroundColor: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
+                  padding: '12px',
                 }}
-                formatter={(value: number, name: string) => [formatValue(value), name.toUpperCase()]}
-                labelFormatter={(label) => `Month ${label}`}
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const p10 = payload.find(p => p.dataKey === 'p10')?.value as number;
+                    const p50 = payload.find(p => p.dataKey === 'p50')?.value as number;
+                    const p90 = payload.find(p => p.dataKey === 'p90')?.value as number;
+                    return (
+                      <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                        <p className="font-medium text-sm mb-2">Month {label}</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">P90 (Optimistic):</span>
+                            <span className="font-mono text-emerald-400">{formatValue(p90)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">P50 (Median):</span>
+                            <span className="font-mono font-bold">{formatValue(p50)}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground">P10 (Pessimistic):</span>
+                            <span className="font-mono text-amber-400">{formatValue(p10)}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Range: {formatValue(p90 - p10)} spread
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
               />
               <Area
                 type="monotone"

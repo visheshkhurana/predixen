@@ -3,14 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
 import { BandsChart } from '@/components/BandsChart';
-import { Play, Plus } from 'lucide-react';
+import { AnnotatedSlider } from '@/components/AnnotatedSlider';
+import { Play, Plus, Info } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
+import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const SCENARIO_TEMPLATES = [
   { name: 'Conservative Cut', deltas: { burn_reduction_pct: 20, growth_uplift_pct: -3 } },
@@ -144,45 +146,54 @@ export default function ScenariosPage() {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label>Pricing Change: {newScenario.pricing_change_pct}%</Label>
-                <Slider
-                  value={[newScenario.pricing_change_pct]}
-                  onValueChange={([v]) => setNewScenario({ ...newScenario, pricing_change_pct: v })}
-                  min={-20}
-                  max={30}
-                  step={1}
-                  data-testid="slider-pricing"
-                />
-              </div>
+              <AnnotatedSlider
+                label="Pricing Change"
+                value={newScenario.pricing_change_pct}
+                onChange={(v) => setNewScenario({ ...newScenario, pricing_change_pct: v })}
+                min={-20}
+                max={30}
+                tooltip={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.description}
+                markers={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.markers || []}
+                testId="slider-pricing"
+              />
               
-              <div className="space-y-2">
-                <Label>Growth Uplift: {newScenario.growth_uplift_pct}%</Label>
-                <Slider
-                  value={[newScenario.growth_uplift_pct]}
-                  onValueChange={([v]) => setNewScenario({ ...newScenario, growth_uplift_pct: v })}
-                  min={-10}
-                  max={20}
-                  step={1}
-                  data-testid="slider-growth"
-                />
-              </div>
+              <AnnotatedSlider
+                label="Growth Uplift"
+                value={newScenario.growth_uplift_pct}
+                onChange={(v) => setNewScenario({ ...newScenario, growth_uplift_pct: v })}
+                min={-10}
+                max={20}
+                tooltip={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.description}
+                markers={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.markers || []}
+                testId="slider-growth"
+              />
               
-              <div className="space-y-2">
-                <Label>Burn Reduction: {newScenario.burn_reduction_pct}%</Label>
-                <Slider
-                  value={[newScenario.burn_reduction_pct]}
-                  onValueChange={([v]) => setNewScenario({ ...newScenario, burn_reduction_pct: v })}
-                  min={-20}
-                  max={40}
-                  step={1}
-                  data-testid="slider-burn"
-                />
-              </div>
+              <AnnotatedSlider
+                label="Burn Reduction"
+                value={newScenario.burn_reduction_pct}
+                onChange={(v) => setNewScenario({ ...newScenario, burn_reduction_pct: v })}
+                min={-20}
+                max={40}
+                tooltip={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.description}
+                markers={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.markers || []}
+                testId="slider-burn"
+              />
               
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <Label>Fundraise Month</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label>Fundraise Month</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="inline-flex" data-testid="tooltip-fundraise-month">
+                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-sm">Month in projection when funding is received (1-24). Leave empty for no fundraise.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     type="number"
                     value={newScenario.fundraise_month || ''}
@@ -197,7 +208,19 @@ export default function ScenariosPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Amount ($)</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label>Amount ($)</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="inline-flex" data-testid="tooltip-fundraise-amount">
+                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-sm">Amount of funding to model (e.g., 500000 for a $500K bridge round).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     type="number"
                     value={newScenario.fundraise_amount || ''}

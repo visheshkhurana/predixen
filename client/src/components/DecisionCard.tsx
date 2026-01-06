@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, AlertTriangle, Play } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Play, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DecisionCardProps {
   rank: number;
@@ -15,6 +17,9 @@ interface DecisionCardProps {
   keyAssumption: string;
   onValidate?: () => void;
   onSelect?: () => void;
+  onAccept?: () => void;
+  onReject?: () => void;
+  status?: 'pending' | 'accepted' | 'rejected';
   testId?: string;
 }
 
@@ -27,8 +32,12 @@ export function DecisionCard({
   keyAssumption,
   onValidate,
   onSelect,
+  onAccept,
+  onReject,
+  status = 'pending',
   testId = 'decision-card',
 }: DecisionCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const getRankBadge = () => {
     switch (rank) {
       case 1:
@@ -109,19 +118,75 @@ export function DecisionCard({
           </div>
         )}
         
-        <div className="flex gap-2 pt-2">
-          {onValidate && (
-            <Button variant="outline" size="sm" onClick={onValidate} data-testid={`${testId}-validate`}>
-              <Play className="h-3 w-3 mr-1" />
-              Run Validation
-            </Button>
+        <div className="flex items-center gap-2 pt-2 flex-wrap">
+          {status === 'pending' && (
+            <>
+              {onAccept && (
+                <Button size="sm" onClick={onAccept} data-testid={`${testId}-accept`}>
+                  <Check className="h-3 w-3 mr-1" />
+                  Accept
+                </Button>
+              )}
+              {onReject && (
+                <Button variant="outline" size="sm" onClick={onReject} data-testid={`${testId}-reject`}>
+                  <X className="h-3 w-3 mr-1" />
+                  Reject
+                </Button>
+              )}
+              {onValidate && (
+                <Button variant="ghost" size="sm" onClick={onValidate} data-testid={`${testId}-validate`}>
+                  <Play className="h-3 w-3 mr-1" />
+                  Simulate
+                </Button>
+              )}
+            </>
           )}
-          {onSelect && rank === 1 && (
-            <Button size="sm" onClick={onSelect} data-testid={`${testId}-select`}>
-              Make This My Plan
-            </Button>
+          {status === 'accepted' && (
+            <Badge className="bg-emerald-500/20 text-emerald-400">
+              <Check className="h-3 w-3 mr-1" />
+              Accepted
+            </Badge>
           )}
+          {status === 'rejected' && (
+            <Badge variant="secondary" className="text-muted-foreground">
+              <X className="h-3 w-3 mr-1" />
+              Rejected
+            </Badge>
+          )}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="ml-auto"
+            data-testid={`${testId}-expand`}
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </div>
+        
+        {isExpanded && (
+          <div className="pt-3 mt-3 border-t border-border space-y-3">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Full Rationale</p>
+              <p className="text-sm">{rationale}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">Key Assumption</p>
+              <p className="text-sm italic">{keyAssumption}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1">All Risks</p>
+              <ul className="text-sm space-y-1">
+                {risks.map((risk, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <AlertTriangle className="h-3 w-3 mt-0.5 text-amber-500 flex-shrink-0" />
+                    <span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
