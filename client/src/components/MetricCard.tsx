@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MetricCardProps {
@@ -15,6 +16,8 @@ interface MetricCardProps {
   };
   variant?: 'default' | 'warning' | 'danger' | 'success';
   testId?: string;
+  tooltip?: string;
+  onClick?: () => void;
 }
 
 export function MetricCard({
@@ -26,6 +29,8 @@ export function MetricCard({
   benchmark,
   variant = 'default',
   testId = 'metric-card',
+  tooltip,
+  onClick,
 }: MetricCardProps) {
   const getTrendIcon = () => {
     if (!trend) return null;
@@ -106,10 +111,33 @@ export function MetricCard({
   };
 
   return (
-    <Card className="overflow-visible" data-testid={testId}>
+    <Card 
+      className={cn('overflow-visible', onClick && 'cursor-pointer hover-elevate')} 
+      data-testid={testId}
+      onClick={onClick}
+    >
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-sm font-medium text-muted-foreground">{title}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-muted-foreground">{title}</span>
+            {tooltip && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full p-0.5"
+                    onClick={(e) => e.stopPropagation()}
+                    data-testid={`${testId}-tooltip`}
+                  >
+                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs" side="top">
+                  <p className="text-sm">{tooltip}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {getVariantBadge()}
             {getBenchmarkBadge()}

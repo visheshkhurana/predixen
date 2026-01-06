@@ -34,7 +34,10 @@ import {
   AlertCircle,
   DollarSign,
   TrendingUp,
+  Info,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { INPUT_FIELD_TOOLTIPS } from "@/lib/metricDefinitions";
 
 const manualInputSchema = z.object({
   cashOnHand: z.coerce.number().min(0, "Cash must be positive"),
@@ -197,7 +200,20 @@ export default function DataInput() {
                       name="cashOnHand"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Cash on Hand ($)</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Cash on Hand ($)
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex" data-testid="tooltip-cash">
+                                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="font-medium mb-1">{INPUT_FIELD_TOOLTIPS.cashOnHand.title}</p>
+                                <p className="text-sm text-muted-foreground">{INPUT_FIELD_TOOLTIPS.cashOnHand.whyItMatters}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
                           <FormControl>
                             <div className="relative">
                               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -210,7 +226,7 @@ export default function DataInput() {
                               />
                             </div>
                           </FormControl>
-                          <FormDescription>Total cash available</FormDescription>
+                          <FormDescription>{INPUT_FIELD_TOOLTIPS.cashOnHand.description}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -220,7 +236,20 @@ export default function DataInput() {
                       name="monthlyRevenue"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Monthly Revenue ($)</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Monthly Revenue ($)
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex" data-testid="tooltip-revenue">
+                                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="font-medium mb-1">{INPUT_FIELD_TOOLTIPS.monthlyRevenue.title}</p>
+                                <p className="text-sm text-muted-foreground">{INPUT_FIELD_TOOLTIPS.monthlyRevenue.whyItMatters}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
                           <FormControl>
                             <div className="relative">
                               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -233,7 +262,7 @@ export default function DataInput() {
                               />
                             </div>
                           </FormControl>
-                          <FormDescription>Current MRR or monthly revenue</FormDescription>
+                          <FormDescription>{INPUT_FIELD_TOOLTIPS.monthlyRevenue.description}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -243,7 +272,20 @@ export default function DataInput() {
                       name="monthlyExpenses"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Monthly Expenses ($)</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Monthly Expenses ($)
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex" data-testid="tooltip-expenses">
+                                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="font-medium mb-1">{INPUT_FIELD_TOOLTIPS.monthlyExpenses.title}</p>
+                                <p className="text-sm text-muted-foreground">{INPUT_FIELD_TOOLTIPS.monthlyExpenses.whyItMatters}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
                           <FormControl>
                             <div className="relative">
                               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -256,7 +298,7 @@ export default function DataInput() {
                               />
                             </div>
                           </FormControl>
-                          <FormDescription>Total monthly operating expenses</FormDescription>
+                          <FormDescription>{INPUT_FIELD_TOOLTIPS.monthlyExpenses.description}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -266,7 +308,20 @@ export default function DataInput() {
                       name="growthRate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Monthly Growth Rate (%)</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Monthly Growth Rate (%)
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="inline-flex" data-testid="tooltip-growth">
+                                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                <p className="font-medium mb-1">{INPUT_FIELD_TOOLTIPS.growthRate.title}</p>
+                                <p className="text-sm text-muted-foreground">{INPUT_FIELD_TOOLTIPS.growthRate.whyItMatters}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </FormLabel>
                           <FormControl>
                             <div className="relative">
                               <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -279,7 +334,7 @@ export default function DataInput() {
                               />
                             </div>
                           </FormControl>
-                          <FormDescription>Expected revenue growth per month</FormDescription>
+                          <FormDescription>{INPUT_FIELD_TOOLTIPS.growthRate.description}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
