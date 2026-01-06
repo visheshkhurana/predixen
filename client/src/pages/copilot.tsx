@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Send, Sparkles, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { FeedbackButton } from '@/components/FeedbackButton';
+import { Send, Sparkles, TrendingUp, TrendingDown, DollarSign, Play } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
 
@@ -152,8 +153,14 @@ export default function CopilotPage() {
                       className="mt-3"
                       data-testid={`button-suggestion-${i}`}
                     >
+                      <Play className="h-3 w-3 mr-1" />
                       {message.suggestion.label}
                     </Button>
+                  )}
+                  {message.role === 'assistant' && i > 0 && (
+                    <div className="mt-3 pt-2 border-t border-border/50">
+                      <FeedbackButton testId={`feedback-${i}`} />
+                    </div>
                   )}
                 </div>
               </div>
