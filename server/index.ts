@@ -9,6 +9,7 @@ const app = express();
 const httpServer = createServer(app);
 
 function startFastAPIServer() {
+  console.log("Starting FastAPI server...");
   const fastapi = spawn("python", ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8001"], {
     stdio: "inherit",
     shell: true,
@@ -25,6 +26,23 @@ function startFastAPIServer() {
   });
   
   return fastapi;
+}
+
+async function waitForFastAPI(maxRetries = 30, retryDelay = 1000): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch("http://localhost:8001/health");
+      if (response.ok) {
+        console.log("FastAPI server is ready");
+        return true;
+      }
+    } catch {
+      console.log(`Waiting for FastAPI... (${i + 1}/${maxRetries})`);
+    }
+    await new Promise(resolve => setTimeout(resolve, retryDelay));
+  }
+  console.error("FastAPI server failed to start");
+  return false;
 }
 
 const fastapiProcess = startFastAPIServer();
@@ -105,6 +123,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Wait for FastAPI to be ready before serving requests
+  await waitForFastAPI();
+  
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
