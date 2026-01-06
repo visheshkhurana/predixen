@@ -244,6 +244,12 @@ export default function ScenariosPage() {
     }));
   }, [scenarios]);
   
+  const currentScenarioName = useMemo(() => {
+    if (!selectedScenarioId || !scenarios) return newScenario.name;
+    const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
+    return selected?.name || newScenario.name;
+  }, [selectedScenarioId, scenarios, newScenario.name]);
+  
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -563,13 +569,13 @@ export default function ScenariosPage() {
                 survival18m={simulation.survival?.['18m'] || 0}
                 survival12m={simulation.survival?.['12m'] || 0}
                 endCash={simulation.summary?.end_cash}
-                scenarioName={newScenario.name}
+                scenarioName={currentScenarioName}
               />
               
               <div className="flex justify-end">
                 <ExportButton
                   data={simulation}
-                  filename={`simulation-${newScenario.name.toLowerCase().replace(/\s+/g, '-')}`}
+                  filename={`simulation-${currentScenarioName.toLowerCase().replace(/\s+/g, '-')}`}
                   formatForCSV={formatSimulationForExport}
                   testId="export-simulation"
                 />
