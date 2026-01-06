@@ -15,27 +15,45 @@ from server.core.security import get_password_hash
 def seed_demo_data(db: Session):
     existing = db.query(User).filter(User.email == "demo@predixen.ai").first()
     if existing:
-        return existing
-    
-    demo_user = User(
-        email="demo@predixen.ai",
-        password_hash=get_password_hash("demo123")
-    )
-    db.add(demo_user)
-    db.commit()
-    db.refresh(demo_user)
-    
-    demo_company = Company(
-        user_id=demo_user.id,
-        name="TechFlow Analytics",
-        website="https://techflow.ai",
-        industry="general_saas",
-        stage="seed",
-        currency="USD"
-    )
-    db.add(demo_company)
-    db.commit()
-    db.refresh(demo_company)
+        demo_user = existing
+        company = db.query(Company).filter(Company.user_id == demo_user.id).first()
+        if company:
+            existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
+            if existing_scenario:
+                return demo_user
+            demo_company = company
+        else:
+            demo_company = Company(
+                user_id=demo_user.id,
+                name="TechFlow Analytics",
+                website="https://techflow.ai",
+                industry="general_saas",
+                stage="seed",
+                currency="USD"
+            )
+            db.add(demo_company)
+            db.commit()
+            db.refresh(demo_company)
+    else:
+        demo_user = User(
+            email="demo@predixen.ai",
+            password_hash=get_password_hash("demo123")
+        )
+        db.add(demo_user)
+        db.commit()
+        db.refresh(demo_user)
+        
+        demo_company = Company(
+            user_id=demo_user.id,
+            name="TechFlow Analytics",
+            website="https://techflow.ai",
+            industry="general_saas",
+            stage="seed",
+            currency="USD"
+        )
+        db.add(demo_company)
+        db.commit()
+        db.refresh(demo_company)
     
     base_date = datetime.now() - timedelta(days=365)
     revenue = 15000
@@ -139,9 +157,7 @@ def seed_demo_data(db: Session):
     
     truth_scan = TruthScan(
         company_id=demo_company.id,
-        outputs_json=truth_outputs,
-        data_confidence_score=78.0,
-        quality_of_growth_index=72.0
+        outputs_json=truth_outputs
     )
     db.add(truth_scan)
     db.commit()
@@ -150,12 +166,14 @@ def seed_demo_data(db: Session):
     scenario = Scenario(
         company_id=demo_company.id,
         name="Current Trajectory",
-        pricing_change_pct=0,
-        growth_uplift_pct=0,
-        burn_reduction_pct=0,
-        fundraise_month=None,
-        fundraise_amount=0,
-        gross_margin_delta_pct=0
+        inputs_json={
+            "pricing_change_pct": 0,
+            "growth_uplift_pct": 0,
+            "burn_reduction_pct": 0,
+            "fundraise_month": None,
+            "fundraise_amount": 0,
+            "gross_margin_delta_pct": 0
+        }
     )
     db.add(scenario)
     db.commit()
@@ -263,7 +281,6 @@ def seed_demo_data(db: Session):
     
     decision = Decision(
         simulation_run_id=sim_run.id,
-        company_id=demo_company.id,
         recommended_actions_json=decisions_output
     )
     db.add(decision)
