@@ -61,7 +61,7 @@ export default function OverviewPage() {
   };
   
   const formatPercent = (value: number | null | undefined) => {
-    if (value == null) return 'N/A';
+    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
     return `${value.toFixed(1)}%`;
   };
   

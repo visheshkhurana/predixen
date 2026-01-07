@@ -188,3 +188,19 @@ export function useTerminaPdfUpload() {
     },
   });
 }
+
+export function useTerminaExcelUpload() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, file, saveAsBaseline }: { 
+      companyId: number; 
+      file: File;
+      saveAsBaseline?: boolean;
+    }) => api.datasets.uploadTerminaExcel(companyId, file, saveAsBaseline),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+    },
+  });
+}
