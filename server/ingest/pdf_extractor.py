@@ -19,33 +19,41 @@ def get_openai_client() -> OpenAI:
     
     return OpenAI(api_key=api_key, base_url=base_url)
 
-EXTRACTION_PROMPT = """Extract from the following Termina financial report all key financial and operational metrics. 
+EXTRACTION_PROMPT = """Extract from the following financial report (Tribe Capital Mini Benchmark Scan, Termina report, or similar) all key financial and operational metrics. 
 Return the result as a JSON object with these exact keys (use null if not found):
 
 {
   "company_name": "string - the company name",
   "report_date": "string - the date of the report (YYYY-MM-DD format if possible)",
-  "currency": "string - the currency code (USD, EUR, GBP, etc.)",
-  "monthly_revenue": "number - current monthly revenue",
+  "currency": "string - the currency code (USD, EUR, GBP, INR, etc.)",
+  "monthly_revenue": "number - current monthly revenue in the stated currency",
   "run_rate_revenue": "number - annualized run rate revenue",
   "cogs": "number - cost of goods sold (monthly)",
   "gross_profit": "number - gross profit (monthly)",
   "gross_margin": "number - gross margin as percentage (0-100)",
   "operating_income": "number - operating income (monthly)",
   "operating_margin": "number - operating margin as percentage",
-  "net_burn": "number - monthly net burn rate",
-  "cash_balance": "number - current cash on hand",
+  "total_monthly_expenses": "number - total monthly operating expenses (COGS + Opex + S&M + Other)",
+  "net_burn": "number - monthly net burn rate (expenses minus revenue if negative cash flow)",
+  "cash_balance": "number - current cash on hand / bank balance",
   "runway_months": "number - estimated runway in months",
-  "yoy_growth": "number - year over year growth rate as percentage",
-  "mom_growth": "number - month over month growth rate as percentage",
-  "payroll": "number - monthly payroll expense",
-  "opex": "number - monthly operating expenses (excluding COGS)",
+  "yoy_growth": "number - year over year growth rate as multiple (e.g., 1.6x becomes 60)",
+  "mom_growth": "number - month over month growth rate as percentage (e.g., CMGR)",
+  "cmgr_3": "number - 3-month compound monthly growth rate as percentage",
+  "cmgr_6": "number - 6-month compound monthly growth rate as percentage",
+  "cmgr_12": "number - 12-month compound monthly growth rate as percentage",
+  "payroll": "number - monthly payroll/personnel expense",
+  "sales_and_marketing": "number - monthly sales & marketing expense",
+  "other_opex": "number - monthly other operating expenses",
+  "opex": "number - total monthly operating expenses (excluding COGS)",
   "headcount": "number - current employee count",
   "arr": "number - annual recurring revenue",
   "mrr": "number - monthly recurring revenue",
   "ndr": "number - net dollar retention as percentage",
   "logo_retention": "number - customer logo retention as percentage",
-  "customers": "number - total customer count",
+  "customers": "number - total customer/user count",
+  "monthly_active_users": "number - monthly active users",
+  "paid_users": "number - monthly paid users",
   "arpu": "number - average revenue per user/customer",
   "ltv": "number - customer lifetime value",
   "cac": "number - customer acquisition cost",
@@ -54,10 +62,14 @@ Return the result as a JSON object with these exact keys (use null if not found)
 }
 
 Important instructions:
-- Extract actual numbers, not formatted strings
+- Extract actual numbers from the report, not formatted strings
+- Convert all monetary values to numbers (e.g., "$14.2M" becomes 14200000)
 - Convert percentages to numbers (e.g., 85% becomes 85)
+- For YoY growth shown as multipliers (e.g., "1.6x"), convert to percentage (60%)
 - Use null for any metrics not found in the report
-- If a metric can be calculated from other metrics, calculate it
+- Look for metrics in tables, key findings sections, and benchmark tables
+- If COGS and Opex are given, calculate total_monthly_expenses = COGS + all Opex items
+- If operating margin and revenue are given, calculate operating_income
 - Be precise with the numbers - do not estimate or guess
 
 Here is the report text:
@@ -157,26 +169,49 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     if not metrics:
         raise ValueError("Failed to extract any metrics from the PDF.")
     
+    total_expenses = metrics.get("total_monthly_expenses")
+    if not total_expenses:
+        cogs = metrics.get("cogs") or 0
+        opex = metrics.get("opex") or 0
+        sm = metrics.get("sales_and_marketing") or 0
+        other = metrics.get("other_opex") or 0
+        if cogs or opex or sm or other:
+            total_expenses = cogs + opex + sm + other
+    
+    mom_growth = metrics.get("mom_growth") or metrics.get("cmgr_3") or metrics.get("cmgr_12")
+    
     baseline_data = {
         "monthly_revenue": metrics.get("monthly_revenue") or metrics.get("mrr"),
+        "total_expenses": total_expenses,
         "gross_margin": metrics.get("gross_margin"),
+        "operating_margin": metrics.get("operating_margin"),
         "operating_expenses": metrics.get("opex"),
         "payroll": metrics.get("payroll"),
+        "sales_and_marketing": metrics.get("sales_and_marketing"),
+        "other_opex": metrics.get("other_opex"),
         "cogs": metrics.get("cogs"),
+        "gross_profit": metrics.get("gross_profit"),
+        "operating_income": metrics.get("operating_income"),
         "cash_balance": metrics.get("cash_balance"),
         "headcount": metrics.get("headcount"),
         "yoy_growth": metrics.get("yoy_growth"),
-        "mom_growth": metrics.get("mom_growth"),
+        "mom_growth": mom_growth,
+        "cmgr_3": metrics.get("cmgr_3"),
+        "cmgr_6": metrics.get("cmgr_6"),
+        "cmgr_12": metrics.get("cmgr_12"),
         "runway_months": metrics.get("runway_months"),
         "net_burn": metrics.get("net_burn"),
         "ndr": metrics.get("ndr"),
         "logo_retention": metrics.get("logo_retention"),
         "customers": metrics.get("customers"),
+        "monthly_active_users": metrics.get("monthly_active_users"),
+        "paid_users": metrics.get("paid_users"),
         "arpu": metrics.get("arpu"),
         "ltv": metrics.get("ltv"),
         "cac": metrics.get("cac"),
         "ltv_cac_ratio": metrics.get("ltv_cac_ratio"),
         "arr": metrics.get("arr"),
+        "run_rate_revenue": metrics.get("run_rate_revenue"),
     }
     
     baseline_data = {k: v for k, v in baseline_data.items() if v is not None}
