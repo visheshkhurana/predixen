@@ -175,7 +175,7 @@ def calculate_metrics(normalized: NormalizedFinancials) -> Dict[str, Any]:
         'isProfitable': revenue >= expenses,
     }
 
-@router.post("/api/ingest/financials", response_model=ExtractionResponse)
+@router.post("/ingest/financials", response_model=ExtractionResponse)
 async def ingest_financials(
     file: UploadFile = File(...),
     fileType: str = Form(...),
