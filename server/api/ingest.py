@@ -261,6 +261,10 @@ async def ingest_financials(
                 if normalized.monthlyRevenue:
                     cogs = normalized.monthlyRevenue * 0.3
                 
+                payroll_amount = 0.0
+                if normalized.expenseBreakdown and normalized.expenseBreakdown.payroll:
+                    payroll_amount = normalized.expenseBreakdown.payroll
+                
                 record = FinancialRecord(
                     company_id=companyId,
                     period_start=first_of_month,
@@ -268,7 +272,7 @@ async def ingest_financials(
                     revenue=normalized.monthlyRevenue or 0,
                     cogs=cogs,
                     opex=total_expenses or 0,
-                    payroll=normalized.expenseBreakdown.payroll or 0 if normalized.expenseBreakdown else 0,
+                    payroll=payroll_amount,
                     other_costs=0,
                     cash_balance=normalized.cashOnHand or 0,
                 )
@@ -296,7 +300,7 @@ async def ingest_financials(
         logger.error(f"Error processing file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
 
-@router.get("/api/companies/{company_id}/financials/baseline", response_model=Dict[str, Any])
+@router.get("/companies/{company_id}/financials/baseline", response_model=Dict[str, Any])
 async def get_financial_baseline(
     company_id: int,
     db: Session = Depends(get_db),
@@ -338,7 +342,7 @@ async def get_financial_baseline(
         }
     }
 
-@router.post("/api/companies/{company_id}/financials/save", response_model=Dict[str, Any])
+@router.post("/companies/{company_id}/financials/save", response_model=Dict[str, Any])
 async def save_financial_baseline(
     company_id: int,
     baseline: NormalizedFinancials,
