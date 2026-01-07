@@ -41,7 +41,9 @@ import {
   Briefcase,
   Loader2,
   Info,
+  FileText,
 } from "lucide-react";
+import { TerminaPdfUpload } from "@/components/TerminaPdfUpload";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const dataInputSchema = z.object({
@@ -265,7 +267,11 @@ export default function DataInput() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="pdf-upload" data-testid="tab-pdf-upload">
+                <FileText className="h-4 w-4 mr-2" />
+                PDF Upload
+              </TabsTrigger>
               <TabsTrigger value="company" data-testid="tab-company">
                 <Building2 className="h-4 w-4 mr-2" />
                 Company
@@ -279,6 +285,26 @@ export default function DataInput() {
                 Goals
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="pdf-upload" className="mt-6">
+              {currentCompany ? (
+                <TerminaPdfUpload 
+                  companyId={currentCompany.id} 
+                  onSuccess={(metrics) => {
+                    toast({
+                      title: "Baseline data updated",
+                      description: "Financial metrics extracted and saved from PDF",
+                    });
+                  }}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Please select a company first to upload a PDF report
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleSave)}>
