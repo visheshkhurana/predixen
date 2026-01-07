@@ -89,6 +89,27 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    uploadTerminaPdf: async (companyId: number, file: File, saveAsBaseline = true) => {
+      const token = localStorage.getItem('predixen-token');
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(
+        `${API_BASE}/companies/${companyId}/datasets/termina-pdf?save_as_baseline=${saveAsBaseline}`, 
+        {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new ApiError(response.status, error.detail);
+      }
+      
+      return response.json();
+    },
   },
   
   truth: {

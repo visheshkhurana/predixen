@@ -172,3 +172,19 @@ export function useDefaultScenarios(companyId: number | null) {
     enabled: !!companyId,
   });
 }
+
+export function useTerminaPdfUpload() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, file, saveAsBaseline }: { 
+      companyId: number; 
+      file: File;
+      saveAsBaseline?: boolean;
+    }) => api.datasets.uploadTerminaPdf(companyId, file, saveAsBaseline),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+    },
+  });
+}

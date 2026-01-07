@@ -7,10 +7,17 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(
-    api_key=os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY"),
-    base_url=os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL"),
-)
+MAX_PDF_SIZE_MB = 10
+
+def get_openai_client() -> OpenAI:
+    """Get OpenAI client with validation."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    
+    if not api_key:
+        raise ValueError("OpenAI API key not configured. Please check environment settings.")
+    
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 EXTRACTION_PROMPT = """Extract from the following Termina financial report all key financial and operational metrics. 
 Return the result as a JSON object with these exact keys (use null if not found):
@@ -89,6 +96,8 @@ def extract_text_from_pdf(file_path: str) -> str:
 def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
     """Use OpenAI to extract financial metrics from PDF text."""
     try:
+        client = get_openai_client()
+        
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -103,9 +112,13 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
             ],
             max_tokens=2000,
             temperature=0.1,
+            timeout=60,
         )
         
         content = response.choices[0].message.content
+        
+        if not content:
+            raise ValueError("OpenAI returned empty response")
         
         if content.startswith("```"):
             content = content.split("```")[1]
@@ -114,21 +127,35 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
         content = content.strip()
         
         metrics = json.loads(content)
+        
+        if not isinstance(metrics, dict):
+            raise ValueError("OpenAI response is not a valid metrics object")
+        
         return metrics
         
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse OpenAI response as JSON: {e}")
-        raise ValueError(f"Failed to parse extracted metrics: {e}")
+        raise ValueError(f"AI response was not valid JSON. Please try again.")
     except Exception as e:
         logger.error(f"Error calling OpenAI API: {e}")
-        raise
+        raise ValueError(f"Failed to analyze PDF: {str(e)}")
 
 
-def process_termina_pdf(file_path: str) -> Dict[str, Any]:
+def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) -> Dict[str, Any]:
     """Process a Termina PDF and extract financial metrics."""
+    file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+    if file_size_mb > max_size_mb:
+        raise ValueError(f"PDF file too large ({file_size_mb:.1f}MB). Maximum allowed is {max_size_mb}MB.")
+    
     pdf_text = extract_text_from_pdf(file_path)
     
+    if len(pdf_text.strip()) < 100:
+        raise ValueError("PDF contains insufficient text content for analysis.")
+    
     metrics = extract_metrics_with_openai(pdf_text)
+    
+    if not metrics:
+        raise ValueError("Failed to extract any metrics from the PDF.")
     
     baseline_data = {
         "monthly_revenue": metrics.get("monthly_revenue") or metrics.get("mrr"),
