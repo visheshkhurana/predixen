@@ -65,6 +65,11 @@ export default function OverviewPage() {
     return `${value.toFixed(1)}%`;
   };
   
+  const safeToFixed = (value: any, digits: number = 1): string => {
+    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
+    return value.toFixed(digits);
+  };
+  
   const getConfidenceBadge = () => {
     if (confidence < 60) {
       return <Badge variant="destructive">Low Confidence ({confidence})</Badge>;
@@ -176,9 +181,9 @@ export default function OverviewPage() {
           <>
             <MetricCard
               title="Runway (P50)"
-              value={`${metrics.runway_p50?.toFixed(1) || 0} mo`}
-              subtitle={`P10: ${metrics.runway_p10?.toFixed(1) || 0}, P90: ${metrics.runway_p90?.toFixed(1) || 0}`}
-              variant={metrics.runway_p50 < 6 ? 'danger' : metrics.runway_p50 < 12 ? 'warning' : 'success'}
+              value={`${safeToFixed(metrics.runway_p50)} mo`}
+              subtitle={`P10: ${safeToFixed(metrics.runway_p10)}, P90: ${safeToFixed(metrics.runway_p90)}`}
+              variant={typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 6 ? 'danger' : typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 12 ? 'warning' : 'success'}
               testId="metric-runway"
             />
             <MetricCard
@@ -203,8 +208,8 @@ export default function OverviewPage() {
             />
             <MetricCard
               title="Burn Multiple"
-              value={metrics.burn_multiple?.toFixed(1) || 'N/A'}
-              variant={metrics.burn_multiple > 3 ? 'warning' : 'default'}
+              value={safeToFixed(metrics.burn_multiple)}
+              variant={typeof metrics.burn_multiple === 'number' && metrics.burn_multiple > 3 ? 'warning' : 'default'}
               testId="metric-burn-multiple"
             />
             <MetricCard
