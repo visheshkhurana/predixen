@@ -86,14 +86,31 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
     field_mapping = {
         'cashOnHand': ['cash_balance', 'cash_on_hand', 'bank_balance', 'cash'],
         'monthlyRevenue': ['monthly_revenue', 'revenue', 'mrr', 'net_revenue'],
-        'totalMonthlyExpenses': ['total_expenses', 'opex', 'monthly_expenses', 'operating_expenses'],
-        'monthlyGrowthRate': ['mom_growth', 'monthly_growth', 'growth_rate', 'revenue_growth'],
+        'totalMonthlyExpenses': ['total_expenses', 'total_monthly_expenses', 'opex', 'monthly_expenses', 'operating_expenses'],
+        'monthlyGrowthRate': ['mom_growth', 'cmgr_3', 'cmgr_12', 'monthly_growth', 'growth_rate', 'revenue_growth'],
         'payroll': ['payroll', 'salaries', 'employee_costs', 'personnel'],
-        'marketing': ['marketing', 'marketing_expenses', 'advertising'],
-        'operating': ['operating', 'opex', 'operating_expenses', 'general_admin'],
+        'marketing': ['marketing', 'marketing_expenses', 'sales_and_marketing', 'advertising'],
+        'operating': ['operating', 'other_opex', 'opex', 'operating_expenses', 'general_admin'],
+        'cogs': ['cogs', 'cost_of_goods_sold', 'direct_costs'],
+        'grossProfit': ['gross_profit', 'gross_income'],
+        'grossMargin': ['gross_margin'],
+        'operatingIncome': ['operating_income', 'ebit'],
+        'operatingMargin': ['operating_margin'],
+        'netBurn': ['net_burn', 'burn_rate'],
+        'runwayMonths': ['runway_months', 'runway'],
+        'headcount': ['headcount', 'employees', 'team_size'],
+        'customers': ['customers', 'paid_users', 'monthly_active_users'],
+        'arr': ['arr', 'annual_recurring_revenue'],
+        'ndr': ['ndr', 'net_dollar_retention'],
+        'ltv': ['ltv', 'lifetime_value'],
+        'cac': ['cac', 'customer_acquisition_cost'],
+        'ltvCacRatio': ['ltv_cac_ratio'],
+        'yoyGrowth': ['yoy_growth', 'year_over_year'],
         'currency': ['currency'],
         'asOfDate': ['report_date', 'as_of_date', 'date', 'period_end'],
     }
+    
+    string_fields = ['currency', 'asOfDate']
     
     for field, possible_keys in field_mapping.items():
         value = None
@@ -106,7 +123,7 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
                 break
         
         if value is not None:
-            if field in ['currency', 'asOfDate']:
+            if field in string_fields:
                 extracted[field] = FieldExtraction(
                     value=str(value) if value else None,
                     confidence=0.85 if source == 'excel' else 0.75,
@@ -116,7 +133,7 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
                 normalized_value = normalize_currency_value(value)
                 extracted[field] = FieldExtraction(
                     value=normalized_value,
-                    confidence=0.90 if source == 'excel' else 0.75,
+                    confidence=0.90 if source == 'excel' else 0.80,
                     evidence=evidence
                 )
         else:
