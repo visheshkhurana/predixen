@@ -41,7 +41,7 @@ class NormalizedFinancials(BaseModel):
     asOfDate: Optional[str] = None
 
 class ExtractionResponse(BaseModel):
-    extracted: Dict[str, FieldExtraction]
+    extracted: Dict[str, Any]
     normalized: NormalizedFinancials
     missingFields: List[str]
     confidence: Dict[str, float]
@@ -124,20 +124,28 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
     
     return extracted
 
+def safe_float(value: Any) -> Optional[float]:
+    """Safely convert a value to float."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
 def build_normalized_financials(extracted: Dict[str, FieldExtraction]) -> NormalizedFinancials:
     """Build normalized financials from extracted fields."""
     return NormalizedFinancials(
-        cashOnHand=extracted.get('cashOnHand', FieldExtraction()).value if isinstance(extracted.get('cashOnHand', FieldExtraction()).value, (int, float)) else None,
-        monthlyRevenue=extracted.get('monthlyRevenue', FieldExtraction()).value if isinstance(extracted.get('monthlyRevenue', FieldExtraction()).value, (int, float)) else None,
-        totalMonthlyExpenses=extracted.get('totalMonthlyExpenses', FieldExtraction()).value if isinstance(extracted.get('totalMonthlyExpenses', FieldExtraction()).value, (int, float)) else None,
-        monthlyGrowthRate=extracted.get('monthlyGrowthRate', FieldExtraction()).value if isinstance(extracted.get('monthlyGrowthRate', FieldExtraction()).value, (int, float)) else None,
+        cashOnHand=safe_float(extracted.get('cashOnHand', FieldExtraction()).value),
+        monthlyRevenue=safe_float(extracted.get('monthlyRevenue', FieldExtraction()).value),
+        totalMonthlyExpenses=safe_float(extracted.get('totalMonthlyExpenses', FieldExtraction()).value),
+        monthlyGrowthRate=safe_float(extracted.get('monthlyGrowthRate', FieldExtraction()).value),
         expenseBreakdown=ExpenseBreakdown(
-            payroll=extracted.get('payroll', FieldExtraction()).value if isinstance(extracted.get('payroll', FieldExtraction()).value, (int, float)) else None,
-            marketing=extracted.get('marketing', FieldExtraction()).value if isinstance(extracted.get('marketing', FieldExtraction()).value, (int, float)) else None,
-            operating=extracted.get('operating', FieldExtraction()).value if isinstance(extracted.get('operating', FieldExtraction()).value, (int, float)) else None,
+            payroll=safe_float(extracted.get('payroll', FieldExtraction()).value),
+            marketing=safe_float(extracted.get('marketing', FieldExtraction()).value),
+            operating=safe_float(extracted.get('operating', FieldExtraction()).value),
         ),
-        currency=str(extracted.get('currency', FieldExtraction()).value) if extracted.get('currency', FieldExtraction()).value else 'USD',
-        asOfDate=str(extracted.get('asOfDate', FieldExtraction()).value) if extracted.get('asOfDate', FieldExtraction()).value else None,
+        currency='USD',
+        asOfDate=None,
     )
 
 def get_missing_fields(extracted: Dict[str, FieldExtraction], threshold: float = 0.60) -> List[str]:
@@ -219,6 +227,8 @@ async def ingest_financials(
             
             confidence_map = {k: v.confidence for k, v in extracted.items()}
             
+            extracted_dict = {k: {"value": v.value, "confidence": v.confidence, "evidence": v.evidence} for k, v in extracted.items()}
+            
             dataset = Dataset(
                 company_id=companyId,
                 type='financial',
@@ -229,41 +239,50 @@ async def ingest_financials(
             db.commit()
             db.refresh(dataset)
             
-            today = date.today()
-            first_of_month = today.replace(day=1)
+            dataset_id = dataset.id
             
-            total_expenses = normalized.totalMonthlyExpenses
-            if total_expenses is None and normalized.expenseBreakdown:
-                breakdown = normalized.expenseBreakdown
-                parts = [breakdown.payroll, breakdown.marketing, breakdown.operating]
-                total_expenses = sum(p for p in parts if p is not None) or None
-            
-            cogs = 0
-            if normalized.monthlyRevenue:
-                cogs = normalized.monthlyRevenue * 0.3
-            
-            record = FinancialRecord(
-                company_id=companyId,
-                period_start=first_of_month,
-                period_end=today,
-                revenue=normalized.monthlyRevenue or 0,
-                cogs=cogs,
-                opex=total_expenses or 0,
-                payroll=normalized.expenseBreakdown.payroll or 0,
-                other_costs=0,
-                cash_balance=normalized.cashOnHand or 0,
+            has_meaningful_data = (
+                normalized.cashOnHand is not None or 
+                normalized.monthlyRevenue is not None or 
+                normalized.totalMonthlyExpenses is not None
             )
-            db.add(record)
-            db.commit()
+            
+            if has_meaningful_data:
+                today = date.today()
+                first_of_month = today.replace(day=1)
+                
+                total_expenses = normalized.totalMonthlyExpenses
+                if total_expenses is None and normalized.expenseBreakdown:
+                    breakdown = normalized.expenseBreakdown
+                    parts = [breakdown.payroll, breakdown.marketing, breakdown.operating]
+                    total_expenses = sum(p for p in parts if p is not None) or 0.0
+                
+                cogs = 0.0
+                if normalized.monthlyRevenue:
+                    cogs = normalized.monthlyRevenue * 0.3
+                
+                record = FinancialRecord(
+                    company_id=companyId,
+                    period_start=first_of_month,
+                    period_end=today,
+                    revenue=normalized.monthlyRevenue or 0,
+                    cogs=cogs,
+                    opex=total_expenses or 0,
+                    payroll=normalized.expenseBreakdown.payroll or 0 if normalized.expenseBreakdown else 0,
+                    other_costs=0,
+                    cash_balance=normalized.cashOnHand or 0,
+                )
+                db.add(record)
+                db.commit()
             
             return ExtractionResponse(
-                extracted={k: v.model_dump() for k, v in extracted.items()},
+                extracted=extracted_dict,
                 normalized=normalized,
                 missingFields=missing_fields,
                 confidence=confidence_map,
                 source=fileType,
                 fileName=file.filename or 'upload',
-                uploadId=dataset.id,
+                uploadId=dataset_id,
                 calculatedMetrics=calculated,
             )
             
