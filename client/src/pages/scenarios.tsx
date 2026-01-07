@@ -10,9 +10,12 @@ import { ScenarioComparisonTable } from '@/components/ScenarioComparisonTable';
 import { SimulationSummaryBanner } from '@/components/SimulationSummaryBanner';
 import { SimulationLearnMoreModal } from '@/components/SimulationLearnMoreModal';
 import { ScenarioWizard } from '@/components/ScenarioWizard';
-import { Play, Filter, BarChart3, History } from 'lucide-react';
+import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
+import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
+import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { formatSimulationForExport } from '@/lib/exportUtils';
 import {
@@ -115,6 +118,9 @@ export default function ScenariosPage() {
   const [activeTab, setActiveTab] = useState('builder');
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [showComparison, setShowComparison] = useState(false);
+  
+  const multiSimMutation = useMultiScenarioSimulation();
+  const [multiSimResults, setMultiSimResults] = useState<any>(null);
   
   const filteredScenarios = useMemo(() => {
     if (!scenarios) return [];
@@ -235,6 +241,21 @@ export default function ScenariosPage() {
     return selected?.name || 'New Scenario';
   }, [selectedScenarioId, scenarios]);
   
+  const handleRunMultiScenario = async () => {
+    if (!currentCompany) return;
+    
+    try {
+      const result = await multiSimMutation.mutateAsync({
+        companyId: currentCompany.id,
+        options: { n_sims: 500, horizon_months: 24 }
+      });
+      setMultiSimResults(result);
+      toast({ title: 'All scenarios simulated successfully!' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+  
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -290,9 +311,13 @@ export default function ScenariosPage() {
       )}
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="builder" data-testid="tab-builder">Scenario Builder</TabsTrigger>
           <TabsTrigger value="results" data-testid="tab-results">Simulation Results</TabsTrigger>
+          <TabsTrigger value="compare" data-testid="tab-compare">
+            <GitCompare className="h-4 w-4 mr-2" />
+            Compare All
+          </TabsTrigger>
           {scenarios && scenarios.length > 0 && (
             <TabsTrigger value="history" data-testid="tab-history">
               <History className="h-4 w-4 mr-2" />
