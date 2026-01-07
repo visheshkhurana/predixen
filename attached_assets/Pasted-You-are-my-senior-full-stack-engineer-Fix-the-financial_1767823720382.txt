@@ -1,0 +1,38 @@
+You are my senior full-stack engineer. Fix the financial data upload flow by modifying the following files in our repo:
+
+- **Frontend page component**: `client/src/pages/data-input.tsx`  
+- **Zustand store**: `client/src/store/founderStore.ts`  
+
+CONTEXT
+- The Data Input → Financials screen allows uploading PDFs or Excel files. When uploading, the app should extract values (Cash on Hand, Monthly Revenue, Total Monthly Expenses, Monthly Growth Rate, optional expense breakdown) and auto-populate the form. Calculated metrics (net burn rate, runway months) should update immediately.
+- These metrics live in the `founderStore.ts` baseline state and are consumed by `data-input.tsx` for UI rendering.
+
+TASKS
+1. **File upload UI** (in `data-input.tsx`):
+   - Replace the existing “PDF” and “Excel” buttons with file pickers accepting PDF (`application/pdf`) and Excel (`.xls`, `.xlsx`).
+   - When a file is selected, disable the buttons and show a spinner (“Extracting metrics…”).
+
+2. **Upload handler**:
+   - Implement `onFileSelected(file: File, fileType: 'pdf' | 'excel')` in `data-input.tsx`.
+   - Send a multipart POST request to `/api/ingest/financials` with fields `{ file, fileType, companyId }`.
+   - On response, expect an object with `extracted`, `normalized`, `missingFields`, and `confidence`.  
+   - Populate the form fields from `normalized` only if confidence ≥ 0.60 or the field is empty. Show “Low confidence” badges where appropriate and inline hints for `missingFields`.
+
+3. **State updates**:
+   - In `founderStore.ts`, add actions such as `setFinancialBaseline(normalized)` and `setExtractionAudit(extracted, confidence, fileMeta)`.
+   - Ensure `recomputeCalculatedMetrics()` derives net burn rate and runway months from the baseline state and runs automatically on baseline changes.
+   - Persist the raw extraction and normalized baseline for later auditing.
+
+4. **Persistence / Save**:
+   - The “Save All Data” button should POST normalized data to `/api/company/{companyId}/financials/save` and store a link to the audit record.
+
+5. **Backend** (FastAPI):
+   - Add `/api/ingest/financials` endpoint that accepts PDF/Excel uploads and returns extracted + normalized values with confidence scores. Use your existing Excel parsing heuristics and LLM-based PDF extraction as described in the earlier spec.
+   - Validate and normalize numeric values (strip currency symbols, convert k/m/b suffixes, clamp absurd growth rates, etc.).
+   - Derive net burn rate and runway months: netBurnRate = max(0, totalMonthlyExpenses - monthlyRevenue); runwayMonths = cashOnHand / netBurnRate (∞ if netBurnRate ≤ 0).
+
+6. **User feedback**:
+   - Show success toast after parsing, and warnings if fields couldn’t be found.
+   - Display a small drawer/modal with extracted evidence snippets, confidence per field, and an “Apply suggested values” toggle.
+
+Remember, the core files to modify are `client/src/pages/data-input.tsx` and `client/src/store/founderStore.ts`. Keep your changes clean, typed, and production-safe (timeouts, file size limits, proper error handling). Do not break existing simulation flows—baseline metrics in the store should remain the single source of truth for downstream logic.
