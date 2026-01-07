@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Form,
   FormControl,
@@ -25,8 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useFounderStore } from "@/store/founderStore";
+import { useFounderStore, FinancialBaseline, ExtractionResult } from "@/store/founderStore";
 import {
   Building2,
   DollarSign,
@@ -43,9 +52,11 @@ import {
   Info,
   FileText,
   FileSpreadsheet,
+  FileUp,
+  Eye,
+  AlertTriangle,
+  X,
 } from "lucide-react";
-import { TerminaPdfUpload } from "@/components/TerminaPdfUpload";
-import { TerminaExcelUpload } from "@/components/TerminaExcelUpload";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const dataInputSchema = z.object({
@@ -74,6 +85,12 @@ type DataInputValues = z.infer<typeof dataInputSchema>;
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+interface FieldConfidence {
+  value: number | string | null;
+  confidence: number;
+  evidence: string | null;
 }
 
 const SAMPLE_PROMPTS = [
@@ -105,15 +122,33 @@ const INDUSTRIES = [
   { value: "other", label: "Other" },
 ];
 
+const CONFIDENCE_THRESHOLD = 0.60;
+
 export default function DataInput() {
   const { toast } = useToast();
-  const { currentCompany } = useFounderStore();
+  const { 
+    currentCompany, 
+    token,
+    financialBaseline,
+    lastExtraction,
+    extractionInProgress,
+    setFinancialBaseline,
+    setLastExtraction,
+    setExtractionInProgress,
+  } = useFounderStore();
   const [activeTab, setActiveTab] = useState("company");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showExtractionDetails, setShowExtractionDetails] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadType, setUploadType] = useState<'pdf' | 'excel'>('pdf');
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<DataInputValues>({
     resolver: zodResolver(dataInputSchema),
@@ -149,10 +184,220 @@ export default function DataInput() {
     }
   }, [chatMessages]);
 
+  useEffect(() => {
+    if (financialBaseline) {
+      if (financialBaseline.cashOnHand !== null) {
+        form.setValue('cashOnHand', financialBaseline.cashOnHand);
+      }
+      if (financialBaseline.monthlyRevenue !== null) {
+        form.setValue('monthlyRevenue', financialBaseline.monthlyRevenue);
+      }
+      if (financialBaseline.totalMonthlyExpenses !== null) {
+        form.setValue('monthlyExpenses', financialBaseline.totalMonthlyExpenses);
+      }
+      if (financialBaseline.monthlyGrowthRate !== null) {
+        form.setValue('growthRate', financialBaseline.monthlyGrowthRate);
+      }
+      if (financialBaseline.expenseBreakdown) {
+        if (financialBaseline.expenseBreakdown.payroll !== null) {
+          form.setValue('payrollExpenses', financialBaseline.expenseBreakdown.payroll);
+        }
+        if (financialBaseline.expenseBreakdown.marketing !== null) {
+          form.setValue('marketingExpenses', financialBaseline.expenseBreakdown.marketing);
+        }
+        if (financialBaseline.expenseBreakdown.operating !== null) {
+          form.setValue('operatingExpenses', financialBaseline.expenseBreakdown.operating);
+        }
+      }
+    }
+  }, [financialBaseline, form]);
+
+  const handleFileUpload = async (file: File, type: 'pdf' | 'excel') => {
+    if (!currentCompany || !token) {
+      toast({
+        title: "Please select a company",
+        description: "You need to select a company before uploading files",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setExtractionInProgress(true);
+    setUploadProgress(10);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileType', type);
+      formData.append('companyId', currentCompany.id.toString());
+
+      setUploadProgress(30);
+
+      const response = await fetch('/api/ingest/financials', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      setUploadProgress(70);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to process file');
+      }
+
+      const result = await response.json();
+      setUploadProgress(100);
+
+      const normalized = result.normalized;
+      const confidence = result.confidence || {};
+      const missingFields = result.missingFields || [];
+
+      const baseline: FinancialBaseline = {
+        cashOnHand: normalized.cashOnHand,
+        monthlyRevenue: normalized.monthlyRevenue,
+        totalMonthlyExpenses: normalized.totalMonthlyExpenses,
+        monthlyGrowthRate: normalized.monthlyGrowthRate,
+        expenseBreakdown: {
+          payroll: normalized.expenseBreakdown?.payroll || null,
+          marketing: normalized.expenseBreakdown?.marketing || null,
+          operating: normalized.expenseBreakdown?.operating || null,
+        },
+        currency: normalized.currency || 'USD',
+        asOfDate: normalized.asOfDate,
+      };
+
+      setFinancialBaseline(baseline);
+
+      const extraction: ExtractionResult = {
+        extracted: result.extracted,
+        normalized: baseline,
+        missingFields,
+        confidence,
+        source: type,
+        fileName: file.name,
+        uploadId: result.uploadId,
+      };
+      setLastExtraction(extraction);
+
+      applyExtractionToForm(baseline, confidence);
+
+      if (missingFields.length > 0) {
+        toast({
+          title: "Partial extraction",
+          description: `Some fields could not be detected: ${missingFields.join(', ')}. Please fill them manually.`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Extraction successful",
+          description: `Financial metrics imported from ${type.toUpperCase()}`,
+        });
+      }
+
+      setActiveTab('financials');
+      setSelectedFile(null);
+
+    } catch (error: any) {
+      toast({
+        title: "Extraction failed",
+        description: error.message || "Failed to process the file",
+        variant: "destructive",
+      });
+    } finally {
+      setExtractionInProgress(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const applyExtractionToForm = (baseline: FinancialBaseline, confidence: Record<string, number>) => {
+    const applyValue = (field: keyof DataInputValues, value: number | null, confKey: string) => {
+      if (value !== null && value !== undefined) {
+        const conf = confidence[confKey] || 0;
+        const currentValue = form.getValues(field);
+        
+        if (conf >= CONFIDENCE_THRESHOLD || !currentValue) {
+          form.setValue(field, value as any);
+        }
+      }
+    };
+
+    applyValue('cashOnHand', baseline.cashOnHand, 'cashOnHand');
+    applyValue('monthlyRevenue', baseline.monthlyRevenue, 'monthlyRevenue');
+    applyValue('monthlyExpenses', baseline.totalMonthlyExpenses, 'totalMonthlyExpenses');
+    applyValue('growthRate', baseline.monthlyGrowthRate, 'monthlyGrowthRate');
+    
+    if (baseline.expenseBreakdown) {
+      applyValue('payrollExpenses', baseline.expenseBreakdown.payroll, 'payroll');
+      applyValue('marketingExpenses', baseline.expenseBreakdown.marketing, 'marketing');
+      applyValue('operatingExpenses', baseline.expenseBreakdown.operating, 'operating');
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'pdf' | 'excel') => {
+    e.preventDefault();
+    setDragActive(false);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      const ext = file.name.toLowerCase().split('.').pop();
+      if (type === 'pdf' && ext === 'pdf') {
+        handleFileUpload(file, 'pdf');
+      } else if (type === 'excel' && (ext === 'xlsx' || ext === 'xls')) {
+        handleFileUpload(file, 'excel');
+      } else {
+        toast({
+          title: "Invalid file type",
+          description: type === 'pdf' ? "Please upload a PDF file" : "Please upload an Excel file (.xlsx or .xls)",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const handleSave = async (values: DataInputValues) => {
+    if (!currentCompany || !token) {
+      toast({
+        title: "Please select a company",
+        description: "You need to select a company before saving",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const baseline = {
+        cashOnHand: values.cashOnHand,
+        monthlyRevenue: values.monthlyRevenue,
+        totalMonthlyExpenses: values.monthlyExpenses,
+        monthlyGrowthRate: values.growthRate,
+        expenseBreakdown: {
+          payroll: values.payrollExpenses || null,
+          marketing: values.marketingExpenses || null,
+          operating: values.operatingExpenses || null,
+        },
+        currency: 'USD',
+        asOfDate: new Date().toISOString().split('T')[0],
+      };
+
+      const response = await fetch(`/api/companies/${currentCompany.id}/financials/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(baseline),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save');
+      }
+
+      setFinancialBaseline(baseline);
+
       toast({
         title: "Data saved",
         description: "Your company and financial data has been saved successfully",
@@ -257,6 +502,136 @@ export default function DataInput() {
     }).format(value);
   };
 
+  const getConfidenceBadge = (fieldKey: string) => {
+    if (!lastExtraction) return null;
+    const conf = lastExtraction.confidence[fieldKey];
+    if (conf === undefined) return null;
+    
+    if (conf < CONFIDENCE_THRESHOLD) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="ml-2 text-amber-500 border-amber-500">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Low confidence
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>This value was extracted with {Math.round(conf * 100)}% confidence. Please verify.</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+    return null;
+  };
+
+  const getMissingFieldHint = (fieldKey: string) => {
+    if (!lastExtraction) return null;
+    if (lastExtraction.missingFields.includes(fieldKey)) {
+      return (
+        <p className="text-xs text-amber-500 mt-1">Not detected from file - please fill manually</p>
+      );
+    }
+    return null;
+  };
+
+  const renderFileUploadZone = (type: 'pdf' | 'excel') => {
+    const accept = type === 'pdf' ? '.pdf' : '.xlsx,.xls';
+    const icon = type === 'pdf' ? <FileText className="h-12 w-12 text-muted-foreground" /> : <FileSpreadsheet className="h-12 w-12 text-muted-foreground" />;
+    const label = type === 'pdf' ? 'PDF Report' : 'Excel Spreadsheet';
+    const inputRef = type === 'pdf' ? pdfInputRef : excelInputRef;
+
+    return (
+      <Card className="overflow-visible">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            {type === 'pdf' ? <FileText className="h-5 w-5" /> : <FileSpreadsheet className="h-5 w-5" />}
+            Upload {label}
+          </CardTitle>
+          <CardDescription>
+            Upload a Termina {type === 'pdf' ? 'PDF report' : 'Excel export'} to auto-populate financial metrics
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+              dragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'
+            } ${extractionInProgress ? 'opacity-50 pointer-events-none' : ''}`}
+            onDrop={(e) => handleDrop(e, type)}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept={accept}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file, type);
+              }}
+              disabled={extractionInProgress}
+              data-testid={`input-file-${type}`}
+            />
+            
+            {extractionInProgress ? (
+              <div className="space-y-4">
+                <Loader2 className="h-12 w-12 text-primary mx-auto animate-spin" />
+                <p className="text-sm font-medium">Extracting metrics...</p>
+                <Progress value={uploadProgress} className="w-48 mx-auto" />
+              </div>
+            ) : (
+              <>
+                {icon}
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Drag and drop your {label.toLowerCase()} here, or
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => inputRef.current?.click()}
+                  data-testid={`button-browse-${type}`}
+                >
+                  <FileUp className="h-4 w-4 mr-2" />
+                  Browse Files
+                </Button>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {type === 'pdf' ? 'PDF files up to 10MB' : 'Excel files (.xlsx, .xls) up to 20MB'}
+                </p>
+              </>
+            )}
+          </div>
+
+          {lastExtraction && lastExtraction.source === type && (
+            <div className="mt-4 p-4 rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-500" />
+                  <span className="text-sm font-medium">Last extraction: {lastExtraction.fileName}</span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowExtractionDetails(true)}
+                  data-testid="button-view-extraction"
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  View Details
+                </Button>
+              </div>
+              {lastExtraction.missingFields.length > 0 && (
+                <p className="text-xs text-amber-500">
+                  <AlertTriangle className="h-3 w-3 inline mr-1" />
+                  Missing fields: {lastExtraction.missingFields.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
@@ -293,17 +668,7 @@ export default function DataInput() {
             </TabsList>
 
             <TabsContent value="pdf-upload" className="mt-6">
-              {currentCompany ? (
-                <TerminaPdfUpload 
-                  companyId={currentCompany.id} 
-                  onSuccess={(metrics) => {
-                    toast({
-                      title: "Baseline data updated",
-                      description: "Financial metrics extracted and saved from PDF",
-                    });
-                  }}
-                />
-              ) : (
+              {currentCompany ? renderFileUploadZone('pdf') : (
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">
                     Please select a company first to upload a PDF report
@@ -313,17 +678,7 @@ export default function DataInput() {
             </TabsContent>
 
             <TabsContent value="excel-upload" className="mt-6">
-              {currentCompany ? (
-                <TerminaExcelUpload 
-                  companyId={currentCompany.id} 
-                  onSuccess={(metrics) => {
-                    toast({
-                      title: "Baseline data updated",
-                      description: "Financial metrics extracted and saved from Excel",
-                    });
-                  }}
-                />
-              ) : (
+              {currentCompany ? renderFileUploadZone('excel') : (
                 <Card>
                   <CardContent className="py-8 text-center text-muted-foreground">
                     Please select a company first to upload an Excel file
@@ -496,10 +851,20 @@ export default function DataInput() {
                 <TabsContent value="financials" className="mt-6">
                   <Card className="overflow-visible">
                     <CardHeader>
-                      <CardTitle className="text-lg">Financial Metrics</CardTitle>
-                      <CardDescription>
-                        Your current financial position and performance
-                      </CardDescription>
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <CardTitle className="text-lg">Financial Metrics</CardTitle>
+                          <CardDescription>
+                            Your current financial position and performance
+                          </CardDescription>
+                        </div>
+                        {lastExtraction && (
+                          <Badge variant="secondary" className="gap-1">
+                            <FileUp className="h-3 w-3" />
+                            Imported from {lastExtraction.source.toUpperCase()}
+                          </Badge>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -508,8 +873,9 @@ export default function DataInput() {
                           name="cashOnHand"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="flex items-center gap-1.5">
+                              <FormLabel className="flex items-center gap-1.5 flex-wrap">
                                 Cash on Hand ($)
+                                {getConfidenceBadge('cashOnHand')}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button type="button" className="inline-flex">
@@ -534,6 +900,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>Current bank balance</FormDescription>
+                              {getMissingFieldHint('cashOnHand')}
                               <FormMessage />
                             </FormItem>
                           )}
@@ -543,8 +910,9 @@ export default function DataInput() {
                           name="monthlyRevenue"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="flex items-center gap-1.5">
+                              <FormLabel className="flex items-center gap-1.5 flex-wrap">
                                 Monthly Revenue ($)
+                                {getConfidenceBadge('monthlyRevenue')}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button type="button" className="inline-flex">
@@ -569,6 +937,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>Recurring monthly income</FormDescription>
+                              {getMissingFieldHint('monthlyRevenue')}
                               <FormMessage />
                             </FormItem>
                           )}
@@ -578,8 +947,9 @@ export default function DataInput() {
                           name="monthlyExpenses"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="flex items-center gap-1.5">
+                              <FormLabel className="flex items-center gap-1.5 flex-wrap">
                                 Total Monthly Expenses ($)
+                                {getConfidenceBadge('totalMonthlyExpenses')}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button type="button" className="inline-flex">
@@ -604,6 +974,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>Total monthly operating costs</FormDescription>
+                              {getMissingFieldHint('totalMonthlyExpenses')}
                               <FormMessage />
                             </FormItem>
                           )}
@@ -613,8 +984,9 @@ export default function DataInput() {
                           name="growthRate"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="flex items-center gap-1.5">
+                              <FormLabel className="flex items-center gap-1.5 flex-wrap">
                                 Monthly Growth Rate (%)
+                                {getConfidenceBadge('monthlyGrowthRate')}
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button type="button" className="inline-flex">
@@ -639,6 +1011,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>MoM revenue growth</FormDescription>
+                              {getMissingFieldHint('monthlyGrowthRate')}
                               <FormMessage />
                             </FormItem>
                           )}
@@ -653,7 +1026,10 @@ export default function DataInput() {
                             name="payrollExpenses"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Payroll ($)</FormLabel>
+                                <FormLabel className="flex items-center gap-1.5 flex-wrap">
+                                  Payroll ($)
+                                  {getConfidenceBadge('payroll')}
+                                </FormLabel>
                                 <FormControl>
                                   <Input
                                     type="number"
@@ -672,7 +1048,10 @@ export default function DataInput() {
                             name="marketingExpenses"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Marketing ($)</FormLabel>
+                                <FormLabel className="flex items-center gap-1.5 flex-wrap">
+                                  Marketing ($)
+                                  {getConfidenceBadge('marketing')}
+                                </FormLabel>
                                 <FormControl>
                                   <Input
                                     type="number"
@@ -691,7 +1070,10 @@ export default function DataInput() {
                             name="operatingExpenses"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Operating ($)</FormLabel>
+                                <FormLabel className="flex items-center gap-1.5 flex-wrap">
+                                  Operating ($)
+                                  {getConfidenceBadge('operating')}
+                                </FormLabel>
                                 <FormControl>
                                   <Input
                                     type="number"
@@ -955,6 +1337,68 @@ export default function DataInput() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={showExtractionDetails} onOpenChange={setShowExtractionDetails}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Extraction Details
+            </DialogTitle>
+          </DialogHeader>
+          {lastExtraction && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span>Source: <Badge variant="outline">{lastExtraction.source.toUpperCase()}</Badge></span>
+                <span>File: {lastExtraction.fileName}</span>
+              </div>
+              
+              <div className="space-y-3">
+                <h4 className="font-medium">Extracted Fields</h4>
+                <div className="grid gap-2">
+                  {Object.entries(lastExtraction.extracted).map(([key, field]) => (
+                    <div key={key} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                      <div>
+                        <span className="font-medium text-sm">{key}</span>
+                        {field.evidence && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{field.evidence}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">
+                          {field.value !== null ? (
+                            typeof field.value === 'number' ? 
+                              formatCurrency(field.value) : 
+                              field.value
+                          ) : 'Not found'}
+                        </span>
+                        <Badge 
+                          variant={field.confidence >= CONFIDENCE_THRESHOLD ? "default" : "outline"}
+                          className={field.confidence < CONFIDENCE_THRESHOLD ? "text-amber-500 border-amber-500" : ""}
+                        >
+                          {Math.round(field.confidence * 100)}%
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {lastExtraction.missingFields.length > 0 && (
+                <div className="p-3 rounded-md bg-amber-500/10">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="font-medium text-sm">Missing Fields</span>
+                  </div>
+                  <p className="text-sm mt-1 text-muted-foreground">
+                    {lastExtraction.missingFields.join(', ')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
