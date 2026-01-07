@@ -398,6 +398,75 @@ export default function ScenariosPage() {
           </Card>
         </TabsContent>
         
+        <TabsContent value="compare" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold">Compare All Scenarios</h2>
+              <p className="text-sm text-muted-foreground">
+                Run simulations for 5 default scenarios and compare results side-by-side
+              </p>
+            </div>
+            <Button
+              onClick={handleRunMultiScenario}
+              disabled={multiSimMutation.isPending}
+              data-testid="button-run-multi-scenario"
+            >
+              {multiSimMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Run All Scenarios
+                </>
+              )}
+            </Button>
+          </div>
+          
+          {multiSimMutation.isPending && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {multiSimResults && !multiSimMutation.isPending && (
+            <>
+              <MultiScenarioSummary comparison={multiSimResults.comparison} />
+              
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <ScenarioComparisonChart scenarios={multiSimResults.scenarios} />
+                <MonthlyResultsTable scenarios={multiSimResults.scenarios} />
+              </div>
+            </>
+          )}
+          
+          {!multiSimResults && !multiSimMutation.isPending && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <GitCompare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground mb-2">
+                  Compare 5 pre-built scenarios to understand different strategic paths
+                </p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Baseline, Conservative Cut, Moderate Growth, Aggressive Growth, and Cost Cutting
+                </p>
+                <Button onClick={handleRunMultiScenario} data-testid="button-run-multi-cta">
+                  <Play className="h-4 w-4 mr-2" />
+                  Run All Scenarios
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
         <TabsContent value="results" className="mt-6 space-y-4">
           {simLoading ? (
             <Card>
