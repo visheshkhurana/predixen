@@ -25,6 +25,36 @@ interface TruthScan {
   computed_at: string;
 }
 
+export interface FinancialBaseline {
+  cashOnHand: number | null;
+  monthlyRevenue: number | null;
+  totalMonthlyExpenses: number | null;
+  monthlyGrowthRate: number | null;
+  expenseBreakdown: {
+    payroll: number | null;
+    marketing: number | null;
+    operating: number | null;
+  };
+  currency: string | null;
+  asOfDate: string | null;
+}
+
+export interface ExtractionField {
+  value: number | string | null;
+  confidence: number;
+  evidence: string | null;
+}
+
+export interface ExtractionResult {
+  extracted: Record<string, ExtractionField>;
+  normalized: FinancialBaseline;
+  missingFields: string[];
+  confidence: Record<string, number>;
+  source: 'pdf' | 'excel';
+  fileName: string;
+  uploadId?: number;
+}
+
 interface FounderState {
   token: string | null;
   user: User | null;
@@ -34,6 +64,10 @@ interface FounderState {
   currentStep: 'truth' | 'simulation' | 'decision';
   investorModeEnabled: boolean;
   
+  financialBaseline: FinancialBaseline | null;
+  lastExtraction: ExtractionResult | null;
+  extractionInProgress: boolean;
+  
   setToken: (token: string | null) => void;
   setUser: (user: User | null) => void;
   setCurrentCompany: (company: Company | null) => void;
@@ -41,11 +75,32 @@ interface FounderState {
   setTruthScan: (scan: TruthScan | null) => void;
   setCurrentStep: (step: 'truth' | 'simulation' | 'decision') => void;
   logout: () => void;
+  
+  setFinancialBaseline: (baseline: FinancialBaseline) => void;
+  setLastExtraction: (extraction: ExtractionResult | null) => void;
+  setExtractionInProgress: (inProgress: boolean) => void;
+  clearFinancialBaseline: () => void;
+  
+  getCalculatedMetrics: () => { netBurnRate: number; runwayMonths: number | null };
 }
+
+const EMPTY_BASELINE: FinancialBaseline = {
+  cashOnHand: null,
+  monthlyRevenue: null,
+  totalMonthlyExpenses: null,
+  monthlyGrowthRate: null,
+  expenseBreakdown: {
+    payroll: null,
+    marketing: null,
+    operating: null,
+  },
+  currency: null,
+  asOfDate: null,
+};
 
 export const useFounderStore = create<FounderState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       user: null,
       currentCompany: null,
@@ -54,13 +109,49 @@ export const useFounderStore = create<FounderState>()(
       currentStep: 'truth',
       investorModeEnabled: false,
       
+      financialBaseline: null,
+      lastExtraction: null,
+      extractionInProgress: false,
+      
       setToken: (token) => set({ token }),
       setUser: (user) => set({ user }),
       setCurrentCompany: (company) => set({ currentCompany: company }),
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),
       setCurrentStep: (step) => set({ currentStep: step }),
-      logout: () => set({ token: null, user: null, currentCompany: null, companies: [], truthScan: null }),
+      logout: () => set({ 
+        token: null, 
+        user: null, 
+        currentCompany: null, 
+        companies: [], 
+        truthScan: null,
+        financialBaseline: null,
+        lastExtraction: null,
+      }),
+      
+      setFinancialBaseline: (baseline) => set({ financialBaseline: baseline }),
+      setLastExtraction: (extraction) => set({ lastExtraction: extraction }),
+      setExtractionInProgress: (inProgress) => set({ extractionInProgress: inProgress }),
+      clearFinancialBaseline: () => set({ 
+        financialBaseline: null, 
+        lastExtraction: null 
+      }),
+      
+      getCalculatedMetrics: () => {
+        const baseline = get().financialBaseline;
+        if (!baseline) {
+          return { netBurnRate: 0, runwayMonths: null };
+        }
+        
+        const revenue = baseline.monthlyRevenue || 0;
+        const expenses = baseline.totalMonthlyExpenses || 0;
+        const cash = baseline.cashOnHand || 0;
+        
+        const netBurnRate = Math.max(0, expenses - revenue);
+        const runwayMonths = netBurnRate > 0 ? cash / netBurnRate : null;
+        
+        return { netBurnRate, runwayMonths };
+      },
     }),
     {
       name: 'predixen-founder-storage',
@@ -68,6 +159,7 @@ export const useFounderStore = create<FounderState>()(
         token: state.token,
         user: state.user,
         currentCompany: state.currentCompany,
+        financialBaseline: state.financialBaseline,
       }),
     }
   )
