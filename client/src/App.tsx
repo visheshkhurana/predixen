@@ -40,7 +40,7 @@ function Router() {
       <Route path="/truth">
         {() => <AuthenticatedRoute component={TruthScanPage} />}
       </Route>
-      <Route path="/data-input">
+      <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
       <Route path="/scenarios">
