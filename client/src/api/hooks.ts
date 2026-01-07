@@ -145,3 +145,30 @@ export function useManualBaseline() {
     },
   });
 }
+
+export function useMultiScenarioSimulation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, options }: { 
+      companyId: number; 
+      options?: { 
+        n_sims?: number; 
+        horizon_months?: number; 
+        scenario_keys?: string[];
+        seed?: number;
+      } 
+    }) => api.simulations.runMulti(companyId, options),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['multi-simulation', companyId] });
+    },
+  });
+}
+
+export function useDefaultScenarios(companyId: number | null) {
+  return useQuery({
+    queryKey: ['default-scenarios', companyId],
+    queryFn: () => api.simulations.getDefaultScenarios(companyId!),
+    enabled: !!companyId,
+  });
+}

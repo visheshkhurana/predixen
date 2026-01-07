@@ -115,6 +115,18 @@ export const api = {
       }),
     latest: (scenarioId: number) =>
       request<any>(`/scenarios/${scenarioId}/simulation/latest`),
+    runMulti: (companyId: number, options?: { 
+      n_sims?: number; 
+      horizon_months?: number; 
+      scenario_keys?: string[];
+      seed?: number;
+    }) =>
+      request<any>(`/companies/${companyId}/simulate-multi`, {
+        method: 'POST',
+        body: JSON.stringify(options || {}),
+      }),
+    getDefaultScenarios: (companyId: number) =>
+      request<any>(`/companies/${companyId}/default-scenarios`),
   },
   
   decisions: {
