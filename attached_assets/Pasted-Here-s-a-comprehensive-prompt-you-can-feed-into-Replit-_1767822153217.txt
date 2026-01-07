@@ -1,0 +1,78 @@
+Here’s a comprehensive prompt you can feed into Replit’s AI (or any other code‑generation assistant) to build out the functionality for importing the Excel‐formatted company data (`deal-2642-export (1).xlsx`) and integrating it into Predixen, similar to the PDF pipeline:
+
+---
+
+**Replit AI Project Prompt: Ingest Termina Export (Excel) into Predixen**
+
+> **Project Overview**
+> We need to extend an existing Predixen integration so that it can ingest company performance data exported from Termina in `.xlsx` format.  A sample file (`deal-2642-export (1).xlsx`) contains an “Income Statement” sheet with monthly financial metrics stretching from April 2021 through March 2025.  The leftmost column is labelled `index` and contains row names such as “Revenue”, “Net Revenues (Astrotalk India)”, “Net Revenues (Astrotalk International)”, etc.  Subsequent columns are date‑formatted (`YYYY‑MM`) and hold the numeric values for each month.  Your task is to build a full‑stack application that allows users to upload this spreadsheet, parses it to extract the latest month’s metrics, optionally uses the OpenAI API to summarise the data, stores the metrics as baseline data in Predixen, and provides a simple simulation interface.
+
+> **Key Functionalities Required**
+
+> 1. **File Upload:**
+>       * Create a UI (HTML/React) that lets the user upload an Excel workbook (`*.xls` or `*.xlsx`).
+>       * Validate the file extension and provide user feedback if the file is not an Excel workbook.
+>       * Save the uploaded file to a secure directory on the server (`/uploads`) with a unique filename.
+
+> 2. **Excel Parsing:**
+>       * Use Python’s `pandas` library to load the workbook.
+>       * Focus on the sheet named “Income Statement”.  Read it into a DataFrame where the `index` column becomes a column rather than an index.
+>       * Determine the most recent month by sorting the date columns in ascending order and picking the last one (e.g., the rightmost column, `2025-03`).
+>       * Extract key metrics for that month.  At minimum:
+>         – **Revenue** (row “Revenue”)
+>         – **Net Revenues (Astrotalk India)**
+>         – **Net Revenues (Astrotalk International)**
+>         – **Net Revenues (E-Commerce)** (if present)
+>         – **Net Revenues (Other Experimental Apps)** (if present)
+>       * If the spreadsheet contains additional rows such as COGS, Gross Profit, Operating Income, or margins, extract those too.
+
+> 3. **OpenAI API Analysis (Optional):**
+>       * After parsing the spreadsheet, call the OpenAI API (e.g., via the `openai` Python library) to generate a human‑readable summary of the income statement.
+>       * The prompt might ask the model to highlight trends, compare the latest month to previous months, and identify notable increases/decreases.
+>       * Store the API key in an environment variable (`OPENAI_API_KEY`) and retrieve it using `os.getenv`.
+>       * Handle API errors gracefully and display meaningful error messages to the user.
+
+> 4. **Data Storage:**
+>       * Create (or update) a SQLite database or a JSON file to store the extracted metrics.  Fields could include:
+>         – `company_name` (string)
+>         – `report_source` (string: “excel”)
+>         – `report_date` (date corresponding to the latest column, e.g., 2025-03-01)
+>         – `revenue` (float)
+>         – `net_revenue_india` (float)
+>         – `net_revenue_international` (float)
+>         – `net_revenue_ecommerce` (float)
+>         – `net_revenue_other` (float)
+>         – `summary` (text) — the OpenAI-generated summary.
+>       * When new data is uploaded, either insert a new record or update the existing one if it’s more recent than the stored baseline.
+
+> 5. **Simulation Interface:**
+>       * Provide a form where users can adjust parameters like revenue growth percentage, gross margin change, or other relevant metrics.
+>       * Using the baseline metrics extracted from the Excel file, calculate projected outcomes based on these adjustments.  For example, if revenue is $14 M and the user applies +10 % growth, display a projected revenue of $15.4 M.
+>       * Show results in a simple table or chart.
+
+> 6. **User Feedback & Error Handling:**
+>       * After processing the file, display the extracted metrics (latest month and run‑rate if applicable) so the user can confirm they look correct.
+>       * If the sheet “Income Statement” is missing, if there’s no recognisable date column, or if key rows like “Revenue” aren’t found, show a descriptive error.
+>       * Log exceptions on the server side to aid debugging.
+
+> 7. **Project Structure Suggestion:**
+>       * `app.py` (Flask backend) — handles file uploads, parses Excel, calls OpenAI, stores data, and serves endpoints for the front‑end.
+>       * `templates/` — Jinja2 templates for upload page, dashboard, and simulation interface (if using plain Flask with templates).
+>       * `static/` — for CSS, JS, and any images.
+>       * `database.db` (SQLite) — for persistent storage of company metrics.
+>       * `.env` — store `OPENAI_API_KEY` for the OpenAI API.
+>       * `requirements.txt` — include packages such as `flask`, `pandas`, `openai`, `python-dotenv`.
+
+> 8. **Testing & Documentation:**
+>       * Include unit tests for the Excel parsing logic, ensuring it correctly identifies the latest month and extracts expected metrics.
+>       * Write a `README.md` explaining how to set up the project, install dependencies, configure the OpenAI API key, and run the server on Replit.
+>       * Provide sample JSON output from the parser to demonstrate expected behaviour.
+
+> **Optional Enhancements:**
+>    * Support additional sheets (e.g., “Balance Sheet” or “Cash Flow”) by generalising the parser.
+>    * Add visualisation for historical trends across months (e.g., line charts of revenue over time).
+>    * Implement user authentication if multiple companies’ data will be uploaded by different users.
+
+---
+
+This prompt lays out the problem context, lists detailed functional requirements, suggests a technology stack and project structure, and highlights optional enhancements.  By following it, Replit’s AI should be able to scaffold a project that reads the Excel file you provided, extracts the latest financial metrics, optionally analyses them via the OpenAI API, stores them in Predixen’s data store, and allows simulations based on those baselines.
