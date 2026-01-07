@@ -1,6 +1,54 @@
 import numpy as np
 from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+DEFAULT_SCENARIOS = {
+    "baseline": {
+        "name": "Baseline",
+        "description": "Current trajectory with no changes",
+        "pricing_change_pct": 0,
+        "growth_uplift_pct": 0,
+        "burn_reduction_pct": 0,
+        "fundraise_amount": 0,
+        "gross_margin_delta_pct": 0,
+    },
+    "conservative": {
+        "name": "Conservative Cut",
+        "description": "Lower growth with reduced expenses",
+        "pricing_change_pct": 0,
+        "growth_uplift_pct": -3,
+        "burn_reduction_pct": 15,
+        "fundraise_amount": 0,
+        "gross_margin_delta_pct": 2,
+    },
+    "moderate_growth": {
+        "name": "Moderate Growth",
+        "description": "Balanced growth with modest efficiency gains",
+        "pricing_change_pct": 5,
+        "growth_uplift_pct": 5,
+        "burn_reduction_pct": 5,
+        "fundraise_amount": 0,
+        "gross_margin_delta_pct": 0,
+    },
+    "aggressive_growth": {
+        "name": "Aggressive Growth",
+        "description": "High growth with increased investment",
+        "pricing_change_pct": 10,
+        "growth_uplift_pct": 15,
+        "burn_reduction_pct": -10,
+        "fundraise_amount": 0,
+        "gross_margin_delta_pct": -3,
+    },
+    "cost_cutting": {
+        "name": "Cost Cutting",
+        "description": "Significant expense reduction, minimal growth",
+        "pricing_change_pct": 0,
+        "growth_uplift_pct": -5,
+        "burn_reduction_pct": 25,
+        "fundraise_amount": 0,
+        "gross_margin_delta_pct": 5,
+    },
+}
 
 @dataclass
 class SimulationInputs:
@@ -151,4 +199,106 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
         },
         "n_simulations": n,
         "horizon_months": horizon
+    }
+
+
+def run_multi_scenario_simulation(
+    base_inputs: SimulationInputs,
+    scenarios: Optional[Dict[str, Dict]] = None,
+    seed: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Run Monte Carlo simulation for multiple scenarios and return month-indexed results.
+    
+    Args:
+        base_inputs: Base financial metrics from truth scan
+        scenarios: Dictionary of scenario definitions. Uses DEFAULT_SCENARIOS if None.
+        seed: Random seed for reproducibility
+    
+    Returns:
+        Dictionary with scenario results containing month-indexed P10/P50/P90 metrics
+    """
+    if scenarios is None:
+        scenarios = DEFAULT_SCENARIOS
+    
+    results = {}
+    
+    for scenario_key, scenario_params in scenarios.items():
+        scenario_inputs = SimulationInputs(
+            baseline_revenue=base_inputs.baseline_revenue,
+            baseline_growth_rate=base_inputs.baseline_growth_rate,
+            gross_margin=base_inputs.gross_margin + scenario_params.get("gross_margin_delta_pct", 0),
+            opex=base_inputs.opex,
+            payroll=base_inputs.payroll,
+            other_costs=base_inputs.other_costs,
+            cash_balance=base_inputs.cash_balance,
+            pricing_change_pct=scenario_params.get("pricing_change_pct", 0),
+            growth_uplift_pct=scenario_params.get("growth_uplift_pct", 0),
+            burn_reduction_pct=scenario_params.get("burn_reduction_pct", 0),
+            fundraise_month=scenario_params.get("fundraise_month"),
+            fundraise_amount=scenario_params.get("fundraise_amount", 0),
+            n_simulations=base_inputs.n_simulations,
+            horizon_months=base_inputs.horizon_months
+        )
+        
+        sim_result = run_monte_carlo(scenario_inputs, seed)
+        
+        month_data = []
+        horizon = base_inputs.horizon_months
+        for m in range(horizon):
+            month_data.append({
+                "month": m + 1,
+                "revenue_p10": round(sim_result["bands"]["revenue"]["p10"][m], 0),
+                "revenue_p50": round(sim_result["bands"]["revenue"]["p50"][m], 0),
+                "revenue_p90": round(sim_result["bands"]["revenue"]["p90"][m], 0),
+                "cash_p10": round(sim_result["bands"]["cash"]["p10"][m], 0),
+                "cash_p50": round(sim_result["bands"]["cash"]["p50"][m], 0),
+                "cash_p90": round(sim_result["bands"]["cash"]["p90"][m], 0),
+                "burn_p10": round(sim_result["bands"]["burn"]["p10"][m], 0),
+                "burn_p50": round(sim_result["bands"]["burn"]["p50"][m], 0),
+                "burn_p90": round(sim_result["bands"]["burn"]["p90"][m], 0),
+                "survival_rate": sim_result["survival"]["curve"][m]["survival_rate"] if m < len(sim_result["survival"]["curve"]) else 0
+            })
+        
+        results[scenario_key] = {
+            "name": scenario_params.get("name", scenario_key),
+            "description": scenario_params.get("description", ""),
+            "params": {
+                "pricing_change_pct": scenario_params.get("pricing_change_pct", 0),
+                "growth_uplift_pct": scenario_params.get("growth_uplift_pct", 0),
+                "burn_reduction_pct": scenario_params.get("burn_reduction_pct", 0),
+                "fundraise_amount": scenario_params.get("fundraise_amount", 0),
+                "gross_margin_delta_pct": scenario_params.get("gross_margin_delta_pct", 0),
+            },
+            "summary": {
+                "runway_p10": sim_result["runway"]["p10"],
+                "runway_p50": sim_result["runway"]["p50"],
+                "runway_p90": sim_result["runway"]["p90"],
+                "survival_12m": sim_result["survival"]["12m"],
+                "survival_18m": sim_result["survival"]["18m"],
+                "survival_24m": sim_result["survival"]["24m"],
+                "final_cash_p50": sim_result["summary"]["final_cash_p50"],
+            },
+            "month_data": month_data,
+            "bands": sim_result["bands"],
+            "survival_curve": sim_result["survival"]["curve"]
+        }
+    
+    scenario_summaries = [
+        {
+            "key": key,
+            "name": results[key]["name"],
+            "runway_p50": results[key]["summary"]["runway_p50"],
+            "survival_18m": results[key]["summary"]["survival_18m"],
+            "final_cash_p50": results[key]["summary"]["final_cash_p50"],
+        }
+        for key in results
+    ]
+    scenario_summaries.sort(key=lambda x: x["runway_p50"], reverse=True)
+    
+    return {
+        "scenarios": results,
+        "comparison": scenario_summaries,
+        "n_simulations": base_inputs.n_simulations,
+        "horizon_months": base_inputs.horizon_months
     }

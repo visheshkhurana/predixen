@@ -9,7 +9,7 @@ from server.models.company import Company
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
-from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
+from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo, run_multi_scenario_simulation, DEFAULT_SCENARIOS
 
 router = APIRouter(tags=["simulations"])
 
@@ -182,3 +182,90 @@ def get_latest_simulation(
         **sim_run.outputs_json,
         "created_at": sim_run.created_at.isoformat()
     }
+
+
+class MultiScenarioRequest(BaseModel):
+    n_sims: int = 500
+    horizon_months: int = 24
+    scenario_keys: Optional[List[str]] = None
+    seed: Optional[int] = None
+
+
+@router.get("/companies/{company_id}/default-scenarios", response_model=Dict[str, Any])
+def get_default_scenarios(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Return the list of default scenario definitions"""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    return {
+        "scenarios": [
+            {"key": key, **params}
+            for key, params in DEFAULT_SCENARIOS.items()
+        ]
+    }
+
+
+@router.post("/companies/{company_id}/simulate-multi", response_model=Dict[str, Any])
+def simulate_multiple_scenarios(
+    company_id: int,
+    request: MultiScenarioRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run Monte Carlo simulation for multiple scenarios at once.
+    Returns month-indexed P10/P50/P90 metrics for each scenario.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    if not truth_scan:
+        raise HTTPException(status_code=400, detail="Run a truth scan first")
+    
+    metrics = truth_scan.outputs_json.get("metrics", {})
+    
+    base_inputs = SimulationInputs(
+        baseline_revenue=metrics.get("monthly_revenue", 50000),
+        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
+        gross_margin=metrics.get("gross_margin", 70),
+        opex=metrics.get("opex", 20000),
+        payroll=metrics.get("payroll", 30000),
+        other_costs=metrics.get("other_costs", 5000),
+        cash_balance=metrics.get("cash_balance", 500000),
+        n_simulations=request.n_sims,
+        horizon_months=request.horizon_months
+    )
+    
+    scenarios_to_run = None
+    if request.scenario_keys:
+        scenarios_to_run = {
+            key: DEFAULT_SCENARIOS[key]
+            for key in request.scenario_keys
+            if key in DEFAULT_SCENARIOS
+        }
+    
+    results = run_multi_scenario_simulation(
+        base_inputs=base_inputs,
+        scenarios=scenarios_to_run,
+        seed=request.seed
+    )
+    
+    return results
