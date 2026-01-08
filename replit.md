@@ -29,11 +29,18 @@ Preferred communication style: Simple, everyday language.
 - **Jobs**: FastAPI BackgroundTasks for async operations
 
 ### Key Modules
-1. **Ingestion**: CSV upload + manual baseline fallback
+1. **Ingestion**: CSV upload + manual baseline fallback + Excel/PDF AI extraction
 2. **Truth Scan**: 24 metrics computation, benchmarking, confidence scoring
 3. **Simulation**: Monte Carlo engine with 24-month projections
 4. **Decision Engine**: Deterministic action library, scoring, top 3 recommendations
 5. **Copilot**: Multi-agent router with context pack grounding
+
+### Data Import Workflow
+- **Excel/PDF Import**: Uses OpenAI to extract financial metrics from Termina/Tribe Capital reports
+- **Editable Preview**: Extracted metrics shown in editable form for user verification before saving
+- **Apply to Financials**: User must explicitly click "Apply to Financials" button to save extracted data
+- **Validation**: Warnings shown for missing required fields (Revenue, Cash Balance)
+- **Data Flow**: File upload → AI extraction → Preview with edit → Apply → Save to FinancialRecord → Run Truth Scan
 
 ### Feature Flags
 - `FEATURE_INVESTOR_MODE`: When false (default), investor routes return 403 and UI hides investor navigation
