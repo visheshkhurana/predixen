@@ -377,7 +377,7 @@ export default function ScenariosPage() {
                           {s.latest_simulation && (
                             <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
                               <span>Runway: {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo</span>
-                              <span>Survival: {((s.latest_simulation.survival?.['18m'] || 0) * 100).toFixed(0)}%</span>
+                              <span>Survival: {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%</span>
                             </div>
                           )}
                         </div>
@@ -486,8 +486,8 @@ export default function ScenariosPage() {
               
               <SimulationSummaryBanner
                 runwayP50={simulation.runway?.p50 || 0}
-                survival18m={(simulation.survival?.['18m'] || 0) * 100}
-                survival12m={(simulation.survival?.['12m'] || 0) * 100}
+                survival18m={simulation.survival?.['18m'] || 0}
+                survival12m={simulation.survival?.['12m'] || 0}
                 endCash={simulation.summary?.end_cash}
                 scenarioName={currentScenarioName}
               />
