@@ -10,6 +10,7 @@ import { DecisionCard } from '@/components/DecisionCard';
 import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
+import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 
 const COPILOT_PROMPTS = [
   "How do I extend runway by 6 months?",
@@ -52,17 +53,11 @@ export default function OverviewPage() {
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
   
   const formatCurrency = (value: number | null | undefined) => {
-    if (value == null) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currentCompany.currency || 'USD',
-      maximumFractionDigits: 0,
-    }).format(value);
+    return formatCurrencyAbbrev(value);
   };
   
   const formatPercent = (value: number | null | undefined) => {
-    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
-    return `${value.toFixed(1)}%`;
+    return formatPct(value);
   };
   
   const safeToFixed = (value: any, digits: number = 1): string => {
