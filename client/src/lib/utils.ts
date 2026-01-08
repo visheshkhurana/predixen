@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Format currency with abbreviations for large numbers
- * Displays: $1.5M, $250K, $1,500
+ * Displays: $1.5M, $250K, $1,500 (with proper currency symbol)
  */
 export function formatCurrencyAbbrev(value: number | null | undefined, currency = 'USD'): string {
   if (value == null || isNaN(value)) return 'N/A';
@@ -15,13 +15,19 @@ export function formatCurrencyAbbrev(value: number | null | undefined, currency 
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : '';
   
+  const symbol = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(0).replace(/[0-9]/g, '').trim();
+  
   if (absValue >= 1000000) {
-    return `${sign}$${(absValue / 1000000).toFixed(1)}M`;
+    return `${sign}${symbol}${(absValue / 1000000).toFixed(1)}M`;
   }
   if (absValue >= 1000) {
-    return `${sign}$${(absValue / 1000).toFixed(0)}K`;
+    return `${sign}${symbol}${(absValue / 1000).toFixed(0)}K`;
   }
-  return `${sign}$${absValue.toFixed(0)}`;
+  return `${sign}${symbol}${absValue.toFixed(0)}`;
 }
 
 /**

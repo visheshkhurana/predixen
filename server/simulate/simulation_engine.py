@@ -63,7 +63,7 @@ class SimulationInputs:
     pricing_change_pct: float = 0
     growth_uplift_pct: float = 0
     burn_reduction_pct: float = 0
-    hiring_plan: List[Dict] = None
+    hiring_plan: Optional[List[Dict]] = None
     fundraise_month: Optional[int] = None
     fundraise_amount: float = 0
     gross_margin_delta_pct: float = 0
