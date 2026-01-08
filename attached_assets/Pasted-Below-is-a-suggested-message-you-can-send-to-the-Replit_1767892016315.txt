@@ -1,0 +1,49 @@
+Below is a suggested message you can send to the Replit development team describing the changes needed to improve RunwayAI’s import functionality and verification workflow for both spreadsheet and mini‑scan PDF formats. It consolidates previous findings and recommendations into a clear, actionable prompt.
+
+---
+
+## Subject: Feature Request – Enhanced Data Import & Verification Workflow for Excel/CSV and Mini‑Scan PDF Formats
+
+### Background
+
+We’ve been using RunwayAI to model financial scenarios. During testing we encountered several issues with the current data‑import process and noticed that important metrics aren’t propagated reliably across modules. We also have new requirements to import “Mini Benchmark Scan” PDF reports (like `6589_AstroTalk – Q2 2025 – 2025‑07‑01 – Mini Scan.pdf`) into the system. To ensure accurate and user‑friendly data ingestion, we propose the following improvements:
+
+### 1. Robust Spreadsheet Import
+
+* **Parsing logic**: When importing an Excel/CSV file (e.g., `deal-2642-export (1).xlsx`), allow users to set the first column as the index (row labels) and handle leading/trailing spaces. Skip or flag blank rows that contain only `NaN`.
+* **Mapping fields**: Provide an interface to map rows/columns from the spreadsheet to the expected fields in the Financials tab. For instance:
+
+  * Aggregate revenue rows (“Net Revenues (… )”) into the *Monthly Revenue* field.
+  * Aggregate expense rows into *Total Monthly Expenses*.
+* **Missing values**: Identify columns or rows with missing values and give users a chance to fill or confirm defaults before saving.
+* **Preview & verification**: After uploading, show a preview of the parsed data on the import screen. Users should be able to correct or remove misinterpreted values. Only after this verification should a “Save to Financials” button be enabled.
+* **Confirmation feedback**: Display clear success/error notifications once the data has been saved to the Financials tab.
+
+### 2. Mini‑Scan PDF Import
+
+* **Text extraction & OCR**: Implement a parser (using libraries like PyMuPDF or pdfplumber) capable of extracting text from PDF reports. If the report includes scanned images, incorporate OCR (e.g., Tesseract) to read embedded text.
+* **Metric identification**: Define expected metric labels (e.g., *Runway (P50)*, *Net Burn*, *Revenue Growth MoM*, *Gross Margin*, *Burn Multiple*) and parse the associated values. Use the report’s metadata or headings to determine the reporting period (e.g., Q2 2025).
+* **Mapping to Financials**: After extraction, map the metrics to the appropriate fields in the application. For example, assign *Net Burn* to a new field or compute it from imported revenue and expense values. Tag imported data with the scan date for provenance.
+* **Verification screen**: Similar to spreadsheet imports, present a preview of extracted metrics. Allow users to edit any incorrect values or skip metrics that couldn’t be parsed. Enable a “Save to Financials” button only once the data is verified.
+
+### 3. Workflow & UX Enhancements
+
+* **Unified import experience**: On the Data Input screen, group PDF and spreadsheet imports under a consistent “Upload & Verify” tab. Clearly explain which file types are accepted (.xlsx, .csv, .pdf) and what the system will do with them.
+* **Versioning & history**: If multiple files or scans are imported over time, allow users to view and manage previous uploads, compare changes, and roll back if needed.
+* **Automatic refresh of downstream modules**: Once data is saved to Financials, ensure the new metrics propagate immediately to Truth Scan, Simulation, and Decision modules. This eliminates discrepancies observed during testing (e.g., when Truth Scan still showed old values after a manual update).
+* **Error handling**: Provide descriptive error messages if parsing fails or if the file contains unsupported structures. Guide users on how to correct the file or manually enter values.
+
+### 4. Documentation & On‑Screen Help
+
+* Include tooltips or a short guide on the import screen explaining:
+
+  * How to prepare spreadsheets (header rows, index columns).
+  * What metrics are expected in mini‑scan PDFs.
+  * How missing or negative values are treated.
+* Provide examples of properly formatted files to reduce user confusion.
+
+### Summary
+
+By implementing these improvements, RunwayAI would allow users to upload detailed financial spreadsheets and mini‑scan PDFs, verify extracted values in the same screen, and only then commit them to the Financials tab. This ensures data accuracy and enhances trust in the analytics produced by Truth Scan, Simulation, and Decision modules.
+
+---
