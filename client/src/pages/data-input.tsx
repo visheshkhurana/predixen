@@ -1096,13 +1096,25 @@ export default function DataInput() {
                           <div>
                             <p className="text-xs text-muted-foreground">Net Burn Rate</p>
                             <p className="text-lg font-mono font-semibold" data-testid="text-burn-rate">
-                              {formatCurrency(Math.max(0, calculatedBurn))}/mo
+                              {calculatedBurn > 0 ? (
+                                <>{formatCurrency(calculatedBurn)}/mo</>
+                              ) : calculatedBurn < 0 ? (
+                                <span className="text-emerald-500">+{formatCurrency(Math.abs(calculatedBurn))}/mo (Net positive)</span>
+                              ) : (
+                                <>$0/mo (Break-even)</>
+                              )}
                             </p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Current Runway</p>
                             <p className="text-lg font-mono font-semibold" data-testid="text-runway">
-                              {calculatedRunway ? `${calculatedRunway.toFixed(1)} months` : "Profitable"}
+                              {calculatedBurn > 0 && watchedValues.cashOnHand ? (
+                                `${(watchedValues.cashOnHand / calculatedBurn).toFixed(1)} months`
+                              ) : calculatedBurn <= 0 ? (
+                                <span className="text-emerald-500">Profitable / Sustainable</span>
+                              ) : (
+                                "N/A"
+                              )}
                             </p>
                           </div>
                         </div>
