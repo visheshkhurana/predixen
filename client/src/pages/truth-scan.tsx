@@ -13,6 +13,7 @@ import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
+import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 
 export default function TruthScanPage() {
   const { currentCompany } = useFounderStore();
@@ -44,17 +45,11 @@ export default function TruthScanPage() {
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
   
   const formatCurrency = (value: number | null | undefined) => {
-    if (value == null) return 'N/A';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(value);
+    return formatCurrencyAbbrev(value);
   };
   
   const formatPercent = (value: number | null | undefined) => {
-    if (value == null) return 'N/A';
-    return `${value.toFixed(1)}%`;
+    return formatPct(value);
   };
   
   const handleRefresh = async () => {
