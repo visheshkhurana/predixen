@@ -19,8 +19,10 @@ import {
   TrendingUp,
   Building2,
   X,
-  Table2
+  Table2,
+  AlertCircle
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface TerminaExcelUploadProps {
   companyId: number;
@@ -36,7 +38,16 @@ interface ExtractedMetrics {
   cogs?: number;
   opex?: number;
   payroll?: number;
+  cash_balance?: number;
   [key: string]: any;
+}
+
+interface EditableMetric {
+  key: string;
+  label: string;
+  value: number | undefined;
+  isPercent?: boolean;
+  required?: boolean;
 }
 
 export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadProps) {
@@ -45,10 +56,13 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [saveAsBaseline, setSaveAsBaseline] = useState(true);
   const [extractedMetrics, setExtractedMetrics] = useState<ExtractedMetrics | null>(null);
+  const [editableMetrics, setEditableMetrics] = useState<Record<string, number | undefined>>({});
   const [sheetName, setSheetName] = useState<string | null>(null);
   const [reportDate, setReportDate] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
 
   const uploadMutation = useTerminaExcelUpload();
 
@@ -94,22 +108,28 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
       const result = await uploadMutation.mutateAsync({
         companyId,
         file: selectedFile,
-        saveAsBaseline,
+        saveAsBaseline: false,
       });
 
       setExtractedMetrics(result.metrics);
       setSummary(result.summary);
       setSheetName(result.sheet_name);
       setReportDate(result.report_date);
-
-      toast({
-        title: "Spreadsheet analyzed successfully",
-        description: `Extracted ${result.extracted_fields} financial metrics from ${result.sheet_name}`,
+      setHasApplied(false);
+      
+      setEditableMetrics({
+        revenue: result.metrics?.revenue,
+        cogs: result.metrics?.cogs,
+        opex: result.metrics?.opex,
+        payroll: result.metrics?.payroll,
+        cash_balance: result.metrics?.cash_balance,
+        gross_margin: result.metrics?.gross_margin,
       });
 
-      if (onSuccess) {
-        onSuccess(result.metrics);
-      }
+      toast({
+        title: "Spreadsheet analyzed",
+        description: "Review the extracted metrics below and click 'Apply to Financials' to save.",
+      });
     } catch (error: any) {
       toast({
         title: "Failed to analyze spreadsheet",
@@ -117,6 +137,72 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
         variant: "destructive",
       });
     }
+  };
+
+  const handleApplyToFinancials = async () => {
+    setIsApplying(true);
+    try {
+      const payload = {
+        cashOnHand: editableMetrics.cash_balance || 0,
+        monthlyRevenue: editableMetrics.revenue || 0,
+        totalMonthlyExpenses: (editableMetrics.opex || 0) + (editableMetrics.payroll || 0),
+        monthlyGrowthRate: 0,
+        expenseBreakdown: {
+          payroll: editableMetrics.payroll || 0,
+          marketing: 0,
+          operating: editableMetrics.opex || 0,
+        },
+        currency: 'USD',
+        asOfDate: null,
+      };
+
+      const response = await fetch(`/api/companies/${companyId}/financials/save`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to save financials');
+      }
+
+      setHasApplied(true);
+      toast({
+        title: "Financials saved successfully",
+        description: "Your data has been applied. Run Truth Scan to see updated metrics.",
+      });
+
+      if (onSuccess) {
+        onSuccess(editableMetrics);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Failed to save financials",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const updateMetric = (key: string, value: string) => {
+    const numValue = parseFloat(value.replace(/[^0-9.-]/g, ''));
+    setEditableMetrics(prev => ({
+      ...prev,
+      [key]: isNaN(numValue) ? undefined : numValue,
+    }));
+  };
+
+  const getMissingFields = (): string[] => {
+    const missing: string[] = [];
+    if (!editableMetrics.revenue && editableMetrics.revenue !== 0) missing.push('Revenue');
+    if (!editableMetrics.cash_balance && editableMetrics.cash_balance !== 0) missing.push('Cash Balance');
+    return missing;
   };
 
   const formatCurrency = (value: number | undefined) => {
@@ -222,18 +308,7 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
         </div>
 
         {selectedFile && !extractedMetrics && (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="save-baseline-excel"
-                checked={saveAsBaseline}
-                onCheckedChange={setSaveAsBaseline}
-                data-testid="switch-save-baseline-excel"
-              />
-              <Label htmlFor="save-baseline-excel" className="text-sm">
-                Save as baseline data
-              </Label>
-            </div>
+          <div className="flex items-center justify-end">
             <Button
               onClick={handleUpload}
               disabled={uploadMutation.isPending}
@@ -268,15 +343,15 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <Check className="h-5 w-5 text-green-500" />
-              <span className="font-medium">Analysis Complete</span>
+              <span className="font-medium">Analysis Complete - Review & Edit Values</span>
               {sheetName && (
                 <Badge variant="outline" className="ml-2">{sheetName}</Badge>
               )}
               {reportDate && (
                 <Badge variant="secondary" className="ml-1">Period: {reportDate}</Badge>
               )}
-              {saveAsBaseline && (
-                <Badge variant="secondary" className="ml-2">Saved as Baseline</Badge>
+              {hasApplied && (
+                <Badge className="bg-emerald-500/20 text-emerald-400">Applied</Badge>
               )}
             </div>
 
@@ -291,86 +366,92 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
               </div>
             )}
 
+            {getMissingFields().length > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-3">
+                <div className="flex items-center gap-2 text-amber-400 text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Missing required fields: {getMissingFields().join(', ')}</span>
+                </div>
+              </div>
+            )}
+
             <Separator />
 
-            <ScrollArea className="max-h-[400px]">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {extractedMetrics.revenue !== undefined && (
-                  <MetricCard
-                    label="Revenue"
-                    value={formatCurrency(extractedMetrics.revenue)}
-                    icon={DollarSign}
-                  />
-                )}
-                {extractedMetrics.gross_profit !== undefined && (
-                  <MetricCard
-                    label="Gross Profit"
-                    value={formatCurrency(extractedMetrics.gross_profit)}
-                    icon={DollarSign}
-                  />
-                )}
-                {extractedMetrics.gross_margin !== undefined && (
-                  <MetricCard
-                    label="Gross Margin"
-                    value={formatPercent(extractedMetrics.gross_margin)}
-                    icon={TrendingUp}
-                  />
-                )}
-                {extractedMetrics.operating_income !== undefined && (
-                  <MetricCard
-                    label="Operating Income"
-                    value={formatCurrency(extractedMetrics.operating_income)}
-                    icon={DollarSign}
-                  />
-                )}
-                {extractedMetrics.net_income !== undefined && (
-                  <MetricCard
-                    label="Net Income"
-                    value={formatCurrency(extractedMetrics.net_income)}
-                    icon={DollarSign}
-                  />
-                )}
-                {extractedMetrics.cogs !== undefined && (
-                  <MetricCard
-                    label="COGS"
-                    value={formatCurrency(extractedMetrics.cogs)}
-                    icon={Building2}
-                  />
-                )}
-                {extractedMetrics.opex !== undefined && (
-                  <MetricCard
-                    label="Operating Expenses"
-                    value={formatCurrency(extractedMetrics.opex)}
-                    icon={Building2}
-                  />
-                )}
-                {extractedMetrics.payroll !== undefined && (
-                  <MetricCard
-                    label="Payroll"
-                    value={formatCurrency(extractedMetrics.payroll)}
-                    icon={Building2}
-                  />
-                )}
-                {extractedMetrics.net_revenue_india !== undefined && (
-                  <MetricCard
-                    label="India Revenue"
-                    value={formatCurrency(extractedMetrics.net_revenue_india)}
-                    icon={DollarSign}
-                  />
-                )}
-                {extractedMetrics.net_revenue_international !== undefined && (
-                  <MetricCard
-                    label="International Revenue"
-                    value={formatCurrency(extractedMetrics.net_revenue_international)}
-                    icon={DollarSign}
-                  />
-                )}
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Review the extracted values below. You can edit any field before applying to your financials.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <EditableMetricField
+                  label="Monthly Revenue"
+                  value={editableMetrics.revenue}
+                  onChange={(val) => updateMetric('revenue', val)}
+                  required
+                  testId="input-edit-revenue"
+                />
+                <EditableMetricField
+                  label="Cash Balance"
+                  value={editableMetrics.cash_balance}
+                  onChange={(val) => updateMetric('cash_balance', val)}
+                  required
+                  testId="input-edit-cash"
+                />
+                <EditableMetricField
+                  label="Operating Expenses"
+                  value={editableMetrics.opex}
+                  onChange={(val) => updateMetric('opex', val)}
+                  testId="input-edit-opex"
+                />
+                <EditableMetricField
+                  label="Payroll"
+                  value={editableMetrics.payroll}
+                  onChange={(val) => updateMetric('payroll', val)}
+                  testId="input-edit-payroll"
+                />
+                <EditableMetricField
+                  label="COGS"
+                  value={editableMetrics.cogs}
+                  onChange={(val) => updateMetric('cogs', val)}
+                  testId="input-edit-cogs"
+                />
+                <EditableMetricField
+                  label="Gross Margin %"
+                  value={editableMetrics.gross_margin}
+                  onChange={(val) => updateMetric('gross_margin', val)}
+                  isPercent
+                  testId="input-edit-margin"
+                />
               </div>
-            </ScrollArea>
+            </div>
 
-            <div className="flex justify-end">
+            <Separator />
+
+            <div className="flex justify-between gap-4 flex-wrap">
               <Button variant="outline" onClick={clearFile} data-testid="button-upload-another-excel">
                 Upload Another File
+              </Button>
+              <Button 
+                onClick={handleApplyToFinancials}
+                disabled={isApplying || hasApplied || getMissingFields().length > 0}
+                data-testid="button-apply-financials"
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Applying...
+                  </>
+                ) : hasApplied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Applied to Financials
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Apply to Financials
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -398,6 +479,53 @@ function MetricCard({
       <p className="font-mono font-medium" data-testid={`text-metric-${label.toLowerCase().replace(/\s+/g, '-')}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function EditableMetricField({
+  label,
+  value,
+  onChange,
+  isPercent = false,
+  required = false,
+  testId,
+}: {
+  label: string;
+  value: number | undefined;
+  onChange: (value: string) => void;
+  isPercent?: boolean;
+  required?: boolean;
+  testId: string;
+}) {
+  const formatDisplayValue = (val: number | undefined) => {
+    if (val === undefined || val === null) return '';
+    if (isPercent) return val.toString();
+    return new Intl.NumberFormat('en-US').format(val);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm text-muted-foreground flex items-center gap-1">
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </label>
+      <div className="relative">
+        {!isPercent && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+        )}
+        <Input
+          type="text"
+          value={formatDisplayValue(value)}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${isPercent ? '' : 'pl-7'} font-mono`}
+          placeholder={isPercent ? '0' : '0'}
+          data-testid={testId}
+        />
+        {isPercent && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+        )}
+      </div>
     </div>
   );
 }
