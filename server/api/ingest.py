@@ -378,25 +378,34 @@ async def save_financial_baseline(
     today = date.today()
     first_of_month = today.replace(day=1)
     
+    payroll = baseline.expenseBreakdown.payroll if baseline.expenseBreakdown else 0
+    marketing = baseline.expenseBreakdown.marketing if baseline.expenseBreakdown else 0
+    operating = baseline.expenseBreakdown.operating if baseline.expenseBreakdown else 0
+    
     total_expenses = baseline.totalMonthlyExpenses
-    if total_expenses is None and baseline.expenseBreakdown:
-        breakdown = baseline.expenseBreakdown
-        parts = [breakdown.payroll, breakdown.marketing, breakdown.operating]
+    if total_expenses is None:
+        parts = [payroll, marketing, operating]
         total_expenses = sum(p for p in parts if p is not None) or 0
     
-    cogs = 0
-    if baseline.monthlyRevenue:
-        cogs = baseline.monthlyRevenue * 0.3
+    revenue = baseline.monthlyRevenue or 0
+    
+    estimated_gross_margin = 0.65
+    cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0
+    
+    if total_expenses > 0 and (payroll or 0) + (marketing or 0) + (operating or 0) > 0:
+        opex = (marketing or 0) + (operating or 0)
+    else:
+        opex = max(0, total_expenses - (payroll or 0) - cogs)
     
     record = FinancialRecord(
         company_id=company_id,
         period_start=first_of_month,
         period_end=today,
-        revenue=baseline.monthlyRevenue or 0,
+        revenue=revenue,
         cogs=cogs,
-        opex=total_expenses or 0,
-        payroll=baseline.expenseBreakdown.payroll or 0,
-        other_costs=baseline.expenseBreakdown.operating or 0,
+        opex=opex,
+        payroll=payroll or 0,
+        other_costs=0,
         cash_balance=baseline.cashOnHand or 0,
     )
     db.add(record)
@@ -411,7 +420,8 @@ async def save_financial_baseline(
     
     db.commit()
     
-    net_burn = max(0, (total_expenses or 0) - (baseline.monthlyRevenue or 0))
+    actual_total = cogs + opex + (payroll or 0)
+    net_burn = max(0, actual_total - revenue)
     runway = (baseline.cashOnHand / net_burn) if net_burn > 0 and baseline.cashOnHand else None
     
     return {
@@ -420,5 +430,6 @@ async def save_financial_baseline(
         'calculatedMetrics': {
             'netBurnRate': net_burn,
             'runwayMonths': runway,
+            'totalExpenses': actual_total,
         }
     }

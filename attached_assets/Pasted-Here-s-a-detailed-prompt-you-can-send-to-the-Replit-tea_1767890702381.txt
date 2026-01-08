@@ -1,0 +1,69 @@
+Here’s a detailed prompt you can send to the Replit team describing the issues encountered across the RunwayAI interface. It outlines each problem area with sufficient context so developers can reproduce and address them:
+
+---
+
+## Subject: Issues in RunwayAI Interface – Data Input, Truth Scan, Simulation & Decision Modules
+
+### Overview
+
+While testing the RunwayAI financial simulator, I encountered several inconsistencies and functional issues across the Data Input, Truth Scan, Simulation and Decision screens. Below is a detailed breakdown to help your team diagnose and fix these problems.
+
+### 1. Data Input Module
+
+#### Financial Metrics Screen
+
+* **Net Burn Rate calculation** – Regardless of the inputs (e.g., cash on hand $500 k, monthly revenue $14.2 M, monthly expenses $643 k), the module reports a **Net Burn Rate of $0/mo** and “Profitable.” The burn rate should reflect revenue minus expenses; with positive net income, the app should display a negative burn or explicitly state it’s profitable.
+* **Lack of user feedback** – After clicking “Save All Data,” there’s no confirmation or status message. It’s unclear whether the data has been saved.
+* **Dropdown reliability** – The Stage and Industry selectors sometimes don’t open or close correctly. This may be due to lingering state from a previous interaction.
+* **Field validation** – Inputs like founding date, growth scenario and funding target allow unrealistic or empty values without warnings.
+
+#### Goals Tab
+
+* Fields for target runway, funding target and timeline accept any values. It would help to validate entries (e.g., funding timeline shouldn’t be negative).
+
+### 2. Truth Scan Module
+
+* **Incorrect key metrics** – Despite entering sizeable figures, Truth Scan displays:
+
+  * Monthly Revenue: “$14” (instead of $14 M).
+  * Net Burn: “$0.”
+  * Cash Balance: “$0.”
+  * Runway (P50): “36.0 months” (doesn’t correlate with other screens).
+  * Revenue Growth: “–100.0 % MoM,” even though the growth rate input was 10 %.
+  * Burn Multiple: “0.0,” which is inconsistent with profitability.
+* **Benchmark comparison anomalies** – Because the system reports –100 % revenue growth, the benchmark comparisons place the company well below typical P25, P50 and P75 quartiles, which misrepresents performance.
+* **Refresh Scan button** – Activating “Refresh Scan” doesn’t appear to update metrics. It should recalculate based on the latest data.
+
+### 3. Simulation Module
+
+#### Compare All vs Simulation Results
+
+* The same baseline scenario yields different outputs:
+
+  * **Compare All** page: Runway = 1 month, Survival = 0 %.
+  * **Simulation Results** page: Runway = 36 months (P50), Survival = 10 000 % at 18 months.
+* A survival probability above 100 % is impossible; these numbers are inconsistent and likely result from a calculation bug.
+
+#### Scenario Builder
+
+* Some template entries lack descriptions (e.g., “Price Increase” appears blank).
+* Scrolling through templates is clunky; the UI doesn’t clearly indicate which template is selected.
+* There is no validation for incomplete data when advancing through the wizard (e.g., leaving founding date blank doesn’t trigger a warning).
+
+### 4. Decision Module
+
+* Recommended actions (e.g., “Extend Runway,” “Price Increase 5 %,” “Fundraise in 3 Months”) each report **+0 % survival impact and +0 mo runway change**. This suggests the simulation engine is not feeding meaningful values to the decision model.
+* No context or explanation is provided for why the recommended actions show zero impact.
+
+### Suggested Fixes
+
+1. **Correct Data Binding** – Ensure that values from the Data Input form propagate correctly into Truth Scan metrics and simulation calculations.
+2. **Recalculate Burn Rate** – Implement proper burn rate computation (revenue – expenses) and display negative values for profitable scenarios.
+3. **Normalize Metrics** – Enforce proper formatting (e.g., $14,246,988.4 instead of $14) and realistic ranges (capping survival at 100 %).
+4. **Improve UI State Management** – Fix issues with dropdowns not opening/closing properly and add success/error toasts after actions like “Save.”
+5. **Validate Inputs** – Add front‑end validation for dates, funding targets and growth rates to catch invalid or missing entries.
+6. **Decision Engine Integration** – Investigate why decision recommendations show zero impact; update the logic to reflect simulation outputs accurately.
+
+---
+
+Feel free to forward this prompt to the appropriate team so they can replicate the issues and prioritize fixes.
