@@ -45,7 +45,7 @@ export default function TruthScanPage() {
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
   
   const formatCurrency = (value: number | null | undefined) => {
-    return formatCurrencyAbbrev(value);
+    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
   };
   
   const formatPercent = (value: number | null | undefined) => {
