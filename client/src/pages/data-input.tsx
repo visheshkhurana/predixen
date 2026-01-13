@@ -535,6 +535,81 @@ export default function DataInput() {
     return null;
   };
 
+  const getIndustryEstimateSuggestion = (fieldKey: string) => {
+    const revenue = watchedValues.monthlyRevenue || 0;
+    const expenses = watchedValues.monthlyExpenses || 0;
+    const operating = watchedValues.operatingExpenses;
+    
+    let suggestedValue: number | null = null;
+    let explanation = "";
+    let currentValue: number | undefined;
+    let fieldName: keyof DataInputValues;
+
+    switch (fieldKey) {
+      case 'payrollExpenses':
+        fieldName = 'payrollExpenses';
+        currentValue = watchedValues.payrollExpenses;
+        if (operating && operating > 0) {
+          suggestedValue = Math.round(operating * 0.5);
+          explanation = "~50% of operating expenses (industry standard)";
+        } else if (expenses > 0) {
+          suggestedValue = Math.round(expenses * 0.5);
+          explanation = "~50% of total expenses (industry standard)";
+        }
+        break;
+      case 'operatingExpenses':
+        fieldName = 'operatingExpenses';
+        currentValue = watchedValues.operatingExpenses;
+        if (revenue > 0) {
+          suggestedValue = Math.round(revenue * 0.3);
+          explanation = "~30% of revenue (industry standard)";
+        } else if (expenses > 0) {
+          suggestedValue = Math.round(expenses * 0.3);
+          explanation = "~30% of total expenses (industry standard)";
+        }
+        break;
+      case 'cashOnHand':
+        fieldName = 'cashOnHand';
+        currentValue = watchedValues.cashOnHand;
+        if (expenses > 0 && (!currentValue || currentValue === 0)) {
+          suggestedValue = expenses * 6;
+          explanation = "6 months of expenses (healthy runway)";
+        }
+        break;
+      case 'growthRate':
+        fieldName = 'growthRate';
+        currentValue = watchedValues.growthRate;
+        if (!currentValue || currentValue === 0) {
+          suggestedValue = 5;
+          explanation = "5% MoM (conservative SaaS benchmark)";
+        }
+        break;
+      default:
+        return null;
+    }
+
+    if (suggestedValue === null || (currentValue && currentValue > 0)) {
+      return null;
+    }
+
+    return (
+      <div className="flex items-center gap-2 mt-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-auto py-0.5 px-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          onClick={() => form.setValue(fieldName, suggestedValue as any)}
+          data-testid={`button-suggest-${fieldKey}`}
+        >
+          <Sparkles className="h-3 w-3 mr-1" />
+          Use {fieldKey === 'growthRate' ? `${suggestedValue}%` : formatCurrency(suggestedValue!)}
+        </Button>
+        <span className="text-xs text-muted-foreground">{explanation}</span>
+      </div>
+    );
+  };
+
   const renderFileUploadZone = (type: 'pdf' | 'excel') => {
     const accept = type === 'pdf' ? '.pdf' : '.xlsx,.xls';
     const icon = type === 'pdf' ? <FileText className="h-12 w-12 text-muted-foreground" /> : <FileSpreadsheet className="h-12 w-12 text-muted-foreground" />;
@@ -900,6 +975,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>Current bank balance</FormDescription>
+                              {getIndustryEstimateSuggestion('cashOnHand')}
                               {getMissingFieldHint('cashOnHand')}
                               <FormMessage />
                             </FormItem>
@@ -1011,6 +1087,7 @@ export default function DataInput() {
                                 </div>
                               </FormControl>
                               <FormDescription>MoM revenue growth</FormDescription>
+                              {getIndustryEstimateSuggestion('growthRate')}
                               {getMissingFieldHint('monthlyGrowthRate')}
                               <FormMessage />
                             </FormItem>
@@ -1039,6 +1116,7 @@ export default function DataInput() {
                                     data-testid="input-payroll"
                                   />
                                 </FormControl>
+                                {getIndustryEstimateSuggestion('payrollExpenses')}
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -1083,6 +1161,7 @@ export default function DataInput() {
                                     data-testid="input-operating"
                                   />
                                 </FormControl>
+                                {getIndustryEstimateSuggestion('operatingExpenses')}
                                 <FormMessage />
                               </FormItem>
                             )}
