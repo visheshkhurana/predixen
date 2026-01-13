@@ -41,7 +41,8 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["operating_margin"] = ((latest.revenue - total_costs) / latest.revenue * 100) if latest.revenue > 0 else 0
         
         net_burn = total_costs - latest.revenue
-        metrics["net_burn"] = max(0, net_burn)
+        metrics["net_burn"] = net_burn
+        metrics["is_profitable"] = net_burn < 0
         
         if len(financials) >= 2:
             prev = financials[1]
@@ -63,20 +64,23 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             metrics["runway_p50"] = round(runway_months, 1)
             metrics["runway_p10"] = round(runway_months * 0.7, 1)
             metrics["runway_p90"] = round(runway_months * 1.4, 1)
+            metrics["runway_sustainable"] = False
         else:
             metrics["burn_multiple"] = 0
-            metrics["runway_p50"] = 36
-            metrics["runway_p10"] = 24
-            metrics["runway_p90"] = 48
+            metrics["runway_p50"] = None
+            metrics["runway_p10"] = None
+            metrics["runway_p90"] = None
+            metrics["runway_sustainable"] = True
         
-        if metrics.get("runway_p50", 0) < 6:
+        runway_p50 = metrics.get("runway_p50")
+        if runway_p50 is not None and runway_p50 < 6:
             flags.append({
                 "severity": "high",
                 "title": "Critical Runway",
                 "description": "Less than 6 months of runway remaining",
                 "metrics_involved": ["runway_p50", "net_burn", "cash_balance"]
             })
-        elif metrics.get("runway_p50", 0) < 12:
+        elif runway_p50 is not None and runway_p50 < 12:
             flags.append({
                 "severity": "medium",
                 "title": "Low Runway",

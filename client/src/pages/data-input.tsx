@@ -74,6 +74,8 @@ const dataInputSchema = z.object({
   payrollExpenses: z.coerce.number().min(0).optional(),
   marketingExpenses: z.coerce.number().min(0).optional(),
   operatingExpenses: z.coerce.number().min(0).optional(),
+  cogsExpenses: z.coerce.number().min(0).optional(),
+  otherOpexExpenses: z.coerce.number().min(0).optional(),
   growthRate: z.coerce.number().min(-100).max(1000),
   burnRate: z.coerce.number().optional(),
   employees: z.coerce.number().min(0).optional(),
@@ -150,6 +152,7 @@ export default function DataInput() {
   const [dragActive, setDragActive] = useState(false);
   const [uploadType, setUploadType] = useState<'pdf' | 'excel'>('pdf');
   const [useVerificationFlow, setUseVerificationFlow] = useState(true);
+  const [hasManualExpenseOverride, setHasManualExpenseOverride] = useState(false);
   const [, navigate] = useLocation();
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -169,6 +172,8 @@ export default function DataInput() {
       payrollExpenses: 50000,
       marketingExpenses: 15000,
       operatingExpenses: 15000,
+      cogsExpenses: 0,
+      otherOpexExpenses: 0,
       growthRate: 10,
       burnRate: 30000,
       employees: 10,
@@ -180,7 +185,20 @@ export default function DataInput() {
   });
 
   const watchedValues = form.watch();
-  const calculatedBurn = (watchedValues.monthlyExpenses || 0) - (watchedValues.monthlyRevenue || 0);
+  
+  const summedExpenses = (watchedValues.payrollExpenses || 0) + 
+                         (watchedValues.marketingExpenses || 0) + 
+                         (watchedValues.operatingExpenses || 0) +
+                         (watchedValues.cogsExpenses || 0) +
+                         (watchedValues.otherOpexExpenses || 0);
+  
+  const effectiveExpenses = hasManualExpenseOverride 
+    ? (watchedValues.monthlyExpenses || 0)
+    : (summedExpenses > 0 ? summedExpenses : (watchedValues.monthlyExpenses || 0));
+  
+  const calculatedBurn = effectiveExpenses - (watchedValues.monthlyRevenue || 0);
+  const isProfitable = calculatedBurn < 0;
+  const isSustainable = calculatedBurn <= 0;
   const calculatedRunway = calculatedBurn > 0 ? (watchedValues.cashOnHand || 0) / calculatedBurn : null;
 
   useEffect(() => {
@@ -213,6 +231,15 @@ export default function DataInput() {
         if (financialBaseline.expenseBreakdown.operating !== null) {
           form.setValue('operatingExpenses', financialBaseline.expenseBreakdown.operating);
         }
+        if (financialBaseline.expenseBreakdown.cogs !== null) {
+          form.setValue('cogsExpenses', financialBaseline.expenseBreakdown.cogs);
+        }
+        if (financialBaseline.expenseBreakdown.otherOpex !== null) {
+          form.setValue('otherOpexExpenses', financialBaseline.expenseBreakdown.otherOpex);
+        }
+      }
+      if (financialBaseline.hasManualExpenseOverride !== undefined) {
+        setHasManualExpenseOverride(financialBaseline.hasManualExpenseOverride);
       }
     }
   }, [financialBaseline, form]);
@@ -304,6 +331,8 @@ export default function DataInput() {
           payroll: normalized.expenseBreakdown?.payroll || null,
           marketing: normalized.expenseBreakdown?.marketing || null,
           operating: normalized.expenseBreakdown?.operating || null,
+          cogs: normalized.expenseBreakdown?.cogs || null,
+          otherOpex: normalized.expenseBreakdown?.otherOpex || null,
         },
         currency: normalized.currency || 'USD',
         asOfDate: normalized.asOfDate,
@@ -373,6 +402,8 @@ export default function DataInput() {
       applyValue('payrollExpenses', baseline.expenseBreakdown.payroll, 'payroll');
       applyValue('marketingExpenses', baseline.expenseBreakdown.marketing, 'marketing');
       applyValue('operatingExpenses', baseline.expenseBreakdown.operating, 'operating');
+      applyValue('cogsExpenses', baseline.expenseBreakdown.cogs, 'cogs');
+      applyValue('otherOpexExpenses', baseline.expenseBreakdown.otherOpex, 'otherOpex');
     }
   };
 
@@ -409,16 +440,29 @@ export default function DataInput() {
 
     setIsSaving(true);
     try {
+      const breakdownSum = (values.payrollExpenses || 0) + 
+                           (values.marketingExpenses || 0) + 
+                           (values.operatingExpenses || 0) +
+                           (values.cogsExpenses || 0) +
+                           (values.otherOpexExpenses || 0);
+      
+      const totalExpenses = hasManualExpenseOverride 
+        ? (values.monthlyExpenses || 0)
+        : (breakdownSum > 0 ? breakdownSum : (values.monthlyExpenses || 0));
+      
       const baseline = {
         cashOnHand: values.cashOnHand,
         monthlyRevenue: values.monthlyRevenue,
-        totalMonthlyExpenses: values.monthlyExpenses,
+        totalMonthlyExpenses: totalExpenses,
         monthlyGrowthRate: values.growthRate,
         expenseBreakdown: {
           payroll: values.payrollExpenses || null,
           marketing: values.marketingExpenses || null,
           operating: values.operatingExpenses || null,
+          cogs: values.cogsExpenses || null,
+          otherOpex: values.otherOpexExpenses || null,
         },
+        hasManualExpenseOverride: hasManualExpenseOverride,
         currency: 'USD',
         asOfDate: new Date().toISOString().split('T')[0],
       };
@@ -1090,11 +1134,21 @@ export default function DataInput() {
                                     className="pl-9 font-mono"
                                     placeholder="80000"
                                     {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(true);
+                                    }}
                                     data-testid="input-expenses"
                                   />
                                 </div>
                               </FormControl>
-                              <FormDescription>Total monthly operating costs</FormDescription>
+                              <FormDescription>
+                                {hasManualExpenseOverride 
+                                  ? "Manual override active" 
+                                  : summedExpenses > 0 
+                                    ? `Computed from breakdown: ${formatCurrency(summedExpenses)}`
+                                    : "Total monthly operating costs"}
+                              </FormDescription>
                               {getMissingFieldHint('totalMonthlyExpenses')}
                               <FormMessage />
                             </FormItem>
@@ -1142,7 +1196,7 @@ export default function DataInput() {
 
                       <div className="border-t pt-4">
                         <h4 className="text-sm font-medium mb-3">Expense Breakdown (Optional)</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                           <FormField
                             control={form.control}
                             name="payrollExpenses"
@@ -1158,6 +1212,10 @@ export default function DataInput() {
                                     className="font-mono"
                                     placeholder="50000"
                                     {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(false);
+                                    }}
                                     data-testid="input-payroll"
                                   />
                                 </FormControl>
@@ -1181,6 +1239,10 @@ export default function DataInput() {
                                     className="font-mono"
                                     placeholder="15000"
                                     {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(false);
+                                    }}
                                     data-testid="input-marketing"
                                   />
                                 </FormControl>
@@ -1203,10 +1265,66 @@ export default function DataInput() {
                                     className="font-mono"
                                     placeholder="15000"
                                     {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(false);
+                                    }}
                                     data-testid="input-operating"
                                   />
                                 </FormControl>
                                 {getIndustryEstimateSuggestion('operatingExpenses')}
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="cogsExpenses"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="flex items-center gap-1.5 flex-wrap">
+                                  COGS ($)
+                                  {getConfidenceBadge('cogs')}
+                                </FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    className="font-mono"
+                                    placeholder="0"
+                                    {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(false);
+                                    }}
+                                    data-testid="input-cogs"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="otherOpexExpenses"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="flex items-center gap-1.5 flex-wrap">
+                                  Other ($)
+                                  {getConfidenceBadge('otherOpex')}
+                                </FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    className="font-mono"
+                                    placeholder="0"
+                                    {...field}
+                                    onChange={(e) => {
+                                      field.onChange(e);
+                                      setHasManualExpenseOverride(false);
+                                    }}
+                                    data-testid="input-other-opex"
+                                  />
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
