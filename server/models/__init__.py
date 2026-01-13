@@ -1,7 +1,19 @@
 from server.models.user import User
 from server.models.company import Company
 from server.models.dataset import Dataset
-from server.models.financial import FinancialRecord
+from server.models.financial import (
+    FinancialRecord,
+    ImportSession,
+    FinancialMetricPoint,
+    SignConvention,
+    TimeGranularity,
+    PeriodMode,
+    ImportStatus,
+    MetricClassification,
+    ExpenseBucket,
+    ConfidenceLevel,
+    SourceType,
+)
 from server.models.transaction import TransactionRecord
 from server.models.customer import CustomerRecord
 from server.models.benchmark import Benchmark
@@ -16,6 +28,16 @@ __all__ = [
     "Company",
     "Dataset",
     "FinancialRecord",
+    "ImportSession",
+    "FinancialMetricPoint",
+    "SignConvention",
+    "TimeGranularity",
+    "PeriodMode",
+    "ImportStatus",
+    "MetricClassification",
+    "ExpenseBucket",
+    "ConfidenceLevel",
+    "SourceType",
     "TransactionRecord",
     "CustomerRecord",
     "Benchmark",

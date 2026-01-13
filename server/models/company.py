@@ -23,3 +23,5 @@ class Company(Base):
     truth_scans = relationship("TruthScan", back_populates="company")
     scenarios = relationship("Scenario", back_populates="company")
     chat_sessions = relationship("ChatSession", back_populates="company")
+    import_sessions = relationship("ImportSession", back_populates="company")
+    metric_points = relationship("FinancialMetricPoint", back_populates="company")

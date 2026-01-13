@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -27,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -146,6 +149,8 @@ export default function DataInput() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadType, setUploadType] = useState<'pdf' | 'excel'>('pdf');
+  const [useVerificationFlow, setUseVerificationFlow] = useState(true);
+  const [, navigate] = useLocation();
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +231,41 @@ export default function DataInput() {
     setUploadProgress(10);
 
     try {
+      if (useVerificationFlow) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('company_id', currentCompany.id.toString());
+
+        setUploadProgress(30);
+
+        const endpoint = type === 'pdf' ? '/api/imports/pdf' : '/api/imports/excel';
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        setUploadProgress(70);
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to process file');
+        }
+
+        const result = await response.json();
+        setUploadProgress(100);
+
+        toast({
+          title: "File processed",
+          description: "Redirecting to verification screen...",
+        });
+
+        navigate(`/data/verify/${result.id}`);
+        return;
+      }
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('fileType', type);
