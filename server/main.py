@@ -6,6 +6,7 @@ from server.core.db import engine, Base, SessionLocal
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration
+from server.api import forecasting as forecasting_api, alerts as alerts_api, integrations as integrations_api, templates as templates_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +60,10 @@ app.include_router(copilot.router)
 app.include_router(investor.router)
 app.include_router(ingest.router)
 app.include_router(calibration.router)
+app.include_router(forecasting_api.router)
+app.include_router(alerts_api.router)
+app.include_router(integrations_api.router)
+app.include_router(templates_api.router)
 
 @app.get("/")
 def root():
