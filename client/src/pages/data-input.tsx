@@ -662,9 +662,14 @@ export default function DataInput() {
                   Drag and drop your {label.toLowerCase()} here, or
                 </p>
                 <Button
+                  type="button"
                   variant="outline"
                   className="mt-2"
-                  onClick={() => inputRef.current?.click()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    inputRef.current?.click();
+                  }}
                   data-testid={`button-browse-${type}`}
                 >
                   <FileUp className="h-4 w-4 mr-2" />
