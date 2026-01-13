@@ -50,13 +50,64 @@ interface EditableMetric {
   required?: boolean;
 }
 
+interface EstimatedFields {
+  [key: string]: boolean;
+}
+
+function calculateIndustryEstimates(metrics: Record<string, number | undefined>): {
+  estimates: Record<string, number>;
+  explanations: Record<string, string>;
+} {
+  const estimates: Record<string, number> = {};
+  const explanations: Record<string, string> = {};
+  
+  const revenue = metrics.revenue || 0;
+  let opex = metrics.opex;
+  let payroll = metrics.payroll;
+  const cogs = metrics.cogs || 0;
+  
+  if (opex === undefined || opex === null) {
+    if (revenue > 0) {
+      opex = Math.round(revenue * 0.3);
+      estimates.opex = opex;
+      explanations.opex = "Estimated at 30% of revenue (typical SaaS operating expense ratio)";
+    }
+  }
+  
+  if ((payroll === undefined || payroll === null) && (opex && opex > 0)) {
+    payroll = Math.round(opex * 0.5);
+    estimates.payroll = payroll;
+    explanations.payroll = "Estimated at 50% of operating expenses (industry benchmark: 40-60%)";
+  }
+  
+  const effectiveOpex = opex || 0;
+  const effectivePayroll = payroll || 0;
+  const totalMonthlyExpenses = effectiveOpex + effectivePayroll + cogs;
+  
+  if (!metrics.cash_balance && metrics.cash_balance !== 0) {
+    const estimatedCash = totalMonthlyExpenses > 0 ? totalMonthlyExpenses * 6 : revenue * 3;
+    if (estimatedCash > 0) {
+      estimates.cash_balance = Math.round(estimatedCash);
+      explanations.cash_balance = "Estimated at 6 months of operating expenses (industry standard for runway)";
+    }
+  }
+  
+  if (!metrics.monthlyGrowthRate && metrics.monthlyGrowthRate !== 0) {
+    estimates.monthlyGrowthRate = 5;
+    explanations.monthlyGrowthRate = "Conservative estimate for high-growth companies (5% MoM)";
+  }
+  
+  return { estimates, explanations };
+}
+
 export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [saveAsBaseline, setSaveAsBaseline] = useState(true);
   const [extractedMetrics, setExtractedMetrics] = useState<ExtractedMetrics | null>(null);
   const [editableMetrics, setEditableMetrics] = useState<Record<string, number | undefined>>({});
+  const [estimatedFields, setEstimatedFields] = useState<EstimatedFields>({});
+  const [estimateExplanations, setEstimateExplanations] = useState<Record<string, string>>({});
   const [sheetName, setSheetName] = useState<string | null>(null);
   const [reportDate, setReportDate] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
@@ -117,18 +168,38 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
       setReportDate(result.report_date);
       setHasApplied(false);
       
-      setEditableMetrics({
+      const extractedValues: Record<string, number | undefined> = {
         revenue: result.metrics?.revenue,
         cogs: result.metrics?.cogs,
         opex: result.metrics?.opex,
         payroll: result.metrics?.payroll,
         cash_balance: result.metrics?.cash_balance,
         gross_margin: result.metrics?.gross_margin,
+        monthlyGrowthRate: undefined,
+      };
+      
+      const { estimates, explanations } = calculateIndustryEstimates(extractedValues);
+      
+      const newEstimatedFields: EstimatedFields = {};
+      const mergedMetrics = { ...extractedValues };
+      
+      Object.entries(estimates).forEach(([key, value]) => {
+        if (mergedMetrics[key] === undefined || mergedMetrics[key] === null) {
+          mergedMetrics[key] = value;
+          newEstimatedFields[key] = true;
+        }
       });
+      
+      setEditableMetrics(mergedMetrics);
+      setEstimatedFields(newEstimatedFields);
+      setEstimateExplanations(explanations);
 
+      const estimatedCount = Object.keys(newEstimatedFields).length;
       toast({
         title: "Spreadsheet analyzed",
-        description: "Review the extracted metrics below and click 'Apply to Financials' to save.",
+        description: estimatedCount > 0 
+          ? `Review extracted metrics. ${estimatedCount} field(s) auto-filled with industry estimates.`
+          : "Review the extracted metrics below and click 'Apply to Financials' to save.",
       });
     } catch (error: any) {
       toast({
@@ -142,11 +213,12 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
   const handleApplyToFinancials = async () => {
     setIsApplying(true);
     try {
+      const growthRate = (editableMetrics.monthlyGrowthRate || 0) / 100;
       const payload = {
         cashOnHand: editableMetrics.cash_balance || 0,
         monthlyRevenue: editableMetrics.revenue || 0,
         totalMonthlyExpenses: (editableMetrics.opex || 0) + (editableMetrics.payroll || 0),
-        monthlyGrowthRate: 0,
+        monthlyGrowthRate: growthRate,
         expenseBreakdown: {
           payroll: editableMetrics.payroll || 0,
           marketing: 0,
@@ -196,6 +268,13 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
       ...prev,
       [key]: isNaN(numValue) ? undefined : numValue,
     }));
+    if (estimatedFields[key]) {
+      setEstimatedFields(prev => {
+        const updated = { ...prev };
+        delete updated[key];
+        return updated;
+      });
+    }
   };
 
   const getMissingFields = (): string[] => {
@@ -226,6 +305,9 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
     setSummary(null);
     setSheetName(null);
     setReportDate(null);
+    setEstimatedFields({});
+    setEstimateExplanations({});
+    setHasApplied(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -292,8 +374,8 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
                   Drag and drop your Termina Excel export here, or
                 </p>
                 <Button
-                  variant="link"
-                  className="px-1"
+                  variant="ghost"
+                  className="px-1 h-auto underline"
                   onClick={() => fileInputRef.current?.click()}
                   data-testid="button-browse-excel-files"
                 >
@@ -375,6 +457,18 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
               </div>
             )}
 
+            {Object.keys(estimatedFields).length > 0 && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3">
+                <div className="flex items-center gap-2 text-blue-400 text-sm">
+                  <Sparkles className="h-4 w-4" />
+                  <span>
+                    {Object.keys(estimatedFields).length} field(s) auto-filled with industry-standard estimates. 
+                    Fields marked with <Badge variant="outline" className="ml-1 text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">Estimated</Badge> can be edited before applying.
+                  </span>
+                </div>
+              </div>
+            )}
+
             <Separator />
 
             <div className="space-y-3">
@@ -395,19 +489,34 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
                   value={editableMetrics.cash_balance}
                   onChange={(val) => updateMetric('cash_balance', val)}
                   required
+                  isEstimated={estimatedFields.cash_balance}
+                  estimateHint={estimateExplanations.cash_balance}
                   testId="input-edit-cash"
                 />
                 <EditableMetricField
                   label="Operating Expenses"
                   value={editableMetrics.opex}
                   onChange={(val) => updateMetric('opex', val)}
+                  isEstimated={estimatedFields.opex}
+                  estimateHint={estimateExplanations.opex}
                   testId="input-edit-opex"
                 />
                 <EditableMetricField
                   label="Payroll"
                   value={editableMetrics.payroll}
                   onChange={(val) => updateMetric('payroll', val)}
+                  isEstimated={estimatedFields.payroll}
+                  estimateHint={estimateExplanations.payroll}
                   testId="input-edit-payroll"
+                />
+                <EditableMetricField
+                  label="Monthly Growth Rate %"
+                  value={editableMetrics.monthlyGrowthRate}
+                  onChange={(val) => updateMetric('monthlyGrowthRate', val)}
+                  isPercent
+                  isEstimated={estimatedFields.monthlyGrowthRate}
+                  estimateHint={estimateExplanations.monthlyGrowthRate}
+                  testId="input-edit-growth"
                 />
                 <EditableMetricField
                   label="COGS"
@@ -489,6 +598,8 @@ function EditableMetricField({
   onChange,
   isPercent = false,
   required = false,
+  isEstimated = false,
+  estimateHint,
   testId,
 }: {
   label: string;
@@ -496,6 +607,8 @@ function EditableMetricField({
   onChange: (value: string) => void;
   isPercent?: boolean;
   required?: boolean;
+  isEstimated?: boolean;
+  estimateHint?: string;
   testId: string;
 }) {
   const formatDisplayValue = (val: number | undefined) => {
@@ -506,9 +619,14 @@ function EditableMetricField({
 
   return (
     <div className="space-y-1.5">
-      <label className="text-sm text-muted-foreground flex items-center gap-1">
+      <label className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
         {label}
         {required && <span className="text-destructive">*</span>}
+        {isEstimated && (
+          <Badge variant="outline" className="ml-1 text-xs bg-blue-500/10 text-blue-400 border-blue-500/30">
+            Estimated
+          </Badge>
+        )}
       </label>
       <div className="relative">
         {!isPercent && (
@@ -518,7 +636,7 @@ function EditableMetricField({
           type="text"
           value={formatDisplayValue(value)}
           onChange={(e) => onChange(e.target.value)}
-          className={`${isPercent ? '' : 'pl-7'} font-mono`}
+          className={`${isPercent ? '' : 'pl-7'} font-mono ${isEstimated ? 'border-blue-500/30' : ''}`}
           placeholder={isPercent ? '0' : '0'}
           data-testid={testId}
         />
@@ -526,6 +644,9 @@ function EditableMetricField({
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
         )}
       </div>
+      {isEstimated && estimateHint && (
+        <p className="text-xs text-blue-400/80">{estimateHint}</p>
+      )}
     </div>
   );
 }
