@@ -20,6 +20,7 @@ import DataInputPage from "@/pages/data-input";
 import IntegrationsPage from "@/pages/integrations";
 import AlertsPage from "@/pages/alerts";
 import TemplatesPage from "@/pages/templates";
+import DataVerificationPage from "@/pages/data-verification";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -45,6 +46,9 @@ function Router() {
       </Route>
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
+      </Route>
+      <Route path="/data/verify/:sessionId">
+        {() => <AuthenticatedRoute component={DataVerificationPage} />}
       </Route>
       <Route path="/scenarios">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
