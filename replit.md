@@ -32,6 +32,11 @@ Preferred communication style: Simple, everyday language.
 1. **Ingestion**: CSV upload + manual baseline fallback + Excel/PDF AI extraction
 2. **Truth Scan**: 24 metrics computation, benchmarking, confidence scoring
 3. **Simulation**: Monte Carlo engine with 24-month projections
+   - **Enhanced Engine**: Regime-aware simulation (Base, Downturn, Breakout) with correlated driver sampling
+   - **Correlated Drivers**: growth_rate, churn_rate, gross_margin, CAC, DSO, conversion_rate using Cholesky decomposition
+   - **Scenario Events**: 8 event types (pricing_change, cost_cut, hiring_freeze, hiring_plan, fundraise, marketing_spend_change, churn_initiative, expansion_revenue)
+   - **Decision Scoring**: Weighted composite (survival 30%, growth 25%, downside risk 20%, dilution 15%, complexity 10%)
+   - **Sensitivity Analysis**: "What Must Be True" driver impact analysis for target runway
 4. **Decision Engine**: Deterministic action library, scoring, top 3 recommendations
 5. **Copilot**: Multi-agent router with context pack grounding
 
@@ -104,6 +109,9 @@ Preferred communication style: Simple, everyday language.
 - POST /companies/{id}/scenarios
 - POST /scenarios/{id}/simulate
 - GET /scenarios/{id}/simulation/latest
+- POST /companies/{id}/simulate-enhanced (regime-aware single scenario)
+- POST /companies/{id}/simulate-scenarios-enhanced (multi-scenario with ranking)
+- POST /companies/{id}/sensitivity-analysis (driver impact analysis)
 
 ### Decisions
 - POST /simulation/{run_id}/decisions/generate
