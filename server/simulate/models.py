@@ -93,6 +93,52 @@ DRIVER_CORRELATION_MATRIX = {
 
 
 @dataclass
+class CustomerCohort:
+    acquisition_month: int
+    initial_customers: int
+    current_customers: int
+    mrr_per_customer: float
+    gross_retention_rate: float
+    net_retention_rate: float
+    expansion_rate: float
+    acquisition_channel: str = "organic"
+
+
+@dataclass
+class WorkingCapital:
+    accounts_receivable: float = 0.0
+    accounts_payable: float = 0.0
+    inventory: float = 0.0
+    deferred_revenue: float = 0.0
+    prepaid_expenses: float = 0.0
+    
+    @property
+    def net_working_capital(self) -> float:
+        return self.accounts_receivable + self.inventory + self.prepaid_expenses - self.accounts_payable - self.deferred_revenue
+
+
+@dataclass
+class DebtFacility:
+    principal: float
+    interest_rate: float
+    term_months: int
+    start_month: int
+    monthly_payment: float = 0.0
+    covenants: Dict[str, float] = field(default_factory=dict)
+    
+    def check_covenants(self, state: Any) -> Dict[str, bool]:
+        results = {}
+        if "min_cash" in self.covenants:
+            results["min_cash"] = state.cash >= self.covenants["min_cash"]
+        if "max_leverage" in self.covenants:
+            leverage = self.principal / max(state.arr, 1)
+            results["max_leverage"] = leverage <= self.covenants["max_leverage"]
+        if "min_revenue_growth" in self.covenants:
+            results["min_revenue_growth"] = True
+        return results
+
+
+@dataclass
 class MonthlyState:
     month: int
     cash: float
@@ -121,6 +167,15 @@ class MonthlyState:
     debt_payment: float
     regime: str = "base"
     events_active: List[str] = field(default_factory=list)
+    accounts_receivable: float = 0.0
+    accounts_payable: float = 0.0
+    deferred_revenue: float = 0.0
+    net_working_capital: float = 0.0
+    interest_expense: float = 0.0
+    covenant_status: Dict[str, bool] = field(default_factory=dict)
+    gross_retention: float = 100.0
+    net_retention: float = 100.0
+    cohort_count: int = 0
 
 
 @dataclass
