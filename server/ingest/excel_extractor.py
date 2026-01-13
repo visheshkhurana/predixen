@@ -88,6 +88,10 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
             'opex': ['Operating Expenses', 'OPEX', 'Total Operating Expenses'],
         }
         
+        # Expense categories that should always be positive (take abs of negative values)
+        # NOTE: operating_income and net_income are NOT included - they can be negative (losses)
+        expense_categories = {'cogs', 'payroll', 'marketing', 'opex'}
+        
         for metric_key, possible_names in row_mappings.items():
             found = False
             for name in possible_names:
@@ -97,7 +101,12 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
                     value = df.loc[name, latest_col]
                     if pd.notna(value):
                         try:
-                            metrics[metric_key] = float(value)
+                            raw_value = float(value)
+                            # Normalize expenses: P&L convention often has expenses as negative
+                            # We store all expenses as positive internally
+                            if metric_key in expense_categories and raw_value < 0:
+                                raw_value = abs(raw_value)
+                            metrics[metric_key] = raw_value
                         except (ValueError, TypeError):
                             pass
                     found = True
@@ -107,7 +116,11 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
                         value = df.loc[idx, latest_col]
                         if pd.notna(value):
                             try:
-                                metrics[metric_key] = float(value)
+                                raw_value = float(value)
+                                # Normalize expenses: P&L convention often has expenses as negative
+                                if metric_key in expense_categories and raw_value < 0:
+                                    raw_value = abs(raw_value)
+                                metrics[metric_key] = raw_value
                             except (ValueError, TypeError):
                                 pass
                         found = True

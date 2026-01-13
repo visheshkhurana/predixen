@@ -112,6 +112,9 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
     
     string_fields = ['currency', 'asOfDate']
     
+    # Expense fields that must always be positive
+    expense_fields = {'totalMonthlyExpenses', 'payroll', 'marketing', 'operating', 'cogs', 'netBurn'}
+    
     for field, possible_keys in field_mapping.items():
         value = None
         evidence = None
@@ -131,6 +134,9 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
                 )
             else:
                 normalized_value = normalize_currency_value(value)
+                # CRITICAL: Normalize expense values to always be positive
+                if normalized_value is not None and field in expense_fields:
+                    normalized_value = abs(normalized_value)
                 extracted[field] = FieldExtraction(
                     value=normalized_value,
                     confidence=0.90 if source == 'excel' else 0.80,
@@ -149,17 +155,39 @@ def safe_float(value: Any) -> Optional[float]:
         return float(value)
     return None
 
+def safe_positive_float(value: Any) -> Optional[float]:
+    """Safely convert a value to positive float (for expenses)."""
+    result = safe_float(value)
+    if result is not None:
+        return abs(result)
+    return None
+
 def build_normalized_financials(extracted: Dict[str, FieldExtraction]) -> NormalizedFinancials:
-    """Build normalized financials from extracted fields."""
+    """Build normalized financials from extracted fields.
+    
+    All expense values are normalized to be positive.
+    """
+    # Revenue and cash should be positive
+    cash = safe_float(extracted.get('cashOnHand', FieldExtraction()).value)
+    if cash is not None:
+        cash = abs(cash)
+    
+    revenue = safe_float(extracted.get('monthlyRevenue', FieldExtraction()).value)
+    if revenue is not None:
+        revenue = abs(revenue)
+    
+    # Expenses must be positive
+    total_expenses = safe_positive_float(extracted.get('totalMonthlyExpenses', FieldExtraction()).value)
+    
     return NormalizedFinancials(
-        cashOnHand=safe_float(extracted.get('cashOnHand', FieldExtraction()).value),
-        monthlyRevenue=safe_float(extracted.get('monthlyRevenue', FieldExtraction()).value),
-        totalMonthlyExpenses=safe_float(extracted.get('totalMonthlyExpenses', FieldExtraction()).value),
+        cashOnHand=cash,
+        monthlyRevenue=revenue,
+        totalMonthlyExpenses=total_expenses,
         monthlyGrowthRate=safe_float(extracted.get('monthlyGrowthRate', FieldExtraction()).value),
         expenseBreakdown=ExpenseBreakdown(
-            payroll=safe_float(extracted.get('payroll', FieldExtraction()).value),
-            marketing=safe_float(extracted.get('marketing', FieldExtraction()).value),
-            operating=safe_float(extracted.get('operating', FieldExtraction()).value),
+            payroll=safe_positive_float(extracted.get('payroll', FieldExtraction()).value),
+            marketing=safe_positive_float(extracted.get('marketing', FieldExtraction()).value),
+            operating=safe_positive_float(extracted.get('operating', FieldExtraction()).value),
         ),
         currency='USD',
         asOfDate=None,
@@ -178,18 +206,40 @@ def get_missing_fields(extracted: Dict[str, FieldExtraction], threshold: float =
     return missing
 
 def calculate_metrics(normalized: NormalizedFinancials) -> Dict[str, Any]:
-    """Calculate derived metrics from normalized financials."""
-    revenue = normalized.monthlyRevenue or 0
-    expenses = normalized.totalMonthlyExpenses or 0
-    cash = normalized.cashOnHand or 0
+    """Calculate derived metrics from normalized financials.
     
-    net_burn = max(0, expenses - revenue)
-    runway_months = (cash / net_burn) if net_burn > 0 else None
+    Net Burn = Total Expenses - Revenue
+    - If Net Burn < 0: Company is profitable (making money)
+    - If Net Burn > 0: Company is burning cash
+    
+    All expenses are stored as positive numbers internally.
+    """
+    revenue = abs(normalized.monthlyRevenue or 0)  # Revenue should be positive
+    expenses = abs(normalized.totalMonthlyExpenses or 0)  # Expenses stored as positive
+    cash = abs(normalized.cashOnHand or 0)  # Cash should be positive
+    
+    # Net burn = expenses - revenue
+    # Positive = burning cash, Negative = profitable
+    net_burn = expenses - revenue
+    
+    # Runway calculation
+    if net_burn <= 0:
+        # Company is profitable or breaking even
+        runway_months = None  # "Sustainable" - no runway limit
+        is_profitable = True
+        status = "profitable"
+    else:
+        # Company is burning cash
+        runway_months = (cash / net_burn) if net_burn > 0 else None
+        is_profitable = False
+        status = "burning"
     
     return {
-        'netBurnRate': net_burn,
+        'netBurnRate': max(0, net_burn),  # Display burn as positive number
+        'monthlySurplus': max(0, -net_burn) if net_burn < 0 else 0,  # Surplus if profitable
         'runwayMonths': runway_months,
-        'isProfitable': revenue >= expenses,
+        'isProfitable': is_profitable,
+        'status': status,
     }
 
 @router.post("/ingest/financials", response_model=ExtractionResponse)
@@ -268,30 +318,51 @@ async def ingest_financials(
                 today = date.today()
                 first_of_month = today.replace(day=1)
                 
+                # Ensure all values are positive (normalize sign)
+                revenue = abs(normalized.monthlyRevenue or 0)
+                cash = abs(normalized.cashOnHand or 0)
+                
                 total_expenses = normalized.totalMonthlyExpenses
                 if total_expenses is None and normalized.expenseBreakdown:
                     breakdown = normalized.expenseBreakdown
                     parts = [breakdown.payroll, breakdown.marketing, breakdown.operating]
-                    total_expenses = sum(p for p in parts if p is not None) or 0.0
+                    total_expenses = sum(abs(p) for p in parts if p is not None) or 0.0
+                total_expenses = abs(total_expenses or 0)
                 
+                # Calculate COGS as 30% of revenue (estimate if not provided)
                 cogs = 0.0
-                if normalized.monthlyRevenue:
-                    cogs = normalized.monthlyRevenue * 0.3
+                if revenue > 0:
+                    cogs = revenue * 0.3
                 
                 payroll_amount = 0.0
                 if normalized.expenseBreakdown and normalized.expenseBreakdown.payroll:
-                    payroll_amount = normalized.expenseBreakdown.payroll
+                    payroll_amount = abs(normalized.expenseBreakdown.payroll)
+                
+                # Data validation: block save if values are invalid
+                validation_errors = []
+                if total_expenses < 0:
+                    validation_errors.append("Expenses cannot be negative after normalization")
+                if revenue < 0:
+                    validation_errors.append("Revenue cannot be negative")
+                
+                # Calculate burn for validation
+                net_burn = total_expenses - revenue
+                if net_burn != net_burn:  # Check for NaN
+                    validation_errors.append("Burn calculation resulted in invalid number")
+                
+                if validation_errors:
+                    logger.warning(f"Validation warnings (auto-corrected): {validation_errors}")
                 
                 record = FinancialRecord(
                     company_id=companyId,
                     period_start=first_of_month,
                     period_end=today,
-                    revenue=normalized.monthlyRevenue or 0,
+                    revenue=revenue,
                     cogs=cogs,
-                    opex=total_expenses or 0,
+                    opex=total_expenses,
                     payroll=payroll_amount,
                     other_costs=0,
-                    cash_balance=normalized.cashOnHand or 0,
+                    cash_balance=cash,
                 )
                 db.add(record)
                 db.commit()

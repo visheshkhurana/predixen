@@ -1,0 +1,96 @@
+CRITICAL DATA NORMALIZATION FIX – EXPENSE SIGN & FINANCIAL LOGIC
+
+Context:
+Uploaded Excel/PDF files often follow standard P&L convention where:
+- Revenue is POSITIVE
+- Expenses are NEGATIVE
+
+Predixen currently treats uploaded expenses as raw values, causing:
+- Negative expense display
+- Incorrect net burn
+- False “profitable” runway outputs
+
+MANDATORY FIXES:
+
+1. EXPENSE NORMALIZATION (NON-NEGOTIABLE)
+------------------------------------------------
+When ingesting any file (Excel or PDF):
+
+If row/category is classified as an EXPENSE:
+    normalized_expense = ABS(raw_value)
+
+This must apply to:
+- Marketing
+- Payroll
+- Operating
+- Astrologer payouts
+- Cost of revenue
+- Any row with keywords:
+  ["expense", "cost", "payout", "salary", "payroll", "marketing", "operating"]
+
+Store all expenses internally as POSITIVE numbers.
+
+2. REVENUE SELECTION LOGIC
+------------------------------------------------
+If multiple revenue rows exist:
+- Revenue
+- Net Revenue
+- Segment revenues
+
+Prompt user to select:
+"Which metric should be treated as primary top-line revenue?"
+
+Default fallback:
+Use the highest-level row named exactly "Revenue"
+
+3. MONTH SELECTION LOGIC
+------------------------------------------------
+When multi-month data is uploaded:
+- Auto-select latest completed month
+- Show preview table:
+  [Metric | Raw Value | Normalized Value]
+
+User must confirm before saving to Financials.
+
+4. BURN & RUNWAY FORMULA (FIX IMMEDIATELY)
+------------------------------------------------
+Internal formulas MUST be:
+
+Total Expenses = sum(normalized_expenses)
+Net Burn = Total Expenses - Revenue
+
+If Net Burn < 0:
+  status = "Profitable"
+Else:
+  status = "Burning Cash"
+
+Runway:
+If Net Burn <= 0:
+  runway = "Sustainable"
+Else:
+  runway_months = Cash / Net Burn
+
+5. UI DISPLAY RULES
+------------------------------------------------
+- Expenses: ALWAYS displayed positive
+- Burn: label clearly:
+    "Monthly Burn (Loss)" or "Monthly Surplus"
+- Never display negative expense numbers in UI
+
+6. DATA VALIDATION
+------------------------------------------------
+Block save if:
+- Expenses < 0 after normalization
+- Revenue <= 0
+- Burn is NaN or Infinity
+
+7. APPLY THIS LOGIC TO:
+------------------------------------------------
+- Excel uploads
+- PDF uploads
+- Manual entry
+- API ingestion
+- Scenario simulations
+
+This is a financial correctness bug, not UX.
+Fix is mandatory before simulations can be trusted.
