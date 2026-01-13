@@ -17,6 +17,9 @@ import ScenariosPage from "@/pages/scenarios";
 import DecisionsPage from "@/pages/decisions";
 import CopilotPage from "@/pages/copilot";
 import DataInputPage from "@/pages/data-input";
+import IntegrationsPage from "@/pages/integrations";
+import AlertsPage from "@/pages/alerts";
+import TemplatesPage from "@/pages/templates";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -51,6 +54,15 @@ function Router() {
       </Route>
       <Route path="/copilot">
         {() => <AuthenticatedRoute component={CopilotPage} />}
+      </Route>
+      <Route path="/integrations">
+        {() => <AuthenticatedRoute component={IntegrationsPage} />}
+      </Route>
+      <Route path="/alerts">
+        {() => <AuthenticatedRoute component={AlertsPage} />}
+      </Route>
+      <Route path="/templates">
+        {() => <AuthenticatedRoute component={TemplatesPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

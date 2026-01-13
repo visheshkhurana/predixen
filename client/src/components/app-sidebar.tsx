@@ -20,6 +20,9 @@ import {
   LogOut,
   Zap,
   Upload,
+  Link2,
+  Bell,
+  Layers,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,11 @@ const menuItems = [
     icon: TrendingUp,
   },
   {
+    title: "Templates",
+    url: "/templates",
+    icon: Layers,
+  },
+  {
     title: "Decisions",
     url: "/decisions",
     icon: Lightbulb,
@@ -56,6 +64,16 @@ const menuItems = [
     title: "Copilot",
     url: "/copilot",
     icon: Sparkles,
+  },
+  {
+    title: "Alerts",
+    url: "/alerts",
+    icon: Bell,
+  },
+  {
+    title: "Integrations",
+    url: "/integrations",
+    icon: Link2,
   },
 ];
 
