@@ -185,13 +185,14 @@ export default function TruthScanPage() {
                 })}
               />
               <MetricCard 
-                title="Net Burn" 
-                value={formatCurrency(metrics.net_burn)} 
+                title={metrics.is_profitable ? "Monthly Surplus" : "Net Burn"} 
+                value={formatCurrency(metrics.is_profitable ? Math.abs(metrics.net_burn) : metrics.net_burn)} 
                 testId="metric-burn"
-                tooltip={METRIC_DEFINITIONS.net_burn?.shortDescription}
+                tooltip={metrics.is_profitable ? "Monthly surplus (revenue exceeds expenses)" : METRIC_DEFINITIONS.net_burn?.shortDescription}
+                variant={metrics.is_profitable ? "success" : metrics.net_burn > 0 ? "danger" : "default"}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
-                  value: formatCurrency(metrics.net_burn) 
+                  value: formatCurrency(metrics.is_profitable ? Math.abs(metrics.net_burn) : metrics.net_burn) 
                 })}
               />
               <MetricCard 
@@ -206,12 +207,13 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Runway (P50)" 
-                value={`${metrics.runway_p50?.toFixed(1) || 0} months`} 
+                value={metrics.runway_sustainable ? "Sustainable" : `${metrics.runway_p50?.toFixed(1) || 0} months`} 
                 testId="metric-runway"
-                tooltip={METRIC_DEFINITIONS.runway_months?.shortDescription}
+                tooltip={metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
+                variant={metrics.runway_sustainable ? "success" : (metrics.runway_p50 && metrics.runway_p50 < 12 ? "danger" : "default")}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('runway_months') || null, 
-                  value: `${metrics.runway_p50?.toFixed(1) || 0} months` 
+                  value: metrics.runway_sustainable ? "Sustainable" : `${metrics.runway_p50?.toFixed(1) || 0} months` 
                 })}
               />
               <MetricCard 

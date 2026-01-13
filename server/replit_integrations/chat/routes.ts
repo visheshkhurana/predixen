@@ -42,15 +42,17 @@ ${context ? `Current Company Context:
 - Cash on Hand: $${context.cashOnHand?.toLocaleString() || "Not specified"}
 - Monthly Revenue: $${context.monthlyRevenue?.toLocaleString() || "Not specified"}
 - Monthly Expenses: $${context.monthlyExpenses?.toLocaleString() || "Not specified"}
-- Monthly Burn Rate: $${((context.monthlyExpenses || 0) - (context.monthlyRevenue || 0)).toLocaleString()}
+- Net Burn Rate: $${((context.monthlyExpenses || 0) - (context.monthlyRevenue || 0)).toLocaleString()}${(context.monthlyExpenses || 0) < (context.monthlyRevenue || 0) ? " (Net Positive/Surplus)" : ""}
 - Growth Rate: ${context.growthRate || 0}%
 - Employees: ${context.employees || "Not specified"}
 - Target Runway: ${context.targetRunway || 18} months
 
 Based on this data:
 - Current Runway: ${context.cashOnHand && context.monthlyExpenses && context.monthlyRevenue 
-  ? Math.max(0, context.cashOnHand / Math.max(1, context.monthlyExpenses - context.monthlyRevenue)).toFixed(1) 
-  : "Cannot calculate"} months
+  ? (context.monthlyExpenses - context.monthlyRevenue) > 0 
+    ? (context.cashOnHand / (context.monthlyExpenses - context.monthlyRevenue)).toFixed(1) + " months"
+    : "Sustainable (net positive cash flow)"
+  : "Cannot calculate"}
 ` : ""}
 
 Be concise but insightful. Use specific numbers from the context when answering questions. If asked about external data or news, acknowledge that you don't have real-time web access but provide helpful guidance based on general knowledge.`;

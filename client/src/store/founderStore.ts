@@ -34,7 +34,10 @@ export interface FinancialBaseline {
     payroll: number | null;
     marketing: number | null;
     operating: number | null;
+    cogs: number | null;
+    otherOpex: number | null;
   };
+  hasManualExpenseOverride?: boolean;
   currency: string | null;
   asOfDate: string | null;
 }
@@ -93,7 +96,10 @@ const EMPTY_BASELINE: FinancialBaseline = {
     payroll: null,
     marketing: null,
     operating: null,
+    cogs: null,
+    otherOpex: null,
   },
+  hasManualExpenseOverride: false,
   currency: null,
   asOfDate: null,
 };
@@ -140,17 +146,29 @@ export const useFounderStore = create<FounderState>()(
       getCalculatedMetrics: () => {
         const baseline = get().financialBaseline;
         if (!baseline) {
-          return { netBurnRate: 0, runwayMonths: null };
+          return { netBurnRate: 0, runwayMonths: null, isProfitable: false, isSustainable: false };
         }
         
         const revenue = baseline.monthlyRevenue || 0;
-        const expenses = baseline.totalMonthlyExpenses || 0;
         const cash = baseline.cashOnHand || 0;
         
-        const netBurnRate = Math.max(0, expenses - revenue);
+        const breakdownSum = 
+          (baseline.expenseBreakdown?.payroll || 0) +
+          (baseline.expenseBreakdown?.marketing || 0) +
+          (baseline.expenseBreakdown?.operating || 0) +
+          (baseline.expenseBreakdown?.cogs || 0) +
+          (baseline.expenseBreakdown?.otherOpex || 0);
+        
+        const expenses = baseline.hasManualExpenseOverride
+          ? (baseline.totalMonthlyExpenses || 0)
+          : (breakdownSum > 0 ? breakdownSum : (baseline.totalMonthlyExpenses || 0));
+        
+        const netBurnRate = expenses - revenue;
+        const isProfitable = netBurnRate < 0;
+        const isSustainable = netBurnRate <= 0;
         const runwayMonths = netBurnRate > 0 ? cash / netBurnRate : null;
         
-        return { netBurnRate, runwayMonths };
+        return { netBurnRate, runwayMonths, isProfitable, isSustainable };
       },
     }),
     {
