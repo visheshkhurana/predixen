@@ -85,12 +85,224 @@ def list_scenarios(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
+    scenarios = db.query(Scenario).filter(
+        Scenario.company_id == company_id,
+        Scenario.is_archived == 0
+    ).all()
     
     return [
-        {"id": s.id, "name": s.name, "inputs": s.inputs_json, "created_at": s.created_at.isoformat()}
+        {
+            "id": s.id, 
+            "name": s.name, 
+            "description": s.description,
+            "inputs": s.inputs_json, 
+            "created_at": s.created_at.isoformat(),
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "version": s.version,
+            "parent_id": s.parent_id,
+            "tags": s.tags or []
+        }
         for s in scenarios
     ]
+
+
+INPUT_GUARDRAILS = {
+    "pricing_change_pct": {"min": -50, "max": 100, "label": "Pricing change", "unit": "%"},
+    "growth_uplift_pct": {"min": -30, "max": 50, "label": "Growth uplift", "unit": "%"},
+    "burn_reduction_pct": {"min": 0, "max": 80, "label": "Burn reduction", "unit": "%"},
+    "churn_rate": {"min": 0, "max": 30, "label": "Monthly churn rate", "unit": "%"},
+    "gross_margin": {"min": 10, "max": 95, "label": "Gross margin", "unit": "%"},
+    "cac": {"min": 0, "max": 50000, "label": "Customer acquisition cost", "unit": "$"},
+    "fundraise_amount": {"min": 0, "max": 100000000, "label": "Fundraise amount", "unit": "$"},
+}
+
+
+def validate_inputs(inputs: Dict[str, Any]) -> List[Dict[str, str]]:
+    warnings = []
+    for key, limits in INPUT_GUARDRAILS.items():
+        if key in inputs:
+            value = inputs[key]
+            unit = limits.get("unit", "")
+            if value < limits["min"]:
+                warnings.append({
+                    "field": key,
+                    "message": f"{limits['label']} cannot be below {unit}{limits['min']}" if unit == "$" else f"{limits['label']} cannot be below {limits['min']}{unit}",
+                    "severity": "error"
+                })
+            if value > limits["max"]:
+                warnings.append({
+                    "field": key,
+                    "message": f"{limits['label']} exceeds maximum of {unit}{limits['max']:,}" if unit == "$" else f"{limits['label']} exceeds maximum of {limits['max']}{unit}",
+                    "severity": "warning"
+                })
+    return warnings
+
+
+class ScenarioDuplicate(BaseModel):
+    new_name: str
+
+
+class ScenarioUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class ScenarioCommentCreate(BaseModel):
+    content: str
+
+
+@router.post("/scenarios/{scenario_id}/duplicate", response_model=Dict[str, Any])
+def duplicate_scenario(
+    scenario_id: int,
+    request: ScenarioDuplicate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    original = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    company = db.query(Company).filter(
+        Company.id == original.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    new_scenario = Scenario(
+        company_id=original.company_id,
+        name=request.new_name,
+        description=f"Duplicated from {original.name}",
+        inputs_json=original.inputs_json.copy(),
+        parent_id=original.id,
+        version=1,
+        tags=original.tags or []
+    )
+    db.add(new_scenario)
+    db.commit()
+    db.refresh(new_scenario)
+    
+    return {
+        "id": new_scenario.id,
+        "name": new_scenario.name,
+        "parent_id": new_scenario.parent_id,
+        "version": new_scenario.version
+    }
+
+
+@router.patch("/scenarios/{scenario_id}", response_model=Dict[str, Any])
+def update_scenario(
+    scenario_id: int,
+    request: ScenarioUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    company = db.query(Company).filter(
+        Company.id == scenario.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    if request.name is not None:
+        scenario.name = request.name
+    if request.description is not None:
+        scenario.description = request.description
+    if request.tags is not None:
+        scenario.tags = request.tags
+    
+    scenario.version = (scenario.version or 1) + 1
+    db.commit()
+    db.refresh(scenario)
+    
+    return {
+        "id": scenario.id,
+        "name": scenario.name,
+        "description": scenario.description,
+        "version": scenario.version,
+        "tags": scenario.tags
+    }
+
+
+@router.delete("/scenarios/{scenario_id}")
+def archive_scenario(
+    scenario_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    company = db.query(Company).filter(
+        Company.id == scenario.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    scenario.is_archived = 1
+    db.commit()
+    
+    return {"status": "archived", "id": scenario_id}
+
+
+@router.get("/scenarios/{scenario_id}/versions", response_model=List[Dict[str, Any]])
+def get_scenario_versions(
+    scenario_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    company = db.query(Company).filter(
+        Company.id == scenario.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    root_id = scenario.parent_id or scenario.id
+    versions = db.query(Scenario).filter(
+        (Scenario.id == root_id) | (Scenario.parent_id == root_id)
+    ).order_by(Scenario.created_at.desc()).all()
+    
+    return [
+        {
+            "id": v.id,
+            "name": v.name,
+            "version": v.version,
+            "created_at": v.created_at.isoformat()
+        }
+        for v in versions
+    ]
+
+
+@router.get("/input-guardrails", response_model=Dict[str, Any])
+def get_input_guardrails(
+    current_user: User = Depends(get_current_user)
+):
+    return {"guardrails": INPUT_GUARDRAILS}
+
+
+@router.post("/validate-inputs", response_model=Dict[str, Any])
+def validate_scenario_inputs(
+    inputs: Dict[str, Any],
+    current_user: User = Depends(get_current_user)
+):
+    warnings = validate_inputs(inputs)
+    return {
+        "valid": len([w for w in warnings if w["severity"] == "error"]) == 0,
+        "warnings": warnings
+    }
+
 
 @router.post("/scenarios/{scenario_id}/simulate", response_model=Dict[str, Any])
 def run_simulation(
@@ -184,10 +396,11 @@ def get_latest_simulation(
     if not sim_run:
         raise HTTPException(status_code=404, detail="No simulation found")
     
+    outputs = sim_run.outputs_json or {}
     return {
         "id": sim_run.id,
         "scenario_id": scenario_id,
-        **sim_run.outputs_json,
+        **outputs,
         "created_at": sim_run.created_at.isoformat()
     }
 
@@ -603,3 +816,42 @@ def run_sensitivity_analysis(
         ],
         "recommendations": wmbt_report.recommendations
     }
+
+
+class ExplainRequest(BaseModel):
+    runway_p50: float
+    survival_12m: float
+    survival_18m: float
+    scenario_name: str = "Current Scenario"
+    sensitivity: Optional[List[Dict[str, Any]]] = None
+    decision_ranking: Optional[List[Dict[str, Any]]] = None
+
+
+@router.post("/explain-simulation", response_model=Dict[str, Any])
+def explain_simulation(
+    request: ExplainRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate natural language explanations for simulation results."""
+    from server.simulate.explainer import (
+        generate_runway_explanation,
+        generate_driver_impact_explanation,
+        generate_decision_recommendation
+    )
+    
+    explanations = {
+        "summary": generate_runway_explanation(
+            runway_p50=request.runway_p50,
+            survival_12m=request.survival_12m,
+            survival_18m=request.survival_18m,
+            scenario_name=request.scenario_name
+        )
+    }
+    
+    if request.sensitivity:
+        explanations["drivers"] = generate_driver_impact_explanation(request.sensitivity)
+    
+    if request.decision_ranking:
+        explanations["recommendation"] = generate_decision_recommendation(request.decision_ranking)
+    
+    return explanations
