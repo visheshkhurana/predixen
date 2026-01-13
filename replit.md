@@ -39,6 +39,10 @@ Preferred communication style: Simple, everyday language.
    - **Sensitivity Analysis**: "What Must Be True" driver impact analysis for target runway
 4. **Decision Engine**: Deterministic action library, scoring, top 3 recommendations
 5. **Copilot**: Multi-agent router with context pack grounding
+6. **Forecasting**: Holt-Winters exponential smoothing, linear regression, trend detection
+7. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings, covenant checks
+8. **Integrations**: Framework for QuickBooks/Xero (accounting) and Salesforce/HubSpot (CRM)
+9. **Scenario Templates**: 7 pre-built templates (Baseline, Conservative Cut, Aggressive Growth, etc.)
 
 ### Data Import Workflow
 - **Excel/PDF Import**: Uses OpenAI to extract financial metrics from Termina/Tribe Capital reports
@@ -121,6 +125,25 @@ Preferred communication style: Simple, everyday language.
 - GET /companies/{id}/context
 - POST /companies/{id}/simulate
 - POST /companies/{id}/decision/compare
+
+### Forecasting
+- POST /forecasting/companies/{id}/forecast
+- POST /forecasting/trend/analyze
+
+### Alerts
+- GET /alerts/companies/{id}/alerts
+- POST /alerts/companies/{id}/analyze
+
+### Integrations
+- GET /integrations/available
+- POST /integrations/companies/{id}/{type}/connect
+- POST /integrations/companies/{id}/{type}/sync
+
+### Templates
+- GET /templates/
+- GET /templates/{id}
+- POST /templates/companies/{id}/apply/{template_id}
+- POST /templates/companies/{id}/bulk-apply
 
 ## Running the Application
 
