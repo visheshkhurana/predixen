@@ -237,12 +237,12 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Burn Multiple" 
-                value={metrics.burn_multiple?.toFixed(1) || 'N/A'} 
+                value={typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A'} 
                 testId="metric-burn-mult"
                 tooltip={METRIC_DEFINITIONS.burn_multiple?.shortDescription}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('burn_multiple') || null, 
-                  value: metrics.burn_multiple?.toFixed(1) || 'N/A' 
+                  value: typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A' 
                 })}
               />
               <MetricCard 

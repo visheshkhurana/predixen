@@ -10,6 +10,14 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo, run_multi_scenario_simulation, DEFAULT_SCENARIOS
+from server.simulate.enhanced_engine import EnhancedSimulationEngine, compute_decision_scores
+from server.simulate.models import (
+    EnrichedSimulationInputs,
+    ScenarioDefinition,
+    ScenarioEvent,
+    WhatMustBeTrueReport
+)
+from dataclasses import asdict
 
 router = APIRouter(tags=["simulations"])
 
@@ -269,3 +277,329 @@ def simulate_multiple_scenarios(
     )
     
     return results
+
+
+class EnhancedSimulationRequest(BaseModel):
+    n_sims: int = 1000
+    horizon_months: int = 24
+    starting_regime: str = "base"
+    enable_regime_transitions: bool = True
+    churn_rate: float = 3.0
+    cac: float = 500.0
+    dso: float = 45.0
+    conversion_rate: float = 5.0
+    headcount: int = 10
+    total_customers: int = 100
+    arpu: float = 500.0
+    pipeline_value: float = 0.0
+    seed: Optional[int] = None
+
+
+class ScenarioEventInput(BaseModel):
+    event_type: str
+    start_month: int
+    end_month: Optional[int] = None
+    params: Dict[str, Any] = {}
+    description: str = ""
+
+
+class EnhancedScenarioInput(BaseModel):
+    name: str
+    description: str = ""
+    events: List[ScenarioEventInput] = []
+    starting_regime: str = "base"
+    regime_override: Optional[str] = None
+
+
+class EnhancedMultiScenarioRequest(BaseModel):
+    n_sims: int = 1000
+    horizon_months: int = 24
+    starting_regime: str = "base"
+    enable_regime_transitions: bool = True
+    churn_rate: float = 3.0
+    cac: float = 500.0
+    dso: float = 45.0
+    scenarios: List[EnhancedScenarioInput] = []
+    include_sensitivity: bool = False
+    seed: Optional[int] = None
+
+
+@router.post("/companies/{company_id}/simulate-enhanced", response_model=Dict[str, Any])
+def simulate_enhanced(
+    company_id: int,
+    request: EnhancedSimulationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run enhanced Monte Carlo simulation with regime-aware drivers and correlated sampling.
+    Returns enriched results with regime distribution, monthly states, and survival curves.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    if not truth_scan:
+        raise HTTPException(status_code=400, detail="Run a truth scan first")
+    
+    metrics = truth_scan.outputs_json.get("metrics", {})
+    
+    inputs = EnrichedSimulationInputs(
+        baseline_mrr=metrics.get("monthly_revenue", 50000),
+        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
+        gross_margin=metrics.get("gross_margin", 70),
+        opex=metrics.get("opex", 20000),
+        payroll=metrics.get("payroll", 30000),
+        other_costs=metrics.get("other_costs", 5000),
+        cash_balance=metrics.get("cash_balance", 500000),
+        churn_rate=request.churn_rate,
+        cac=request.cac,
+        dso=request.dso,
+        conversion_rate=request.conversion_rate,
+        headcount=request.headcount,
+        total_customers=request.total_customers,
+        arpu=request.arpu,
+        pipeline_value=request.pipeline_value,
+        starting_regime=request.starting_regime,
+        enable_regime_transitions=request.enable_regime_transitions,
+        n_simulations=request.n_sims,
+        horizon_months=request.horizon_months
+    )
+    
+    engine = EnhancedSimulationEngine(inputs, seed=request.seed)
+    result = engine.run_monte_carlo()
+    
+    return {
+        "scenario_key": result.scenario_key,
+        "scenario_name": result.scenario_name,
+        "runway": result.runway,
+        "survival": result.survival,
+        "survival_curve": result.survival_curve,
+        "bands": result.bands,
+        "monthly_states": result.monthly_states,
+        "regime_distribution": result.regime_distribution,
+        "n_simulations": result.n_simulations,
+        "horizon_months": result.horizon_months
+    }
+
+
+@router.post("/companies/{company_id}/simulate-scenarios-enhanced", response_model=Dict[str, Any])
+def simulate_scenarios_enhanced(
+    company_id: int,
+    request: EnhancedMultiScenarioRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run enhanced Monte Carlo simulation across multiple scenarios with decision ranking.
+    Supports time-windowed events and optional sensitivity analysis.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    if not truth_scan:
+        raise HTTPException(status_code=400, detail="Run a truth scan first")
+    
+    metrics = truth_scan.outputs_json.get("metrics", {})
+    
+    base_inputs = EnrichedSimulationInputs(
+        baseline_mrr=metrics.get("monthly_revenue", 50000),
+        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
+        gross_margin=metrics.get("gross_margin", 70),
+        opex=metrics.get("opex", 20000),
+        payroll=metrics.get("payroll", 30000),
+        other_costs=metrics.get("other_costs", 5000),
+        cash_balance=metrics.get("cash_balance", 500000),
+        churn_rate=request.churn_rate,
+        cac=request.cac,
+        dso=request.dso,
+        starting_regime=request.starting_regime,
+        enable_regime_transitions=request.enable_regime_transitions,
+        n_simulations=request.n_sims,
+        horizon_months=request.horizon_months
+    )
+    
+    scenarios_to_run = request.scenarios if request.scenarios else [
+        EnhancedScenarioInput(name="Baseline", description="Current trajectory"),
+        EnhancedScenarioInput(
+            name="Cost Cutting",
+            description="Reduce expenses by 20%",
+            events=[ScenarioEventInput(
+                event_type="cost_cut",
+                start_month=1,
+                params={"opex_reduction_pct": 20, "payroll_reduction_pct": 15}
+            )]
+        ),
+        EnhancedScenarioInput(
+            name="Growth Investment",
+            description="Increase marketing spend for growth",
+            events=[ScenarioEventInput(
+                event_type="marketing_spend_change",
+                start_month=1,
+                params={"change_pct": 30}
+            )]
+        ),
+    ]
+    
+    all_results = []
+    
+    for scenario_input in scenarios_to_run:
+        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed)
+        
+        scenario_def = ScenarioDefinition(
+            name=scenario_input.name,
+            description=scenario_input.description,
+            events=[
+                ScenarioEvent(
+                    event_type=e.event_type,
+                    start_month=e.start_month,
+                    end_month=e.end_month,
+                    params=e.params,
+                    description=e.description
+                )
+                for e in scenario_input.events
+            ],
+            starting_regime=scenario_input.starting_regime,
+            regime_override=scenario_input.regime_override
+        )
+        
+        result = engine.run_monte_carlo(scenario_def)
+        all_results.append(result)
+    
+    decision_scores = compute_decision_scores(all_results)
+    
+    scenarios_output = {}
+    for i, result in enumerate(all_results):
+        result.decision_score = decision_scores[i] if i < len(decision_scores) else None
+        scenarios_output[result.scenario_key] = {
+            "name": result.scenario_name,
+            "runway": result.runway,
+            "survival": result.survival,
+            "survival_curve": result.survival_curve,
+            "bands": result.bands,
+            "monthly_states": result.monthly_states,
+            "regime_distribution": result.regime_distribution,
+            "decision_score": asdict(result.decision_score) if result.decision_score else None,
+        }
+    
+    comparison = [
+        {
+            "key": s.scenario_key,
+            "name": s.scenario_name,
+            "runway_p50": s.runway["p50"],
+            "survival_18m": s.survival.get("18m", 0),
+            "composite_score": s.decision_score.composite_score if s.decision_score else 0,
+            "rank": s.decision_score.rank if s.decision_score else 0
+        }
+        for s in all_results
+    ]
+    comparison.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
+    
+    sensitivity_report = None
+    if request.include_sensitivity and all_results:
+        baseline_result = all_results[0]
+        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed)
+        wmbt_report = engine.compute_sensitivity(baseline_result)
+        sensitivity_report = {
+            "target_runway_months": wmbt_report.target_runway_months,
+            "target_probability": wmbt_report.target_probability,
+            "achievable": wmbt_report.achievable,
+            "current_probability": wmbt_report.current_probability,
+            "key_drivers": [asdict(d) for d in wmbt_report.key_drivers],
+            "recommendations": wmbt_report.recommendations
+        }
+    
+    return {
+        "scenarios": scenarios_output,
+        "comparison": comparison,
+        "decision_ranking": [asdict(s) for s in decision_scores],
+        "sensitivity": sensitivity_report,
+        "n_simulations": request.n_sims,
+        "horizon_months": request.horizon_months
+    }
+
+
+@router.post("/companies/{company_id}/sensitivity-analysis", response_model=Dict[str, Any])
+def run_sensitivity_analysis(
+    company_id: int,
+    target_runway: int = 18,
+    target_probability: float = 0.7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run driver sensitivity analysis to determine what must be true to achieve target runway.
+    Returns key drivers, thresholds, and actionable recommendations.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    if not truth_scan:
+        raise HTTPException(status_code=400, detail="Run a truth scan first")
+    
+    metrics = truth_scan.outputs_json.get("metrics", {})
+    
+    inputs = EnrichedSimulationInputs(
+        baseline_mrr=metrics.get("monthly_revenue", 50000),
+        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
+        gross_margin=metrics.get("gross_margin", 70),
+        opex=metrics.get("opex", 20000),
+        payroll=metrics.get("payroll", 30000),
+        other_costs=metrics.get("other_costs", 5000),
+        cash_balance=metrics.get("cash_balance", 500000),
+        n_simulations=500,
+        horizon_months=24
+    )
+    
+    engine = EnhancedSimulationEngine(inputs)
+    baseline_result = engine.run_monte_carlo()
+    
+    wmbt_report = engine.compute_sensitivity(
+        baseline_result, 
+        target_runway=target_runway,
+        target_probability=target_probability
+    )
+    
+    return {
+        "target_runway_months": wmbt_report.target_runway_months,
+        "target_probability": wmbt_report.target_probability,
+        "achievable": wmbt_report.achievable,
+        "current_probability": wmbt_report.current_probability,
+        "key_drivers": [
+            {
+                "driver": d.driver,
+                "impact_direction": d.impact_direction,
+                "impact_magnitude": round(d.impact_magnitude * 100, 1),
+                "threshold_value": d.threshold_value,
+                "explanation": d.explanation
+            }
+            for d in wmbt_report.key_drivers
+        ],
+        "recommendations": wmbt_report.recommendations
+    }
