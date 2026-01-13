@@ -173,6 +173,49 @@ export function useDefaultScenarios(companyId: number | null) {
   });
 }
 
+export function useEnhancedSimulation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, options }: { 
+      companyId: number; 
+      options: Parameters<typeof api.simulations.runEnhanced>[1]
+    }) => api.simulations.runEnhanced(companyId, options),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['enhanced-simulation', companyId] });
+    },
+  });
+}
+
+export function useEnhancedMultiScenarioSimulation() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, options }: { 
+      companyId: number; 
+      options: Parameters<typeof api.simulations.runEnhancedMulti>[1]
+    }) => api.simulations.runEnhancedMulti(companyId, options),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['enhanced-multi-simulation', companyId] });
+    },
+  });
+}
+
+export function useSensitivityAnalysis() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ companyId, targetRunway, targetProbability }: { 
+      companyId: number; 
+      targetRunway?: number;
+      targetProbability?: number;
+    }) => api.simulations.runSensitivityAnalysis(companyId, targetRunway, targetProbability),
+    onSuccess: (_, { companyId }) => {
+      queryClient.invalidateQueries({ queryKey: ['sensitivity', companyId] });
+    },
+  });
+}
+
 export function useTerminaPdfUpload() {
   const queryClient = useQueryClient();
   

@@ -10,12 +10,21 @@ class Regime(str, Enum):
     BREAKOUT = "breakout"
 
 
+class DistributionType(str, Enum):
+    NORMAL = "normal"
+    TRIANGULAR = "triangular"
+    UNIFORM = "uniform"
+    LOGNORMAL = "lognormal"
+
+
 @dataclass
 class DriverConfig:
     mean: float
     sigma: float
     min_val: Optional[float] = None
     max_val: Optional[float] = None
+    distribution: DistributionType = DistributionType.NORMAL
+    mode: Optional[float] = None
 
 
 @dataclass
@@ -167,6 +176,8 @@ class ScenarioEvent:
     end_month: Optional[int] = None
     params: Dict[str, Any] = field(default_factory=dict)
     description: str = ""
+    decay_rate: float = 0.0
+    decay_type: str = "exponential"
 
 
 EVENT_TYPES = {

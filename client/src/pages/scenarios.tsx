@@ -13,9 +13,12 @@ import { ScenarioWizard } from '@/components/ScenarioWizard';
 import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
 import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
 import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2 } from 'lucide-react';
+import { SensitivityAnalysisPanel } from '@/components/SensitivityAnalysisPanel';
+import { DecisionRankingTable } from '@/components/DecisionRankingTable';
+import { RegimeDistributionChart } from '@/components/RegimeDistributionChart';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { formatSimulationForExport } from '@/lib/exportUtils';
 import {
@@ -121,6 +124,12 @@ export default function ScenariosPage() {
   
   const multiSimMutation = useMultiScenarioSimulation();
   const [multiSimResults, setMultiSimResults] = useState<any>(null);
+  
+  const sensitivityMutation = useSensitivityAnalysis();
+  const [sensitivityResults, setSensitivityResults] = useState<any>(null);
+  
+  const enhancedMultiMutation = useEnhancedMultiScenarioSimulation();
+  const [enhancedResults, setEnhancedResults] = useState<any>(null);
   
   const filteredScenarios = useMemo(() => {
     if (!scenarios) return [];
@@ -256,6 +265,59 @@ export default function ScenariosPage() {
     }
   };
   
+  const handleRunSensitivityAnalysis = async () => {
+    if (!currentCompany) return;
+    
+    try {
+      const result = await sensitivityMutation.mutateAsync({
+        companyId: currentCompany.id,
+        targetRunway: 18,
+        targetProbability: 0.7
+      });
+      setSensitivityResults(result);
+      toast({ title: 'Sensitivity analysis complete!' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+  
+  const handleRunEnhancedMulti = async () => {
+    if (!currentCompany) return;
+    
+    try {
+      const result = await enhancedMultiMutation.mutateAsync({
+        companyId: currentCompany.id,
+        options: { 
+          n_sims: 500, 
+          horizon_months: 24,
+          include_sensitivity: true,
+          scenarios: [
+            { name: 'Baseline', description: 'Current trajectory' },
+            { 
+              name: 'Cost Cutting', 
+              description: 'Reduce expenses by 20%',
+              events: [{ event_type: 'cost_cut', start_month: 1, params: { opex_reduction_pct: 20, payroll_reduction_pct: 15 } }]
+            },
+            { 
+              name: 'Growth Investment', 
+              description: 'Increase marketing spend',
+              events: [{ event_type: 'marketing_spend_change', start_month: 1, params: { change_pct: 30 } }]
+            },
+            { 
+              name: 'Fundraise', 
+              description: 'Raise $1M bridge round',
+              events: [{ event_type: 'fundraise', start_month: 3, params: { amount: 1000000 } }]
+            },
+          ]
+        }
+      });
+      setEnhancedResults(result);
+      toast({ title: 'Enhanced simulation complete!' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+  
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -317,6 +379,14 @@ export default function ScenariosPage() {
           <TabsTrigger value="compare" data-testid="tab-compare">
             <GitCompare className="h-4 w-4 mr-2" />
             Compare All
+          </TabsTrigger>
+          <TabsTrigger value="enhanced" data-testid="tab-enhanced">
+            <Trophy className="h-4 w-4 mr-2" />
+            Decision Ranking
+          </TabsTrigger>
+          <TabsTrigger value="sensitivity" data-testid="tab-sensitivity">
+            <Target className="h-4 w-4 mr-2" />
+            Sensitivity
           </TabsTrigger>
           {scenarios && scenarios.length > 0 && (
             <TabsTrigger value="history" data-testid="tab-history">
@@ -465,6 +535,131 @@ export default function ScenariosPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+        
+        <TabsContent value="enhanced" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold">Enhanced Scenario Analysis</h2>
+              <p className="text-sm text-muted-foreground">
+                Regime-aware simulation with correlated drivers and decision ranking
+              </p>
+            </div>
+            <Button
+              onClick={handleRunEnhancedMulti}
+              disabled={enhancedMultiMutation.isPending}
+              data-testid="button-run-enhanced-multi"
+            >
+              {enhancedMultiMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Running...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Run Enhanced Analysis
+                </>
+              )}
+            </Button>
+          </div>
+          
+          {enhancedMultiMutation.isPending && (
+            <Card>
+              <CardContent className="p-6">
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
+          {enhancedResults && !enhancedMultiMutation.isPending && (
+            <>
+              {enhancedResults.decision_ranking && (
+                <DecisionRankingTable 
+                  rankings={enhancedResults.decision_ranking}
+                  onSelectScenario={(key) => {
+                    const scenario = enhancedResults.scenarios?.[key];
+                    if (scenario) {
+                      toast({ title: `Selected: ${scenario.name}` });
+                    }
+                  }}
+                />
+              )}
+              
+              {enhancedResults.sensitivity && (
+                <SensitivityAnalysisPanel 
+                  data={enhancedResults.sensitivity}
+                  isLoading={false}
+                />
+              )}
+              
+              {Object.entries(enhancedResults.scenarios || {}).slice(0, 1).map(([key, scenario]: [string, any]) => (
+                scenario.regime_distribution && (
+                  <RegimeDistributionChart 
+                    key={key}
+                    distribution={scenario.regime_distribution}
+                    scenarioName={scenario.name}
+                  />
+                )
+              ))}
+            </>
+          )}
+          
+          {!enhancedResults && !enhancedMultiMutation.isPending && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground mb-2">
+                  Run enhanced simulation with regime-aware Monte Carlo
+                </p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Includes correlated drivers, market regimes, and decision scoring
+                </p>
+                <Button onClick={handleRunEnhancedMulti} data-testid="button-run-enhanced-cta">
+                  <Play className="h-4 w-4 mr-2" />
+                  Run Enhanced Analysis
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="sensitivity" className="mt-6 space-y-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold">Driver Sensitivity Analysis</h2>
+              <p className="text-sm text-muted-foreground">
+                Discover which drivers have the biggest impact on your runway
+              </p>
+            </div>
+            <Button
+              onClick={handleRunSensitivityAnalysis}
+              disabled={sensitivityMutation.isPending}
+              data-testid="button-run-sensitivity-analysis"
+            >
+              {sensitivityMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Target className="h-4 w-4 mr-2" />
+                  Run Analysis
+                </>
+              )}
+            </Button>
+          </div>
+          
+          <SensitivityAnalysisPanel 
+            data={sensitivityResults}
+            isLoading={sensitivityMutation.isPending}
+            onRunAnalysis={handleRunSensitivityAnalysis}
+          />
         </TabsContent>
         
         <TabsContent value="results" className="mt-6 space-y-4">

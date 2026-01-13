@@ -13,10 +13,93 @@ from .models import (
     EnrichedSimulationResult,
     RegimeConfig,
     DriverConfig,
+    DistributionType,
     DEFAULT_REGIMES,
     DRIVER_CORRELATION_MATRIX,
     Regime
 )
+
+
+def sample_from_distribution(
+    rng: np.random.Generator,
+    config: DriverConfig,
+    base_value: float,
+    n_samples: int = 1,
+    correlated_z: Optional[np.ndarray] = None
+) -> np.ndarray:
+    dist_type = getattr(config, 'distribution', DistributionType.NORMAL)
+    mean = base_value + config.mean
+    
+    if dist_type == DistributionType.NORMAL:
+        if correlated_z is not None:
+            samples = mean + correlated_z * config.sigma
+        else:
+            samples = rng.normal(mean, config.sigma, n_samples)
+    elif dist_type == DistributionType.TRIANGULAR:
+        left = config.min_val if config.min_val is not None else max(0.01, mean - 3 * config.sigma)
+        right = config.max_val if config.max_val is not None else mean + 3 * config.sigma
+        mode = config.mode if config.mode is not None else mean
+        left = min(left, mode - 0.01)
+        right = max(right, mode + 0.01)
+        if correlated_z is not None:
+            from scipy.stats import norm, triang
+            u = norm.cdf(correlated_z)
+            c = (mode - left) / (right - left) if right > left else 0.5
+            samples = triang.ppf(u, c, loc=left, scale=right - left)
+        else:
+            samples = rng.triangular(left, mode, right, n_samples)
+    elif dist_type == DistributionType.UNIFORM:
+        low = config.min_val if config.min_val is not None else mean - config.sigma * 1.732
+        high = config.max_val if config.max_val is not None else mean + config.sigma * 1.732
+        if correlated_z is not None:
+            from scipy.stats import norm
+            u = norm.cdf(correlated_z)
+            samples = low + u * (high - low)
+        else:
+            samples = rng.uniform(low, high, n_samples)
+    elif dist_type == DistributionType.LOGNORMAL:
+        safe_mean = max(mean, 1.0)
+        safe_sigma = max(config.sigma, 0.01)
+        variance = safe_sigma ** 2
+        mu = np.log(safe_mean**2 / np.sqrt(safe_mean**2 + variance))
+        sigma_ln = np.sqrt(np.log(1 + (variance / safe_mean**2)))
+        if correlated_z is not None:
+            samples = np.exp(mu + sigma_ln * correlated_z)
+        else:
+            samples = rng.lognormal(mu, sigma_ln, n_samples)
+    else:
+        if correlated_z is not None:
+            samples = mean + correlated_z * config.sigma
+        else:
+            samples = rng.normal(mean, config.sigma, n_samples)
+    
+    if config.min_val is not None:
+        samples = np.maximum(samples, config.min_val)
+    if config.max_val is not None:
+        samples = np.minimum(samples, config.max_val)
+    
+    return samples
+
+
+def calculate_decay_factor(
+    event: ScenarioEvent,
+    current_month: int
+) -> float:
+    if event.decay_rate <= 0:
+        return 1.0
+    
+    months_active = current_month - event.start_month
+    if months_active <= 0:
+        return 1.0
+    
+    if event.decay_type == "exponential":
+        return np.exp(-event.decay_rate * months_active)
+    elif event.decay_type == "linear":
+        return max(0, 1 - event.decay_rate * months_active)
+    elif event.decay_type == "sqrt":
+        return 1 / (1 + event.decay_rate * np.sqrt(months_active))
+    else:
+        return np.exp(-event.decay_rate * months_active)
 
 
 class EnhancedSimulationEngine:
@@ -54,18 +137,19 @@ class EnhancedSimulationEngine:
         for i, driver_name in enumerate(self.driver_names):
             adj = regime_config.driver_adjustments.get(driver_name, DriverConfig(mean=0, sigma=1.0))
             
-            base_values = getattr(self.inputs, driver_name, 0) if hasattr(self.inputs, driver_name) else 0
+            base_value = getattr(self.inputs, driver_name, 0) if hasattr(self.inputs, driver_name) else 0
             if driver_name == "growth_rate":
-                base_values = self.inputs.baseline_growth_rate + self.inputs.growth_uplift_pct
+                base_value = self.inputs.baseline_growth_rate + self.inputs.growth_uplift_pct
             elif driver_name == "gross_margin":
-                base_values = self.inputs.gross_margin + self.inputs.gross_margin_delta_pct
+                base_value = self.inputs.gross_margin + self.inputs.gross_margin_delta_pct
             
-            sampled = base_values + adj.mean + correlated_samples[:, i] * adj.sigma
-            
-            if adj.min_val is not None:
-                sampled = np.maximum(sampled, adj.min_val)
-            if adj.max_val is not None:
-                sampled = np.minimum(sampled, adj.max_val)
+            sampled = sample_from_distribution(
+                rng=self.rng,
+                config=adj,
+                base_value=base_value,
+                n_samples=n_samples,
+                correlated_z=correlated_samples[:, i]
+            )
             
             drivers[driver_name] = sampled
         
@@ -98,15 +182,16 @@ class EnhancedSimulationEngine:
             if event.start_month <= state.month:
                 if event.end_month is None or event.end_month >= state.month:
                     active_events.append(event.event_type)
+                    decay_factor = calculate_decay_factor(event, state.month)
                     
                     if event.event_type == "pricing_change":
-                        change = event.params.get("change_pct", 0) / 100
+                        change = event.params.get("change_pct", 0) / 100 * decay_factor
                         state.mrr = state.mrr * (1 + change)
                         state.arr = state.mrr * 12
                     
                     elif event.event_type == "cost_cut":
-                        opex_cut = event.params.get("opex_reduction_pct", 0) / 100
-                        payroll_cut = event.params.get("payroll_reduction_pct", 0) / 100
+                        opex_cut = event.params.get("opex_reduction_pct", 0) / 100 * decay_factor
+                        payroll_cut = event.params.get("payroll_reduction_pct", 0) / 100 * decay_factor
                         state.opex = state.opex * (1 - opex_cut)
                         state.payroll = state.payroll * (1 - payroll_cut)
                         if payroll_cut > 0 and state.headcount > 1:
@@ -134,17 +219,17 @@ class EnhancedSimulationEngine:
                                 state.cash += amount
                     
                     elif event.event_type == "marketing_spend_change":
-                        change = event.params.get("change_pct", 0) / 100
+                        change = event.params.get("change_pct", 0) / 100 * decay_factor
                         marketing_portion = state.opex * 0.3
                         state.opex = state.opex + (marketing_portion * change)
                         modified_drivers["cac"] = modified_drivers.get("cac", self.inputs.cac) * (1 - change * 0.3)
                     
                     elif event.event_type == "churn_initiative":
-                        reduction = event.params.get("churn_reduction_pct", 0) / 100
+                        reduction = event.params.get("churn_reduction_pct", 0) / 100 * decay_factor
                         modified_drivers["churn_rate"] = modified_drivers.get("churn_rate", self.inputs.churn_rate) * (1 - reduction)
                     
                     elif event.event_type == "expansion_revenue":
-                        expansion = event.params.get("expansion_rate_pct", 0) / 100
+                        expansion = event.params.get("expansion_rate_pct", 0) / 100 * decay_factor
                         state.mrr = state.mrr * (1 + expansion / 12)
                         state.arr = state.mrr * 12
         

@@ -5,7 +5,7 @@ import logging
 from server.core.db import engine, Base, SessionLocal
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
-from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest
+from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ app.include_router(decisions.router)
 app.include_router(copilot.router)
 app.include_router(investor.router)
 app.include_router(ingest.router)
+app.include_router(calibration.router)
 
 @app.get("/")
 def root():

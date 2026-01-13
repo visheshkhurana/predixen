@@ -169,6 +169,57 @@ export const api = {
       }),
     getDefaultScenarios: (companyId: number) =>
       request<any>(`/companies/${companyId}/default-scenarios`),
+    runEnhanced: (companyId: number, options: {
+      n_sims?: number;
+      horizon_months?: number;
+      starting_regime?: string;
+      enable_regime_transitions?: boolean;
+      churn_rate?: number;
+      cac?: number;
+      dso?: number;
+      conversion_rate?: number;
+      headcount?: number;
+      total_customers?: number;
+      arpu?: number;
+      pipeline_value?: number;
+      seed?: number;
+    }) =>
+      request<any>(`/companies/${companyId}/simulate-enhanced`, {
+        method: 'POST',
+        body: JSON.stringify(options),
+      }),
+    runEnhancedMulti: (companyId: number, options: {
+      n_sims?: number;
+      horizon_months?: number;
+      starting_regime?: string;
+      enable_regime_transitions?: boolean;
+      churn_rate?: number;
+      cac?: number;
+      dso?: number;
+      scenarios?: Array<{
+        name: string;
+        description?: string;
+        events?: Array<{
+          event_type: string;
+          start_month: number;
+          end_month?: number;
+          params?: Record<string, any>;
+          description?: string;
+        }>;
+        starting_regime?: string;
+        regime_override?: string;
+      }>;
+      include_sensitivity?: boolean;
+      seed?: number;
+    }) =>
+      request<any>(`/companies/${companyId}/simulate-scenarios-enhanced`, {
+        method: 'POST',
+        body: JSON.stringify(options),
+      }),
+    runSensitivityAnalysis: (companyId: number, targetRunway = 18, targetProbability = 0.7) =>
+      request<any>(`/companies/${companyId}/sensitivity-analysis?target_runway=${targetRunway}&target_probability=${targetProbability}`, {
+        method: 'POST',
+      }),
   },
   
   decisions: {
