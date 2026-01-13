@@ -71,6 +71,7 @@ Important instructions:
 - If COGS and Opex are given, calculate total_monthly_expenses = COGS + all Opex items
 - If operating margin and revenue are given, calculate operating_income
 - Be precise with the numbers - do not estimate or guess
+- CRITICAL: All expense values (COGS, payroll, marketing, opex, etc.) must be returned as POSITIVE numbers, even if they appear as negative in the P&L. Revenue should be positive.
 
 Here is the report text:
 
@@ -153,6 +154,16 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to analyze PDF: {str(e)}")
 
 
+def normalize_expense_value(value: Any) -> Optional[float]:
+    """Normalize expense value to always be positive."""
+    if value is None:
+        return None
+    try:
+        num = float(value)
+        return abs(num)  # Expenses are always stored as positive
+    except (ValueError, TypeError):
+        return None
+
 def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) -> Dict[str, Any]:
     """Process a Termina PDF and extract financial metrics."""
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
@@ -168,6 +179,13 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     
     if not metrics:
         raise ValueError("Failed to extract any metrics from the PDF.")
+    
+    # Normalize all expense fields to be positive
+    expense_fields = ['cogs', 'opex', 'payroll', 'sales_and_marketing', 'other_opex', 
+                      'total_monthly_expenses', 'net_burn', 'operating_expenses']
+    for field in expense_fields:
+        if field in metrics and metrics[field] is not None:
+            metrics[field] = normalize_expense_value(metrics[field])
     
     total_expenses = metrics.get("total_monthly_expenses")
     if not total_expenses:
