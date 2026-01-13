@@ -66,9 +66,13 @@ def get_company_alerts(
     all_alerts = []
     health_status = {}
     
-    # Extract metrics
+    # Extract metrics - calculate burn from available fields
     revenue_values = [float(r.revenue or 0) for r in records]
-    burn_values = [float(r.net_burn or 0) for r in records]
+    # Calculate net burn as total costs minus revenue (negative means burn)
+    burn_values = [
+        float(r.opex or 0) + float(r.payroll or 0) + float(r.cogs or 0) + float(r.other_costs or 0) - float(r.revenue or 0)
+        for r in records
+    ]
     cash_values = [float(r.cash_balance or 0) for r in records]
     
     # Detect anomalies
@@ -86,8 +90,10 @@ def get_company_alerts(
     if len(records) > 0:
         latest = records[-1]
         cash = float(latest.cash_balance) if latest.cash_balance else 0.0
-        burn = float(latest.net_burn) if latest.net_burn else 0.0
-        runway_alert = check_runway_warning(cash, burn, company_id)
+        # Calculate burn from components
+        total_costs = float(latest.opex or 0) + float(latest.payroll or 0) + float(latest.cogs or 0) + float(latest.other_costs or 0)
+        burn = total_costs - float(latest.revenue or 0)
+        runway_alert = check_runway_warning(cash, max(burn, 0.0), company_id)
         if runway_alert:
             all_alerts.append(runway_alert)
     
