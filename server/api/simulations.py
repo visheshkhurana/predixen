@@ -405,6 +405,75 @@ def get_latest_simulation(
     }
 
 
+@router.get("/scenarios/{scenario_id}/timeseries", response_model=Dict[str, Any])
+def get_scenario_timeseries(
+    scenario_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get month-by-month projection timeseries for the ProjectionChart component"""
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    company = db.query(Company).filter(
+        Company.id == scenario.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    sim_run = db.query(SimulationRun).filter(
+        SimulationRun.scenario_id == scenario_id
+    ).order_by(SimulationRun.created_at.desc()).first()
+    
+    if not sim_run:
+        raise HTTPException(status_code=404, detail="No simulation found for this scenario")
+    
+    outputs = sim_run.outputs_json or {}
+    month_data = outputs.get("month_data", [])
+    scenario_inputs = scenario.inputs_json or {}
+    
+    timeseries = []
+    for i, m in enumerate(month_data):
+        cash_balance = m.get("cash_p50", 0)
+        monthly_burn = m.get("burn_p50", 0)
+        monthly_revenue = m.get("revenue_p50", 0)
+        net_burn = max(1, monthly_burn - monthly_revenue)
+        runway_remaining = cash_balance / net_burn if net_burn > 0 else 24
+        
+        timeseries.append({
+            "month": i + 1,
+            "cashBalance": cash_balance,
+            "monthlyBurn": monthly_burn,
+            "monthlyRevenue": monthly_revenue,
+            "runwayRemaining": min(runway_remaining, 48),
+            "headcount": m.get("headcount", 0)
+        })
+    
+    funding_events = []
+    fundraise_month = scenario_inputs.get("fundraise_month")
+    fundraise_amount = scenario_inputs.get("fundraise_amount", 0)
+    if fundraise_month is not None and fundraise_amount > 0:
+        funding_events.append({
+            "month": fundraise_month + 1,
+            "amount": fundraise_amount,
+            "label": f"Funding: ${fundraise_amount/1000000:.1f}M" if fundraise_amount >= 1000000 else f"Funding: ${fundraise_amount/1000:.0f}K"
+        })
+    
+    return {
+        "scenario_id": scenario_id,
+        "scenario_name": scenario.name,
+        "timeseries": timeseries,
+        "fundingEvents": funding_events,
+        "summary": outputs.get("summary", {}),
+        "runway": outputs.get("runway", {}),
+        "survival": outputs.get("survival", {})
+    }
+
+
 class MultiScenarioRequest(BaseModel):
     n_sims: int = 500
     horizon_months: int = 24

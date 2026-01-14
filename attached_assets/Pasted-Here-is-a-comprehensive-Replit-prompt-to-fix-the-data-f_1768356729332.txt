@@ -1,0 +1,90 @@
+Here is a comprehensive Replit prompt to fix the data formatting issue on the “Enhanced Scenario Analysis” screen and implement additional UX refinements that make the decision ranking more informative for founders and CXOs.
+
+---
+
+**Replit Prompt – Correct Data Formatting and Enhance Decision Ranking UX**
+
+I’m enhancing our “Enhanced Scenario Analysis” view in the RunwayAI app. On this page, scenarios are ranked by composite scores and displayed in cards with metrics such as Survival 18m, Expected ARR, Downside Risk, Dilution, and Complexity. There are several data formatting issues (e.g., survival shown as “100000%”) and the UX needs to better convey trade‑offs and comparisons between scenarios. Please help me implement the following fixes and improvements:
+
+### 1. Fix Data Formatting Bug for Survival Probability
+
+* Investigate the calculation and formatting of the **Survival 18m** metric. It currently displays as “100000%” for several scenarios. This likely indicates a missing decimal point or scaling error.
+
+  * Ensure that survival probabilities are stored and transmitted as decimals (`0.0–1.0`) or percentages (`0–100`).
+  * Update the UI component to format the value correctly with one or two decimal places, e.g. `100%` or `100.0%`.
+  * Add unit tests verifying that survival values > 1 are formatted as 100% rather than 10000%.
+
+### 2. Normalize and Clarify Metric Units
+
+* For monetary values like **Expected ARR** and **Downside Risk**, always display units explicitly:
+
+  * If a value is in millions, show it as `$448.3 M` (with a thin space or a non-breaking space before the unit). Ensure consistent spacing and punctuation (e.g., `$274.5 M`).
+  * Consider abbreviating thousands (`K`), millions (`M`), and billions (`B`) uniformly and adding a tooltip on hover that displays the full number (e.g., `$448,300,000`).
+* For **Dilution**, ensure the value is clearly a percentage. For example, display `0.0%` instead of just `0%` if decimals are relevant.
+* For **Complexity**, clarify the scale (0–10). In tooltips, describe what “Complexity 0.8/10” means.
+
+### 3. Composite Score Breakdown
+
+* Create a tooltip or popover for the **Composite Score** label that explains how the score is calculated. For example:
+
+  > Composite Score = weighted sum of Survival (40 %), Growth (25 %), Risk (20 %), Dilution (10 %), Complexity (5 %)
+* Allow users to see the raw component scores when they hover over or click on the composite score. This breakdown can be displayed as a small bar chart or list.
+
+### 4. Relative Performance vs. Baseline
+
+* For each scenario (other than the baseline), compute the difference in key metrics relative to the baseline scenario. Then:
+
+  * Display a small delta next to **Expected ARR**: e.g., `$448.3 M (+1.2% vs baseline)`.
+  * For **Survival 18m**, display the change relative to the baseline (e.g., `100% (+0%)` if survival is the same).
+  * Show the delta in a muted colour (e.g., green for improvement, red for decline) and include a plus/minus sign.
+
+### 5. Visual Trade‑off Representation
+
+* Implement a radar/spider chart or small horizontal bar chart within each scenario card that visualizes the five components: Survival, Expected Growth, Downside Risk, Dilution, Complexity.
+
+  * Normalize each component to a 0–100 scale.
+  * Use different colours for each axis and include a legend or labels.
+  * If space is tight, allow the user to expand a card to view this chart (e.g., via an accordion).
+
+### 6. Sorting and Filtering Controls
+
+* Add controls above the list of scenario cards to:
+
+  * **Sort by**: Composite Score (default), Survival, Expected ARR, Downside Risk, Dilution, Complexity.
+  * **Filter** scenarios that meet certain criteria (e.g., “Survival ≥ 80 %”, “Dilution ≤ 5 %”).
+* Update the state management so that the order of cards reflects the chosen sort and filter criteria.
+
+### 7. Enhanced Card Layout and Accessibility
+
+* Redesign scenario cards to improve readability:
+
+  * Group metrics in a single horizontal row with icons and labels. For example:
+
+    ```
+    Survival 18m: 100.0%    Expected ARR: $448.3 M    Downside Risk: $274.5 M    Dilution: 0.0%    Complexity: 0.8/10
+    ```
+  * Use consistent spacing and icons, and ensure the row wraps gracefully on smaller screens.
+  * Use semantic HTML (e.g., `<h3>` for scenario names, `<ul>`/`<li>` or `<dl>`/`<dt>`/`<dd>` for metric lists) to improve screen reader support.
+* Add ARIA labels for all interactive elements (e.g., the “Best”, “2nd”, “3rd” badges; sort/filter controls; composite score tooltip triggers).
+
+### 8. Back‑End Adjustments (if necessary)
+
+* Verify that the API supplying scenario data returns correct values for survival (0–1), expected ARR (number), downside risk (number), dilution (0–1), complexity (0–10). Ensure that any conversions to percentages or formatted strings happen in the front‑end.
+* If composite scores are calculated server‑side, provide the component breakdown (survival, growth, risk, dilution, complexity) alongside the aggregated score so the front‑end can display the breakdown.
+
+### 9. Testing and Documentation
+
+* Add unit tests for:
+
+  * Correct formatting of survival percentages.
+  * Delta calculations vs. baseline.
+  * Rendering of radar/spider charts.
+  * Sorting/filtering functionality.
+* Update any existing Storybook stories (if used) or create new ones to showcase the enhanced scenario card design and tooltip behaviour.
+* Document the new props/data expectations in a developer README or code comments so others understand the changes.
+
+---
+
+**Summary**
+
+These tasks will correct the misformatted survival percentage, clarify units and scores, and add comparative and visual information that helps founders and CXOs understand trade‑offs between different strategic scenarios. By implementing explanatory tooltips, relative metrics versus baseline, and interactive sorting/filtering, the decision ranking screen will become a powerful decision‑support tool rather than just a list of numbers.

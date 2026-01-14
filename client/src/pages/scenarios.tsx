@@ -22,9 +22,11 @@ import { GlossaryModal } from '@/components/GlossaryModal';
 import { RiskGauge } from '@/components/RiskGauge';
 import { DrillDownChart } from '@/components/DrillDownChart';
 import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
+import { ProjectionChart } from '@/components/ProjectionChart';
+import { ProjectionSummary } from '@/components/ProjectionSummary';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { formatSimulationForExport } from '@/lib/exportUtils';
 import {
@@ -120,6 +122,7 @@ export default function ScenariosPage() {
   
   const [selectedScenarioId, setSelectedScenarioId] = useState<number | null>(null);
   const { data: simulation, isLoading: simLoading } = useSimulation(selectedScenarioId);
+  const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
   
   const [isCreating, setIsCreating] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -780,6 +783,24 @@ export default function ScenariosPage() {
                     }))}
                     scenarioName={currentScenarioName}
                     testId="stacked-burn-revenue-chart"
+                  />
+                </>
+              )}
+              
+              {timeseriesData && timeseriesData.timeseries && timeseriesData.timeseries.length > 0 && (
+                <>
+                  <ProjectionChart
+                    timeseries={timeseriesData.timeseries}
+                    fundingEvents={timeseriesData.fundingEvents}
+                    scenarioName={timeseriesData.scenario_name || currentScenarioName}
+                    targetRunway={18}
+                    testId="projection-chart-results"
+                  />
+                  
+                  <ProjectionSummary
+                    timeseries={timeseriesData.timeseries}
+                    targetRunway={18}
+                    testId="projection-summary-results"
                   />
                 </>
               )}

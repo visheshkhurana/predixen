@@ -220,6 +220,27 @@ export const api = {
       request<any>(`/companies/${companyId}/sensitivity-analysis?target_runway=${targetRunway}&target_probability=${targetProbability}`, {
         method: 'POST',
       }),
+    getTimeseries: (scenarioId: number) =>
+      request<{
+        scenario_id: number;
+        scenario_name: string;
+        timeseries: Array<{
+          month: number;
+          cashBalance: number;
+          monthlyBurn: number;
+          monthlyRevenue: number;
+          runwayRemaining: number;
+          headcount?: number;
+        }>;
+        fundingEvents: Array<{
+          month: number;
+          amount: number;
+          label?: string;
+        }>;
+        summary: any;
+        runway: any;
+        survival: any;
+      }>(`/scenarios/${scenarioId}/timeseries`),
   },
   
   decisions: {
