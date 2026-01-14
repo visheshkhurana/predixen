@@ -300,6 +300,11 @@ class DecisionScore:
     complexity_score: float
     composite_score: float
     rank: int
+    survival_component: float = 0.0
+    growth_component: float = 0.0
+    risk_component: float = 0.0
+    dilution_component: float = 0.0
+    complexity_component: float = 0.0
 
 
 @dataclass

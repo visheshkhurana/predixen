@@ -619,14 +619,21 @@ def compute_decision_scores(
         dilution_pct = 0
         dilution_score = 1.0 - (dilution_pct / 50)
         
-        complexity_score = 0.8
+        complexity_score_raw = 0.8
+        complexity_component = 1.0 - (complexity_score_raw / 10)
+        
+        survival_component = weights["survival"] * survival_score
+        growth_component = weights["growth"] * growth_score
+        risk_component = weights["downside_risk"] * downside_score
+        dilution_component = weights["dilution"] * dilution_score
+        complexity_weighted = weights["complexity"] * complexity_component
         
         composite = (
-            weights["survival"] * survival_score +
-            weights["growth"] * growth_score +
-            weights["downside_risk"] * downside_score +
-            weights["dilution"] * dilution_score +
-            weights["complexity"] * complexity_score
+            survival_component +
+            growth_component +
+            risk_component +
+            dilution_component +
+            complexity_weighted
         )
         
         scores.append(DecisionScore(
@@ -637,9 +644,14 @@ def compute_decision_scores(
             expected_arr_18m=arr_18m,
             downside_risk_cvar=cash_p10_end,
             dilution_pct=dilution_pct,
-            complexity_score=complexity_score,
+            complexity_score=complexity_score_raw,
             composite_score=round(composite, 3),
-            rank=0
+            rank=0,
+            survival_component=round(survival_component, 4),
+            growth_component=round(growth_component, 4),
+            risk_component=round(risk_component, 4),
+            dilution_component=round(dilution_component, 4),
+            complexity_component=round(complexity_weighted, 4)
         ))
     
     scores.sort(key=lambda x: x.composite_score, reverse=True)
