@@ -50,6 +50,8 @@ Preferred communication style: Simple, everyday language.
     - **DrillDownChart**: Zoom/pan capability, metric switching (cash/revenue/burn/runway), benchmark overlays
     - **StackedBurnRevenueChart**: Revenue vs burn visualization with break-even detection
     - **GlossaryModal**: 13 financial term definitions with search and category filtering
+    - **ProjectionChart**: Month-by-month interactive visualization with toggleable series (cash/burn/revenue/runway/headcount), custom tooltips, milestone markers (funding events, break-even, runway exhaustion), benchmark overlays, and brush zoom
+    - **ProjectionSummary**: Key statistics panel showing peak/lowest cash, total revenue, average burn/revenue, break-even detection, runway at key intervals (3, 6, 12 months, end)
 11. **Recommendations Engine**: POST /companies/{id}/recommendations - prioritized action recommendations based on runway gaps and survival rate vs benchmarks
 
 ### Data Import Workflow
@@ -124,6 +126,7 @@ Preferred communication style: Simple, everyday language.
 - POST /companies/{id}/simulate-enhanced (regime-aware single scenario)
 - POST /companies/{id}/simulate-scenarios-enhanced (multi-scenario with ranking)
 - POST /companies/{id}/sensitivity-analysis (driver impact analysis)
+- GET /scenarios/{scenario_id}/timeseries (month-by-month projection data with funding events)
 
 ### Decisions
 - POST /simulation/{run_id}/decisions/generate
