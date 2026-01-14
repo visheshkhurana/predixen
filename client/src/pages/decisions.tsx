@@ -46,7 +46,16 @@ export default function DecisionsPage() {
       setCurrentStep('decision');
       toast({ title: 'Decisions generated!' });
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      const message = err.message || 'Something went wrong';
+      if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
+        toast({ 
+          title: 'Session Expired', 
+          description: 'Please sign in again to continue.',
+          variant: 'destructive' 
+        });
+      } else {
+        toast({ title: 'Error', description: message, variant: 'destructive' });
+      }
     } finally {
       setIsGenerating(false);
     }
