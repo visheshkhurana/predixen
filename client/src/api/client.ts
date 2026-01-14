@@ -6,11 +6,36 @@ export class ApiError extends Error {
   }
 }
 
+// Helper to get token from localStorage or Zustand persisted storage
+function getAuthToken(): string | null {
+  // First try direct localStorage key
+  let token = localStorage.getItem('predixen-token');
+  
+  // Fallback: try to get from Zustand persisted storage
+  if (!token) {
+    try {
+      const zustandStorage = localStorage.getItem('predixen-founder-storage');
+      if (zustandStorage) {
+        const parsed = JSON.parse(zustandStorage);
+        token = parsed?.state?.token || null;
+        // Sync back to direct key if found
+        if (token) {
+          localStorage.setItem('predixen-token', token);
+        }
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+  
+  return token;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem('predixen-token');
+  const token = getAuthToken();
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -60,7 +85,7 @@ export const api = {
   
   datasets: {
     upload: async (companyId: number, type: string, file: File) => {
-      const token = localStorage.getItem('predixen-token');
+      const token = getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
       
@@ -90,7 +115,7 @@ export const api = {
         body: JSON.stringify(data),
       }),
     uploadTerminaPdf: async (companyId: number, file: File, saveAsBaseline = true) => {
-      const token = localStorage.getItem('predixen-token');
+      const token = getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
       
@@ -111,7 +136,7 @@ export const api = {
       return response.json();
     },
     uploadTerminaExcel: async (companyId: number, file: File, saveAsBaseline = true) => {
-      const token = localStorage.getItem('predixen-token');
+      const token = getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
       
