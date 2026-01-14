@@ -818,6 +818,120 @@ def run_sensitivity_analysis(
     }
 
 
+class RecommendationsRequest(BaseModel):
+    runway_p50: float
+    survival_18m: float
+    current_burn: float = 50000
+    current_revenue: float = 40000
+    cash_balance: float = 500000
+    target_runway: int = 18
+    min_survival: float = 0.8
+
+
+@router.post("/companies/{company_id}/recommendations", response_model=Dict[str, Any])
+def generate_recommendations(
+    company_id: int,
+    request: RecommendationsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate actionable recommendations based on simulation results and benchmarks.
+    Returns prioritized list of actions to improve runway and survival probability.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    recommendations = []
+    priority = 1
+    
+    survival_rate = request.survival_18m / 100 if request.survival_18m > 1 else request.survival_18m
+    meets_runway = request.runway_p50 >= request.target_runway
+    meets_survival = survival_rate >= request.min_survival
+    
+    net_burn = request.current_burn - request.current_revenue
+    
+    if not meets_runway:
+        runway_gap = max(0, request.target_runway - request.runway_p50)
+        
+        if net_burn > 0:
+            if request.runway_p50 > 0:
+                burn_cut_needed = min(30, (runway_gap / request.runway_p50) * 100 * 0.5)
+            else:
+                burn_cut_needed = 30
+            recommendations.append({
+                "priority": priority,
+                "action": "Reduce burn rate",
+                "description": f"Cut monthly burn by {burn_cut_needed:.0f}% to extend runway by ~{runway_gap:.1f} months",
+                "impact": {"runway_gain_months": max(1, runway_gap * 0.5), "difficulty": "medium"},
+                "category": "cost_reduction"
+            })
+            priority += 1
+        
+        fundraise_needed = max(100000, net_burn * runway_gap if net_burn > 0 else 500000)
+        recommendations.append({
+            "priority": priority,
+            "action": "Raise bridge funding",
+            "description": f"Raise ${fundraise_needed/1000:.0f}K to extend runway to {request.target_runway} months",
+            "impact": {"runway_gain_months": max(1, runway_gap), "difficulty": "high"},
+            "category": "fundraising"
+        })
+        priority += 1
+    
+    if not meets_survival:
+        survival_gap = (request.min_survival - survival_rate) * 100
+        
+        recommendations.append({
+            "priority": priority,
+            "action": "Accelerate revenue growth",
+            "description": f"Increase MoM growth by 3-5% to improve survival probability by ~{survival_gap:.0f}%",
+            "impact": {"survival_improvement_pct": survival_gap * 0.6, "difficulty": "medium"},
+            "category": "growth"
+        })
+        priority += 1
+        
+        recommendations.append({
+            "priority": priority,
+            "action": "Improve pricing",
+            "description": "Increase prices by 10-15% to improve unit economics and extend runway",
+            "impact": {"runway_gain_months": 2, "revenue_increase_pct": 10, "difficulty": "low"},
+            "category": "pricing"
+        })
+        priority += 1
+    
+    if meets_runway and meets_survival:
+        recommendations.append({
+            "priority": 1,
+            "action": "Maintain current trajectory",
+            "description": f"Current path achieves {request.runway_p50:.1f} months runway with {survival_rate*100:.0f}% survival",
+            "impact": {"status": "on_track"},
+            "category": "maintain"
+        })
+    
+    return {
+        "company_id": company_id,
+        "benchmarks": {
+            "target_runway": request.target_runway,
+            "min_survival": request.min_survival,
+            "meets_runway": meets_runway,
+            "meets_survival": meets_survival
+        },
+        "current_metrics": {
+            "runway_p50": request.runway_p50,
+            "survival_18m": survival_rate,
+            "monthly_burn": request.current_burn,
+            "monthly_revenue": request.current_revenue,
+            "cash_balance": request.cash_balance
+        },
+        "recommendations": recommendations
+    }
+
+
 class ExplainRequest(BaseModel):
     runway_p50: float
     survival_12m: float

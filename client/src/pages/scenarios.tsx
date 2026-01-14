@@ -16,7 +16,13 @@ import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
 import { SensitivityAnalysisPanel } from '@/components/SensitivityAnalysisPanel';
 import { DecisionRankingTable } from '@/components/DecisionRankingTable';
 import { RegimeDistributionChart } from '@/components/RegimeDistributionChart';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy } from 'lucide-react';
+import { ExecutiveSummary } from '@/components/ExecutiveSummary';
+import { ScenarioCard } from '@/components/ScenarioCard';
+import { GlossaryModal } from '@/components/GlossaryModal';
+import { RiskGauge } from '@/components/RiskGauge';
+import { DrillDownChart } from '@/components/DrillDownChart';
+import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -476,23 +482,26 @@ export default function ScenariosPage() {
                 Run simulations for 5 default scenarios and compare results side-by-side
               </p>
             </div>
-            <Button
-              onClick={handleRunMultiScenario}
-              disabled={multiSimMutation.isPending}
-              data-testid="button-run-multi-scenario"
-            >
-              {multiSimMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Run All Scenarios
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <GlossaryModal />
+              <Button
+                onClick={handleRunMultiScenario}
+                disabled={multiSimMutation.isPending}
+                data-testid="button-run-multi-scenario"
+              >
+                {multiSimMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Running...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Run All Scenarios
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
           
           {multiSimMutation.isPending && (
@@ -509,7 +518,49 @@ export default function ScenariosPage() {
           
           {multiSimResults && !multiSimMutation.isPending && (
             <>
+              {multiSimResults.comparison && (
+                <ExecutiveSummary
+                  scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
+                    id: key,
+                    name: scenario.name || key,
+                    runway_p50: scenario.summary?.runway_p50 || 0,
+                    runway_p10: scenario.summary?.runway_p10,
+                    runway_p90: scenario.summary?.runway_p90,
+                    survival_rate: (scenario.summary?.survival_18m || 0) / 100,
+                    end_cash_p50: scenario.summary?.end_cash_p50,
+                    monthly_burn_p50: scenario.summary?.monthly_burn_p50,
+                    assumptions: scenario.assumptions,
+                  }))}
+                  baselineId="baseline"
+                  targetRunway={18}
+                  minSurvival={0.8}
+                />
+              )}
+              
               <MultiScenarioSummary comparison={multiSimResults.comparison} />
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => (
+                  <ScenarioCard
+                    key={key}
+                    id={key}
+                    name={scenario.name || key}
+                    runwayP50={scenario.summary?.runway_p50 || 0}
+                    runwayP10={scenario.summary?.runway_p10}
+                    runwayP90={scenario.summary?.runway_p90}
+                    survivalRate={(scenario.summary?.survival_18m || 0) / 100}
+                    endCash={scenario.summary?.end_cash_p50}
+                    monthlyBurn={scenario.summary?.monthly_burn_p50}
+                    assumptions={scenario.assumptions}
+                    tags={scenario.tags}
+                    isBaseline={key === 'baseline'}
+                    isBest={multiSimResults.comparison?.best_scenario === key}
+                    meetsBenchmark={(scenario.summary?.runway_p50 || 0) >= 18 && (scenario.summary?.survival_18m || 0) >= 80}
+                    cashProjection={scenario.month_data?.map((m: any) => m.cash_p50)}
+                    testId={`scenario-card-${key}`}
+                  />
+                ))}
+              </div>
               
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <ScenarioComparisonChart scenarios={multiSimResults.scenarios} />
@@ -687,6 +738,52 @@ export default function ScenariosPage() {
                 scenarioName={currentScenarioName}
               />
               
+              <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">Risk Assessment:</span>
+                  <RiskGauge 
+                    survivalProbability={(simulation.survival?.['18m'] || 0) / 100} 
+                    size="sm"
+                  />
+                </div>
+                <GlossaryModal />
+              </div>
+              
+              {simulation.month_data && simulation.month_data.length > 0 && (
+                <>
+                  <DrillDownChart
+                    data={simulation.month_data.map((m: any, idx: number) => ({
+                      month: idx + 1,
+                      cash_p10: m.cash_p10,
+                      cash_p50: m.cash_p50 ?? 0,
+                      cash_p90: m.cash_p90,
+                      revenue_p10: m.revenue_p10,
+                      revenue_p50: m.revenue_p50 ?? 0,
+                      revenue_p90: m.revenue_p90,
+                      burn_p10: m.burn_p10,
+                      burn_p50: m.burn_p50 ?? 0,
+                      burn_p90: m.burn_p90,
+                      runway_p50: m.runway_p50 || (m.cash_p50 / Math.max(1, (m.burn_p50 ?? 1) - (m.revenue_p50 ?? 0))),
+                      survival_rate: m.survival_rate,
+                    }))}
+                    scenarioName={currentScenarioName}
+                    targetRunway={18}
+                    testId="drill-down-chart-results"
+                  />
+                  
+                  <StackedBurnRevenueChart
+                    data={simulation.month_data.map((m: any, idx: number) => ({
+                      month: idx + 1,
+                      revenue: m.revenue_p50 ?? 0,
+                      burn: m.burn_p50 ?? 0,
+                      cash: m.cash_p50,
+                    }))}
+                    scenarioName={currentScenarioName}
+                    testId="stacked-burn-revenue-chart"
+                  />
+                </>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader>
