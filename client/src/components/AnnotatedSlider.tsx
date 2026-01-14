@@ -24,6 +24,7 @@ interface AnnotatedSliderProps {
   testId?: string;
   showTextInput?: boolean;
   example?: string;
+  icon?: React.ReactNode;
 }
 
 export function AnnotatedSlider({
@@ -39,6 +40,7 @@ export function AnnotatedSlider({
   testId,
   showTextInput = true,
   example,
+  icon,
 }: AnnotatedSliderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [textValue, setTextValue] = useState(value.toString());
@@ -76,6 +78,7 @@ export function AnnotatedSlider({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-1">
+          {icon && <span className="shrink-0">{icon}</span>}
           <Label className="text-sm">{label}</Label>
           {tooltip && (
             <Tooltip>
