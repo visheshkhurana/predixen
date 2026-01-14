@@ -53,6 +53,9 @@ function Router() {
       <Route path="/scenarios">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
       </Route>
+      <Route path="/scenarios/:id">
+        {() => <AuthenticatedRoute component={ScenariosPage} />}
+      </Route>
       <Route path="/decisions">
         {() => <AuthenticatedRoute component={DecisionsPage} />}
       </Route>
