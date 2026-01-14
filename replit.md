@@ -43,6 +43,14 @@ Preferred communication style: Simple, everyday language.
 7. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings, covenant checks
 8. **Integrations**: Framework for QuickBooks/Xero (accounting) and Salesforce/HubSpot (CRM)
 9. **Scenario Templates**: 7 pre-built templates (Baseline, Conservative Cut, Aggressive Growth, etc.)
+10. **Enhanced UX Components**:
+    - **ExecutiveSummary**: Best scenario analysis, runway range display, key recommendations
+    - **RiskGauge/TrafficLight**: Visual risk indicators with color-coded survival probability
+    - **ScenarioCard**: Interactive expandable cards with mini-charts and assumptions
+    - **DrillDownChart**: Zoom/pan capability, metric switching (cash/revenue/burn/runway), benchmark overlays
+    - **StackedBurnRevenueChart**: Revenue vs burn visualization with break-even detection
+    - **GlossaryModal**: 13 financial term definitions with search and category filtering
+11. **Recommendations Engine**: POST /companies/{id}/recommendations - prioritized action recommendations based on runway gaps and survival rate vs benchmarks
 
 ### Data Import Workflow
 - **Excel/PDF Import**: Uses OpenAI to extract financial metrics from Termina/Tribe Capital reports
