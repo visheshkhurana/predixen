@@ -1,0 +1,126 @@
+Below is a comprehensive Replit prompt that guides a developer (or Replit’s AI coding assistant) through fixing the data/UX issues identified on the “Enhanced Scenario Analysis” screen and implementing additional features to make the decision ranking far more valuable for founders and CX‑level executives.
+
+---
+
+**Replit Prompt – Fix Data Issues & Implement Advanced Decision Ranking Features**
+
+I need to overhaul our “Enhanced Scenario Analysis” (Decision Ranking) page in the RunwayAI app. This screen currently ranks scenarios (e.g., “Cost Cutting”, “Fundraise”, “Baseline”) using a composite score, but there are data formatting errors (e.g., “Survival 18m: 100000%” instead of “100 %”) and the UX could deliver more actionable insights. Please help me correct the issues and add features to make the information truly useful for founders and CXOs. Here are the detailed requirements:
+
+### 1. Correct Data Formatting and Metric Presentation
+
+1. **Survival Probability Bug**:
+
+   * Identify why “Survival 18m” appears as “100000%”. It likely results from scaling (e.g., 1 = 100%, but erroneously multiplied by 1000). Ensure survival values are stored as decimals (`0–1`) or percentages (`0–100`) and format them as percentages with one decimal place (e.g., `100.0 %`).
+   * Write a utility function for percentage formatting to avoid similar issues.
+
+2. **Uniform Units for Monetary Values**:
+
+   * Standardize display of monetary metrics (Expected ARR, Downside Risk) to show large numbers in abbreviated form with a unit (K, M, B). For example, `$448.3 M` for 448,300,000. Add a tooltip that shows the full numeric value (`$448,300,000`) on hover.
+   * For negative values (downside risk), display them with a clear context (e.g., “Potential ARR Loss: –$274.5 M”) so users understand it’s risk of lost revenue rather than an asset.
+
+3. **Dilution and Complexity**:
+
+   * Format **Dilution** as a percentage with one decimal place (e.g., `0.0 %`).
+   * Clarify the **Complexity** scale (0–10) by adding “/10” to the label and including a brief description in the tooltip.
+
+### 2. Add Tooltips & Glossary Links
+
+* Implement a small info icon (`ⓘ`) next to each metric (Survival 18 m, Expected ARR, Downside Risk, Dilution, Complexity, Composite Score).
+* When the user hovers or clicks on the icon, display a popover/modal with:
+
+  * A definition of the metric.
+  * Why it matters for decision‑making.
+  * How it’s calculated (briefly), especially for composite score. For example:
+    “Composite Score = (Survival × 0.4) + (Growth × 0.25) – (Risk × 0.2) – (Dilution × 0.1) – (Complexity × 0.05)”.
+* Provide a link to a full glossary page for more detail.
+
+### 3. Show Relative Performance vs. Baseline
+
+* For all scenarios other than the baseline, compute the difference in each metric compared with the baseline scenario:
+
+  * **Survival Delta** = scenario.Survival – baseline.Survival (format as ±x.x %).
+  * **Expected ARR Delta** = (scenario.ExpectedARR – baseline.ExpectedARR) / baseline.ExpectedARR (format as ±x.x %).
+  * **Downside Risk Delta** = scenario.DownsideRisk – baseline.DownsideRisk (absolute difference, show a “–” sign if risk is lower than baseline).
+* Display these deltas next to the metric values in a muted font with colour coding (green for positive improvements, red for negative changes) and a “+” or “–” sign. Example: “$448.3 M (+1.2 %)”.
+
+### 4. Visualize Trade‑offs
+
+* Implement a small **radar (spider) chart or horizontal bar chart** inside each scenario card to visualize the five dimensions: Survival, Growth (Expected ARR), Risk (Downside Risk), Dilution, Complexity. Normalize each component onto a 0–100 scale:
+
+  * For beneficial metrics (Survival, Growth) use the raw percentage.
+  * For cost metrics (Risk, Dilution, Complexity) invert the value so higher is better (e.g., `RiskScore = 100 – downsideRiskNormalized`).
+* Place this visualization beneath or beside the composite score, and label each axis/segment.
+* Include a legend or labels so users know which coloured area corresponds to which metric.
+
+### 5. Personalize Ranking via Adjustable Weights
+
+* Add a “Weighting” button or panel (e.g., in the header of the page). When clicked, allow users to adjust how much each factor (Survival, Growth, Risk, Dilution, Complexity) contributes to the composite score.
+* Use sliders (range 0–1) or number inputs (0–100 %) for each weight. Ensure all weights sum to 1 (or 100 %). Display a live preview of how the composite scores and scenario order change as weights are adjusted.
+* Persist the user’s chosen weights (e.g., in local storage or user preferences) so that the ranking remains consistent across sessions.
+
+### 6. Sorting and Filtering Controls
+
+* Above the scenario cards, add UI elements for:
+
+  * **Sort by** drop‑down with options: Composite Score (default), Survival, Expected ARR, Downside Risk, Dilution, Complexity.
+  * **Filters**: checkboxes or toggles to show only scenarios that meet thresholds (e.g., “Survival ≥ 80 %”, “Dilution ≤ 5 %”, “Complexity ≤ 5/10”). These thresholds can be input fields or preset options.
+* When the user selects a sort option or changes a filter, update the scenario order and which cards are displayed accordingly.
+
+### 7. Improved Scenario Card Layout
+
+* Redesign scenario cards to improve readability and scannability:
+
+  * Header: scenario rank (“Best”, “2nd”, “3rd”) and name.
+  * A single row listing each metric with its value and delta (e.g., `Survival 18 m: 100.0 % (+0.0 %) • Expected ARR: $448.3 M (+1.2 %) • Downside Risk: –$274.5 M (–$10 M) • Dilution: 0.0 % (no change) • Complexity: 0.8/10 (–0.1)`).
+  * Visual trade‑off chart (radar/bar) below the metrics row.
+  * Composite score displayed prominently, with the info icon for details.
+* Make the entire card accessible (use appropriate HTML semantics) and ensure focus outlines appear for keyboard navigation.
+
+### 8. Actionable Notes & Recommendations
+
+* For each scenario, add a small text area that provides a **brief recommendation** or caveat, such as:
+
+  * “Cost Cutting: Extends runway significantly but may slow product development; consider if market conditions are uncertain.”
+  * “Fundraise: Maintains growth and minimizes cost cuts but introduces dilution risk; ideal if capital is available.”
+* Generate these notes based on simple rules (e.g., if downside risk > X, note that it’s risky; if dilution > Y, caution about equity). Alternatively, allow users to enter their own notes and save them with the scenario.
+
+### 9. Drill‑Down Capability
+
+* Enable each card to be expandable (e.g., click to toggle) to reveal a detailed view:
+
+  * Show monthly cash flow projections, runway timeline, and key assumptions.
+  * Provide a link to navigate back to the broader scenario simulation if deeper editing is needed.
+
+### 10. Export and Share
+
+* Add an “Export” button that lets users download the ranking data (including all metrics, deltas and weights) as a CSV or PDF. Include:
+
+  * Scenario name and rank.
+  * All metric values, deltas, and weights.
+  * A timestamp of when the analysis was generated.
+* Optionally generate a summary report page that can be printed or shared.
+
+### 11. Back‑End Adjustments
+
+* Ensure the API returns:
+
+  * Raw metric values (survival probability as decimal, expected ARR as number, downside risk as number, dilution as decimal, complexity as number).
+  * Baseline metrics for calculating deltas.
+  * Individual component scores that contribute to the composite score.
+* If composite score weights become user‑customizable, update the API to accept weight parameters or calculate scores client‑side using the weights.
+
+### 12. Testing & Documentation
+
+* Add unit tests for:
+
+  * Proper formatting of metric values and deltas.
+  * Correct calculation of composite scores based on adjustable weights.
+  * Rendering of radar/bar charts with normalized values.
+  * Sorting and filtering logic.
+* Document new components (`ScenarioCard`, weighting panel, export functions) and update any API documentation to reflect the new fields/parameters.
+
+---
+
+**Outcome**
+
+These changes will fix the data formatting bug (e.g., survival percentages), clarify what each metric means, allow founders and CXOs to prioritize the criteria that matter most to them, visualize trade‑offs intuitively, and provide actionable notes for each scenario. The interface will become a powerful decision‑support tool rather than a static list, enabling leaders to confidently choose the strategy that best aligns with their risk tolerance, growth ambitions and equity considerations.
