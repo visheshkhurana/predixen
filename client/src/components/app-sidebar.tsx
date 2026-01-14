@@ -28,6 +28,8 @@ import {
   Building2,
   CreditCard,
   BarChart3,
+  History,
+  FileText,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -92,6 +94,16 @@ const adminMenuItems = [
     title: "Users",
     url: "/admin/users",
     icon: Users,
+  },
+  {
+    title: "Login History",
+    url: "/admin/login-history",
+    icon: History,
+  },
+  {
+    title: "Activity Logs",
+    url: "/admin/activity",
+    icon: FileText,
   },
   {
     title: "Companies",
@@ -169,7 +181,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
-                      isActive={location === item.url || (item.url === "/admin" && location.startsWith("/admin") && location !== "/admin/users" && location !== "/admin/companies" && location !== "/admin/billing" && location !== "/admin/metrics")}
+                      isActive={location === item.url || (item.url === "/admin" && location === "/admin")}
                       data-testid={`nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                     >
                       <Link href={item.url}>

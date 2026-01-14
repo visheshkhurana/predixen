@@ -310,13 +310,29 @@ export const api = {
         created_at: string;
         company_count: number;
       }>>('/admin/users'),
+      get: (userId: number) => request<{
+        id: number;
+        email: string;
+        role: string;
+        is_active: boolean;
+        created_at: string;
+        company_count: number;
+        companies: Array<{ id: number; name: string }>;
+        last_login: {
+          timestamp: string | null;
+          ip_address: string | null;
+          device_type: string | null;
+          browser: string | null;
+        } | null;
+        total_logins: number;
+      }>(`/admin/users/${userId}/details`),
       update: (userId: number, data: { role?: string; is_active?: boolean }) =>
         request<any>(`/admin/users/${userId}`, {
           method: 'PATCH',
           body: JSON.stringify(data),
         }),
       suspend: (userId: number) =>
-        request<any>(`/admin/users/${userId}`, { method: 'DELETE' }),
+        request<any>(`/admin/users/${userId}/suspend`, { method: 'POST' }),
       activate: (userId: number) =>
         request<any>(`/admin/users/${userId}/activate`, { method: 'POST' }),
     },
@@ -362,16 +378,59 @@ export const api = {
       companies_by_stage: Record<string, number>;
     }>('/admin/metrics/aggregate'),
     
-    auditLogs: (limit = 50) => request<Array<{
+    auditLogs: (limit = 50, actionType?: string, userId?: number) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (actionType) params.append('action_type', actionType);
+      if (userId) params.append('user_id', String(userId));
+      return request<Array<{
+        id: number;
+        user_email: string | null;
+        action: string;
+        resource_type: string | null;
+        resource_id: number | null;
+        details: any;
+        ip_address: string | null;
+        created_at: string;
+      }>>(`/admin/audit-logs?${params}`);
+    },
+    
+    loginHistory: (limit = 100, successOnly?: boolean, userId?: number) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (successOnly !== undefined) params.append('success_only', String(successOnly));
+      if (userId) params.append('user_id', String(userId));
+      return request<Array<{
+        id: number;
+        user_id: number | null;
+        email: string;
+        ip_address: string | null;
+        user_agent: string | null;
+        device_type: string | null;
+        browser: string | null;
+        os: string | null;
+        country: string | null;
+        city: string | null;
+        success: boolean;
+        failure_reason: string | null;
+        created_at: string;
+      }>>(`/admin/login-history?${params}`);
+    },
+    
+    notifications: (limit = 50) => request<Array<{
       id: number;
-      user_email: string | null;
-      action: string;
-      resource_type: string | null;
-      resource_id: number | null;
-      details: any;
-      ip_address: string | null;
+      user_id: number | null;
+      company_id: number | null;
+      type: string;
+      severity: string;
+      title: string;
+      message: string | null;
+      read: boolean;
       created_at: string;
-    }>>(`/admin/audit-logs?limit=${limit}`),
+    }>>(`/admin/notifications?limit=${limit}`),
+    
+    activityStats: (days = 30) => request<{
+      logins_by_date: Record<string, number>;
+      new_users_by_date: Record<string, number>;
+    }>(`/admin/stats/activity?days=${days}`),
     
     me: () => request<{
       id: number;
