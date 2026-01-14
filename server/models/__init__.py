@@ -1,4 +1,4 @@
-from server.models.user import User
+from server.models.user import User, UserRole
 from server.models.company import Company
 from server.models.dataset import Dataset
 from server.models.financial import (
@@ -22,9 +22,12 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.chat import ChatSession, ChatMessage
+from server.models.subscription import Subscription, SubscriptionStatus
+from server.models.audit_log import AuditLog
 
 __all__ = [
     "User",
+    "UserRole",
     "Company",
     "Dataset",
     "FinancialRecord",
@@ -47,4 +50,7 @@ __all__ = [
     "Decision",
     "ChatSession",
     "ChatMessage",
+    "Subscription",
+    "SubscriptionStatus",
+    "AuditLog",
 ]

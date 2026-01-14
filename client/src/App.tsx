@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -9,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Stepper } from "@/components/Layout/Stepper";
 import { Badge } from "@/components/ui/badge";
 import { useFounderStore } from "@/store/founderStore";
+import { api } from "@/api/client";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
@@ -22,12 +24,74 @@ import AlertsPage from "@/pages/alerts";
 import TemplatesPage from "@/pages/templates";
 import DataVerificationPage from "@/pages/data-verification";
 import NotFound from "@/pages/not-found";
+import AdminDashboard from "@/pages/admin/index";
+import AdminUsers from "@/pages/admin/users";
+import AdminCompanies from "@/pages/admin/companies";
+import AdminBilling from "@/pages/admin/billing";
+import AdminMetrics from "@/pages/admin/metrics";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
   
   if (!token) {
     return <Redirect to="/auth" />;
+  }
+  
+  return <Component />;
+}
+
+function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const token = useFounderStore((s) => s.token);
+  const user = useFounderStore((s) => s.user);
+  const setUser = useFounderStore((s) => s.setUser);
+  const isAdmin = useFounderStore((s) => s.isAdmin);
+  const [loading, setLoading] = useState(!user?.role);
+  const [accessDenied, setAccessDenied] = useState(false);
+  
+  useEffect(() => {
+    if (token && !user?.role) {
+      api.admin.me()
+        .then((data) => {
+          if (user) {
+            setUser({ ...user, role: data.role });
+          }
+          setLoading(false);
+          if (!data.is_admin) {
+            setAccessDenied(true);
+          }
+        })
+        .catch(() => {
+          setLoading(false);
+          setAccessDenied(true);
+        });
+    } else {
+      setLoading(false);
+      if (user?.role && !isAdmin()) {
+        setAccessDenied(true);
+      }
+    }
+  }, [token, user?.role]);
+  
+  if (!token) {
+    return <Redirect to="/auth" />;
+  }
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-muted-foreground">Checking access...</div>
+      </div>
+    );
+  }
+  
+  if (accessDenied) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <div className="text-2xl font-bold text-destructive">Access Denied</div>
+        <p className="text-muted-foreground">You don't have permission to access this page.</p>
+        <a href="/" className="text-primary hover:underline">Go to Dashboard</a>
+      </div>
+    );
   }
   
   return <Component />;
@@ -70,6 +134,21 @@ function Router() {
       </Route>
       <Route path="/templates">
         {() => <AuthenticatedRoute component={TemplatesPage} />}
+      </Route>
+      <Route path="/admin">
+        {() => <AdminRoute component={AdminDashboard} />}
+      </Route>
+      <Route path="/admin/users">
+        {() => <AdminRoute component={AdminUsers} />}
+      </Route>
+      <Route path="/admin/companies">
+        {() => <AdminRoute component={AdminCompanies} />}
+      </Route>
+      <Route path="/admin/billing">
+        {() => <AdminRoute component={AdminBilling} />}
+      </Route>
+      <Route path="/admin/metrics">
+        {() => <AdminRoute component={AdminMetrics} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

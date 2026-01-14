@@ -22,6 +22,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user_id: int
     email: str
+    role: str = "viewer"
 
 @router.post("/register", response_model=TokenResponse)
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
@@ -48,7 +49,8 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
-        email=user.email
+        email=user.email,
+        role=user.role or "viewer"
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -68,5 +70,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
-        email=user.email
+        email=user.email,
+        role=user.role or "viewer"
     )

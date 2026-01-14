@@ -23,6 +23,11 @@ import {
   Link2,
   Bell,
   Layers,
+  Shield,
+  Users,
+  Building2,
+  CreditCard,
+  BarChart3,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -77,9 +82,38 @@ const menuItems = [
   },
 ];
 
+const adminMenuItems = [
+  {
+    title: "Dashboard",
+    url: "/admin",
+    icon: Shield,
+  },
+  {
+    title: "Users",
+    url: "/admin/users",
+    icon: Users,
+  },
+  {
+    title: "Companies",
+    url: "/admin/companies",
+    icon: Building2,
+  },
+  {
+    title: "Billing",
+    url: "/admin/billing",
+    icon: CreditCard,
+  },
+  {
+    title: "Metrics",
+    url: "/admin/metrics",
+    icon: BarChart3,
+  },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
-  const { currentCompany, logout } = useFounderStore();
+  const { currentCompany, logout, isAdmin } = useFounderStore();
+  const showAdmin = isAdmin();
 
   const handleLogout = () => {
     localStorage.removeItem('predixen-token');
@@ -126,6 +160,29 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {showAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminMenuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url || (item.url === "/admin" && location.startsWith("/admin") && location !== "/admin/users" && location !== "/admin/companies" && location !== "/admin/billing" && location !== "/admin/metrics")}
+                      data-testid={`nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-4 space-y-3">
         <div className="flex items-center justify-between">

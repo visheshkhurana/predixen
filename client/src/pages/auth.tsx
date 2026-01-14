@@ -27,7 +27,7 @@ export default function AuthPage() {
       const result = await api.auth.login(email, password);
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email });
+      setUser({ id: result.user_id, email: result.email, role: result.role });
       toast({ title: 'Welcome back!' });
       setLocation('/');
     } catch (err) {
@@ -50,7 +50,7 @@ export default function AuthPage() {
       const result = await api.auth.register(email, password);
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email });
+      setUser({ id: result.user_id, email: result.email, role: result.role });
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
     } catch (err) {
@@ -67,7 +67,7 @@ export default function AuthPage() {
       const result = await api.auth.login('demo@predixen.ai', 'demo123');
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email });
+      setUser({ id: result.user_id, email: result.email, role: result.role });
       toast({ title: 'Welcome to the demo!' });
       setLocation('/');
     } catch (err) {

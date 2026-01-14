@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 interface User {
   id: number;
   email: string;
+  role?: string;
 }
 
 interface Company {
@@ -85,6 +86,7 @@ interface FounderState {
   clearFinancialBaseline: () => void;
   
   getCalculatedMetrics: () => { netBurnRate: number; runwayMonths: number | null };
+  isAdmin: () => boolean;
 }
 
 const EMPTY_BASELINE: FinancialBaseline = {
@@ -169,6 +171,11 @@ export const useFounderStore = create<FounderState>()(
         const runwayMonths = netBurnRate > 0 ? cash / netBurnRate : null;
         
         return { netBurnRate, runwayMonths, isProfitable, isSustainable };
+      },
+      
+      isAdmin: () => {
+        const user = get().user;
+        return user?.role === 'admin' || user?.role === 'owner';
       },
     }),
     {
