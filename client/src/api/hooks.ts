@@ -93,6 +93,15 @@ export function useSimulation(scenarioId: number | null) {
   });
 }
 
+export function useScenarioTimeseries(scenarioId: number | null) {
+  return useQuery({
+    queryKey: ['timeseries', scenarioId],
+    queryFn: () => api.simulations.getTimeseries(scenarioId!),
+    enabled: !!scenarioId,
+    retry: false,
+  });
+}
+
 export function useGenerateDecisions() {
   const queryClient = useQueryClient();
   
