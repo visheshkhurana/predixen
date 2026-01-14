@@ -289,4 +289,95 @@ export const api = {
         body: JSON.stringify({ action_ids: actionIds }),
       }),
   },
+  
+  admin: {
+    dashboard: () => request<{
+      total_users: number;
+      active_users: number;
+      total_companies: number;
+      total_subscriptions: number;
+      mrr: number;
+      active_simulations: number;
+      truth_scans_today: number;
+    }>('/admin/dashboard'),
+    
+    users: {
+      list: () => request<Array<{
+        id: number;
+        email: string;
+        role: string;
+        is_active: boolean;
+        created_at: string;
+        company_count: number;
+      }>>('/admin/users'),
+      update: (userId: number, data: { role?: string; is_active?: boolean }) =>
+        request<any>(`/admin/users/${userId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        }),
+      suspend: (userId: number) =>
+        request<any>(`/admin/users/${userId}`, { method: 'DELETE' }),
+      activate: (userId: number) =>
+        request<any>(`/admin/users/${userId}/activate`, { method: 'POST' }),
+    },
+    
+    companies: {
+      list: () => request<Array<{
+        id: number;
+        name: string;
+        industry: string | null;
+        stage: string | null;
+        user_email: string;
+        created_at: string;
+      }>>('/admin/companies'),
+      get: (companyId: number) => request<any>(`/admin/companies/${companyId}`),
+    },
+    
+    subscriptions: {
+      list: () => request<Array<{
+        id: number;
+        user_email: string | null;
+        company_name: string | null;
+        plan: string;
+        status: string;
+        seats: number;
+        monthly_price: number;
+        current_period_end: string | null;
+        created_at: string;
+      }>>('/admin/subscriptions'),
+      update: (subscriptionId: number, data: { plan?: string; seats?: number; status?: string }) =>
+        request<any>(`/admin/subscriptions/${subscriptionId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        }),
+    },
+    
+    metrics: () => request<{
+      financial: {
+        total_revenue: number;
+        avg_burn: number;
+        avg_runway_months: number;
+      };
+      users_by_role: Record<string, number>;
+      companies_by_stage: Record<string, number>;
+    }>('/admin/metrics/aggregate'),
+    
+    auditLogs: (limit = 50) => request<Array<{
+      id: number;
+      user_email: string | null;
+      action: string;
+      resource_type: string | null;
+      resource_id: number | null;
+      details: any;
+      ip_address: string | null;
+      created_at: string;
+    }>>(`/admin/audit-logs?limit=${limit}`),
+    
+    me: () => request<{
+      id: number;
+      email: string;
+      role: string;
+      is_admin: boolean;
+    }>('/admin/me'),
+  },
 };

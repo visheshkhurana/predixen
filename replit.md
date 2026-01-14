@@ -53,6 +53,13 @@ Preferred communication style: Simple, everyday language.
     - **ProjectionChart**: Month-by-month interactive visualization with toggleable series (cash/burn/revenue/runway/headcount), custom tooltips, milestone markers (funding events, break-even, runway exhaustion), benchmark overlays, and brush zoom
     - **ProjectionSummary**: Key statistics panel showing peak/lowest cash, total revenue, average burn/revenue, break-even detection, runway at key intervals (3, 6, 12 months, end)
 11. **Recommendations Engine**: POST /companies/{id}/recommendations - prioritized action recommendations based on runway gaps and survival rate vs benchmarks
+12. **Admin Dashboard**: Centralized admin interface for super-admins
+    - **User Management**: View, edit roles (owner/admin/analyst/viewer), suspend/activate users
+    - **Company Management**: View all companies with metadata and statistics
+    - **Billing Management**: Subscription tracking (plan, status, seats, MRR)
+    - **Platform Metrics**: Aggregated KPIs, charts (users by role, companies by stage)
+    - **Audit Logs**: Track admin actions for compliance
+    - **RBAC**: Role-based access control on both frontend and backend
 
 ### Data Import Workflow
 - **Excel/PDF Import**: Uses OpenAI to extract financial metrics from Termina/Tribe Capital reports
@@ -63,6 +70,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Feature Flags
 - `FEATURE_INVESTOR_MODE`: When false (default), investor routes return 403 and UI hides investor navigation
+
+### User Roles
+- `owner`: Full platform access including admin dashboard
+- `admin`: Full platform access including admin dashboard
+- `analyst`: Standard platform access, no admin
+- `viewer`: Standard platform access, no admin (default for new users)
 
 ### Project Structure
 \`\`\`

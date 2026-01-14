@@ -25,3 +25,4 @@ class Company(Base):
     chat_sessions = relationship("ChatSession", back_populates="company")
     import_sessions = relationship("ImportSession", back_populates="company")
     metric_points = relationship("FinancialMetricPoint", back_populates="company")
+    subscriptions = relationship("Subscription", back_populates="company")
