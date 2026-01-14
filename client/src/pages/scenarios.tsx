@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -116,11 +117,22 @@ const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising'
 export default function ScenariosPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
   const { toast } = useToast();
+  const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
   const createScenarioMutation = useCreateScenario();
   const runSimulationMutation = useRunSimulation();
   
   const [selectedScenarioId, setSelectedScenarioId] = useState<number | null>(null);
+  
+  // Auto-select scenario from URL parameter
+  useEffect(() => {
+    if (params.id) {
+      const idFromUrl = parseInt(params.id, 10);
+      if (!isNaN(idFromUrl)) {
+        setSelectedScenarioId(idFromUrl);
+      }
+    }
+  }, [params.id]);
   const { data: simulation, isLoading: simLoading } = useSimulation(selectedScenarioId);
   const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
   
