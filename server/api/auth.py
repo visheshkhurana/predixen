@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta
@@ -6,8 +6,72 @@ from server.core.db import get_db
 from server.core.security import get_password_hash, verify_password, create_access_token
 from server.core.config import settings
 from server.models.user import User
+from server.models.login_history import LoginHistory
+import re
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+def parse_user_agent(user_agent: str) -> dict:
+    """Parse user agent string to extract device, browser, and OS info."""
+    device_type = "Desktop"
+    if "Mobile" in user_agent or "Android" in user_agent:
+        device_type = "Mobile"
+    elif "Tablet" in user_agent or "iPad" in user_agent:
+        device_type = "Tablet"
+    
+    browser = "Unknown"
+    if "Chrome" in user_agent and "Edg" not in user_agent:
+        browser = "Chrome"
+    elif "Firefox" in user_agent:
+        browser = "Firefox"
+    elif "Safari" in user_agent and "Chrome" not in user_agent:
+        browser = "Safari"
+    elif "Edg" in user_agent:
+        browser = "Edge"
+    
+    os = "Unknown"
+    if "Windows" in user_agent:
+        os = "Windows"
+    elif "Mac OS" in user_agent:
+        os = "macOS"
+    elif "Linux" in user_agent:
+        os = "Linux"
+    elif "Android" in user_agent:
+        os = "Android"
+    elif "iOS" in user_agent or "iPhone" in user_agent:
+        os = "iOS"
+    
+    return {"device_type": device_type, "browser": browser, "os": os}
+
+def log_login_attempt(db: Session, email: str, user_id: int = None, success: bool = True, 
+                      failure_reason: str = None, request: Request = None):
+    """Log a login attempt to the database."""
+    ip_address = None
+    user_agent = None
+    device_info = {"device_type": None, "browser": None, "os": None}
+    
+    if request:
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")
+        if user_agent:
+            device_info = parse_user_agent(user_agent)
+    
+    try:
+        login_record = LoginHistory(
+            user_id=user_id,
+            email=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            device_type=device_info["device_type"],
+            browser=device_info["browser"],
+            os=device_info["os"],
+            success=success,
+            failure_reason=failure_reason
+        )
+        db.add(login_record)
+        db.commit()
+    except Exception:
+        db.rollback()
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -25,21 +89,25 @@ class TokenResponse(BaseModel):
     role: str = "viewer"
 
 @router.post("/register", response_model=TokenResponse)
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == request.email).first()
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == req.email).first()
     if existing:
+        log_login_attempt(db, req.email, success=False, 
+                         failure_reason="Email already registered", request=request)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
     
     user = User(
-        email=request.email,
-        password_hash=get_password_hash(request.password)
+        email=req.email,
+        password_hash=get_password_hash(req.password)
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    log_login_attempt(db, user.email, user.id, success=True, request=request)
     
     access_token = create_access_token(
         data={"sub": str(user.id)},
@@ -54,13 +122,25 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/login", response_model=TokenResponse)
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email).first()
-    if not user or not verify_password(request.password, user.password_hash):
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user or not verify_password(req.password, user.password_hash):
+        log_login_attempt(db, req.email, user.id if user else None, success=False,
+                         failure_reason="Invalid credentials", request=request)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
+    
+    if not user.is_active:
+        log_login_attempt(db, req.email, user.id, success=False,
+                         failure_reason="Account suspended", request=request)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended. Contact support."
+        )
+    
+    log_login_attempt(db, user.email, user.id, success=True, request=request)
     
     access_token = create_access_token(
         data={"sub": str(user.id)},
