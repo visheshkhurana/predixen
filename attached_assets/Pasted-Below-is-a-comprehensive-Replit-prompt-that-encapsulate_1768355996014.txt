@@ -1,0 +1,117 @@
+Below is a comprehensive Replit prompt that encapsulates the month‑by‑month projection enhancements described earlier. This prompt is designed to guide a developer (or Replit’s AI) through implementing an interactive, founder‑friendly projection view in your Scenario Builder application.
+
+---
+
+**Replit Prompt – Implement Enhanced Month‑by‑Month Projections**
+
+I need to improve the “month‑by‑month projections” area of our startup financial simulation tool. The goal is to transform it from a static or dense output into a dynamic, intuitive visualization that delivers actionable insights for founders and CXOs. Please help me implement the following features in our React/Next.js project.
+
+### 1. Charting Framework and Setup
+
+* Choose a suitable charting library for React (e.g., [Recharts](https://recharts.org/), [Chart.js via react-chartjs-2](https://react-chartjs-2.js.org/), or [VisX](https://airbnb.io/visx/)). Ensure it supports multiple line/area series, custom markers, tooltips, and zoom/pan functionality.
+* Create a reusable `ProjectionChart` component that accepts a `timeseries` prop representing monthly data (an array of objects with keys like `month`, `cashBalance`, `monthlyBurn`, `monthlyRevenue`, `runwayRemaining`, `headcount`).
+
+### 2. Display Key Metrics
+
+Within `ProjectionChart`, render the following series, each with its own colour/style and legend entry:
+
+1. **Cash Balance** – line chart representing total cash on hand each month.
+2. **Monthly Burn** – line or area chart showing monthly operating expenses; consider stacking burn categories if the data is available.
+3. **Monthly Revenue** – line or area chart representing total revenue or MRR/ARR per month.
+4. **Runway Remaining** – line chart showing the number of months left at each point (i.e., `cashBalance / monthlyBurn`).
+5. **Headcount (optional)** – secondary y‑axis if you choose to plot headcount growth; keep this optional.
+
+Users should be able to toggle any of these series on or off via the chart legend or a set of checkboxes above the chart. When a series is toggled off, it should disappear from the chart.
+
+### 3. Tooltips and Hover Details
+
+* Implement custom tooltips that show:
+
+  * The month (e.g., “Month 6 – Jun 2026”).
+  * Values for all visible series at that point (e.g., `Cash Balance: $1.2M`, `Monthly Revenue: $200k`, `Monthly Burn: $150k`, `Runway Remaining: 8 months`).
+* Ensure tooltips are accessible via keyboard focus and that values are formatted with currency and comma separators.
+
+### 4. Highlight Critical Milestones
+
+* Add markers on the chart for key events:
+
+  * **Funding events**: Accept an array of events (month index and funding amount) as a prop. Render a vertical line or dot at that month, with a label (e.g., “Seed Round: +$2M”).
+  * **Break‑even point**: Determine when monthly revenue ≥ monthly burn. If break‑even is reached within the projection period, place a marker and annotate it (e.g., “Break‑even Month 14”).
+  * **Runway exhaustion**: Compute the month when cash balance hits zero (if applicable) and mark it with a prominent icon and text (e.g., “Cash runs out in Month 20”). If no exhaustion occurs within the horizon, omit this marker.
+* Use distinct shapes or colours for each type of event and provide a legend.
+
+### 5. Summary Insights Panel
+
+* Below or alongside the chart, implement a `ProjectionSummary` component that displays high‑level statistics, such as:
+
+  * **Peak Cash Balance** and the month it occurs.
+  * **Lowest Cash Balance Before Funding** (or indicate “never drops” if always positive).
+  * **Total Revenue Generated** over the projection period.
+  * **Average Monthly Burn** and **Average Monthly Revenue**.
+  * **Runway Remaining at Key Intervals**: show runway at 3, 6, 12 months and at the end of the horizon.
+* Format monetary values as currency and runway as months (with one decimal if needed).
+* Use a card or grid layout to make these numbers easy to scan.
+
+### 6. Benchmark Overlays and User Controls
+
+* Provide UI controls (e.g., input fields or a settings modal) where users can specify:
+
+  * A **target runway length** (e.g., 18 months).
+  * A **target monthly revenue** or ARR goal.
+* In the chart:
+
+  * Draw a horizontal line across the cash balance graph at the cash level corresponding to the target runway (i.e., `targetRunway × averageMonthlyBurn`).
+  * Draw a horizontal line across the revenue graph at the target revenue level.
+* Add labels for these benchmarks (“Target Runway: 18 mo”, “Target Revenue: $500k/mo”) and highlight any months where actual projections fall below (or exceed) the target.
+
+### 7. Scenario Comparison (Optional)
+
+* If multiple scenarios are being compared, allow users to select two or more scenarios and overlay their respective series on a shared chart or provide a set of mini‑charts side by side. Use distinct colours or line styles for each scenario.
+* Synchronize the x‑axis (months) across all charts for easy comparison.
+
+### 8. Data Retrieval and API Integration
+
+* Ensure the back‑end provides an endpoint (e.g., `/api/scenario/{id}/timeseries`) that returns an array of monthly values for each required metric:
+
+  ```json
+  [
+    {
+      "month": 0,
+      "cashBalance": 1000000,
+      "monthlyBurn": 100000,
+      "monthlyRevenue": 50000,
+      "runwayRemaining": 10,
+      "headcount": 15
+    },
+    ...
+  ]
+  ```
+* Funding events should be delivered in a separate array or as part of the payload:
+
+  ```json
+  "fundingEvents": [
+    { "month": 6, "amount": 2000000 },
+    { "month": 18, "amount": 5000000 }
+  ]
+  ```
+* The front‑end `ProjectionChart` should fetch this data on mount or when the user switches scenarios and store it in state.
+
+### 9. Responsiveness and Accessibility
+
+* Ensure the chart and summary components are responsive:
+
+  * On desktop: show the chart and summary side by side or stacked with ample width.
+  * On mobile: stack the chart above the summary, and allow horizontal scrolling for wide charts if necessary.
+* Make all interactive elements (toggles, benchmark inputs) keyboard accessible with proper focus management and ARIA labels.
+
+### 10. Testing and Documentation
+
+* Add unit tests for key functions (e.g., break‑even detection, runway exhaustion calculation).
+* Document the `ProjectionChart` API (props expected) within code comments or a README so other developers know how to use it.
+* Provide example stories in Storybook (if used) or a sample page where the chart is displayed with mock data for demonstration.
+
+---
+
+**Summary**
+
+These enhancements aim to transform the month‑by‑month projection space into a clear, interactive dashboard that founders and CXOs can use to understand their cash trajectory, revenue growth, and burn rate. By highlighting key milestones, providing summary insights, and allowing user-defined benchmarks, the tool will help users quickly assess whether their financial plan aligns with their goals and make more informed strategic decisions.

@@ -1,0 +1,147 @@
+Below is a comprehensive prompt you can use with Replit’s AI developer tool (or share with a developer) to implement both the UX improvements and back‑end logic enhancements we discussed. It provides explicit requirements and suggested approaches for both the front‑end and back‑end aspects of the project.
+
+---
+
+**Replit Prompt – Implement Enhanced UX and Back‑End Logic for Scenario Builder**
+
+I’m tasked with enhancing our startup financial simulation tool hosted at `/scenarios` in a React/Next.js application. The current tool runs simulations and displays basic metrics like runway and survival probability, but it lacks intuitive UX and robust back‑end modelling. I want to make this tool more actionable for founders and CXOs by adding rich visuals, clear risk indicators, interactive scenario management, and a simulation engine that supports detailed analytics. Please help me implement the following requirements:
+
+### Front‑End Enhancements
+
+#### 1. Executive Summary Panel
+
+* Create an `ExecutiveSummary` component that appears at the top of the results page (e.g., on the “Compare All” or “Simulation Results” tabs).
+* Show high‑level insights: the best‑performing scenario, its projected runway range, survival probability, and a plain‑language recommendation (“Increase pricing by 5 % and cut burn by 10 % to achieve 24 months of runway”).
+* Style the panel to stand out (e.g., card with contrasting background) and ensure it adapts to mobile and desktop layouts.
+
+#### 2. Visual Risk Indicators
+
+* Replace the current text‑only risk assessment with a colour‑coded indicator:
+
+  * Use a traffic‑light bar or circular gauge where green = high survival (>80 %), yellow = medium (50–80 %), red = low (<50 %).
+  * Display the exact survival percentage and label each scenario with its risk rating (“Low Risk”, “Moderate Risk”, “High Risk”).
+* Provide explanatory tooltips for risk ratings.
+
+#### 3. Interactive Scenario Cards
+
+* Build a `ScenarioCard` component that summarizes each scenario. Each card should display:
+
+  * Scenario name and preset used.
+  * Key assumptions (pricing change, growth uplift, burn reduction, fundraising events).
+  * A mini‑chart or bar showing projected runway range.
+  * Survival probability.
+* Make cards clickable: when clicked, expand to show detailed charts and metrics (see below).
+* Enable drag‑and‑drop reordering of scenario cards so users can prioritize the ones they care about most.
+
+#### 4. Rich Charting and Drill‑Down
+
+* Integrate a chart library (e.g., recharts or Chart.js) to plot multiple metrics. For each scenario, provide line charts for:
+
+  * Cash balance over time.
+  * Runway remaining vs. time.
+  * Monthly revenue and monthly burn (stacked area chart if possible).
+* Allow users to choose which metric to view via a dropdown or tabs.
+* Implement zoom and pan functionality to examine specific date ranges.
+* Add hover tooltips on data points to show exact values and corresponding dates.
+
+#### 5. User‑Defined Benchmarks
+
+* Let users input a target runway length (e.g., 24 months) and/or a minimum survival probability (e.g., 80 %).
+* Overlay a line or shaded area on the charts showing when each scenario meets or fails the benchmark.
+* Highlight scenarios that meet or exceed the benchmark in green and those that fail in red in both the executive summary and scenario cards.
+
+#### 6. Contextual Help and Glossary
+
+* Implement a help icon in the UI (e.g., next to “runway”, “survival probability”, “risk assessment”).
+* Clicking the icon should open a modal or tooltip with definitions and explanation of how each metric is calculated and why it matters.
+* Add a link to a full glossary page if there are many terms.
+
+### Back‑End Logic Enhancements
+
+#### 1. Simulation Engine Overhaul
+
+* Build a configurable simulation engine that accepts an object containing assumptions:
+
+  ```json
+  {
+    "pricingChange": 0.05,
+    "growthUplift": 0.05,
+    "burnReduction": -0.05,
+    "initialCash": 1000000,
+    "initialMRR": 50000,
+    "churnRate": 0.02,
+    "marketingSpend": 10000,
+    "fundraisingEvents": [
+      { "amount": 2000000, "month": 6 },
+      { "amount": 5000000, "month": 18 }
+    ]
+  }
+  ```
+* For each scenario, compute monthly projections for cash balance, revenue, burn, runway remaining, and any other relevant metrics for a defined horizon (e.g., 36 months).
+* Formula suggestions:
+
+  * **Revenue**: `revenue_t = MRR_t * (1 + pricingChange) * (1 + growthUplift)^(t/horizon)` minus churn (e.g., `MRR_{t+1} = MRR_t × (1 + growthUplift - churnRate)`).
+  * **Burn**: `burn_t = baseBurn × (1 + burnReduction)` adjusted for inflation or cost trends if needed.
+  * **Runway**: `(cash_t) / (burn_t)` (expressed in months).
+  * Update `cash_t` each month: `cash_{t+1} = cash_t + revenue_t - burn_t + fundraisingEventIfAny`.
+* Include randomness if desired: allow optional Monte Carlo simulations where growth and burn are sampled from distributions (e.g., log‑normal) to produce survival probabilities.
+
+#### 2. Survival Probability and Risk Ranking
+
+* Run either multiple Monte Carlo simulations or apply variance factors to compute the likelihood that cash remains positive for the desired horizon.
+* For each scenario, store:
+
+  * Median runway length.
+  * 5th/95th percentile runway ranges.
+  * Survival probability = number of runs where `cash_t > 0` for all `t`.
+* Rank scenarios by survival probability and median runway. Provide this ranking to the front‑end for display.
+
+#### 3. Data Persistence and API Layer
+
+* Add a database model (e.g., using Prisma or Mongoose) for scenarios:
+
+  ```typescript
+  type Scenario = {
+    id: string,
+    userId: string,
+    name: string,
+    assumptions: AssumptionsObject,
+    createdAt: Date,
+    results: SimulationResult
+  }
+  ```
+* Create REST or GraphQL endpoints:
+
+  * `POST /api/scenario` – save a new scenario and trigger simulation.
+  * `GET /api/scenario/{id}` – fetch the scenario with assumptions and results.
+  * `GET /api/scenario/{id}/summary` – return summary statistics for the executive panel.
+  * `GET /api/scenario/{id}/timeseries?metric=cash` – return time‑series arrays for charting.
+* Implement caching (e.g., Redis) for expensive simulation results, keyed by a hash of the assumptions, to avoid re‑running identical simulations.
+
+#### 4. Alerting and Recommendations
+
+* After computing results, analyze each scenario for thresholds:
+
+  * If projected cash becomes negative before the end of the horizon, tag the scenario as high risk and record the month it fails.
+  * If survival probability falls below user‑defined thresholds, mark the scenario accordingly.
+* Provide a recommendation engine function that suggests simple actions:
+
+  * If runway is too short, propose raising additional funds or reducing burn by a certain percentage.
+  * If survival probability is low, propose adjusting pricing or churn assumptions.
+* Expose recommendations through the API (`/api/scenario/{id}/recommendations`) so the front‑end can surface them in the executive summary.
+
+#### 5. Benchmarks and User Preferences
+
+* Store user‑defined benchmarks (target runway, minimum survival probability) in the database keyed to the user.
+* Use these benchmarks when computing scenario status and when highlighting scenarios in the UI.
+
+---
+
+**Implementation Notes:**
+
+* Use TypeScript for type safety on assumptions and results.
+* For date handling, use an appropriate library (e.g., `date-fns` or `Luxon`).
+* Ensure the UI meets accessibility standards: all interactive elements must be keyboard‑navigable and screen‑reader friendly.
+* Write unit tests and integration tests where feasible to ensure back‑end calculations are accurate and the front‑end renders data correctly.
+
+The goal is to transform the existing simulation tool into a decision‑support platform that offers clear visuals, actionable insights, and rigorous simulation logic, empowering founders and executives to make informed strategic decisions.
