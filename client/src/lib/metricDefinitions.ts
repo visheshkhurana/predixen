@@ -231,10 +231,11 @@ export const INPUT_FIELD_TOOLTIPS: Record<string, { title: string; description: 
   },
 };
 
-export const SCENARIO_SLIDER_TOOLTIPS: Record<string, { title: string; description: string; markers: { value: number; label: string }[] }> = {
+export const SCENARIO_SLIDER_TOOLTIPS: Record<string, { title: string; description: string; example: string; markers: { value: number; label: string }[] }> = {
   pricing_change_pct: {
     title: 'Pricing Change',
     description: 'Adjust your pricing strategy. Increases may impact growth, but improve unit economics.',
+    example: 'A 10% price increase on $50K MRR adds $5K/mo to revenue immediately.',
     markers: [
       { value: -10, label: 'Discount' },
       { value: 0, label: 'Current' },
@@ -245,6 +246,7 @@ export const SCENARIO_SLIDER_TOOLTIPS: Record<string, { title: string; descripti
   growth_uplift_pct: {
     title: 'Growth Uplift',
     description: 'Expected change in growth rate from marketing, sales, or product improvements.',
+    example: 'A 5% growth uplift compounds to ~30% more revenue over 12 months.',
     markers: [
       { value: -5, label: 'Slowdown' },
       { value: 0, label: 'Current' },
@@ -255,6 +257,7 @@ export const SCENARIO_SLIDER_TOOLTIPS: Record<string, { title: string; descripti
   burn_reduction_pct: {
     title: 'Burn Reduction',
     description: 'Cost-cutting measures to extend runway. May impact growth or morale.',
+    example: 'A 20% reduction on $80K/mo expenses saves $16K/mo, adding ~5 months runway.',
     markers: [
       { value: 0, label: 'None' },
       { value: 10, label: 'Conservative' },
@@ -265,11 +268,34 @@ export const SCENARIO_SLIDER_TOOLTIPS: Record<string, { title: string; descripti
   gross_margin_delta_pct: {
     title: 'Gross Margin Change',
     description: 'Improvements in unit economics through pricing, cost reduction, or efficiency.',
+    example: 'A 5% margin improvement means $2.5K more profit per $50K revenue.',
     markers: [
       { value: -5, label: 'Decline' },
       { value: 0, label: 'Current' },
       { value: 5, label: 'Improved' },
       { value: 10, label: 'Optimized' },
+    ],
+  },
+  churn_change_pct: {
+    title: 'Churn Rate Change',
+    description: 'Adjustment to monthly customer churn. Negative values reduce churn (improve retention).',
+    example: 'Reducing churn by 2% on 100 customers saves 2 customers/month, worth $2K+ in ARR.',
+    markers: [
+      { value: -3, label: 'Reduced' },
+      { value: 0, label: 'Current' },
+      { value: 2, label: 'Increased' },
+      { value: 5, label: 'High' },
+    ],
+  },
+  cac_change_pct: {
+    title: 'CAC Change',
+    description: 'Change in Customer Acquisition Cost. Negative values mean more efficient acquisition.',
+    example: 'A 15% CAC reduction on $500 CAC saves $75 per customer, improving LTV/CAC ratio.',
+    markers: [
+      { value: -20, label: 'Efficient' },
+      { value: -10, label: 'Improved' },
+      { value: 0, label: 'Current' },
+      { value: 10, label: 'Higher' },
     ],
   },
 };

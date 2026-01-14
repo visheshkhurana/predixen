@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AnnotatedSlider } from '@/components/AnnotatedSlider';
+import { ScenarioTutorial, TutorialTrigger } from '@/components/ScenarioTutorial';
+import { ScenarioSummarySidebar } from '@/components/ScenarioSummarySidebar';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
 import { cn } from '@/lib/utils';
 import {
@@ -26,6 +28,7 @@ import {
   Calendar,
   Percent,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 
 interface ScenarioTemplate {
@@ -41,6 +44,8 @@ interface ScenarioParams {
   growth_uplift_pct: number;
   burn_reduction_pct: number;
   gross_margin_delta_pct: number;
+  churn_change_pct: number;
+  cac_change_pct: number;
   fundraise_month: number | null;
   fundraise_amount: number;
   tags: string[];
@@ -128,9 +133,53 @@ function getSliderFeedback(
       if (value < 0) return { text: 'Declining margins', type: 'negative' };
       return { text: 'No change', type: 'neutral' };
 
+    case 'churn_change_pct':
+      if (value <= -2) return { text: 'Strong retention improvement', type: 'positive' };
+      if (value < 0) return { text: 'Reduced churn', type: 'positive' };
+      if (value >= 3) return { text: 'Significant churn risk', type: 'negative' };
+      if (value > 0) return { text: 'Higher customer loss', type: 'negative' };
+      return { text: 'Current churn rate', type: 'neutral' };
+
+    case 'cac_change_pct':
+      if (value <= -15) return { text: 'Highly efficient acquisition', type: 'positive' };
+      if (value < 0) return { text: 'More efficient customer acquisition', type: 'positive' };
+      if (value >= 10) return { text: 'Acquisition becoming expensive', type: 'negative' };
+      if (value > 0) return { text: 'Slightly higher CAC', type: 'neutral' };
+      return { text: 'Current CAC', type: 'neutral' };
+
     default:
       return { text: '', type: 'neutral' };
   }
+}
+
+const TUTORIAL_STORAGE_KEY = 'predixen_scenario_tutorial_dismissed';
+
+function getValidationWarnings(params: ScenarioParams): { field: string; message: string }[] {
+  const warnings: { field: string; message: string }[] = [];
+  
+  if (params.pricing_change_pct > 25) {
+    warnings.push({ field: 'pricing_change_pct', message: 'Price increases above 25% may significantly reduce customer acquisition' });
+  }
+  if (params.pricing_change_pct < -15) {
+    warnings.push({ field: 'pricing_change_pct', message: 'Large discounts may hurt margins without proportional growth' });
+  }
+  if (params.growth_uplift_pct > 15) {
+    warnings.push({ field: 'growth_uplift_pct', message: 'Growth above 15% requires substantial investment or viral momentum' });
+  }
+  if (params.burn_reduction_pct > 30) {
+    warnings.push({ field: 'burn_reduction_pct', message: 'Cutting burn by 30%+ may require layoffs or major restructuring' });
+  }
+  if (params.burn_reduction_pct < -15) {
+    warnings.push({ field: 'burn_reduction_pct', message: 'Increasing burn significantly will shorten runway' });
+  }
+  if (params.fundraise_amount > 0 && !params.fundraise_month) {
+    warnings.push({ field: 'fundraise_month', message: 'Set a fundraise month to model when funds arrive' });
+  }
+  if (params.fundraise_month && params.fundraise_amount <= 0) {
+    warnings.push({ field: 'fundraise_amount', message: 'Set an amount to model the fundraise impact' });
+  }
+  
+  return warnings;
 }
 
 export function ScenarioWizard({
@@ -141,18 +190,38 @@ export function ScenarioWizard({
 }: ScenarioWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
   const [params, setParams] = useState<ScenarioParams>({
     name: 'Custom Scenario',
     pricing_change_pct: 0,
     growth_uplift_pct: 0,
     burn_reduction_pct: 0,
     gross_margin_delta_pct: 0,
+    churn_change_pct: 0,
+    cac_change_pct: 0,
     fundraise_month: null,
     fundraise_amount: 0,
     tags: [],
   });
 
+  useEffect(() => {
+    const dismissed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
+    if (!dismissed) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const handleCloseTutorial = () => {
+    setShowTutorial(false);
+  };
+
+  const handleNeverShowTutorial = () => {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    setShowTutorial(false);
+  };
+
   const runwayImpact = useMemo(() => estimateRunwayImpact(params, baseMetrics), [params, baseMetrics]);
+  const validationWarnings = useMemo(() => getValidationWarnings(params), [params]);
 
   const canProceed = useMemo(() => {
     switch (currentStep) {
@@ -178,6 +247,8 @@ export function ScenarioWizard({
       growth_uplift_pct: template.deltas.growth_uplift_pct ?? 0,
       burn_reduction_pct: template.deltas.burn_reduction_pct ?? 0,
       gross_margin_delta_pct: template.deltas.gross_margin_delta_pct ?? 0,
+      churn_change_pct: template.deltas.churn_change_pct ?? 0,
+      cac_change_pct: template.deltas.cac_change_pct ?? 0,
       fundraise_month: template.deltas.fundraise_month ?? null,
       fundraise_amount: template.deltas.fundraise_amount ?? 0,
       tags: template.tags,
@@ -207,53 +278,83 @@ export function ScenarioWizard({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between" role="navigation" aria-label="Scenario Builder Steps">
-        {STEPS.map((step, index) => (
-          <div key={step.id} className="flex items-center flex-1">
-            <button
-              onClick={() => setCurrentStep(step.id)}
-              className={cn(
-                'flex items-center gap-3 p-3 rounded-lg transition-colors w-full',
-                currentStep === step.id
-                  ? 'bg-primary/10 text-primary'
-                  : currentStep > step.id
-                  ? 'text-muted-foreground'
-                  : 'text-muted-foreground/50'
-              )}
-              aria-current={currentStep === step.id ? 'step' : undefined}
-              aria-label={`Step ${step.id}: ${step.title}`}
-              data-testid={`wizard-step-${step.id}`}
-            >
-              <div
-                className={cn(
-                  'flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium',
-                  currentStep === step.id
-                    ? 'bg-primary text-primary-foreground'
-                    : currentStep > step.id
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {currentStep > step.id ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  step.id
-                )}
-              </div>
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium">{step.title}</p>
-                <p className="text-xs text-muted-foreground">{step.description}</p>
-              </div>
-            </button>
-            {index < STEPS.length - 1 && (
-              <ArrowRight className="h-4 w-4 text-muted-foreground/30 mx-2 flex-shrink-0 hidden sm:block" />
-            )}
+    <>
+      {showTutorial && (
+        <ScenarioTutorial
+          currentStep={currentStep}
+          onClose={handleCloseTutorial}
+          onNeverShowAgain={handleNeverShowTutorial}
+        />
+      )}
+      
+      <div className="flex gap-6">
+        <div className="flex-1 space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center flex-1" role="navigation" aria-label="Scenario Builder Steps">
+              {STEPS.map((step, index) => (
+                <div key={step.id} className="flex items-center flex-1">
+                  <button
+                    onClick={() => setCurrentStep(step.id)}
+                    className={cn(
+                      'flex items-center gap-3 p-3 rounded-lg transition-colors w-full',
+                      currentStep === step.id
+                        ? 'bg-primary/10 text-primary'
+                        : currentStep > step.id
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground/50'
+                    )}
+                    aria-current={currentStep === step.id ? 'step' : undefined}
+                    aria-label={`Step ${step.id}: ${step.title}`}
+                    data-testid={`wizard-step-${step.id}`}
+                  >
+                    <div
+                      className={cn(
+                        'flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium',
+                        currentStep === step.id
+                          ? 'bg-primary text-primary-foreground'
+                          : currentStep > step.id
+                          ? 'bg-primary/20 text-primary'
+                          : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {currentStep > step.id ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        step.id
+                      )}
+                    </div>
+                    <div className="hidden md:block text-left">
+                      <p className="text-sm font-medium">{step.title}</p>
+                      <p className="text-xs text-muted-foreground">{step.description}</p>
+                    </div>
+                  </button>
+                  {index < STEPS.length - 1 && (
+                    <ArrowRight className="h-4 w-4 text-muted-foreground/30 mx-2 flex-shrink-0 hidden sm:block" />
+                  )}
+                </div>
+              ))}
+            </div>
+            <TutorialTrigger onClick={() => setShowTutorial(true)} />
           </div>
-        ))}
-      </div>
 
-      {runwayImpact && currentStep >= 2 && (
+          {validationWarnings.length > 0 && currentStep >= 2 && (
+            <Card className="border-amber-500/50 bg-amber-500/5">
+              <CardContent className="py-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-1">
+                    {validationWarnings.map((warning, i) => (
+                      <p key={i} className="text-sm text-amber-700 dark:text-amber-400">
+                        {warning.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {runwayImpact && currentStep >= 2 && (
         <Card className={cn(
           'border-l-4',
           runwayImpact.direction === 'positive' && 'border-l-green-500',
@@ -357,6 +458,7 @@ export function ScenarioWizard({
                     min={-20}
                     max={30}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.markers || []}
                     testId="slider-pricing"
                   />
@@ -380,6 +482,7 @@ export function ScenarioWizard({
                     min={-10}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.markers || []}
                     testId="slider-growth"
                   />
@@ -403,6 +506,7 @@ export function ScenarioWizard({
                     min={-20}
                     max={40}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.markers || []}
                     testId="slider-burn"
                   />
@@ -425,13 +529,9 @@ export function ScenarioWizard({
                     onChange={(v) => setParams({ ...params, gross_margin_delta_pct: v })}
                     min={-10}
                     max={20}
-                    tooltip="Adjustment to gross margin percentage. Positive values improve profitability per dollar of revenue."
-                    markers={[
-                      { value: -10, label: '-10%' },
-                      { value: 0, label: '0' },
-                      { value: 10, label: '+10%' },
-                      { value: 20, label: '+20%' },
-                    ]}
+                    tooltip={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.example}
+                    markers={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.markers || []}
                     testId="slider-margin"
                   />
                   <div className="flex items-center gap-1.5 mt-1">
@@ -442,6 +542,55 @@ export function ScenarioWizard({
                       getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
                     )}>
                       {getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).text}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <AnnotatedSlider
+                    label="Churn Rate Change"
+                    value={params.churn_change_pct}
+                    onChange={(v) => setParams({ ...params, churn_change_pct: v })}
+                    min={-5}
+                    max={5}
+                    step={0.5}
+                    tooltip={SCENARIO_SLIDER_TOOLTIPS.churn_change_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.churn_change_pct?.example}
+                    markers={SCENARIO_SLIDER_TOOLTIPS.churn_change_pct?.markers || []}
+                    testId="slider-churn"
+                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className={cn(
+                      'text-xs',
+                      getSliderFeedback('churn_change_pct', params.churn_change_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
+                      getSliderFeedback('churn_change_pct', params.churn_change_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
+                    )}>
+                      {getSliderFeedback('churn_change_pct', params.churn_change_pct).text}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <AnnotatedSlider
+                    label="CAC Change"
+                    value={params.cac_change_pct}
+                    onChange={(v) => setParams({ ...params, cac_change_pct: v })}
+                    min={-30}
+                    max={20}
+                    tooltip={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.description}
+                    example={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.example}
+                    markers={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.markers || []}
+                    testId="slider-cac"
+                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Info className="h-3 w-3 text-muted-foreground" />
+                    <span className={cn(
+                      'text-xs',
+                      getSliderFeedback('cac_change_pct', params.cac_change_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
+                      getSliderFeedback('cac_change_pct', params.cac_change_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
+                    )}>
+                      {getSliderFeedback('cac_change_pct', params.cac_change_pct).text}
                     </span>
                   </div>
                 </div>
@@ -694,8 +843,14 @@ export function ScenarioWizard({
               {isRunning ? 'Running Simulation...' : 'Run Simulation (1,000 scenarios)'}
             </Button>
           )}
-        </CardFooter>
-      </Card>
+          </CardFooter>
+        </Card>
+      </div>
+
+      <div className="hidden lg:block w-72 flex-shrink-0">
+        <ScenarioSummarySidebar params={params} baseMetrics={baseMetrics} />
+      </div>
     </div>
+    </>
   );
 }
