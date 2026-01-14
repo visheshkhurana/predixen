@@ -274,14 +274,14 @@ export default function ScenariosPage() {
     }
   };
   
-  const handleRunSensitivityAnalysis = async () => {
+  const handleRunSensitivityAnalysis = async (targetRunway: number = 18, targetProbability: number = 0.7) => {
     if (!currentCompany) return;
     
     try {
       const result = await sensitivityMutation.mutateAsync({
         companyId: currentCompany.id,
-        targetRunway: 18,
-        targetProbability: 0.7
+        targetRunway,
+        targetProbability
       });
       setSensitivityResults(result);
       toast({ title: 'Sensitivity analysis complete!' });
@@ -683,32 +683,6 @@ export default function ScenariosPage() {
         </TabsContent>
         
         <TabsContent value="sensitivity" className="mt-6 space-y-6">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="text-lg font-semibold">Driver Sensitivity Analysis</h2>
-              <p className="text-sm text-muted-foreground">
-                Discover which drivers have the biggest impact on your runway
-              </p>
-            </div>
-            <Button
-              onClick={handleRunSensitivityAnalysis}
-              disabled={sensitivityMutation.isPending}
-              data-testid="button-run-sensitivity-analysis"
-            >
-              {sensitivityMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Target className="h-4 w-4 mr-2" />
-                  Run Analysis
-                </>
-              )}
-            </Button>
-          </div>
-          
           <SensitivityAnalysisPanel 
             data={sensitivityResults}
             isLoading={sensitivityMutation.isPending}

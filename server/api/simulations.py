@@ -873,15 +873,31 @@ def run_sensitivity_analysis(
         "target_probability": wmbt_report.target_probability,
         "achievable": wmbt_report.achievable,
         "current_probability": wmbt_report.current_probability,
+        "total_gap": wmbt_report.total_gap,
         "key_drivers": [
             {
                 "driver": d.driver,
                 "impact_direction": d.impact_direction,
                 "impact_magnitude": round(d.impact_magnitude * 100, 1),
                 "threshold_value": d.threshold_value,
-                "explanation": d.explanation
+                "explanation": d.explanation,
+                "current_value": d.current_value,
+                "target_threshold": d.target_threshold,
+                "recommended_change": d.recommended_change,
+                "achievable": d.achievable,
+                "gap_contribution": round(d.gap_contribution, 1),
+                "benchmark_value": d.benchmark_value,
+                "benchmark_comparison": d.benchmark_comparison
             }
             for d in wmbt_report.key_drivers
+        ],
+        "gap_breakdown": [
+            {
+                "driver": g.driver,
+                "contribution_pct": g.contribution_pct,
+                "absolute_contribution": g.absolute_contribution
+            }
+            for g in wmbt_report.gap_breakdown
         ],
         "recommendations": wmbt_report.recommendations
     }

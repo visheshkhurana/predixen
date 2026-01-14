@@ -314,6 +314,30 @@ class SensitivityResult:
     impact_magnitude: float
     threshold_value: Optional[float]
     explanation: str
+    current_value: float = 0.0
+    target_threshold: float = 0.0
+    recommended_change: float = 0.0
+    achievable: bool = True
+    gap_contribution: float = 0.0
+    benchmark_value: Optional[float] = None
+    benchmark_comparison: Optional[str] = None
+
+
+INDUSTRY_BENCHMARKS = {
+    "growth_rate": {"median": 8.0, "p25": 4.0, "p75": 15.0, "label": "MoM Growth"},
+    "churn_rate": {"median": 2.5, "p25": 1.5, "p75": 4.0, "label": "Monthly Churn"},
+    "gross_margin": {"median": 70.0, "p25": 60.0, "p75": 80.0, "label": "Gross Margin"},
+    "cac": {"median": 400.0, "p25": 200.0, "p75": 800.0, "label": "CAC"},
+    "dso": {"median": 35.0, "p25": 25.0, "p75": 50.0, "label": "DSO"},
+    "conversion_rate": {"median": 25.0, "p25": 15.0, "p75": 35.0, "label": "Conversion Rate"},
+}
+
+
+@dataclass
+class GapBreakdown:
+    driver: str
+    contribution_pct: float
+    absolute_contribution: float
 
 
 @dataclass
@@ -324,6 +348,8 @@ class WhatMustBeTrueReport:
     current_probability: float
     key_drivers: List[SensitivityResult]
     recommendations: List[str]
+    gap_breakdown: List[GapBreakdown] = field(default_factory=list)
+    total_gap: float = 0.0
 
 
 @dataclass

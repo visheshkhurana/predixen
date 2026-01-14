@@ -16,6 +16,8 @@ from .models import (
     DistributionType,
     DEFAULT_REGIMES,
     DRIVER_CORRELATION_MATRIX,
+    INDUSTRY_BENCHMARKS,
+    GapBreakdown,
     Regime
 )
 
@@ -513,72 +515,144 @@ class EnhancedSimulationEngine:
         target_probability: float = 0.7
     ) -> WhatMustBeTrueReport:
         current_prob = baseline_result.survival.get(f"{target_runway}m", 0) / 100
+        total_gap = max(0, target_probability - current_prob)
         
         sensitivity_results = []
+        driver_impacts = []
         
-        perturbation_pct = 0.1
+        drivers_config = {
+            "growth_rate": {"improve_direction": "increase", "perturbation": 1.2, "attr": "baseline_growth_rate"},
+            "churn_rate": {"improve_direction": "decrease", "perturbation": 0.7, "attr": "churn_rate"},
+            "gross_margin": {"improve_direction": "increase", "perturbation": 1.1, "attr": "gross_margin", "max": 95},
+            "cac": {"improve_direction": "decrease", "perturbation": 0.8, "attr": "cac"},
+            "dso": {"improve_direction": "decrease", "perturbation": 0.8, "attr": "dso"},
+            "conversion_rate": {"improve_direction": "increase", "perturbation": 1.2, "attr": "conversion_rate"},
+        }
         
-        for driver in ["growth_rate", "churn_rate", "gross_margin", "cac"]:
-            original_value = getattr(self.inputs, driver, None)
+        for driver, config in drivers_config.items():
+            attr_name = config.get("attr", driver)
+            original_value = getattr(self.inputs, attr_name, None)
             if original_value is None:
-                if driver == "growth_rate":
-                    original_value = self.inputs.baseline_growth_rate
-                elif driver == "gross_margin":
-                    original_value = self.inputs.gross_margin
-                else:
-                    continue
+                continue
             
-            perturbed_value = original_value
+            if config["improve_direction"] == "increase":
+                perturbed_value = original_value * config["perturbation"]
+                if "max" in config:
+                    perturbed_value = min(config["max"], perturbed_value)
+            else:
+                perturbed_value = original_value * config["perturbation"]
             
-            if driver == "growth_rate":
-                perturbed_value = original_value * 1.2
-                self.inputs.baseline_growth_rate = perturbed_value
-            elif driver == "gross_margin":
-                perturbed_value = min(95, original_value * 1.1)
-                self.inputs.gross_margin = perturbed_value
-            elif driver == "churn_rate":
-                perturbed_value = original_value * 0.7
-                setattr(self.inputs, driver, perturbed_value)
-            elif driver == "cac":
-                perturbed_value = original_value * 0.8
-                setattr(self.inputs, driver, perturbed_value)
-            
+            setattr(self.inputs, attr_name, perturbed_value)
             perturbed_result = self.run_monte_carlo()
             perturbed_prob = perturbed_result.survival.get(f"{target_runway}m", 0) / 100
-            
-            if driver == "growth_rate":
-                self.inputs.baseline_growth_rate = original_value
-            elif driver == "gross_margin":
-                self.inputs.gross_margin = original_value
-            else:
-                setattr(self.inputs, driver, original_value)
+            setattr(self.inputs, attr_name, original_value)
             
             impact = perturbed_prob - current_prob
             
-            direction = "increase" if impact > 0 else "decrease"
-            if driver in ["churn_rate", "cac"]:
-                direction = "decrease" if impact > 0 else "increase"
+            direction = config["improve_direction"]
+            change_amount = abs(perturbed_value - original_value)
             
-            sensitivity_results.append(SensitivityResult(
+            benchmark = INDUSTRY_BENCHMARKS.get(driver, {})
+            benchmark_value = benchmark.get("median") if benchmark else None
+            benchmark_comparison = None
+            if benchmark_value is not None:
+                if driver in ["churn_rate", "cac", "dso"]:
+                    if original_value > benchmark_value:
+                        benchmark_comparison = "above_median"
+                    elif original_value < benchmark.get("p25", benchmark_value):
+                        benchmark_comparison = "top_quartile"
+                    else:
+                        benchmark_comparison = "below_median"
+                else:
+                    if original_value < benchmark_value:
+                        benchmark_comparison = "below_median"
+                    elif original_value > benchmark.get("p75", benchmark_value):
+                        benchmark_comparison = "top_quartile"
+                    else:
+                        benchmark_comparison = "above_median"
+            
+            required_change = 0
+            is_achievable = True
+            if impact > 0 and total_gap > 0:
+                normalized_impact = impact / abs(perturbed_value - original_value) if abs(perturbed_value - original_value) > 0 else 0
+                if normalized_impact > 0:
+                    required_change = total_gap / normalized_impact
+                    if driver == "growth_rate":
+                        is_achievable = required_change < 20
+                    elif driver == "churn_rate":
+                        is_achievable = required_change < original_value
+                    elif driver == "gross_margin":
+                        is_achievable = (original_value + required_change) <= 95
+                    elif driver == "cac":
+                        is_achievable = required_change < original_value * 0.5
+            
+            description = f"{'Increasing' if direction == 'increase' else 'Decreasing'} {driver.replace('_', ' ')} "
+            if impact > 0:
+                description += f"by {abs(change_amount):.1f} improves survival probability by {abs(impact)*100:.1f}%"
+            else:
+                description += f"has minimal impact on survival probability"
+            
+            sr = SensitivityResult(
                 driver=driver,
                 impact_direction=direction,
                 impact_magnitude=abs(impact),
                 threshold_value=perturbed_value,
-                explanation=f"{direction.title()}ing {driver.replace('_', ' ')} improves survival by {abs(impact)*100:.1f}%"
-            ))
+                explanation=description,
+                current_value=original_value,
+                target_threshold=perturbed_value if impact > 0 else original_value,
+                recommended_change=change_amount if impact > 0 else 0,
+                achievable=is_achievable,
+                gap_contribution=0,
+                benchmark_value=benchmark_value,
+                benchmark_comparison=benchmark_comparison
+            )
+            sensitivity_results.append(sr)
+            driver_impacts.append((driver, abs(impact)))
         
         sensitivity_results.sort(key=lambda x: x.impact_magnitude, reverse=True)
         
+        total_impact = sum(d[1] for d in driver_impacts)
+        gap_breakdown = []
+        if total_impact > 0 and total_gap > 0:
+            for sr in sensitivity_results:
+                contribution = (sr.impact_magnitude / total_impact) * 100
+                sr.gap_contribution = contribution
+                absolute_contrib = (contribution / 100) * total_gap * 100
+                gap_breakdown.append(GapBreakdown(
+                    driver=sr.driver,
+                    contribution_pct=round(contribution, 1),
+                    absolute_contribution=round(absolute_contrib, 2)
+                ))
+        
         recommendations = []
         for sr in sensitivity_results[:3]:
+            if sr.impact_magnitude < 0.001:
+                continue
+            driver_name = sr.driver.replace('_', ' ').title()
             if sr.driver == "growth_rate":
-                recommendations.append(f"Increase monthly growth rate above {sr.threshold_value:.1f}% to improve runway")
+                rec = f"Increase {driver_name} from {sr.current_value:.1f}% to {sr.target_threshold:.1f}%"
+                if not sr.achievable:
+                    rec += " (ambitious target)"
             elif sr.driver == "churn_rate":
-                recommendations.append(f"Reduce monthly churn below {sr.threshold_value:.1f}% to extend runway")
+                rec = f"Reduce {driver_name} from {sr.current_value:.1f}% to {sr.target_threshold:.1f}%"
             elif sr.driver == "gross_margin":
-                recommendations.append(f"Improve gross margin above {sr.threshold_value:.1f}% to boost cash generation")
+                rec = f"Improve {driver_name} from {sr.current_value:.1f}% to {sr.target_threshold:.1f}%"
             elif sr.driver == "cac":
-                recommendations.append(f"Reduce CAC below ${sr.threshold_value:.0f} to improve unit economics")
+                rec = f"Reduce {driver_name} from ${sr.current_value:.0f} to ${sr.target_threshold:.0f}"
+            elif sr.driver == "dso":
+                rec = f"Reduce {driver_name} from {sr.current_value:.0f} to {sr.target_threshold:.0f} days"
+            elif sr.driver == "conversion_rate":
+                rec = f"Increase {driver_name} from {sr.current_value:.1f}% to {sr.target_threshold:.1f}%"
+            else:
+                rec = f"Optimize {driver_name}"
+            
+            if sr.benchmark_value and sr.benchmark_comparison:
+                if sr.benchmark_comparison == "below_median":
+                    rec += f" (currently below industry median of {sr.benchmark_value:.1f})"
+                elif sr.benchmark_comparison == "above_median" and sr.driver in ["churn_rate", "cac", "dso"]:
+                    rec += f" (currently above industry median of {sr.benchmark_value:.1f})"
+            
+            recommendations.append(rec)
         
         return WhatMustBeTrueReport(
             target_runway_months=target_runway,
@@ -586,7 +660,9 @@ class EnhancedSimulationEngine:
             achievable=current_prob >= target_probability,
             current_probability=current_prob,
             key_drivers=sensitivity_results,
-            recommendations=recommendations
+            recommendations=recommendations,
+            gap_breakdown=gap_breakdown,
+            total_gap=round(total_gap * 100, 1)
         )
 
 
