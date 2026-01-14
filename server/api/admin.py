@@ -10,7 +10,7 @@ from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role not in [UserRole.OWNER.value, UserRole.ADMIN.value]:
@@ -69,6 +69,26 @@ class DashboardMetrics(BaseModel):
     mrr: float
     active_simulations: int
     truth_scans_today: int
+
+class MeResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_admin: bool
+
+@router.get("/me")
+def get_current_admin(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> MeResponse:
+    role = current_user.role or "viewer"
+    is_admin = role in [UserRole.OWNER.value, UserRole.ADMIN.value]
+    return MeResponse(
+        id=current_user.id,
+        email=current_user.email,
+        role=role,
+        is_admin=is_admin
+    )
 
 @router.get("/dashboard")
 def get_dashboard_metrics(
@@ -303,13 +323,25 @@ def get_aggregate_metrics(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    from server.models import FinancialRecord
+    from sqlalchemy import text
     
-    total_revenue = db.query(func.sum(FinancialRecord.revenue)).scalar() or 0
-    avg_burn = db.query(func.avg(FinancialRecord.net_burn)).scalar() or 0
-    avg_runway = db.query(func.avg(FinancialRecord.runway_months)).filter(
-        FinancialRecord.runway_months.isnot(None)
-    ).scalar() or 0
+    try:
+        result = db.execute(text("""
+            SELECT 
+                COALESCE(SUM(revenue), 0) as total_revenue,
+                COALESCE(AVG(cogs + opex + payroll + other_costs), 0) as avg_burn,
+                COALESCE(AVG(cash_balance), 0) as avg_cash
+            FROM financial_records
+        """)).fetchone()
+        
+        total_revenue = float(result[0]) if result else 0
+        avg_burn = float(result[1]) if result else 0
+        avg_cash = float(result[2]) if result else 0
+        avg_runway = avg_cash / avg_burn if avg_burn > 0 else 12
+    except Exception:
+        total_revenue = 0
+        avg_burn = 0
+        avg_runway = 12
     
     users_by_role = db.query(User.role, func.count(User.id)).group_by(User.role).all()
     companies_by_stage = db.query(Company.stage, func.count(Company.id)).group_by(Company.stage).all()
@@ -345,11 +377,3 @@ def list_audit_logs(
         for log in logs
     ]
 
-@router.get("/me")
-def get_current_admin(current_user: User = Depends(require_admin)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "role": current_user.role,
-        "is_admin": current_user.role in [UserRole.OWNER.value, UserRole.ADMIN.value]
-    }

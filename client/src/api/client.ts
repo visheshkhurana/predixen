@@ -62,12 +62,12 @@ async function request<T>(
 export const api = {
   auth: {
     register: (email: string, password: string) =>
-      request<{ access_token: string; user_id: number; email: string }>('/auth/register', {
+      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
     login: (email: string, password: string) =>
-      request<{ access_token: string; user_id: number; email: string }>('/auth/login', {
+      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
