@@ -29,6 +29,8 @@ import AdminUsers from "@/pages/admin/users";
 import AdminCompanies from "@/pages/admin/companies";
 import AdminBilling from "@/pages/admin/billing";
 import AdminMetrics from "@/pages/admin/metrics";
+import AdminLoginHistory from "@/pages/admin/login-history";
+import AdminActivity from "@/pages/admin/activity";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -149,6 +151,12 @@ function Router() {
       </Route>
       <Route path="/admin/metrics">
         {() => <AdminRoute component={AdminMetrics} />}
+      </Route>
+      <Route path="/admin/login-history">
+        {() => <AdminRoute component={AdminLoginHistory} />}
+      </Route>
+      <Route path="/admin/activity">
+        {() => <AdminRoute component={AdminActivity} />}
       </Route>
       <Route component={NotFound} />
     </Switch>
