@@ -20,6 +20,7 @@ import {
   Sparkles,
   DollarSign,
   TrendingUp,
+  TrendingDown,
   Briefcase,
   Rocket,
   Target,
@@ -29,6 +30,13 @@ import {
   Percent,
   ArrowRight,
   AlertCircle,
+  Tag,
+  Scissors,
+  Users,
+  UserPlus,
+  Zap,
+  Shield,
+  Flame,
 } from 'lucide-react';
 
 interface ScenarioTemplate {
@@ -72,6 +80,117 @@ const STEPS = [
 ];
 
 const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'risk'];
+
+const SCENARIO_PRESETS = [
+  {
+    id: 'conservative',
+    name: 'Conservative',
+    icon: Shield,
+    description: 'Focus on cost reduction and capital preservation with minimal growth risk.',
+    values: {
+      pricing_change_pct: 0,
+      growth_uplift_pct: 0,
+      burn_reduction_pct: 15,
+      gross_margin_delta_pct: 0,
+      churn_change_pct: 0,
+      cac_change_pct: 0,
+    },
+  },
+  {
+    id: 'balanced',
+    name: 'Balanced',
+    icon: Target,
+    description: 'Moderate price increases with steady growth expectations and efficiency gains.',
+    values: {
+      pricing_change_pct: 5,
+      growth_uplift_pct: 5,
+      burn_reduction_pct: 5,
+      gross_margin_delta_pct: 2,
+      churn_change_pct: -1,
+      cac_change_pct: -5,
+    },
+  },
+  {
+    id: 'aggressive',
+    name: 'Aggressive',
+    icon: Flame,
+    description: 'Maximize growth with higher prices and increased investment in acquisition.',
+    values: {
+      pricing_change_pct: 10,
+      growth_uplift_pct: 15,
+      burn_reduction_pct: -5,
+      gross_margin_delta_pct: 3,
+      churn_change_pct: -2,
+      cac_change_pct: -10,
+    },
+  },
+];
+
+function generateNarrativeFeedback(params: ScenarioParams, runwayImpact: ReturnType<typeof estimateRunwayImpact>): string {
+  const changes: string[] = [];
+  
+  if (params.pricing_change_pct > 0) {
+    changes.push(`increasing prices by ${params.pricing_change_pct}%`);
+  } else if (params.pricing_change_pct < 0) {
+    changes.push(`reducing prices by ${Math.abs(params.pricing_change_pct)}%`);
+  }
+  
+  if (params.growth_uplift_pct > 0) {
+    changes.push(`accelerating growth by ${params.growth_uplift_pct}%`);
+  } else if (params.growth_uplift_pct < 0) {
+    changes.push(`expecting ${Math.abs(params.growth_uplift_pct)}% slower growth`);
+  }
+  
+  if (params.burn_reduction_pct > 0) {
+    changes.push(`cutting costs by ${params.burn_reduction_pct}%`);
+  } else if (params.burn_reduction_pct < 0) {
+    changes.push(`increasing spending by ${Math.abs(params.burn_reduction_pct)}%`);
+  }
+  
+  if (params.churn_change_pct < 0) {
+    changes.push(`improving retention by ${Math.abs(params.churn_change_pct)}%`);
+  }
+  
+  if (params.cac_change_pct < 0) {
+    changes.push(`reducing acquisition costs by ${Math.abs(params.cac_change_pct)}%`);
+  }
+  
+  if (params.fundraise_amount > 0 && params.fundraise_month) {
+    const amount = params.fundraise_amount >= 1000000 
+      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
+      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    changes.push(`raising ${amount} in month ${params.fundraise_month}`);
+  } else if (params.fundraise_amount > 0) {
+    const amount = params.fundraise_amount >= 1000000 
+      ? `$${(params.fundraise_amount / 1000000).toFixed(1)}M` 
+      : `$${(params.fundraise_amount / 1000).toFixed(0)}K`;
+    changes.push(`planning a ${amount} fundraise (month not yet set)`);
+  }
+  
+  if (changes.length === 0) {
+    return "No changes from baseline. Your runway remains unchanged.";
+  }
+  
+  const changeText = changes.length === 1 
+    ? changes[0] 
+    : changes.slice(0, -1).join(', ') + ' and ' + changes[changes.length - 1];
+  
+  if (!runwayImpact) {
+    return `You're ${changeText}.`;
+  }
+  
+  if (runwayImpact.months >= 999) {
+    return `By ${changeText}, you're projected to become profitable.`;
+  }
+  
+  const runwayText = runwayImpact.change > 0 
+    ? `your runway extends by ${runwayImpact.change.toFixed(1)} months to ${runwayImpact.months.toFixed(1)} months`
+    : runwayImpact.change < 0
+    ? `your runway decreases by ${Math.abs(runwayImpact.change).toFixed(1)} months to ${runwayImpact.months.toFixed(1)} months`
+    : `your runway stays at ${runwayImpact.months.toFixed(1)} months`;
+  
+  return `By ${changeText}, ${runwayText}.`;
+}
 
 function estimateRunwayImpact(
   params: ScenarioParams,
@@ -191,6 +310,7 @@ export function ScenarioWizard({
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [params, setParams] = useState<ScenarioParams>({
     name: 'Custom Scenario',
     pricing_change_pct: 0,
@@ -222,6 +342,19 @@ export function ScenarioWizard({
 
   const runwayImpact = useMemo(() => estimateRunwayImpact(params, baseMetrics), [params, baseMetrics]);
   const validationWarnings = useMemo(() => getValidationWarnings(params), [params]);
+  const narrativeFeedback = useMemo(() => generateNarrativeFeedback(params, runwayImpact), [params, runwayImpact]);
+  
+  const handlePresetSelect = (presetId: string) => {
+    const preset = SCENARIO_PRESETS.find(p => p.id === presetId);
+    if (preset) {
+      setActivePreset(presetId);
+      setParams(prev => ({
+        ...prev,
+        ...preset.values,
+        name: `${preset.name} Scenario`,
+      }));
+    }
+  };
 
   const canProceed = useMemo(() => {
     switch (currentStep) {
@@ -449,12 +582,62 @@ export function ScenarioWizard({
                 </p>
               </div>
 
+              {/* Preset Buttons */}
+              <div className="space-y-3">
+                <Label className="text-sm text-muted-foreground" id="preset-group-label">Quick Start Presets</Label>
+                <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="preset-group-label">
+                  {SCENARIO_PRESETS.map((preset) => {
+                    const PresetIcon = preset.icon;
+                    return (
+                      <button
+                        key={preset.id}
+                        onClick={() => handlePresetSelect(preset.id)}
+                        role="radio"
+                        aria-checked={activePreset === preset.id}
+                        aria-label={`${preset.name} preset: ${preset.description}`}
+                        className={cn(
+                          'p-3 rounded-lg border text-left transition-all hover-elevate',
+                          activePreset === preset.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border'
+                        )}
+                        data-testid={`preset-${preset.id}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <PresetIcon className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-sm">{preset.name}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {preset.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Narrative Feedback Banner */}
+              <div className="bg-muted/50 rounded-lg p-4 border border-border">
+                <div className="flex items-start gap-3">
+                  <Lightbulb className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium mb-1">What This Means</p>
+                    <p className="text-sm text-muted-foreground">
+                      {narrativeFeedback}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="space-y-8">
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="Pricing Change"
+                    icon={<Tag className="h-4 w-4 text-green-500" />}
                     value={params.pricing_change_pct}
-                    onChange={(v) => setParams({ ...params, pricing_change_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, pricing_change_pct: v }); }}
                     min={-20}
                     max={30}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.description}
@@ -477,8 +660,9 @@ export function ScenarioWizard({
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="Growth Uplift"
+                    icon={<TrendingUp className="h-4 w-4 text-green-500" />}
                     value={params.growth_uplift_pct}
-                    onChange={(v) => setParams({ ...params, growth_uplift_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, growth_uplift_pct: v }); }}
                     min={-10}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.description}
@@ -501,8 +685,9 @@ export function ScenarioWizard({
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="Burn Reduction"
+                    icon={<Scissors className="h-4 w-4 text-orange-500" />}
                     value={params.burn_reduction_pct}
-                    onChange={(v) => setParams({ ...params, burn_reduction_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, burn_reduction_pct: v }); }}
                     min={-20}
                     max={40}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.description}
@@ -525,8 +710,9 @@ export function ScenarioWizard({
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="Gross Margin Change"
+                    icon={<Percent className="h-4 w-4 text-blue-500" />}
                     value={params.gross_margin_delta_pct}
-                    onChange={(v) => setParams({ ...params, gross_margin_delta_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, gross_margin_delta_pct: v }); }}
                     min={-10}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.description}
@@ -549,8 +735,9 @@ export function ScenarioWizard({
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="Churn Rate Change"
+                    icon={<Users className="h-4 w-4 text-red-500" />}
                     value={params.churn_change_pct}
-                    onChange={(v) => setParams({ ...params, churn_change_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, churn_change_pct: v }); }}
                     min={-5}
                     max={5}
                     step={0.5}
@@ -574,8 +761,9 @@ export function ScenarioWizard({
                 <div className="space-y-2">
                   <AnnotatedSlider
                     label="CAC Change"
+                    icon={<UserPlus className="h-4 w-4 text-purple-500" />}
                     value={params.cac_change_pct}
-                    onChange={(v) => setParams({ ...params, cac_change_pct: v })}
+                    onChange={(v) => { setActivePreset(null); setParams({ ...params, cac_change_pct: v }); }}
                     min={-30}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.description}
@@ -754,42 +942,90 @@ export function ScenarioWizard({
                   </h3>
                   
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Pricing Change</span>
-                      <p className="font-mono font-medium">
-                        {params.pricing_change_pct > 0 ? '+' : ''}{params.pricing_change_pct}%
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-green-500" />
+                      <div>
+                        <span className="text-muted-foreground text-xs">Pricing</span>
+                        <p className="font-mono font-medium">
+                          {params.pricing_change_pct > 0 ? '+' : ''}{params.pricing_change_pct}%
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Growth Uplift</span>
-                      <p className="font-mono font-medium">
-                        {params.growth_uplift_pct > 0 ? '+' : ''}{params.growth_uplift_pct}%
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      <div>
+                        <span className="text-muted-foreground text-xs">Growth</span>
+                        <p className="font-mono font-medium">
+                          {params.growth_uplift_pct > 0 ? '+' : ''}{params.growth_uplift_pct}%
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Burn Reduction</span>
-                      <p className="font-mono font-medium">
-                        {params.burn_reduction_pct > 0 ? '+' : ''}{params.burn_reduction_pct}%
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Scissors className="h-4 w-4 text-orange-500" />
+                      <div>
+                        <span className="text-muted-foreground text-xs">Burn</span>
+                        <p className="font-mono font-medium">
+                          {params.burn_reduction_pct > 0 ? '+' : ''}{params.burn_reduction_pct}%
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Margin Change</span>
-                      <p className="font-mono font-medium">
-                        {params.gross_margin_delta_pct > 0 ? '+' : ''}{params.gross_margin_delta_pct}%
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-4 w-4 text-blue-500" />
+                      <div>
+                        <span className="text-muted-foreground text-xs">Margin</span>
+                        <p className="font-mono font-medium">
+                          {params.gross_margin_delta_pct > 0 ? '+' : ''}{params.gross_margin_delta_pct}%
+                        </p>
+                      </div>
                     </div>
+                    {params.churn_change_pct !== 0 && (
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-red-500" />
+                        <div>
+                          <span className="text-muted-foreground text-xs">Churn</span>
+                          <p className="font-mono font-medium">
+                            {params.churn_change_pct > 0 ? '+' : ''}{params.churn_change_pct}%
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {params.cac_change_pct !== 0 && (
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-purple-500" />
+                        <div>
+                          <span className="text-muted-foreground text-xs">CAC</span>
+                          <p className="font-mono font-medium">
+                            {params.cac_change_pct > 0 ? '+' : ''}{params.cac_change_pct}%
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {params.fundraise_month && params.fundraise_amount > 0 && (
                       <>
-                        <div>
-                          <span className="text-muted-foreground">Fundraise Month</span>
-                          <p className="font-mono font-medium">{params.fundraise_month}</p>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-primary" />
+                          <div>
+                            <span className="text-muted-foreground text-xs">Fundraise Month</span>
+                            <p className="font-mono font-medium">{params.fundraise_month}</p>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-muted-foreground">Fundraise Amount</span>
-                          <p className="font-mono font-medium">{formatCurrency(params.fundraise_amount)}</p>
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-primary" />
+                          <div>
+                            <span className="text-muted-foreground text-xs">Fundraise Amount</span>
+                            <p className="font-mono font-medium">{formatCurrency(params.fundraise_amount)}</p>
+                          </div>
                         </div>
                       </>
                     )}
+                  </div>
+                </div>
+
+                {/* Narrative summary */}
+                <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+                  <div className="flex items-start gap-3">
+                    <Lightbulb className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                    <p className="text-sm">{narrativeFeedback}</p>
                   </div>
                 </div>
 
