@@ -8,7 +8,7 @@ import json
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario
+from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -359,10 +359,17 @@ def get_aggregate_metrics(
 @router.get("/audit-logs")
 def list_audit_logs(
     limit: int = 50,
+    action_type: Optional[str] = None,
+    user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
+    query = db.query(AuditLog)
+    if action_type:
+        query = query.filter(AuditLog.action == action_type)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
+    logs = query.order_by(AuditLog.created_at.desc()).limit(limit).all()
     return [
         {
             "id": log.id,
@@ -376,4 +383,222 @@ def list_audit_logs(
         }
         for log in logs
     ]
+
+@router.get("/login-history")
+def get_login_history(
+    limit: int = 100,
+    success_only: Optional[bool] = None,
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    try:
+        from sqlalchemy import text
+        
+        query_sql = """
+            SELECT id, user_id, email, ip_address, user_agent, device_type, browser, os, 
+                   country, city, success, failure_reason, created_at
+            FROM login_history
+        """
+        conditions = []
+        params = {}
+        
+        if success_only is not None:
+            conditions.append("success = :success")
+            params["success"] = success_only
+        if user_id:
+            conditions.append("user_id = :user_id")
+            params["user_id"] = user_id
+            
+        if conditions:
+            query_sql += " WHERE " + " AND ".join(conditions)
+        
+        query_sql += " ORDER BY created_at DESC LIMIT :limit"
+        params["limit"] = limit
+        
+        result = db.execute(text(query_sql), params).fetchall()
+        
+        return [
+            {
+                "id": row[0],
+                "user_id": row[1],
+                "email": row[2],
+                "ip_address": row[3],
+                "user_agent": row[4],
+                "device_type": row[5],
+                "browser": row[6],
+                "os": row[7],
+                "country": row[8],
+                "city": row[9],
+                "success": row[10],
+                "failure_reason": row[11],
+                "created_at": row[12]
+            }
+            for row in result
+        ]
+    except Exception as e:
+        return []
+
+@router.post("/users/{user_id}/suspend")
+def suspend_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot suspend yourself")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_active = False
+    db.commit()
+    
+    log_action(
+        db, current_user.id, "user_suspended", "user", user_id,
+        {"email": user.email}, request.client.host if request.client else None
+    )
+    
+    return {"message": f"User {user.email} suspended", "user_id": user_id}
+
+@router.post("/users/{user_id}/activate")
+def activate_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_active = True
+    db.commit()
+    
+    log_action(
+        db, current_user.id, "user_activated", "user", user_id,
+        {"email": user.email}, request.client.host if request.client else None
+    )
+    
+    return {"message": f"User {user.email} activated", "user_id": user_id}
+
+@router.get("/notifications")
+def get_notifications(
+    limit: int = 50,
+    unread_only: bool = False,
+    severity: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    try:
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT id, user_id, company_id, type, severity, title, message, read, created_at
+            FROM notifications
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """), {"limit": limit}).fetchall()
+        
+        return [
+            {
+                "id": row[0],
+                "user_id": row[1],
+                "company_id": row[2],
+                "type": row[3],
+                "severity": row[4],
+                "title": row[5],
+                "message": row[6],
+                "read": row[7],
+                "created_at": row[8]
+            }
+            for row in result
+        ]
+    except Exception:
+        return []
+
+@router.get("/stats/activity")
+def get_activity_stats(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    try:
+        from sqlalchemy import text
+        
+        result = db.execute(text("""
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM login_history
+            WHERE created_at >= NOW() - INTERVAL ':days days'
+            AND success = true
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """.replace(":days", str(days)))).fetchall()
+        
+        logins_by_date = {str(row[0]): row[1] for row in result}
+        
+        new_users = db.execute(text("""
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL ':days days'
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """.replace(":days", str(days)))).fetchall()
+        
+        users_by_date = {str(row[0]): row[1] for row in new_users}
+        
+        return {
+            "logins_by_date": logins_by_date,
+            "new_users_by_date": users_by_date
+        }
+    except Exception:
+        return {"logins_by_date": {}, "new_users_by_date": {}}
+
+@router.get("/users/{user_id}/details")
+def get_user_details(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        from sqlalchemy import text
+        
+        last_login = db.execute(text("""
+            SELECT created_at, ip_address, device_type, browser
+            FROM login_history
+            WHERE user_id = :user_id AND success = true
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {"user_id": user_id}).fetchone()
+        
+        login_count = db.execute(text("""
+            SELECT COUNT(*) FROM login_history
+            WHERE user_id = :user_id AND success = true
+        """), {"user_id": user_id}).scalar() or 0
+        
+    except Exception:
+        last_login = None
+        login_count = 0
+    
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role or "viewer",
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "company_count": len(user.companies) if user.companies else 0,
+        "companies": [{"id": c.id, "name": c.name} for c in (user.companies or [])],
+        "last_login": {
+            "timestamp": last_login[0] if last_login else None,
+            "ip_address": last_login[1] if last_login else None,
+            "device_type": last_login[2] if last_login else None,
+            "browser": last_login[3] if last_login else None
+        } if last_login else None,
+        "total_logins": login_count
+    }
 

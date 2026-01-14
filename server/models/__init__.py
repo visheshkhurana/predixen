@@ -24,6 +24,7 @@ from server.models.decision import Decision
 from server.models.chat import ChatSession, ChatMessage
 from server.models.subscription import Subscription, SubscriptionStatus
 from server.models.audit_log import AuditLog
+from server.models.login_history import LoginHistory, Notification
 
 __all__ = [
     "User",
@@ -53,4 +54,6 @@ __all__ = [
     "Subscription",
     "SubscriptionStatus",
     "AuditLog",
+    "LoginHistory",
+    "Notification",
 ]

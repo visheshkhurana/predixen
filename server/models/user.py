@@ -24,3 +24,5 @@ class User(Base):
     companies = relationship("Company", back_populates="user")
     subscriptions = relationship("Subscription", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")
+    login_history = relationship("LoginHistory", back_populates="user")
+    notifications = relationship("Notification", back_populates="user")

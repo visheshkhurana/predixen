@@ -26,3 +26,4 @@ class Company(Base):
     import_sessions = relationship("ImportSession", back_populates="company")
     metric_points = relationship("FinancialMetricPoint", back_populates="company")
     subscriptions = relationship("Subscription", back_populates="company")
+    notifications = relationship("Notification", back_populates="company")
