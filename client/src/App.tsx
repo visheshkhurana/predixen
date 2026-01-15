@@ -31,6 +31,7 @@ import AdminBilling from "@/pages/admin/billing";
 import AdminMetrics from "@/pages/admin/metrics";
 import AdminLoginHistory from "@/pages/admin/login-history";
 import AdminActivity from "@/pages/admin/activity";
+import OwnerConsole from "@/pages/owner-console";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -158,6 +159,7 @@ function Router() {
       <Route path="/admin/activity">
         {() => <AdminRoute component={AdminActivity} />}
       </Route>
+      <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -172,7 +174,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     "--sidebar-width-icon": "3rem",
   };
   
-  if (!token) {
+  // Check if we're on a standalone page (owner console, auth, onboarding)
+  const isStandalonePage = typeof window !== 'undefined' && 
+    (window.location.pathname === '/owner-console' || 
+     window.location.pathname === '/auth' ||
+     window.location.pathname === '/onboarding');
+  
+  if (!token || isStandalonePage) {
     return <>{children}</>;
   }
   
