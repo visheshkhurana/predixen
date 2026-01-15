@@ -30,6 +30,8 @@ class ExpenseBreakdown(BaseModel):
     payroll: Optional[float] = None
     marketing: Optional[float] = None
     operating: Optional[float] = None
+    cogs: Optional[float] = None
+    otherOpex: Optional[float] = None
 
 class NormalizedFinancials(BaseModel):
     cashOnHand: Optional[float] = None
@@ -37,6 +39,7 @@ class NormalizedFinancials(BaseModel):
     totalMonthlyExpenses: Optional[float] = None
     monthlyGrowthRate: Optional[float] = None
     expenseBreakdown: ExpenseBreakdown = ExpenseBreakdown()
+    hasManualExpenseOverride: Optional[bool] = None
     currency: Optional[str] = None
     asOfDate: Optional[str] = None
 
