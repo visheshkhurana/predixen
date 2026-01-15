@@ -176,6 +176,26 @@ export default function ScenariosPage() {
       growthRate: 10,
     };
   }, [currentCompany]);
+
+  // These useMemo hooks must be before any early returns to follow Rules of Hooks
+  const comparisonData = useMemo(() => {
+    if (!scenarios) return [];
+    return scenarios.map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      runway_p50: s.latest_simulation?.runway?.p50,
+      survival_18m: s.latest_simulation?.survival?.['18m'],
+      end_cash: s.latest_simulation?.summary?.end_cash,
+      monthly_burn: s.latest_simulation?.summary?.monthly_burn,
+      tags: s.tags,
+    }));
+  }, [scenarios]);
+  
+  const currentScenarioName = useMemo(() => {
+    if (!selectedScenarioId || !scenarios) return 'New Scenario';
+    const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
+    return selected?.name || 'New Scenario';
+  }, [selectedScenarioId, scenarios]);
   
   if (!currentCompany) {
     return (
@@ -251,25 +271,6 @@ export default function ScenariosPage() {
       setIsRunning(false);
     }
   };
-  
-  const comparisonData = useMemo(() => {
-    if (!scenarios) return [];
-    return scenarios.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      runway_p50: s.latest_simulation?.runway?.p50,
-      survival_18m: s.latest_simulation?.survival?.['18m'],
-      end_cash: s.latest_simulation?.summary?.end_cash,
-      monthly_burn: s.latest_simulation?.summary?.monthly_burn,
-      tags: s.tags,
-    }));
-  }, [scenarios]);
-  
-  const currentScenarioName = useMemo(() => {
-    if (!selectedScenarioId || !scenarios) return 'New Scenario';
-    const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
-    return selected?.name || 'New Scenario';
-  }, [selectedScenarioId, scenarios]);
   
   const handleRunMultiScenario = async () => {
     if (!currentCompany) return;
