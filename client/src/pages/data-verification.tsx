@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -231,8 +232,59 @@ export default function DataVerification() {
 
   if (sessionLoading) {
     return (
-      <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <div className="animate-pulse text-muted-foreground">Loading import session...</div>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-10 rounded" />
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-9 w-36" />
+          </div>
+        </div>
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-5 w-5" />
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-6 w-32 rounded-full" />
+                <Skeleton className="h-9 w-44" />
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+        <div className="grid md:grid-cols-4 gap-4">
+          {Array(4).fill(0).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-28" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Array(5).fill(0).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -258,7 +310,7 @@ export default function DataVerification() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate("/data")} data-testid="button-back">
             <ArrowLeft className="h-5 w-5" />
@@ -268,7 +320,7 @@ export default function DataVerification() {
             <p className="text-muted-foreground">Review and verify extracted metrics before saving</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" onClick={() => {}} data-testid="button-download-csv">
             <Download className="h-4 w-4 mr-2" />
             Download CSV
@@ -286,7 +338,7 @@ export default function DataVerification() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
               <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
               <div>
@@ -294,7 +346,7 @@ export default function DataVerification() {
                 <CardDescription>Source: {session.source_type.toUpperCase()}</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Badge variant={session.detected_sign_convention === "accounting" ? "default" : "secondary"}>
                   {session.detected_sign_convention === "accounting" 
@@ -306,7 +358,7 @@ export default function DataVerification() {
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               </div>
               <div className="flex items-center gap-2">
-                <Label htmlFor="period-select" className="text-sm text-muted-foreground">Period:</Label>
+                <Label htmlFor="period-select" className="text-sm text-muted-foreground whitespace-nowrap">Period:</Label>
                 <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                   <SelectTrigger className="w-[180px]" id="period-select" data-testid="select-period">
                     <SelectValue placeholder="Select period" />

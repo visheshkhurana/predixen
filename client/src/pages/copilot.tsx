@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,21 +6,60 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeedbackButton } from '@/components/FeedbackButton';
-import { Send, Sparkles, TrendingUp, TrendingDown, DollarSign, Play } from 'lucide-react';
+import { 
+  Send, 
+  Sparkles, 
+  TrendingUp, 
+  TrendingDown, 
+  DollarSign, 
+  Play, 
+  Database, 
+  BarChart3, 
+  Target,
+  Bot,
+  User
+} from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
+
+type DataSource = 'truth_scan' | 'simulation' | 'scenario' | 'benchmark';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   metrics?: string[];
+  dataSources?: DataSource[];
   suggestion?: { label: string; action: string };
+  timestamp?: Date;
 }
 
+const DATA_SOURCE_CONFIG: Record<DataSource, { label: string; icon: typeof Database; className: string }> = {
+  truth_scan: { 
+    label: 'Truth Scan', 
+    icon: Database, 
+    className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+  },
+  simulation: { 
+    label: 'Simulation', 
+    icon: BarChart3, 
+    className: 'bg-blue-500/20 text-blue-400 border-blue-500/30' 
+  },
+  scenario: { 
+    label: 'Scenario', 
+    icon: Target, 
+    className: 'bg-purple-500/20 text-purple-400 border-purple-500/30' 
+  },
+  benchmark: { 
+    label: 'Benchmark', 
+    icon: TrendingUp, 
+    className: 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
+  },
+};
+
 const SUGGESTED_PROMPTS = [
-  { label: 'Extend runway by 6 months', icon: TrendingUp },
-  { label: "What's the riskiest assumption?", icon: TrendingDown },
-  { label: 'What if fundraise slips 3 months?', icon: DollarSign },
+  { label: 'How can I extend my runway by 6 months?', icon: TrendingUp },
+  { label: "What's the riskiest assumption in my financials?", icon: TrendingDown },
+  { label: 'What if my fundraise slips by 3 months?', icon: DollarSign },
 ];
 
 export default function CopilotPage() {
@@ -34,28 +73,50 @@ export default function CopilotPage() {
     {
       role: 'assistant',
       content: "I'm your AI financial advisor. I can help you understand your metrics, explore scenarios, and make data-driven decisions. What would you like to know?",
+      timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
   const metrics = truthScan?.metrics || {};
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
   
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const sendMessage = (messageText: string) => {
+    if (!messageText.trim() || isTyping) return;
     
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { 
+      role: 'user', 
+      content: messageText,
+      timestamp: new Date(),
+    };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
     
     setTimeout(() => {
-      const response = generateResponse(input, metrics, confidence);
+      const response = generateResponse(messageText, metrics, confidence);
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
     }, 1500);
+  };
+
+  const handleSend = () => {
+    sendMessage(input);
   };
   
   const generateResponse = (query: string, metrics: any, confidence: number): Message => {
@@ -66,7 +127,9 @@ export default function CopilotPage() {
         role: 'assistant',
         content: `Based on your current metrics, your runway is ${metrics.runway_months?.value?.toFixed(1) || 16.5} months (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
         metrics: ['runway_months', 'net_burn', 'net_revenue_retention'],
+        dataSources: ['truth_scan', 'simulation'],
         suggestion: { label: 'Run burn cut scenario', action: 'burn_cut_15' },
+        timestamp: new Date(),
       };
     }
     
@@ -75,6 +138,8 @@ export default function CopilotPage() {
         role: 'assistant',
         content: `Your riskiest assumption is **revenue concentration**. Your top 5 customers represent ${metrics.concentration_top5?.value || 32}% of revenue.\n\nIf you lose your largest customer, runway drops from ${metrics.runway_months?.value?.toFixed(1) || 16.5} to approximately 11 months.\n\nRecommendation: Prioritize customer diversification and increase logo count before your next fundraise.`,
         metrics: ['concentration_top5', 'customer_count', 'runway_months'],
+        dataSources: ['truth_scan', 'benchmark'],
+        timestamp: new Date(),
       };
     }
     
@@ -83,7 +148,9 @@ export default function CopilotPage() {
         role: 'assistant',
         content: `If your fundraise slips 3 months:\n\n• Current runway: ${metrics.runway_months?.value?.toFixed(1) || 16.5} months\n• Survival probability at 18m: ${simulation?.survival?.['18m'] || 65}%\n• Post-slip survival: ~52%\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
         metrics: ['runway_months', 'survival_18m', 'cash_balance'],
+        dataSources: ['truth_scan', 'simulation', 'scenario'],
         suggestion: { label: 'Run bridge scenario', action: 'bridge_round' },
+        timestamp: new Date(),
       };
     }
     
@@ -91,11 +158,13 @@ export default function CopilotPage() {
       role: 'assistant',
       content: `Based on your current data (confidence: ${confidence}/100):\n\n• Monthly Revenue: $${(metrics.mrr?.value || 45000).toLocaleString()}\n• Gross Margin: ${metrics.gross_margin?.value || 75}%\n• Net Burn: $${(metrics.net_burn?.value || 15000).toLocaleString()}/month\n• Runway: ${metrics.runway_months?.value?.toFixed(1) || 16.5} months\n\nWhat specific aspect would you like to explore? I can run simulations, compare scenarios, or explain any metric.`,
       metrics: ['mrr', 'gross_margin', 'net_burn', 'runway_months'],
+      dataSources: ['truth_scan'],
+      timestamp: new Date(),
     };
   };
   
   const handlePromptClick = (prompt: string) => {
-    setInput(prompt);
+    sendMessage(prompt);
   };
   
   if (!currentCompany) {
@@ -121,15 +190,20 @@ export default function CopilotPage() {
           <p className="text-sm text-muted-foreground">AI-powered financial advisor grounded in your data</p>
         </div>
         
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
+          <div className="space-y-4 pb-4">
             {messages.map((message, i) => (
               <div
                 key={i}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
+                {message.role === 'assistant' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                )}
                 <div
-                  className={`max-w-[80%] rounded-lg p-4 ${
+                  className={`max-w-[80%] rounded-2xl p-4 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-secondary'
@@ -137,15 +211,46 @@ export default function CopilotPage() {
                   data-testid={`message-${message.role}-${i}`}
                 >
                   <p className="whitespace-pre-wrap text-sm">{message.content}</p>
-                  {message.metrics && message.metrics.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {message.metrics.map((metric) => (
-                        <Badge key={metric} variant="outline" className="text-xs">
-                          {metric}
-                        </Badge>
-                      ))}
+                  
+                  {message.dataSources && message.dataSources.length > 0 && (
+                    <div className="mt-3 pt-2 border-t border-border/30">
+                      <p className="text-xs text-muted-foreground mb-2">Data sources used:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {message.dataSources.map((source) => {
+                          const config = DATA_SOURCE_CONFIG[source];
+                          const Icon = config.icon;
+                          return (
+                            <Badge 
+                              key={source} 
+                              variant="outline" 
+                              className={`text-xs ${config.className}`}
+                            >
+                              <Icon className="h-3 w-3 mr-1" />
+                              {config.label}
+                            </Badge>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
+                  
+                  {message.metrics && message.metrics.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1.5">Referenced metrics:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {message.metrics.map((metric) => (
+                          <Badge 
+                            key={metric} 
+                            variant="outline" 
+                            className="text-xs font-mono"
+                          >
+                            {metric.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   {message.suggestion && (
                     <Button
                       size="sm"
@@ -157,25 +262,35 @@ export default function CopilotPage() {
                       {message.suggestion.label}
                     </Button>
                   )}
+                  
                   {message.role === 'assistant' && i > 0 && (
                     <div className="mt-3 pt-2 border-t border-border/50">
                       <FeedbackButton testId={`feedback-${i}`} />
                     </div>
                   )}
                 </div>
+                {message.role === 'user' && (
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <User className="h-4 w-4 text-primary-foreground" />
+                  </div>
+                )}
               </div>
             ))}
             {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-secondary rounded-lg p-4">
+              <div className="flex gap-3 justify-start">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Bot className="h-4 w-4 text-primary" />
+                </div>
+                <div className="bg-secondary rounded-2xl p-4">
                   <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-100" />
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-200" />
+                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
         
@@ -187,10 +302,12 @@ export default function CopilotPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handlePromptClick(prompt.label)}
+                disabled={isTyping}
+                className="whitespace-normal text-left h-auto py-2"
                 data-testid={`button-prompt-${i}`}
               >
-                <prompt.icon className="h-4 w-4 mr-1" />
-                {prompt.label}
+                <prompt.icon className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span>{prompt.label}</span>
               </Button>
             ))}
           </div>
@@ -201,6 +318,7 @@ export default function CopilotPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Ask about your metrics, scenarios, or decisions..."
+              disabled={isTyping}
               data-testid="input-copilot"
             />
             <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
@@ -222,7 +340,10 @@ export default function CopilotPage() {
           <div className="space-y-4">
             <Card className="overflow-visible">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Data Confidence</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Database className="h-4 w-4 text-emerald-400" />
+                  Data Confidence
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono" data-testid="text-context-confidence">
@@ -239,7 +360,10 @@ export default function CopilotPage() {
             
             <Card className="overflow-visible">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Quality of Growth</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-amber-400" />
+                  Quality of Growth
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono" data-testid="text-context-qog">
@@ -250,7 +374,10 @@ export default function CopilotPage() {
             
             <Card className="overflow-visible">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Current Scenario</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Target className="h-4 w-4 text-purple-400" />
+                  Current Scenario
+                </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
                 {latestScenario ? (
@@ -267,7 +394,10 @@ export default function CopilotPage() {
             
             <Card className="overflow-visible">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Latest Simulation</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  Latest Simulation
+                </CardTitle>
               </CardHeader>
               <CardContent className="text-sm">
                 {simulation ? (

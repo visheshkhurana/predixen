@@ -326,9 +326,11 @@ export function ScenarioWizard({
   });
 
   useEffect(() => {
-    const dismissed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
-    if (!dismissed) {
-      setShowTutorial(true);
+    if (typeof window !== 'undefined') {
+      const dismissed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
+      if (!dismissed) {
+        setShowTutorial(true);
+      }
     }
   }, []);
 
@@ -337,7 +339,9 @@ export function ScenarioWizard({
   };
 
   const handleNeverShowTutorial = () => {
-    localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    }
     setShowTutorial(false);
   };
 
@@ -421,6 +425,41 @@ export function ScenarioWizard({
           onClose={handleCloseTutorial}
           onNeverShowAgain={handleNeverShowTutorial}
         />
+      )}
+      
+      {/* Prominent skip tutorial banner */}
+      {showTutorial && (
+        <Card className="mb-4 border-primary/20 bg-primary/5">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-primary" />
+                <span className="text-sm">
+                  <span className="font-medium">Tutorial mode active</span>
+                  <span className="text-muted-foreground ml-1.5">— Follow along or skip if you're familiar</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleCloseTutorial}
+                  data-testid="button-dismiss-tutorial"
+                >
+                  Dismiss
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleNeverShowTutorial}
+                  data-testid="button-skip-tutorial"
+                >
+                  Skip tutorial forever
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
       
       <div className="flex gap-6">

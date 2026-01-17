@@ -30,6 +30,8 @@ import {
   BarChart3,
   History,
   FileText,
+  HelpCircle,
+  ExternalLink,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -201,6 +203,17 @@ export function AppSidebar() {
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
+        <a
+          href="https://docs.predixen.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-md hover-elevate"
+          data-testid="link-help-docs"
+        >
+          <HelpCircle className="h-4 w-4" />
+          <span className="flex-1">Help & Docs</span>
+          <ExternalLink className="h-3 w-3" />
+        </a>
         <Button
           variant="ghost"
           size="sm"

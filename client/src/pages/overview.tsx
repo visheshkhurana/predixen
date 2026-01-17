@@ -7,10 +7,98 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { MetricCard } from '@/components/MetricCard';
 import { DecisionCard } from '@/components/DecisionCard';
-import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send, Info, HelpCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+
+const METRIC_TOOLTIPS = {
+  runway: {
+    title: "Runway (P50)",
+    calculation: "Cash Balance / Monthly Net Burn, simulated across 1000 scenarios",
+    goodRange: "12+ months is healthy, 18+ months is ideal for fundraising",
+    badRange: "Less than 6 months is critical, 6-12 months requires attention",
+    dataSource: "Cash balance and expenses from Data Input",
+  },
+  netBurn: {
+    title: "Net Burn",
+    calculation: "Total Monthly Expenses - Monthly Revenue",
+    goodRange: "Lower burn is better; negative burn means profitable",
+    badRange: "High burn relative to cash reduces runway",
+    dataSource: "Revenue and expense data from Data Input",
+  },
+  revenueGrowth: {
+    title: "Revenue Growth",
+    calculation: "(Current Month Revenue - Previous Month) / Previous Month",
+    goodRange: "10%+ MoM for early-stage, 5-10% for growth stage",
+    badRange: "Negative or flat growth may signal product-market fit issues",
+    dataSource: "Monthly revenue from financial records",
+  },
+  grossMargin: {
+    title: "Gross Margin",
+    calculation: "(Revenue - COGS) / Revenue",
+    goodRange: "70%+ for SaaS, 50%+ for most tech companies",
+    badRange: "Below 50% may indicate pricing or cost issues",
+    dataSource: "Revenue and COGS from Data Input",
+  },
+  burnMultiple: {
+    title: "Burn Multiple",
+    calculation: "Net Burn / Net New ARR",
+    goodRange: "Below 1.5x is excellent, 1.5-2x is good",
+    badRange: "Above 3x indicates inefficient growth",
+    dataSource: "Burn rate and revenue growth from financial data",
+  },
+  concentration: {
+    title: "Top 5 Customer Concentration",
+    calculation: "Revenue from Top 5 Customers / Total Revenue",
+    goodRange: "Below 25% is healthy diversification",
+    badRange: "Above 50% creates significant revenue risk",
+    dataSource: "Customer revenue data from CRM or manual entry",
+  },
+};
+
+const getConfidenceExplanation = (score: number, metrics: any) => {
+  const factors: { label: string; status: 'good' | 'warning' | 'missing' }[] = [];
+  
+  if (metrics.revenue_growth_mom != null) {
+    factors.push({ label: "Revenue data", status: 'good' });
+  } else {
+    factors.push({ label: "Revenue data", status: 'missing' });
+  }
+  
+  if (metrics.net_burn != null) {
+    factors.push({ label: "Expense data", status: 'good' });
+  } else {
+    factors.push({ label: "Expense data", status: 'missing' });
+  }
+  
+  if (metrics.gross_margin != null) {
+    factors.push({ label: "COGS/Margin data", status: 'good' });
+  } else {
+    factors.push({ label: "COGS/Margin data", status: 'warning' });
+  }
+  
+  if (metrics.concentration_top5 != null) {
+    factors.push({ label: "Customer data", status: 'good' });
+  } else {
+    factors.push({ label: "Customer data", status: 'warning' });
+  }
+  
+  return factors;
+};
+
+const getQoGExplanation = (score: number) => {
+  const components = [
+    { name: "Revenue Growth Efficiency", weight: "25%", description: "Growth rate relative to burn" },
+    { name: "Gross Margin Health", weight: "20%", description: "Profitability of core business" },
+    { name: "Burn Efficiency", weight: "20%", description: "Cash efficiency in acquiring growth" },
+    { name: "Customer Concentration", weight: "15%", description: "Revenue diversification" },
+    { name: "Runway Safety", weight: "20%", description: "Time to sustain operations" },
+  ];
+  return components;
+};
 
 const COPILOT_PROMPTS = [
   "How do I extend runway by 6 months?",
@@ -125,6 +213,34 @@ export default function OverviewPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
               Quality of Growth Index
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-qog-info">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80" side="bottom">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">How QoG is Calculated</h4>
+                    <p className="text-sm text-muted-foreground">
+                      A weighted composite score measuring growth quality:
+                    </p>
+                    <div className="space-y-2">
+                      {getQoGExplanation(qualityOfGrowth).map((comp, i) => (
+                        <div key={i} className="flex justify-between text-sm">
+                          <span>{comp.name}</span>
+                          <span className="text-muted-foreground">{comp.weight}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t text-sm">
+                      <p><span className="text-emerald-500">80+:</span> Excellent growth quality</p>
+                      <p><span className="text-amber-500">50-79:</span> Moderate, room for improvement</p>
+                      <p><span className="text-red-500">&lt;50:</span> Needs attention</p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -144,7 +260,43 @@ export default function OverviewPage() {
         
         <Card className="overflow-visible">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Data Confidence Score</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              Data Confidence Score
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-confidence-info">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80" side="bottom">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Data Completeness Factors</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Score based on available data fields:
+                    </p>
+                    <div className="space-y-2">
+                      {getConfidenceExplanation(confidence, metrics).map((factor, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span>{factor.label}</span>
+                          <Badge variant="secondary" className={
+                            factor.status === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
+                            factor.status === 'warning' ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-red-500/20 text-red-400'
+                          }>
+                            {factor.status === 'good' ? 'Complete' : factor.status === 'warning' ? 'Partial' : 'Missing'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t">
+                      <Button variant="ghost" size="sm" className="p-0 h-auto text-primary underline-offset-4 hover:underline" onClick={() => setLocation('/data')} data-testid="link-add-data">
+                        Add more data to improve score
+                      </Button>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {truthLoading ? (
@@ -180,6 +332,7 @@ export default function OverviewPage() {
               subtitle={`P10: ${safeToFixed(metrics.runway_p10)}, P90: ${safeToFixed(metrics.runway_p90)}`}
               variant={typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 6 ? 'danger' : typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 12 ? 'warning' : 'success'}
               testId="metric-runway"
+              tooltip={`${METRIC_TOOLTIPS.runway.calculation}. Good: ${METRIC_TOOLTIPS.runway.goodRange}. Data from: ${METRIC_TOOLTIPS.runway.dataSource}`}
             />
             <MetricCard
               title="Net Burn"
@@ -187,6 +340,7 @@ export default function OverviewPage() {
               trend={metrics.burn_change < 0 ? 'down' : metrics.burn_change > 0 ? 'up' : 'stable'}
               trendValue={`${metrics.burn_change >= 0 ? '+' : ''}${formatCurrency(metrics.burn_change)}`}
               testId="metric-burn"
+              tooltip={`${METRIC_TOOLTIPS.netBurn.calculation}. Good: ${METRIC_TOOLTIPS.netBurn.goodRange}. Data from: ${METRIC_TOOLTIPS.netBurn.dataSource}`}
             />
             <MetricCard
               title="Revenue Growth"
@@ -194,24 +348,28 @@ export default function OverviewPage() {
               subtitle="MoM"
               trend={metrics.revenue_growth_mom > 0 ? 'up' : metrics.revenue_growth_mom < 0 ? 'down' : 'stable'}
               testId="metric-growth"
+              tooltip={`${METRIC_TOOLTIPS.revenueGrowth.calculation}. Good: ${METRIC_TOOLTIPS.revenueGrowth.goodRange}. Data from: ${METRIC_TOOLTIPS.revenueGrowth.dataSource}`}
             />
             <MetricCard
               title="Gross Margin"
               value={formatPercent(metrics.gross_margin)}
               variant={metrics.gross_margin < 50 ? 'warning' : 'default'}
               testId="metric-margin"
+              tooltip={`${METRIC_TOOLTIPS.grossMargin.calculation}. Good: ${METRIC_TOOLTIPS.grossMargin.goodRange}. Data from: ${METRIC_TOOLTIPS.grossMargin.dataSource}`}
             />
             <MetricCard
               title="Burn Multiple"
               value={safeToFixed(metrics.burn_multiple)}
               variant={typeof metrics.burn_multiple === 'number' && metrics.burn_multiple > 3 ? 'warning' : 'default'}
               testId="metric-burn-multiple"
+              tooltip={`${METRIC_TOOLTIPS.burnMultiple.calculation}. Good: ${METRIC_TOOLTIPS.burnMultiple.goodRange}. Data from: ${METRIC_TOOLTIPS.burnMultiple.dataSource}`}
             />
             <MetricCard
               title="Top 5 Concentration"
               value={formatPercent(metrics.concentration_top5)}
               variant={metrics.concentration_top5 > 50 ? 'warning' : 'default'}
               testId="metric-concentration"
+              tooltip={`${METRIC_TOOLTIPS.concentration.calculation}. Good: ${METRIC_TOOLTIPS.concentration.goodRange}. Data from: ${METRIC_TOOLTIPS.concentration.dataSource}`}
             />
           </>
         )}
