@@ -25,7 +25,7 @@ import { DrillDownChart } from '@/components/DrillDownChart';
 import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
 import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -151,6 +151,16 @@ export default function ScenariosPage() {
   
   const enhancedMultiMutation = useEnhancedMultiScenarioSimulation();
   const [enhancedResults, setEnhancedResults] = useState<any>(null);
+  const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
+  
+  // Check if any scenario has been run (has simulation results)
+  const hasRunScenario = useMemo(() => {
+    if (!scenarios || scenarios.length === 0) return false;
+    return scenarios.some((s: any) => s.latest_simulation);
+  }, [scenarios]);
+  
+  // Check if we have simulation results to show
+  const hasSimulationResults = simulation || multiSimResults || enhancedResults || sensitivityResults;
   
   const filteredScenarios = useMemo(() => {
     if (!scenarios) return [];
@@ -340,6 +350,58 @@ export default function ScenariosPage() {
     }
   };
   
+  // Create and run baseline scenario with one click
+  const handleCreateBaselineScenario = async () => {
+    if (!currentCompany) return;
+    
+    const baselineTemplate = SCENARIO_TEMPLATES.find(t => t.tags.includes('baseline'));
+    if (!baselineTemplate) return;
+    
+    setIsCreatingBaseline(true);
+    
+    try {
+      const scenarioData = {
+        name: baselineTemplate.name,
+        pricing_change_pct: baselineTemplate.deltas.pricing_change_pct ?? 0,
+        growth_uplift_pct: baselineTemplate.deltas.growth_uplift_pct ?? 0,
+        burn_reduction_pct: baselineTemplate.deltas.burn_reduction_pct ?? 0,
+        gross_margin_delta_pct: 0,
+        churn_change_pct: 0,
+        cac_change_pct: 0,
+        fundraise_month: null,
+        fundraise_amount: 0,
+        tags: baselineTemplate.tags,
+      };
+      
+      const scenario = await createScenarioMutation.mutateAsync({
+        companyId: currentCompany.id,
+        data: scenarioData,
+      });
+      setSelectedScenarioId(scenario.id);
+      
+      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: 1000 });
+      setCurrentStep('simulation');
+      setActiveTab('results');
+      toast({ 
+        title: 'Baseline scenario created!',
+        description: 'Your baseline simulation is ready to view.'
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsCreatingBaseline(false);
+    }
+  };
+  
+  // Handle clicking on disabled tabs
+  const handleDisabledTabClick = (tabName: string) => {
+    toast({
+      title: `${tabName} tab is locked`,
+      description: 'Create and run at least one scenario first to unlock this tab.',
+      variant: 'default',
+    });
+  };
+  
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -394,19 +456,97 @@ export default function ScenariosPage() {
         <ScenarioComparisonTable scenarios={comparisonData} />
       )}
       
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {/* Show baseline creation prompt when no scenarios exist */}
+      {!scenariosLoading && (!scenarios || scenarios.length === 0) && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Get started instantly</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Create a baseline scenario to see simulation results right away
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={handleCreateBaselineScenario} 
+                disabled={isCreatingBaseline}
+                data-testid="button-create-baseline"
+              >
+                {isCreatingBaseline ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Create Baseline Scenario
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      <Tabs value={activeTab} onValueChange={(value) => {
+        // Prevent switching to disabled tabs
+        const isTabDisabled = ['results', 'compare', 'enhanced', 'sensitivity'].includes(value) && !hasRunScenario && !hasSimulationResults;
+        if (isTabDisabled) {
+          const tabNames: Record<string, string> = {
+            results: 'Simulation Results',
+            compare: 'Compare All',
+            enhanced: 'Decision Ranking',
+            sensitivity: 'Sensitivity'
+          };
+          handleDisabledTabClick(tabNames[value] || value);
+          return;
+        }
+        setActiveTab(value);
+      }}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="builder" data-testid="tab-builder">Scenario Builder</TabsTrigger>
-          <TabsTrigger value="results" data-testid="tab-results">Simulation Results</TabsTrigger>
-          <TabsTrigger value="compare" data-testid="tab-compare">
+          <TabsTrigger 
+            value="results" 
+            data-testid="tab-results"
+            disabled={!hasRunScenario && !hasSimulationResults}
+            className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}
+          >
+            {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
+            Simulation Results
+          </TabsTrigger>
+          <TabsTrigger 
+            value="compare" 
+            data-testid="tab-compare"
+            disabled={!hasRunScenario && !hasSimulationResults}
+            className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}
+          >
+            {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
             <GitCompare className="h-4 w-4 mr-2" />
             Compare All
           </TabsTrigger>
-          <TabsTrigger value="enhanced" data-testid="tab-enhanced">
+          <TabsTrigger 
+            value="enhanced" 
+            data-testid="tab-enhanced"
+            disabled={!hasRunScenario && !hasSimulationResults}
+            className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}
+          >
+            {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
             <Trophy className="h-4 w-4 mr-2" />
             Decision Ranking
           </TabsTrigger>
-          <TabsTrigger value="sensitivity" data-testid="tab-sensitivity">
+          <TabsTrigger 
+            value="sensitivity" 
+            data-testid="tab-sensitivity"
+            disabled={!hasRunScenario && !hasSimulationResults}
+            className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}
+          >
+            {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
             <Target className="h-4 w-4 mr-2" />
             Sensitivity
           </TabsTrigger>

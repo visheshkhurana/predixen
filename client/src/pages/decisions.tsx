@@ -1,14 +1,99 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DecisionCard } from '@/components/DecisionCard';
+import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
 import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
 import { BandsChart } from '@/components/BandsChart';
 import { RefreshCw, ArrowRight } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useDecisions, useSimulation, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
+
+interface StoredDecisionStatus {
+  [decisionId: string]: DecisionStatus;
+}
+
+interface PreviousRecommendation {
+  id: string;
+  title: string;
+  rank: number;
+  expectedImpact: {
+    delta_survival_18m: number;
+    delta_runway_p50: number;
+  };
+}
+
+const STORAGE_KEY_PREFIX = 'decision_statuses_';
+const PREV_RECS_KEY_PREFIX = 'prev_recommendations_';
+
+function getStorageKey(companyId: number): string {
+  return `${STORAGE_KEY_PREFIX}${companyId}`;
+}
+
+function getPrevRecsKey(companyId: number): string {
+  return `${PREV_RECS_KEY_PREFIX}${companyId}`;
+}
+
+function loadDecisionStatuses(companyId: number): StoredDecisionStatus {
+  try {
+    const stored = localStorage.getItem(getStorageKey(companyId));
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDecisionStatuses(companyId: number, statuses: StoredDecisionStatus): void {
+  try {
+    localStorage.setItem(getStorageKey(companyId), JSON.stringify(statuses));
+  } catch {
+    console.warn('Failed to save decision statuses to localStorage');
+  }
+}
+
+function loadPreviousRecommendations(companyId: number): PreviousRecommendation[] {
+  try {
+    const stored = localStorage.getItem(getPrevRecsKey(companyId));
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePreviousRecommendations(companyId: number, recs: PreviousRecommendation[]): void {
+  try {
+    localStorage.setItem(getPrevRecsKey(companyId), JSON.stringify(recs));
+  } catch {
+    console.warn('Failed to save previous recommendations to localStorage');
+  }
+}
+
+function getTimeHorizon(rank: number): string {
+  switch (rank) {
+    case 1: return '1-2 weeks';
+    case 2: return '2-4 weeks';
+    case 3: return '4-8 weeks';
+    default: return '2-4 weeks';
+  }
+}
+
+function getDependencies(title: string): string[] {
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.includes('hire') || lowerTitle.includes('team')) {
+    return ['Budget approval', 'Job description finalization', 'Interview process setup'];
+  }
+  if (lowerTitle.includes('revenue') || lowerTitle.includes('sales')) {
+    return ['Sales team capacity', 'Marketing materials', 'CRM setup'];
+  }
+  if (lowerTitle.includes('cost') || lowerTitle.includes('expense') || lowerTitle.includes('reduce')) {
+    return ['Vendor contract review', 'Team communication plan'];
+  }
+  if (lowerTitle.includes('fund') || lowerTitle.includes('raise')) {
+    return ['Pitch deck update', 'Financial model preparation', 'Investor list'];
+  }
+  return [];
+}
 
 export default function DecisionsPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
@@ -23,10 +108,83 @@ export default function DecisionsPage() {
   const generateDecisionsMutation = useGenerateDecisions();
   
   const [isGenerating, setIsGenerating] = useState(false);
+  const [decisionStatuses, setDecisionStatuses] = useState<StoredDecisionStatus>({});
+  const [previousRecs, setPreviousRecs] = useState<PreviousRecommendation[]>([]);
+  const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const hasInitialized = useRef(false);
+
+  useEffect(() => {
+    if (currentCompany && !hasInitialized.current) {
+      const loadedStatuses = loadDecisionStatuses(currentCompany.id);
+      const loadedPrevRecs = loadPreviousRecommendations(currentCompany.id);
+      setDecisionStatuses(loadedStatuses);
+      setPreviousRecs(loadedPrevRecs);
+      hasInitialized.current = true;
+    }
+  }, [currentCompany]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) return;
+
+    const recommendations = decisions?.recommendations || [];
+    if (recommendations.length === 0 || previousRecs.length === 0) {
+      setChangedIds(new Set());
+      setNewIds(new Set());
+      return;
+    }
+
+    const prevMap = new Map(previousRecs.map(r => [r.id, r]));
+    const prevTitles = new Set(previousRecs.map(r => r.title));
+    
+    const newSet = new Set<string>();
+    const changedSet = new Set<string>();
+
+    for (const rec of recommendations) {
+      const prevRec = prevMap.get(rec.id);
+      
+      if (!prevRec && !prevTitles.has(rec.title)) {
+        newSet.add(rec.id);
+      } else if (prevRec) {
+        const prevImpact = prevRec.expectedImpact;
+        const currImpact = rec.expected_impact;
+        if (
+          prevRec.rank !== rec.rank ||
+          Math.abs(prevImpact.delta_survival_18m - currImpact.delta_survival_18m) > 0.1 ||
+          Math.abs(prevImpact.delta_runway_p50 - currImpact.delta_runway_p50) > 0.1
+        ) {
+          changedSet.add(rec.id);
+        }
+      }
+    }
+
+    setNewIds(newSet);
+    setChangedIds(changedSet);
+  }, [decisions, previousRecs]);
   
+  const handleStatusChange = (decisionId: string, status: DecisionStatus) => {
+    if (!currentCompany) return;
+    
+    const updated = { ...decisionStatuses, [decisionId]: status };
+    setDecisionStatuses(updated);
+    saveDecisionStatuses(currentCompany.id, updated);
+  };
+
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
     setIsGenerating(true);
+    
+    const currentRecs = decisions?.recommendations || [];
+    if (currentRecs.length > 0) {
+      const prevRecsData: PreviousRecommendation[] = currentRecs.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        rank: r.rank,
+        expectedImpact: r.expected_impact,
+      }));
+      setPreviousRecs(prevRecsData);
+      savePreviousRecommendations(currentCompany.id, prevRecsData);
+    }
     
     try {
       let scenarioId = latestScenarioId;
@@ -122,12 +280,22 @@ export default function DecisionsPage() {
             {recommendations.map((rec: any) => (
               <DecisionCard
                 key={rec.id}
+                id={rec.id}
                 rank={rec.rank}
                 title={rec.title}
                 rationale={rec.rationale}
                 expectedImpact={rec.expected_impact}
                 risks={rec.risks}
                 keyAssumption={rec.key_assumption}
+                timeHorizon={getTimeHorizon(rec.rank)}
+                dependencies={getDependencies(rec.title)}
+                detailedRiskFactors={rec.detailed_risks || rec.risks}
+                runwayImpactDetails={rec.runway_impact_details}
+                survivalImpactDetails={rec.survival_impact_details}
+                status={decisionStatuses[rec.id] || 'pending'}
+                onStatusChange={(status) => handleStatusChange(rec.id, status)}
+                isNew={newIds.has(rec.id)}
+                isChanged={changedIds.has(rec.id)}
                 testId={`decision-${rec.rank}`}
               />
             ))}

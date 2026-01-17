@@ -7,13 +7,76 @@ import { MetricCard } from '@/components/MetricCard';
 import { BenchmarkBar } from '@/components/BenchmarkBar';
 import { MetricDetailModal } from '@/components/MetricDetailModal';
 import { ExportButton } from '@/components/ExportButton';
-import { AlertTriangle, TrendingUp, RefreshCw, Info } from 'lucide-react';
+import { InfoTooltip } from '@/components/InfoTooltip';
+import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+
+const STATUS_EXPLANATIONS = {
+  critical: {
+    label: 'Critical',
+    description: 'This metric requires immediate attention. Values in this range indicate a significant risk to business operations or survival.',
+    color: 'text-red-500',
+  },
+  warning: {
+    label: 'Caution',
+    description: 'This metric is below optimal levels. Consider taking action to improve this area before it becomes critical.',
+    color: 'text-amber-500',
+  },
+  healthy: {
+    label: 'Healthy',
+    description: 'This metric is within a healthy range. Continue monitoring to maintain performance.',
+    color: 'text-emerald-500',
+  },
+};
+
+const QUALITY_OF_GROWTH_EXPLANATION = {
+  title: 'Quality of Growth Index',
+  description: 'A composite score (0-100) that evaluates how sustainably your company is growing. It weighs factors like revenue growth efficiency, unit economics, capital efficiency, and risk exposure.',
+  factors: [
+    'Revenue growth rate and consistency',
+    'Burn multiple and capital efficiency',
+    'Gross margin health',
+    'Customer concentration risk',
+    'Net revenue retention',
+  ],
+  improvements: [
+    { score: '0-40', actions: ['Focus on reducing burn rate immediately', 'Prioritize customer retention over acquisition', 'Review pricing strategy for margin improvement'] },
+    { score: '41-60', actions: ['Optimize customer acquisition cost', 'Improve gross margins through pricing or cost reduction', 'Diversify customer base to reduce concentration'] },
+    { score: '61-80', actions: ['Scale proven acquisition channels', 'Invest in product features that drive expansion revenue', 'Build operational efficiency'] },
+    { score: '81-100', actions: ['Maintain current growth trajectory', 'Consider strategic investments for market expansion', 'Prepare for fundraising at favorable terms'] },
+  ],
+};
+
+const DATA_CONFIDENCE_EXPLANATION = {
+  title: 'Data Confidence Score',
+  description: 'Measures how complete and reliable your uploaded financial data is. Higher scores indicate more accurate projections and benchmark comparisons.',
+  factors: [
+    'Number of months of historical data',
+    'Consistency of data entries',
+    'Presence of key financial metrics',
+    'Data recency (how up-to-date)',
+    'Completeness of expense categorization',
+  ],
+  improvements: [
+    { score: '0-40', actions: ['Upload at least 6 months of financial data', 'Ensure all expense categories are properly labeled', 'Include both revenue and expense data'] },
+    { score: '41-60', actions: ['Add 12+ months of historical data', 'Verify data accuracy by cross-referencing with bank statements', 'Fill in any missing monthly entries'] },
+    { score: '61-80', actions: ['Upload customer-level revenue data for better retention analysis', 'Add cohort data for more accurate projections', 'Connect accounting integration for real-time updates'] },
+    { score: '81-100', actions: ['Maintain regular data updates', 'Add forward-looking forecast inputs', 'Consider connecting additional data sources'] },
+  ],
+};
+
+function getScoreActions(score: number, explanationData: typeof QUALITY_OF_GROWTH_EXPLANATION) {
+  if (score <= 40) return explanationData.improvements[0];
+  if (score <= 60) return explanationData.improvements[1];
+  if (score <= 80) return explanationData.improvements[2];
+  return explanationData.improvements[3];
+}
 
 export default function TruthScanPage() {
   const { currentCompany } = useFounderStore();
@@ -25,6 +88,9 @@ export default function TruthScanPage() {
     value?: number | string;
     benchmark?: { value: number; p25: number; p50: number; p75: number };
   }>({ definition: null });
+  
+  const [qualityExpanded, setQualityExpanded] = useState(false);
+  const [confidenceExpanded, setConfidenceExpanded] = useState(false);
   
   if (!currentCompany) {
     return (
@@ -70,6 +136,8 @@ export default function TruthScanPage() {
               data={truthScan}
               filename={`truth-scan-${currentCompany.name.toLowerCase().replace(/\s+/g, '-')}`}
               formatForCSV={formatTruthScanForExport}
+              pdfTitle={`Truth Scan Report - ${currentCompany.name}`}
+              showPDF={true}
               testId="export-truth-scan"
             />
           )}
@@ -105,59 +173,215 @@ export default function TruthScanPage() {
         </Card>
       )}
       
+      <Card className="overflow-visible bg-secondary/30">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-6 flex-wrap">
+            <span className="text-sm font-medium text-muted-foreground">Status Legend:</span>
+            <div className="flex items-center gap-4 flex-wrap">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 cursor-help" data-testid="legend-critical">
+                    <Badge variant="destructive" className="text-xs">Critical</Badge>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium text-red-500 mb-1">{STATUS_EXPLANATIONS.critical.label}</p>
+                  <p className="text-sm">{STATUS_EXPLANATIONS.critical.description}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 cursor-help" data-testid="legend-warning">
+                    <Badge variant="secondary" className="bg-amber-500/20 text-amber-400 text-xs">Caution</Badge>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium text-amber-500 mb-1">{STATUS_EXPLANATIONS.warning.label}</p>
+                  <p className="text-sm">{STATUS_EXPLANATIONS.warning.description}</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 cursor-help" data-testid="legend-healthy">
+                    <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 text-xs">Healthy</Badge>
+                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium text-emerald-500 mb-1">{STATUS_EXPLANATIONS.healthy.label}</p>
+                  <p className="text-sm">{STATUS_EXPLANATIONS.healthy.description}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="overflow-visible">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              Quality of Growth Index
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-20 w-32" />
-            ) : (
-              <>
-                <div className="text-5xl font-bold font-mono" data-testid="text-quality-index">
-                  {qualityOfGrowth}
-                  <span className="text-xl text-muted-foreground">/100</span>
+        <Collapsible open={qualityExpanded} onOpenChange={setQualityExpanded}>
+          <Card className="overflow-visible">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Quality of Growth Index
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="p-0.5" data-testid="tooltip-quality-index">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="text-sm">{QUALITY_OF_GROWTH_EXPLANATION.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Composite score based on growth trajectory, unit economics, and risk factors
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-expand-quality">
+                    {qualityExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </CollapsibleTrigger>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-20 w-32" />
+              ) : (
+                <>
+                  <div className="text-5xl font-bold font-mono" data-testid="text-quality-index">
+                    {qualityOfGrowth}
+                    <span className="text-xl text-muted-foreground">/100</span>
+                  </div>
+                  <div className="w-full h-2 bg-secondary rounded-full mt-3 overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all ${
+                        qualityOfGrowth >= 80 ? 'bg-emerald-500' : 
+                        qualityOfGrowth >= 60 ? 'bg-blue-500' : 
+                        qualityOfGrowth >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${qualityOfGrowth}%` }}
+                    />
+                  </div>
+                  <CollapsibleContent className="mt-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium mb-2">How this score is calculated:</p>
+                      <ul className="space-y-1">
+                        {QUALITY_OF_GROWTH_EXPLANATION.factors.map((factor, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <CheckCircle className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                            {factor}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-secondary/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm font-medium">Actions to improve (Score: {getScoreActions(qualityOfGrowth, QUALITY_OF_GROWTH_EXPLANATION).score})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {getScoreActions(qualityOfGrowth, QUALITY_OF_GROWTH_EXPLANATION).actions.map((action, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <span className="text-primary font-mono">{i + 1}.</span>
+                            {action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CollapsibleContent>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Collapsible>
         
-        <Card className="overflow-visible">
-          <CardHeader>
-            <CardTitle>Data Confidence Score</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-20 w-32" />
-            ) : (
-              <>
-                <div className="text-5xl font-bold font-mono" data-testid="text-confidence">
-                  {confidence}
-                  <span className="text-xl text-muted-foreground">/100</span>
+        <Collapsible open={confidenceExpanded} onOpenChange={setConfidenceExpanded}>
+          <Card className="overflow-visible">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  Data Confidence Score
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="p-0.5" data-testid="tooltip-confidence-score">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p className="text-sm">{DATA_CONFIDENCE_EXPLANATION.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  {confidence < 60 && (
-                    <Badge variant="destructive">Upload more data to improve</Badge>
-                  )}
-                  {confidence >= 60 && confidence < 80 && (
-                    <Badge className="bg-amber-500/20 text-amber-400">Good - could be improved</Badge>
-                  )}
-                  {confidence >= 80 && (
-                    <Badge className="bg-emerald-500/20 text-emerald-400">Excellent data quality</Badge>
-                  )}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence">
+                    {confidenceExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </CollapsibleTrigger>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-20 w-32" />
+              ) : (
+                <>
+                  <div className="text-5xl font-bold font-mono" data-testid="text-confidence">
+                    {confidence}
+                    <span className="text-xl text-muted-foreground">/100</span>
+                  </div>
+                  <div className="w-full h-2 bg-secondary rounded-full mt-3 overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all ${
+                        confidence >= 80 ? 'bg-emerald-500' : 
+                        confidence >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${confidence}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    {confidence < 60 && (
+                      <Badge variant="destructive">Upload more data to improve</Badge>
+                    )}
+                    {confidence >= 60 && confidence < 80 && (
+                      <Badge className="bg-amber-500/20 text-amber-400">Good - could be improved</Badge>
+                    )}
+                    {confidence >= 80 && (
+                      <Badge className="bg-emerald-500/20 text-emerald-400">Excellent data quality</Badge>
+                    )}
+                  </div>
+                  <CollapsibleContent className="mt-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium mb-2">Factors affecting this score:</p>
+                      <ul className="space-y-1">
+                        {DATA_CONFIDENCE_EXPLANATION.factors.map((factor, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <CheckCircle className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                            {factor}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-secondary/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="h-4 w-4 text-amber-500" />
+                        <p className="text-sm font-medium">Actions to improve (Score: {getScoreActions(confidence, DATA_CONFIDENCE_EXPLANATION).score})</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {getScoreActions(confidence, DATA_CONFIDENCE_EXPLANATION).actions.map((action, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <span className="text-primary font-mono">{i + 1}.</span>
+                            {action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </CollapsibleContent>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Collapsible>
       </div>
       
       <div className="space-y-4">
@@ -264,7 +488,21 @@ export default function TruthScanPage() {
       
       {benchmarks.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Benchmark Comparisons</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Benchmark Comparisons</h2>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="p-0.5" data-testid="tooltip-benchmarks">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-sm">
+                  Compare your metrics against industry benchmarks. P25/P50/P75 represent the 25th, 50th (median), and 75th percentiles of comparable companies.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {benchmarks.map((bench: any) => (
               <Card key={bench.metric} className="overflow-visible">

@@ -5,14 +5,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Download, FileSpreadsheet, FileJson } from 'lucide-react';
-import { downloadCSV, downloadJSON } from '@/lib/exportUtils';
+import { Download, FileSpreadsheet, FileJson, FileText } from 'lucide-react';
+import { downloadCSV, downloadJSON, downloadPDF } from '@/lib/exportUtils';
 import { useToast } from '@/hooks/use-toast';
 
 interface ExportButtonProps {
   data: any;
   filename: string;
   formatForCSV?: (data: any) => Record<string, any>[];
+  pdfTitle?: string;
+  showPDF?: boolean;
   testId?: string;
 }
 
@@ -20,6 +22,8 @@ export function ExportButton({
   data,
   filename,
   formatForCSV,
+  pdfTitle,
+  showPDF = false,
   testId = 'export-button',
 }: ExportButtonProps) {
   const { toast } = useToast();
@@ -65,6 +69,22 @@ export function ExportButton({
     }
   };
 
+  const handleExportPDF = () => {
+    try {
+      downloadPDF(data, filename, pdfTitle || 'Truth Scan Report');
+      toast({
+        title: 'PDF opened',
+        description: 'Use your browser print dialog to save as PDF.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Export failed',
+        description: 'There was an error generating the PDF.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -74,6 +94,12 @@ export function ExportButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {showPDF && (
+          <DropdownMenuItem onClick={handleExportPDF} data-testid={`${testId}-pdf`}>
+            <FileText className="h-4 w-4 mr-2" />
+            Export as PDF
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onClick={handleExportCSV} data-testid={`${testId}-csv`}>
           <FileSpreadsheet className="h-4 w-4 mr-2" />
           Export as CSV

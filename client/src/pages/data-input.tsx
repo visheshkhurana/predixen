@@ -59,13 +59,22 @@ import {
   Eye,
   AlertTriangle,
   X,
+  Download,
+  HelpCircle,
+  PieChart,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const dataInputSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   description: z.string().optional(),
-  foundingDate: z.string().optional(),
+  foundingDate: z.string().optional().refine((val) => {
+    if (!val) return true;
+    const date = new Date(val);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return date <= today;
+  }, { message: "Founding date cannot be in the future" }),
   stage: z.string().min(1, "Stage is required"),
   industry: z.string().min(1, "Industry is required"),
   cashOnHand: z.coerce.number().min(0, "Cash must be positive"),
@@ -78,7 +87,7 @@ const dataInputSchema = z.object({
   otherOpexExpenses: z.coerce.number().min(0).optional(),
   growthRate: z.coerce.number().min(-100).max(1000),
   burnRate: z.coerce.number().optional(),
-  employees: z.coerce.number().min(0).optional(),
+  employees: z.coerce.number().min(1, "Employee count must be at least 1").optional(),
   targetRunway: z.coerce.number().min(1).max(60).default(18),
   growthScenario: z.enum(["optimistic", "conservative", "worst-case"]).default("conservative"),
   fundingTarget: z.coerce.number().min(0).optional(),
@@ -762,6 +771,39 @@ export default function DataInput() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   {type === 'pdf' ? 'PDF files up to 10MB' : 'Excel files (.xlsx, .xls) up to 20MB'}
                 </p>
+                <div className="mt-4 pt-3 border-t border-dashed">
+                  <p className="text-xs text-muted-foreground mb-2">Need a sample file?</p>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs gap-1"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toast({
+                            title: type === 'pdf' ? "Sample PDF Format" : "Sample Excel Format",
+                            description: type === 'pdf' 
+                              ? "PDF should contain: Company summary, Cash position, Monthly P&L, Revenue breakdown, and Expense categories. Termina-style reports work best."
+                              : "Excel should have columns: Date, Category (Revenue/Expense), Amount, Description. Include sheets for P&L and Balance Sheet.",
+                          });
+                        }}
+                        data-testid={`button-sample-${type}`}
+                      >
+                        <Download className="h-3 w-3" />
+                        View {type === 'pdf' ? 'PDF' : 'Excel'} Format Guide
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>{type === 'pdf' 
+                        ? "Click to see the expected PDF format for financial reports"
+                        : "Click to see the expected Excel spreadsheet structure"
+                      }</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </>
             )}
           </div>
@@ -1332,14 +1374,30 @@ export default function DataInput() {
                         </div>
                       </div>
 
-                      <div className="bg-muted/50 rounded-md p-4">
-                        <h4 className="text-sm font-medium mb-2">Calculated Metrics</h4>
+                      <div className="bg-muted/50 rounded-md p-4 space-y-4">
+                        <h4 className="text-sm font-medium flex items-center gap-2">
+                          <PieChart className="h-4 w-4 text-primary" />
+                          Real-Time Financial Summary
+                        </h4>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <p className="text-xs text-muted-foreground">Net Burn Rate</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-xs text-muted-foreground">Net Burn Rate</p>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="inline-flex">
+                                    <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p><strong>Net Burn Rate</strong> = Monthly Expenses - Monthly Revenue</p>
+                                  <p className="mt-1 text-xs">This is how much cash you consume each month after accounting for revenue. A negative burn means you're profitable.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
                             <p className="text-lg font-mono font-semibold" data-testid="text-burn-rate">
                               {calculatedBurn > 0 ? (
-                                <>{formatCurrency(calculatedBurn)}/mo</>
+                                <span className="text-amber-500">{formatCurrency(calculatedBurn)}/mo</span>
                               ) : calculatedBurn < 0 ? (
                                 <span className="text-emerald-500">+{formatCurrency(Math.abs(calculatedBurn))}/mo (Net positive)</span>
                               ) : (
@@ -1348,10 +1406,25 @@ export default function DataInput() {
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs text-muted-foreground">Current Runway</p>
+                            <div className="flex items-center gap-1">
+                              <p className="text-xs text-muted-foreground">Current Runway</p>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="inline-flex">
+                                    <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p><strong>Runway</strong> = Cash on Hand ÷ Net Burn Rate</p>
+                                  <p className="mt-1 text-xs">The number of months your company can operate before running out of cash at the current burn rate.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
                             <p className="text-lg font-mono font-semibold" data-testid="text-runway">
                               {calculatedBurn > 0 && watchedValues.cashOnHand ? (
-                                `${(watchedValues.cashOnHand / calculatedBurn).toFixed(1)} months`
+                                <span className={calculatedRunway && calculatedRunway < 12 ? "text-red-500" : calculatedRunway && calculatedRunway < 18 ? "text-amber-500" : "text-emerald-500"}>
+                                  {calculatedRunway?.toFixed(1)} months
+                                </span>
                               ) : calculatedBurn <= 0 ? (
                                 <span className="text-emerald-500">Profitable / Sustainable</span>
                               ) : (
@@ -1360,6 +1433,47 @@ export default function DataInput() {
                             </p>
                           </div>
                         </div>
+                        
+                        {summedExpenses > 0 && (
+                          <div className="pt-3 border-t">
+                            <div className="flex items-center gap-1 mb-2">
+                              <p className="text-xs text-muted-foreground">Expense Breakdown</p>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="inline-flex">
+                                    <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p>Visual breakdown of your monthly expenses by category. Larger bars indicate higher spending.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                            <div className="space-y-2">
+                              {[
+                                { label: "Payroll", value: watchedValues.payrollExpenses || 0, color: "bg-blue-500" },
+                                { label: "Marketing", value: watchedValues.marketingExpenses || 0, color: "bg-purple-500" },
+                                { label: "Operating", value: watchedValues.operatingExpenses || 0, color: "bg-teal-500" },
+                                { label: "COGS", value: watchedValues.cogsExpenses || 0, color: "bg-orange-500" },
+                                { label: "Other", value: watchedValues.otherOpexExpenses || 0, color: "bg-gray-500" },
+                              ].filter(item => item.value > 0).map(item => (
+                                <div key={item.label} className="flex items-center gap-2">
+                                  <span className="text-xs w-16 text-muted-foreground">{item.label}</span>
+                                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full ${item.color} transition-all duration-300`}
+                                      style={{ width: `${Math.min((item.value / summedExpenses) * 100, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-mono w-16 text-right">{formatCurrency(item.value)}</span>
+                                  <span className="text-xs text-muted-foreground w-10 text-right">
+                                    {((item.value / summedExpenses) * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1410,13 +1524,36 @@ export default function DataInput() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="optimistic">Optimistic (high growth)</SelectItem>
-                                  <SelectItem value="conservative">Conservative (steady)</SelectItem>
-                                  <SelectItem value="worst-case">Worst-case (decline)</SelectItem>
+                                  <SelectItem value="optimistic">
+                                    <div className="flex flex-col">
+                                      <span>Optimistic (Aggressive Growth)</span>
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="conservative">
+                                    <div className="flex flex-col">
+                                      <span>Conservative (Moderate Growth)</span>
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="worst-case">
+                                    <div className="flex flex-col">
+                                      <span>Worst-case (Defensive)</span>
+                                    </div>
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
+                              <div className="mt-2 p-3 rounded-md bg-muted/50 text-xs text-muted-foreground">
+                                {field.value === "optimistic" && (
+                                  <p><strong className="text-foreground">Aggressive Growth:</strong> Assumes high revenue growth (15-25% MoM), accelerated hiring, and increased marketing spend. Best for companies with strong product-market fit and funding runway.</p>
+                                )}
+                                {field.value === "conservative" && (
+                                  <p><strong className="text-foreground">Moderate Growth:</strong> Assumes steady revenue growth (5-10% MoM), controlled hiring, and balanced expense management. Recommended for most early-stage companies.</p>
+                                )}
+                                {field.value === "worst-case" && (
+                                  <p><strong className="text-foreground">Defensive:</strong> Assumes flat or declining revenue, expense cuts, and focus on extending runway. Use this for stress-testing or during market downturns.</p>
+                                )}
+                              </div>
                               <FormDescription>
-                                Default scenario for projections
+                                Select the scenario that best matches your growth strategy
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
@@ -1484,8 +1621,18 @@ export default function DataInput() {
                   </Card>
                 </TabsContent>
 
-                <div className="mt-6 flex justify-end">
-                  <Button type="submit" disabled={isSaving} data-testid="button-save-all">
+                <div className="mt-6 flex justify-end gap-2">
+                  {!form.formState.isValid && form.formState.isDirty && (
+                    <p className="text-xs text-amber-500 self-center">
+                      <AlertCircle className="h-3 w-3 inline mr-1" />
+                      Please fix validation errors before saving
+                    </p>
+                  )}
+                  <Button 
+                    type="submit" 
+                    disabled={isSaving || (!form.formState.isValid && form.formState.isDirty)} 
+                    data-testid="button-save-all"
+                  >
                     {isSaving ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />

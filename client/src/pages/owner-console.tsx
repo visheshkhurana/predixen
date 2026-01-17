@@ -128,11 +128,71 @@ export default function OwnerConsole() {
 
   if (!token || meLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading Owner Console...</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
+          <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <div className="space-y-1">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-3 w-40" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-8 w-20" />
+            </div>
+          </div>
+        </header>
+        <main className="max-w-[1800px] mx-auto p-6 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            {Array(8).fill(0).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <Skeleton className="h-4 w-16 mb-2" />
+                  <Skeleton className="h-7 w-12" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {Array(3).fill(0).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-8 w-32" />
+                    </div>
+                    <Skeleton className="h-12 w-12 rounded" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-96" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-5 w-40" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-[250px] w-full" />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-5 w-32" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-[200px] w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -192,9 +252,9 @@ export default function OwnerConsole() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">
-        <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
               <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
@@ -202,7 +262,7 @@ export default function OwnerConsole() {
               <p className="text-sm text-muted-foreground">Predixen Intelligence OS</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Badge variant="outline" className="text-emerald-500 border-emerald-500/30">
               <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
               Live
