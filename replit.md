@@ -177,3 +177,63 @@ Development server runs on port 5000:
 
 ## Fonts
 - Google Fonts: Inter (primary), IBM Plex Mono (financial figures)
+
+## Recent UX/UI Improvements (January 2026)
+
+### Overview Page
+- Added tooltips to all metrics (runway, burn, growth, margin) with calculation formulas and good/bad ranges
+- Added HoverCards to Quality of Growth Index and Data Confidence Score explaining how they're calculated
+
+### Data Input
+- Added inline validation (founding date cannot be in future, employee count must be positive)
+- Added sample file format guides for PDF/Excel uploads
+- Added real-time Net Burn and Runway calculations with color-coded runway warnings
+- Added expense breakdown visualization bar chart
+
+### Truth Scan
+- Added BenchmarkBar component with visual quartile indicators and gradient backgrounds
+- Added quartile status badges (Top Quartile, Above Median, Below Median, Bottom Quartile)
+- Added PDF/CSV export functionality via ExportButton component
+- Added collapsible explanations for composite scores with actionable improvement steps
+
+### Templates
+- Added expected impact metadata (runway change, burn change, risk level) on template cards
+- Added confirmation modal before applying templates
+- Added category icons and grouping
+
+### Scenario Builder
+- Added Skip Tutorial button with localStorage preference saving (`predixen_scenario_tutorial_dismissed`)
+- Added quick-create baseline scenario option when no scenarios exist
+- Added disabled tabs with lock icons until scenarios are run (with toast notifications)
+
+### Decision Recommendations
+- Added expandable details section (time horizon, dependencies, risk factors)
+- Added change highlighting on regeneration (New/Updated badges)
+- Added decision status tracking (Adopted/Deferred/Rejected) persisted to localStorage
+
+### Copilot
+- Converted to chat interface with auto-scroll and conversation history
+- Fixed example prompts to show full text and auto-trigger responses on click
+- Added data provenance badges showing which data sources (Truth Scan, Simulation, Scenario, Benchmark) were used
+
+### Alerts & Monitoring
+- Added Health Dashboard tab with traffic light indicators (green/amber/red)
+- Added sparkline trends for metrics with historical data
+- Added threshold configuration modal for custom alert rules
+- Added Unknown status explanation with CTAs to load data
+
+### Integrations
+- Added multi-step connection flow modals (benefits, OAuth simulation, credentials)
+- Added sync status display (last sync time, record counts)
+- Added Sync Now button with loading state
+- Added new integration placeholders: NetSuite, Pipedrive, Zoho CRM (marked "Coming Soon")
+
+### General
+- Added robust loading skeletons across pages (alerts, owner-console, data-verification, templates)
+- Added Help & Docs link in sidebar footer
+- Improved responsiveness with flex-wrap and proper gap spacing
+
+### LocalStorage Keys
+- `predixen_scenario_tutorial_dismissed`: Tutorial preference for Scenario Builder
+- `decision_statuses_{companyId}`: Decision status tracking per company
+- `previous_recommendations_{companyId}`: Previous recommendations for change detection
