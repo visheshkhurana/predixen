@@ -30,6 +30,37 @@ export function useCreateCompany() {
   });
 }
 
+export function useUpdateCompany() {
+  const queryClient = useQueryClient();
+  const { currentCompany, setCurrentCompany } = useFounderStore();
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string } }) =>
+      api.companies.update(id, data),
+    onSuccess: (updatedCompany) => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      if (currentCompany?.id === updatedCompany.id) {
+        setCurrentCompany(updatedCompany);
+      }
+    },
+  });
+}
+
+export function useDeleteCompany() {
+  const queryClient = useQueryClient();
+  const { currentCompany, setCurrentCompany } = useFounderStore();
+  
+  return useMutation({
+    mutationFn: (id: number) => api.companies.delete(id),
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      if (currentCompany?.id === deletedId) {
+        setCurrentCompany(null);
+      }
+    },
+  });
+}
+
 export function useTruthScan(companyId: number | null) {
   return useQuery({
     queryKey: ['truth', companyId],

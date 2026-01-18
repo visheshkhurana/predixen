@@ -54,6 +54,14 @@ def list_companies(
     companies = db.query(Company).filter(Company.user_id == current_user.id).all()
     return companies
 
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    website: Optional[str] = None
+    industry: Optional[str] = None
+    stage: Optional[str] = None
+    currency: Optional[str] = None
+
+
 @router.get("/{company_id}", response_model=CompanyResponse)
 def get_company(
     company_id: int,
@@ -72,3 +80,60 @@ def get_company(
         )
     
     return company
+
+
+@router.put("/{company_id}", response_model=CompanyResponse)
+def update_company(
+    company_id: int,
+    request: CompanyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    if request.name is not None:
+        company.name = request.name
+    if request.website is not None:
+        company.website = request.website
+    if request.industry is not None:
+        company.industry = request.industry
+    if request.stage is not None:
+        company.stage = request.stage
+    if request.currency is not None:
+        company.currency = request.currency
+    
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.delete("/{company_id}")
+def delete_company(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    db.delete(company)
+    db.commit()
+    
+    return {"message": "Company deleted successfully"}

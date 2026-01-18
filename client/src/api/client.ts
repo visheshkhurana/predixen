@@ -81,6 +81,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    update: (id: number, data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string }) =>
+      request<any>(`/companies/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: number) =>
+      request<{ message: string }>(`/companies/${id}`, {
+        method: 'DELETE',
+      }),
   },
   
   datasets: {
