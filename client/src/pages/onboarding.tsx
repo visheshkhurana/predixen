@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { api, ApiError } from '@/api/client';
+import { ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpCircle } from 'lucide-react';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -25,8 +27,8 @@ export default function OnboardingPage() {
   const [companyData, setCompanyData] = useState({
     name: '',
     website: '',
-    industry: 'general_saas',
-    stage: 'seed',
+    industry: '',
+    stage: '',
     currency: 'USD',
   });
   const [baselineData, setBaselineData] = useState({
@@ -37,6 +39,7 @@ export default function OnboardingPage() {
     other_costs: 5000,
     cash_balance: 500000,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const createCompanyMutation = useCreateCompany();
   const manualBaselineMutation = useManualBaseline();
@@ -44,21 +47,65 @@ export default function OnboardingPage() {
   
   const handleCompanySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (isSubmitting || createCompanyMutation.isPending) return;
+    
+    if (!companyData.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Company name is required', variant: 'destructive' });
+      return;
+    }
+    
+    if (!companyData.industry) {
+      toast({ title: 'Validation Error', description: 'Please select an industry', variant: 'destructive' });
+      return;
+    }
+    
+    if (!companyData.stage) {
+      toast({ title: 'Validation Error', description: 'Please select a company stage', variant: 'destructive' });
+      return;
+    }
+    
+    setIsSubmitting(true);
     try {
       const company = await createCompanyMutation.mutateAsync(companyData);
       setCurrentCompany(company);
       setStep(2);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create company';
+      const message = err instanceof ApiError ? err.message : 'Failed to create company. Please try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+  
+  const validateBaseline = (): string | null => {
+    if (baselineData.monthly_revenue < 0) return 'Monthly revenue cannot be negative';
+    if (baselineData.gross_margin_pct < 0 || baselineData.gross_margin_pct > 100) return 'Gross margin must be between 0 and 100%';
+    if (baselineData.opex < 0) return 'Operating expenses cannot be negative';
+    if (baselineData.payroll < 0) return 'Payroll cannot be negative';
+    if (baselineData.other_costs < 0) return 'Other costs cannot be negative';
+    if (baselineData.cash_balance < 0) return 'Cash balance cannot be negative';
+    return null;
   };
   
   const handleBaselineSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const { currentCompany } = useFounderStore.getState();
-    if (!currentCompany) return;
     
+    if (isSubmitting) return;
+    
+    const validationError = validateBaseline();
+    if (validationError) {
+      toast({ title: 'Validation Error', description: validationError, variant: 'destructive' });
+      return;
+    }
+    
+    const { currentCompany } = useFounderStore.getState();
+    if (!currentCompany) {
+      toast({ title: 'Error', description: 'No company selected. Please go back and create a company first.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsSubmitting(true);
     try {
       await manualBaselineMutation.mutateAsync({
         companyId: currentCompany.id,
@@ -73,8 +120,13 @@ export default function OnboardingPage() {
       toast({ title: 'Setup complete!', description: 'Your first Truth Scan is ready.' });
       setTimeout(() => setLocation('/'), 1500);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to save baseline';
+      const message = err instanceof ApiError 
+        ? err.message 
+        : 'Failed to run Truth Scan. Please check your financial data and try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
+      setStep(2);
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -125,13 +177,13 @@ export default function OnboardingPage() {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Industry</Label>
+                    <Label>Industry <span className="text-destructive">*</span></Label>
                     <Select
                       value={companyData.industry}
                       onValueChange={(v) => setCompanyData({ ...companyData, industry: v })}
                     >
                       <SelectTrigger data-testid="select-industry">
-                        <SelectValue />
+                        <SelectValue placeholder="Select industry..." />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="general_saas">SaaS</SelectItem>
@@ -144,13 +196,13 @@ export default function OnboardingPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>Stage</Label>
+                    <Label>Stage <span className="text-destructive">*</span></Label>
                     <Select
                       value={companyData.stage}
                       onValueChange={(v) => setCompanyData({ ...companyData, stage: v })}
                     >
                       <SelectTrigger data-testid="select-stage">
-                        <SelectValue />
+                        <SelectValue placeholder="Select stage..." />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pre_seed">Pre-seed</SelectItem>
@@ -165,10 +217,10 @@ export default function OnboardingPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={createCompanyMutation.isPending}
+                  disabled={isSubmitting || createCompanyMutation.isPending}
                   data-testid="button-next-step"
                 >
-                  {createCompanyMutation.isPending ? 'Creating...' : 'Continue'}
+                  {isSubmitting || createCompanyMutation.isPending ? 'Creating...' : 'Continue'}
                 </Button>
               </form>
             </CardContent>
@@ -179,13 +231,23 @@ export default function OnboardingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Financial Baseline</CardTitle>
-              <CardDescription>Enter your current monthly financials</CardDescription>
+              <CardDescription>Enter your current monthly financials. These values will be used to compute your first Truth Scan.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleBaselineSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="revenue">Monthly Revenue ($)</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="revenue">Monthly Revenue ($)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Your total monthly recurring revenue (MRR) from subscriptions and recurring sales.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <Input
                       id="revenue"
                       type="number"
@@ -198,7 +260,17 @@ export default function OnboardingPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="gross-margin">Gross Margin (%)</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="gross-margin">Gross Margin (%)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Revenue minus cost of goods sold, divided by revenue. SaaS companies typically have 70-85% gross margin.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <Input
                       id="gross-margin"
                       type="number"
@@ -214,7 +286,17 @@ export default function OnboardingPage() {
                 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="opex">Opex ($)</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="opex">Opex ($)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Operating expenses: rent, software, marketing, and other non-payroll costs.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <Input
                       id="opex"
                       type="number"
@@ -227,7 +309,17 @@ export default function OnboardingPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="payroll">Payroll ($)</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="payroll">Payroll ($)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Total monthly employee salaries, benefits, and payroll taxes.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <Input
                       id="payroll"
                       type="number"
@@ -240,7 +332,17 @@ export default function OnboardingPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="other-costs">Other Costs ($)</Label>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="other-costs">Other Costs ($)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Miscellaneous expenses not included in Opex or Payroll.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <Input
                       id="other-costs"
                       type="number"
@@ -253,7 +355,17 @@ export default function OnboardingPage() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="cash">Cash Balance ($)</Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="cash">Cash Balance ($)</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p>Total cash and cash equivalents currently in your bank accounts.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     id="cash"
                     type="number"
@@ -268,10 +380,10 @@ export default function OnboardingPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={manualBaselineMutation.isPending || runTruthScanMutation.isPending}
+                  disabled={isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending}
                   data-testid="button-run-scan"
                 >
-                  {manualBaselineMutation.isPending || runTruthScanMutation.isPending
+                  {isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending
                     ? 'Running Truth Scan...'
                     : 'Run First Truth Scan'}
                 </Button>
