@@ -1,0 +1,52 @@
+To get help fixing the issues you encountered, you can draft a detailed prompt for Replit’s AI (or any developer) that clearly outlines the problems, how to reproduce them, and what a successful solution should look like. Here’s a comprehensive example:
+
+---
+
+### 🛠️ Replit AI Fix Prompt
+
+I’m working on a project called **RunwayAI – Startup Financial Simulator**, hosted on Replit. During the onboarding workflow, I encountered two main issues that block progress to the final step. Below is everything you need to reproduce the bug, the current behaviour, and how I want it improved.
+
+#### ✅ Repro Steps
+
+1. **Launch the app** at `https://fund-flow--<your-app>.replit.app/onboarding` and sign in (if necessary).
+2. **Step 1 – Company Info**:
+
+   * Enter a non-empty **Company Name** (e.g., “Sample Corp”).
+   * (Optional) enter a website (e.g., “[https://example.com”](https://example.com”)).
+   * Select an **Industry** (“SaaS” appears preselected by default) and a **Stage** (“Seed” is preselected).
+   * Click **Continue** to create the company.
+3. Observe that after the first click, the form reloads and clears all fields. Only after clicking **Continue** again does it proceed.
+4. **Step 2 – Financial Baseline**:
+
+   * Default values are pre‑filled (Monthly Revenue, Gross Margin, Opex, Payroll, Other Costs, Cash Balance).
+   * Click **Run First Truth Scan**.
+5. A toast message appears: `Error – Request failed`. The page stays on Step 2 and the scan never finishes. Clicking again repeats the same failure.
+
+#### 🔴 Current Behaviour
+
+* The **Continue** button doesn’t always trigger the submission on the first click. It sometimes reloads the form without saving, requiring a second click.
+* In Step 2, the **Run First Truth Scan** button triggers a network request that fails with “Request failed”, and users cannot proceed to Step 3. There is no specific error handling or guidance.
+
+#### ✅ Expected Behaviour
+
+* **Continue** should create the company record and always advance to Step 2 on the first click (should also respond to pressing Enter).
+* **Run First Truth Scan** should call the backend endpoint successfully and load the next step (Step 3 – likely a data review or dashboard).
+* If the backend fails (e.g., no API key, network error), the UI should display a clear message explaining why and suggest a retry or fallback.
+
+#### 💡 Additional Improvement Suggestions
+
+* Remove preselected defaults for *Industry* and *Stage*, or change them to a “Select…” placeholder so users make an explicit choice.
+* Add client-side validation for all numeric fields (non‑negative numbers, appropriate percentage ranges).
+* Include tooltips or helper text explaining each field (e.g., MRR vs. revenue, gross margin definition).
+* Provide keyboard accessibility; ensure buttons can be activated via Enter/Space and that focus moves logically.
+* Catch and surface backend error messages in the UI. Display the actual reason for failure rather than a generic “Request failed”.
+
+#### 🔧 What I Need You to Do
+
+* Investigate why the **onboarding create** endpoint returns an error. Check logs for the API call made by “Run First Truth Scan” and fix the backend to return valid data.
+* Fix the button submission logic so the company record is saved on the first click and the form doesn’t reset unexpectedly.
+* Implement robust error handling in the UI for API failures, with clear user feedback and the ability to retry or skip the scan.
+
+---
+
+You can paste the above prompt into Replit’s AI assistant or share it with a developer to get actionable fixes for your project.
