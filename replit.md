@@ -123,6 +123,8 @@ Preferred communication style: Simple, everyday language.
 ### Companies
 - POST/GET /companies
 - GET /companies/{id}
+- PUT /companies/{id} (edit company details)
+- DELETE /companies/{id} (delete company and all associated data)
 
 ### Datasets
 - POST /companies/{id}/datasets/upload
