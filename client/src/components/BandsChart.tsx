@@ -33,11 +33,26 @@ export function BandsChart({
   testId = 'bands-chart',
   description = 'Shows P10, P50 (median), and P90 projections from Monte Carlo simulation. P10 is the pessimistic case, P90 is optimistic.',
 }: BandsChartProps) {
+  if (!data || !data.p50 || !Array.isArray(data.p50) || data.p50.length === 0) {
+    return (
+      <Card className="overflow-visible" data-testid={testId}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64 flex items-center justify-center text-muted-foreground">
+            No data available
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const chartData = data.p50.map((_, index) => ({
     month: index + 1,
-    p10: data.p10[index],
+    p10: data.p10?.[index] ?? 0,
     p50: data.p50[index],
-    p90: data.p90[index],
+    p90: data.p90?.[index] ?? 0,
   }));
   
   return (

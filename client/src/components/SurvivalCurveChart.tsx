@@ -23,9 +23,24 @@ export function SurvivalCurveChart({
   title = 'Survival Curve',
   testId = 'survival-curve-chart',
 }: SurvivalCurveChartProps) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    return (
+      <Card className="overflow-visible" data-testid={testId}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">{title}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-64 flex items-center justify-center text-muted-foreground">
+            No data available
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const formattedData = data.map((d) => ({
     month: d.month,
-    survival: d.survival_rate * 100,
+    survival: (d.survival_rate || 0) * 100,
   }));
   
   return (
