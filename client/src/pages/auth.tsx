@@ -126,10 +126,10 @@ export default function AuthPage() {
   };
 
   const features = [
-    { icon: TrendingUp, title: 'Truth Scan', description: '24 metrics analyzed against industry benchmarks' },
-    { icon: Sparkles, title: 'Monte Carlo Simulation', description: 'Probabilistic runway and survival modeling' },
-    { icon: Shield, title: 'Decision Engine', description: 'AI-ranked recommendations for your startup' },
-    { icon: Zap, title: 'Copilot', description: 'Natural language financial intelligence' },
+    { icon: TrendingUp, title: 'Decision Simulation Engine', description: 'Run Monte Carlo simulations on real company data to model outcomes, risks, and trade-offs' },
+    { icon: Sparkles, title: 'Scenario Builder', description: 'Compare multiple futures — aggressive growth, conservative burn, fundraising delays — side by side' },
+    { icon: Shield, title: 'Outcome Probability Mapping', description: 'See survival likelihood, runway distribution, dilution risk, and downside exposure' },
+    { icon: Zap, title: 'AI Decision Copilot', description: 'Ask "What happens if we hire 10 engineers?" and simulate the answer' },
   ];
   
   return (
@@ -152,12 +152,12 @@ export default function AuthPage() {
               <span className="text-2xl font-bold">Predixen</span>
             </div>
             <h1 className="text-4xl font-bold mb-4 leading-tight">
-              Financial Intelligence<br />
-              <span className="text-primary">Powered by AI</span>
+              AI Decision Simulator<br />
+              <span className="text-primary">for Founders & CXOs</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-md">
-              Transform your startup's financial data into actionable insights with 
-              investor-grade analysis and probabilistic modeling.
+              Simulate strategic decisions <em>before</em> you execute them. Test hiring plans, 
+              pricing changes, fundraising strategies across thousands of probabilistic scenarios.
             </p>
           </div>
           
@@ -173,6 +173,14 @@ export default function AuthPage() {
                 </div>
               </div>
             ))}
+          </div>
+          
+          <div className="mt-8 pt-6 border-t border-border/30">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Built for High-Stakes Decisions</span>
+              <br />
+              Predixen is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies.
+            </p>
           </div>
         </div>
       </div>
@@ -192,8 +200,8 @@ export default function AuthPage() {
               </h2>
               <p className="text-muted-foreground">
                 {activeTab === 'login' 
-                  ? 'Sign in to access your financial intelligence dashboard'
-                  : 'Start your journey to smarter financial decisions'
+                  ? 'Sign in to continue simulating decisions and outcomes'
+                  : 'Start simulating strategic decisions today'
                 }
               </p>
             </div>
@@ -473,9 +481,13 @@ export default function AuthPage() {
               >
                 <span className="flex items-center justify-center gap-2">
                   <Sparkles className="h-4 w-4" />
-                  {isDemoLoading ? 'Loading demo...' : 'Try demo account'}
-                  {!isDemoLoading && <span className="text-xs opacity-70">(pre-loaded with sample data)</span>}
+                  {isDemoLoading ? 'Loading simulation...' : 'Try Demo Simulation'}
                 </span>
+                {!isDemoLoading && (
+                  <span className="block text-xs opacity-70 mt-1">
+                    Explore with a pre-loaded startup with realistic data and scenarios
+                  </span>
+                )}
               </button>
             </div>
           </CardContent>
