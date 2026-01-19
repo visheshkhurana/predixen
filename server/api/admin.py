@@ -635,12 +635,14 @@ def list_invites(
 
 
 @router.post("/invites")
-def create_invite(
+async def create_invite(
     invite_data: UserInvite,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
+    from server.email.service import send_invite_email, is_email_configured
+    
     existing_user = db.query(User).filter(User.email == invite_data.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User with this email already exists")
@@ -667,17 +669,34 @@ def create_invite(
     db.commit()
     db.refresh(invite)
     
+    email_sent = False
+    email_error = None
+    
+    if is_email_configured():
+        email_result = await send_invite_email(
+            to_email=invite_data.email,
+            invite_token=invite.token,
+            role=invite_data.role,
+            invited_by_email=current_user.email,
+            expires_at=invite.expires_at
+        )
+        email_sent = email_result.get("success", False)
+        if not email_sent:
+            email_error = email_result.get("error")
+    
     log_action(
         db, current_user.id, "invite_created", "invite", invite.id,
-        {"email": invite_data.email, "role": invite_data.role},
+        {"email": invite_data.email, "role": invite_data.role, "email_sent": email_sent},
         request.client.host if request.client else None
     )
     
     return {
-        "message": f"Invite sent to {invite_data.email}",
+        "message": f"Invite created for {invite_data.email}" + (" and email sent" if email_sent else ""),
         "invite_id": invite.id,
         "token": invite.token,
-        "expires_at": invite.expires_at
+        "expires_at": invite.expires_at,
+        "email_sent": email_sent,
+        "email_error": email_error
     }
 
 
@@ -708,13 +727,14 @@ def revoke_invite(
 
 
 @router.post("/invites/{invite_id}/resend")
-def resend_invite(
+async def resend_invite(
     invite_id: int,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     from datetime import timedelta
+    from server.email.service import send_invite_email, is_email_configured
     
     invite = db.query(Invite).filter(Invite.id == invite_id).first()
     if not invite:
@@ -726,10 +746,30 @@ def resend_invite(
     invite.expires_at = datetime.utcnow() + timedelta(days=7)
     db.commit()
     
+    email_sent = False
+    email_error = None
+    
+    if is_email_configured():
+        email_result = await send_invite_email(
+            to_email=invite.email,
+            invite_token=invite.token,
+            role=invite.role,
+            invited_by_email=current_user.email,
+            expires_at=invite.expires_at
+        )
+        email_sent = email_result.get("success", False)
+        if not email_sent:
+            email_error = email_result.get("error")
+    
     log_action(
         db, current_user.id, "invite_resent", "invite", invite_id,
-        {"email": invite.email}, request.client.host if request.client else None
+        {"email": invite.email, "email_sent": email_sent}, request.client.host if request.client else None
     )
     
-    return {"message": f"Invite for {invite.email} resent", "expires_at": invite.expires_at}
+    return {
+        "message": f"Invite for {invite.email} resent" + (" and email sent" if email_sent else ""),
+        "expires_at": invite.expires_at,
+        "email_sent": email_sent,
+        "email_error": email_error
+    }
 

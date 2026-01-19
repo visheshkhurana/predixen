@@ -465,14 +465,40 @@ export const api = {
         is_expired: boolean;
       }>>('/admin/invites'),
       create: (email: string, role: string) =>
-        request<{ message: string; invite_id: number; token: string; expires_at: string }>('/admin/invites', {
+        request<{ message: string; invite_id: number; token: string; expires_at: string; email_sent: boolean; email_error?: string }>('/admin/invites', {
           method: 'POST',
           body: JSON.stringify({ email, role }),
         }),
       revoke: (inviteId: number) =>
         request<{ message: string }>(`/admin/invites/${inviteId}`, { method: 'DELETE' }),
       resend: (inviteId: number) =>
-        request<{ message: string; expires_at: string }>(`/admin/invites/${inviteId}/resend`, { method: 'POST' }),
+        request<{ message: string; expires_at: string; email_sent: boolean; email_error?: string }>(`/admin/invites/${inviteId}/resend`, { method: 'POST' }),
+    },
+    
+    emailTemplates: {
+      status: () => request<{
+        configured: boolean;
+        from_email: string | null;
+      }>('/email-templates/status'),
+      list: () => request<Array<{
+        id: string;
+        name: string;
+        description: string;
+        variables: string[];
+        subject: string;
+      }>>('/email-templates/templates'),
+      preview: (templateType: string) => request<{
+        template_type: string;
+        name: string;
+        subject: string;
+        html: string;
+        variables: string[];
+      }>(`/email-templates/templates/${templateType}/preview`),
+      sendTest: (templateType: string, toEmail: string) =>
+        request<{ success: boolean; message: string; template_type: string }>('/email-templates/test', {
+          method: 'POST',
+          body: JSON.stringify({ template_type: templateType, to_email: toEmail }),
+        }),
     },
   },
 };

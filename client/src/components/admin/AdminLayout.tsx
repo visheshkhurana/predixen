@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, Mail, Activity, BarChart3, 
   Building2, CreditCard, LogOut, Shield, ChevronRight,
-  Menu, X
+  Menu, X, FileText
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { title: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Invitations', href: '/admin/invites', icon: Mail },
+  { title: 'Email Templates', href: '/admin/email-templates', icon: FileText },
   { title: 'Companies', href: '/admin/companies', icon: Building2 },
   { title: 'Billing', href: '/admin/billing', icon: CreditCard },
   { title: 'Metrics', href: '/admin/metrics', icon: BarChart3 },
