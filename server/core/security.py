@@ -33,6 +33,14 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
+class MasterUser:
+    """Virtual user object for master admin authentication."""
+    def __init__(self):
+        self.id = 0
+        self.email = settings.ADMIN_MASTER_EMAIL
+        self.role = "owner"
+        self.is_active = True
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
@@ -55,7 +63,17 @@ async def get_current_user(
             detail="Invalid authentication credentials",
         )
     
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user_id == "master" and payload.get("is_master"):
+        return MasterUser()
+    
+    try:
+        user = db.query(User).filter(User.id == int(user_id)).first()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user ID",
+        )
+    
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

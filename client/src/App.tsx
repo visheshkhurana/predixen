@@ -32,6 +32,8 @@ import AdminMetrics from "@/pages/admin/metrics";
 import AdminLoginHistory from "@/pages/admin/login-history";
 import AdminActivity from "@/pages/admin/activity";
 import AdminInvites from "@/pages/admin/invites";
+import AdminLoginPage from "@/pages/admin/login";
+import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -77,12 +79,12 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   }, [token, user?.role]);
   
   if (!token) {
-    return <Redirect to="/auth" />;
+    return <Redirect to="/admin/login" />;
   }
   
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-screen bg-background">
         <div className="text-muted-foreground">Checking access...</div>
       </div>
     );
@@ -90,15 +92,19 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   
   if (accessDenied) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
+      <div className="flex flex-col items-center justify-center h-screen bg-background gap-4">
         <div className="text-2xl font-bold text-destructive">Access Denied</div>
-        <p className="text-muted-foreground">You don't have permission to access this page.</p>
-        <a href="/" className="text-primary hover:underline">Go to Dashboard</a>
+        <p className="text-muted-foreground">You don't have permission to access the admin console.</p>
+        <a href="/admin/login" className="text-primary hover:underline">Go to Admin Login</a>
       </div>
     );
   }
   
-  return <Component />;
+  return (
+    <AdminLayout>
+      <Component />
+    </AdminLayout>
+  );
 }
 
 function Router() {
@@ -139,6 +145,7 @@ function Router() {
       <Route path="/templates">
         {() => <AuthenticatedRoute component={TemplatesPage} />}
       </Route>
+      <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
         {() => <AdminRoute component={AdminDashboard} />}
       </Route>
@@ -178,11 +185,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     "--sidebar-width-icon": "3rem",
   };
   
-  // Check if we're on a standalone page (owner console, auth, onboarding)
+  // Check if we're on a standalone page (owner console, auth, onboarding, admin)
   const isStandalonePage = typeof window !== 'undefined' && 
     (window.location.pathname === '/owner-console' || 
      window.location.pathname === '/auth' ||
-     window.location.pathname === '/onboarding');
+     window.location.pathname === '/onboarding' ||
+     window.location.pathname.startsWith('/admin'));
   
   if (!token || isStandalonePage) {
     return <>{children}</>;

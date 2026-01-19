@@ -153,3 +153,64 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         email=user.email,
         role=user.role or "viewer"
     )
+
+
+@router.post("/admin/login", response_model=TokenResponse)
+def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Admin-only login endpoint with master credentials support."""
+    
+    if (settings.ADMIN_MASTER_EMAIL and settings.ADMIN_MASTER_PASSWORD and 
+        req.email == settings.ADMIN_MASTER_EMAIL and req.password == settings.ADMIN_MASTER_PASSWORD):
+        
+        log_login_attempt(db, req.email, None, success=True, request=request)
+        
+        access_token = create_access_token(
+            data={"sub": "master", "admin": True, "is_master": True},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        
+        return TokenResponse(
+            access_token=access_token,
+            user_id=0,
+            email=settings.ADMIN_MASTER_EMAIL,
+            role="owner"
+        )
+    
+    user = db.query(User).filter(User.email == req.email).first()
+    if not user or not verify_password(req.password, user.password_hash):
+        log_login_attempt(db, req.email, user.id if user else None, success=False,
+                         failure_reason="Invalid admin credentials", request=request)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid admin credentials"
+        )
+    
+    if user.role not in ["owner", "admin"]:
+        log_login_attempt(db, req.email, user.id, success=False,
+                         failure_reason="Not an admin account", request=request)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Admin privileges required."
+        )
+    
+    if not user.is_active:
+        log_login_attempt(db, req.email, user.id, success=False,
+                         failure_reason="Account suspended", request=request)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended. Contact support."
+        )
+    
+    log_login_attempt(db, user.email, user.id, success=True, request=request)
+    
+    access_token = create_access_token(
+        data={"sub": str(user.id), "admin": True},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        email=user.email,
+        role=user.role
+    )
