@@ -148,8 +148,86 @@ def extract_metrics_with_openai(excel_text: str) -> Dict[str, Any]:
         raise ValueError(f"Failed to analyze Excel: {str(e)}")
 
 
-def parse_income_statement(file_path: str) -> Dict[str, Any]:
-    """Parse Income Statement sheet from Termina Excel export using structured approach."""
+DEFAULT_INR_TO_USD_RATE = 0.012  # ~83 INR per USD
+
+
+def detect_currency(df: pd.DataFrame, file_path: str) -> str:
+    """Detect currency from sheet metadata or file context.
+    
+    Note: Many financial exports (like Termina) already normalize values to USD,
+    so we default to USD unless explicit INR indicators are found.
+    """
+    for idx in df.index:
+        if isinstance(idx, str):
+            idx_lower = idx.lower()
+            if '₹' in idx_lower or 'rupee' in idx_lower or '(inr)' in idx_lower:
+                return 'INR'
+            if '$' in idx_lower or 'dollar' in idx_lower or '(usd)' in idx_lower:
+                return 'USD'
+    
+    for col in df.columns:
+        if isinstance(col, str):
+            col_lower = col.lower()
+            if '₹' in col_lower or '(inr)' in col_lower:
+                return 'INR'
+            if '$' in col_lower or '(usd)' in col_lower:
+                return 'USD'
+    
+    return 'USD'
+
+
+def convert_currency(value: float, from_currency: str, to_currency: str = 'USD', 
+                     fx_rate: Optional[float] = None) -> float:
+    """Convert currency value. Currently supports INR to USD."""
+    if from_currency == to_currency:
+        return value
+    
+    if from_currency == 'INR' and to_currency == 'USD':
+        rate = fx_rate if fx_rate else DEFAULT_INR_TO_USD_RATE
+        return value * rate
+    
+    if from_currency == 'USD' and to_currency == 'INR':
+        rate = fx_rate if fx_rate else (1 / DEFAULT_INR_TO_USD_RATE)
+        return value * rate
+    
+    logger.warning(f"Unsupported currency conversion: {from_currency} to {to_currency}")
+    return value
+
+
+def get_value_from_row(df: pd.DataFrame, row_names: List[str], column: str) -> Optional[float]:
+    """Extract value from a row matching any of the given names."""
+    for name in row_names:
+        if name in df.index:
+            value = df.loc[name, column]
+            if pd.notna(value):
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    pass
+        for idx in df.index:
+            if isinstance(idx, str):
+                idx_stripped = idx.strip()
+                if idx_stripped == name or name.lower() in idx_stripped.lower():
+                    value = df.loc[idx, column]
+                    if pd.notna(value):
+                        try:
+                            return float(value)
+                        except (ValueError, TypeError):
+                            pass
+    return None
+
+
+def parse_income_statement(file_path: str, fx_rate: Optional[float] = None) -> Dict[str, Any]:
+    """Parse Income Statement sheet from Termina Excel export with comprehensive extraction.
+    
+    Extracts:
+    - Revenue and revenue breakdowns
+    - COGS, Gross Profit, Sales & Marketing, Other Opex, Operating Income
+    - Derived metrics: lifetime_gross_margin, lifetime_operating_margin, rule_of_40, 
+      magic_number, burn_multiple, margin_burn_multiple
+    - Currency conversion (INR to USD)
+    - Month-over-month revenue growth
+    """
     try:
         xl = pd.ExcelFile(file_path)
         
@@ -174,6 +252,9 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
         if df.columns[0] in ['index', 'Index', 'Metric', 'metric', 'Unnamed: 0']:
             df = df.set_index(df.columns[0])
         
+        detected_currency = detect_currency(df, file_path)
+        logger.info(f"Detected currency: {detected_currency}")
+        
         date_columns = []
         for col in df.columns:
             try:
@@ -194,61 +275,88 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             if numeric_cols:
                 latest_col = numeric_cols[-1]
+                prev_col = numeric_cols[-2] if len(numeric_cols) > 1 else None
             else:
                 raise ValueError("No date or numeric columns found in the spreadsheet")
         else:
             sorted_dates = sorted(date_columns, key=lambda x: x[1])
             latest_col = sorted_dates[-1][0]
+            prev_col = sorted_dates[-2][0] if len(sorted_dates) > 1 else None
         
-        metrics = {}
+        logger.info(f"Using latest column: {latest_col}, previous column: {prev_col}")
+        
         row_mappings = {
             'revenue': ['Revenue', 'Total Revenue', 'Net Revenue', 'Sales', 'Total Sales'],
-            'net_revenue_india': ['Net Revenues (Astrotalk India)', 'Net Revenue India', 'India Revenue'],
-            'net_revenue_international': ['Net Revenues (Astrotalk International)', 'Net Revenue International', 'International Revenue'],
-            'net_revenue_ecommerce': ['Net Revenues (E-Commerce)', 'E-Commerce Revenue', 'Ecommerce Revenue'],
-            'net_revenue_other': ['Net Revenues (Other Experimental Apps)', 'Other Revenue'],
+            'net_revenue_india': ['    Net Revenues (Astrotalk India)', 'Net Revenues (Astrotalk India)', 'Net Revenue India', 'India Revenue'],
+            'net_revenue_international': ['    Net Revenues (Astrotalk International)', 'Net Revenues (Astrotalk International)', 'Net Revenue International', 'International Revenue'],
+            'net_revenue_ecommerce': ['    Net Revenues (E-Commerce)', 'Net Revenues (E-Commerce)', 'E-Commerce Revenue', 'Ecommerce Revenue'],
+            'net_revenue_other': ['    Net Revenues (Other Experimental Apps)', 'Net Revenues (Other Experimental Apps)', 'Other Revenue'],
             'cogs': ['COGS', 'Cost of Goods Sold', 'Cost of Revenue', 'Direct Costs'],
-            'gross_profit': ['Gross Profit', 'Gross Income', 'Gross Margin'],
+            'gross_profit': ['Gross Profit', 'Gross Income'],
+            'sales_and_marketing': ['Sales And Marketing', 'Sales & Marketing', 'Marketing', 'Marketing Expenses'],
+            'other_opex': ['Other Opex', 'Other Operating Expenses', 'General & Admin'],
             'operating_income': ['Operating Income', 'Operating Profit', 'EBIT'],
             'net_income': ['Net Income', 'Net Profit', 'Profit After Tax'],
             'payroll': ['Payroll', 'Salaries', 'Employee Costs', 'Personnel Expenses'],
-            'marketing': ['Marketing', 'Marketing Expenses', 'Sales & Marketing'],
-            'opex': ['Operating Expenses', 'OPEX', 'Total Operating Expenses'],
+            'lifetime_gross_margin': ['lifetime_gross_margin', 'Lifetime Gross Margin'],
+            'lifetime_operating_margin': ['lifetime_operating_margin', 'Lifetime Operating Margin'],
+            'rule_of_40': ['rule_of_40', 'Rule of 40'],
+            'magic_number': ['magic_number', 'Magic Number'],
+            'margin_magic_number': ['margin_magic_number', 'Margin Magic Number'],
+            'burn_multiple': ['burn_multiple', 'Burn Multiple'],
+            'margin_burn_multiple': ['margin_burn_multiple', 'Margin Burn Multiple'],
         }
         
-        # Expense categories that should always be positive
-        expense_categories = {'cogs', 'payroll', 'marketing', 'opex'}
+        expense_categories = {'cogs', 'sales_and_marketing', 'other_opex', 'payroll'}
+        monetary_fields = {'revenue', 'net_revenue_india', 'net_revenue_international', 
+                          'net_revenue_ecommerce', 'net_revenue_other', 'cogs', 'gross_profit',
+                          'sales_and_marketing', 'other_opex', 'operating_income', 'net_income', 'payroll'}
+        
+        metrics = {}
+        metrics_original = {}
         
         for metric_key, possible_names in row_mappings.items():
-            found = False
-            for name in possible_names:
-                if found:
-                    break
-                if name in df.index:
-                    value = df.loc[name, latest_col]
-                    if pd.notna(value):
-                        try:
-                            raw_value = float(value)
-                            if metric_key in expense_categories and raw_value < 0:
-                                raw_value = abs(raw_value)
-                            metrics[metric_key] = raw_value
-                        except (ValueError, TypeError):
-                            pass
-                    found = True
-                    break
-                for idx in df.index:
-                    if isinstance(idx, str) and name.lower() in idx.lower():
-                        value = df.loc[idx, latest_col]
-                        if pd.notna(value):
-                            try:
-                                raw_value = float(value)
-                                if metric_key in expense_categories and raw_value < 0:
-                                    raw_value = abs(raw_value)
-                                metrics[metric_key] = raw_value
-                            except (ValueError, TypeError):
-                                pass
-                        found = True
-                        break
+            raw_value = get_value_from_row(df, possible_names, latest_col)
+            
+            if raw_value is not None:
+                if metric_key in expense_categories and raw_value < 0:
+                    raw_value = abs(raw_value)
+                
+                metrics_original[metric_key] = raw_value
+                
+                if metric_key in monetary_fields and detected_currency != 'USD':
+                    metrics[metric_key] = convert_currency(raw_value, detected_currency, 'USD', fx_rate)
+                else:
+                    metrics[metric_key] = raw_value
+        
+        revenue_prev = None
+        if prev_col is not None:
+            revenue_prev = get_value_from_row(df, row_mappings['revenue'], prev_col)
+        
+        revenue_growth_mom = None
+        if 'revenue' in metrics_original and revenue_prev and revenue_prev != 0:
+            revenue_growth_mom = ((metrics_original['revenue'] - revenue_prev) / revenue_prev) * 100
+            metrics['revenue_growth_mom'] = revenue_growth_mom
+        
+        if 'revenue' in metrics and 'cogs' in metrics and 'gross_profit' not in metrics:
+            metrics['gross_profit'] = metrics['revenue'] - metrics['cogs']
+        
+        if 'revenue' in metrics and 'gross_profit' in metrics:
+            computed_gross_margin = (metrics['gross_profit'] / metrics['revenue']) * 100
+            if 'lifetime_gross_margin' not in metrics:
+                metrics['gross_margin'] = computed_gross_margin
+            else:
+                metrics['gross_margin'] = metrics['lifetime_gross_margin'] * 100
+        
+        if 'revenue' in metrics and 'operating_income' in metrics:
+            computed_operating_margin = (metrics['operating_income'] / metrics['revenue']) * 100
+            if 'lifetime_operating_margin' not in metrics:
+                metrics['operating_margin'] = computed_operating_margin
+            else:
+                metrics['operating_margin'] = metrics['lifetime_operating_margin'] * 100
+        
+        if 'operating_income' in metrics:
+            metrics['monthly_surplus'] = metrics['operating_income']
         
         if isinstance(latest_col, datetime):
             report_date = latest_col.strftime('%Y-%m-%d')
@@ -257,22 +365,24 @@ def parse_income_statement(file_path: str) -> Dict[str, Any]:
         else:
             report_date = str(latest_col)
         
-        if 'revenue' in metrics and 'cogs' in metrics and 'gross_profit' not in metrics:
-            metrics['gross_profit'] = metrics['revenue'] - metrics['cogs']
-        
-        if 'revenue' in metrics and 'gross_profit' in metrics:
-            metrics['gross_margin'] = (metrics['gross_profit'] / metrics['revenue']) * 100
-        
         return {
             'sheet_name': sheet_name,
             'report_date': report_date,
             'latest_column': str(latest_col),
+            'previous_column': str(prev_col) if prev_col else None,
+            'detected_currency': detected_currency,
+            'target_currency': 'USD',
+            'fx_rate_used': fx_rate or DEFAULT_INR_TO_USD_RATE if detected_currency == 'INR' else 1.0,
             'metrics': metrics,
+            'metrics_original_currency': metrics_original,
+            'revenue_prev_month': convert_currency(revenue_prev, detected_currency, 'USD', fx_rate) if revenue_prev else None,
             'available_rows': list(df.index)[:50],
         }
         
     except Exception as e:
         logger.warning(f"Structured parsing failed: {e}")
+        import traceback
+        logger.warning(traceback.format_exc())
         return {'metrics': {}, 'error': str(e)}
 
 
@@ -401,11 +511,13 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     baseline_data = {
         "monthly_revenue": metrics.get("revenue"),
         "gross_margin": metrics.get("gross_margin"),
+        "operating_margin": metrics.get("operating_margin"),
         "net_burn": metrics.get("net_burn"),
+        "monthly_surplus": metrics.get("monthly_surplus"),
         "cash_balance": metrics.get("cash_balance"),
         "runway_months": metrics.get("runway_months"),
         "yoy_growth": metrics.get("yoy_growth"),
-        "mom_growth": metrics.get("mom_growth"),
+        "mom_growth": metrics.get("mom_growth") or metrics.get("revenue_growth_mom"),
         "payroll": metrics.get("payroll"),
         "opex": metrics.get("opex"),
         "headcount": metrics.get("headcount"),
@@ -415,8 +527,20 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         "operating_income": metrics.get("operating_income"),
         "net_income": metrics.get("net_income"),
         "total_expenses": metrics.get("total_expenses"),
-        "sales_and_marketing": metrics.get("marketing"),
+        "sales_and_marketing": metrics.get("sales_and_marketing") or metrics.get("marketing"),
+        "other_opex": metrics.get("other_opex"),
         "arpu": metrics.get("arpu"),
+        "burn_multiple": metrics.get("burn_multiple"),
+        "rule_of_40": metrics.get("rule_of_40"),
+        "magic_number": metrics.get("magic_number"),
+        "margin_magic_number": metrics.get("margin_magic_number"),
+        "margin_burn_multiple": metrics.get("margin_burn_multiple"),
+        "lifetime_gross_margin": metrics.get("lifetime_gross_margin"),
+        "lifetime_operating_margin": metrics.get("lifetime_operating_margin"),
+        "net_revenue_india": metrics.get("net_revenue_india"),
+        "net_revenue_international": metrics.get("net_revenue_international"),
+        "net_revenue_ecommerce": metrics.get("net_revenue_ecommerce"),
+        "net_revenue_other": metrics.get("net_revenue_other"),
     }
     
     baseline_data = {k: v for k, v in baseline_data.items() if v is not None}
@@ -425,7 +549,11 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         "source": "excel",
         "sheet_name": parsed.get("sheet_name"),
         "report_date": parsed.get("report_date"),
+        "detected_currency": parsed.get("detected_currency"),
+        "target_currency": parsed.get("target_currency", "USD"),
+        "fx_rate_used": parsed.get("fx_rate_used"),
         "raw_metrics": metrics,
+        "metrics_original_currency": parsed.get("metrics_original_currency", {}),
         "baseline_data": baseline_data,
         "summary": summary,
         "extraction_successful": True,
