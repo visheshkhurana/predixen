@@ -139,27 +139,51 @@ def render_invite_template(
     invite_url: str,
     role: str,
     invited_by_email: str,
-    expires_at: datetime
+    expires_at: datetime,
+    early_access: bool = True
 ) -> str:
     """Render the invite email template."""
     role_display = role.title()
     expires_formatted = expires_at.strftime("%B %d, %Y at %I:%M %p UTC")
     
-    content = f"""
-        <div class="email-header">
-            <div class="logo">Predixen</div>
-            <h1>You're Invited!</h1>
-        </div>
-        <div class="email-body">
-            <h2>Join Predixen Intelligence OS</h2>
-            <p>You've been invited by <span class="highlight">{invited_by_email}</span> to join Predixen Intelligence OS as a <span class="role-badge">{role_display}</span>.</p>
-            
-            <p>Predixen is an AI-powered financial intelligence platform that helps startups with investor-grade diligence, probabilistic simulation, and ranked decision recommendations.</p>
-            
-            <div style="text-align: center;">
-                <a href="{invite_url}" class="cta-button">Accept Invitation</a>
+    if early_access:
+        header_title = "Early Access Invitation"
+        intro_text = f"""
+            <p style="font-size: 18px; color: #4a4a68; margin-bottom: 24px;">
+                You've been selected for <span class="highlight">exclusive early access</span> to Predixen Intelligence OS.
+            </p>
+            <p>
+                <span class="highlight">{invited_by_email}</span> has personally invited you to be among the first to experience 
+                our AI-powered financial intelligence platform. Your role: <span class="role-badge">{role_display}</span>
+            </p>
+        """
+        early_badge = """
+            <div style="text-align: center; margin-bottom: 24px;">
+                <span style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
+                      color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; 
+                      text-transform: uppercase; letter-spacing: 1px;">
+                    Early Access Member
+                </span>
             </div>
-            
+        """
+        value_prop = """
+            <div class="info-box">
+                <p><strong>As an early access member, you'll get:</strong></p>
+                <p>• <strong>First look</strong> at new features before public release</p>
+                <p>• <strong>AI-powered analysis</strong> of your financial documents (PDF & Excel)</p>
+                <p>• <strong>Monte Carlo simulations</strong> for cash flow forecasting</p>
+                <p>• <strong>Decision recommendations</strong> ranked by survival, growth & risk</p>
+                <p>• <strong>Direct feedback channel</strong> to shape the product roadmap</p>
+            </div>
+        """
+    else:
+        header_title = "You're Invited!"
+        intro_text = f"""
+            <p>You've been invited by <span class="highlight">{invited_by_email}</span> to join Predixen Intelligence OS as a <span class="role-badge">{role_display}</span>.</p>
+            <p>Predixen is an AI-powered financial intelligence platform that helps startups with investor-grade diligence, probabilistic simulation, and ranked decision recommendations.</p>
+        """
+        early_badge = ""
+        value_prop = """
             <div class="info-box">
                 <p><strong>What you'll get access to:</strong></p>
                 <p>• Financial metrics extraction and analysis</p>
@@ -167,13 +191,30 @@ def render_invite_template(
                 <p>• AI-powered decision recommendations</p>
                 <p>• Real-time runway and burn tracking</p>
             </div>
+        """
+    
+    content = f"""
+        <div class="email-header">
+            <div class="logo">Predixen</div>
+            <h1>{header_title}</h1>
+        </div>
+        <div class="email-body">
+            {early_badge}
+            <h2>Join Predixen Intelligence OS</h2>
+            {intro_text}
             
-            <p class="expiry-notice">This invitation expires on {expires_formatted}.</p>
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="{invite_url}" class="cta-button">Accept Your Invitation</a>
+            </div>
             
-            <p style="font-size: 13px; color: #8888a0;">If you weren't expecting this invitation, you can safely ignore this email.</p>
+            {value_prop}
+            
+            <p class="expiry-notice" style="text-align: center;">This invitation expires on {expires_formatted}.</p>
+            
+            <p style="font-size: 13px; color: #8888a0; margin-top: 24px;">If you weren't expecting this invitation, you can safely ignore this email.</p>
         </div>
         <div class="email-footer">
-            <p>Predixen Intelligence OS</p>
+            <p><strong>Predixen Intelligence OS</strong></p>
             <p>AI-Powered Financial Intelligence for Startups</p>
         </div>
     """
@@ -253,10 +294,10 @@ def render_password_reset_template(
 # Standard template configurations for admin UI
 TEMPLATE_CONFIGS = {
     "invite": {
-        "name": "Invitation Email",
-        "description": "Sent when inviting new users to the platform",
-        "variables": ["invite_url", "role", "invited_by_email", "expires_at"],
-        "subject": "You've been invited to join Predixen Intelligence OS",
+        "name": "Early Access Invitation",
+        "description": "Sent to early users with exclusive access messaging",
+        "variables": ["invite_url", "role", "invited_by_email", "expires_at", "early_access"],
+        "subject": "You're invited to Predixen Early Access",
         "render_fn": "render_invite_template"
     },
     "welcome": {
@@ -291,7 +332,8 @@ def get_template_preview(template_type: str) -> Optional[str]:
             "invite_url": "https://predixen.ai/register?token=sample_token_abc123",
             "role": "analyst",
             "invited_by_email": "admin@company.com",
-            "expires_at": datetime.now()
+            "expires_at": datetime.now(),
+            "early_access": True
         },
         "welcome": {
             "user_name": "John Doe",
