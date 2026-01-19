@@ -12,6 +12,82 @@ MAX_EXCEL_SIZE_MB = 20
 MIN_METRICS_COUNT = 3  # Minimum metrics to consider extraction successful
 
 
+def format_number_as_words(value: float, currency: str = "USD", is_percentage: bool = False) -> str:
+    """Convert a numeric value to a word-based representation.
+    
+    Examples:
+        14246988.40 → "14.2 million USD"
+        125000 → "125 thousand USD"
+        -3600000 → "-3.6 million USD"
+        46.62 (percentage) → "46.6%"
+    """
+    if value is None:
+        return None
+    
+    if is_percentage:
+        return f"{value:.1f}%"
+    
+    abs_value = abs(value)
+    sign = "-" if value < 0 else ""
+    
+    if abs_value >= 1_000_000_000:
+        formatted = f"{sign}{abs_value / 1_000_000_000:.1f} billion {currency}"
+    elif abs_value >= 1_000_000:
+        formatted = f"{sign}{abs_value / 1_000_000:.1f} million {currency}"
+    elif abs_value >= 1_000:
+        formatted = f"{sign}{abs_value / 1_000:.1f} thousand {currency}"
+    else:
+        formatted = f"{sign}{abs_value:,.2f} {currency}"
+    
+    return formatted
+
+
+def create_word_representations(metrics: Dict[str, Any], currency: str = "USD") -> Dict[str, str]:
+    """Create word-based representations for all monetary metrics.
+    
+    Returns a dictionary with keys like 'revenue_words', 'gross_profit_words', etc.
+    """
+    monetary_fields = {
+        'revenue', 'monthly_revenue', 'cogs', 'gross_profit', 'operating_income',
+        'net_income', 'sales_and_marketing', 'other_opex', 'payroll', 'opex',
+        'net_burn', 'monthly_surplus', 'cash_balance', 'mrr', 'arr', 'ltv', 'cac',
+        'arpu', 'net_revenue_india', 'net_revenue_international', 
+        'net_revenue_ecommerce', 'net_revenue_other', 'marketing_expense'
+    }
+    
+    percentage_fields = {
+        'gross_margin', 'operating_margin', 'mom_growth', 'yoy_growth',
+        'revenue_growth_mom', 'ndr'
+    }
+    
+    ratio_fields = {
+        'burn_multiple', 'rule_of_40', 'magic_number', 'margin_magic_number',
+        'margin_burn_multiple', 'ltv_cac_ratio', 'lifetime_gross_margin',
+        'lifetime_operating_margin'
+    }
+    
+    word_representations = {}
+    
+    for field, value in metrics.items():
+        if value is None:
+            continue
+        
+        try:
+            num_value = float(value)
+        except (ValueError, TypeError):
+            continue
+        
+        if field in monetary_fields:
+            word_representations[f"{field}_words"] = format_number_as_words(num_value, currency)
+        elif field in percentage_fields:
+            word_representations[f"{field}_words"] = format_number_as_words(num_value, currency, is_percentage=True)
+        elif field in ratio_fields:
+            sign = "-" if num_value < 0 else ""
+            word_representations[f"{field}_words"] = f"{sign}{abs(num_value):.2f}x"
+    
+    return word_representations
+
+
 def get_openai_client() -> OpenAI:
     """Get OpenAI client with validation."""
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
@@ -545,16 +621,22 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     
     baseline_data = {k: v for k, v in baseline_data.items() if v is not None}
     
+    target_currency = parsed.get("target_currency", "USD")
+    word_representations = create_word_representations(baseline_data, target_currency)
+    
+    baseline_data_with_words = {**baseline_data, **word_representations}
+    
     return {
         "source": "excel",
         "sheet_name": parsed.get("sheet_name"),
         "report_date": parsed.get("report_date"),
         "detected_currency": parsed.get("detected_currency"),
-        "target_currency": parsed.get("target_currency", "USD"),
+        "target_currency": target_currency,
         "fx_rate_used": parsed.get("fx_rate_used"),
         "raw_metrics": metrics,
         "metrics_original_currency": parsed.get("metrics_original_currency", {}),
-        "baseline_data": baseline_data,
+        "baseline_data": baseline_data_with_words,
+        "word_representations": word_representations,
         "summary": summary,
         "extraction_successful": True,
         "extraction_method": extraction_method,
