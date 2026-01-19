@@ -54,7 +54,16 @@ class ExtractionResponse(BaseModel):
     calculatedMetrics: Dict[str, Any]
 
 def normalize_currency_value(value: Any) -> Optional[float]:
-    """Normalize a currency value to float, handling various formats."""
+    """Normalize a currency or percentage value to float, handling various formats.
+    
+    Handles:
+    - Currency symbols ($, etc.)
+    - Comma separators (1,000,000)
+    - Parenthetical negatives ((100))
+    - Suffixes: K/k (thousands), M/m (millions), B/b (billions)
+    - Percentage signs (45% -> 45.0)
+    - 'x' suffix for ratios (3.5x -> 3.5)
+    """
     if value is None:
         return None
     
@@ -63,6 +72,14 @@ def normalize_currency_value(value: Any) -> Optional[float]:
     
     if isinstance(value, str):
         cleaned = value.replace('$', '').replace(',', '').replace('(', '-').replace(')', '').strip()
+        
+        # Handle percentage suffix - remove % and keep as-is (already in percentage form like 45 for 45%)
+        is_percentage = '%' in cleaned
+        cleaned = cleaned.replace('%', '')
+        
+        # Handle 'x' suffix for ratios (e.g., "3.5x")
+        if cleaned.lower().endswith('x'):
+            cleaned = cleaned[:-1]
         
         multiplier = 1
         if cleaned.lower().endswith('k'):
@@ -286,9 +303,15 @@ async def ingest_financials(
             if fileType == 'pdf':
                 result = process_termina_pdf(tmp_path)
                 raw_metrics = result.get('raw_metrics', result)
+                extracted_company_name = result.get('company_name')
+                extracted_currency = result.get('currency', 'USD')
+                extraction_summary = result.get('summary')
             else:
                 result = process_termina_excel(tmp_path)
                 raw_metrics = result.get('raw_metrics', result.get('baseline_data', {}))
+                extracted_company_name = raw_metrics.get('company_name')
+                extracted_currency = raw_metrics.get('currency', 'USD')
+                extraction_summary = None
             
             extracted = extract_with_confidence(raw_metrics, fileType)
             normalized = build_normalized_financials(extracted)
@@ -298,6 +321,14 @@ async def ingest_financials(
             confidence_map = {k: v.confidence for k, v in extracted.items()}
             
             extracted_dict = {k: {"value": v.value, "confidence": v.confidence, "evidence": v.evidence} for k, v in extracted.items()}
+            
+            # Update company name and currency if extracted from PDF
+            if extracted_company_name and extracted_company_name.strip():
+                company.name = extracted_company_name.strip()
+                logger.info(f"Updated company name to: {extracted_company_name}")
+            if extracted_currency:
+                company.currency = extracted_currency
+            db.commit()
             
             dataset = Dataset(
                 company_id=companyId,
@@ -356,6 +387,48 @@ async def ingest_financials(
                 if validation_errors:
                     logger.warning(f"Validation warnings (auto-corrected): {validation_errors}")
                 
+                # Extract additional metrics from raw_metrics
+                marketing_amount = 0.0
+                if normalized.expenseBreakdown and normalized.expenseBreakdown.marketing:
+                    marketing_amount = abs(normalized.expenseBreakdown.marketing)
+                
+                # Get raw_metrics values for extended fields - use normalize_currency_value to handle strings
+                mrr_val = normalize_currency_value(raw_metrics.get('mrr') or raw_metrics.get('monthly_revenue'))
+                arr_val = normalize_currency_value(raw_metrics.get('arr'))
+                gross_profit_val = normalize_currency_value(raw_metrics.get('gross_profit'))
+                gross_margin_val = normalize_currency_value(raw_metrics.get('gross_margin'))
+                operating_income_val = normalize_currency_value(raw_metrics.get('operating_income'))
+                operating_margin_val = normalize_currency_value(raw_metrics.get('operating_margin'))
+                net_burn_val = normalize_currency_value(raw_metrics.get('net_burn'))
+                if net_burn_val is not None:
+                    net_burn_val = abs(net_burn_val)  # Ensure positive
+                runway_months_val = normalize_currency_value(raw_metrics.get('runway_months'))
+                
+                # Handle integer fields
+                headcount_raw = raw_metrics.get('headcount')
+                headcount_val = None
+                if headcount_raw is not None:
+                    try:
+                        headcount_val = int(float(str(headcount_raw).replace(',', '')))
+                    except (ValueError, TypeError):
+                        headcount_val = None
+                
+                customers_raw = raw_metrics.get('customers') or raw_metrics.get('paid_users')
+                customers_val = None
+                if customers_raw is not None:
+                    try:
+                        customers_val = int(float(str(customers_raw).replace(',', '')))
+                    except (ValueError, TypeError):
+                        customers_val = None
+                
+                mom_growth_val = normalize_currency_value(raw_metrics.get('mom_growth') or raw_metrics.get('cmgr_3'))
+                yoy_growth_val = normalize_currency_value(raw_metrics.get('yoy_growth'))
+                ndr_val = normalize_currency_value(raw_metrics.get('ndr'))
+                ltv_val = normalize_currency_value(raw_metrics.get('ltv'))
+                cac_val = normalize_currency_value(raw_metrics.get('cac'))
+                ltv_cac_val = normalize_currency_value(raw_metrics.get('ltv_cac_ratio'))
+                arpu_val = normalize_currency_value(raw_metrics.get('arpu'))
+                
                 record = FinancialRecord(
                     company_id=companyId,
                     period_start=first_of_month,
@@ -366,9 +439,32 @@ async def ingest_financials(
                     payroll=payroll_amount,
                     other_costs=0,
                     cash_balance=cash,
+                    # Extended financial fields
+                    mrr=mrr_val,
+                    arr=arr_val,
+                    gross_profit=gross_profit_val,
+                    gross_margin=gross_margin_val,
+                    operating_income=operating_income_val,
+                    operating_margin=operating_margin_val,
+                    net_burn=net_burn_val if net_burn_val else max(0, net_burn),
+                    runway_months=runway_months_val,
+                    headcount=headcount_val,
+                    customers=customers_val,
+                    mom_growth=mom_growth_val,
+                    yoy_growth=yoy_growth_val,
+                    ndr=ndr_val,
+                    ltv=ltv_val,
+                    cac=cac_val,
+                    ltv_cac_ratio=ltv_cac_val,
+                    arpu=arpu_val,
+                    marketing_expense=marketing_amount,
+                    source_type=fileType,
+                    extraction_summary=extraction_summary,
                 )
                 db.add(record)
                 db.commit()
+                
+                logger.info(f"Saved comprehensive financial record for company {companyId} with {len([v for v in [mrr_val, arr_val, headcount_val, ndr_val, ltv_val, cac_val] if v])} extended metrics")
             
             return ExtractionResponse(
                 extracted=extracted_dict,
@@ -422,14 +518,37 @@ async def get_financial_baseline(
             'cashOnHand': float(latest_record.cash_balance) if latest_record.cash_balance else 0,
             'monthlyRevenue': float(latest_record.revenue) if latest_record.revenue else 0,
             'totalMonthlyExpenses': float(latest_record.opex) if latest_record.opex else 0,
-            'monthlyGrowthRate': 0,
+            'monthlyGrowthRate': float(latest_record.mom_growth) if latest_record.mom_growth else 0,
             'expenseBreakdown': {
                 'payroll': float(latest_record.payroll) if latest_record.payroll else 0,
-                'marketing': 0,
+                'marketing': float(latest_record.marketing_expense) if latest_record.marketing_expense else 0,
                 'operating': float(latest_record.other_costs) if latest_record.other_costs else 0,
             },
-            'currency': 'USD',
+            'currency': company.currency or 'USD',
             'asOfDate': latest_record.period_end.isoformat() if latest_record.period_end else None,
+        },
+        'extendedMetrics': {
+            'mrr': float(latest_record.mrr) if latest_record.mrr else None,
+            'arr': float(latest_record.arr) if latest_record.arr else None,
+            'grossProfit': float(latest_record.gross_profit) if latest_record.gross_profit else None,
+            'grossMargin': float(latest_record.gross_margin) if latest_record.gross_margin else None,
+            'operatingIncome': float(latest_record.operating_income) if latest_record.operating_income else None,
+            'operatingMargin': float(latest_record.operating_margin) if latest_record.operating_margin else None,
+            'netBurn': float(latest_record.net_burn) if latest_record.net_burn else None,
+            'runwayMonths': float(latest_record.runway_months) if latest_record.runway_months else None,
+            'headcount': int(latest_record.headcount) if latest_record.headcount else None,
+            'customers': int(latest_record.customers) if latest_record.customers else None,
+            'yoyGrowth': float(latest_record.yoy_growth) if latest_record.yoy_growth else None,
+            'ndr': float(latest_record.ndr) if latest_record.ndr else None,
+            'ltv': float(latest_record.ltv) if latest_record.ltv else None,
+            'cac': float(latest_record.cac) if latest_record.cac else None,
+            'ltvCacRatio': float(latest_record.ltv_cac_ratio) if latest_record.ltv_cac_ratio else None,
+            'arpu': float(latest_record.arpu) if latest_record.arpu else None,
+        },
+        'company': {
+            'name': company.name,
+            'currency': company.currency,
+            'industry': company.industry,
         }
     }
 

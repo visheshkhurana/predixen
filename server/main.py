@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 from server.core.db import engine, Base, SessionLocal
+from server.core.migrations import run_migrations
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration
@@ -21,6 +22,9 @@ async def lifespan(app: FastAPI):
         logger.info("Creating database tables...")
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
+        
+        # Run migrations to add any new columns to existing tables
+        run_migrations(engine)
         
         db = SessionLocal()
         try:

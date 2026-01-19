@@ -146,4 +146,30 @@ class FinancialRecord(Base):
     
     import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True)
     
+    mrr = Column(Float, nullable=True)
+    arr = Column(Float, nullable=True)
+    gross_profit = Column(Float, nullable=True)
+    gross_margin = Column(Float, nullable=True)
+    operating_income = Column(Float, nullable=True)
+    operating_margin = Column(Float, nullable=True)
+    net_burn = Column(Float, nullable=True)
+    runway_months = Column(Float, nullable=True)
+    
+    headcount = Column(Integer, nullable=True)
+    customers = Column(Integer, nullable=True)
+    
+    mom_growth = Column(Float, nullable=True)
+    yoy_growth = Column(Float, nullable=True)
+    
+    ndr = Column(Float, nullable=True)
+    ltv = Column(Float, nullable=True)
+    cac = Column(Float, nullable=True)
+    ltv_cac_ratio = Column(Float, nullable=True)
+    arpu = Column(Float, nullable=True)
+    
+    marketing_expense = Column(Float, nullable=True)
+    
+    source_type = Column(String(20), nullable=True)
+    extraction_summary = Column(Text, nullable=True)
+    
     company = relationship("Company", back_populates="financial_records")
