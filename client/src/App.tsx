@@ -32,6 +32,7 @@ import AdminMetrics from "@/pages/admin/metrics";
 import AdminLoginHistory from "@/pages/admin/login-history";
 import AdminActivity from "@/pages/admin/activity";
 import AdminInvites from "@/pages/admin/invites";
+import AdminEmailTemplates from "@/pages/admin/email-templates";
 import AdminLoginPage from "@/pages/admin/login";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
@@ -169,6 +170,9 @@ function Router() {
       </Route>
       <Route path="/admin/invites">
         {() => <AdminRoute component={AdminInvites} />}
+      </Route>
+      <Route path="/admin/email-templates">
+        {() => <AdminRoute component={AdminEmailTemplates} />}
       </Route>
       <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />
