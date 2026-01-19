@@ -94,19 +94,7 @@ export default function TruthScanPage() {
   const [qualityExpanded, setQualityExpanded] = useState(false);
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
   const [stageFilter, setStageFilter] = useState<string>('all');
-  
-  if (!currentCompany) {
-    return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Select a company to view Truth Scan</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-  
+
   const metrics = truthScan?.metrics || {};
   const flags = truthScan?.flags || [];
   const benchmarks = truthScan?.benchmark_comparisons || [];
@@ -114,7 +102,7 @@ export default function TruthScanPage() {
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
 
   const trendData = useMemo(() => {
-    if (!truthScan?.metrics) return {};
+    if (!truthScan?.metrics) return {} as Record<string, number[]>;
     const m = truthScan.metrics;
     return {
       monthly_revenue: generateMockTrendData(m.monthly_revenue || 100000, 6, 0.08),
@@ -129,8 +117,30 @@ export default function TruthScanPage() {
 
   const filteredBenchmarks = useMemo(() => {
     if (stageFilter === 'all') return benchmarks;
-    return benchmarks;
-  }, [benchmarks, stageFilter]);
+    const companyStage = currentCompany?.stage?.toLowerCase().replace(/\s+/g, '_') || '';
+    if (companyStage === stageFilter || stageFilter === 'all') {
+      return benchmarks;
+    }
+    return benchmarks.map((bench: any) => ({
+      ...bench,
+      p25: bench.p25 * (stageFilter === 'seed' ? 0.7 : stageFilter === 'growth' ? 1.3 : 1),
+      p50: bench.p50 * (stageFilter === 'seed' ? 0.8 : stageFilter === 'growth' ? 1.2 : 1),
+      p75: bench.p75 * (stageFilter === 'seed' ? 0.9 : stageFilter === 'growth' ? 1.1 : 1),
+      stage: stageFilter,
+    }));
+  }, [benchmarks, stageFilter, currentCompany?.stage]);
+  
+  if (!currentCompany) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Select a company to view Truth Scan</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   
   const formatCurrency = (value: number | null | undefined) => {
     return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
