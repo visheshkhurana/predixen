@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import base64
 import json
 import logging
@@ -11,6 +12,171 @@ logger = logging.getLogger(__name__)
 
 MAX_PDF_SIZE_MB = 10
 MIN_TEXT_LENGTH = 100  # Minimum characters to consider text extraction successful
+
+
+def parse_value_from_text(text: str) -> Optional[float]:
+    """Parse a numeric value from text, handling $, M, K, %, x suffixes.
+    
+    Returns the raw value as reported (e.g., "$14.2M" -> 14.2, "60.3%" -> 60.3)
+    Does NOT multiply by scale factors - stores in millions as millions.
+    """
+    if not text:
+        return None
+    
+    text = text.strip()
+    
+    # Check for percentage
+    is_percentage = '%' in text
+    
+    # Check for 'x' suffix (multiplier/ratio)
+    is_ratio = text.lower().endswith('x')
+    
+    # Check for M/K suffixes - we'll preserve millions as millions
+    is_millions = 'm' in text.lower() and not text.lower().endswith('month')
+    is_thousands = 'k' in text.lower()
+    is_billions = 'b' in text.lower()
+    
+    # Clean the string to extract just the number
+    cleaned = text
+    cleaned = re.sub(r'[₹$€£,]', '', cleaned)  # Remove currency symbols
+    cleaned = cleaned.replace('%', '')
+    cleaned = re.sub(r'[xX]$', '', cleaned)
+    cleaned = re.sub(r'[mMkKbB]$', '', cleaned)
+    cleaned = cleaned.replace('(', '-').replace(')', '')  # Handle negatives
+    cleaned = cleaned.strip()
+    
+    try:
+        value = float(cleaned)
+        
+        # Apply scale for storage (store in base units)
+        if is_millions:
+            value = value * 1_000_000
+        elif is_thousands:
+            value = value * 1_000
+        elif is_billions:
+            value = value * 1_000_000_000
+        
+        return value
+    except (ValueError, TypeError):
+        return None
+
+
+def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
+    """Extract financial metrics using direct text pattern matching.
+    
+    This is optimized for Tribe Capital Mini Benchmark Scan and similar formats.
+    Returns values exactly as stated in the PDF without scaling.
+    """
+    metrics = {}
+    
+    # Normalize whitespace and line breaks for easier matching
+    text = ' '.join(pdf_text.split())
+    
+    # Company name - look for common patterns
+    company_match = re.search(r'(?:Mini Benchmark Scan|Overview)\s+([A-Z][A-Za-z0-9\s]+?)(?:\s+(?:Key|Revenue|Summary|March|January|February|April|May|June|July|August|September|October|November|December))', text)
+    if company_match:
+        metrics['company_name'] = company_match.group(1).strip()
+    
+    # Monthly Revenue: "In March 2025, Revenue was $14.2M"
+    revenue_match = re.search(r'(?:In\s+\w+\s+\d{4},\s+)?Revenue\s+was\s+([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if revenue_match:
+        metrics['monthly_revenue'] = parse_value_from_text(revenue_match.group(1))
+    
+    # Annual Run Rate: "($171.0M run rate)" or "run rate of $171M"
+    run_rate_match = re.search(r'\(?\s*([₹$€£]?[\d.,]+[MKBmkb]?)\s*run\s*rate\)?', text, re.IGNORECASE)
+    if run_rate_match:
+        metrics['run_rate_revenue'] = parse_value_from_text(run_rate_match.group(1))
+        # Also calculate ARR from run rate
+        if metrics.get('run_rate_revenue'):
+            metrics['arr'] = metrics['run_rate_revenue']
+    
+    # Gross Margin: "Gross Margin was 60.3%"
+    gross_margin_match = re.search(r'Gross\s+Margin\s+(?:was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    if gross_margin_match:
+        metrics['gross_margin'] = float(gross_margin_match.group(1))
+    
+    # Operating Margin: "Operating Margin was 30.6%" or "Operating margin 30.6%"
+    op_margin_match = re.search(r'Operating\s+[Mm]argin\s+(?:was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    if op_margin_match:
+        metrics['operating_margin'] = float(op_margin_match.group(1))
+    
+    # Burn Multiple: "Burn Multiple was -0.7x"
+    burn_match = re.search(r'Burn\s+Multiple\s+(?:was\s+)?(-?[\d.]+)x?', text, re.IGNORECASE)
+    if burn_match:
+        metrics['burn_multiple'] = float(burn_match.group(1))
+    
+    # Revenue CMGR - look for 3/6/12 month growth rates
+    # Patterns like "3-month CMGR of 4.2%" or "CMGR (3m): 4.2%"
+    cmgr3_match = re.search(r'(?:3[-\s]?month\s+)?CMGR\s*(?:\(3m?\))?\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    if cmgr3_match:
+        metrics['cmgr_3'] = float(cmgr3_match.group(1))
+        metrics['mom_growth'] = float(cmgr3_match.group(1))  # Use 3-month as primary
+    
+    cmgr6_match = re.search(r'6[-\s]?month\s+CMGR\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    if cmgr6_match:
+        metrics['cmgr_6'] = float(cmgr6_match.group(1))
+    
+    cmgr12_match = re.search(r'12[-\s]?month\s+CMGR\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    if cmgr12_match:
+        metrics['cmgr_12'] = float(cmgr12_match.group(1))
+    
+    # Operating Income: "Operating Income $4.4M" or "Operating Income was $4.4M"
+    op_income_match = re.search(r'Operating\s+Income\s+(?:was\s+)?([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if op_income_match:
+        metrics['operating_income'] = parse_value_from_text(op_income_match.group(1))
+    
+    # Gross Profit: "Gross Profit $8.6M"
+    gross_profit_match = re.search(r'Gross\s+Profit\s+(?:was\s+)?([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if gross_profit_match:
+        metrics['gross_profit'] = parse_value_from_text(gross_profit_match.group(1))
+    
+    # Cash Balance
+    cash_match = re.search(r'(?:Cash\s+Balance|Cash\s+on\s+Hand|Bank\s+Balance)\s*:?\s*([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if cash_match:
+        metrics['cash_balance'] = parse_value_from_text(cash_match.group(1))
+    
+    # Net Burn
+    burn_rate_match = re.search(r'(?:Net\s+Burn|Monthly\s+Burn)\s*:?\s*([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if burn_rate_match:
+        metrics['net_burn'] = parse_value_from_text(burn_rate_match.group(1))
+    
+    # Runway
+    runway_match = re.search(r'Runway\s*:?\s*(\d+)\s*months?', text, re.IGNORECASE)
+    if runway_match:
+        metrics['runway_months'] = int(runway_match.group(1))
+    
+    # Headcount
+    headcount_match = re.search(r'(?:Headcount|Employees|Team\s+Size)\s*:?\s*(\d+)', text, re.IGNORECASE)
+    if headcount_match:
+        metrics['headcount'] = int(headcount_match.group(1))
+    
+    # YoY Growth: "Year-over-Year Growth 1.6x" or "YoY Growth 60%"
+    yoy_match = re.search(r'(?:Y[oe][Yy]|Year[-\s]over[-\s]Year)\s+[Gg]rowth\s*:?\s*(-?[\d.]+)([x%])?', text, re.IGNORECASE)
+    if yoy_match:
+        value = float(yoy_match.group(1))
+        suffix = yoy_match.group(2)
+        if suffix and suffix.lower() == 'x':
+            # Convert 1.6x to 60%
+            metrics['yoy_growth'] = (value - 1) * 100
+        else:
+            metrics['yoy_growth'] = value
+    
+    # Currency detection
+    if '₹' in pdf_text:
+        metrics['currency'] = 'INR'
+    elif '€' in pdf_text:
+        metrics['currency'] = 'EUR'
+    elif '£' in pdf_text:
+        metrics['currency'] = 'GBP'
+    elif '$' in pdf_text:
+        metrics['currency'] = 'USD'
+    
+    # Report date - look for month year patterns
+    date_match = re.search(r'(?:In\s+)?(\w+\s+\d{4})', text)
+    if date_match:
+        metrics['report_date'] = date_match.group(1)
+    
+    return metrics
 
 
 def get_openai_client() -> OpenAI:
@@ -62,52 +228,52 @@ Return the result as a JSON object with these exact keys (use null if not found)
   "company_name": "string - the company name",
   "report_date": "string - the date of the report (YYYY-MM-DD format if possible)",
   "currency": "string - the currency code (USD, EUR, GBP, INR, etc.)",
-  "monthly_revenue": "number - current monthly revenue in the stated currency",
-  "run_rate_revenue": "number - annualized run rate revenue",
-  "cogs": "number - cost of goods sold (monthly)",
-  "gross_profit": "number - gross profit (monthly)",
-  "gross_margin": "number - gross margin as percentage (0-100)",
-  "operating_income": "number - operating income (monthly)",
-  "operating_margin": "number - operating margin as percentage",
-  "total_monthly_expenses": "number - total monthly operating expenses (COGS + Opex + S&M + Other)",
-  "net_burn": "number - monthly net burn rate (expenses minus revenue if negative cash flow)",
-  "cash_balance": "number - current cash on hand / bank balance",
+  "monthly_revenue": "number - current monthly revenue in base units (e.g., $14.2M = 14200000)",
+  "run_rate_revenue": "number - annualized run rate revenue in base units",
+  "cogs": "number - cost of goods sold (monthly) in base units",
+  "gross_profit": "number - gross profit (monthly) in base units",
+  "gross_margin": "number - gross margin as percentage (e.g., 60.3% = 60.3)",
+  "operating_income": "number - operating income (monthly) in base units",
+  "operating_margin": "number - operating margin as percentage (e.g., 30.6% = 30.6)",
+  "burn_multiple": "number - burn multiple as reported (e.g., -0.7x = -0.7)",
+  "total_monthly_expenses": "number - total monthly operating expenses in base units",
+  "net_burn": "number - monthly net burn rate in base units",
+  "cash_balance": "number - current cash on hand in base units",
   "runway_months": "number - estimated runway in months",
-  "yoy_growth": "number - year over year growth rate as multiple (e.g., 1.6x becomes 60)",
-  "mom_growth": "number - month over month growth rate as percentage (e.g., CMGR)",
+  "yoy_growth": "number - year over year growth as percentage (e.g., 1.6x = 60, 60% = 60)",
+  "mom_growth": "number - month over month growth rate as percentage",
   "cmgr_3": "number - 3-month compound monthly growth rate as percentage",
   "cmgr_6": "number - 6-month compound monthly growth rate as percentage",
   "cmgr_12": "number - 12-month compound monthly growth rate as percentage",
-  "payroll": "number - monthly payroll/personnel expense",
-  "sales_and_marketing": "number - monthly sales & marketing expense",
-  "other_opex": "number - monthly other operating expenses",
-  "opex": "number - total monthly operating expenses (excluding COGS)",
+  "payroll": "number - monthly payroll/personnel expense in base units",
+  "sales_and_marketing": "number - monthly sales & marketing expense in base units",
+  "other_opex": "number - monthly other operating expenses in base units",
+  "opex": "number - total monthly operating expenses in base units",
   "headcount": "number - current employee count",
-  "arr": "number - annual recurring revenue",
-  "mrr": "number - monthly recurring revenue",
+  "arr": "number - annual recurring revenue in base units",
+  "mrr": "number - monthly recurring revenue in base units",
   "ndr": "number - net dollar retention as percentage",
   "logo_retention": "number - customer logo retention as percentage",
   "customers": "number - total customer/user count",
   "monthly_active_users": "number - monthly active users",
   "paid_users": "number - monthly paid users",
-  "arpu": "number - average revenue per user/customer",
-  "ltv": "number - customer lifetime value",
-  "cac": "number - customer acquisition cost",
-  "ltv_cac_ratio": "number - LTV to CAC ratio",
+  "arpu": "number - average revenue per user/customer in base units",
+  "ltv": "number - customer lifetime value in base units",
+  "cac": "number - customer acquisition cost in base units",
+  "ltv_cac_ratio": "number - LTV to CAC ratio as a decimal",
   "summary": "string - brief 2-3 sentence summary of the company's financial health"
 }
 
-Important instructions:
-- Extract actual numbers from the report, not formatted strings
-- Convert all monetary values to numbers (e.g., "$14.2M" becomes 14200000)
-- Convert percentages to numbers (e.g., 85% becomes 85)
-- For YoY growth shown as multipliers (e.g., "1.6x"), convert to percentage (60%)
-- Use null for any metrics not found in the report
-- Look for metrics in tables, key findings sections, and benchmark tables
-- If COGS and Opex are given, calculate total_monthly_expenses = COGS + all Opex items
-- If operating margin and revenue are given, calculate operating_income
-- Be precise with the numbers - do not estimate or guess
-- CRITICAL: All expense values (COGS, payroll, marketing, opex, etc.) must be returned as POSITIVE numbers, even if they appear as negative in the P&L. Revenue should be positive.
+CRITICAL INSTRUCTIONS - EXTRACT EXACTLY AS STATED:
+- Extract the EXACT values from the report without additional calculation or scaling
+- For monetary values: $14.2M = 14200000, $500K = 500000, $1.5B = 1500000000
+- For percentages: 60.3% = 60.3, 30.6% = 30.6, 4.2% = 4.2 (keep the number, not decimal)
+- For multiples/ratios: -0.7x = -0.7, 3.5x = 3.5 (keep the sign and value)
+- For YoY growth as multiplier: 1.6x = 60 (convert to percentage growth)
+- Use null if a metric is NOT found - do NOT default to zero
+- PRESERVE negative values (like negative burn multiple) - do not clamp to zero
+- All expense values should be POSITIVE numbers, but burn_multiple can be negative
+- Do NOT estimate or calculate values that aren't explicitly stated
 
 """
 
@@ -302,36 +468,48 @@ def normalize_expense_value(value: Any) -> Optional[float]:
 def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) -> Dict[str, Any]:
     """Process a Termina PDF and extract financial metrics.
     
-    Uses a two-stage approach:
-    1. Try text extraction with pdfplumber + OpenAI analysis
-    2. Fall back to OpenAI Vision for scanned/image-based PDFs
+    Uses a three-stage approach:
+    1. Try direct pattern extraction using pdfplumber (most accurate for known formats)
+    2. Use OpenAI to fill in any missing fields
+    3. Fall back to OpenAI Vision for scanned/image-based PDFs
     """
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
     if file_size_mb > max_size_mb:
         raise ValueError(f"PDF file too large ({file_size_mb:.1f}MB). Maximum allowed is {max_size_mb}MB.")
     
-    extraction_method = "text"
+    extraction_method = "pattern"
     
-    # Stage 1: Try text extraction
+    # Stage 1: Try text extraction with pdfplumber
     pdf_text = extract_text_from_pdf(file_path)
     
+    # Stage 2: Try pattern-based extraction first (most accurate for known formats)
+    pattern_metrics = {}
+    ai_metrics = {}
+    
     if len(pdf_text.strip()) >= MIN_TEXT_LENGTH:
-        # Good text extraction, use standard OpenAI analysis
-        logger.info(f"Text extraction successful ({len(pdf_text)} chars), using text-based analysis")
+        logger.info(f"Text extraction successful ({len(pdf_text)} chars)")
+        
+        # First, try pattern extraction for known formats (Mini Benchmark Scan, etc.)
+        pattern_metrics = extract_metrics_with_patterns(pdf_text)
+        logger.info(f"Pattern extraction found {len(pattern_metrics)} metrics: {list(pattern_metrics.keys())}")
+        
+        # Then use OpenAI to fill in any missing fields
         try:
-            metrics = extract_metrics_with_openai(pdf_text)
+            ai_metrics = extract_metrics_with_openai(pdf_text)
+            extraction_method = "pattern+ai"
         except Exception as e:
-            logger.warning(f"Text-based extraction failed: {e}, falling back to vision")
-            extraction_method = "vision"
-            metrics = None
+            logger.warning(f"AI extraction failed: {e}")
+            if not pattern_metrics:
+                extraction_method = "vision"
     else:
-        # Insufficient text, use vision
         logger.info(f"Insufficient text extracted ({len(pdf_text.strip())} chars), using vision-based analysis")
         extraction_method = "vision"
-        metrics = None
     
-    # Stage 2: Fall back to vision if needed
-    if metrics is None:
+    # Merge pattern and AI metrics (pattern takes priority for accuracy)
+    metrics = {**ai_metrics, **pattern_metrics}  # pattern_metrics override ai_metrics
+    
+    # Stage 3: Fall back to vision if we still have no metrics
+    if not metrics:
         try:
             image_list = pdf_to_images(file_path)
             if not image_list:
@@ -346,9 +524,9 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     if not metrics:
         raise ValueError("Failed to extract any metrics from the PDF.")
     
-    # Normalize all expense fields to be positive
+    # Normalize expense fields to be positive (but NOT net_burn - it can be negative for profitable companies)
     expense_fields = ['cogs', 'opex', 'payroll', 'sales_and_marketing', 'other_opex', 
-                      'total_monthly_expenses', 'net_burn', 'operating_expenses']
+                      'total_monthly_expenses', 'operating_expenses']
     for field in expense_fields:
         if field in metrics and metrics[field] is not None:
             metrics[field] = normalize_expense_value(metrics[field])
@@ -386,6 +564,7 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
         "cmgr_12": metrics.get("cmgr_12"),
         "runway_months": metrics.get("runway_months"),
         "net_burn": metrics.get("net_burn"),
+        "burn_multiple": metrics.get("burn_multiple"),  # Preserve negative values
         "ndr": metrics.get("ndr"),
         "logo_retention": metrics.get("logo_retention"),
         "customers": metrics.get("customers"),

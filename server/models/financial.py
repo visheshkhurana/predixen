@@ -153,6 +153,7 @@ class FinancialRecord(Base):
     operating_income = Column(Float, nullable=True)
     operating_margin = Column(Float, nullable=True)
     net_burn = Column(Float, nullable=True)
+    burn_multiple = Column(Float, nullable=True)  # Can be negative (e.g., -0.7)
     runway_months = Column(Float, nullable=True)
     
     headcount = Column(Integer, nullable=True)

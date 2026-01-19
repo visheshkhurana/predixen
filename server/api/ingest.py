@@ -132,8 +132,8 @@ def extract_with_confidence(raw_metrics: Dict[str, Any], source: str) -> Dict[st
     
     string_fields = ['currency', 'asOfDate']
     
-    # Expense fields that must always be positive
-    expense_fields = {'totalMonthlyExpenses', 'payroll', 'marketing', 'operating', 'cogs', 'netBurn'}
+    # Expense fields that must always be positive (NOT netBurn - it can be negative for profitable companies)
+    expense_fields = {'totalMonthlyExpenses', 'payroll', 'marketing', 'operating', 'cogs'}
     
     for field, possible_keys in field_mapping.items():
         value = None
@@ -400,8 +400,8 @@ async def ingest_financials(
                 operating_income_val = normalize_currency_value(raw_metrics.get('operating_income'))
                 operating_margin_val = normalize_currency_value(raw_metrics.get('operating_margin'))
                 net_burn_val = normalize_currency_value(raw_metrics.get('net_burn'))
-                if net_burn_val is not None:
-                    net_burn_val = abs(net_burn_val)  # Ensure positive
+                # Note: net_burn can be positive (burning cash) or negative (generating cash)
+                # We keep it as-is to preserve the actual value from extraction
                 runway_months_val = normalize_currency_value(raw_metrics.get('runway_months'))
                 
                 # Handle integer fields
@@ -429,6 +429,16 @@ async def ingest_financials(
                 ltv_cac_val = normalize_currency_value(raw_metrics.get('ltv_cac_ratio'))
                 arpu_val = normalize_currency_value(raw_metrics.get('arpu'))
                 
+                # Burn multiple can be negative (e.g., -0.7x) - preserve sign
+                burn_multiple_raw = raw_metrics.get('burn_multiple')
+                burn_multiple_val = None
+                if burn_multiple_raw is not None:
+                    try:
+                        val_str = str(burn_multiple_raw).replace('x', '').replace('X', '').strip()
+                        burn_multiple_val = float(val_str)
+                    except (ValueError, TypeError):
+                        burn_multiple_val = None
+                
                 record = FinancialRecord(
                     company_id=companyId,
                     period_start=first_of_month,
@@ -446,7 +456,8 @@ async def ingest_financials(
                     gross_margin=gross_margin_val,
                     operating_income=operating_income_val,
                     operating_margin=operating_margin_val,
-                    net_burn=net_burn_val if net_burn_val else max(0, net_burn),
+                    net_burn=net_burn_val if net_burn_val is not None else net_burn,  # Preserve sign
+                    burn_multiple=burn_multiple_val,  # Preserve negative values
                     runway_months=runway_months_val,
                     headcount=headcount_val,
                     customers=customers_val,
@@ -535,6 +546,7 @@ async def get_financial_baseline(
             'operatingIncome': float(latest_record.operating_income) if latest_record.operating_income else None,
             'operatingMargin': float(latest_record.operating_margin) if latest_record.operating_margin else None,
             'netBurn': float(latest_record.net_burn) if latest_record.net_burn else None,
+            'burnMultiple': float(latest_record.burn_multiple) if latest_record.burn_multiple is not None else None,
             'runwayMonths': float(latest_record.runway_months) if latest_record.runway_months else None,
             'headcount': int(latest_record.headcount) if latest_record.headcount else None,
             'customers': int(latest_record.customers) if latest_record.customers else None,
