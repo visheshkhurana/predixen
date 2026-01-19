@@ -11,6 +11,7 @@ import { ScenarioComparisonTable } from '@/components/ScenarioComparisonTable';
 import { SimulationSummaryBanner } from '@/components/SimulationSummaryBanner';
 import { SimulationLearnMoreModal } from '@/components/SimulationLearnMoreModal';
 import { ScenarioWizard } from '@/components/ScenarioWizard';
+import { type ScenarioEvent } from '@/components/CustomEventBuilder';
 import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
 import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
 import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
@@ -165,7 +166,7 @@ export default function ScenariosPage() {
   const editCommentMutation = useEditComment();
   const deleteCommentMutation = useDeleteComment();
   
-  const currentUserEmail = currentCompany?.user_id ? `demo@predixen.ai` : 'user@example.com';
+  const currentUserEmail = currentCompany ? `demo@predixen.ai` : 'user@example.com';
   
   // Check if any scenario has been run (has simulation results)
   const hasRunScenario = useMemo(() => {

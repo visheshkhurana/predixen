@@ -39,16 +39,27 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 ### Key Features and Technical Implementations
 1.  **Ingestion**: CSV upload, manual baseline, and AI-powered extraction from Excel/PDF using OpenAI.
 2.  **Truth Scan**: Computes 24 financial metrics, benchmarks against industry data, and assigns confidence scores.
-3.  **Simulation Engine**: Monte Carlo simulations with 24-month projections.
-    -   **Regime-aware Simulation**: Base, Downturn, and Breakout regimes with correlated driver sampling (growth_rate, churn_rate, gross_margin, CAC, DSO, conversion_rate) using Cholesky decomposition.
-    -   **Scenario Events**: Supports 8 event types (e.g., pricing change, fundraise) with configurable probabilities and timing.
-    -   **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
-    -   **Sensitivity Analysis**: "What Must Be True" driver impact analysis for target runway.
-4.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
-5.  **Copilot**: Multi-agent router with context pack grounding for AI assistance.
-6.  **Forecasting**: Holt-Winters exponential smoothing, linear regression.
-7.  **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
-8.  **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
+3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections.
+    -   **Distribution-Aware Simulation**: Supports fixed, normal, lognormal, uniform, triangular, and discrete probability distributions for event impacts.
+    -   **Configurable Iterations**: 100 to 10,000 iterations with configurable confidence intervals (P10/P25/P50/P75/P90).
+    -   **Async Job Execution**: Background job processing with progress tracking via `/api/simulations/run` and `/api/simulations/jobs/{id}`.
+    -   **Regime-aware Simulation**: Base, Downturn, and Breakout regimes with correlated driver sampling.
+    -   **Custom Events**: 12 event types with probability-weighted impacts on revenue, costs, growth, churn, margin, headcount, and cash.
+    -   **Event Conditions**: Conditional event triggering based on metric thresholds.
+4.  **Sensitivity Analysis**: Tornado chart data generation via `/api/simulations/sensitivity`.
+    -   **Parameter Sweeps**: Analyze impact of varying parameters on runway.
+    -   **Ranked Drivers**: Top drivers sorted by impact magnitude.
+    -   **Visual Insights**: TornadoChart and SensitivityPanel UI components.
+5.  **Scenario Versioning**: Full version control for scenarios via `/api/simulations/versions`.
+    -   **Version History**: Create, list, and restore scenario versions.
+    -   **Diff View**: Compare changes between versions (inputs, events, tags).
+    -   **Rollback**: Restore to any previous version with audit trail.
+6.  **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
+7.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
+8.  **Copilot**: Multi-agent router with context pack grounding for AI assistance.
+9.  **Forecasting**: Holt-Winters exponential smoothing, linear regression.
+10. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
+11. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
 
 ### User Roles
 - `owner`, `admin`: Full platform access including admin dashboard.

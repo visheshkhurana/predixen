@@ -10,6 +10,7 @@ from server.api import forecasting as forecasting_api, alerts as alerts_api, int
 from server.api import imports as imports_api
 from server.api import admin as admin_api
 from server.api import workspace as workspace_api, comments as comments_api
+from server.api import simulation_jobs as simulation_jobs_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ app.include_router(imports_api.router)
 app.include_router(admin_api.router)
 app.include_router(workspace_api.router)
 app.include_router(comments_api.router)
+app.include_router(simulation_jobs_api.router)
 
 @app.get("/")
 def root():
