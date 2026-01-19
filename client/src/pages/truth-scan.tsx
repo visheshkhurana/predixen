@@ -4,11 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from '@/components/MetricCard';
-import { BenchmarkBar } from '@/components/BenchmarkBar';
 import { MetricDetailModal } from '@/components/MetricDetailModal';
 import { ExportButton } from '@/components/ExportButton';
 import { InfoTooltip } from '@/components/InfoTooltip';
-import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Filter } from 'lucide-react';
+import { UnitEconomicsPanel } from '@/components/UnitEconomicsPanel';
+import { BurnBreakdownChart } from '@/components/BurnBreakdownChart';
+import { ScenarioRunwayToggle } from '@/components/ScenarioRunwayToggle';
+import { CashFlowForecast } from '@/components/CashFlowForecast';
+import { HeadcountPanel } from '@/components/HeadcountPanel';
+import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
@@ -16,7 +20,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generateMockTrendData } from '@/components/Sparkline';
 
 const STATUS_EXPLANATIONS = {
@@ -93,11 +96,9 @@ export default function TruthScanPage() {
   
   const [qualityExpanded, setQualityExpanded] = useState(false);
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
-  const [stageFilter, setStageFilter] = useState<string>('all');
 
   const metrics = truthScan?.metrics || {};
   const flags = truthScan?.flags || [];
-  const benchmarks = truthScan?.benchmark_comparisons || [];
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
 
@@ -114,21 +115,6 @@ export default function TruthScanPage() {
       operating_margin: generateMockTrendData((m.operating_margin || -0.2) * 100 + 50, 6, 0.08),
     };
   }, [truthScan?.metrics]);
-
-  const filteredBenchmarks = useMemo(() => {
-    if (stageFilter === 'all') return benchmarks;
-    const companyStage = currentCompany?.stage?.toLowerCase().replace(/\s+/g, '_') || '';
-    if (companyStage === stageFilter || stageFilter === 'all') {
-      return benchmarks;
-    }
-    return benchmarks.map((bench: any) => ({
-      ...bench,
-      p25: bench.p25 * (stageFilter === 'seed' ? 0.7 : stageFilter === 'growth' ? 1.3 : 1),
-      p50: bench.p50 * (stageFilter === 'seed' ? 0.8 : stageFilter === 'growth' ? 1.2 : 1),
-      p75: bench.p75 * (stageFilter === 'seed' ? 0.9 : stageFilter === 'growth' ? 1.1 : 1),
-      stage: stageFilter,
-    }));
-  }, [benchmarks, stageFilter, currentCompany?.stage]);
   
   if (!currentCompany) {
     return (
@@ -160,7 +146,7 @@ export default function TruthScanPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Truth Scan</h1>
-          <p className="text-muted-foreground">24 metrics benchmarked against industry standards</p>
+          <p className="text-muted-foreground">24 financial metrics for startup health assessment</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {truthScan && (
@@ -525,65 +511,58 @@ export default function TruthScanPage() {
         </div>
       </div>
       
-      {filteredBenchmarks.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold">Benchmark Comparisons</h2>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" className="p-0.5" data-testid="tooltip-benchmarks">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="text-sm">
-                    Compare your metrics against industry benchmarks. P25/P50/P75 represent the 25th, 50th (median), and 75th percentiles of comparable companies.
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <Select value={stageFilter} onValueChange={setStageFilter}>
-                <SelectTrigger className="w-40" data-testid="select-stage-filter">
-                  <SelectValue placeholder="Filter by stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Stages</SelectItem>
-                  <SelectItem value="seed">Seed</SelectItem>
-                  <SelectItem value="series_a">Series A</SelectItem>
-                  <SelectItem value="series_b">Series B</SelectItem>
-                  <SelectItem value="growth">Growth</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredBenchmarks.map((bench: any) => (
-              <Card key={bench.metric} className="overflow-visible">
-                <CardContent className="p-4">
-                  <BenchmarkBar
-                    metric={bench.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                    value={bench.value}
-                    p25={bench.p25}
-                    p50={bench.p50}
-                    p75={bench.p75}
-                    direction={bench.direction}
-                    testId={`benchmark-${bench.metric}`}
-                  />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Unit Economics Section */}
+      <UnitEconomicsPanel 
+        metrics={{
+          cac: metrics.cac,
+          ltv: metrics.ltv,
+          ltv_cac_ratio: metrics.ltv_cac_ratio,
+          payback_months: metrics.payback_months,
+          mrr: metrics.mrr,
+          arr: metrics.arr,
+          arpu: metrics.arpu,
+          customer_count: metrics.customer_count,
+          churn_rate_customer: metrics.churn_rate_customer,
+          churn_rate_revenue: metrics.churn_rate_revenue,
+          net_revenue_retention: metrics.net_revenue_retention,
+        }}
+        currency={currentCompany?.currency || 'USD'}
+      />
       
-      {flags.filter((f: any) => f.severity !== 'high').length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Warnings & Insights</h2>
-          <div className="space-y-2">
-            {flags.filter((f: any) => f.severity !== 'high').map((flag: any, i: number) => (
+      {/* Burn & Runway Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BurnBreakdownChart 
+          breakdown={metrics.expense_breakdown}
+          currency={currentCompany?.currency || 'USD'}
+        />
+        <ScenarioRunwayToggle
+          currentRunway={metrics.runway_p50}
+          currentBurn={metrics.net_burn}
+          cashBalance={metrics.cash_balance}
+          currency={currentCompany?.currency || 'USD'}
+        />
+      </div>
+      
+      {/* Cash Flow & Headcount Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CashFlowForecast 
+          forecast={metrics.cash_flow_forecast}
+          currency={currentCompany?.currency || 'USD'}
+        />
+        <HeadcountPanel
+          headcount={metrics.headcount}
+          plannedHires={metrics.planned_hires}
+          revenuePerEmployee={metrics.revenue_per_employee}
+          currency={currentCompany?.currency || 'USD'}
+        />
+      </div>
+      
+      {/* Insights & Recommendations Section - always shown */}
+      <div className="space-y-4" data-testid="insights-section">
+        <h2 className="text-xl font-semibold">Insights & Recommendations</h2>
+        <div className="space-y-2">
+          {flags.filter((f: any) => f.severity !== 'high').length > 0 ? (
+            flags.filter((f: any) => f.severity !== 'high').map((flag: any, i: number) => (
               <Card key={i} className="overflow-visible">
                 <CardContent className="p-4 flex items-start gap-3">
                   <AlertTriangle className={`h-5 w-5 mt-0.5 ${flag.severity === 'medium' ? 'text-amber-500' : 'text-muted-foreground'}`} />
@@ -593,10 +572,40 @@ export default function TruthScanPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            ))
+          ) : (
+            <>
+              <Card className="overflow-visible">
+                <CardContent className="p-4 flex items-start gap-3">
+                  <CheckCircle className="h-5 w-5 mt-0.5 text-emerald-500" />
+                  <div>
+                    <p className="font-medium">Financial Health is Looking Good</p>
+                    <p className="text-sm text-muted-foreground">No critical issues detected. Your metrics are within healthy ranges. Continue monitoring key indicators regularly.</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="overflow-visible">
+                <CardContent className="p-4 flex items-start gap-3">
+                  <Lightbulb className="h-5 w-5 mt-0.5 text-primary" />
+                  <div>
+                    <p className="font-medium">Opportunity: Optimize Your Burn Rate</p>
+                    <p className="text-sm text-muted-foreground">Use the Scenario-Based Runway toggle above to explore how cost reduction strategies could extend your runway.</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="overflow-visible">
+                <CardContent className="p-4 flex items-start gap-3">
+                  <TrendingUp className="h-5 w-5 mt-0.5 text-primary" />
+                  <div>
+                    <p className="font-medium">Next Step: Run a Simulation</p>
+                    <p className="text-sm text-muted-foreground">Head to the Simulation page to model different scenarios and understand the probabilistic outcomes for your business.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
-      )}
+      </div>
       
       <MetricDetailModal
         open={selectedMetric.definition !== null}
