@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Sparkline } from './Sparkline';
 
 interface MetricCardProps {
   title: string;
@@ -10,6 +11,7 @@ interface MetricCardProps {
   subtitle?: string;
   trend?: 'up' | 'down' | 'stable';
   trendValue?: string;
+  trendData?: number[];
   benchmark?: {
     position: 'above_p75' | 'above_p50' | 'above_p25' | 'below_p25';
     direction: 'higher_is_better' | 'lower_is_better';
@@ -26,6 +28,7 @@ export function MetricCard({
   subtitle,
   trend,
   trendValue,
+  trendData,
   benchmark,
   variant = 'default',
   testId = 'metric-card',
@@ -143,15 +146,22 @@ export function MetricCard({
             {getBenchmarkBadge()}
           </div>
         </div>
-        <div className="mt-2">
-          <span
-            className="text-2xl font-semibold font-mono tracking-tight"
-            data-testid={`${testId}-value`}
-          >
-            {value}
-          </span>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        <div className="mt-2 flex items-end justify-between gap-2">
+          <div>
+            <span
+              className="text-2xl font-semibold font-mono tracking-tight"
+              data-testid={`${testId}-value`}
+            >
+              {value}
+            </span>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+            )}
+          </div>
+          {trendData && trendData.length > 1 && (
+            <div className="flex-shrink-0" data-testid={`${testId}-sparkline`}>
+              <Sparkline data={trendData} width={50} height={24} />
+            </div>
           )}
         </div>
         {trend && trendValue && (
