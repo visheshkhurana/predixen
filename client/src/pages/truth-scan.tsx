@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { BenchmarkBar } from '@/components/BenchmarkBar';
 import { MetricDetailModal } from '@/components/MetricDetailModal';
 import { ExportButton } from '@/components/ExportButton';
 import { InfoTooltip } from '@/components/InfoTooltip';
-import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Filter } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
@@ -16,6 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { generateMockTrendData } from '@/components/Sparkline';
 
 const STATUS_EXPLANATIONS = {
   critical: {
@@ -91,6 +93,7 @@ export default function TruthScanPage() {
   
   const [qualityExpanded, setQualityExpanded] = useState(false);
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
+  const [stageFilter, setStageFilter] = useState<string>('all');
   
   if (!currentCompany) {
     return (
@@ -109,6 +112,25 @@ export default function TruthScanPage() {
   const benchmarks = truthScan?.benchmark_comparisons || [];
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
+
+  const trendData = useMemo(() => {
+    if (!truthScan?.metrics) return {};
+    const m = truthScan.metrics;
+    return {
+      monthly_revenue: generateMockTrendData(m.monthly_revenue || 100000, 6, 0.08),
+      net_burn: generateMockTrendData(Math.abs(m.net_burn || 50000), 6, 0.12),
+      cash_balance: generateMockTrendData(m.cash_balance || 500000, 6, 0.05),
+      gross_margin: generateMockTrendData((m.gross_margin || 0.65) * 100, 6, 0.03),
+      revenue_growth: generateMockTrendData((m.revenue_growth_mom || 0.1) * 100, 6, 0.15),
+      burn_multiple: generateMockTrendData(m.burn_multiple || 2, 6, 0.1),
+      operating_margin: generateMockTrendData((m.operating_margin || -0.2) * 100 + 50, 6, 0.08),
+    };
+  }, [truthScan?.metrics]);
+
+  const filteredBenchmarks = useMemo(() => {
+    if (stageFilter === 'all') return benchmarks;
+    return benchmarks;
+  }, [benchmarks, stageFilter]);
   
   const formatCurrency = (value: number | null | undefined) => {
     return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
@@ -403,6 +425,7 @@ export default function TruthScanPage() {
                 value={formatCurrency(metrics.monthly_revenue)} 
                 testId="metric-revenue"
                 tooltip={METRIC_DEFINITIONS.mrr?.shortDescription}
+                trendData={trendData.monthly_revenue}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('mrr') || null, 
                   value: formatCurrency(metrics.monthly_revenue) 
@@ -414,6 +437,7 @@ export default function TruthScanPage() {
                 testId="metric-burn"
                 tooltip={metrics.is_profitable ? "Monthly surplus (revenue exceeds expenses)" : METRIC_DEFINITIONS.net_burn?.shortDescription}
                 variant={metrics.is_profitable ? "success" : metrics.net_burn > 0 ? "danger" : "default"}
+                trendData={trendData.net_burn}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
                   value: formatCurrency(metrics.is_profitable ? Math.abs(metrics.net_burn) : metrics.net_burn) 
@@ -424,6 +448,7 @@ export default function TruthScanPage() {
                 value={formatCurrency(metrics.cash_balance)} 
                 testId="metric-cash"
                 tooltip={METRIC_DEFINITIONS.cash_balance?.shortDescription}
+                trendData={trendData.cash_balance}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('cash_balance') || null, 
                   value: formatCurrency(metrics.cash_balance) 
@@ -445,6 +470,7 @@ export default function TruthScanPage() {
                 value={formatPercent(metrics.gross_margin)} 
                 testId="metric-margin"
                 tooltip={METRIC_DEFINITIONS.gross_margin?.shortDescription}
+                trendData={trendData.gross_margin}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('gross_margin') || null, 
                   value: formatPercent(metrics.gross_margin) 
@@ -456,6 +482,7 @@ export default function TruthScanPage() {
                 subtitle="MoM" 
                 testId="metric-growth"
                 tooltip={METRIC_DEFINITIONS.revenue_growth_mom?.shortDescription}
+                trendData={trendData.revenue_growth}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('revenue_growth_mom') || null, 
                   value: formatPercent(metrics.revenue_growth_mom) 
@@ -466,6 +493,7 @@ export default function TruthScanPage() {
                 value={typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A'} 
                 testId="metric-burn-mult"
                 tooltip={METRIC_DEFINITIONS.burn_multiple?.shortDescription}
+                trendData={trendData.burn_multiple}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('burn_multiple') || null, 
                   value: typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A' 
@@ -476,6 +504,7 @@ export default function TruthScanPage() {
                 value={formatPercent(metrics.operating_margin)} 
                 testId="metric-op-margin"
                 tooltip={METRIC_DEFINITIONS.operating_margin?.shortDescription}
+                trendData={trendData.operating_margin}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('operating_margin') || null, 
                   value: formatPercent(metrics.operating_margin) 
@@ -486,25 +515,42 @@ export default function TruthScanPage() {
         </div>
       </div>
       
-      {benchmarks.length > 0 && (
+      {filteredBenchmarks.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold">Benchmark Comparisons</h2>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button type="button" className="p-0.5" data-testid="tooltip-benchmarks">
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-sm">
-                  Compare your metrics against industry benchmarks. P25/P50/P75 represent the 25th, 50th (median), and 75th percentiles of comparable companies.
-                </p>
-              </TooltipContent>
-            </Tooltip>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold">Benchmark Comparisons</h2>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" className="p-0.5" data-testid="tooltip-benchmarks">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-sm">
+                    Compare your metrics against industry benchmarks. P25/P50/P75 represent the 25th, 50th (median), and 75th percentiles of comparable companies.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={stageFilter} onValueChange={setStageFilter}>
+                <SelectTrigger className="w-40" data-testid="select-stage-filter">
+                  <SelectValue placeholder="Filter by stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stages</SelectItem>
+                  <SelectItem value="seed">Seed</SelectItem>
+                  <SelectItem value="series_a">Series A</SelectItem>
+                  <SelectItem value="series_b">Series B</SelectItem>
+                  <SelectItem value="growth">Growth</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {benchmarks.map((bench: any) => (
+            {filteredBenchmarks.map((bench: any) => (
               <Card key={bench.metric} className="overflow-visible">
                 <CardContent className="p-4">
                   <BenchmarkBar
