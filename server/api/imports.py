@@ -98,6 +98,7 @@ def parse_excel_to_rows(file_path: str) -> List[Dict[str, Any]]:
     
     rows = []
     
+    # If we have time series data, use that
     if time_series:
         for label, values in time_series.items():
             if isinstance(values, dict):
@@ -106,16 +107,16 @@ def parse_excel_to_rows(file_path: str) -> List[Dict[str, Any]]:
                     'values': values
                 })
     
+    # Otherwise, create individual rows for each metric (like PDF extraction)
     if not rows and raw_metrics:
-        latest_values = {}
         for key, value in raw_metrics.items():
             if isinstance(value, (int, float)):
-                latest_values[key] = value
-        if latest_values:
-            rows.append({
-                'label': 'Extracted Metrics',
-                'values': {'latest': latest_values}
-            })
+                # Convert snake_case to Title Case for labels
+                label = key.replace('_', ' ').title()
+                rows.append({
+                    'label': label,
+                    'values': {'latest': value}
+                })
     
     return rows
 
