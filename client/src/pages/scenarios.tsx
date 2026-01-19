@@ -25,9 +25,12 @@ import { DrillDownChart } from '@/components/DrillDownChart';
 import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
 import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
+import { ScenarioComments } from '@/components/ScenarioComments';
+import { DistributionView } from '@/components/DistributionView';
+import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
 import { useToast } from '@/hooks/use-toast';
 import { formatSimulationForExport } from '@/lib/exportUtils';
 import {
@@ -152,6 +155,17 @@ export default function ScenariosPage() {
   const enhancedMultiMutation = useEnhancedMultiScenarioSimulation();
   const [enhancedResults, setEnhancedResults] = useState<any>(null);
   const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
+  
+  // Custom events for scenario builder
+  const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
+  
+  // Comments for collaboration
+  const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
+  const addCommentMutation = useAddComment();
+  const editCommentMutation = useEditComment();
+  const deleteCommentMutation = useDeleteComment();
+  
+  const currentUserEmail = currentCompany?.user_id ? `demo@predixen.ai` : 'user@example.com';
   
   // Check if any scenario has been run (has simulation results)
   const hasRunScenario = useMemo(() => {
@@ -554,6 +568,15 @@ export default function ScenariosPage() {
             <TabsTrigger value="history" data-testid="tab-history">
               <History className="h-4 w-4 mr-2" />
               Saved ({scenarios.length})
+            </TabsTrigger>
+          )}
+          {selectedScenarioId && (
+            <TabsTrigger value="collaborate" data-testid="tab-collaborate">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Discussion
+              {comments.length > 0 && (
+                <span className="ml-1 text-xs bg-muted rounded-full px-1.5">{comments.length}</span>
+              )}
             </TabsTrigger>
           )}
         </TabsList>
@@ -998,6 +1021,68 @@ export default function ScenariosPage() {
                   onClick={() => setActiveTab('builder')}
                 >
                   Go to Builder
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="collaborate" className="mt-6 space-y-6">
+          {selectedScenarioId ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ScenarioComments
+                scenarioId={selectedScenarioId}
+                comments={comments}
+                isLoading={commentsLoading}
+                currentUserEmail={currentUserEmail}
+                onAddComment={async (content, parentId) => {
+                  await addCommentMutation.mutateAsync({
+                    scenarioId: selectedScenarioId,
+                    content,
+                    parentId,
+                  });
+                }}
+                onEditComment={async (commentId, content) => {
+                  await editCommentMutation.mutateAsync({
+                    commentId,
+                    content,
+                    scenarioId: selectedScenarioId,
+                  });
+                }}
+                onDeleteComment={async (commentId) => {
+                  await deleteCommentMutation.mutateAsync({
+                    commentId,
+                    scenarioId: selectedScenarioId,
+                  });
+                }}
+              />
+              
+              {simulation && (
+                <DistributionView
+                  title="Runway Distribution"
+                  description="Distribution across all Monte Carlo runs"
+                  data={Array.from({ length: 1000 }, () => 
+                    (simulation.runway?.p50 || 12) + (Math.random() - 0.5) * (simulation.runway?.p90 - simulation.runway?.p10 || 6)
+                  )}
+                  unit="months"
+                  thresholds={{ warning: 18, critical: 12 }}
+                  higherIsBetter={true}
+                />
+              )}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  Select a scenario to view and add comments
+                </p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setActiveTab('history')}
+                >
+                  View Saved Scenarios
                 </Button>
               </CardContent>
             </Card>

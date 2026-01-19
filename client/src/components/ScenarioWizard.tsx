@@ -10,6 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { AnnotatedSlider } from '@/components/AnnotatedSlider';
 import { ScenarioTutorial, TutorialTrigger } from '@/components/ScenarioTutorial';
 import { ScenarioSummarySidebar } from '@/components/ScenarioSummarySidebar';
+import { CustomEventBuilder, type ScenarioEvent } from '@/components/CustomEventBuilder';
+import { ScenarioTagManager } from '@/components/ScenarioTagManager';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
 import { cn } from '@/lib/utils';
 import {
@@ -77,7 +79,8 @@ const STEPS = [
   { id: 1, title: 'Template', icon: Lightbulb, description: 'Choose a starting point' },
   { id: 2, title: 'Parameters', icon: Target, description: 'Adjust financial levers' },
   { id: 3, title: 'Fundraising', icon: DollarSign, description: 'Model funding rounds' },
-  { id: 4, title: 'Review', icon: Rocket, description: 'Confirm and run' },
+  { id: 4, title: 'Events', icon: Zap, description: 'Add scenario events' },
+  { id: 5, title: 'Review', icon: Rocket, description: 'Confirm and run' },
 ];
 
 const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'risk'];
@@ -324,6 +327,7 @@ export function ScenarioWizard({
     fundraise_amount: 0,
     tags: [],
   });
+  const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -370,6 +374,8 @@ export function ScenarioWizard({
       case 3:
         return true;
       case 4:
+        return true;
+      case 5:
         return params.name.trim().length > 0;
       default:
         return false;
@@ -935,6 +941,28 @@ export function ScenarioWizard({
           {currentStep === 4 && (
             <div className="space-y-6">
               <div className="text-center mb-6">
+                <h2 className="text-xl font-semibold">Scenario Events</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Add probabilistic events to model uncertainty
+                </p>
+              </div>
+              
+              <CustomEventBuilder
+                events={customEvents}
+                onChange={setCustomEvents}
+              />
+              
+              {customEvents.length === 0 && (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  No custom events added yet. Click "Add Event" above to model specific scenarios like fundraising, hiring changes, or pricing adjustments with probability distributions.
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 5 && (
+            <div className="space-y-6">
+              <div className="text-center mb-6">
                 <h2 className="text-xl font-semibold">Review Your Scenario</h2>
                 <p className="text-muted-foreground text-sm mt-1">
                   Confirm your settings before running the simulation
@@ -955,26 +983,10 @@ export function ScenarioWizard({
 
                 <div className="space-y-2">
                   <Label>Tags</Label>
-                  <div className="flex gap-1 flex-wrap">
-                    {ALL_TAGS.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant={params.tags.includes(tag) ? 'default' : 'outline'}
-                        className="cursor-pointer"
-                        onClick={() => {
-                          setParams({
-                            ...params,
-                            tags: params.tags.includes(tag)
-                              ? params.tags.filter((t) => t !== tag)
-                              : [...params.tags, tag],
-                          });
-                        }}
-                        data-testid={`tag-${tag}`}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
+                  <ScenarioTagManager
+                    tags={params.tags}
+                    onChange={(newTags) => setParams({ ...params, tags: newTags })}
+                  />
                 </div>
 
                 <div className="bg-muted/50 rounded-lg p-4 space-y-3">
@@ -1061,6 +1073,26 @@ export function ScenarioWizard({
                       </>
                     )}
                   </div>
+                  
+                  {customEvents.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Zap className="h-4 w-4 text-amber-500" />
+                        <span className="text-sm font-medium">Custom Events ({customEvents.length})</span>
+                      </div>
+                      <div className="space-y-1">
+                        {customEvents.map((event) => (
+                          <div key={event.id} className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span className="capitalize">{event.event_type.replace(/_/g, ' ')}</span>
+                            <span>-</span>
+                            <span>Month {event.start_month}</span>
+                            <span>-</span>
+                            <span>{event.probability}% chance</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Narrative summary */}
@@ -1110,7 +1142,7 @@ export function ScenarioWizard({
             Back
           </Button>
 
-          {currentStep < 4 ? (
+          {currentStep < 5 ? (
             <Button onClick={handleNext} disabled={!canProceed} data-testid="button-wizard-next">
               Next
               <ChevronRight className="h-4 w-4 ml-2" />
