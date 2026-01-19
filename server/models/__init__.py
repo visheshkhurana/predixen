@@ -25,6 +25,7 @@ from server.models.chat import ChatSession, ChatMessage
 from server.models.subscription import Subscription, SubscriptionStatus
 from server.models.audit_log import AuditLog
 from server.models.login_history import LoginHistory, Notification
+from server.models.invite import Invite
 
 __all__ = [
     "User",
@@ -56,4 +57,5 @@ __all__ = [
     "AuditLog",
     "LoginHistory",
     "Notification",
+    "Invite",
 ]

@@ -31,6 +31,7 @@ import AdminBilling from "@/pages/admin/billing";
 import AdminMetrics from "@/pages/admin/metrics";
 import AdminLoginHistory from "@/pages/admin/login-history";
 import AdminActivity from "@/pages/admin/activity";
+import AdminInvites from "@/pages/admin/invites";
 import OwnerConsole from "@/pages/owner-console";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -158,6 +159,9 @@ function Router() {
       </Route>
       <Route path="/admin/activity">
         {() => <AdminRoute component={AdminActivity} />}
+      </Route>
+      <Route path="/admin/invites">
+        {() => <AdminRoute component={AdminInvites} />}
       </Route>
       <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />

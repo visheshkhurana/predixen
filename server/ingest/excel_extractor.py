@@ -622,7 +622,18 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     baseline_data = {k: v for k, v in baseline_data.items() if v is not None}
     
     target_currency = parsed.get("target_currency", "USD")
+    detected_currency = parsed.get("detected_currency", "USD")
+    
     word_representations = create_word_representations(baseline_data, target_currency)
+    
+    original_word_representations = {}
+    if detected_currency != target_currency and parsed.get("metrics_original_currency"):
+        original_word_representations = create_word_representations(
+            parsed.get("metrics_original_currency", {}), 
+            detected_currency
+        )
+        for key, value in original_word_representations.items():
+            word_representations[f"original_{key}"] = value
     
     baseline_data_with_words = {**baseline_data, **word_representations}
     
@@ -630,7 +641,7 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         "source": "excel",
         "sheet_name": parsed.get("sheet_name"),
         "report_date": parsed.get("report_date"),
-        "detected_currency": parsed.get("detected_currency"),
+        "detected_currency": detected_currency,
         "target_currency": target_currency,
         "fx_rate_used": parsed.get("fx_rate_used"),
         "raw_metrics": metrics,

@@ -447,5 +447,27 @@ export const api = {
       role: string;
       is_admin: boolean;
     }>('/admin/me'),
+    
+    invites: {
+      list: () => request<Array<{
+        id: number;
+        email: string;
+        role: string;
+        invited_by_email: string;
+        accepted: boolean;
+        expires_at: string;
+        created_at: string;
+        is_expired: boolean;
+      }>>('/admin/invites'),
+      create: (email: string, role: string) =>
+        request<{ message: string; invite_id: number; token: string; expires_at: string }>('/admin/invites', {
+          method: 'POST',
+          body: JSON.stringify({ email, role }),
+        }),
+      revoke: (inviteId: number) =>
+        request<{ message: string }>(`/admin/invites/${inviteId}`, { method: 'DELETE' }),
+      resend: (inviteId: number) =>
+        request<{ message: string; expires_at: string }>(`/admin/invites/${inviteId}/resend`, { method: 'POST' }),
+    },
   },
 };
