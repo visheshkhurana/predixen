@@ -32,6 +32,7 @@ import {
   FileText,
   HelpCircle,
   ExternalLink,
+  Mail,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,11 @@ const adminMenuItems = [
     title: "Users",
     url: "/admin/users",
     icon: Users,
+  },
+  {
+    title: "Invitations",
+    url: "/admin/invites",
+    icon: Mail,
   },
   {
     title: "Login History",

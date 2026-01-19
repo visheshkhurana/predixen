@@ -48,8 +48,34 @@ def ensure_financial_record_columns(engine: Engine) -> None:
     logger.info("Financial records schema migration complete")
 
 
+def ensure_invites_table(engine: Engine) -> None:
+    """Ensure the invites table exists."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS invites (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR(255) NOT NULL,
+                    token VARCHAR(64) UNIQUE NOT NULL,
+                    role VARCHAR(20) DEFAULT 'viewer',
+                    invited_by_id INTEGER NOT NULL REFERENCES users(id),
+                    accepted BOOLEAN DEFAULT FALSE,
+                    accepted_at TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_invites_email ON invites(email)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token)"))
+            conn.commit()
+            logger.info("Invites table migration complete")
+        except Exception as e:
+            logger.debug(f"Invites table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
     ensure_financial_record_columns(engine)
+    ensure_invites_table(engine)
     logger.info("Database migrations completed successfully")

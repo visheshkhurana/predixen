@@ -8,7 +8,7 @@ import json
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification
+from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -39,6 +39,16 @@ class UserUpdate(BaseModel):
 class UserInvite(BaseModel):
     email: str
     role: str = "viewer"
+    
+class InviteResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    invited_by_email: str
+    accepted: bool
+    expires_at: datetime
+    created_at: datetime
+    is_expired: bool
 
 class SubscriptionUpdate(BaseModel):
     plan: Optional[str] = None
@@ -601,4 +611,125 @@ def get_user_details(
         } if last_login else None,
         "total_logins": login_count
     }
+
+
+@router.get("/invites")
+def list_invites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+) -> List[InviteResponse]:
+    invites = db.query(Invite).order_by(Invite.created_at.desc()).all()
+    return [
+        InviteResponse(
+            id=inv.id,
+            email=inv.email,
+            role=inv.role or "viewer",
+            invited_by_email=inv.invited_by.email if inv.invited_by else "Unknown",
+            accepted=inv.accepted,
+            expires_at=inv.expires_at,
+            created_at=inv.created_at,
+            is_expired=datetime.utcnow() > inv.expires_at if inv.expires_at else False
+        )
+        for inv in invites
+    ]
+
+
+@router.post("/invites")
+def create_invite(
+    invite_data: UserInvite,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    existing_user = db.query(User).filter(User.email == invite_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+    
+    existing_invite = db.query(Invite).filter(
+        Invite.email == invite_data.email,
+        Invite.accepted == False
+    ).first()
+    
+    if existing_invite:
+        invite_is_expired = datetime.utcnow() > existing_invite.expires_at if existing_invite.expires_at else False
+        if not invite_is_expired:
+            raise HTTPException(status_code=400, detail="An active invite already exists for this email")
+    
+    if invite_data.role not in [r.value for r in UserRole]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    
+    invite = Invite.create_invite(
+        email=invite_data.email,
+        role=invite_data.role,
+        invited_by_id=current_user.id
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    
+    log_action(
+        db, current_user.id, "invite_created", "invite", invite.id,
+        {"email": invite_data.email, "role": invite_data.role},
+        request.client.host if request.client else None
+    )
+    
+    return {
+        "message": f"Invite sent to {invite_data.email}",
+        "invite_id": invite.id,
+        "token": invite.token,
+        "expires_at": invite.expires_at
+    }
+
+
+@router.delete("/invites/{invite_id}")
+def revoke_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    invite = db.query(Invite).filter(Invite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    
+    if invite.accepted:
+        raise HTTPException(status_code=400, detail="Cannot revoke an accepted invite")
+    
+    email = invite.email
+    db.delete(invite)
+    db.commit()
+    
+    log_action(
+        db, current_user.id, "invite_revoked", "invite", invite_id,
+        {"email": email}, request.client.host if request.client else None
+    )
+    
+    return {"message": f"Invite for {email} revoked"}
+
+
+@router.post("/invites/{invite_id}/resend")
+def resend_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    from datetime import timedelta
+    
+    invite = db.query(Invite).filter(Invite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    
+    if invite.accepted:
+        raise HTTPException(status_code=400, detail="Cannot resend an accepted invite")
+    
+    invite.expires_at = datetime.utcnow() + timedelta(days=7)
+    db.commit()
+    
+    log_action(
+        db, current_user.id, "invite_resent", "invite", invite_id,
+        {"email": invite.email}, request.client.host if request.client else None
+    )
+    
+    return {"message": f"Invite for {invite.email} resent", "expires_at": invite.expires_at}
 
