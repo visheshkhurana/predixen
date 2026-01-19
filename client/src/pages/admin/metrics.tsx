@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart3, PieChart, TrendingUp, DollarSign, Flame, Clock } from 'lucide-react';
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { BarChart3, PieChart, TrendingUp, DollarSign, Flame, Clock, HelpCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Legend } from 'recharts';
 
@@ -40,7 +41,17 @@ export default function AdminMetrics() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card data-testid="card-total-revenue">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Total Revenue (All Companies)</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Total Revenue (All Companies)</CardTitle>
+              <UITooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p>Sum of all monthly recurring revenue reported by companies on the platform. Calculated from the latest financial records.</p>
+                </TooltipContent>
+              </UITooltip>
+            </div>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -56,7 +67,17 @@ export default function AdminMetrics() {
 
         <Card data-testid="card-avg-burn">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Avg Monthly Burn</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Avg Monthly Burn</CardTitle>
+              <UITooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p>Average monthly cash burn rate across all companies. Calculated as (Total Expenses - Total Revenue) / Number of Companies.</p>
+                </TooltipContent>
+              </UITooltip>
+            </div>
             <Flame className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -72,7 +93,17 @@ export default function AdminMetrics() {
 
         <Card data-testid="card-avg-runway">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
-            <CardTitle className="text-sm font-medium">Avg Runway</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">Avg Runway</CardTitle>
+              <UITooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p>Average remaining runway in months across all companies. Calculated as Cash Balance / Monthly Burn Rate for each company, then averaged.</p>
+                </TooltipContent>
+              </UITooltip>
+            </div>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   History, Search, CheckCircle, XCircle, Monitor, Smartphone, Tablet,
-  Globe, RefreshCw, Filter
+  Globe, RefreshCw, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { api } from '@/api/client';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -25,13 +25,16 @@ function getDeviceIcon(deviceType: string | null) {
   }
 }
 
+const ITEMS_PER_PAGE = 25;
+
 export default function LoginHistory() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: loginHistory, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['/admin/login-history'],
-    queryFn: () => api.admin.loginHistory(100),
+    queryFn: () => api.admin.loginHistory(500),
     refetchInterval: 60000,
   });
 
@@ -45,6 +48,27 @@ export default function LoginHistory() {
 
   const successCount = loginHistory?.filter(e => e.success).length ?? 0;
   const failedCount = loginHistory?.filter(e => !e.success).length ?? 0;
+  
+  const totalPages = Math.max(1, Math.ceil((filteredHistory?.length ?? 0) / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedHistory = filteredHistory?.slice(
+    (safePage - 1) * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE
+  );
+  
+  const handlePageChange = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+  
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+  
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -122,12 +146,12 @@ export default function LoginHistory() {
                 <Input 
                   placeholder="Search by email..." 
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-9 w-64"
                   data-testid="input-search-history"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
                 <SelectTrigger className="w-36" data-testid="select-filter-status">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Status" />
@@ -162,7 +186,7 @@ export default function LoginHistory() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredHistory?.map((entry) => {
+                  {paginatedHistory?.map((entry) => {
                     const DeviceIcon = getDeviceIcon(entry.device_type);
                     return (
                       <tr 
@@ -242,6 +266,62 @@ export default function LoginHistory() {
                 <div className="text-center py-8 text-muted-foreground">
                   <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No login history found</p>
+                </div>
+              )}
+              
+              {(filteredHistory?.length ?? 0) > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {((safePage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(safePage * ITEMS_PER_PAGE, filteredHistory?.length ?? 0)} of {filteredHistory?.length ?? 0} entries
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(safePage - 1)}
+                      disabled={safePage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (safePage <= 3) {
+                          pageNum = i + 1;
+                        } else if (safePage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = safePage - 2 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={safePage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(pageNum)}
+                            className="w-9"
+                            data-testid={`button-page-${pageNum}`}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(safePage + 1)}
+                      disabled={safePage === totalPages}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

@@ -10,10 +10,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Users, UserCheck, UserX, Shield, Search, MoreHorizontal, 
-  Building2, Calendar, MapPin, Monitor, Globe, Clock
+  Building2, Calendar, MapPin, Monitor, Globe, Clock, AlertTriangle
 } from 'lucide-react';
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
@@ -143,6 +147,8 @@ export default function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [suspendConfirm, setSuspendConfirm] = useState<{ userId: number; email: string } | null>(null);
+  const [roleChangeConfirm, setRoleChangeConfirm] = useState<{ userId: number; email: string; newRole: string } | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['/admin/users'],
@@ -156,11 +162,33 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ['/admin/users'] });
       toast({ title: 'User updated successfully' });
       setEditingUserId(null);
+      setRoleChangeConfirm(null);
     },
     onError: (err: any) => {
       toast({ title: 'Failed to update user', description: err.message, variant: 'destructive' });
+      setRoleChangeConfirm(null);
     },
   });
+
+  const handleRoleChange = (userId: number, email: string, newRole: string) => {
+    setRoleChangeConfirm({ userId, email, newRole });
+  };
+
+  const confirmRoleChange = () => {
+    if (roleChangeConfirm) {
+      updateMutation.mutate({ userId: roleChangeConfirm.userId, data: { role: roleChangeConfirm.newRole } });
+    }
+  };
+
+  const handleSuspendUser = (userId: number, email: string) => {
+    setSuspendConfirm({ userId, email });
+  };
+
+  const confirmSuspend = () => {
+    if (suspendConfirm) {
+      suspendMutation.mutate(suspendConfirm.userId);
+    }
+  };
 
   const suspendMutation = useMutation({
     mutationFn: (userId: number) => api.admin.users.suspend(userId),
@@ -168,9 +196,11 @@ export default function AdminUsers() {
       queryClient.invalidateQueries({ queryKey: ['/admin/users'] });
       queryClient.invalidateQueries({ queryKey: ['/admin/dashboard'] });
       toast({ title: 'User suspended successfully' });
+      setSuspendConfirm(null);
     },
     onError: (err: any) => {
       toast({ title: 'Failed to suspend user', description: err.message, variant: 'destructive' });
+      setSuspendConfirm(null);
     },
   });
 
@@ -330,7 +360,7 @@ export default function AdminUsers() {
                           <Select
                             defaultValue={user.role}
                             onValueChange={(value) => {
-                              updateMutation.mutate({ userId: user.id, data: { role: value } });
+                              handleRoleChange(user.id, user.email, value);
                             }}
                           >
                             <SelectTrigger className="w-28" data-testid={`select-role-${user.id}`}>
@@ -378,7 +408,7 @@ export default function AdminUsers() {
                             <DropdownMenuSeparator />
                             {user.is_active ? (
                               <DropdownMenuItem 
-                                onClick={() => suspendMutation.mutate(user.id)}
+                                onClick={() => handleSuspendUser(user.id, user.email)}
                                 className="text-red-600"
                                 disabled={suspendMutation.isPending}
                               >
@@ -419,6 +449,53 @@ export default function AdminUsers() {
         open={!!selectedUserId} 
         onClose={() => setSelectedUserId(null)} 
       />
+
+      <AlertDialog open={!!suspendConfirm} onOpenChange={() => setSuspendConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Suspend User
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to suspend <strong>{suspendConfirm?.email}</strong>? 
+              This will prevent them from logging in and accessing the platform.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmSuspend}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={suspendMutation.isPending}
+            >
+              {suspendMutation.isPending ? 'Suspending...' : 'Suspend User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!roleChangeConfirm} onOpenChange={() => setRoleChangeConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change User Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to change <strong>{roleChangeConfirm?.email}</strong>'s role to{' '}
+              <strong>{ROLES.find(r => r.value === roleChangeConfirm?.newRole)?.label}</strong>?
+              This will immediately change their permissions on the platform.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmRoleChange}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'Updating...' : 'Change Role'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
