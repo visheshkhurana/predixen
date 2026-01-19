@@ -6,13 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { MetricCard } from '@/components/MetricCard';
-import { DecisionCard } from '@/components/DecisionCard';
+import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send, Info, HelpCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+
+const DECISION_STATUSES_KEY = 'decision_statuses_';
 
 const METRIC_TOOLTIPS = {
   runway: {
@@ -108,16 +111,76 @@ const COPILOT_PROMPTS = [
 
 export default function OverviewPage() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const { currentCompany, setTruthScan, setCurrentStep } = useFounderStore();
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const runTruthScanMutation = useRunTruthScan();
+  const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
+
+  useEffect(() => {
+    if (currentCompany?.id) {
+      try {
+        const stored = localStorage.getItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`);
+        if (stored) {
+          setDecisionStatuses(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.warn('Failed to load decision statuses');
+      }
+    }
+  }, [currentCompany?.id]);
   
   useEffect(() => {
     if (truthScan) {
       setTruthScan(truthScan);
     }
   }, [truthScan, setTruthScan]);
+
+  const handleAdoptPlan = (recId: string, recTitle: string) => {
+    if (!currentCompany?.id) return;
+    
+    const updated = { ...decisionStatuses, [recId]: 'adopted' as DecisionStatus };
+    setDecisionStatuses(updated);
+    
+    try {
+      localStorage.setItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save decision status');
+    }
+    
+    toast({
+      title: 'Plan Adopted',
+      description: `"${recTitle}" has been marked as adopted. View in Decisions page.`,
+    });
+  };
+
+  const handleRunScenario = (recTitle: string) => {
+    setCurrentStep('simulation');
+    toast({
+      title: 'Opening Scenario Builder',
+      description: `Create a scenario based on "${recTitle}"`,
+    });
+    setLocation('/scenarios');
+  };
+
+  const handleStatusChange = (recId: string, status: DecisionStatus) => {
+    if (!currentCompany?.id) return;
+    
+    const updated = { ...decisionStatuses, [recId]: status };
+    setDecisionStatuses(updated);
+    
+    try {
+      localStorage.setItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save decision status');
+    }
+    
+    toast({
+      title: 'Status Updated',
+      description: `Decision marked as ${status}`,
+    });
+  };
   
   if (!currentCompany) {
     return (
@@ -400,12 +463,17 @@ export default function OverviewPage() {
             {decisions.recommendations.slice(0, 3).map((rec: any) => (
               <DecisionCard
                 key={rec.id}
+                id={rec.id}
                 rank={rec.rank}
                 title={rec.title}
                 rationale={rec.rationale}
                 expectedImpact={rec.expected_impact}
                 risks={rec.risks}
                 keyAssumption={rec.key_assumption}
+                status={decisionStatuses[rec.id] || 'pending'}
+                onAdoptPlan={() => handleAdoptPlan(rec.id, rec.title)}
+                onRunScenario={() => handleRunScenario(rec.title)}
+                onStatusChange={(status) => handleStatusChange(rec.id, status)}
                 testId={`decision-card-${rec.rank}`}
               />
             ))}
