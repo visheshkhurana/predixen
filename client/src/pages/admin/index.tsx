@@ -356,58 +356,6 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-green-500" />
-              Total Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {aggregateLoading ? <Skeleton className="h-8 w-32" /> : (
-              <div className="text-2xl font-bold text-green-600">
-                ${(aggregateMetrics?.financial?.total_revenue ?? 0).toLocaleString()}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Platform-wide revenue</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Flame className="h-4 w-4 text-orange-500" />
-              Avg Monthly Burn
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {aggregateLoading ? <Skeleton className="h-8 w-32" /> : (
-              <div className="text-2xl font-bold text-orange-600">
-                ${(aggregateMetrics?.financial?.avg_burn ?? 0).toLocaleString()}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Average across companies</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-blue-500" />
-              Avg Runway
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {aggregateLoading ? <Skeleton className="h-8 w-32" /> : (
-              <div className="text-2xl font-bold text-blue-600">
-                {(aggregateMetrics?.financial?.avg_runway_months ?? 0).toFixed(1)} months
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Average runway remaining</p>
-          </CardContent>
-        </Card>
-      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
