@@ -19,6 +19,7 @@ def ensure_financial_record_columns(engine: Engine) -> None:
         ('operating_income', 'FLOAT'),
         ('operating_margin', 'FLOAT'),
         ('net_burn', 'FLOAT'),
+        ('burn_multiple', 'FLOAT'),  # Can be negative (e.g., -0.7)
         ('runway_months', 'FLOAT'),
         ('headcount', 'INTEGER'),
         ('customers', 'INTEGER'),
