@@ -54,6 +54,11 @@ def get_integration_status(
                 "connected": None,
                 "last_sync": None,
             },
+            "payments": {
+                "available": ["stripe"],
+                "connected": None,
+                "last_sync": None,
+            },
         },
     }
 
@@ -241,4 +246,59 @@ async def get_pipeline_metrics(
         "weighted_pipeline": 0,
         "deal_count": 0,
         "message": "No data available. Please connect and sync your CRM first.",
+    }
+
+
+@router.post("/companies/{company_id}/payments/connect")
+async def connect_payments(
+    company_id: int,
+    request: ConnectRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Connect a payments integration (e.g., Stripe).
+    """
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    if request.provider not in ["stripe"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown payments provider: {request.provider}"
+        )
+    
+    # In production, this would validate credentials and store them
+    return {
+        "status": "connected",
+        "provider": request.provider,
+        "message": f"Successfully connected to {request.provider}",
+    }
+
+
+@router.post("/companies/{company_id}/payments/sync")
+async def sync_payments(
+    company_id: int,
+    provider: str = "stripe",
+    db: Session = Depends(get_db),
+):
+    """
+    Sync data from payments integration.
+    """
+    from datetime import datetime
+    
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    if provider not in ["stripe"]:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    
+    # In production, this would call the Stripe API and sync data
+    # For now, return mock success response
+    return {
+        "success": True,
+        "records_synced": 0,
+        "errors": [],
+        "sync_time": datetime.utcnow().isoformat(),
     }

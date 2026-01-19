@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   Loader2
 } from "lucide-react";
-import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot } from "react-icons/si";
+import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -55,6 +55,7 @@ const providerIcons: Record<string, React.ReactNode> = {
   xero: <SiXero className="h-6 w-6" />,
   salesforce: <SiSalesforce className="h-6 w-6" />,
   hubspot: <SiHubspot className="h-6 w-6" />,
+  stripe: <SiStripe className="h-6 w-6" />,
   netsuite: <Database className="h-6 w-6" />,
   pipedrive: <Users className="h-6 w-6" />,
   zoho: <Users className="h-6 w-6" />,
@@ -159,6 +160,20 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View reports",
     ],
   },
+  stripe: {
+    dataImported: [
+      "Subscription revenue (MRR/ARR)",
+      "Payment transactions",
+      "Customer billing data",
+      "Churn & retention metrics",
+      "Invoice history",
+    ],
+    permissions: [
+      "Read payment data",
+      "Access subscription info",
+      "View customer records",
+    ],
+  },
 };
 
 const additionalAccountingProviders: IntegrationProvider[] = [
@@ -188,6 +203,15 @@ const additionalCrmProviders: IntegrationProvider[] = [
   },
 ];
 
+const paymentsProviders: IntegrationProvider[] = [
+  {
+    id: "stripe",
+    name: "Stripe",
+    description: "Payment processing and subscription billing data",
+    features: ["MRR/ARR Tracking", "Churn Analytics", "Payment History", "Revenue Recognition"],
+  },
+];
+
 export default function IntegrationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -205,13 +229,14 @@ export default function IntegrationsPage() {
     integrations: {
       accounting: IntegrationStatus;
       crm: IntegrationStatus;
+      payments?: IntegrationStatus;
     };
   }>({
     queryKey: ["/api/integrations/companies", companyId, "status"],
   });
 
   const syncMutation = useMutation({
-    mutationFn: async ({ type, provider }: { type: "accounting" | "crm"; provider: string }) => {
+    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments"; provider: string }) => {
       setSyncingProvider(provider);
       const res = await apiRequest("POST", `/api/integrations/companies/${companyId}/${type}/sync?provider=${provider}`);
       return res.json();
@@ -244,10 +269,15 @@ export default function IntegrationsPage() {
     ...additionalCrmProviders,
   ];
 
-  const renderProviderCard = (provider: IntegrationProvider, type: "accounting" | "crm") => {
-    const isConnected = status?.integrations[type]?.connected === provider.id;
-    const lastSync = status?.integrations[type]?.last_sync;
-    const syncDetails = status?.integrations[type]?.sync_details;
+  const renderProviderCard = (provider: IntegrationProvider, type: "accounting" | "crm" | "payments") => {
+    const isConnected = type === "payments" 
+      ? status?.integrations.payments?.connected === provider.id
+      : status?.integrations[type]?.connected === provider.id;
+    const integrationStatus = type === "payments" 
+      ? status?.integrations.payments 
+      : status?.integrations[type];
+    const lastSync = integrationStatus?.last_sync;
+    const syncDetails = integrationStatus?.sync_details;
     const isSyncing = syncingProvider === provider.id && syncMutation.isPending;
     
     return (
@@ -339,6 +369,7 @@ export default function IntegrationsPage() {
         <TabsList data-testid="tabs-integration-type">
           <TabsTrigger value="accounting" data-testid="tab-accounting">Accounting</TabsTrigger>
           <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
+          <TabsTrigger value="payments" data-testid="tab-payments">Payments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="accounting" className="space-y-4">
@@ -356,6 +387,14 @@ export default function IntegrationsPage() {
             )}
           </div>
         </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            {paymentsProviders.map((provider) =>
+              renderProviderCard(provider, "payments")
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
       <Card>
@@ -364,7 +403,7 @@ export default function IntegrationsPage() {
           <CardDescription>Overview of your connected data sources</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full">
                 {status?.integrations.accounting.connected ? (
@@ -401,6 +440,26 @@ export default function IntegrationsPage() {
                 {status?.integrations.crm.last_sync && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Last synced: {formatDistanceToNow(new Date(status.integrations.crm.last_sync), { addSuffix: true })}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+              <div className="p-2 bg-background rounded-full">
+                {status?.integrations.payments?.connected ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="font-medium">Payments</p>
+                <p className="text-sm text-muted-foreground">
+                  {status?.integrations.payments?.connected || "Not connected"}
+                </p>
+                {status?.integrations.payments?.last_sync && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Last synced: {formatDistanceToNow(new Date(status.integrations.payments.last_sync), { addSuffix: true })}
                   </p>
                 )}
               </div>
@@ -467,7 +526,7 @@ function ConnectDialog({
   companyId,
 }: {
   provider: IntegrationProvider;
-  type: "accounting" | "crm";
+  type: "accounting" | "crm" | "payments";
   companyId: number;
 }) {
   const { toast } = useToast();
