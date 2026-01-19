@@ -71,6 +71,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
+    adminLogin: (email: string, password: string) =>
+      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
   },
   
   companies: {
