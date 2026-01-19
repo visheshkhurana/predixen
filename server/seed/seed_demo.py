@@ -20,6 +20,9 @@ def seed_demo_data(db: Session):
     existing = db.query(User).filter(User.email == "demo@predixen.ai").first()
     if existing:
         demo_user = existing
+        if demo_user.role != "owner":
+            demo_user.role = "owner"
+            db.commit()
         company = db.query(Company).filter(Company.user_id == demo_user.id).first()
         if company:
             existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
@@ -42,7 +45,8 @@ def seed_demo_data(db: Session):
     else:
         demo_user = User(
             email="demo@predixen.ai",
-            password_hash=get_password_hash("demo123")
+            password_hash=get_password_hash("demo123"),
+            role="owner"
         )
         db.add(demo_user)
         db.commit()
