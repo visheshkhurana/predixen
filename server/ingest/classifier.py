@@ -221,9 +221,15 @@ def calculate_classification_scores(label: str, values: List[float], has_childre
         if kw in norm_label:
             scores['derived'] += 2.0
     
+    # Only treat as header if it has children OR has no values
+    # A row with values and no children is actual data, not a section header
+    has_actual_values = len(values) > 0
+    
     for exact in HEADER_EXACT_MATCHES:
         if norm_label == exact:
-            scores['header'] += 1.5
+            # Only boost header score if it's a true section header (no values or has children)
+            if has_children or not has_actual_values:
+                scores['header'] += 1.5
     
     if has_children:
         scores['header'] += 1.0
