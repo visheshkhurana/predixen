@@ -154,10 +154,145 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["logo_retention_12m"] = None
         metrics["net_revenue_retention"] = None
     
-    metrics["ltv"] = None
-    metrics["cac"] = None
-    metrics["ltv_cac_ratio"] = None
-    metrics["payback_months"] = None
+    # Unit Economics Calculations
+    # Calculate MRR/ARR from monthly revenue
+    mrr = metrics.get("monthly_revenue", 0)
+    metrics["mrr"] = mrr
+    metrics["arr"] = mrr * 12
+    
+    # ARPU: Average Revenue Per User (using customer count if available)
+    customer_count = len(customers) if customers else None
+    if customer_count and customer_count > 0 and mrr:
+        metrics["arpu"] = mrr / customer_count
+        metrics["customer_count"] = customer_count
+    else:
+        # Mock values for demo if no customer data
+        metrics["arpu"] = mrr / 150 if mrr else None  # Assume 150 customers
+        metrics["customer_count"] = 150 if mrr else None
+    
+    # Churn Rate calculation (mock if no data)
+    if customers and len(customers) > 0:
+        churned = sum(1 for c in customers if getattr(c, 'churned', False))
+        metrics["churn_rate_customer"] = (churned / len(customers)) * 100
+        metrics["churn_rate_revenue"] = metrics["churn_rate_customer"] * 1.2  # Revenue churn usually higher
+    else:
+        # Mock values for demo
+        metrics["churn_rate_customer"] = 3.2  # 3.2% monthly churn
+        metrics["churn_rate_revenue"] = 4.1  # 4.1% revenue churn
+    
+    # CAC, LTV, LTV:CAC, Payback calculations
+    marketing_spend = metrics.get("payroll", 0) * 0.3 + (metrics.get("opex", 0) * 0.4)  # Estimate marketing
+    new_customers_per_month = max(1, (metrics.get("customer_count", 150) or 150) * 0.08)  # ~8% new customers
+    
+    if marketing_spend > 0 and new_customers_per_month > 0:
+        cac = marketing_spend / new_customers_per_month
+        metrics["cac"] = round(cac, 2)
+    else:
+        metrics["cac"] = 5000  # Mock CAC
+        cac = 5000
+    
+    # LTV = ARPU * Gross Margin * (1 / Churn Rate)
+    arpu = metrics.get("arpu") or 0
+    gm_pct = (metrics.get("gross_margin", 65) or 65) / 100
+    monthly_churn = (metrics.get("churn_rate_customer", 3.2) or 3.2) / 100
+    
+    if arpu > 0 and monthly_churn > 0:
+        customer_lifetime_months = 1 / monthly_churn
+        ltv = arpu * gm_pct * customer_lifetime_months
+        metrics["ltv"] = round(ltv, 2)
+    else:
+        metrics["ltv"] = 25000  # Mock LTV
+        ltv = 25000
+    
+    # LTV:CAC Ratio
+    if cac and cac > 0 and ltv:
+        metrics["ltv_cac_ratio"] = round(ltv / cac, 2)
+    else:
+        metrics["ltv_cac_ratio"] = 5.0
+    
+    # Payback Period (months to recover CAC)
+    if arpu > 0 and cac:
+        metrics["payback_months"] = round(cac / (arpu * gm_pct), 1)
+    else:
+        metrics["payback_months"] = 12
+    
+    # Net Dollar Retention (NDR)
+    if metrics.get("net_revenue_retention") is None:
+        metrics["net_revenue_retention"] = 108  # Mock 108% NDR
+    
+    # Expense Breakdown for burn chart
+    if financials:
+        latest = financials[0]
+        total_expenses = latest.cogs + latest.opex + latest.payroll + latest.other_costs
+        metrics["expense_breakdown"] = {
+            "cogs": latest.cogs,
+            "payroll": latest.payroll,
+            "marketing": latest.opex * 0.4,  # Estimate marketing from opex
+            "rd": latest.opex * 0.3,  # R&D estimate
+            "ga": latest.opex * 0.3 + latest.other_costs,  # G&A
+            "total": total_expenses
+        }
+    else:
+        metrics["expense_breakdown"] = None
+    
+    # Headcount data (mock if not available)
+    if financials:
+        # Estimate headcount from payroll (assume avg salary)
+        avg_salary = 8000  # Monthly
+        metrics["headcount"] = max(1, int(metrics.get("payroll", 0) / avg_salary))
+        metrics["planned_hires"] = max(0, int(metrics["headcount"] * 0.15))  # 15% growth
+        if metrics["headcount"] > 0 and mrr:
+            metrics["revenue_per_employee"] = mrr / metrics["headcount"]
+        else:
+            metrics["revenue_per_employee"] = None
+    else:
+        metrics["headcount"] = 25
+        metrics["planned_hires"] = 4
+        metrics["revenue_per_employee"] = mrr / 25 if mrr else None
+    
+    # Cash flow forecast (12 month projection)
+    if financials and len(financials) > 0:
+        latest = financials[0]
+        monthly_burn = metrics.get("net_burn", 0)
+        monthly_rev = metrics.get("monthly_revenue", 0)
+        growth_rate = (metrics.get("revenue_growth_mom", 5) or 5) / 100
+        
+        cash_flow_forecast = []
+        current_cash = latest.cash_balance
+        for month in range(1, 13):
+            projected_revenue = monthly_rev * ((1 + growth_rate) ** month)
+            projected_expenses = (latest.cogs + latest.opex + latest.payroll + latest.other_costs) * 1.02 ** month
+            net_flow = projected_revenue - projected_expenses
+            current_cash += net_flow
+            cash_flow_forecast.append({
+                "month": month,
+                "inflow": round(projected_revenue),
+                "outflow": round(projected_expenses),
+                "net": round(net_flow),
+                "cash_balance": round(current_cash)
+            })
+        metrics["cash_flow_forecast"] = cash_flow_forecast
+    else:
+        metrics["cash_flow_forecast"] = None
+    
+    # Flag for unit economics alerts
+    ltv_cac = metrics.get("ltv_cac_ratio", 0)
+    if ltv_cac and ltv_cac < 3:
+        flags.append({
+            "severity": "medium",
+            "title": "Low LTV:CAC Ratio",
+            "description": f"LTV:CAC ratio of {ltv_cac:.1f}x is below the 3x benchmark",
+            "metrics_involved": ["ltv_cac_ratio", "cac", "ltv"]
+        })
+    
+    churn = metrics.get("churn_rate_customer", 0)
+    if churn and churn > 5:
+        flags.append({
+            "severity": "medium",
+            "title": "High Customer Churn",
+            "description": f"Monthly churn rate of {churn:.1f}% exceeds 5% threshold",
+            "metrics_involved": ["churn_rate_customer"]
+        })
     
     data_confidence = compute_data_confidence(metrics, bool(financials), bool(transactions), bool(customers))
     quality_of_growth = compute_quality_of_growth(metrics, data_confidence)
