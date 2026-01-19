@@ -38,6 +38,8 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 
 ### Key Features and Technical Implementations
 1.  **Ingestion**: CSV upload, manual baseline, and AI-powered extraction from Excel/PDF using OpenAI.
+    -   **Two-Stage PDF Extraction**: Text extraction with pdfplumber + GPT-4o analysis, with automatic fallback to OpenAI Vision for scanned/image-based PDFs.
+    -   **Vision Fallback**: PDF pages converted to images and analyzed by GPT-4o vision when text extraction fails or produces insufficient content.
 2.  **Truth Scan**: Computes 24 financial metrics, benchmarks against industry data, and assigns confidence scores.
 3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections.
     -   **Distribution-Aware Simulation**: Supports fixed, normal, lognormal, uniform, triangular, and discrete probability distributions for event impacts.
