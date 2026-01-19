@@ -96,6 +96,7 @@ async def send_invite_email(
     role: str,
     invited_by_email: str,
     expires_at: datetime,
+    early_access: bool = True,
     template_html: Optional[str] = None
 ) -> dict:
     """
@@ -107,6 +108,7 @@ async def send_invite_email(
         role: The role being offered (viewer, analyst, admin, owner)
         invited_by_email: Email of the person who sent the invite
         expires_at: When the invite expires
+        early_access: Whether to use early access messaging (default True)
         template_html: Optional custom HTML template
     
     Returns:
@@ -121,10 +123,11 @@ async def send_invite_email(
         invite_url=invite_url,
         role=role,
         invited_by_email=invited_by_email,
-        expires_at=expires_at
+        expires_at=expires_at,
+        early_access=early_access
     )
     
-    subject = f"You've been invited to join Predixen Intelligence OS"
+    subject = "You're invited to Predixen Early Access" if early_access else "You've been invited to join Predixen Intelligence OS"
     
     return await send_email(to_email, subject, html_content)
 
