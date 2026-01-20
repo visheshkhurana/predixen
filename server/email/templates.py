@@ -1,138 +1,235 @@
 """
 Email templates for Predixen Intelligence OS.
-Provides HTML templates for various transactional emails.
+Professional HTML templates using table-based layouts for email client compatibility.
+All icons use text/Unicode for universal rendering (no SVG data URIs).
 """
 from datetime import datetime
 from typing import Optional
 
 
-def get_base_styles() -> str:
-    """Common CSS styles for email templates."""
-    return """
-    <style>
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #1a1a2e;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f8;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .email-header {
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            padding: 32px 24px;
-            text-align: center;
-        }
-        .email-header h1 {
-            color: #ffffff;
-            margin: 0;
-            font-size: 24px;
-            font-weight: 700;
-        }
-        .email-header .logo {
-            font-size: 28px;
-            font-weight: 800;
-            color: #ffffff;
-            margin-bottom: 8px;
-        }
-        .email-body {
-            padding: 32px 24px;
-        }
-        .email-body h2 {
-            color: #1a1a2e;
-            font-size: 20px;
-            margin-top: 0;
-            margin-bottom: 16px;
-        }
-        .email-body p {
-            color: #4a4a68;
-            margin-bottom: 16px;
-        }
-        .cta-button {
-            display: inline-block;
-            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-            color: #ffffff !important;
-            text-decoration: none;
-            padding: 14px 32px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 16px;
-            margin: 16px 0;
-            text-align: center;
-        }
-        .cta-button:hover {
-            opacity: 0.9;
-        }
-        .info-box {
-            background-color: #f0f0ff;
-            border-left: 4px solid #6366f1;
-            padding: 16px;
-            margin: 24px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        .info-box p {
-            margin: 0;
-            color: #4a4a68;
-        }
-        .email-footer {
-            background-color: #f8f8fc;
-            padding: 24px;
-            text-align: center;
-            border-top: 1px solid #e8e8f0;
-        }
-        .email-footer p {
-            color: #8888a0;
-            font-size: 13px;
-            margin: 4px 0;
-        }
-        .highlight {
-            color: #6366f1;
-            font-weight: 600;
-        }
-        .role-badge {
-            display: inline-block;
-            background-color: #e0e7ff;
-            color: #4338ca;
-            padding: 4px 12px;
-            border-radius: 16px;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .expiry-notice {
-            color: #f59e0b;
-            font-size: 14px;
-        }
-    </style>
-    """
+# Brand colors
+COLORS = {
+    "primary": "#0ea5e9",      # Electric teal
+    "primary_dark": "#0284c7", # Darker teal
+    "navy": "#0f172a",         # Deep navy
+    "navy_light": "#1e293b",   # Lighter navy
+    "white": "#ffffff",
+    "off_white": "#f8fafc",
+    "gray_50": "#f1f5f9",
+    "gray_100": "#e2e8f0",
+    "gray_400": "#94a3b8",
+    "gray_500": "#64748b",
+    "gray_600": "#475569",
+    "gray_700": "#334155",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+}
+
+# Safe font stack
+FONT_STACK = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
 
 def get_email_wrapper(content: str) -> str:
-    """Wrap content in base email HTML structure."""
+    """Wrap content in base email HTML structure with table-based layout."""
     return f"""
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {get_base_styles()}
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Predixen</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style type="text/css">
+        body, table, td, a {{ -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }}
+        table, td {{ mso-table-lspace: 0pt; mso-table-rspace: 0pt; }}
+        img {{ -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }}
+        table {{ border-collapse: collapse !important; }}
+        body {{ margin: 0 !important; padding: 0 !important; width: 100% !important; }}
+        a[x-apple-data-detectors] {{ color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }}
+        @media only screen and (max-width: 600px) {{
+            .email-container {{ width: 100% !important; max-width: 100% !important; }}
+            .body-content {{ padding: 24px !important; }}
+        }}
+    </style>
 </head>
-<body>
-    <div style="padding: 24px;">
-        <div class="email-container">
-            {content}
-        </div>
-    </div>
+<body style="margin: 0; padding: 0; background-color: {COLORS['gray_50']}; font-family: {FONT_STACK};">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: {COLORS['gray_50']};">
+        <tr>
+            <td align="center" style="padding: 40px 20px;">
+                <table role="presentation" class="email-container" width="560" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; background-color: {COLORS['white']}; border-radius: 16px; overflow: hidden;">
+                    {content}
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
 """
+
+
+def get_header_html(subtitle: str) -> str:
+    """Generate the header section with text-based logo."""
+    return f"""
+    <tr>
+        <td style="background-color: {COLORS['navy']}; padding: 32px 40px; text-align: center;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                    <td align="center">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                                <td style="vertical-align: middle; padding-right: 10px;">
+                                    <!--[if mso]>
+                                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" style="height:36px;v-text-anchor:middle;width:36px;" arcsize="28%" fillcolor="{COLORS['primary']}" stroke="f">
+                                        <w:anchorlock/>
+                                        <center style="color:{COLORS['white']};font-family:{FONT_STACK};font-size:18px;font-weight:bold;">P</center>
+                                    </v:roundrect>
+                                    <![endif]-->
+                                    <!--[if !mso]><!-->
+                                    <div style="width: 36px; height: 36px; background-color: {COLORS['primary']}; border-radius: 10px; text-align: center; line-height: 36px; color: {COLORS['white']}; font-weight: 700; font-size: 18px; font-family: {FONT_STACK};">P</div>
+                                    <!--<![endif]-->
+                                </td>
+                                <td style="vertical-align: middle;">
+                                    <span style="font-size: 24px; font-weight: 700; color: {COLORS['white']}; letter-spacing: -0.5px; font-family: {FONT_STACK};">Predixen</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td align="center" style="padding-top: 12px;">
+                        <span style="color: {COLORS['gray_400']}; font-size: 12px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; font-family: {FONT_STACK};">{subtitle}</span>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    """
+
+
+def get_footer_html() -> str:
+    """Generate the footer section."""
+    return f"""
+    <tr>
+        <td style="background-color: {COLORS['off_white']}; padding: 24px 40px; text-align: center; border-top: 1px solid {COLORS['gray_100']};">
+            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">Predixen</p>
+            <p style="margin: 0; font-size: 13px; color: {COLORS['gray_500']}; font-family: {FONT_STACK};">AI-Powered Financial Intelligence</p>
+        </td>
+    </tr>
+    """
+
+
+def get_cta_button(url: str, text: str) -> str:
+    """Generate a CTA button with VML fallback for Outlook."""
+    return f"""
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto;">
+        <tr>
+            <td>
+                <!--[if mso]>
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{url}" style="height:48px;v-text-anchor:middle;width:200px;" arcsize="21%" fillcolor="{COLORS['primary']}" stroke="f">
+                    <w:anchorlock/>
+                    <center style="color:{COLORS['white']};font-family:{FONT_STACK};font-size:15px;font-weight:bold;">{text}</center>
+                </v:roundrect>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <a href="{url}" target="_blank" style="display: inline-block; padding: 14px 36px; font-size: 15px; font-weight: 600; color: {COLORS['white']}; text-decoration: none; background-color: {COLORS['primary']}; border-radius: 10px; font-family: {FONT_STACK};">{text}</a>
+                <!--<![endif]-->
+            </td>
+        </tr>
+    </table>
+    """
+
+
+def get_info_card_start(title: str) -> str:
+    """Start an info card section."""
+    return f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: {COLORS['gray_50']}; border-radius: 12px; margin: 24px 0;">
+        <tr>
+            <td style="padding: 24px;">
+                <p style="margin: 0 0 16px 0; font-size: 12px; font-weight: 600; color: {COLORS['navy']}; text-transform: uppercase; letter-spacing: 1px; font-family: {FONT_STACK};">{title}</p>
+    """
+
+
+def get_info_card_end() -> str:
+    """End an info card section."""
+    return """
+            </td>
+        </tr>
+    </table>
+    """
+
+
+def get_check_item(text: str) -> str:
+    """Generate a list item with a colored circle and checkmark character."""
+    return f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 12px;">
+        <tr>
+            <td width="32" valign="top" style="padding-right: 12px;">
+                <!--[if mso]>
+                <v:oval xmlns:v="urn:schemas-microsoft-com:vml" style="width:20px;height:20px;" fillcolor="{COLORS['primary']}" stroke="f">
+                    <v:textbox inset="0,0,0,0" style="mso-fit-shape-to-text:t">
+                        <center style="color:{COLORS['white']};font-size:12px;font-family:Arial,sans-serif;line-height:20px;">&#10003;</center>
+                    </v:textbox>
+                </v:oval>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <div style="width: 20px; height: 20px; background-color: {COLORS['primary']}; border-radius: 50%; text-align: center; line-height: 20px; color: {COLORS['white']}; font-size: 12px; font-family: Arial, sans-serif;">&#10003;</div>
+                <!--<![endif]-->
+            </td>
+            <td valign="top" style="font-size: 14px; color: {COLORS['gray_600']}; line-height: 1.5; font-family: {FONT_STACK};">
+                {text}
+            </td>
+        </tr>
+    </table>
+    """
+
+
+def get_numbered_step(num: str, title: str, desc: str) -> str:
+    """Generate a numbered step item."""
+    return f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 16px;">
+        <tr>
+            <td width="42" valign="top" style="padding-right: 14px;">
+                <!--[if mso]>
+                <v:oval xmlns:v="urn:schemas-microsoft-com:vml" style="width:28px;height:28px;" fillcolor="{COLORS['primary']}" stroke="f">
+                    <v:textbox inset="0,0,0,0" style="mso-fit-shape-to-text:t">
+                        <center style="color:{COLORS['white']};font-size:13px;font-weight:bold;font-family:Arial,sans-serif;line-height:28px;">{num}</center>
+                    </v:textbox>
+                </v:oval>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <div style="width: 28px; height: 28px; background-color: {COLORS['primary']}; border-radius: 50%; text-align: center; line-height: 28px; color: {COLORS['white']}; font-weight: 600; font-size: 13px; font-family: {FONT_STACK};">{num}</div>
+                <!--<![endif]-->
+            </td>
+            <td valign="top">
+                <p style="margin: 0 0 2px 0; font-weight: 600; color: {COLORS['navy']}; font-size: 14px; font-family: {FONT_STACK};">{title}</p>
+                <p style="margin: 0; color: {COLORS['gray_500']}; font-size: 13px; font-family: {FONT_STACK};">{desc}</p>
+            </td>
+        </tr>
+    </table>
+    """
+
+
+def get_divider() -> str:
+    """Generate a horizontal divider."""
+    return f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+            <td style="padding: 24px 0;">
+                <div style="height: 1px; background-color: {COLORS['gray_100']};"></div>
+            </td>
+        </tr>
+    </table>
+    """
 
 
 def render_invite_template(
@@ -146,115 +243,127 @@ def render_invite_template(
     role_display = role.title()
     expires_formatted = expires_at.strftime("%B %d, %Y at %I:%M %p UTC")
     
+    header_subtitle = "EARLY ACCESS INVITATION" if early_access else "PLATFORM INVITATION"
+    
+    early_badge = f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
+        <tr>
+            <td align="center">
+                <span style="display: inline-block; background-color: {COLORS['warning']}; color: {COLORS['white']}; padding: 6px 16px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-family: {FONT_STACK};">Early Access</span>
+            </td>
+        </tr>
+    </table>
+    """ if early_access else ""
+    
+    role_badge = f"""<span style="display: inline-block; background-color: #e0f2fe; color: {COLORS['primary_dark']}; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; font-family: {FONT_STACK};">{role_display}</span>"""
+    
     if early_access:
-        header_title = "Early Access Invitation"
         intro_text = f"""
-            <p style="font-size: 18px; color: #4a4a68; margin-bottom: 24px;">
-                You've been selected for <span class="highlight">exclusive early access</span> to Predixen Intelligence OS.
-            </p>
-            <p>
-                <span class="highlight">{invited_by_email}</span> has personally invited you to be among the first to experience 
-                our AI-powered financial intelligence platform. Your role: <span class="role-badge">{role_display}</span>
-            </p>
+        <p style="font-size: 16px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
+            You've been selected for <span style="color: {COLORS['primary']}; font-weight: 600;">exclusive early access</span> to Predixen Intelligence OS.
+        </p>
+        <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
+            <span style="color: {COLORS['primary']}; font-weight: 600;">{invited_by_email}</span> has personally invited you to join as a {role_badge}
+        </p>
         """
-        early_badge = """
-            <div style="text-align: center; margin-bottom: 24px;">
-                <span style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                      color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; 
-                      text-transform: uppercase; letter-spacing: 1px;">
-                    Early Access Member
-                </span>
-            </div>
-        """
-        value_prop = """
-            <div class="info-box">
-                <p><strong>As an early access member, you'll get:</strong></p>
-                <p>• <strong>First look</strong> at new features before public release</p>
-                <p>• <strong>AI-powered analysis</strong> of your financial documents (PDF & Excel)</p>
-                <p>• <strong>Monte Carlo simulations</strong> for cash flow forecasting</p>
-                <p>• <strong>Decision recommendations</strong> ranked by survival, growth & risk</p>
-                <p>• <strong>Direct feedback channel</strong> to shape the product roadmap</p>
-            </div>
-        """
+        features = [
+            "First look at new features before public release",
+            "AI-powered extraction from financial documents",
+            "Monte Carlo simulations for cash flow forecasting",
+            "Decision recommendations ranked by survival & risk",
+            "Direct feedback channel to shape the roadmap"
+        ]
     else:
-        header_title = "You're Invited!"
         intro_text = f"""
-            <p>You've been invited by <span class="highlight">{invited_by_email}</span> to join Predixen Intelligence OS as a <span class="role-badge">{role_display}</span>.</p>
-            <p>Predixen is an AI-powered financial intelligence platform that helps startups with investor-grade diligence, probabilistic simulation, and ranked decision recommendations.</p>
+        <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
+            <span style="color: {COLORS['primary']}; font-weight: 600;">{invited_by_email}</span> has invited you to join Predixen Intelligence OS as a {role_badge}
+        </p>
+        <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
+            Predixen helps startups make data-driven financial decisions with AI-powered analysis and probabilistic forecasting.
+        </p>
         """
-        early_badge = ""
-        value_prop = """
-            <div class="info-box">
-                <p><strong>What you'll get access to:</strong></p>
-                <p>• Financial metrics extraction and analysis</p>
-                <p>• Monte Carlo simulations for forecasting</p>
-                <p>• AI-powered decision recommendations</p>
-                <p>• Real-time runway and burn tracking</p>
-            </div>
-        """
+        features = [
+            "Financial metrics extraction and analysis",
+            "Monte Carlo simulations for forecasting",
+            "AI-powered decision recommendations",
+            "Real-time runway and burn tracking"
+        ]
+    
+    features_html = "".join([get_check_item(f) for f in features])
     
     content = f"""
-        <div class="email-header">
-            <div class="logo">Predixen</div>
-            <h1>{header_title}</h1>
-        </div>
-        <div class="email-body">
+    {get_header_html(header_subtitle)}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
             {early_badge}
-            <h2>Join Predixen Intelligence OS</h2>
+            <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">You're Invited</h2>
             {intro_text}
             
-            <div style="text-align: center; margin: 32px 0;">
-                <a href="{invite_url}" class="cta-button">Accept Your Invitation</a>
-            </div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        {get_cta_button(invite_url, "Accept Invitation")}
+                    </td>
+                </tr>
+            </table>
             
-            {value_prop}
+            {get_info_card_start("What You'll Get")}
+            {features_html}
+            {get_info_card_end()}
             
-            <p class="expiry-notice" style="text-align: center;">This invitation expires on {expires_formatted}.</p>
+            <p style="text-align: center; color: {COLORS['gray_500']}; font-size: 13px; margin: 24px 0 0 0; font-family: {FONT_STACK};">This invitation expires on {expires_formatted}</p>
             
-            <p style="font-size: 13px; color: #8888a0; margin-top: 24px;">If you weren't expecting this invitation, you can safely ignore this email.</p>
-        </div>
-        <div class="email-footer">
-            <p><strong>Predixen Intelligence OS</strong></p>
-            <p>AI-Powered Financial Intelligence for Startups</p>
-        </div>
+            {get_divider()}
+            
+            <p style="color: {COLORS['gray_500']}; font-size: 13px; margin: 0; font-family: {FONT_STACK};">If you weren't expecting this invitation, you can safely ignore this email.</p>
+        </td>
+    </tr>
+    {get_footer_html()}
     """
     return get_email_wrapper(content)
 
 
 def render_welcome_template(
     user_name: Optional[str] = None,
-    login_url: str = "https://predixen.ai/login"
+    login_url: str = "https://predixen.app/auth"
 ) -> str:
     """Render the welcome email template."""
-    greeting = f"Welcome, {user_name}!" if user_name else "Welcome!"
+    greeting = f"Welcome aboard, {user_name}!" if user_name else "Welcome aboard!"
+    
+    steps = [
+        ("1", "Upload Financial Data", "Import your financial documents (PDF, Excel) or connect your tools"),
+        ("2", "Review Truth Scan", "See your metrics benchmarked against industry standards"),
+        ("3", "Run Simulations", "Model scenarios with Monte Carlo forecasting"),
+        ("4", "Get Recommendations", "Receive AI-powered decision guidance"),
+    ]
+    
+    steps_html = "".join([get_numbered_step(num, title, desc) for num, title, desc in steps])
     
     content = f"""
-        <div class="email-header">
-            <div class="logo">Predixen</div>
-            <h1>Welcome Aboard!</h1>
-        </div>
-        <div class="email-body">
-            <h2>{greeting}</h2>
-            <p>Your account has been created successfully. You're now ready to start making data-driven decisions for your startup.</p>
+    {get_header_html("WELCOME TO PREDIXEN")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">{greeting}</h2>
+            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">Your account has been created successfully. You're now ready to start making data-driven decisions for your startup.</p>
             
-            <div style="text-align: center;">
-                <a href="{login_url}" class="cta-button">Go to Dashboard</a>
-            </div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        {get_cta_button(login_url, "Go to Dashboard")}
+                    </td>
+                </tr>
+            </table>
             
-            <div class="info-box">
-                <p><strong>Getting Started:</strong></p>
-                <p>1. Upload your financial documents (PDF or Excel)</p>
-                <p>2. Review your Truth Scan metrics</p>
-                <p>3. Run simulations to forecast scenarios</p>
-                <p>4. Get AI-powered recommendations</p>
-            </div>
+            {get_info_card_start("Getting Started")}
+            {steps_html}
+            {get_info_card_end()}
             
-            <p>Need help? Our platform includes an AI Copilot that can guide you through any feature.</p>
-        </div>
-        <div class="email-footer">
-            <p>Predixen Intelligence OS</p>
-            <p>AI-Powered Financial Intelligence for Startups</p>
-        </div>
+            {get_divider()}
+            
+            <p style="color: {COLORS['gray_500']}; font-size: 13px; margin: 0; font-family: {FONT_STACK};">Need help? Our AI Copilot is available in-platform to guide you through any feature or answer questions about your financial data.</p>
+        </td>
+    </tr>
+    {get_footer_html()}
     """
     return get_email_wrapper(content)
 
@@ -264,29 +373,34 @@ def render_password_reset_template(
 ) -> str:
     """Render the password reset email template."""
     content = f"""
-        <div class="email-header">
-            <div class="logo">Predixen</div>
-            <h1>Password Reset</h1>
-        </div>
-        <div class="email-body">
-            <h2>Reset Your Password</h2>
-            <p>We received a request to reset the password for your Predixen account. Click the button below to create a new password.</p>
+    {get_header_html("PASSWORD RESET")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">Reset Your Password</h2>
+            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">We received a request to reset the password for your Predixen account. Click the button below to create a new password.</p>
             
-            <div style="text-align: center;">
-                <a href="{reset_url}" class="cta-button">Reset Password</a>
-            </div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        {get_cta_button(reset_url, "Reset Password")}
+                    </td>
+                </tr>
+            </table>
             
-            <div class="info-box">
-                <p><strong>Security Notice:</strong></p>
-                <p>This link will expire in 1 hour for security reasons. If you didn't request a password reset, please ignore this email or contact support if you have concerns.</p>
-            </div>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #fef3c7; border-left: 3px solid {COLORS['warning']}; border-radius: 0 8px 8px 0; margin: 24px 0;">
+                <tr>
+                    <td style="padding: 16px 20px;">
+                        <p style="margin: 0; color: {COLORS['gray_700']}; font-size: 14px; font-family: {FONT_STACK};"><strong>Security Notice:</strong> This link expires in 1 hour. If you didn't request this reset, please ignore this email or contact support if you have concerns.</p>
+                    </td>
+                </tr>
+            </table>
             
-            <p style="font-size: 13px; color: #8888a0;">If you didn't request this password reset, you can safely ignore this email.</p>
-        </div>
-        <div class="email-footer">
-            <p>Predixen Intelligence OS</p>
-            <p>AI-Powered Financial Intelligence for Startups</p>
-        </div>
+            {get_divider()}
+            
+            <p style="color: {COLORS['gray_500']}; font-size: 13px; margin: 0; font-family: {FONT_STACK};">For security reasons, never share this link with anyone. Predixen will never ask for your password via email.</p>
+        </td>
+    </tr>
+    {get_footer_html()}
     """
     return get_email_wrapper(content)
 
@@ -329,7 +443,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
     """
     sample_data = {
         "invite": {
-            "invite_url": "https://predixen.ai/register?token=sample_token_abc123",
+            "invite_url": "https://predixen.app/auth?invite=sample_token_abc123",
             "role": "analyst",
             "invited_by_email": "admin@company.com",
             "expires_at": datetime.now(),
@@ -337,10 +451,10 @@ def get_template_preview(template_type: str) -> Optional[str]:
         },
         "welcome": {
             "user_name": "John Doe",
-            "login_url": "https://predixen.ai/login"
+            "login_url": "https://predixen.app/auth"
         },
         "password_reset": {
-            "reset_url": "https://predixen.ai/reset-password?token=sample_reset_token"
+            "reset_url": "https://predixen.app/reset-password?token=sample_reset_token"
         }
     }
     
