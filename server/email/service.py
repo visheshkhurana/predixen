@@ -203,8 +203,8 @@ async def send_invite_email(
     """
     from server.email.templates import render_invite_template
     
-    base_url = os.getenv("APP_BASE_URL", "https://predixen.ai")
-    invite_url = f"{base_url}/register?token={invite_token}"
+    base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+    invite_url = f"{base_url}/auth?invite={invite_token}"
     
     html_content = template_html or render_invite_template(
         invite_url=invite_url,
