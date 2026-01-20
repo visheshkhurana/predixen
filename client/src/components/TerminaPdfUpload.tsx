@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useTerminaPdfUpload } from "@/api/hooks";
+import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
   FileUp, 
   FileText, 
@@ -103,6 +104,7 @@ function calculateIndustryEstimates(metrics: Record<string, number | undefined>)
 
 export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps) {
   const { toast } = useToast();
+  const { setFinancialBaseline } = useFounderStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedMetrics, setExtractedMetrics] = useState<ExtractedMetrics | null>(null);
@@ -241,6 +243,27 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
       }
 
       setHasApplied(true);
+      
+      const baseline: FinancialBaseline = {
+        cashOnHand: payload.cashOnHand,
+        monthlyRevenue: payload.monthlyRevenue,
+        totalMonthlyExpenses: payload.totalMonthlyExpenses,
+        monthlyGrowthRate: payload.monthlyGrowthRate !== null && payload.monthlyGrowthRate !== undefined
+          ? payload.monthlyGrowthRate * 100 
+          : null,
+        expenseBreakdown: {
+          payroll: payload.expenseBreakdown.payroll || null,
+          marketing: payload.expenseBreakdown.marketing || null,
+          operating: payload.expenseBreakdown.operating || null,
+          cogs: payload.expenseBreakdown.cogs || null,
+          otherOpex: payload.expenseBreakdown.otherOpex || null,
+        },
+        hasManualExpenseOverride: false,
+        currency: payload.currency,
+        asOfDate: payload.asOfDate,
+      };
+      setFinancialBaseline(baseline);
+      
       toast({
         title: "Financials saved successfully",
         description: "Your data has been applied. Run Truth Scan to see updated metrics.",

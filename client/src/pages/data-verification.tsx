@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
   FileSpreadsheet, 
   AlertTriangle, 
@@ -129,6 +130,7 @@ export default function DataVerification() {
   const [, params] = useRoute("/data/verify/:sessionId");
   const sessionId = params?.sessionId ? parseInt(params.sessionId) : null;
   const { toast } = useToast();
+  const { setFinancialBaseline } = useFounderStore();
 
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [cashOnHand, setCashOnHand] = useState<string>("");
@@ -191,10 +193,33 @@ export default function DataVerification() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.baseline) {
+        const savedBaseline = data.baseline;
+        const baseline: FinancialBaseline = {
+          cashOnHand: savedBaseline.cashOnHand || null,
+          monthlyRevenue: savedBaseline.monthlyRevenue || null,
+          totalMonthlyExpenses: savedBaseline.totalMonthlyExpenses || null,
+          monthlyGrowthRate: savedBaseline.monthlyGrowthRate !== null 
+            ? savedBaseline.monthlyGrowthRate * 100 
+            : null,
+          expenseBreakdown: {
+            payroll: savedBaseline.expenseBreakdown?.payroll || null,
+            marketing: savedBaseline.expenseBreakdown?.marketing || null,
+            operating: savedBaseline.expenseBreakdown?.operating || null,
+            cogs: savedBaseline.expenseBreakdown?.cogs || null,
+            otherOpex: savedBaseline.expenseBreakdown?.otherOpex || null,
+          },
+          hasManualExpenseOverride: false,
+          currency: savedBaseline.currency || 'USD',
+          asOfDate: savedBaseline.asOfDate || selectedPeriod || new Date().toISOString().split('T')[0],
+        };
+        setFinancialBaseline(baseline);
+      }
+      
       toast({
         title: "Data Saved",
-        description: "Financial data has been saved successfully.",
+        description: "Financial data has been saved and applied to your dashboard.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
       navigate("/data");
