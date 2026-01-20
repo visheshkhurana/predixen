@@ -102,6 +102,37 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function formatCurrencyInWords(value: number, currency: string = "USD"): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return "";
+  }
+  
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? "Negative " : "";
+  
+  const currencyNames: Record<string, string> = {
+    USD: "US Dollars",
+    EUR: "Euros",
+    GBP: "British Pounds",
+    INR: "Indian Rupees",
+  };
+  
+  const currencyName = currencyNames[currency] || currency;
+  
+  if (absValue >= 1_000_000_000) {
+    const billions = absValue / 1_000_000_000;
+    return `${sign}${billions.toFixed(1)} billion ${currencyName}`;
+  } else if (absValue >= 1_000_000) {
+    const millions = absValue / 1_000_000;
+    return `${sign}${millions.toFixed(1)} million ${currencyName}`;
+  } else if (absValue >= 1_000) {
+    const thousands = absValue / 1_000;
+    return `${sign}${thousands.toFixed(1)} thousand ${currencyName}`;
+  } else {
+    return `${sign}${absValue.toFixed(2)} ${currencyName}`;
+  }
+}
+
 function formatPercentage(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -400,6 +431,19 @@ export default function DataVerification() {
         </CardHeader>
       </Card>
 
+      {verifyData && (verifyData.baseline.revenue > 50_000_000 || verifyData.baseline.total_expenses > 50_000_000) && (
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-600">Values Seem Unusually High</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            The extracted values appear very large (over $50 million). Please verify these are correct. 
+            If your document uses abbreviations like "K" for thousands, please use the override fields 
+            below to enter the correct values. For example, if revenue should be $116,100 (not $116.1 million), 
+            enter "116100" in the override field.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {(verifyData?.warnings?.length || 0) > 0 && (
         <Alert>
           <AlertTriangle className="h-4 w-4" />
@@ -441,6 +485,11 @@ export default function DataVerification() {
               <div className="text-2xl font-bold font-mono">
                 {verifyData ? formatCurrency(verifyData.baseline.revenue) : "--"}
               </div>
+              {verifyData && (
+                <p className="text-xs text-muted-foreground italic">
+                  {formatCurrencyInWords(verifyData.baseline.revenue)}
+                </p>
+              )}
               <Input
                 type="number"
                 placeholder="Override revenue..."
@@ -464,6 +513,11 @@ export default function DataVerification() {
               <div className="text-2xl font-bold font-mono">
                 {verifyData ? formatCurrency(verifyData.baseline.total_expenses) : "--"}
               </div>
+              {verifyData && (
+                <p className="text-xs text-muted-foreground italic">
+                  {formatCurrencyInWords(verifyData.baseline.total_expenses)}
+                </p>
+              )}
               <Input
                 type="number"
                 placeholder="Override expenses..."
@@ -487,6 +541,11 @@ export default function DataVerification() {
               <div className="text-2xl font-bold font-mono">
                 {cashOnHand ? formatCurrency(parseFloat(cashOnHand)) : "--"}
               </div>
+              {cashOnHand && (
+                <p className="text-xs text-muted-foreground italic">
+                  {formatCurrencyInWords(parseFloat(cashOnHand))}
+                </p>
+              )}
               <Input
                 type="number"
                 placeholder="Enter cash on hand..."
@@ -513,6 +572,11 @@ export default function DataVerification() {
                 </span>
               ) : "--"}
             </div>
+            {verifyData && (
+              <p className="text-xs text-muted-foreground italic">
+                {formatCurrencyInWords(verifyData.burn_display.value)}
+              </p>
+            )}
             <div className="text-sm text-muted-foreground mt-1">
               Runway: {verifyData?.runway_display || "--"}
             </div>
@@ -531,6 +595,9 @@ export default function DataVerification() {
                 <div key={bucket} className="space-y-1">
                   <div className="text-sm text-muted-foreground capitalize">{bucket}</div>
                   <div className="text-lg font-mono font-semibold">{formatCurrency(value)}</div>
+                  <p className="text-xs text-muted-foreground italic">
+                    {formatCurrencyInWords(value)}
+                  </p>
                 </div>
               ))}
             </div>

@@ -508,6 +508,11 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     # Merge pattern and AI metrics (pattern takes priority for accuracy)
     metrics = {**ai_metrics, **pattern_metrics}  # pattern_metrics override ai_metrics
     
+    # Log extracted values for debugging
+    logger.info(f"Merged metrics: revenue={metrics.get('monthly_revenue')}, "
+                f"expenses={metrics.get('total_monthly_expenses') or metrics.get('opex')}, "
+                f"cogs={metrics.get('cogs')}")
+    
     # Stage 3: Fall back to vision if we still have no metrics
     if not metrics:
         try:
