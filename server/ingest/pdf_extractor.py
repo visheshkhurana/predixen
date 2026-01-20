@@ -66,100 +66,164 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
     
     This is optimized for Tribe Capital Mini Benchmark Scan and similar formats.
     Returns values exactly as stated in the PDF without scaling.
+    
+    IMPORTANT: This format reports QUARTERLY revenue (Rolling Q) which is then
+    annualized to get the run rate (ARR). Monthly revenue = quarterly revenue / 3.
     """
     metrics = {}
     
     # Normalize whitespace and line breaks for easier matching
     text = ' '.join(pdf_text.split())
     
+    # Detect if this is a Mini Benchmark Scan format (uses Rolling Q = quarterly data)
+    # Use case-insensitive matching for quarterly indicators
+    text_lower = text.lower()
+    is_quarterly_format = 'rolling q' in text_lower or 'mini benchmark scan' in text_lower or 'annualized revenue' in text_lower
+    metrics['_is_quarterly_format'] = is_quarterly_format
+    
     # Company name - look for common patterns
-    company_match = re.search(r'(?:Mini Benchmark Scan|Overview)\s+([A-Z][A-Za-z0-9\s]+?)(?:\s+(?:Key|Revenue|Summary|March|January|February|April|May|June|July|August|September|October|November|December))', text)
+    company_match = re.search(r'(?:Mini Benchmark Scan|Overview)\s+([A-Z][A-Za-z0-9.\s]+?)(?:\s+(?:HIGHLY|Key|Revenue|Summary|March|January|February|April|May|June|July|August|September|October|November|December))', text)
     if company_match:
         metrics['company_name'] = company_match.group(1).strip()
     
-    # Monthly Revenue: "In March 2025, Revenue was $14.2M"
-    revenue_match = re.search(r'(?:In\s+\w+\s+\d{4},\s+)?Revenue\s+was\s+([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
-    if revenue_match:
-        metrics['monthly_revenue'] = parse_value_from_text(revenue_match.group(1))
+    # Check for explicit quarterly format indicators (case-insensitive)
+    has_quarterly_indicator = (
+        'rolling q' in text_lower or 
+        'latest revenue / arr' in text_lower or
+        'latest revenue/arr' in text_lower or
+        'quarterly revenue' in text_lower or
+        '(rolling q)' in text_lower
+    )
     
-    # Annual Run Rate: "($171.0M run rate)" or "run rate of $171M"
-    run_rate_match = re.search(r'\(?\s*([₹$€£]?[\d.,]+[MKBmkb]?)\s*run\s*rate\)?', text, re.IGNORECASE)
-    if run_rate_match:
-        metrics['run_rate_revenue'] = parse_value_from_text(run_rate_match.group(1))
-        # Also calculate ARR from run rate
-        if metrics.get('run_rate_revenue'):
-            metrics['arr'] = metrics['run_rate_revenue']
+    # FIRST: Try to extract direct monthly revenue for non-quarterly reports
+    # Pattern: "In March 2025, Revenue was $14.2M" or "Monthly Revenue: $14.2M"
+    if not has_quarterly_indicator:
+        monthly_rev_match = re.search(r'(?:In\s+\w+\s+\d{4},\s+)?(?:Monthly\s+)?Revenue\s+(?:was\s+)?([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+        if monthly_rev_match:
+            monthly_val = parse_value_from_text(monthly_rev_match.group(1))
+            if monthly_val:
+                metrics['monthly_revenue'] = monthly_val
+                logger.info(f"Extracted monthly revenue directly: {monthly_val}")
     
-    # Gross Margin: "Gross Margin was 60.3%"
-    gross_margin_match = re.search(r'Gross\s+Margin\s+(?:was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    # Annualized Revenue (Rolling Q) - extract ARR but ONLY derive monthly if explicitly quarterly
+    # Pattern: "Annualized Revenue (Rolling Q) was $51.6M"
+    arr_rolling_match = re.search(r'Annualized\s+Revenue\s*\(?\s*Rolling\s*Q?\s*\)?\s*(?:was\s+)?([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if arr_rolling_match:
+        arr_value = parse_value_from_text(arr_rolling_match.group(1))
+        if arr_value:
+            metrics['arr'] = arr_value
+            metrics['run_rate_revenue'] = arr_value
+            # Only derive monthly from ARR if this is explicitly a quarterly format
+            # DO NOT overwrite if monthly_revenue is already set
+            if has_quarterly_indicator and not metrics.get('monthly_revenue'):
+                metrics['monthly_revenue'] = arr_value / 12
+                logger.info(f"Extracted ARR (Rolling Q): {arr_value}, derived monthly: {arr_value/12}")
+            else:
+                logger.info(f"Extracted ARR: {arr_value}, not deriving monthly (no quarterly indicator or already set)")
+    
+    # Also look for plain run rate if ARR not found
+    if not metrics.get('run_rate_revenue'):
+        run_rate_match = re.search(r'\(?\s*([₹$€£]?[\d.,]+[MKBmkb]?)\s*run\s*rate\)?', text, re.IGNORECASE)
+        if run_rate_match:
+            run_rate = parse_value_from_text(run_rate_match.group(1))
+            if run_rate:
+                metrics['run_rate_revenue'] = run_rate
+                metrics['arr'] = run_rate
+                # DO NOT derive monthly from run rate - only extract what's explicitly stated
+    
+    # Latest Revenue (quarterly): Look for "Latest Revenue / ARR" table pattern
+    # This IS an explicit quarterly indicator - Pattern: "$12.9M / $51.6M" where first is quarterly, second is ARR
+    latest_rev_match = re.search(r'Latest\s+Revenue\s*/\s*ARR[^$₹€£]*?([₹$€£]?[\d.,]+[MKBmkb]?)\s*/\s*([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+    if latest_rev_match:
+        quarterly_rev = parse_value_from_text(latest_rev_match.group(1))
+        arr_value = parse_value_from_text(latest_rev_match.group(2))
+        if quarterly_rev and arr_value:
+            metrics['quarterly_revenue'] = quarterly_rev
+            metrics['arr'] = arr_value
+            metrics['run_rate_revenue'] = arr_value
+            # This is explicit quarterly format, so we CAN derive monthly
+            metrics['monthly_revenue'] = quarterly_rev / 3
+            logger.info(f"Extracted quarterly: {quarterly_rev}, ARR: {arr_value}, derived monthly: {quarterly_rev/3}")
+    
+    # Gross Margin (Rolling Q): "Gross Margin (Rolling Q) was 22.1%"
+    gross_margin_match = re.search(r'Gross\s+Margin\s*(?:\(Rolling\s*Q?\))?\s*(?:was\s+)?(-?[\d.]+)\s*%?', text, re.IGNORECASE)
     if gross_margin_match:
         metrics['gross_margin'] = float(gross_margin_match.group(1))
     
-    # Operating Margin: "Operating Margin was 30.6%" or "Operating margin 30.6%"
-    op_margin_match = re.search(r'Operating\s+[Mm]argin\s+(?:was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    # Operating Margin (Rolling Q): "Operating Margin (Rolling Q) was 9.9%"
+    op_margin_match = re.search(r'Operating\s+[Mm]argin\s*(?:\(Rolling\s*Q?\))?\s*(?:was\s+)?(-?[\d.]+)\s*%?', text, re.IGNORECASE)
     if op_margin_match:
         metrics['operating_margin'] = float(op_margin_match.group(1))
     
-    # Burn Multiple: "Burn Multiple was -0.7x"
+    # Burn Multiple: "Burn Multiple was -0.7x" (negative means profitable)
     burn_match = re.search(r'Burn\s+Multiple\s+(?:was\s+)?(-?[\d.]+)x?', text, re.IGNORECASE)
     if burn_match:
         metrics['burn_multiple'] = float(burn_match.group(1))
     
-    # Revenue CMGR - look for 3/6/12 month growth rates
-    # Patterns like "3-month CMGR of 4.2%" or "CMGR (3m): 4.2%"
-    cmgr3_match = re.search(r'(?:3[-\s]?month\s+)?CMGR\s*(?:\(3m?\))?\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
-    if cmgr3_match:
-        metrics['cmgr_3'] = float(cmgr3_match.group(1))
-        metrics['mom_growth'] = float(cmgr3_match.group(1))  # Use 3-month as primary
-    
-    cmgr6_match = re.search(r'6[-\s]?month\s+CMGR\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
-    if cmgr6_match:
-        metrics['cmgr_6'] = float(cmgr6_match.group(1))
-    
-    cmgr12_match = re.search(r'12[-\s]?month\s+CMGR\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)%?', text, re.IGNORECASE)
+    # CMGR12 (primary growth indicator for this format): "CMGR12 was 1.8%"
+    cmgr12_match = re.search(r'CMGR\s*12\s*(?:was\s+)?(-?[\d.]+)\s*%?', text, re.IGNORECASE)
     if cmgr12_match:
         metrics['cmgr_12'] = float(cmgr12_match.group(1))
+        metrics['mom_growth'] = float(cmgr12_match.group(1))  # Use CMGR12 as MoM
     
-    # Operating Income: "Operating Income $4.4M" or "Operating Income was $4.4M"
+    # Also look for "3-month CMGR" or similar patterns
+    cmgr3_match = re.search(r'(?:3[-\s]?month\s+)?CMGR\s*(?:\(3m?\))?\s*(?:of\s+|:\s*|was\s+)?(-?[\d.]+)\s*%?', text, re.IGNORECASE)
+    if cmgr3_match and not metrics.get('cmgr_12'):
+        metrics['cmgr_3'] = float(cmgr3_match.group(1))
+        if not metrics.get('mom_growth'):
+            metrics['mom_growth'] = float(cmgr3_match.group(1))
+    
+    # Revenue CQGR patterns: "Revenue CQGR 1/2/4 was 22.7/14.4/5.6%"
+    cqgr_match = re.search(r'Revenue\s+CQGR\s+\d/\d/\d\s+(?:was\s+)?([\d.]+)/([\d.]+)/([\d.]+)\s*%?', text, re.IGNORECASE)
+    if cqgr_match:
+        metrics['cqgr_1'] = float(cqgr_match.group(1))
+        metrics['cqgr_2'] = float(cqgr_match.group(2))
+        metrics['cqgr_4'] = float(cqgr_match.group(3))
+    
+    # YoY Growth from table: "YoY Growth" column values like "1.24x"
+    # Pattern: "YoY Growth" followed by values like "1.24x"
+    yoy_match = re.search(r'(?:Y[oe][Yy]|Year[-\s]over[-\s]Year)\s+[Gg]rowth[^0-9]*?(\d+\.?\d*)x?', text, re.IGNORECASE)
+    if yoy_match:
+        value = float(yoy_match.group(1))
+        if value >= 0.5 and value <= 10:  # Likely a multiplier like 1.24x
+            metrics['yoy_growth'] = (value - 1) * 100  # Convert 1.24x to 24%
+        else:
+            metrics['yoy_growth'] = value  # Already a percentage
+    
+    # Also look for "implied year-over-year growth was 2.3/1.7/1.2x" pattern
+    implied_yoy = re.search(r'[Ii]mplied\s+year[-\s]over[-\s]year\s+growth\s+(?:was\s+)?([\d.]+)/([\d.]+)/([\d.]+)\s*x?', text, re.IGNORECASE)
+    if implied_yoy:
+        yoy_1q = float(implied_yoy.group(1))
+        yoy_2q = float(implied_yoy.group(2))
+        yoy_4q = float(implied_yoy.group(3))
+        # Use the 4-quarter YoY as primary
+        if yoy_4q >= 0.5 and yoy_4q <= 10:
+            metrics['yoy_growth'] = (yoy_4q - 1) * 100
+    
+    # Operating Income - not commonly in this format but check anyway
     op_income_match = re.search(r'Operating\s+Income\s+(?:was\s+)?([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
     if op_income_match:
         metrics['operating_income'] = parse_value_from_text(op_income_match.group(1))
     
-    # Gross Profit: "Gross Profit $8.6M"
+    # Gross Profit - only extract if explicitly stated, do NOT derive from margins
     gross_profit_match = re.search(r'Gross\s+Profit\s+(?:was\s+)?([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
     if gross_profit_match:
         metrics['gross_profit'] = parse_value_from_text(gross_profit_match.group(1))
     
-    # Cash Balance
+    # Cash Balance (rarely in Mini Benchmark Scan)
     cash_match = re.search(r'(?:Cash\s+Balance|Cash\s+on\s+Hand|Bank\s+Balance)\s*:?\s*([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
     if cash_match:
         metrics['cash_balance'] = parse_value_from_text(cash_match.group(1))
     
-    # Net Burn
+    # Net Burn - only extract if explicitly stated, do NOT derive from margins
     burn_rate_match = re.search(r'(?:Net\s+Burn|Monthly\s+Burn)\s*:?\s*([₹$€£]?-?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
     if burn_rate_match:
         metrics['net_burn'] = parse_value_from_text(burn_rate_match.group(1))
-    
-    # Runway
-    runway_match = re.search(r'Runway\s*:?\s*(\d+)\s*months?', text, re.IGNORECASE)
-    if runway_match:
-        metrics['runway_months'] = int(runway_match.group(1))
     
     # Headcount
     headcount_match = re.search(r'(?:Headcount|Employees|Team\s+Size)\s*:?\s*(\d+)', text, re.IGNORECASE)
     if headcount_match:
         metrics['headcount'] = int(headcount_match.group(1))
-    
-    # YoY Growth: "Year-over-Year Growth 1.6x" or "YoY Growth 60%"
-    yoy_match = re.search(r'(?:Y[oe][Yy]|Year[-\s]over[-\s]Year)\s+[Gg]rowth\s*:?\s*(-?[\d.]+)([x%])?', text, re.IGNORECASE)
-    if yoy_match:
-        value = float(yoy_match.group(1))
-        suffix = yoy_match.group(2)
-        if suffix and suffix.lower() == 'x':
-            # Convert 1.6x to 60%
-            metrics['yoy_growth'] = (value - 1) * 100
-        else:
-            metrics['yoy_growth'] = value
     
     # Currency detection
     if '₹' in pdf_text:
@@ -228,29 +292,31 @@ Return the result as a JSON object with these exact keys (use null if not found)
   "company_name": "string - the company name",
   "report_date": "string - the date of the report (YYYY-MM-DD format if possible)",
   "currency": "string - the currency code (USD, EUR, GBP, INR, etc.)",
-  "monthly_revenue": "number - current monthly revenue in base units (e.g., $14.2M = 14200000)",
-  "run_rate_revenue": "number - annualized run rate revenue in base units",
+  "is_quarterly_format": "boolean - true if report uses quarterly (Rolling Q) data, false if monthly",
+  "quarterly_revenue": "number - quarterly revenue if report uses quarterly format (e.g., Q1 revenue)",
+  "monthly_revenue": "number - monthly revenue in base units. If quarterly format, divide quarterly by 3",
+  "run_rate_revenue": "number - annualized run rate (ARR) in base units. If quarterly, this is quarterly * 4",
   "cogs": "number - cost of goods sold (monthly) in base units",
   "gross_profit": "number - gross profit (monthly) in base units",
-  "gross_margin": "number - gross margin as percentage (e.g., 60.3% = 60.3)",
+  "gross_margin": "number - gross margin as percentage exactly as stated (e.g., 22.1% = 22.1, NOT inflated)",
   "operating_income": "number - operating income (monthly) in base units",
-  "operating_margin": "number - operating margin as percentage (e.g., 30.6% = 30.6)",
-  "burn_multiple": "number - burn multiple as reported (e.g., -0.7x = -0.7)",
+  "operating_margin": "number - operating margin as percentage exactly as stated (e.g., 9.9% = 9.9, NOT inflated)",
+  "burn_multiple": "number - burn multiple as reported (e.g., -0.7x = -0.7, -0.2x = -0.2)",
   "total_monthly_expenses": "number - total monthly operating expenses in base units",
   "net_burn": "number - monthly net burn rate in base units",
   "cash_balance": "number - current cash on hand in base units",
   "runway_months": "number - estimated runway in months",
-  "yoy_growth": "number - year over year growth as percentage (e.g., 1.6x = 60, 60% = 60)",
-  "mom_growth": "number - month over month growth rate as percentage",
+  "yoy_growth": "number - year over year growth as percentage (e.g., 1.24x = 24%, NOT 124%)",
+  "mom_growth": "number - month over month growth rate as percentage (typically 1-10% for stable companies)",
   "cmgr_3": "number - 3-month compound monthly growth rate as percentage",
   "cmgr_6": "number - 6-month compound monthly growth rate as percentage",
-  "cmgr_12": "number - 12-month compound monthly growth rate as percentage",
+  "cmgr_12": "number - 12-month compound monthly growth rate as percentage (e.g., 1.8% = 1.8)",
   "payroll": "number - monthly payroll/personnel expense in base units",
   "sales_and_marketing": "number - monthly sales & marketing expense in base units",
   "other_opex": "number - monthly other operating expenses in base units",
   "opex": "number - total monthly operating expenses in base units",
   "headcount": "number - current employee count",
-  "arr": "number - annual recurring revenue in base units",
+  "arr": "number - annual recurring revenue (run rate) in base units",
   "mrr": "number - monthly recurring revenue in base units",
   "ndr": "number - net dollar retention as percentage",
   "logo_retention": "number - customer logo retention as percentage",
@@ -265,15 +331,22 @@ Return the result as a JSON object with these exact keys (use null if not found)
 }
 
 CRITICAL INSTRUCTIONS - EXTRACT EXACTLY AS STATED:
-- Extract the EXACT values from the report without additional calculation or scaling
+- IDENTIFY THE REPORTING PERIOD: Many reports use QUARTERLY data (Rolling Q). 
+  - If you see "Rolling Q", "Annualized Revenue", or "$X.XM / $Y.YM ARR" format, the first number is QUARTERLY revenue
+  - Monthly revenue = quarterly / 3
+  - ARR (run rate) = quarterly * 4 = monthly * 12
+- Extract the EXACT values from the report - do NOT scale, inflate, or multiply incorrectly
 - For monetary values: $14.2M = 14200000, $500K = 500000, $1.5B = 1500000000
-- For percentages: 60.3% = 60.3, 30.6% = 30.6, 4.2% = 4.2 (keep the number, not decimal)
-- For multiples/ratios: -0.7x = -0.7, 3.5x = 3.5 (keep the sign and value)
-- For YoY growth as multiplier: 1.6x = 60 (convert to percentage growth)
-- Use null if a metric is NOT found - do NOT default to zero
-- PRESERVE negative values (like negative burn multiple) - do not clamp to zero
-- All expense values should be POSITIVE numbers, but burn_multiple can be negative
-- Do NOT estimate or calculate values that aren't explicitly stated
+- For percentages: Extract EXACTLY as stated. If it says 22.1%, return 22.1. If it says 9.9%, return 9.9.
+  - DO NOT inflate margins to unrealistic values (e.g., 91% gross margin is very rare)
+- For YoY growth multipliers: 1.24x means 24% growth (NOT 124% or 800%)
+  - Convert: 1.24x = 24%, 1.47x = 47%, 2.0x = 100%
+- For CMGR (monthly growth): Typical values are 1-5% for stable companies
+  - CMGR12 of 1.8% means 1.8% month-over-month growth
+- For burn_multiple: Negative means profitable (e.g., -0.2x = profitable with low burn)
+- Use null if a metric is NOT found - do NOT default to zero or estimate
+- PRESERVE negative values for burn_multiple
+- SANITY CHECK: Gross margins above 70% are uncommon. Growth rates above 50% MoM are very rare.
 
 """
 
@@ -465,6 +538,98 @@ def normalize_expense_value(value: Any) -> Optional[float]:
         return None
 
 
+def validate_and_correct_metrics(metrics: Dict[str, Any]) -> tuple[Dict[str, Any], List[str], Dict[str, Any]]:
+    """
+    Validate extracted metrics and flag unrealistic values.
+    
+    IMPORTANT: This function does NOT mutate values. It only flags issues and suggests corrections.
+    The original metrics are preserved so users can see actual extraction results and decide.
+    
+    Returns:
+        Tuple of (original_metrics_unchanged, warnings_list, suggested_corrections)
+    """
+    warnings = []
+    suggestions = {}  # Suggested corrections for UI display only
+    
+    # Check for unrealistic margins
+    gross_margin = metrics.get('gross_margin')
+    if gross_margin is not None:
+        if gross_margin > 90:
+            warnings.append(f"Gross margin of {gross_margin}% is unusually high - please verify against source document")
+            op_margin = metrics.get('operating_margin')
+            if op_margin and op_margin < 20:
+                logger.warning(f"Gross margin {gross_margin}% seems too high, operating margin {op_margin}% seems reasonable - possible extraction error")
+        elif gross_margin < 0:
+            warnings.append(f"Negative gross margin ({gross_margin}%) indicates losses at gross level")
+    
+    operating_margin = metrics.get('operating_margin')
+    if operating_margin is not None:
+        if operating_margin > 70:
+            warnings.append(f"Operating margin of {operating_margin}% is unusually high - please verify")
+    
+    # Check for unrealistic growth rates
+    mom_growth = metrics.get('mom_growth')
+    if mom_growth is not None:
+        if mom_growth > 100:
+            warnings.append(f"Month-over-month growth of {mom_growth}% is extremely high - this may be YoY growth mislabeled")
+            logger.warning(f"MoM growth {mom_growth}% seems like it might be YoY or misextracted")
+        elif mom_growth > 50:
+            warnings.append(f"Month-over-month growth of {mom_growth}% is unusually high")
+    
+    yoy_growth = metrics.get('yoy_growth')
+    if yoy_growth is not None:
+        if yoy_growth > 500:
+            warnings.append(f"Year-over-year growth of {yoy_growth}% is extremely high - please verify")
+            # Check if this might be a misinterpreted multiplier
+            if yoy_growth > 100 and yoy_growth < 1000:
+                possible_multiplier = yoy_growth / 100
+                if 1.0 < possible_multiplier < 10.0:
+                    suggested_yoy = (possible_multiplier - 1) * 100
+                    suggestions['yoy_growth'] = suggested_yoy
+                    logger.warning(f"YoY {yoy_growth}% might be misinterpreted multiplier, suggested: {suggested_yoy}%")
+    
+    # Check revenue scaling - if monthly revenue seems too high compared to ARR
+    monthly_rev = metrics.get('monthly_revenue')
+    arr = metrics.get('arr') or metrics.get('run_rate_revenue')
+    
+    if monthly_rev and arr:
+        expected_monthly = arr / 12
+        ratio = monthly_rev / expected_monthly if expected_monthly > 0 else 0
+        
+        if ratio > 2:
+            warnings.append(f"Monthly revenue (${monthly_rev:,.0f}) appears inconsistent with ARR (${arr:,.0f}) - ratio is {ratio:.1f}x expected")
+            # Suggest possible corrections for UI display
+            if 2.5 < ratio < 4.5:
+                suggestions['monthly_revenue'] = monthly_rev / 3
+                suggestions['_monthly_revenue_note'] = "Value may be quarterly revenue - suggested monthly = quarterly/3"
+                logger.info(f"Suggestion: monthly revenue {monthly_rev} may be quarterly, suggested: {monthly_rev/3}")
+            elif 8 < ratio < 15:
+                suggestions['monthly_revenue'] = monthly_rev / 12
+                suggestions['_monthly_revenue_note'] = "Value may be annual revenue - suggested monthly = annual/12"
+                logger.info(f"Suggestion: monthly revenue {monthly_rev} may be annual, suggested: {monthly_rev/12}")
+    
+    # Check quarterly vs monthly consistency
+    quarterly_rev = metrics.get('quarterly_revenue')
+    if quarterly_rev and monthly_rev:
+        expected_monthly = quarterly_rev / 3
+        ratio = monthly_rev / expected_monthly if expected_monthly > 0 else 0
+        if ratio > 1.5 or ratio < 0.5:
+            warnings.append(f"Monthly revenue doesn't match quarterly/3 (expected ${expected_monthly:,.0f}, got ${monthly_rev:,.0f})")
+            suggestions['monthly_revenue'] = expected_monthly
+    
+    # Validate CMGR values are reasonable
+    for cmgr_key in ['cmgr_3', 'cmgr_6', 'cmgr_12']:
+        cmgr_val = metrics.get(cmgr_key)
+        if cmgr_val is not None and cmgr_val > 30:
+            warnings.append(f"{cmgr_key.upper()} of {cmgr_val}% is unusually high for monthly growth - please verify")
+    
+    # Check for large revenue values that might be misscaled
+    if monthly_rev and monthly_rev > 500_000_000:  # > $500M monthly
+        warnings.append(f"Monthly revenue of ${monthly_rev/1_000_000:.1f}M is extremely high - please verify units")
+    
+    return metrics, warnings, suggestions
+
+
 def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) -> Dict[str, Any]:
     """Process a Termina PDF and extract financial metrics.
     
@@ -510,8 +675,9 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     
     # Log extracted values for debugging
     logger.info(f"Merged metrics: revenue={metrics.get('monthly_revenue')}, "
-                f"expenses={metrics.get('total_monthly_expenses') or metrics.get('opex')}, "
-                f"cogs={metrics.get('cogs')}")
+                f"gross_margin={metrics.get('gross_margin')}, "
+                f"operating_margin={metrics.get('operating_margin')}, "
+                f"arr={metrics.get('arr')}, yoy_growth={metrics.get('yoy_growth')}")
     
     # Stage 3: Fall back to vision if we still have no metrics
     if not metrics:
@@ -528,6 +694,11 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
     
     if not metrics:
         raise ValueError("Failed to extract any metrics from the PDF.")
+    
+    # Validate metrics and get warnings/suggestions (does NOT mutate metrics)
+    metrics, validation_warnings, suggested_corrections = validate_and_correct_metrics(metrics)
+    for warning in validation_warnings:
+        logger.warning(f"Validation: {warning}")
     
     # Normalize expense fields to be positive (but NOT net_burn - it can be negative for profitable companies)
     expense_fields = ['cogs', 'opex', 'payroll', 'sales_and_marketing', 'other_opex', 
@@ -595,4 +766,6 @@ def process_termina_pdf(file_path: str, max_size_mb: float = MAX_PDF_SIZE_MB) ->
         "summary": metrics.get("summary"),
         "extracted_text_length": len(pdf_text),
         "extraction_method": extraction_method,
+        "validation_warnings": validation_warnings if validation_warnings else None,
+        "suggested_corrections": suggested_corrections if suggested_corrections else None,
     }
