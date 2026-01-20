@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useTerminaExcelUpload } from "@/api/hooks";
+import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
   FileUp, 
   FileSpreadsheet, 
@@ -102,6 +103,7 @@ function calculateIndustryEstimates(metrics: Record<string, number | undefined>)
 
 export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadProps) {
   const { toast } = useToast();
+  const { setFinancialBaseline } = useFounderStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedMetrics, setExtractedMetrics] = useState<ExtractedMetrics | null>(null);
@@ -243,6 +245,27 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
       }
 
       setHasApplied(true);
+      
+      const baseline: FinancialBaseline = {
+        cashOnHand: payload.cashOnHand,
+        monthlyRevenue: payload.monthlyRevenue,
+        totalMonthlyExpenses: payload.totalMonthlyExpenses,
+        monthlyGrowthRate: payload.monthlyGrowthRate !== null && payload.monthlyGrowthRate !== undefined
+          ? payload.monthlyGrowthRate * 100 
+          : null,
+        expenseBreakdown: {
+          payroll: payload.expenseBreakdown.payroll || null,
+          marketing: payload.expenseBreakdown.marketing || null,
+          operating: payload.expenseBreakdown.operating || null,
+          cogs: payload.expenseBreakdown.cogs || null,
+          otherOpex: payload.expenseBreakdown.otherOpex || null,
+        },
+        hasManualExpenseOverride: false,
+        currency: payload.currency,
+        asOfDate: payload.asOfDate,
+      };
+      setFinancialBaseline(baseline);
+      
       toast({
         title: "Financials saved successfully",
         description: "Your data has been applied. Run Truth Scan to see updated metrics.",

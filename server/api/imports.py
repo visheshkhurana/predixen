@@ -74,10 +74,21 @@ class SaveRequest(BaseModel):
     row_overrides: Optional[Dict[str, Dict[str, Any]]] = None
 
 
+class SavedBaselineData(BaseModel):
+    cashOnHand: float
+    monthlyRevenue: float
+    totalMonthlyExpenses: float
+    monthlyGrowthRate: Optional[float] = None
+    expenseBreakdown: Dict[str, Optional[float]] = {}
+    currency: str = "USD"
+    asOfDate: Optional[str] = None
+
+
 class SaveResponse(BaseModel):
     success: bool
     financial_record_id: int
     message: str
+    baseline: Optional[SavedBaselineData] = None
 
 
 def extract_periods_from_rows(rows: List[Dict[str, Any]]) -> List[str]:
@@ -502,10 +513,43 @@ async def save_import(
     db.commit()
     db.refresh(record)
     
+    company = db.query(Company).filter(Company.id == session.company_id).first()
+    currency = str(company.currency) if company and company.currency else "USD"
+    
+    net_burn = abs(total_expenses) - abs(total_revenue) if abs(total_expenses) > abs(total_revenue) else 0
+    runway_months = cash_on_hand / net_burn if net_burn > 0 and cash_on_hand > 0 else None
+    
+    growth_rate = None
+    
+    payroll_amt = expense_breakdown.get('payroll', 0) or 0
+    marketing_amt = expense_breakdown.get('marketing', 0) or 0
+    operating_amt = expense_breakdown.get('operating', 0) or 0
+    cogs_amt = expense_breakdown.get('cogs', 0) or 0
+    
+    known_expenses = payroll_amt + marketing_amt + operating_amt + cogs_amt
+    other_opex = max(0, abs(total_expenses) - known_expenses) if abs(total_expenses) > known_expenses else 0
+    
+    baseline_data = SavedBaselineData(
+        cashOnHand=abs(cash_on_hand),
+        monthlyRevenue=abs(total_revenue),
+        totalMonthlyExpenses=abs(total_expenses),
+        monthlyGrowthRate=growth_rate,
+        expenseBreakdown={
+            "payroll": payroll_amt if payroll_amt > 0 else None,
+            "marketing": marketing_amt if marketing_amt > 0 else None,
+            "operating": operating_amt if operating_amt > 0 else None,
+            "cogs": cogs_amt if cogs_amt > 0 else None,
+            "otherOpex": other_opex if other_opex > 0 else None,
+        },
+        currency=currency,
+        asOfDate=selected_period
+    )
+    
     return SaveResponse(
         success=True,
-        financial_record_id=record.id,
-        message=f"Financial data saved successfully for period {selected_period}"
+        financial_record_id=int(record.id),
+        message=f"Financial data saved successfully for period {selected_period}",
+        baseline=baseline_data
     )
 
 
