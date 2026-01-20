@@ -505,6 +505,49 @@ def normalize_expense_value(value: Any) -> Optional[float]:
         return None
 
 
+def validate_excel_metrics(metrics: Dict[str, Any]) -> tuple:
+    """Validate extracted metrics and return warnings/suggestions without mutating.
+    
+    Returns: (metrics, warnings, suggested_corrections)
+    - metrics: Original metrics unchanged
+    - warnings: List of warning messages about suspicious values
+    - suggested_corrections: Dict of {field: suggested_value} for UI display
+    """
+    warnings = []
+    suggested_corrections = {}
+    
+    # Check for unrealistic margins (>90% is suspicious)
+    gross_margin = metrics.get('gross_margin')
+    if gross_margin is not None and gross_margin > 90:
+        warnings.append(f"Gross margin {gross_margin:.1f}% is unusually high - please verify")
+    
+    operating_margin = metrics.get('operating_margin')
+    if operating_margin is not None and operating_margin > 90:
+        warnings.append(f"Operating margin {operating_margin:.1f}% is unusually high - please verify")
+    
+    # Check if lifetime margins were not properly converted to percentage in gross_margin
+    # Only warn if gross_margin is also in decimal form (< 1), meaning conversion didn't happen
+    lifetime_gm = metrics.get('lifetime_gross_margin')
+    gross_margin_val = metrics.get('gross_margin')
+    if lifetime_gm is not None and 0 < lifetime_gm < 1:
+        if gross_margin_val is None or (gross_margin_val is not None and gross_margin_val < 1):
+            # Conversion didn't happen - gross_margin should be in percentage form
+            warnings.append(f"Lifetime gross margin appears to be in decimal form ({lifetime_gm:.2f}) and was not converted")
+    
+    # Check for unrealistic MoM growth (>100% is suspicious for established companies)
+    mom_growth = metrics.get('mom_growth') or metrics.get('revenue_growth_mom')
+    if mom_growth is not None and abs(mom_growth) > 100:
+        warnings.append(f"MoM growth {mom_growth:.1f}% seems high - please verify")
+    
+    # Check for potential quarterly/annual data being treated as monthly
+    revenue = metrics.get('revenue')
+    if revenue is not None and revenue > 100_000_000:  # >$100M monthly is rare
+        warnings.append(f"Monthly revenue ${revenue/1e6:.1f}M is very high - could this be quarterly or annual?")
+    
+    logger.info(f"Excel validation: {len(warnings)} warnings generated")
+    return metrics, warnings, suggested_corrections
+
+
 def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB) -> Dict[str, Any]:
     """Process a Termina Excel export and extract financial metrics.
     
@@ -581,6 +624,9 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     if 'revenue' not in metrics:
         logger.warning("Revenue row not found in the spreadsheet")
     
+    # Validate extracted metrics (warn-only, no mutation)
+    validated_metrics, validation_warnings, suggested_corrections = validate_excel_metrics(metrics)
+    
     # Generate summary
     summary = parsed.get('ai_metrics', {}).get('summary') or generate_ai_summary(metrics)
     
@@ -651,4 +697,6 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         "summary": summary,
         "extraction_successful": True,
         "extraction_method": extraction_method,
+        "validation_warnings": validation_warnings,
+        "suggested_corrections": suggested_corrections,
     }
