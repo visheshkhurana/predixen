@@ -49,4 +49,4 @@ integrations = ["javascript_openai_ai_integrations:2.0.0", "resend:1.0.0"]
 [userenv]
 
 [userenv.shared]
-APP_BASE_URL = "https://44dba869-ea36-447a-8c24-87f3ea575a47-00-3a95zbd7xb2xg.riker.replit.dev"
+APP_BASE_URL = "https://predixen.app"
