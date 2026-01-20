@@ -87,6 +87,7 @@ class TokenResponse(BaseModel):
     user_id: int
     email: str
     role: str = "viewer"
+    is_platform_admin: bool = False
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
@@ -114,11 +115,15 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
+    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
+    
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
         email=user.email,
-        role=user.role or "viewer"
+        role=user.role or "viewer",
+        is_platform_admin=is_platform_admin
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -147,11 +152,15 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
+    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
+    
     return TokenResponse(
         access_token=access_token,
         user_id=user.id,
         email=user.email,
-        role=user.role or "viewer"
+        role=user.role or "viewer",
+        is_platform_admin=is_platform_admin
     )
 
 
@@ -159,8 +168,11 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """Admin-only login endpoint with master credentials support."""
     
-    if (settings.ADMIN_MASTER_EMAIL and settings.ADMIN_MASTER_PASSWORD and 
-        req.email == settings.ADMIN_MASTER_EMAIL and req.password == settings.ADMIN_MASTER_PASSWORD):
+    admin_email_config = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    req_email_lower = req.email.lower().strip()
+    
+    if (admin_email_config and settings.ADMIN_MASTER_PASSWORD and 
+        req_email_lower == admin_email_config and req.password == settings.ADMIN_MASTER_PASSWORD):
         
         log_login_attempt(db, req.email, None, success=True, request=request)
         
@@ -173,7 +185,8 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
             access_token=access_token,
             user_id=0,
             email=settings.ADMIN_MASTER_EMAIL,
-            role="owner"
+            role="owner",
+            is_platform_admin=True
         )
     
     user = db.query(User).filter(User.email == req.email).first()
@@ -185,12 +198,15 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
             detail="Invalid admin credentials"
         )
     
-    if user.role not in ["owner", "admin"]:
+    admin_email_check = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    is_platform_admin = bool(admin_email_check and user.email.lower().strip() == admin_email_check)
+    
+    if not is_platform_admin:
         log_login_attempt(db, req.email, user.id, success=False,
-                         failure_reason="Not an admin account", request=request)
+                         failure_reason="Not the platform administrator", request=request)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. Admin privileges required."
+            detail="Access denied. Only the platform owner can access the admin section."
         )
     
     if not user.is_active:
@@ -212,5 +228,6 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
         access_token=access_token,
         user_id=user.id,
         email=user.email,
-        role=user.role
+        role=user.role or "owner",
+        is_platform_admin=True
     )

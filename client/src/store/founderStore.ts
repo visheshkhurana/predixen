@@ -5,6 +5,7 @@ interface User {
   id: number;
   email: string;
   role?: string;
+  is_platform_admin?: boolean;
 }
 
 interface Company {
@@ -175,7 +176,7 @@ export const useFounderStore = create<FounderState>()(
       
       isAdmin: () => {
         const user = get().user;
-        return user?.role === 'admin' || user?.role === 'owner';
+        return user?.is_platform_admin === true;
       },
     }),
     {

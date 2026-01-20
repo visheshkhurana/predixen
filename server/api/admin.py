@@ -8,17 +8,36 @@ import json
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.config import settings
 from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-def require_admin(current_user: User = Depends(get_current_user)):
-    if current_user.role not in [UserRole.OWNER.value, UserRole.ADMIN.value]:
+def require_platform_admin(current_user: User = Depends(get_current_user)):
+    """
+    Ensures only the platform owner (whose email matches ADMIN_MASTER_EMAIL) 
+    can access admin endpoints. This is NOT a company-level role check.
+    """
+    admin_email = settings.ADMIN_MASTER_EMAIL
+    if not admin_email:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin access is not configured"
+        )
+    
+    user_email = getattr(current_user, 'email', '').lower().strip()
+    admin_email_normalized = admin_email.lower().strip()
+    
+    if user_email != admin_email_normalized:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            detail="Access denied. Only the platform owner can access admin features."
         )
     return current_user
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    """Legacy function - redirects to require_platform_admin for security."""
+    return require_platform_admin(current_user)
 
 def log_action(db: Session, user_id, action: str, resource_type: Optional[str] = None, resource_id: Optional[int] = None, details: Optional[dict] = None, ip_address: Optional[str] = None):
     audit_log = AuditLog(
@@ -89,15 +108,15 @@ class MeResponse(BaseModel):
 @router.get("/me")
 def get_current_admin(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_platform_admin)
 ) -> MeResponse:
-    role = current_user.role or "viewer"
-    is_admin = role in [UserRole.OWNER.value, UserRole.ADMIN.value]
+    """Returns admin info - only accessible to platform owner."""
+    role = current_user.role or "owner"
     return MeResponse(
         id=current_user.id,
         email=current_user.email,
         role=role,
-        is_admin=is_admin
+        is_admin=True
     )
 
 @router.get("/dashboard")

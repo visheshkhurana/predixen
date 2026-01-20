@@ -62,17 +62,17 @@ async function request<T>(
 export const api = {
   auth: {
     register: (email: string, password: string) =>
-      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/register', {
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
     login: (email: string, password: string) =>
-      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/login', {
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
     adminLogin: (email: string, password: string) =>
-      request<{ access_token: string; user_id: number; email: string; role: string }>('/auth/admin/login', {
+      request<{ access_token: string; user_id: number; email: string; role: string; is_platform_admin: boolean }>('/auth/admin/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
