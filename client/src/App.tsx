@@ -112,7 +112,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
-      <Route path="/onboarding" component={OnboardingPage} />
+      <Route path="/onboarding">
+        {() => <AuthenticatedRoute component={OnboardingPage} />}
+      </Route>
       <Route path="/">
         {() => <AuthenticatedRoute component={OverviewPage} />}
       </Route>
