@@ -271,7 +271,7 @@ def run_enhanced_monte_carlo(
     for m in range(1, horizon + 1):
         survival_curve.append({
             "month": m,
-            "survivalRate": float(np.sum(runway_months > m) / n)
+            "survival_rate": float(np.sum(runway_months > m) / n)
         })
     
     event_impacts = []

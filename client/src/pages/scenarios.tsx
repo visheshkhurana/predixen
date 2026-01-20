@@ -965,12 +965,12 @@ export default function ScenariosPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <SurvivalCurveChart data={simulation.survival_curve || []} />
+                    <SurvivalCurveChart data={simulation.survival?.curve || simulation.survival_curve || []} />
                   </CardContent>
                 </Card>
                 
                 <BandsChart
-                  data={simulation.cash_bands || { p10: [], p50: [], p90: [] }}
+                  data={simulation.bands?.cash || simulation.cash_bands || { p10: [], p50: [], p90: [] }}
                   title="Cash Projection Bands"
                   description="10th, 50th, and 90th percentile outcomes"
                 />
