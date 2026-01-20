@@ -539,11 +539,18 @@ export default function DataVerification() {
           <CardContent>
             <div className="space-y-2">
               <div className="text-2xl font-bold font-mono">
-                {cashOnHand ? formatCurrency(parseFloat(cashOnHand)) : "--"}
+                {cashOnHand 
+                  ? formatCurrency(parseFloat(cashOnHand)) 
+                  : verifyData?.baseline?.cash_on_hand 
+                    ? formatCurrency(verifyData.baseline.cash_on_hand)
+                    : "--"}
               </div>
-              {cashOnHand && (
+              {(cashOnHand || verifyData?.baseline?.cash_on_hand) && (
                 <p className="text-xs text-muted-foreground italic">
-                  {formatCurrencyInWords(parseFloat(cashOnHand))}
+                  {formatCurrencyInWords(cashOnHand ? parseFloat(cashOnHand) : (verifyData?.baseline?.cash_on_hand || 0))}
+                  {!cashOnHand && verifyData?.baseline?.cash_on_hand && (
+                    <span className="text-amber-500"> (estimated)</span>
+                  )}
                 </p>
               )}
               <Input
