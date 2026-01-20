@@ -368,6 +368,171 @@ def render_welcome_template(
     return get_email_wrapper(content)
 
 
+def get_feature_card(title: str, description: str, icon: str, screenshot_url: str = None) -> str:
+    """Generate a feature card with optional screenshot."""
+    screenshot_html = ""
+    if screenshot_url:
+        screenshot_html = f"""
+        <tr>
+            <td style="padding: 16px 0 0 0;">
+                <img src="{screenshot_url}" alt="{title}" width="100%" style="border-radius: 8px; border: 1px solid {COLORS['gray_100']}; display: block;" />
+            </td>
+        </tr>
+        """
+    
+    return f"""
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: {COLORS['white']}; border: 1px solid {COLORS['gray_100']}; border-radius: 12px; margin-bottom: 16px;">
+        <tr>
+            <td style="padding: 20px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td width="40" valign="top" style="padding-right: 14px;">
+                            <div style="width: 36px; height: 36px; background-color: {COLORS['primary']}; border-radius: 10px; text-align: center; line-height: 36px; color: {COLORS['white']}; font-size: 18px; font-family: Arial, sans-serif;">{icon}</div>
+                        </td>
+                        <td valign="top">
+                            <p style="margin: 0 0 6px 0; font-weight: 600; color: {COLORS['navy']}; font-size: 16px; font-family: {FONT_STACK};">{title}</p>
+                            <p style="margin: 0; color: {COLORS['gray_500']}; font-size: 14px; line-height: 1.5; font-family: {FONT_STACK};">{description}</p>
+                        </td>
+                    </tr>
+                    {screenshot_html}
+                </table>
+            </td>
+        </tr>
+    </table>
+    """
+
+
+def get_stat_box(value: str, label: str) -> str:
+    """Generate a statistics box."""
+    return f"""
+    <td align="center" style="padding: 16px; background-color: {COLORS['gray_50']}; border-radius: 8px;">
+        <p style="margin: 0 0 4px 0; font-size: 28px; font-weight: 700; color: {COLORS['primary']}; font-family: {FONT_STACK};">{value}</p>
+        <p style="margin: 0; font-size: 12px; color: {COLORS['gray_500']}; text-transform: uppercase; letter-spacing: 0.5px; font-family: {FONT_STACK};">{label}</p>
+    </td>
+    """
+
+
+def render_app_overview_template(
+    user_name: str = None,
+    login_url: str = "https://predixen.app/dashboard",
+    dashboard_screenshot_url: str = None,
+    truth_scan_screenshot_url: str = None,
+    simulation_screenshot_url: str = None,
+    decision_screenshot_url: str = None
+) -> str:
+    """Render the app overview email template with screenshots."""
+    greeting = f"Hello {user_name}," if user_name else "Hello,"
+    
+    # Hero section with main screenshot
+    hero_screenshot = ""
+    if dashboard_screenshot_url:
+        hero_screenshot = f"""
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
+            <tr>
+                <td>
+                    <img src="{dashboard_screenshot_url}" alt="Predixen Dashboard" width="100%" style="border-radius: 12px; border: 1px solid {COLORS['gray_100']}; display: block;" />
+                </td>
+            </tr>
+        </table>
+        """
+    
+    # Feature cards
+    features = [
+        {
+            "title": "Truth Scan",
+            "description": "Automatically extract and validate 24+ financial metrics from your PDFs, Excel files, or pitch decks. Benchmarked against industry standards with confidence scores.",
+            "icon": "&#128202;",
+            "screenshot_url": truth_scan_screenshot_url
+        },
+        {
+            "title": "Monte Carlo Simulation",
+            "description": "Run probabilistic forecasts with up to 10,000 iterations. Model different scenarios, custom events, and see P10/P50/P90 confidence intervals for your runway.",
+            "icon": "&#128200;",
+            "screenshot_url": simulation_screenshot_url
+        },
+        {
+            "title": "AI Decision Engine",
+            "description": "Get ranked recommendations based on survival probability, growth potential, downside risk, and dilution impact. Each decision comes with a composite score and detailed analysis.",
+            "icon": "&#9889;",
+            "screenshot_url": decision_screenshot_url
+        }
+    ]
+    
+    features_html = ""
+    for feature in features:
+        features_html += get_feature_card(
+            feature["title"],
+            feature["description"],
+            feature["icon"],
+            feature.get("screenshot_url")
+        )
+    
+    content = f"""
+    {get_header_html("INTELLIGENCE OS")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 8px 0; font-family: {FONT_STACK};">{greeting}</p>
+            <h2 style="margin: 0 0 16px 0; font-size: 26px; font-weight: 700; color: {COLORS['navy']}; letter-spacing: -0.5px; line-height: 1.3; font-family: {FONT_STACK};">Your AI-Powered Financial Command Center</h2>
+            <p style="font-size: 16px; color: {COLORS['gray_600']}; margin: 0 0 8px 0; line-height: 1.7; font-family: {FONT_STACK};">
+                Predixen Intelligence OS gives startups <span style="color: {COLORS['primary']}; font-weight: 600;">investor-grade financial analysis</span> in minutes, not weeks.
+            </p>
+            <p style="font-size: 15px; color: {COLORS['gray_500']}; margin: 0 0 24px 0; line-height: 1.6; font-family: {FONT_STACK};">
+                Upload your financials, run simulations, and get ranked recommendations to maximize survival and growth.
+            </p>
+            
+            {hero_screenshot}
+            
+            <!-- Stats row -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
+                <tr>
+                    {get_stat_box("24+", "Metrics")}
+                    <td width="12"></td>
+                    {get_stat_box("10K", "Simulations")}
+                    <td width="12"></td>
+                    {get_stat_box("P90", "Confidence")}
+                </tr>
+            </table>
+            
+            {get_divider()}
+            
+            <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">Core Capabilities</h3>
+            
+            {features_html}
+            
+            <!-- Additional features list -->
+            {get_info_card_start("Also Included")}
+            {get_check_item("AI Copilot for guided analysis and Q&A")}
+            {get_check_item("Smart alerts for anomalies and runway warnings")}
+            {get_check_item("Scenario versioning with diff and rollback")}
+            {get_check_item("Sensitivity analysis with tornado charts")}
+            {get_check_item("QuickBooks & Salesforce integrations (coming soon)")}
+            {get_info_card_end()}
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        {get_cta_button(login_url, "Go to Dashboard")}
+                    </td>
+                </tr>
+            </table>
+            
+            {get_divider()}
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: {COLORS['navy']}; border-radius: 12px; margin-top: 8px;">
+                <tr>
+                    <td style="padding: 24px; text-align: center;">
+                        <p style="margin: 0 0 8px 0; font-size: 14px; color: {COLORS['gray_400']}; font-family: {FONT_STACK};">Need help getting started?</p>
+                        <p style="margin: 0; font-size: 15px; color: {COLORS['white']}; font-family: {FONT_STACK};">Our <span style="color: {COLORS['primary']};">AI Copilot</span> is available 24/7 inside the platform to guide you through every feature.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    {get_footer_html()}
+    """
+    return get_email_wrapper(content)
+
+
 def render_password_reset_template(
     reset_url: str
 ) -> str:
@@ -427,6 +592,13 @@ TEMPLATE_CONFIGS = {
         "variables": ["reset_url"],
         "subject": "Reset Your Predixen Password",
         "render_fn": "render_password_reset_template"
+    },
+    "app_overview": {
+        "name": "App Overview",
+        "description": "Product showcase email with screenshots explaining key features",
+        "variables": ["user_name", "login_url", "dashboard_screenshot_url", "truth_scan_screenshot_url", "simulation_screenshot_url", "decision_screenshot_url"],
+        "subject": "Discover Predixen Intelligence OS - Your AI Financial Command Center",
+        "render_fn": "render_app_overview_template"
     }
 }
 
@@ -436,7 +608,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
     Get a preview of an email template with sample data.
     
     Args:
-        template_type: One of 'invite', 'welcome', 'password_reset'
+        template_type: One of 'invite', 'welcome', 'password_reset', 'app_overview'
     
     Returns:
         HTML content of the template with sample data
@@ -455,6 +627,14 @@ def get_template_preview(template_type: str) -> Optional[str]:
         },
         "password_reset": {
             "reset_url": "https://predixen.app/reset-password?token=sample_reset_token"
+        },
+        "app_overview": {
+            "user_name": "John",
+            "login_url": "https://predixen.app/dashboard",
+            "dashboard_screenshot_url": None,
+            "truth_scan_screenshot_url": None,
+            "simulation_screenshot_url": None,
+            "decision_screenshot_url": None
         }
     }
     
@@ -464,5 +644,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
         return render_welcome_template(**sample_data["welcome"])
     elif template_type == "password_reset":
         return render_password_reset_template(**sample_data["password_reset"])
+    elif template_type == "app_overview":
+        return render_app_overview_template(**sample_data["app_overview"])
     
     return None
