@@ -23,12 +23,18 @@ interface UnitEconomicsPanelProps {
   currency?: string;
 }
 
+interface DetailedTooltip {
+  description: string;
+  benchmark: string;
+  impact: string;
+}
+
 interface MetricItemProps {
   icon: React.ReactNode;
   title: string;
   value: string | number;
   subtitle?: string;
-  tooltip: string;
+  tooltip: string | DetailedTooltip;
   variant?: 'default' | 'success' | 'warning' | 'danger';
   testId: string;
 }
@@ -63,7 +69,15 @@ function MetricItem({ icon, title, value, subtitle, tooltip, variant = 'default'
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs">
-              <p className="text-sm">{tooltip}</p>
+              {typeof tooltip === 'string' ? (
+                <p className="text-sm">{tooltip}</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm">{tooltip.description}</p>
+                  <p className="text-xs text-primary">{tooltip.benchmark}</p>
+                  <p className="text-xs text-amber-400">{tooltip.impact}</p>
+                </div>
+              )}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -169,22 +183,70 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-3 rounded-lg bg-muted/30" data-testid="metric-mrr">
-              <p className="text-sm text-muted-foreground">MRR</p>
-              <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.mrr)}</p>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-muted/30" data-testid="metric-arr">
-              <p className="text-sm text-muted-foreground">ARR</p>
-              <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.arr)}</p>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-muted/30" data-testid="metric-arpu">
-              <p className="text-sm text-muted-foreground">ARPU</p>
-              <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.arpu)}</p>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-muted/30" data-testid="metric-customers">
-              <p className="text-sm text-muted-foreground">Customers</p>
-              <p className="text-2xl font-bold font-mono">{metrics.customer_count ?? 'N/A'}</p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-center p-3 rounded-lg bg-muted/30 cursor-help hover:bg-muted/50 transition-colors" data-testid="metric-mrr">
+                  <p className="text-sm text-muted-foreground">MRR</p>
+                  <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.mrr)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="space-y-2">
+                  <p className="font-medium">Monthly Recurring Revenue</p>
+                  <p className="text-xs">Predictable revenue earned each month from subscriptions.</p>
+                  <p className="text-xs text-primary">Benchmark: Seed $10K-$100K, Series A $100K-$500K MRR</p>
+                  <p className="text-xs text-amber-400">Impact: Foundation of SaaS valuation. Higher MRR = stronger product-market fit.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-center p-3 rounded-lg bg-muted/30 cursor-help hover:bg-muted/50 transition-colors" data-testid="metric-arr">
+                  <p className="text-sm text-muted-foreground">ARR</p>
+                  <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.arr)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="space-y-2">
+                  <p className="font-medium">Annual Recurring Revenue</p>
+                  <p className="text-xs">MRR multiplied by 12 - your yearly revenue projection.</p>
+                  <p className="text-xs text-primary">Benchmark: Series A $1M-$5M, Series B $5M-$15M ARR</p>
+                  <p className="text-xs text-amber-400">Impact: Primary valuation metric. Valuations often 8-15x ARR for growth companies.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-center p-3 rounded-lg bg-muted/30 cursor-help hover:bg-muted/50 transition-colors" data-testid="metric-arpu">
+                  <p className="text-sm text-muted-foreground">ARPU</p>
+                  <p className="text-2xl font-bold font-mono">{formatCurrency(metrics.arpu)}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="space-y-2">
+                  <p className="font-medium">Average Revenue Per User</p>
+                  <p className="text-xs">MRR divided by total customers - your average deal size.</p>
+                  <p className="text-xs text-primary">Benchmark: SMB $50-$500, Mid-market $1K-$10K, Enterprise $10K+</p>
+                  <p className="text-xs text-amber-400">Impact: Higher ARPU allows for more customer acquisition spending and faster growth.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="text-center p-3 rounded-lg bg-muted/30 cursor-help hover:bg-muted/50 transition-colors" data-testid="metric-customers">
+                  <p className="text-sm text-muted-foreground">Customers</p>
+                  <p className="text-2xl font-bold font-mono">{metrics.customer_count ?? 'N/A'}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="space-y-2">
+                  <p className="font-medium">Active Customer Count</p>
+                  <p className="text-xs">Total number of paying customers on your platform.</p>
+                  <p className="text-xs text-primary">Growth: Aim for 5-10% monthly customer growth</p>
+                  <p className="text-xs text-amber-400">Impact: Customer concentration risk - avoid having any single customer above 10% of revenue.</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </CardContent>
       </Card>
@@ -195,14 +257,22 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           icon={<Target className="h-4 w-4" />}
           title="CAC"
           value={formatCurrency(metrics.cac)}
-          tooltip="Customer Acquisition Cost: Total marketing and sales spend divided by new customers acquired"
+          tooltip={{
+            description: "Customer Acquisition Cost - Total marketing and sales spend divided by new customers acquired.",
+            benchmark: "Target: $1 CAC for every $3+ of LTV. SMB CAC typically $100-$500, Enterprise $5K-$50K.",
+            impact: "High CAC limits growth speed. Focus on reducing CAC through better targeting and conversion optimization."
+          }}
           testId="metric-cac"
         />
         <MetricItem
           icon={<TrendingUp className="h-4 w-4" />}
           title="LTV"
           value={formatCurrency(metrics.ltv)}
-          tooltip="Lifetime Value: Predicted total revenue from a customer over their entire relationship"
+          tooltip={{
+            description: "Lifetime Value - Predicted total revenue from a customer over their entire relationship with you.",
+            benchmark: "Healthy LTV should be 3x+ CAC. Top SaaS companies achieve 5-7x LTV:CAC.",
+            impact: "Higher LTV justifies more acquisition spending and indicates strong retention and expansion."
+          }}
           testId="metric-ltv"
         />
         <MetricItem
@@ -210,7 +280,11 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           title="LTV:CAC"
           value={formatRatio(metrics.ltv_cac_ratio)}
           subtitle={metrics.ltv_cac_ratio && metrics.ltv_cac_ratio >= 3 ? 'Healthy' : 'Below target'}
-          tooltip="LTV to CAC ratio: Measures return on customer acquisition investment. 3x+ is healthy, 5x+ is excellent"
+          tooltip={{
+            description: "LTV to CAC ratio - Measures return on customer acquisition investment.",
+            benchmark: "3x = Good, 5x+ = Excellent. Below 3x means acquisition is too expensive or retention is poor.",
+            impact: "Below 3x: Risk of running out of cash before seeing ROI. Above 5x: Opportunity to invest more in growth."
+          }}
           variant={getLtvCacVariant()}
           testId="metric-ltv-cac"
         />
@@ -219,7 +293,11 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           title="Payback"
           value={formatMonths(metrics.payback_months)}
           subtitle={metrics.payback_months && metrics.payback_months <= 12 ? 'Good' : undefined}
-          tooltip="CAC Payback Period: Months to recover customer acquisition cost. Under 12 months is excellent"
+          tooltip={{
+            description: "CAC Payback Period - Months needed to recover customer acquisition cost from that customer's revenue.",
+            benchmark: "Under 12 months = Excellent. 12-18 months = Good. Over 24 months = Concerning.",
+            impact: "Long payback ties up capital and increases risk. Shorter payback enables faster reinvestment in growth."
+          }}
           variant={getPaybackVariant()}
           testId="metric-payback"
         />
@@ -232,7 +310,11 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           title="Customer Churn"
           value={formatPct(metrics.churn_rate_customer)}
           subtitle="monthly"
-          tooltip="Monthly customer churn rate: Percentage of customers lost per month. Under 5% is healthy"
+          tooltip={{
+            description: "Monthly Customer Churn - Percentage of customers lost per month.",
+            benchmark: "SMB: Under 5% monthly is healthy. Enterprise: Under 2% monthly.",
+            impact: "High churn destroys growth. 5% monthly churn = 46% annual churn, meaning you must replace half your customers yearly."
+          }}
           variant={getChurnVariant()}
           testId="metric-churn-customer"
         />
@@ -241,7 +323,11 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           title="Revenue Churn"
           value={formatPct(metrics.churn_rate_revenue)}
           subtitle="monthly"
-          tooltip="Monthly revenue churn: Percentage of MRR lost from churned customers and downgrades"
+          tooltip={{
+            description: "Monthly Revenue Churn - Percentage of MRR lost from churned customers and downgrades.",
+            benchmark: "Under 2% monthly is good. Negative revenue churn (more expansions than churn) is ideal.",
+            impact: "Revenue churn is often more impactful than customer churn - losing big customers hurts more."
+          }}
           variant={getChurnVariant()}
           testId="metric-churn-revenue"
         />
@@ -250,7 +336,11 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
           title="NDR"
           value={formatPct(metrics.net_revenue_retention)}
           subtitle={metrics.net_revenue_retention && metrics.net_revenue_retention >= 100 ? 'Net positive' : 'Net negative'}
-          tooltip="Net Dollar Retention: Revenue retained from existing customers including expansions. 100%+ means growth without new customers"
+          tooltip={{
+            description: "Net Dollar Retention - Revenue retained from existing customers including expansions minus churn.",
+            benchmark: "100% = Stable. 110%+ = Good. 120%+ = Excellent (best-in-class SaaS).",
+            impact: "NDR above 100% means you grow even without new customers. This is the most powerful growth lever."
+          }}
           variant={getNdrVariant()}
           testId="metric-ndr"
         />
