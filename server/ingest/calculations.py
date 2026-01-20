@@ -74,6 +74,35 @@ def determine_burn_status(net_burn: float) -> BurnStatus:
         return BurnStatus.BREAKEVEN
 
 
+DEFAULT_RUNWAY_ASSUMPTION_MONTHS = 12
+DEFAULT_PROFITABLE_CASH_BALANCE = 2_000_000  # $2 million USD
+
+
+def estimate_cash_on_hand(
+    net_burn: float, 
+    cash_on_hand: Optional[float] = None
+) -> tuple[Optional[float], bool]:
+    """
+    Estimate cash on hand when not provided.
+    
+    Rules:
+    - If cash_on_hand is already provided, use it as-is
+    - If company is burning cash (net_burn > 0), assume 12 months runway: cash = burn * 12
+    - If company is profitable/breakeven (net_burn <= 0), assume $2 million USD balance
+    
+    Returns:
+        Tuple of (estimated_cash, is_estimated) where is_estimated is True if we made an assumption
+    """
+    if cash_on_hand is not None:
+        return cash_on_hand, False
+    
+    if net_burn > 0:
+        estimated = net_burn * DEFAULT_RUNWAY_ASSUMPTION_MONTHS
+        return estimated, True
+    else:
+        return DEFAULT_PROFITABLE_CASH_BALANCE, True
+
+
 def format_runway_display(runway_months: Optional[float], burn_status: BurnStatus) -> str:
     """Format runway for display in the UI."""
     if burn_status == BurnStatus.PROFITABLE:
@@ -128,7 +157,8 @@ def compute_baseline_metrics(
     total_expenses: float,
     cash_on_hand: Optional[float] = None,
     growth_rate_mom: Optional[float] = None,
-    expense_breakdown: Optional[Dict[str, float]] = None
+    expense_breakdown: Optional[Dict[str, float]] = None,
+    auto_estimate_cash: bool = True
 ) -> BaselineMetrics:
     """
     Compute all baseline metrics from raw financial data.
@@ -139,6 +169,7 @@ def compute_baseline_metrics(
         cash_on_hand: Current cash balance (optional)
         growth_rate_mom: Month-over-month growth rate (optional)
         expense_breakdown: Dict with keys like 'cogs', 'marketing', 'payroll', 'operating'
+        auto_estimate_cash: If True, estimate cash when not provided (default True)
     
     Returns:
         BaselineMetrics object with all computed values
@@ -148,11 +179,26 @@ def compute_baseline_metrics(
     
     net_burn = calculate_net_burn(total_expenses, revenue)
     burn_status = determine_burn_status(net_burn)
-    runway_months = calculate_runway_months(net_burn, cash_on_hand)
     
     warnings = []
-    if net_burn > 0 and cash_on_hand is None:
+    
+    # Estimate cash on hand if not provided
+    effective_cash = cash_on_hand
+    cash_was_estimated = False
+    
+    if auto_estimate_cash:
+        effective_cash, cash_was_estimated = estimate_cash_on_hand(net_burn, cash_on_hand)
+        
+        if cash_was_estimated:
+            if net_burn > 0:
+                warnings.append(f"Cash on hand estimated assuming 12-month runway (${effective_cash:,.0f})")
+            else:
+                warnings.append(f"Cash on hand defaulted to $2 million (profitable company)")
+    elif cash_on_hand is None and net_burn > 0:
         warnings.append("Cash on hand is missing; runway cannot be calculated")
+    
+    runway_months = calculate_runway_months(net_burn, effective_cash)
+    
     if revenue == 0 and total_expenses > 0:
         warnings.append("No revenue recorded; all expenses contribute to burn")
     
@@ -162,7 +208,7 @@ def compute_baseline_metrics(
         net_burn=net_burn,
         burn_status=burn_status,
         runway_months=runway_months,
-        cash_on_hand=cash_on_hand,
+        cash_on_hand=effective_cash,
         growth_rate_mom=growth_rate_mom,
         expense_breakdown=expense_breakdown,
         warnings=warnings if warnings else None

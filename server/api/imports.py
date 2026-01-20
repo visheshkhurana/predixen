@@ -21,7 +21,8 @@ from server.ingest.pdf_extractor import process_termina_pdf
 from server.ingest.classifier import classify_all_rows, SignConvention
 from server.ingest.calculations import (
     compute_baseline_metrics, calculate_total_revenue, calculate_total_expenses,
-    aggregate_expense_breakdown, format_burn_display, format_runway_display
+    aggregate_expense_breakdown, format_burn_display, format_runway_display,
+    estimate_cash_on_hand, calculate_net_burn
 )
 from server.ingest.benchmarks import get_benchmarks, inject_benchmark_defaults
 
@@ -418,8 +419,6 @@ async def verify_import(
         errors.append("No revenue selected or found")
     if total_expenses == 0:
         errors.append("No expenses included")
-    if baseline.net_burn > 0 and cash_on_hand is None:
-        warnings.append("Cash on hand is missing; runway cannot be calculated")
     
     return VerifyResponse(
         baseline={
@@ -480,7 +479,15 @@ async def save_import(
     
     expense_breakdown = aggregate_expense_breakdown(rows, selected_period)
     
-    cash_on_hand = request.cash_on_hand or 0
+    # Calculate net burn to determine cash estimation
+    net_burn = abs(total_expenses) - abs(total_revenue)
+    
+    # Estimate cash on hand if not provided
+    if request.cash_on_hand is not None:
+        cash_on_hand = request.cash_on_hand
+    else:
+        estimated_cash, _ = estimate_cash_on_hand(net_burn, None)
+        cash_on_hand = estimated_cash or 0
     
     try:
         period_date = datetime.strptime(selected_period, "%Y-%m-%d").date()
