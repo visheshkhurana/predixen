@@ -18,7 +18,6 @@ import {
   Lightbulb,
   Sparkles,
   LogOut,
-  Zap,
   Upload,
   Link2,
   Bell,
@@ -38,6 +37,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useFounderStore } from "@/store/founderStore";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import predixenLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
 
 const menuItems = [
   {
@@ -144,10 +144,12 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-md bg-primary">
-            <Zap className="h-5 w-5 text-primary-foreground" />
-          </div>
+        <div className="flex items-center gap-3">
+          <img 
+            src={predixenLogo} 
+            alt="Predixen" 
+            className="h-9 w-9 rounded-md"
+          />
           <div>
             <h1 className="font-semibold text-sm">Predixen</h1>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>

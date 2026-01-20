@@ -5,11 +5,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, Mail, Activity, BarChart3, 
-  Building2, CreditCard, LogOut, Shield, ChevronRight,
+  Building2, CreditCard, LogOut, ChevronRight,
   Menu, X, FileText
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import predixenLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
 
 interface NavItem {
   title: string;
@@ -47,9 +48,11 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="h-16 flex items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <Shield className="h-4 w-4 text-primary-foreground" />
-              </div>
+              <img 
+                src={predixenLogo} 
+                alt="Predixen" 
+                className="h-8 w-8 rounded-lg"
+              />
               <span className="font-semibold text-sm">Admin Console</span>
             </div>
           )}
