@@ -1142,18 +1142,31 @@ export function ScenarioWizard({
             Back
           </Button>
 
-          {currentStep < 5 ? (
-            <Button onClick={handleNext} disabled={!canProceed} data-testid="button-wizard-next">
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
-          ) : (
+          <div className="flex items-center gap-2">
+            {currentStep === 4 && customEvents.length === 0 && (
+              <Button 
+                variant="ghost" 
+                onClick={handleNext}
+                className="text-muted-foreground"
+                data-testid="button-skip-events"
+              >
+                Skip
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
+            {currentStep < 5 ? (
+              <Button onClick={handleNext} disabled={!canProceed} data-testid="button-wizard-next">
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
+            ) : (
             <Button onClick={handleSubmit} disabled={isRunning || !canProceed} data-testid="button-run-simulation">
               <Play className="h-4 w-4 mr-2" />
               {isRunning ? 'Running Simulation...' : 'Run Simulation (1,000 scenarios)'}
             </Button>
           )}
-          </CardFooter>
+          </div>
+        </CardFooter>
         </Card>
       </div>
 
