@@ -46,19 +46,76 @@ export function CashFlowForecast({ forecast, currency = 'USD' }: CashFlowForecas
     monthLabel: `M${m.month}`,
   }));
 
-  // Custom tooltip
+  // Get context-aware impact message based on cash flow values
+  const getImpactMessage = (data: CashFlowMonth) => {
+    const netRatio = data.inflow > 0 ? (data.outflow / data.inflow) : 999;
+    const monthsLeft = data.cash_balance > 0 && data.net < 0 ? Math.round(data.cash_balance / Math.abs(data.net)) : null;
+    
+    if (data.cash_balance <= 0) {
+      return { text: 'Cash depleted - Immediate action required to secure funding or reduce burn.', severity: 'critical' };
+    }
+    if (monthsLeft && monthsLeft < 6) {
+      return { text: `Only ${monthsLeft} months runway at current burn. Consider cutting costs or accelerating fundraise.`, severity: 'warning' };
+    }
+    if (data.net >= 0) {
+      return { text: 'Cash-positive month - Your revenue exceeds expenses. This is ideal for sustainable growth.', severity: 'healthy' };
+    }
+    if (netRatio > 2) {
+      return { text: 'High burn rate - Expenses are more than 2x revenue. Focus on reducing costs or boosting sales.', severity: 'warning' };
+    }
+    if (netRatio > 1.5) {
+      return { text: 'Moderate burn - Expenses exceed revenue by 50%+. Normal for growth stage, but monitor closely.', severity: 'info' };
+    }
+    return { text: 'Healthy burn level - You are efficiently investing in growth while managing cash consumption.', severity: 'healthy' };
+  };
+
+  // Custom tooltip with detailed impact explanations
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const data = payload[0].payload;
+      const data = payload[0].payload as CashFlowMonth;
+      const impact = getImpactMessage(data);
+      const coverageRatio = data.inflow > 0 ? ((data.inflow / data.outflow) * 100).toFixed(0) : 0;
+      
       return (
-        <div className="bg-popover border rounded-lg p-3 shadow-lg text-sm">
-          <p className="font-medium mb-1">Month {data.month}</p>
-          <div className="space-y-1 text-muted-foreground">
-            <p>Inflow: <span className="text-emerald-500 font-mono">{formatCurrency(data.inflow)}</span></p>
-            <p>Outflow: <span className="text-red-500 font-mono">{formatCurrency(data.outflow)}</span></p>
-            <p>Net: <span className={data.net >= 0 ? 'text-emerald-500' : 'text-red-500'} style={{ fontFamily: 'monospace' }}>{formatCurrency(data.net)}</span></p>
-            <p className="pt-1 border-t">Balance: <span className="font-mono font-medium">{formatCurrency(data.cash_balance)}</span></p>
+        <div className="bg-popover border rounded-lg p-3 shadow-lg text-sm max-w-xs">
+          <p className="font-semibold mb-2">Month {data.month} Cash Flow</p>
+          <div className="space-y-1.5 text-muted-foreground">
+            <div className="flex justify-between">
+              <span>Inflow (Revenue):</span>
+              <span className="text-emerald-500 font-mono">{formatCurrency(data.inflow)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Outflow (Expenses):</span>
+              <span className="text-red-500 font-mono">{formatCurrency(data.outflow)}</span>
+            </div>
+            <div className="flex justify-between pt-1 border-t">
+              <span>Net Cash Flow:</span>
+              <span className={`font-mono font-medium ${data.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                {formatCurrency(data.net)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Ending Balance:</span>
+              <span className={`font-mono font-medium ${data.cash_balance <= 0 ? 'text-red-500' : ''}`}>
+                {formatCurrency(data.cash_balance)}
+              </span>
+            </div>
           </div>
+          <div className={`mt-3 pt-2 border-t text-xs ${
+            impact.severity === 'critical' ? 'text-red-400' : 
+            impact.severity === 'warning' ? 'text-amber-400' : 
+            impact.severity === 'healthy' ? 'text-emerald-400' : 'text-muted-foreground'
+          }`}>
+            <p className="font-medium mb-1">
+              {impact.severity === 'critical' ? 'Critical:' : 
+               impact.severity === 'warning' ? 'Caution:' : 
+               impact.severity === 'healthy' ? 'Good:' : 'Note:'}
+            </p>
+            <p>{impact.text}</p>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Revenue covers {coverageRatio}% of expenses this month.
+          </p>
         </div>
       );
     }

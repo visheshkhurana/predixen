@@ -134,38 +134,74 @@ export function ScenarioRunwayToggle({
 
         {/* Results */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 rounded-lg bg-muted/30 text-center">
-            <p className="text-sm text-muted-foreground mb-1">Runway</p>
-            <p 
-              className={cn(
-                'text-3xl font-bold font-mono',
-                getRunwayVariant(calculatedRunway) === 'success' && 'text-emerald-500',
-                getRunwayVariant(calculatedRunway) === 'warning' && 'text-amber-500',
-                getRunwayVariant(calculatedRunway) === 'danger' && 'text-red-500'
-              )}
-              data-testid="scenario-runway-result"
-              data-scenario={activeScenario}
-              data-runway-value={calculatedRunway}
-            >
-              {formatRunway(calculatedRunway)}
-            </p>
-            {calculatedRunway !== currentRunway && currentRunway && (
-              <Badge variant="secondary" className="mt-1 text-xs">
-                {calculatedRunway && calculatedRunway > currentRunway ? '+' : ''}{calculatedRunway && currentRunway ? (calculatedRunway - currentRunway).toFixed(1) : 0} mo
-              </Badge>
-            )}
-          </div>
-          <div className="p-4 rounded-lg bg-muted/30 text-center">
-            <p className="text-sm text-muted-foreground mb-1">Monthly Burn</p>
-            <p className="text-3xl font-bold font-mono" data-testid="scenario-burn-result">
-              ${formatCurrency(adjustedBurn)}
-            </p>
-            {adjustedBurn !== currentBurn && currentBurn && (
-              <Badge variant="secondary" className="mt-1 text-xs">
-                {activeScenarioData.burnMultiplier > 1 ? '+' : ''}{((activeScenarioData.burnMultiplier - 1) * 100).toFixed(0)}%
-              </Badge>
-            )}
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="p-4 rounded-lg bg-muted/30 text-center cursor-help hover:bg-muted/50 transition-colors">
+                <p className="text-sm text-muted-foreground mb-1">Runway</p>
+                <p 
+                  className={cn(
+                    'text-3xl font-bold font-mono',
+                    getRunwayVariant(calculatedRunway) === 'success' && 'text-emerald-500',
+                    getRunwayVariant(calculatedRunway) === 'warning' && 'text-amber-500',
+                    getRunwayVariant(calculatedRunway) === 'danger' && 'text-red-500'
+                  )}
+                  data-testid="scenario-runway-result"
+                  data-scenario={activeScenario}
+                  data-runway-value={calculatedRunway}
+                >
+                  {formatRunway(calculatedRunway)}
+                </p>
+                {calculatedRunway !== currentRunway && currentRunway && (
+                  <Badge variant="secondary" className="mt-1 text-xs">
+                    {calculatedRunway && calculatedRunway > currentRunway ? '+' : ''}{calculatedRunway && currentRunway ? (calculatedRunway - currentRunway).toFixed(1) : 0} mo
+                  </Badge>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <div className="space-y-2">
+                <p className="font-medium">Cash Runway</p>
+                <p className="text-xs">Number of months your current cash will last at this burn rate.</p>
+                <p className="text-xs text-primary">Benchmark: Maintain 18-24 months post-raise. Never drop below 12 months.</p>
+                <p className="text-xs text-amber-400">
+                  {calculatedRunway && calculatedRunway < 6 
+                    ? "Critical: Under 6 months runway - immediate action required. Consider emergency cost cuts or bridge financing."
+                    : calculatedRunway && calculatedRunway < 12 
+                    ? "Caution: Under 12 months runway - start fundraising or cost reduction planning now."
+                    : "Healthy runway - maintain vigilance and continue monitoring monthly."}
+                </p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="p-4 rounded-lg bg-muted/30 text-center cursor-help hover:bg-muted/50 transition-colors">
+                <p className="text-sm text-muted-foreground mb-1">Monthly Burn</p>
+                <p className="text-3xl font-bold font-mono" data-testid="scenario-burn-result">
+                  ${formatCurrency(adjustedBurn)}
+                </p>
+                {adjustedBurn !== currentBurn && currentBurn && (
+                  <Badge variant="secondary" className="mt-1 text-xs">
+                    {activeScenarioData.burnMultiplier > 1 ? '+' : ''}{((activeScenarioData.burnMultiplier - 1) * 100).toFixed(0)}%
+                  </Badge>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <div className="space-y-2">
+                <p className="font-medium">Monthly Net Burn</p>
+                <p className="text-xs">Net cash consumed each month after revenue. Burn = Expenses - Revenue.</p>
+                <p className="text-xs text-primary">Goal: Reduce burn over time as revenue grows. Efficient startups have burn multiples under 2x.</p>
+                <p className="text-xs text-amber-400">
+                  {activeScenario === 'growth' 
+                    ? "Impact: Higher burn accelerates growth but shortens runway. Monitor closely."
+                    : activeScenario === 'costcut'
+                    ? "Impact: Reduced burn extends runway, giving you more time to reach milestones."
+                    : "Impact: Current burn determines how fast you're consuming capital."}
+                </p>
+              </div>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
