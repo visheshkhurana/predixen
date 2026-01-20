@@ -64,9 +64,16 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 11. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
 
 ### User Roles
-- `owner`, `admin`: Full platform access including admin dashboard.
+**Platform Level:**
+- **Platform Admin**: Only the user whose email matches `ADMIN_MASTER_EMAIL` env variable can access the Admin dashboard. This is the application owner, not a database role.
+
+**Company Level (within the platform):**
+- `owner`: Company owner with full access to their company's data.
+- `admin`: Company admin with management access.
 - `analyst`: Standard platform access.
 - `viewer`: Read-only standard platform access.
+
+**Security Note**: The Admin section in the sidebar is restricted to the platform owner only (checked via `is_platform_admin` flag from authentication). Regular users, even with 'owner' or 'admin' company roles, cannot see or access the admin dashboard.
 
 ### Project Structure (High-Level)
 - `client/`: React frontend (components, pages, state management, API hooks).

@@ -43,7 +43,7 @@ export default function AdminLoginPage() {
       localStorage.setItem('predixen-token', result.access_token);
       localStorage.setItem('predixen-admin-session', 'true');
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email, role: result.role });
+      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
       toast({ title: 'Welcome, Administrator' });
       setLocation('/admin');
     } catch (err) {
