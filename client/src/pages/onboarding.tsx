@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,13 +11,33 @@ import { ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2 } from 'lucide-react';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
   { id: 2, title: 'Financial Baseline', description: 'Enter your current financials' },
   { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
 ];
+
+interface ExtractedData {
+  company_info: {
+    name?: string;
+    website?: string;
+    industry?: string;
+    stage?: string;
+  };
+  financials: {
+    monthly_revenue?: number;
+    gross_margin_pct?: number;
+    opex?: number;
+    payroll?: number;
+    other_costs?: number;
+    cash_balance?: number;
+  };
+  currency?: string;
+  confidence?: { company_info: number; financials: number };
+  summary?: string;
+}
 
 export default function OnboardingPage() {
   const [, setLocation] = useLocation();
@@ -40,6 +60,121 @@ export default function OnboardingPage() {
     cash_balance: 500000,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // File upload state
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+  
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+  
+  const processFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast({ title: 'Invalid file', description: 'Please upload a PDF file', variant: 'destructive' });
+      return;
+    }
+    
+    if (file.size > 20 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Maximum file size is 20MB', variant: 'destructive' });
+      return;
+    }
+    
+    setUploadedFile(file);
+    setIsExtracting(true);
+    setExtractionError(null);
+    setExtractedData(null);
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/ingest/onboarding/extract-deck', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Extraction failed');
+      }
+      
+      const data: ExtractedData = await response.json();
+      setExtractedData(data);
+      
+      // Autofill company data
+      if (data.company_info) {
+        setCompanyData(prev => ({
+          ...prev,
+          name: data.company_info.name || prev.name,
+          website: data.company_info.website || prev.website,
+          industry: data.company_info.industry || prev.industry,
+          stage: data.company_info.stage || prev.stage,
+          currency: data.currency || prev.currency,
+        }));
+      }
+      
+      // Autofill financial data
+      if (data.financials) {
+        setBaselineData(prev => ({
+          monthly_revenue: data.financials.monthly_revenue ?? prev.monthly_revenue,
+          gross_margin_pct: data.financials.gross_margin_pct ?? prev.gross_margin_pct,
+          opex: data.financials.opex ?? prev.opex,
+          payroll: data.financials.payroll ?? prev.payroll,
+          other_costs: data.financials.other_costs ?? prev.other_costs,
+          cash_balance: data.financials.cash_balance ?? prev.cash_balance,
+        }));
+      }
+      
+      toast({ 
+        title: 'Information extracted', 
+        description: data.summary || 'Company and financial data has been auto-filled' 
+      });
+      
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to extract information';
+      setExtractionError(message);
+      toast({ title: 'Extraction failed', description: message, variant: 'destructive' });
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+  
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      processFile(file);
+    }
+  }, []);
+  
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+  
+  const clearUpload = () => {
+    setUploadedFile(null);
+    setExtractedData(null);
+    setExtractionError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
   
   const createCompanyMutation = useCreateCompany();
   const manualBaselineMutation = useManualBaseline();
@@ -151,6 +286,126 @@ export default function OnboardingPage() {
               <CardDescription>Tell us about your startup</CardDescription>
             </CardHeader>
             <CardContent>
+              {/* AI-Powered Upload Zone */}
+              <div className="mb-6">
+                <div
+                  className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${
+                    isDragging 
+                      ? 'border-primary bg-primary/5' 
+                      : uploadedFile 
+                        ? 'border-muted-foreground/30 bg-muted/30' 
+                        : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/20'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => !isExtracting && fileInputRef.current?.click()}
+                  data-testid="dropzone-deck-upload"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    data-testid="input-file-upload"
+                  />
+                  
+                  {isExtracting ? (
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="p-3 rounded-full bg-primary/10">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Analyzing your document...</p>
+                        <p className="text-sm text-muted-foreground">
+                          AI is extracting company and financial information
+                        </p>
+                      </div>
+                    </div>
+                  ) : extractedData ? (
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="p-3 rounded-full bg-green-500/10">
+                        <Check className="w-8 h-8 text-green-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-green-600 dark:text-green-400">
+                          Information extracted successfully
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {uploadedFile?.name} - Fields auto-filled below
+                        </p>
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => { e.stopPropagation(); clearUpload(); }}
+                        data-testid="button-clear-upload"
+                      >
+                        Upload different file
+                      </Button>
+                    </div>
+                  ) : extractionError ? (
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="p-3 rounded-full bg-destructive/10">
+                        <AlertCircle className="w-8 h-8 text-destructive" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-destructive">Extraction failed</p>
+                        <p className="text-sm text-muted-foreground">{extractionError}</p>
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => { e.stopPropagation(); clearUpload(); }}
+                      >
+                        Try again
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="p-3 rounded-full bg-primary/10">
+                        <Sparkles className="w-8 h-8 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Upload your pitch deck or investor update</p>
+                        <p className="text-sm text-muted-foreground">
+                          Drop a PDF here or click to browse. AI will auto-fill company and financial details.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <FileText className="w-3 h-3" />
+                        <span>PDF files up to 20MB</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {extractedData && extractedData.confidence && (
+                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-green-500" />
+                      Company info: {Math.round((extractedData.confidence.company_info || 0) * 100)}% confident
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-green-500" />
+                      Financials: {Math.round((extractedData.confidence.financials || 0) * 100)}% confident
+                    </span>
+                  </div>
+                )}
+                
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or fill in manually</span>
+                  </div>
+                </div>
+              </div>
+              
               <form onSubmit={handleCompanySubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="company-name">Company Name</Label>
@@ -161,6 +416,7 @@ export default function OnboardingPage() {
                     required
                     placeholder="Your Company"
                     data-testid="input-company-name"
+                    className={extractedData?.company_info?.name ? 'border-green-500/50' : ''}
                   />
                 </div>
                 
@@ -172,6 +428,7 @@ export default function OnboardingPage() {
                     onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
                     placeholder="https://yourcompany.com"
                     data-testid="input-company-website"
+                    className={extractedData?.company_info?.website ? 'border-green-500/50' : ''}
                   />
                 </div>
                 
@@ -182,7 +439,10 @@ export default function OnboardingPage() {
                       value={companyData.industry}
                       onValueChange={(v) => setCompanyData({ ...companyData, industry: v })}
                     >
-                      <SelectTrigger data-testid="select-industry">
+                      <SelectTrigger 
+                        data-testid="select-industry"
+                        className={extractedData?.company_info?.industry ? 'border-green-500/50' : ''}
+                      >
                         <SelectValue placeholder="Select industry..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -201,7 +461,10 @@ export default function OnboardingPage() {
                       value={companyData.stage}
                       onValueChange={(v) => setCompanyData({ ...companyData, stage: v })}
                     >
-                      <SelectTrigger data-testid="select-stage">
+                      <SelectTrigger 
+                        data-testid="select-stage"
+                        className={extractedData?.company_info?.stage ? 'border-green-500/50' : ''}
+                      >
                         <SelectValue placeholder="Select stage..." />
                       </SelectTrigger>
                       <SelectContent>

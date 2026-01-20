@@ -638,3 +638,304 @@ async def save_financial_baseline(
             'totalExpenses': actual_total,
         }
     }
+
+
+# ============================================================================
+# ONBOARDING DECK EXTRACTION
+# ============================================================================
+
+ONBOARDING_EXTRACTION_PROMPT = """You are an AI assistant that extracts company information and financial metrics from pitch decks, investor updates, and company documents.
+
+Analyze the provided document and extract the following information. Return ONLY valid JSON with no markdown formatting.
+
+{
+  "company_info": {
+    "name": "string - the company name",
+    "website": "string - the company website URL if found, or null",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "stage": "string - one of: pre_seed, seed, series_a, series_b based on funding mentioned"
+  },
+  "financials": {
+    "monthly_revenue": "number - current monthly revenue in base currency units (not millions), or null",
+    "gross_margin_pct": "number - gross margin as percentage (e.g., 70 for 70%), or null", 
+    "opex": "number - monthly operating expenses in base currency units, or null",
+    "payroll": "number - monthly payroll/salaries in base currency units, or null",
+    "other_costs": "number - other monthly costs in base currency units, or null",
+    "cash_balance": "number - total cash/bank balance in base currency units, or null",
+    "arr": "number - annual recurring revenue if mentioned, or null",
+    "mrr": "number - monthly recurring revenue if mentioned, or null",
+    "headcount": "number - number of employees if mentioned, or null",
+    "runway_months": "number - runway in months if mentioned, or null",
+    "burn_rate": "number - monthly burn rate if mentioned, or null"
+  },
+  "currency": "string - detected currency code (USD, EUR, GBP, INR, etc.), default USD",
+  "confidence": {
+    "company_info": "number - confidence score 0-1 for company extraction",
+    "financials": "number - confidence score 0-1 for financial extraction"
+  },
+  "summary": "string - brief 1-2 sentence summary of what was found"
+}
+
+IMPORTANT RULES:
+1. Extract values EXACTLY as stated - do not scale or modify numbers
+2. Convert all monetary values to base units (e.g., $5M = 5000000, $50K = 50000)
+3. For percentages, store as the percentage number (70% = 70, not 0.7)
+4. If a field is not found, use null - do not guess
+5. Detect currency from symbols ($, ₹, €, £) or explicit mentions
+6. For industry, map to the closest category from the allowed values
+7. For stage, infer from funding rounds mentioned (Pre-seed, Seed, Series A, etc.)
+"""
+
+ONBOARDING_VISION_PROMPT = """You are an AI assistant analyzing images from a company pitch deck or investor document.
+
+Extract company information and financial metrics from these images. Return ONLY valid JSON with no markdown.
+
+{
+  "company_info": {
+    "name": "string - the company name visible in the deck",
+    "website": "string - company website if shown, or null",
+    "industry": "string - one of: general_saas, fintech, ecommerce, marketplace, other",
+    "stage": "string - one of: pre_seed, seed, series_a, series_b"
+  },
+  "financials": {
+    "monthly_revenue": "number in base units or null",
+    "gross_margin_pct": "number as percentage or null",
+    "opex": "number in base units or null",
+    "payroll": "number in base units or null",
+    "other_costs": "number in base units or null",
+    "cash_balance": "number in base units or null",
+    "arr": "number or null",
+    "mrr": "number or null",
+    "headcount": "number or null",
+    "runway_months": "number or null",
+    "burn_rate": "number or null"
+  },
+  "currency": "string - currency code (USD, EUR, etc.)",
+  "confidence": {
+    "company_info": "number 0-1",
+    "financials": "number 0-1"
+  },
+  "summary": "string - brief summary"
+}
+
+Convert all values to base units: $5M = 5000000, $50K = 50000.
+Percentages as numbers: 70% = 70.
+Use null for missing fields - do not guess.
+"""
+
+
+class OnboardingExtractionResponse(BaseModel):
+    company_info: Dict[str, Any]
+    financials: Dict[str, Any]
+    currency: str
+    confidence: Dict[str, float]
+    summary: str
+    extraction_method: str
+
+
+def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
+    """Use OpenAI to extract company info and financials from document text."""
+    from openai import OpenAI
+    
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    
+    if not api_key:
+        raise ValueError("OpenAI API key not configured")
+    
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a financial analyst AI. Always respond with valid JSON only."
+                },
+                {
+                    "role": "user",
+                    "content": ONBOARDING_EXTRACTION_PROMPT + "\n\nDocument text:\n\n" + text[:20000]
+                }
+            ],
+            max_tokens=2000,
+            temperature=0.1,
+            timeout=60
+        )
+        
+        content = response.choices[0].message.content.strip()
+        # Clean up markdown if present
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        content = content.strip()
+        
+        return json.loads(content)
+    except Exception as e:
+        logger.error(f"OpenAI extraction failed: {e}")
+        raise
+
+
+def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
+    """Use OpenAI Vision to extract company info and financials from images."""
+    from openai import OpenAI
+    
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    
+    if not api_key:
+        raise ValueError("OpenAI API key not configured")
+    
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    
+    content = [{"type": "text", "text": ONBOARDING_VISION_PROMPT}]
+    
+    for img_b64 in image_base64_list[:8]:  # Limit to 8 pages
+        content.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/png;base64,{img_b64}",
+                "detail": "high"
+            }
+        })
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a financial analyst AI. Respond with valid JSON only."
+                },
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            max_tokens=2000,
+            temperature=0.1,
+            timeout=90
+        )
+        
+        result = response.choices[0].message.content.strip()
+        if result.startswith("```"):
+            result = result.split("```")[1]
+            if result.startswith("json"):
+                result = result[4:]
+        result = result.strip()
+        
+        return json.loads(result)
+    except Exception as e:
+        logger.error(f"Vision extraction failed: {e}")
+        raise
+
+
+@router.post("/ingest/onboarding/extract-deck")
+async def extract_onboarding_deck(
+    file: UploadFile = File(...)
+):
+    """
+    Extract company information and financials from a pitch deck or company document.
+    Supports PDF files. Uses text extraction with GPT-4o, falling back to vision for image-based PDFs.
+    
+    This endpoint does NOT require authentication - it's used during onboarding before user creation.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in ['.pdf']:
+        raise HTTPException(status_code=400, detail="Only PDF files are supported. Please upload a PDF pitch deck.")
+    
+    temp_file = None
+    try:
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp:
+            content = await file.read()
+            temp.write(content)
+            temp_file = temp.name
+        
+        # Check file size (max 20MB)
+        file_size_mb = len(content) / (1024 * 1024)
+        if file_size_mb > 20:
+            raise HTTPException(status_code=400, detail=f"File too large ({file_size_mb:.1f}MB). Maximum is 20MB.")
+        
+        extraction_method = "text"
+        result = None
+        
+        # Try text extraction first
+        try:
+            pdf_text = extract_text_from_pdf(temp_file)
+            
+            if pdf_text and len(pdf_text.strip()) > 500:
+                # Good text content, use text-based extraction
+                result = extract_onboarding_data_with_openai(pdf_text)
+                extraction_method = "text+gpt4o"
+            else:
+                raise ValueError("Insufficient text content")
+                
+        except Exception as text_error:
+            logger.info(f"Text extraction insufficient, trying vision: {text_error}")
+            
+            # Fall back to vision
+            try:
+                from pdf2image import convert_from_path
+                import base64
+                from io import BytesIO
+                
+                images = convert_from_path(temp_file, dpi=150, first_page=1, last_page=8)
+                image_base64_list = []
+                
+                for img in images:
+                    buffered = BytesIO()
+                    img.save(buffered, format="PNG", optimize=True)
+                    img_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                    image_base64_list.append(img_b64)
+                
+                result = extract_onboarding_data_with_vision(image_base64_list)
+                extraction_method = "vision+gpt4o"
+                
+            except Exception as vision_error:
+                logger.error(f"Vision extraction also failed: {vision_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Could not extract information from the document. Please try a different file or enter details manually."
+                )
+        
+        if not result:
+            raise HTTPException(status_code=500, detail="Extraction failed - no data returned")
+        
+        # Ensure all expected fields exist with defaults
+        company_info = result.get("company_info", {})
+        financials = result.get("financials", {})
+        
+        return OnboardingExtractionResponse(
+            company_info={
+                "name": company_info.get("name") or "",
+                "website": company_info.get("website") or "",
+                "industry": company_info.get("industry") or "",
+                "stage": company_info.get("stage") or ""
+            },
+            financials={
+                "monthly_revenue": financials.get("monthly_revenue") or financials.get("mrr"),
+                "gross_margin_pct": financials.get("gross_margin_pct"),
+                "opex": financials.get("opex"),
+                "payroll": financials.get("payroll"),
+                "other_costs": financials.get("other_costs"),
+                "cash_balance": financials.get("cash_balance"),
+                "arr": financials.get("arr"),
+                "mrr": financials.get("mrr"),
+                "headcount": financials.get("headcount"),
+                "runway_months": financials.get("runway_months"),
+                "burn_rate": financials.get("burn_rate")
+            },
+            currency=result.get("currency", "USD"),
+            confidence=result.get("confidence", {"company_info": 0.5, "financials": 0.5}),
+            summary=result.get("summary", ""),
+            extraction_method=extraction_method
+        )
+        
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            os.unlink(temp_file)
