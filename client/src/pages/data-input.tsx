@@ -62,7 +62,10 @@ import {
   Download,
   HelpCircle,
   PieChart,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const dataInputSchema = z.object({
@@ -149,6 +152,7 @@ export default function DataInput() {
     setFinancialBaseline,
     setLastExtraction,
     setExtractionInProgress,
+    clearFinancialBaseline,
   } = useFounderStore();
   const [activeTab, setActiveTab] = useState("company");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -850,13 +854,51 @@ export default function DataInput() {
     );
   };
 
+  const handleClearCache = () => {
+    // Clear React Query cache
+    queryClient.clear();
+    
+    // Clear Zustand persisted state for financial data
+    clearFinancialBaseline();
+    setLastExtraction(null);
+    
+    // Clear localStorage founder-storage
+    localStorage.removeItem('founder-storage');
+    
+    toast({
+      title: "Cache Cleared",
+      description: "All cached data has been cleared. Please re-upload your files.",
+    });
+    
+    // Force reload to ensure fresh state
+    window.location.reload();
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Data Input</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Enter your company information and financial data for analysis
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Data Input</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Enter your company information and financial data for analysis
+          </p>
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClearCache}
+              data-testid="button-clear-cache"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Clear Cache
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Clear all cached extraction data and reload</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
