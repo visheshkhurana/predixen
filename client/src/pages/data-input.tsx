@@ -587,12 +587,24 @@ export default function DataInput() {
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+    if (value === null || value === undefined || isNaN(value)) return 'N/A';
+    
+    const absValue = Math.abs(value);
+    const sign = value < 0 ? '-' : '';
+    
+    if (absValue >= 1_000_000_000) {
+      const billions = absValue / 1_000_000_000;
+      return `${sign}$${billions.toFixed(1)}B`;
+    } else if (absValue >= 1_000_000) {
+      const millions = absValue / 1_000_000;
+      return `${sign}$${millions.toFixed(1)}M`;
+    } else if (absValue >= 1_000) {
+      const thousands = absValue / 1_000;
+      return `${sign}$${thousands.toFixed(1)}K`;
+    } else if (absValue > 0) {
+      return `${sign}$${absValue.toFixed(0)}`;
+    }
+    return '$0';
   };
 
   const getConfidenceBadge = (fieldKey: string) => {
