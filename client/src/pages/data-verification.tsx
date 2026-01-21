@@ -26,8 +26,10 @@ import {
   DollarSign,
   TrendingUp,
   Wallet,
-  PiggyBank
+  PiggyBank,
+  RefreshCw
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ClassifiedRow {
   index: number;
@@ -173,7 +175,7 @@ export default function DataVerification() {
   const [, params] = useRoute("/data/verify/:sessionId");
   const sessionId = params?.sessionId ? parseInt(params.sessionId) : null;
   const { toast } = useToast();
-  const { setFinancialBaseline } = useFounderStore();
+  const { setFinancialBaseline, clearFinancialBaseline, setLastExtraction } = useFounderStore();
 
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [cashOnHand, setCashOnHand] = useState<string>("");
@@ -389,6 +391,31 @@ export default function DataVerification() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => {
+                  queryClient.clear();
+                  clearFinancialBaseline();
+                  setLastExtraction(null);
+                  localStorage.removeItem('founder-storage');
+                  toast({
+                    title: "Cache Cleared",
+                    description: "All cached data has been cleared. Redirecting to Data Input...",
+                  });
+                  setTimeout(() => navigate("/data"), 500);
+                }}
+                data-testid="button-clear-cache"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Clear cache and start fresh</p>
+            </TooltipContent>
+          </Tooltip>
           <Button variant="outline" onClick={() => {}} data-testid="button-download-csv">
             <Download className="h-4 w-4 mr-2" />
             Download CSV
