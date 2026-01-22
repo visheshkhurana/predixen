@@ -46,7 +46,7 @@ interface InvestorRoomData {
 }
 
 export default function InvestorRoomPage() {
-  const { selectedCompany } = useFounderStore();
+  const { currentCompany: selectedCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
