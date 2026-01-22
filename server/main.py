@@ -6,7 +6,7 @@ from server.core.db import engine, Base, SessionLocal
 from server.core.migrations import run_migrations
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
-from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration
+from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration, scenarios
 from server.api import forecasting as forecasting_api, alerts as alerts_api, integrations as integrations_api, templates as templates_api
 from server.api import imports as imports_api
 from server.api import admin as admin_api
@@ -79,6 +79,7 @@ app.include_router(workspace_api.router)
 app.include_router(comments_api.router)
 app.include_router(simulation_jobs_api.router)
 app.include_router(email_templates_api.router)
+app.include_router(scenarios.router)
 
 @app.get("/")
 def root():

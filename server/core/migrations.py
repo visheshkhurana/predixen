@@ -86,10 +86,66 @@ def ensure_company_metadata_column(engine: Engine) -> None:
             logger.debug(f"metadata_json column may already exist: {e}")
 
 
+def ensure_company_decisions_table(engine: Engine) -> None:
+    """Ensure the company_decisions table exists for copilot decision tracking."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_decisions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    title VARCHAR(500) NOT NULL,
+                    context TEXT,
+                    options_json JSONB DEFAULT '[]'::jsonb,
+                    recommendation_json JSONB DEFAULT '{}'::jsonb,
+                    status VARCHAR(50) DEFAULT 'proposed',
+                    owner VARCHAR(255),
+                    tags JSONB DEFAULT '[]'::jsonb,
+                    confidence VARCHAR(20) DEFAULT 'medium',
+                    sources_json JSONB DEFAULT '[]'::jsonb,
+                    created_from_message_id UUID,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_decisions_company ON company_decisions(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_decisions_status ON company_decisions(status)"))
+            conn.commit()
+            logger.info("Company decisions table migration complete")
+        except Exception as e:
+            logger.debug(f"Company decisions table may already exist: {e}")
+
+
+def ensure_company_scenarios_table(engine: Engine) -> None:
+    """Ensure the company_scenarios table exists for scenario forking."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_scenarios (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    name VARCHAR(255) NOT NULL,
+                    base_scenario_id UUID REFERENCES company_scenarios(id),
+                    assumptions_json JSONB DEFAULT '{}'::jsonb,
+                    outputs_json JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_scenarios_company ON company_scenarios(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_scenarios_base ON company_scenarios(base_scenario_id)"))
+            conn.commit()
+            logger.info("Company scenarios table migration complete")
+        except Exception as e:
+            logger.debug(f"Company scenarios table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
     ensure_financial_record_columns(engine)
     ensure_invites_table(engine)
     ensure_company_metadata_column(engine)
+    ensure_company_decisions_table(engine)
+    ensure_company_scenarios_table(engine)
     logger.info("Database migrations completed successfully")
