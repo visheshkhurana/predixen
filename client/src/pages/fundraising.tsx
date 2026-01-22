@@ -51,7 +51,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function FundraisingPage() {
-  const { selectedCompany } = useFounderStore();
+  const { currentCompany: selectedCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
