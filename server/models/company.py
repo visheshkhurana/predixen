@@ -34,3 +34,6 @@ class Company(Base):
     company_workstreams = relationship("CompanyWorkstream", back_populates="company")
     company_alerts = relationship("CompanyAlert", back_populates="company")
     company_driver_models = relationship("CompanyDriverModel", back_populates="company")
+    cap_tables = relationship("CompanyCapTable", back_populates="company")
+    fundraising_rounds = relationship("FundraisingRound", back_populates="company")
+    investors = relationship("Investor", back_populates="company")

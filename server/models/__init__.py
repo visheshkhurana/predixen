@@ -29,6 +29,17 @@ from server.models.invite import Invite
 from server.models.company_decision import CompanyDecision, CompanyScenario
 from server.models.llm_audit_log import LLMAuditLog
 from server.models.eval_run import EvalRun
+from server.models.fundraising import (
+    CompanyCapTable,
+    FundraisingRound,
+    RoundTerms,
+    Investor,
+    InvestorPipeline,
+    InstrumentType,
+    RoundStatus,
+    InvestorType,
+    PipelineStage,
+)
 
 __all__ = [
     "User",
@@ -65,4 +76,13 @@ __all__ = [
     "CompanyScenario",
     "LLMAuditLog",
     "EvalRun",
+    "CompanyCapTable",
+    "FundraisingRound",
+    "RoundTerms",
+    "Investor",
+    "InvestorPipeline",
+    "InstrumentType",
+    "RoundStatus",
+    "InvestorType",
+    "PipelineStage",
 ]

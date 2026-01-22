@@ -302,6 +302,93 @@ def ensure_eval_runs_table(engine: Engine) -> None:
             logger.debug(f"Eval runs table may already exist: {e}")
 
 
+def ensure_fundraising_tables(engine: Engine) -> None:
+    """Ensure all fundraising-related tables exist."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_cap_tables (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    name VARCHAR(255) NOT NULL DEFAULT 'Current Cap Table',
+                    as_of_date DATE,
+                    currency VARCHAR(10) DEFAULT 'USD',
+                    cap_table_json JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cap_tables_company ON company_cap_tables(company_id)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS fundraising_rounds (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    name VARCHAR(255) NOT NULL,
+                    target_raise FLOAT,
+                    pre_money FLOAT,
+                    post_money FLOAT,
+                    instrument VARCHAR(20) DEFAULT 'equity',
+                    option_pool_refresh_percent FLOAT,
+                    use_of_funds_json JSONB DEFAULT '{}'::jsonb,
+                    status VARCHAR(20) DEFAULT 'planned',
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fundraising_rounds_company ON fundraising_rounds(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fundraising_rounds_status ON fundraising_rounds(status)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS round_terms (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    round_id UUID NOT NULL REFERENCES fundraising_rounds(id),
+                    terms_json JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_round_terms_round ON round_terms(round_id)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS investors (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    name VARCHAR(255) NOT NULL,
+                    type VARCHAR(50) DEFAULT 'vc',
+                    geography VARCHAR(100),
+                    stage_focus VARCHAR(100),
+                    thesis_tags JSONB DEFAULT '[]'::jsonb,
+                    contact_json JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_investors_company ON investors(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_investors_type ON investors(type)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS investor_pipeline (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    round_id UUID NOT NULL REFERENCES fundraising_rounds(id),
+                    investor_id UUID NOT NULL REFERENCES investors(id),
+                    stage VARCHAR(50) DEFAULT 'sourced',
+                    probability FLOAT DEFAULT 0.0,
+                    last_contacted_at TIMESTAMP,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_investor_pipeline_round ON investor_pipeline(round_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_investor_pipeline_investor ON investor_pipeline(investor_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_investor_pipeline_stage ON investor_pipeline(stage)"))
+            
+            conn.commit()
+            logger.info("Fundraising tables migration complete")
+        except Exception as e:
+            logger.debug(f"Fundraising tables may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -316,4 +403,5 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_driver_models_table(engine)
     ensure_llm_audit_logs_table(engine)
     ensure_eval_runs_table(engine)
+    ensure_fundraising_tables(engine)
     logger.info("Database migrations completed successfully")
