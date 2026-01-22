@@ -26,6 +26,7 @@ from server.models.subscription import Subscription, SubscriptionStatus
 from server.models.audit_log import AuditLog
 from server.models.login_history import LoginHistory, Notification
 from server.models.invite import Invite
+from server.models.company_decision import CompanyDecision, CompanyScenario
 
 __all__ = [
     "User",
@@ -58,4 +59,6 @@ __all__ = [
     "LoginHistory",
     "Notification",
     "Invite",
+    "CompanyDecision",
+    "CompanyScenario",
 ]

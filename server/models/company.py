@@ -28,3 +28,5 @@ class Company(Base):
     metric_points = relationship("FinancialMetricPoint", back_populates="company")
     subscriptions = relationship("Subscription", back_populates="company")
     notifications = relationship("Notification", back_populates="company")
+    company_decisions = relationship("CompanyDecision", back_populates="company")
+    company_scenarios = relationship("CompanyScenario", back_populates="company")
