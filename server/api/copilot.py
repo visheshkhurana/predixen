@@ -480,3 +480,256 @@ def update_ckb_section(
         raise HTTPException(status_code=400, detail=f"Failed to update {section}")
     
     return {"success": True, "section": section}
+
+
+class MemoExportRequest(BaseModel):
+    """Request for memo export."""
+    format: str = "markdown"
+    include_sections: List[str] = ["executive_summary", "financials", "recommendations", "risks"]
+    decision_id: Optional[str] = None
+    scenario_id: Optional[str] = None
+
+
+@router.post("/companies/{company_id}/memo/export")
+async def export_memo(
+    company_id: int,
+    request: MemoExportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Export a formatted memo for sharing with investors or board members.
+    
+    Generates a professional memo combining company data, decisions, and recommendations
+    in a format suitable for investor updates or board presentations.
+    """
+    from server.copilot.ckb_storage import CKBStorage
+    from server.models.company_decision import CompanyDecision, CompanyScenario
+    from datetime import datetime
+    import uuid as uuid_lib
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    ckb_storage = CKBStorage(db)
+    ckb = ckb_storage.get_ckb(company_id)
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    decision = None
+    if request.decision_id:
+        try:
+            decision_uuid = uuid_lib.UUID(request.decision_id)
+            decision = db.query(CompanyDecision).filter(
+                CompanyDecision.id == decision_uuid,
+                CompanyDecision.company_id == company_id
+            ).first()
+        except ValueError:
+            pass
+    
+    scenario = None
+    if request.scenario_id:
+        try:
+            scenario_uuid = uuid_lib.UUID(request.scenario_id)
+            scenario = db.query(CompanyScenario).filter(
+                CompanyScenario.id == scenario_uuid,
+                CompanyScenario.company_id == company_id
+            ).first()
+        except ValueError:
+            pass
+    
+    memo = generate_memo(
+        company=company,
+        ckb=ckb,
+        truth_scan=truth_scan,
+        decision=decision,
+        scenario=scenario,
+        sections=request.include_sections,
+        format=request.format
+    )
+    
+    return {
+        "company_id": company_id,
+        "format": request.format,
+        "generated_at": datetime.utcnow().isoformat(),
+        "memo": memo
+    }
+
+
+def generate_memo(
+    company,
+    ckb,
+    truth_scan,
+    decision,
+    scenario,
+    sections: List[str],
+    format: str = "markdown"
+) -> Dict[str, Any]:
+    """Generate a formatted memo."""
+    from datetime import datetime
+    
+    memo = {
+        "title": f"{company.name} - Strategic Memo",
+        "date": datetime.utcnow().strftime("%B %d, %Y"),
+        "sections": []
+    }
+    
+    if "executive_summary" in sections:
+        summary = {
+            "title": "Executive Summary",
+            "content": []
+        }
+        
+        if ckb and ckb.overview:
+            summary["content"].append(ckb.overview.get("description", f"{company.name} overview"))
+        
+        if truth_scan:
+            metrics = truth_scan.outputs_json.get("metrics", {})
+            runway = metrics.get("runway_months", "N/A")
+            mrr = metrics.get("monthly_revenue", 0)
+            summary["content"].append(f"Current MRR: ${mrr:,.0f}" if mrr else "MRR: Data pending")
+            summary["content"].append(f"Runway: {runway} months" if runway != "N/A" else "Runway: Data pending")
+        
+        memo["sections"].append(summary)
+    
+    if "financials" in sections and truth_scan:
+        metrics = truth_scan.outputs_json.get("metrics", {})
+        financials = {
+            "title": "Financial Snapshot",
+            "metrics": {
+                "monthly_revenue": metrics.get("monthly_revenue"),
+                "gross_margin": metrics.get("gross_margin"),
+                "net_burn": metrics.get("net_burn"),
+                "runway_months": metrics.get("runway_months"),
+                "cash_balance": metrics.get("cash_balance"),
+                "growth_rate": metrics.get("revenue_growth_mom")
+            }
+        }
+        memo["sections"].append(financials)
+    
+    if "recommendations" in sections:
+        recommendations = {
+            "title": "Strategic Recommendations",
+            "items": []
+        }
+        
+        if decision:
+            recommendations["items"].append({
+                "decision": decision.title,
+                "status": decision.status,
+                "recommendation": decision.recommendation_json,
+                "options": decision.options_json[:3] if decision.options_json else []
+            })
+        
+        if ckb and ckb.decisions_made:
+            for d in ckb.decisions_made[-3:]:
+                recommendations["items"].append({
+                    "decision": d.get("title", d.get("action", "Decision")),
+                    "status": d.get("status", "proposed"),
+                    "recommendation": d
+                })
+        
+        memo["sections"].append(recommendations)
+    
+    if "scenario" in sections and scenario:
+        scenario_section = {
+            "title": f"Scenario Analysis: {scenario.name}",
+            "assumptions": scenario.assumptions_json,
+            "projected_outcomes": scenario.outputs_json
+        }
+        memo["sections"].append(scenario_section)
+    
+    if "risks" in sections:
+        risks = {
+            "title": "Key Risks & Mitigations",
+            "items": []
+        }
+        
+        if ckb and ckb.risks:
+            risks["items"] = ckb.risks[:5] if isinstance(ckb.risks, list) else []
+        
+        if not risks["items"]:
+            risks["items"] = [
+                "Market conditions and competitive landscape changes",
+                "Cash runway and fundraising timing",
+                "Execution risk on key initiatives"
+            ]
+        
+        memo["sections"].append(risks)
+    
+    if "market" in sections and ckb:
+        market = {
+            "title": "Market & Competitive Position",
+            "icp": ckb.icp if ckb.icp else {},
+            "competitors": ckb.competitors[:5] if ckb.competitors else []
+        }
+        memo["sections"].append(market)
+    
+    if format == "markdown":
+        memo["formatted"] = format_memo_as_markdown(memo)
+    
+    return memo
+
+
+def format_memo_as_markdown(memo: Dict[str, Any]) -> str:
+    """Format memo as markdown string."""
+    lines = [
+        f"# {memo['title']}",
+        f"*Generated: {memo['date']}*",
+        "",
+        "---",
+        ""
+    ]
+    
+    for section in memo.get("sections", []):
+        lines.append(f"## {section['title']}")
+        lines.append("")
+        
+        if "content" in section:
+            for item in section["content"]:
+                lines.append(f"- {item}")
+            lines.append("")
+        
+        if "metrics" in section:
+            for key, value in section["metrics"].items():
+                if value is not None:
+                    display_key = key.replace("_", " ").title()
+                    if isinstance(value, (int, float)) and "revenue" in key or "burn" in key or "cash" in key:
+                        lines.append(f"- **{display_key}**: ${value:,.0f}")
+                    elif isinstance(value, (int, float)):
+                        lines.append(f"- **{display_key}**: {value:.1f}")
+                    else:
+                        lines.append(f"- **{display_key}**: {value}")
+            lines.append("")
+        
+        if "items" in section:
+            for item in section["items"]:
+                if isinstance(item, str):
+                    lines.append(f"- {item}")
+                elif isinstance(item, dict):
+                    lines.append(f"- **{item.get('decision', 'Item')}** ({item.get('status', 'pending')})")
+            lines.append("")
+        
+        if "assumptions" in section:
+            lines.append("### Assumptions")
+            for key, value in section.get("assumptions", {}).items():
+                lines.append(f"- {key}: {value}")
+            lines.append("")
+        
+        if "projected_outcomes" in section:
+            lines.append("### Projected Outcomes")
+            for key, value in section.get("projected_outcomes", {}).items():
+                if key != "assumptions_applied":
+                    lines.append(f"- {key.replace('_', ' ').title()}: {value}")
+            lines.append("")
+    
+    lines.extend(["---", "", "*This memo was generated by Predixen Intelligence OS*"])
+    
+    return "\n".join(lines)

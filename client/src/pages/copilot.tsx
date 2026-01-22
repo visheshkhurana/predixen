@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { 
@@ -25,7 +27,11 @@ import {
   Lightbulb,
   Users,
   Building2,
-  HelpCircle
+  HelpCircle,
+  Zap,
+  Eye,
+  FileText,
+  Shield
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -46,6 +52,14 @@ interface CopilotApiResponse {
     icp?: any;
     competitors?: any[];
     benchmarks?: Record<string, any>;
+    this_month_targets?: Array<{
+      company_name: string;
+      industry: string;
+      why_now: string;
+      outreach_channel: string;
+      talking_points: string[];
+      priority: string;
+    }>;
   };
   strategy_options?: Array<{
     title: string;
@@ -65,6 +79,35 @@ interface CopilotApiResponse {
   next_questions: string[];
   confidence: string;
   ckb_updated: boolean;
+  decision_created?: {
+    id: string;
+    title: string;
+    status: string;
+  };
+  challenge?: {
+    mode: string;
+    challenges: Array<{
+      recommendation: string;
+      counterarguments: string[];
+      stress_test: Record<string, string>;
+      alternative_perspectives: string[];
+    }>;
+    summary: string;
+  };
+  investor_analysis?: {
+    investor_type: string;
+    evaluation_criteria: Record<string, any>;
+    company_fit_analysis: {
+      strengths: string[];
+      gaps: string[];
+      score: string;
+    };
+    recommendation_alignment: Array<{
+      action: string;
+      investor_perspective: string;
+      concerns: string;
+    }>;
+  };
 }
 
 interface Message {
@@ -264,6 +307,11 @@ export default function CopilotPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [useApiMode, setUseApiMode] = useState(true);
   
+  const [mode, setMode] = useState<'advisor' | 'analyst' | 'pitch'>('advisor');
+  const [challengeMode, setChallengeMode] = useState(false);
+  const [investorLens, setInvestorLens] = useState<string | null>(null);
+  const [createDecision, setCreateDecision] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   
@@ -298,7 +346,13 @@ export default function CopilotPage() {
         const response = await apiRequest<CopilotApiResponse>(
           'POST',
           `/companies/${currentCompany.id}/chat`,
-          { message: messageText }
+          { 
+            message: messageText,
+            mode,
+            challenge_mode: challengeMode,
+            investor_lens: investorLens,
+            create_decision: createDecision
+          }
         );
         
         const dataSources: DataSource[] = [];
@@ -536,6 +590,64 @@ export default function CopilotPage() {
                 <span>{prompt.label}</span>
               </Button>
             ))}
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-secondary/50 border border-border/30">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Mode:</span>
+              <Select value={mode} onValueChange={(v) => setMode(v as 'advisor' | 'analyst' | 'pitch')}>
+                <SelectTrigger className="w-24 h-7 text-xs" data-testid="select-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="advisor">Advisor</SelectItem>
+                  <SelectItem value="analyst">Analyst</SelectItem>
+                  <SelectItem value="pitch">Pitch</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Investor Lens:</span>
+              <Select value={investorLens || 'none'} onValueChange={(v) => setInvestorLens(v === 'none' ? null : v)}>
+                <SelectTrigger className="w-28 h-7 text-xs" data-testid="select-investor-lens">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="seed">Seed</SelectItem>
+                  <SelectItem value="series_a">Series A</SelectItem>
+                  <SelectItem value="series_b">Series B</SelectItem>
+                  <SelectItem value="pe">PE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <Switch 
+                id="challenge-mode" 
+                checked={challengeMode} 
+                onCheckedChange={setChallengeMode}
+                data-testid="switch-challenge-mode"
+              />
+              <label htmlFor="challenge-mode" className="text-xs flex items-center gap-1 cursor-pointer">
+                <Shield className="h-3 w-3" />
+                Challenge
+              </label>
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <Switch 
+                id="create-decision" 
+                checked={createDecision} 
+                onCheckedChange={setCreateDecision}
+                data-testid="switch-create-decision"
+              />
+              <label htmlFor="create-decision" className="text-xs flex items-center gap-1 cursor-pointer">
+                <FileText className="h-3 w-3" />
+                Track Decision
+              </label>
+            </div>
           </div>
           
           <div className="flex gap-2">
