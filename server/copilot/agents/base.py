@@ -49,8 +49,33 @@ class AgentResponse:
 
 
 @dataclass
+class CKBLayer:
+    """Base layer for structured CKB data."""
+    items: List[Dict[str, Any]] = field(default_factory=list)
+    
+    def add(self, item: Dict[str, Any]) -> None:
+        """Add an item to the layer."""
+        from datetime import datetime
+        item["added_at"] = datetime.utcnow().isoformat()
+        self.items.append(item)
+        if len(self.items) > 100:
+            self.items = self.items[-100:]
+    
+    def to_dict(self) -> List[Dict[str, Any]]:
+        return self.items
+
+
+@dataclass
 class CompanyKnowledgeBase:
-    """Company Knowledge Base (CKB) - shared context across agents."""
+    """
+    Company Knowledge Base (CKB) v2 - shared context across agents.
+    
+    Organized into four layers:
+    - facts: Verified data from documents, APIs, user confirmations
+    - beliefs: Inferences and estimates with confidence levels
+    - decisions: Tracked decisions with options and outcomes
+    - outcomes: Results and learnings from past decisions
+    """
     company_id: int
     company_name: str
     industry: str = ""
@@ -67,6 +92,80 @@ class CompanyKnowledgeBase:
     risks: List[str] = field(default_factory=list)
     decisions_made: List[Dict[str, Any]] = field(default_factory=list)
     
+    facts: List[Dict[str, Any]] = field(default_factory=list)
+    beliefs: List[Dict[str, Any]] = field(default_factory=list)
+    decisions_v2: List[Dict[str, Any]] = field(default_factory=list)
+    outcomes: List[Dict[str, Any]] = field(default_factory=list)
+    
+    def add_fact(self, category: str, key: str, value: Any, source: str, confidence: str = "high") -> None:
+        """Add a verified fact to the CKB."""
+        from datetime import datetime
+        self.facts.append({
+            "category": category,
+            "key": key,
+            "value": value,
+            "source": source,
+            "confidence": confidence,
+            "added_at": datetime.utcnow().isoformat()
+        })
+        if len(self.facts) > 200:
+            self.facts = self.facts[-200:]
+    
+    def add_belief(self, category: str, belief: str, reasoning: str, confidence: str = "medium") -> None:
+        """Add an inference/belief to the CKB."""
+        from datetime import datetime
+        self.beliefs.append({
+            "category": category,
+            "belief": belief,
+            "reasoning": reasoning,
+            "confidence": confidence,
+            "added_at": datetime.utcnow().isoformat()
+        })
+        if len(self.beliefs) > 100:
+            self.beliefs = self.beliefs[-100:]
+    
+    def add_decision(self, decision_id: str, title: str, context: str, 
+                     options: List[Dict], recommendation: Dict, status: str = "proposed") -> None:
+        """Track a decision in the CKB."""
+        from datetime import datetime
+        self.decisions_v2.append({
+            "decision_id": decision_id,
+            "title": title,
+            "context": context,
+            "options": options,
+            "recommendation": recommendation,
+            "status": status,
+            "created_at": datetime.utcnow().isoformat()
+        })
+        if len(self.decisions_v2) > 50:
+            self.decisions_v2 = self.decisions_v2[-50:]
+    
+    def add_outcome(self, decision_id: str, result: str, metrics_impact: Dict[str, Any], 
+                    learnings: List[str]) -> None:
+        """Record the outcome of a decision."""
+        from datetime import datetime
+        self.outcomes.append({
+            "decision_id": decision_id,
+            "result": result,
+            "metrics_impact": metrics_impact,
+            "learnings": learnings,
+            "recorded_at": datetime.utcnow().isoformat()
+        })
+        if len(self.outcomes) > 50:
+            self.outcomes = self.outcomes[-50:]
+    
+    def get_facts_by_category(self, category: str) -> List[Dict[str, Any]]:
+        """Get all facts for a specific category."""
+        return [f for f in self.facts if f.get("category") == category]
+    
+    def get_high_confidence_beliefs(self) -> List[Dict[str, Any]]:
+        """Get beliefs with high confidence."""
+        return [b for b in self.beliefs if b.get("confidence") == "high"]
+    
+    def get_pending_decisions(self) -> List[Dict[str, Any]]:
+        """Get decisions that are still pending."""
+        return [d for d in self.decisions_v2 if d.get("status") in ["proposed", "pending"]]
+    
     def to_dict(self) -> Dict[str, Any]:
         return {
             "company_id": self.company_id,
@@ -81,7 +180,11 @@ class CompanyKnowledgeBase:
             "icp": self.icp,
             "competitors": self.competitors,
             "risks": self.risks,
-            "decisions_made": self.decisions_made
+            "decisions_made": self.decisions_made,
+            "facts": self.facts,
+            "beliefs": self.beliefs,
+            "decisions_v2": self.decisions_v2,
+            "outcomes": self.outcomes
         }
     
     @classmethod
@@ -99,7 +202,11 @@ class CompanyKnowledgeBase:
             icp=data.get("icp", {}),
             competitors=data.get("competitors", []),
             risks=data.get("risks", []),
-            decisions_made=data.get("decisions_made", [])
+            decisions_made=data.get("decisions_made", []),
+            facts=data.get("facts", []),
+            beliefs=data.get("beliefs", []),
+            decisions_v2=data.get("decisions_v2", []),
+            outcomes=data.get("outcomes", [])
         )
 
 

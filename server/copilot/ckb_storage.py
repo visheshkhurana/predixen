@@ -54,6 +54,10 @@ class CKBStorage:
             ckb.competitors = ckb_data.get("competitors", [])
             ckb.risks = ckb_data.get("risks", [])
             ckb.decisions_made = ckb_data.get("decisions_made", [])
+            ckb.facts = ckb_data.get("facts", [])
+            ckb.beliefs = ckb_data.get("beliefs", [])
+            ckb.decisions_v2 = ckb_data.get("decisions_v2", [])
+            ckb.outcomes = ckb_data.get("outcomes", [])
         
         ckb = self._enrich_from_truth_scan(ckb, company_id)
         
@@ -81,6 +85,10 @@ class CKBStorage:
             "competitors": ckb.competitors,
             "risks": ckb.risks,
             "decisions_made": ckb.decisions_made,
+            "facts": ckb.facts,
+            "beliefs": ckb.beliefs,
+            "decisions_v2": ckb.decisions_v2,
+            "outcomes": ckb.outcomes,
             "updated_at": datetime.utcnow().isoformat()
         }
         
@@ -104,7 +112,8 @@ class CKBStorage:
         
         valid_sections = [
             "overview", "financials", "market", "strategy",
-            "icp", "competitors", "risks", "decisions_made"
+            "icp", "competitors", "risks", "decisions_made",
+            "facts", "beliefs", "decisions_v2", "outcomes"
         ]
         
         if section not in valid_sections:
