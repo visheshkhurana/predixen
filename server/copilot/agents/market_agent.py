@@ -106,6 +106,27 @@ class TargetCustomer:
 
 
 @dataclass
+class MonthlyTarget:
+    """Monthly target company for outreach."""
+    company_name: str
+    industry: str
+    why_now: str
+    outreach_channel: str
+    talking_points: List[str] = field(default_factory=list)
+    priority: str = "medium"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "company_name": self.company_name,
+            "industry": self.industry,
+            "why_now": self.why_now,
+            "outreach_channel": self.outreach_channel,
+            "talking_points": self.talking_points,
+            "priority": self.priority
+        }
+
+
+@dataclass
 class MarketResearch:
     """Complete market research output."""
     category: str = ""
@@ -115,6 +136,7 @@ class MarketResearch:
     competitors: List[Competitor] = field(default_factory=list)
     icp: Optional[IdealCustomerProfile] = None
     target_customers: List[TargetCustomer] = field(default_factory=list)
+    monthly_targets: List[MonthlyTarget] = field(default_factory=list)
     
     benchmarks: Dict[str, Any] = field(default_factory=dict)
     pricing_signals: List[str] = field(default_factory=list)
@@ -132,6 +154,7 @@ class MarketResearch:
             "competitors": [c.to_dict() for c in self.competitors],
             "icp": self.icp.to_dict() if self.icp else None,
             "target_customers": [tc.to_dict() for tc in self.target_customers],
+            "this_month_targets": [mt.to_dict() for mt in self.monthly_targets],
             "benchmarks": self.benchmarks,
             "pricing_signals": self.pricing_signals,
             "sources": self.sources,
@@ -208,6 +231,9 @@ class MarketAgent(BaseAgent):
         
         research.target_customers = self._generate_target_customers(research.icp, research.category)
         findings.append(f"Identified {len(research.target_customers)} target customer segments")
+        
+        research.monthly_targets = self._generate_monthly_targets(research.icp, research.category, ckb)
+        findings.append(f"Generated {len(research.monthly_targets)} this-month target companies")
         
         benchmarks = self._get_industry_benchmarks(research.category)
         if benchmarks:
@@ -486,3 +512,82 @@ class MarketAgent(BaseAgent):
             risks.append("Limited competitive intelligence - may miss key threats")
         
         return risks
+    
+    def _generate_monthly_targets(
+        self,
+        icp: Optional[IdealCustomerProfile],
+        category: str,
+        ckb: CompanyKnowledgeBase
+    ) -> List[MonthlyTarget]:
+        """Generate This Month's Target companies for sales outreach."""
+        
+        targets = []
+        
+        industry = icp.industry[0] if icp and icp.industry else category
+        
+        targets.append(MonthlyTarget(
+            company_name="[High-Growth Company in Your Space]",
+            industry=industry,
+            why_now="Recently raised funding or announced expansion",
+            outreach_channel="LinkedIn + warm intro through investor network",
+            talking_points=[
+                "Congratulate on recent funding/news",
+                f"Share how similar {category} companies solved [pain point]",
+                "Offer a quick 15-minute discovery call"
+            ],
+            priority="high"
+        ))
+        
+        targets.append(MonthlyTarget(
+            company_name="[Enterprise Account in Target Vertical]",
+            industry=industry,
+            why_now="Announced digital transformation or new initiative",
+            outreach_channel="Executive email + industry event connection",
+            talking_points=[
+                "Reference their public initiative",
+                "Share relevant case study from similar company",
+                "Propose pilot program with clear ROI metrics"
+            ],
+            priority="high"
+        ))
+        
+        targets.append(MonthlyTarget(
+            company_name="[Competitor's Unhappy Customer]",
+            industry=industry,
+            why_now="Showing signs of vendor frustration (reviews, social posts)",
+            outreach_channel="Content marketing + targeted ads + SDR outreach",
+            talking_points=[
+                "Acknowledge the challenge without bashing competitor",
+                "Highlight key differentiators",
+                "Offer easy migration path"
+            ],
+            priority="medium"
+        ))
+        
+        targets.append(MonthlyTarget(
+            company_name="[Mid-Market Fast Grower]",
+            industry=industry,
+            why_now="Scaling rapidly and outgrowing current solutions",
+            outreach_channel="Product-led growth + webinar invitation",
+            talking_points=[
+                "Reference their growth trajectory",
+                "Show how you scale with them",
+                "Emphasize quick time-to-value"
+            ],
+            priority="medium"
+        ))
+        
+        targets.append(MonthlyTarget(
+            company_name="[Strategic Partner's Customer]",
+            industry=industry,
+            why_now="Already using complementary tool in your ecosystem",
+            outreach_channel="Partner referral + co-marketing",
+            talking_points=[
+                "Leverage partner relationship",
+                "Show integration benefits",
+                "Offer joint implementation support"
+            ],
+            priority="medium"
+        ))
+        
+        return targets
