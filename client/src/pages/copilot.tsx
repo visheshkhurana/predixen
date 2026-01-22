@@ -196,6 +196,9 @@ const SUGGESTED_PROMPTS = [
   { label: 'What if my fundraise slips by 3 months?', icon: DollarSign },
   { label: 'Who are my top competitors and how do I differentiate?', icon: Users },
   { label: 'What strategic options should I consider for growth?', icon: Lightbulb },
+  { label: 'How much dilution will I face in the next round?', icon: DollarSign },
+  { label: 'What valuation should I target for my Series A?', icon: TrendingUp },
+  { label: 'Help me prepare my investor data room checklist', icon: FileText },
 ];
 
 function StructuredResponseDisplay({ response, messageIndex, showSources }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean }) {

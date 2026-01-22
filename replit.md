@@ -71,9 +71,18 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Operating Cadence**: Workstreams API for weekly metrics, monthly board memos, quarterly strategy reviews with configurable KPIs.
     -   **Automated Alerts**: Rule-based alerts for runway <9mo, revenue decline >10%, CAC spike >15%.
     -   **Driver-Based Forecasting**: Templates for SaaS, marketplace, and services models with 12-month projections.
-9.  **Forecasting**: Holt-Winters exponential smoothing, linear regression.
-10. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
-11. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
+9.  **Copilot V6: Fundraising OS**: Comprehensive fundraising management module.
+    -   **Cap Table Management**: Database models for cap tables with common shares, preferred shares, option pools, and convertible notes.
+    -   **Cap Table Engine**: Pure Python functions for dilution calculations including `compute_fully_diluted`, `apply_equity_round`, `apply_safe_or_note`, `compute_ownership_summary`, and `simulate_round_scenarios`.
+    -   **Fundraising Rounds**: Track rounds with name, target raise, pre/post-money valuations, instrument type (equity/SAFE/note), and option pool refresh.
+    -   **Dilution Simulator**: Model the impact of fundraising rounds on ownership with multi-scenario comparison.
+    -   **Investor Room**: Automated generation of investor materials including markdown investor memo, stage-aware data room checklist (Legal, Finance, Team, Product, GTM categories), KPI snapshots from latest financials, and mode-specific FAQ (VC/Growth PE/Strategic).
+    -   **Investor Pipeline**: Track investors through stages (cold, warm, active, term_sheet, closed) with contact info and notes.
+    -   **Database Models**: `company_cap_tables`, `fundraising_rounds`, `round_terms`, `investors`, `investor_pipeline` tables.
+    -   **API Endpoints**: `/companies/{id}/cap-tables`, `/companies/{id}/fundraising/rounds`, `/companies/{id}/fundraising/simulate`, `/companies/{id}/investor-room/generate`.
+10. **Forecasting**: Holt-Winters exponential smoothing, linear regression.
+11. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
+12. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
 
 ### User Roles
 **Platform Level:**
