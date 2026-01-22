@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  Search, RefreshCw, Shield, Eye, Clock, Database, 
+  RefreshCw, Shield, Eye, Clock, 
   AlertTriangle, ChevronLeft, ChevronRight, Hash, Zap
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { api } from '@/api/client';
 
 interface LLMAuditLog {
   id: string;
@@ -38,16 +38,6 @@ interface LLMAuditLog {
   created_at: string;
 }
 
-interface AuditStats {
-  period_days: number;
-  total_requests: number;
-  total_tokens_in: number;
-  total_tokens_out: number;
-  avg_latency_ms: number;
-  pii_mode_breakdown: Record<string, number>;
-  requests_with_pii_detected: number;
-}
-
 const PII_MODE_COLORS: Record<string, string> = {
   off: 'bg-red-500/20 text-red-600 border-red-500/30',
   standard: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
@@ -62,31 +52,12 @@ export default function LLMAuditPage() {
 
   const { data: logsResponse, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['/admin/llm-audit', page, piiModeFilter],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: perPage.toString(),
-      });
-      if (piiModeFilter !== 'all') {
-        params.append('pii_mode', piiModeFilter);
-      }
-      const res = await fetch(`/api/admin/llm-audit?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch audit logs');
-      return res.json();
-    },
+    queryFn: () => api.admin.llmAudit.list(page, perPage, piiModeFilter !== 'all' ? piiModeFilter : undefined),
   });
 
-  const { data: stats } = useQuery<AuditStats>({
+  const { data: stats } = useQuery({
     queryKey: ['/admin/llm-audit/stats/summary'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/llm-audit/stats/summary', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch stats');
-      return res.json();
-    },
+    queryFn: () => api.admin.llmAudit.stats(),
   });
 
   const logs = logsResponse?.logs || [];
