@@ -16,6 +16,7 @@ from server.api import email_templates as email_templates_api
 from server.api import data_health as data_health_api
 from server.api import workstreams as workstreams_api
 from server.api import driver_models as driver_models_api
+from server.api import fundraising as fundraising_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ app.include_router(scenarios.router)
 app.include_router(data_health_api.router)
 app.include_router(workstreams_api.router)
 app.include_router(driver_models_api.router)
+app.include_router(fundraising_api.router)
 
 @app.get("/")
 def root():

@@ -38,6 +38,8 @@ import AdminLLMAudit from "@/pages/admin/llm-audit";
 import AdminEvals from "@/pages/admin/evals";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
+import FundraisingPage from "@/pages/fundraising";
+import InvestorRoomPage from "@/pages/investor-room";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -149,6 +151,12 @@ function Router() {
       </Route>
       <Route path="/templates">
         {() => <AuthenticatedRoute component={TemplatesPage} />}
+      </Route>
+      <Route path="/fundraising">
+        {() => <AuthenticatedRoute component={FundraisingPage} />}
+      </Route>
+      <Route path="/investor-room">
+        {() => <AuthenticatedRoute component={InvestorRoomPage} />}
       </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
