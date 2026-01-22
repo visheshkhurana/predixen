@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, Mail, Activity, BarChart3, 
   Building2, CreditCard, LogOut, ChevronRight,
-  Menu, X, FileText
+  Menu, X, FileText, Shield, FlaskConical
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -27,6 +27,8 @@ const navItems: NavItem[] = [
   { title: 'Billing', href: '/admin/billing', icon: CreditCard },
   { title: 'Metrics', href: '/admin/metrics', icon: BarChart3 },
   { title: 'Login History', href: '/admin/login-history', icon: Activity },
+  { title: 'LLM Audit', href: '/admin/llm-audit', icon: Shield },
+  { title: 'Evaluations', href: '/admin/evals', icon: FlaskConical },
 ];
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
