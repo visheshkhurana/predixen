@@ -32,6 +32,8 @@ import {
   HelpCircle,
   ExternalLink,
   Mail,
+  DollarSign,
+  Briefcase,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -79,6 +81,16 @@ const menuItems = [
     title: "Alerts",
     url: "/alerts",
     icon: Bell,
+  },
+  {
+    title: "Fundraising",
+    url: "/fundraising",
+    icon: DollarSign,
+  },
+  {
+    title: "Investor Room",
+    url: "/investor-room",
+    icon: Briefcase,
   },
   {
     title: "Integrations",
