@@ -133,6 +133,13 @@ interface CopilotApiResponse {
       suggested_fix: string;
     }>;
   };
+  pii_findings?: Array<{
+    type: string;
+    count: number;
+    examples: string[];
+    confidence: string;
+  }>;
+  pii_mode?: string;
 }
 
 interface Message {
@@ -369,7 +376,9 @@ export default function CopilotPage() {
   const [investorLens, setInvestorLens] = useState<string | null>(null);
   const [createDecision, setCreateDecision] = useState(false);
   const [showSources, setShowSources] = useState(false);
+  const [piiMode, setPiiMode] = useState<'off' | 'standard' | 'strict'>('standard');
   const [latestDataHealth, setLatestDataHealth] = useState<CopilotApiResponse['data_health'] | null>(null);
+  const [latestPiiFindings, setLatestPiiFindings] = useState<any[] | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -410,7 +419,9 @@ export default function CopilotPage() {
             mode,
             challenge_mode: challengeMode,
             investor_lens: investorLens,
-            create_decision: createDecision
+            create_decision: createDecision,
+            show_sources: showSources,
+            privacy: { pii_mode: piiMode }
           }
         );
         
@@ -434,6 +445,10 @@ export default function CopilotPage() {
         
         if (response.data_health) {
           setLatestDataHealth(response.data_health);
+        }
+        
+        if (response.pii_findings) {
+          setLatestPiiFindings(response.pii_findings);
         }
       } catch (error: any) {
         console.error('Copilot API error:', error);
@@ -723,6 +738,23 @@ export default function CopilotPage() {
                 <Link2 className="h-3 w-3" />
                 Show Sources
               </label>
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Privacy:
+              </label>
+              <Select value={piiMode} onValueChange={(v: 'off' | 'standard' | 'strict') => setPiiMode(v)} data-testid="select-pii-mode">
+                <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-pii-mode-trigger">
+                  <SelectValue placeholder="Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="off">Off</SelectItem>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="strict">Strict</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
