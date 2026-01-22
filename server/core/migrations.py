@@ -73,9 +73,23 @@ def ensure_invites_table(engine: Engine) -> None:
             logger.debug(f"Invites table may already exist: {e}")
 
 
+def ensure_company_metadata_column(engine: Engine) -> None:
+    """Ensure the metadata_json column exists in companies table for CKB storage."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'"
+            ))
+            conn.commit()
+            logger.info("Companies metadata_json column migration complete")
+        except Exception as e:
+            logger.debug(f"metadata_json column may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
     ensure_financial_record_columns(engine)
     ensure_invites_table(engine)
+    ensure_company_metadata_column(engine)
     logger.info("Database migrations completed successfully")

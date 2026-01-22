@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from server.core.db import Base
@@ -13,6 +13,7 @@ class Company(Base):
     industry = Column(String, nullable=True)
     stage = Column(String, nullable=True)
     currency = Column(String, default="USD")
+    metadata_json = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="companies")

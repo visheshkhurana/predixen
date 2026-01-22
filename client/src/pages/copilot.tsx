@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { 
   Send, 
@@ -17,12 +19,53 @@ import {
   BarChart3, 
   Target,
   Bot,
-  User
+  User,
+  ChevronDown,
+  AlertTriangle,
+  Lightbulb,
+  Users,
+  Building2,
+  HelpCircle
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
-type DataSource = 'truth_scan' | 'simulation' | 'scenario' | 'benchmark';
+type DataSource = 'truth_scan' | 'simulation' | 'scenario' | 'benchmark' | 'cfo_agent' | 'market_agent' | 'strategy_agent';
+
+interface CopilotApiResponse {
+  executive_summary: string[];
+  company_snapshot: string[];
+  financials?: {
+    metrics?: Record<string, any>;
+    extracted?: Record<string, any>;
+    health_score?: number;
+  };
+  market_and_customers?: {
+    icp?: any;
+    competitors?: any[];
+    benchmarks?: Record<string, any>;
+  };
+  strategy_options?: Array<{
+    title: string;
+    description: string;
+    impact: string;
+    risk_level: string;
+    timeline: string;
+  }>;
+  recommendations?: Array<{
+    action: string;
+    priority: string;
+    rationale: string;
+    expected_impact: string;
+  }>;
+  assumptions: string[];
+  risks: string[];
+  next_questions: string[];
+  confidence: string;
+  ckb_updated: boolean;
+}
 
 interface Message {
   role: 'user' | 'assistant';
@@ -31,6 +74,7 @@ interface Message {
   dataSources?: DataSource[];
   suggestion?: { label: string; action: string };
   timestamp?: Date;
+  structuredResponse?: CopilotApiResponse;
 }
 
 const DATA_SOURCE_CONFIG: Record<DataSource, { label: string; icon: typeof Database; className: string }> = {
@@ -54,16 +98,156 @@ const DATA_SOURCE_CONFIG: Record<DataSource, { label: string; icon: typeof Datab
     icon: TrendingUp, 
     className: 'bg-amber-500/20 text-amber-400 border-amber-500/30' 
   },
+  cfo_agent: { 
+    label: 'CFO Agent', 
+    icon: DollarSign, 
+    className: 'bg-green-500/20 text-green-400 border-green-500/30' 
+  },
+  market_agent: { 
+    label: 'Market Agent', 
+    icon: Users, 
+    className: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' 
+  },
+  strategy_agent: { 
+    label: 'Strategy Agent', 
+    icon: Building2, 
+    className: 'bg-orange-500/20 text-orange-400 border-orange-500/30' 
+  },
 };
 
 const SUGGESTED_PROMPTS = [
   { label: 'How can I extend my runway by 6 months?', icon: TrendingUp },
   { label: "What's the riskiest assumption in my financials?", icon: TrendingDown },
   { label: 'What if my fundraise slips by 3 months?', icon: DollarSign },
+  { label: 'Who are my top competitors and how do I differentiate?', icon: Users },
+  { label: 'What strategic options should I consider for growth?', icon: Lightbulb },
 ];
 
+function StructuredResponseDisplay({ response, messageIndex }: { response: CopilotApiResponse; messageIndex: number }) {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+  
+  return (
+    <div className="mt-4 space-y-3">
+      {response.company_snapshot && response.company_snapshot.length > 0 && (
+        <Collapsible open={openSections['snapshot']} onOpenChange={() => toggleSection('snapshot')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-snapshot-${messageIndex}`}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['snapshot'] ? 'rotate-180' : ''}`} />
+            <Building2 className="h-4 w-4" />
+            Company Snapshot
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 pl-6 space-y-1">
+            {response.company_snapshot.map((item, i) => (
+              <p key={i} className="text-xs text-muted-foreground">{item}</p>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      
+      {response.strategy_options && response.strategy_options.length > 0 && (
+        <Collapsible open={openSections['strategy']} onOpenChange={() => toggleSection('strategy')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-strategy-${messageIndex}`}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['strategy'] ? 'rotate-180' : ''}`} />
+            <Lightbulb className="h-4 w-4" />
+            Strategic Options ({response.strategy_options.length})
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 pl-6 space-y-2">
+            {response.strategy_options.map((option, i) => (
+              <div key={i} className="p-2 rounded bg-card/50 border border-border/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{option.title}</span>
+                  <Badge variant="outline" className={option.risk_level === 'Low' ? 'text-green-400' : option.risk_level === 'High' ? 'text-red-400' : 'text-yellow-400'}>
+                    {option.risk_level} Risk
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
+                <div className="flex gap-4 mt-2 text-xs">
+                  <span>Impact: {option.impact}</span>
+                  <span>Timeline: {option.timeline}</span>
+                </div>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      
+      {response.recommendations && response.recommendations.length > 0 && (
+        <Collapsible open={openSections['recommendations']} onOpenChange={() => toggleSection('recommendations')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-recommendations-${messageIndex}`}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['recommendations'] ? 'rotate-180' : ''}`} />
+            <Target className="h-4 w-4" />
+            Recommendations ({response.recommendations.length})
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 pl-6 space-y-2">
+            {response.recommendations.map((rec, i) => (
+              <div key={i} className="p-2 rounded bg-card/50 border border-border/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{rec.action}</span>
+                  <Badge variant="outline" className={rec.priority === 'High' ? 'text-red-400' : rec.priority === 'Low' ? 'text-green-400' : 'text-yellow-400'}>
+                    {rec.priority} Priority
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{rec.rationale}</p>
+                <p className="text-xs text-primary mt-1">Expected: {rec.expected_impact}</p>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      
+      {response.risks && response.risks.length > 0 && (
+        <Collapsible open={openSections['risks']} onOpenChange={() => toggleSection('risks')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-risks-${messageIndex}`}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['risks'] ? 'rotate-180' : ''}`} />
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            Risks & Considerations ({response.risks.length})
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 pl-6">
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+              {response.risks.map((risk, i) => (
+                <li key={i}>{risk}</li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+      
+      {response.next_questions && response.next_questions.length > 0 && (
+        <div className="pt-2 border-t border-border/30">
+          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+            <HelpCircle className="h-3 w-3" />
+            Suggested follow-ups:
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {response.next_questions.slice(0, 3).map((q, i) => (
+              <Badge key={i} variant="outline" className="text-xs cursor-pointer hover:bg-primary/10">
+                {q}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Badge variant="outline" className={response.confidence === 'High' ? 'text-green-400 border-green-500/30' : response.confidence === 'Low' ? 'text-red-400 border-red-500/30' : 'text-yellow-400 border-yellow-500/30'}>
+          {response.confidence} Confidence
+        </Badge>
+        {response.ckb_updated && (
+          <Badge variant="outline" className="text-blue-400 border-blue-500/30">
+            Knowledge Base Updated
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CopilotPage() {
-  const { currentCompany } = useFounderStore();
+  const { currentCompany, token } = useFounderStore();
+  const { toast } = useToast();
   const { data: truthScan, isLoading: truthLoading } = useTruthScan(currentCompany?.id || null);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const latestScenario = scenarios?.[0];
@@ -72,12 +256,13 @@ export default function CopilotPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: "I'm your AI financial advisor. I can help you understand your metrics, explore scenarios, and make data-driven decisions. What would you like to know?",
+      content: "I'm your AI financial advisor powered by a multi-agent system. I can analyze your financials (CFO Agent), research your market (Market Agent), and develop strategy (Strategy Agent). What would you like to explore?",
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [useApiMode, setUseApiMode] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -96,8 +281,8 @@ export default function CopilotPage() {
     scrollToBottom();
   }, [messages, isTyping]);
   
-  const sendMessage = (messageText: string) => {
-    if (!messageText.trim() || isTyping) return;
+  const sendMessage = async (messageText: string) => {
+    if (!messageText.trim() || isTyping || !currentCompany) return;
     
     const userMessage: Message = { 
       role: 'user', 
@@ -108,11 +293,48 @@ export default function CopilotPage() {
     setInput('');
     setIsTyping(true);
     
-    setTimeout(() => {
-      const response = generateResponse(messageText, metrics, confidence);
-      setMessages((prev) => [...prev, response]);
-      setIsTyping(false);
-    }, 1500);
+    if (useApiMode && token) {
+      try {
+        const response = await apiRequest<CopilotApiResponse>(
+          'POST',
+          `/companies/${currentCompany.id}/chat`,
+          { message: messageText }
+        );
+        
+        const dataSources: DataSource[] = [];
+        if (response.financials) dataSources.push('cfo_agent');
+        if (response.market_and_customers) dataSources.push('market_agent');
+        if (response.strategy_options) dataSources.push('strategy_agent');
+        
+        const summary = Array.isArray(response.executive_summary) 
+          ? response.executive_summary.join('\n\n')
+          : 'Response received but could not be parsed.';
+        
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: summary || 'No summary available.',
+          dataSources,
+          timestamp: new Date(),
+          structuredResponse: response,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } catch (error: any) {
+        console.error('Copilot API error:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to get response from Copilot. Using fallback mode.',
+          variant: 'destructive',
+        });
+        const fallbackResponse = generateResponse(messageText, metrics, confidence);
+        setMessages((prev) => [...prev, fallbackResponse]);
+      }
+    } else {
+      setTimeout(() => {
+        const response = generateResponse(messageText, metrics, confidence);
+        setMessages((prev) => [...prev, response]);
+      }, 1500);
+    }
+    setIsTyping(false);
   };
 
   const handleSend = () => {
@@ -249,6 +471,10 @@ export default function CopilotPage() {
                         ))}
                       </div>
                     </div>
+                  )}
+                  
+                  {message.structuredResponse && (
+                    <StructuredResponseDisplay response={message.structuredResponse} messageIndex={i} />
                   )}
                   
                   {message.suggestion && (
