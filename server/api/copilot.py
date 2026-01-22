@@ -153,3 +153,149 @@ def compare_decisions(
         "recommendations": recommendations,
         "compared_actions": request.action_ids
     }
+
+
+class CopilotChatRequest(BaseModel):
+    """Request for copilot chat."""
+    message: str
+    include_financials: bool = True
+    include_market: bool = False
+    include_strategy: bool = True
+
+
+class CopilotChatResponse(BaseModel):
+    """Response from copilot chat."""
+    executive_summary: List[str]
+    company_snapshot: List[str]
+    financials: Optional[Dict[str, Any]] = None
+    market_and_customers: Optional[Dict[str, Any]] = None
+    strategy_options: Optional[List[Dict[str, Any]]] = None
+    recommendations: Optional[List[Dict[str, Any]]] = None
+    assumptions: List[str]
+    risks: List[str]
+    next_questions: List[str]
+    confidence: str
+    ckb_updated: bool = False
+
+
+@router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
+async def copilot_chat(
+    company_id: int,
+    request: CopilotChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Multi-agent copilot chat endpoint.
+    
+    Routes the user's message to appropriate specialist agents (CFO, Market, Strategy)
+    and returns a structured, actionable response.
+    """
+    from server.copilot.agents import RouterAgent
+    from server.copilot.agents.base import CompanyKnowledgeBase
+    from server.copilot.ckb_storage import CKBStorage
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    ckb_storage = CKBStorage(db)
+    ckb = ckb_storage.get_ckb(company_id)
+    
+    if not ckb:
+        ckb = CompanyKnowledgeBase(
+            company_id=company.id,
+            company_name=company.name or "",
+            industry=company.industry or "",
+            stage=company.stage or "",
+            currency=company.currency or "USD"
+        )
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    context = {
+        "has_document": False,
+        "extracted_financials": None,
+        "truth_scan": truth_scan.outputs_json if truth_scan else None
+    }
+    
+    router = RouterAgent()
+    response = await router.process(request.message, ckb, context)
+    
+    ckb_storage.save_ckb(ckb)
+    
+    output = response.structured_output
+    
+    return CopilotChatResponse(
+        executive_summary=output.get("executive_summary", []),
+        company_snapshot=output.get("company_snapshot", []),
+        financials=output.get("financials"),
+        market_and_customers=output.get("market_and_customers"),
+        strategy_options=output.get("strategy_options"),
+        recommendations=output.get("recommendations"),
+        assumptions=response.assumptions,
+        risks=response.risks,
+        next_questions=response.next_questions,
+        confidence=response.confidence.value,
+        ckb_updated=True
+    )
+
+
+@router.get("/companies/{company_id}/ckb", response_model=Dict[str, Any])
+def get_company_knowledge_base(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the Company Knowledge Base for a company."""
+    from server.copilot.ckb_storage import CKBStorage
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    ckb_storage = CKBStorage(db)
+    ckb = ckb_storage.get_ckb(company_id)
+    
+    if not ckb:
+        return {"company_id": company_id, "message": "No CKB data available"}
+    
+    return ckb.to_dict()
+
+
+@router.put("/companies/{company_id}/ckb/{section}")
+def update_ckb_section(
+    company_id: int,
+    section: str,
+    data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a specific section of the Company Knowledge Base."""
+    from server.copilot.ckb_storage import CKBStorage
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    ckb_storage = CKBStorage(db)
+    success = ckb_storage.update_ckb_section(company_id, section, data)
+    
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to update {section}")
+    
+    return {"success": True, "section": section}
