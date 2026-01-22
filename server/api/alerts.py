@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 from server.core.db import get_db
+from server.core.security import get_current_user
+from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
 from server.alerts import (
@@ -43,12 +45,16 @@ class CovenantCheckRequest(BaseModel):
 def get_company_alerts(
     company_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all active alerts for a company.
     Checks for anomalies, threshold breaches, and runway warnings.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
@@ -111,11 +117,15 @@ def analyze_company_health(
     company_id: int,
     config: Optional[AlertConfigRequest] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Comprehensive health analysis for a company.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     

@@ -140,6 +140,107 @@ def ensure_company_scenarios_table(engine: Engine) -> None:
             logger.debug(f"Company scenarios table may already exist: {e}")
 
 
+def ensure_company_sources_table(engine: Engine) -> None:
+    """Ensure the company_sources table exists for citations."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_sources (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    kind VARCHAR(20) NOT NULL,
+                    title TEXT,
+                    url TEXT,
+                    doc_id TEXT,
+                    page INTEGER,
+                    table_id TEXT,
+                    row_ref TEXT,
+                    cell_ref TEXT,
+                    snippet TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_sources_company ON company_sources(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_sources_kind ON company_sources(kind)"))
+            conn.commit()
+            logger.info("Company sources table migration complete")
+        except Exception as e:
+            logger.debug(f"Company sources table may already exist: {e}")
+
+
+def ensure_company_workstreams_table(engine: Engine) -> None:
+    """Ensure the company_workstreams table exists for operating cadence."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_workstreams (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    name VARCHAR(255) NOT NULL,
+                    cadence VARCHAR(20) NOT NULL,
+                    enabled BOOLEAN DEFAULT TRUE,
+                    config_json JSONB DEFAULT '{}'::jsonb,
+                    last_run_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_workstreams_company ON company_workstreams(company_id)"))
+            conn.commit()
+            logger.info("Company workstreams table migration complete")
+        except Exception as e:
+            logger.debug(f"Company workstreams table may already exist: {e}")
+
+
+def ensure_company_alerts_table(engine: Engine) -> None:
+    """Ensure the company_alerts table exists for alerts/reminders."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_alerts (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    type VARCHAR(50) NOT NULL,
+                    severity VARCHAR(20) DEFAULT 'medium',
+                    message TEXT,
+                    rule_json JSONB DEFAULT '{}'::jsonb,
+                    triggered_at TIMESTAMP DEFAULT NOW(),
+                    resolved_at TIMESTAMP,
+                    status VARCHAR(20) DEFAULT 'open'
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_alerts_company ON company_alerts(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_alerts_status ON company_alerts(status)"))
+            conn.commit()
+            logger.info("Company alerts table migration complete")
+        except Exception as e:
+            logger.debug(f"Company alerts table may already exist: {e}")
+
+
+def ensure_company_driver_models_table(engine: Engine) -> None:
+    """Ensure the company_driver_models table exists for forecasting."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_driver_models (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    model_name VARCHAR(255) NOT NULL,
+                    template VARCHAR(50) NOT NULL,
+                    drivers_json JSONB DEFAULT '{}'::jsonb,
+                    assumptions_json JSONB DEFAULT '{}'::jsonb,
+                    outputs_json JSONB DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_driver_models_company ON company_driver_models(company_id)"))
+            conn.commit()
+            logger.info("Company driver models table migration complete")
+        except Exception as e:
+            logger.debug(f"Company driver models table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -148,4 +249,8 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_metadata_column(engine)
     ensure_company_decisions_table(engine)
     ensure_company_scenarios_table(engine)
+    ensure_company_sources_table(engine)
+    ensure_company_workstreams_table(engine)
+    ensure_company_alerts_table(engine)
+    ensure_company_driver_models_table(engine)
     logger.info("Database migrations completed successfully")

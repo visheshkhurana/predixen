@@ -30,3 +30,7 @@ class Company(Base):
     notifications = relationship("Notification", back_populates="company")
     company_decisions = relationship("CompanyDecision", back_populates="company")
     company_scenarios = relationship("CompanyScenario", back_populates="company")
+    company_sources = relationship("CompanySource", back_populates="company")
+    company_workstreams = relationship("CompanyWorkstream", back_populates="company")
+    company_alerts = relationship("CompanyAlert", back_populates="company")
+    company_driver_models = relationship("CompanyDriverModel", back_populates="company")
