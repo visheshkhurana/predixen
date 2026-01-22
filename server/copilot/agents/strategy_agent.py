@@ -211,14 +211,15 @@ class StrategyAgent(BaseAgent):
         
         if ckb.financials:
             fin = ckb.financials
-            if fin.get("pnl", {}).get("revenue"):
-                diagnosis["current_revenue"] = self.format_currency(
-                    fin["pnl"]["revenue"], ckb.currency
-                )
-            if fin.get("pnl", {}).get("gross_margin"):
-                diagnosis["gross_margin"] = f"{fin['pnl']['gross_margin']:.1f}%"
-            if fin.get("cashflow", {}).get("runway_months"):
-                diagnosis["runway"] = f"{fin['cashflow']['runway_months']:.0f} months"
+            revenue = (fin.get("pnl") or {}).get("revenue")
+            if isinstance(revenue, (int, float)):
+                diagnosis["current_revenue"] = self.format_currency(revenue, ckb.currency)
+            gross_margin = (fin.get("pnl") or {}).get("gross_margin")
+            if isinstance(gross_margin, (int, float)):
+                diagnosis["gross_margin"] = f"{gross_margin:.1f}%"
+            runway = (fin.get("cashflow") or {}).get("runway_months")
+            if isinstance(runway, (int, float)):
+                diagnosis["runway"] = f"{runway:.0f} months"
         
         return diagnosis
     

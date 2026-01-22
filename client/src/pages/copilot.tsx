@@ -414,7 +414,7 @@ export default function CopilotPage() {
     
     if (useApiMode && token) {
       try {
-        const response = await apiRequest<CopilotApiResponse>(
+        const res = await apiRequest(
           'POST',
           `/companies/${currentCompany.id}/chat`,
           { 
@@ -428,14 +428,31 @@ export default function CopilotPage() {
           }
         );
         
+        // Parse JSON response
+        const response = await res.json() as CopilotApiResponse;
+        
         const dataSources: DataSource[] = [];
         if (response.financials) dataSources.push('cfo_agent');
         if (response.market_and_customers) dataSources.push('market_agent');
         if (response.strategy_options) dataSources.push('strategy_agent');
         
-        const summary = Array.isArray(response.executive_summary) 
-          ? response.executive_summary.join('\n\n')
-          : 'Response received but could not be parsed.';
+        // More robust parsing with fallback handling
+        let summary = 'No summary available.';
+        if (response && response.executive_summary) {
+          if (Array.isArray(response.executive_summary)) {
+            summary = response.executive_summary.filter(s => s && typeof s === 'string').join('\n\n');
+          } else if (typeof response.executive_summary === 'string') {
+            summary = response.executive_summary;
+          }
+        }
+        if (!summary || summary.trim() === '') {
+          // Fallback to recommendations if available
+          if (response.recommendations && Array.isArray(response.recommendations) && response.recommendations.length > 0) {
+            summary = response.recommendations.map((r: any) => r.name || r.description || JSON.stringify(r)).join('\n\n');
+          } else {
+            summary = 'Analysis complete. See details in the structured response below.';
+          }
+        }
         
         const assistantMessage: Message = {
           role: 'assistant',

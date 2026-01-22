@@ -196,7 +196,7 @@ class CFOAgent(BaseAgent):
         next_questions = []
         if metrics.data_gaps:
             next_questions.append(f"Can you provide: {', '.join(metrics.data_gaps[:3])}?")
-        if metrics.runway_months and metrics.runway_months < 12:
+        if isinstance(metrics.runway_months, (int, float)) and metrics.runway_months < 12:
             next_questions.append("What are your fundraising plans?")
         if not metrics.cac or not metrics.ltv:
             next_questions.append("What are your customer acquisition costs and lifetime value?")
@@ -296,7 +296,9 @@ class CFOAgent(BaseAgent):
         if metrics.cash_balance is None:
             metrics.cash_balance = ts_metrics.get("cash_balance")
         if metrics.runway_months is None:
-            metrics.runway_months = ts_metrics.get("runway_months")
+            runway_val = ts_metrics.get("runway_months")
+            if isinstance(runway_val, (int, float)):
+                metrics.runway_months = runway_val
         
         if ts_metrics.get("revenue_growth_mom"):
             metrics.revenue_growth_mom = ts_metrics.get("revenue_growth_mom")
@@ -320,7 +322,9 @@ class CFOAgent(BaseAgent):
         metrics.operating_margin = pnl.get("operating_margin")
         metrics.cash_balance = balance.get("cash_balance")
         metrics.burn_rate = cashflow.get("burn_rate")
-        metrics.runway_months = cashflow.get("runway_months")
+        runway_val = cashflow.get("runway_months")
+        if isinstance(runway_val, (int, float)):
+            metrics.runway_months = runway_val
         metrics.arpu = unit_econ.get("arpu")
         metrics.cac = unit_econ.get("cac")
         metrics.ltv = unit_econ.get("ltv")
@@ -334,25 +338,26 @@ class CFOAgent(BaseAgent):
         
         insights = []
         
-        if metrics.revenue and metrics.cogs:
+        if isinstance(metrics.revenue, (int, float)) and isinstance(metrics.cogs, (int, float)) and metrics.revenue > 0:
             metrics.gross_profit = metrics.revenue - metrics.cogs
             metrics.gross_margin = (metrics.gross_profit / metrics.revenue) * 100
             insights.append(f"Gross Margin: {metrics.gross_margin:.1f}%")
         
-        if metrics.revenue and metrics.opex:
-            metrics.operating_income = metrics.revenue - (metrics.cogs or 0) - metrics.opex
+        if isinstance(metrics.revenue, (int, float)) and isinstance(metrics.opex, (int, float)) and metrics.revenue > 0:
+            cogs_val = metrics.cogs if isinstance(metrics.cogs, (int, float)) else 0
+            metrics.operating_income = metrics.revenue - cogs_val - metrics.opex
             metrics.operating_margin = (metrics.operating_income / metrics.revenue) * 100
             insights.append(f"Operating Margin: {metrics.operating_margin:.1f}%")
         
-        if metrics.cash_balance and metrics.burn_rate and metrics.burn_rate > 0:
+        if isinstance(metrics.cash_balance, (int, float)) and isinstance(metrics.burn_rate, (int, float)) and metrics.burn_rate > 0:
             metrics.runway_months = metrics.cash_balance / metrics.burn_rate
             insights.append(f"Runway: {metrics.runway_months:.1f} months")
         
-        if metrics.ltv and metrics.cac and metrics.cac > 0:
+        if isinstance(metrics.ltv, (int, float)) and isinstance(metrics.cac, (int, float)) and metrics.cac > 0:
             metrics.ltv_cac_ratio = metrics.ltv / metrics.cac
             insights.append(f"LTV/CAC Ratio: {metrics.ltv_cac_ratio:.1f}x")
         
-        if metrics.mrr:
+        if isinstance(metrics.mrr, (int, float)) and metrics.mrr:
             metrics.arr = metrics.mrr * 12
             insights.append(f"ARR: {self.format_currency(metrics.arr, metrics.currency_base)}")
         
@@ -363,17 +368,17 @@ class CFOAgent(BaseAgent):
         
         findings = []
         
-        if metrics.revenue:
+        if isinstance(metrics.revenue, (int, float)) and metrics.revenue:
             findings.append(f"Monthly Revenue: {self.format_currency(metrics.revenue, metrics.currency_base)}")
         
-        if metrics.gross_margin:
+        if isinstance(metrics.gross_margin, (int, float)):
             status = "healthy" if metrics.gross_margin > 50 else "needs improvement" if metrics.gross_margin > 30 else "concerning"
             findings.append(f"Gross Margin: {metrics.gross_margin:.1f}% ({status})")
         
-        if metrics.burn_rate:
+        if isinstance(metrics.burn_rate, (int, float)) and metrics.burn_rate:
             findings.append(f"Monthly Burn: {self.format_currency(metrics.burn_rate, metrics.currency_base)}")
         
-        if metrics.runway_months:
+        if isinstance(metrics.runway_months, (int, float)):
             status = "comfortable" if metrics.runway_months > 18 else "adequate" if metrics.runway_months > 12 else "urgent"
             findings.append(f"Runway: {metrics.runway_months:.0f} months ({status})")
         
@@ -388,7 +393,7 @@ class CFOAgent(BaseAgent):
         
         assumptions = []
         
-        source_currency = context.get("extracted_financials", {}).get("currency")
+        source_currency = (context.get("extracted_financials") or {}).get("currency")
         if source_currency and source_currency != metrics.currency_base:
             rate = self.FX_RATES.get(source_currency, 1.0)
             assumptions.append(f"Currency converted from {source_currency} to USD at approx rate {rate}")
@@ -401,26 +406,31 @@ class CFOAgent(BaseAgent):
         
         return assumptions
     
+    def _is_number(self, val: Any) -> bool:
+        """Check if a value is a valid number (int or float)."""
+        return isinstance(val, (int, float)) and not isinstance(val, bool)
+    
     def _identify_risks(self, metrics: FinancialMetrics) -> List[str]:
         """Identify financial risks."""
         
         risks = []
         
-        if metrics.runway_months and metrics.runway_months < 6:
-            risks.append("CRITICAL: Less than 6 months runway - immediate fundraising needed")
-        elif metrics.runway_months and metrics.runway_months < 12:
-            risks.append("WARNING: Less than 12 months runway - start fundraising process")
+        if self._is_number(metrics.runway_months):
+            if metrics.runway_months < 6:
+                risks.append("CRITICAL: Less than 6 months runway - immediate fundraising needed")
+            elif metrics.runway_months < 12:
+                risks.append("WARNING: Less than 12 months runway - start fundraising process")
         
-        if metrics.gross_margin and metrics.gross_margin < 30:
+        if self._is_number(metrics.gross_margin) and metrics.gross_margin < 30:
             risks.append("Low gross margin may limit growth investment capacity")
         
-        if metrics.ltv_cac_ratio and metrics.ltv_cac_ratio < 3:
+        if self._is_number(metrics.ltv_cac_ratio) and metrics.ltv_cac_ratio < 3:
             risks.append("LTV/CAC ratio below 3x indicates inefficient customer acquisition")
         
-        if metrics.churn_rate and metrics.churn_rate > 5:
+        if self._is_number(metrics.churn_rate) and metrics.churn_rate > 5:
             risks.append(f"Monthly churn of {metrics.churn_rate}% is above healthy threshold")
         
-        if metrics.burn_rate and metrics.revenue:
+        if self._is_number(metrics.burn_rate) and self._is_number(metrics.revenue) and metrics.revenue > 0:
             burn_multiple = metrics.burn_rate / metrics.revenue
             if burn_multiple > 2:
                 risks.append(f"Burn multiple of {burn_multiple:.1f}x is high - focus on efficiency")

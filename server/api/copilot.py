@@ -482,21 +482,23 @@ def generate_citations(truth_scan, output: Dict[str, Any]) -> List[Dict[str, Any
     if truth_scan and truth_scan.outputs_json:
         metrics = truth_scan.outputs_json.get("metrics", {})
         
-        if metrics.get("monthly_revenue"):
+        monthly_revenue = metrics.get("monthly_revenue")
+        if isinstance(monthly_revenue, (int, float)):
             citations.append({
                 "source_id": f"truth_scan_{citation_index}",
                 "label": "Truth Scan - Financial Metrics",
                 "kind": "analysis",
-                "snippet": f"Revenue: ${metrics.get('monthly_revenue', 0):,.0f}/mo"
+                "snippet": f"Revenue: ${monthly_revenue:,.0f}/mo"
             })
             citation_index += 1
         
-        if metrics.get("runway_months"):
+        runway_months = metrics.get("runway_months")
+        if isinstance(runway_months, (int, float)):
             citations.append({
                 "source_id": f"truth_scan_{citation_index}",
                 "label": "Truth Scan - Runway Analysis",
                 "kind": "analysis",
-                "snippet": f"Runway: {metrics.get('runway_months', 0):.1f} months"
+                "snippet": f"Runway: {runway_months:.1f} months"
             })
             citation_index += 1
     
