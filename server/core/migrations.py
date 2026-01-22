@@ -241,6 +241,67 @@ def ensure_company_driver_models_table(engine: Engine) -> None:
             logger.debug(f"Company driver models table may already exist: {e}")
 
 
+def ensure_llm_audit_logs_table(engine: Engine) -> None:
+    """Ensure the llm_audit_logs table exists for OpenAI API audit logging."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS llm_audit_logs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    company_id INTEGER REFERENCES companies(id),
+                    user_id INTEGER REFERENCES users(id),
+                    endpoint TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    pii_mode VARCHAR(20) DEFAULT 'standard',
+                    prompt_hash VARCHAR(64) NOT NULL,
+                    input_chars_original INTEGER NOT NULL,
+                    input_chars_redacted INTEGER NOT NULL,
+                    pii_findings_json JSONB DEFAULT '[]'::jsonb,
+                    redacted_prompt_preview TEXT,
+                    redacted_output_preview TEXT,
+                    tokens_in INTEGER,
+                    tokens_out INTEGER,
+                    latency_ms INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_llm_audit_logs_company ON llm_audit_logs(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_llm_audit_logs_user ON llm_audit_logs(user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_llm_audit_logs_created ON llm_audit_logs(created_at)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_llm_audit_logs_pii_mode ON llm_audit_logs(pii_mode)"))
+            conn.commit()
+            logger.info("LLM audit logs table migration complete")
+        except Exception as e:
+            logger.debug(f"LLM audit logs table may already exist: {e}")
+
+
+def ensure_eval_runs_table(engine: Engine) -> None:
+    """Ensure the eval_runs table exists for quality evaluation tracking."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS eval_runs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    suite_name VARCHAR(255) NOT NULL,
+                    inputs_json JSONB DEFAULT '{}'::jsonb,
+                    outputs_json JSONB DEFAULT '{}'::jsonb,
+                    scores_json JSONB DEFAULT '{}'::jsonb,
+                    overall_score FLOAT,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    completed_at TIMESTAMP
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_eval_runs_suite ON eval_runs(suite_name)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_eval_runs_status ON eval_runs(status)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_eval_runs_created ON eval_runs(created_at)"))
+            conn.commit()
+            logger.info("Eval runs table migration complete")
+        except Exception as e:
+            logger.debug(f"Eval runs table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -253,4 +314,6 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_workstreams_table(engine)
     ensure_company_alerts_table(engine)
     ensure_company_driver_models_table(engine)
+    ensure_llm_audit_logs_table(engine)
+    ensure_eval_runs_table(engine)
     logger.info("Database migrations completed successfully")

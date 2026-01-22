@@ -27,6 +27,8 @@ from server.models.audit_log import AuditLog
 from server.models.login_history import LoginHistory, Notification
 from server.models.invite import Invite
 from server.models.company_decision import CompanyDecision, CompanyScenario
+from server.models.llm_audit_log import LLMAuditLog
+from server.models.eval_run import EvalRun
 
 __all__ = [
     "User",
@@ -61,4 +63,6 @@ __all__ = [
     "Invite",
     "CompanyDecision",
     "CompanyScenario",
+    "LLMAuditLog",
+    "EvalRun",
 ]
