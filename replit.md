@@ -58,7 +58,7 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Rollback**: Restore to any previous version with audit trail.
 6.  **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
 7.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
-8.  **Multi-Agent Fund Flow Copilot**: Production-ready AI system with specialized agents.
+8.  **Multi-Agent Fund Flow Copilot V2+**: Production-ready AI system with specialized agents and enhanced features.
     -   **Router/Orchestrator Agent**: Analyzes incoming queries and routes to appropriate specialist agents.
     -   **CFO Agent**: Financial analysis, metrics extraction, FX conversion (INR, EUR, GBP, CAD, AUD, JPY, CNY), and runway optimization.
     -   **Market Agent**: Competitor analysis, ICP definition, target customer segmentation, and industry benchmarks (SaaS, Fintech, Marketplace, E-commerce, AgTech).
@@ -66,6 +66,11 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Company Knowledge Base (CKB)**: Persistent context storage per company in `metadata_json` column, maintains: overview, financials, market, strategy, ICP, competitors, risks, decisions_made.
     -   **API Endpoints**: `/companies/{company_id}/chat` for chat, `/companies/{company_id}/ckb` for CKB management.
     -   **Structured Responses**: Each agent returns findings, assumptions, risks, next_questions, and confidence levels.
+    -   **Truth-First Citations**: Source tracking from PDFs and web sources with highlighted claims.
+    -   **Data Health Scoring**: 0-100 score with grades A-F based on data completeness (P&L, cash, unit economics) and consistency.
+    -   **Operating Cadence**: Workstreams API for weekly metrics, monthly board memos, quarterly strategy reviews with configurable KPIs.
+    -   **Automated Alerts**: Rule-based alerts for runway <9mo, revenue decline >10%, CAC spike >15%.
+    -   **Driver-Based Forecasting**: Templates for SaaS, marketplace, and services models with 12-month projections.
 9.  **Forecasting**: Holt-Winters exponential smoothing, linear regression.
 10. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
 11. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.

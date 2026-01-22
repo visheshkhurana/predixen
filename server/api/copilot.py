@@ -168,6 +168,19 @@ class CopilotChatRequest(BaseModel):
     investor_lens: Optional[str] = None
 
 
+class Citation(BaseModel):
+    """Citation reference."""
+    source_id: str
+    label: str
+
+
+class HighlightedClaim(BaseModel):
+    """Claim with source citations."""
+    text: str
+    source_ids: List[str]
+    confidence: str
+
+
 class CopilotChatResponse(BaseModel):
     """Response from copilot chat."""
     executive_summary: List[str]
@@ -184,6 +197,9 @@ class CopilotChatResponse(BaseModel):
     decision_created: Optional[Dict[str, Any]] = None
     challenge: Optional[Dict[str, Any]] = None
     investor_analysis: Optional[Dict[str, Any]] = None
+    citations: Optional[List[Dict[str, Any]]] = None
+    highlighted_claims: Optional[List[Dict[str, Any]]] = None
+    data_health: Optional[Dict[str, Any]] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -301,6 +317,12 @@ async def copilot_chat(
             truth_scan.outputs_json if truth_scan else {}
         )
     
+    from server.api.data_health import calculate_data_health
+    data_health = calculate_data_health(truth_scan)
+    
+    citations = generate_citations(truth_scan, output)
+    highlighted_claims = generate_highlighted_claims(output, citations)
+    
     return CopilotChatResponse(
         executive_summary=output.get("executive_summary", []),
         company_snapshot=output.get("company_snapshot", []),
@@ -315,7 +337,10 @@ async def copilot_chat(
         ckb_updated=True,
         decision_created=decision_created,
         challenge=challenge_result,
-        investor_analysis=investor_analysis
+        investor_analysis=investor_analysis,
+        citations=citations,
+        highlighted_claims=highlighted_claims,
+        data_health=data_health
     )
 
 
@@ -426,6 +451,83 @@ def generate_investor_analysis(
         })
     
     return analysis
+
+
+def generate_citations(truth_scan, output: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Generate citations from truth scan and output data."""
+    citations = []
+    citation_index = 1
+    
+    if truth_scan and truth_scan.outputs_json:
+        metrics = truth_scan.outputs_json.get("metrics", {})
+        
+        if metrics.get("monthly_revenue"):
+            citations.append({
+                "source_id": f"truth_scan_{citation_index}",
+                "label": "Truth Scan - Financial Metrics",
+                "kind": "analysis",
+                "snippet": f"Revenue: ${metrics.get('monthly_revenue', 0):,.0f}/mo"
+            })
+            citation_index += 1
+        
+        if metrics.get("runway_months"):
+            citations.append({
+                "source_id": f"truth_scan_{citation_index}",
+                "label": "Truth Scan - Runway Analysis",
+                "kind": "analysis",
+                "snippet": f"Runway: {metrics.get('runway_months', 0):.1f} months"
+            })
+            citation_index += 1
+    
+    if output.get("financials") and output["financials"].get("sources"):
+        for source in output["financials"]["sources"]:
+            citations.append({
+                "source_id": f"financial_{citation_index}",
+                "label": f"Financial Data - {source.get('type', 'Document')}",
+                "kind": source.get("kind", "pdf"),
+                "page": source.get("page"),
+                "snippet": source.get("snippet", "")
+            })
+            citation_index += 1
+    
+    if output.get("market_and_customers") and output["market_and_customers"].get("sources"):
+        for source in output["market_and_customers"]["sources"]:
+            citations.append({
+                "source_id": f"market_{citation_index}",
+                "label": f"Web: {source.get('title', 'Research')}",
+                "kind": "web",
+                "url": source.get("url"),
+                "snippet": source.get("snippet", "")
+            })
+            citation_index += 1
+    
+    return citations
+
+
+def generate_highlighted_claims(output: Dict[str, Any], citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Generate highlighted claims with citation references."""
+    claims = []
+    
+    if output.get("executive_summary"):
+        for i, summary in enumerate(output["executive_summary"][:3]):
+            if "$" in summary or "%" in summary or any(word in summary.lower() for word in ["revenue", "growth", "runway", "burn"]):
+                citation_ids = [c["source_id"] for c in citations[:2]] if citations else []
+                claims.append({
+                    "text": summary,
+                    "source_ids": citation_ids,
+                    "confidence": "high" if citations else "medium"
+                })
+    
+    if output.get("financials") and output["financials"].get("metrics"):
+        metrics = output["financials"]["metrics"]
+        if metrics.get("monthly_revenue"):
+            claims.append({
+                "text": f"Monthly revenue is ${metrics['monthly_revenue']:,.0f}",
+                "source_ids": [c["source_id"] for c in citations if "Financial" in c.get("label", "")][:1],
+                "confidence": "high"
+            })
+    
+    return claims
 
 
 @router.get("/companies/{company_id}/ckb", response_model=Dict[str, Any])

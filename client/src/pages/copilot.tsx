@@ -31,7 +31,9 @@ import {
   Zap,
   Eye,
   FileText,
-  Shield
+  Shield,
+  Link2,
+  Activity
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -108,6 +110,29 @@ interface CopilotApiResponse {
       concerns: string;
     }>;
   };
+  citations?: Array<{
+    source_id: string;
+    label: string;
+    kind?: string;
+    page?: number;
+    url?: string;
+    snippet?: string;
+  }>;
+  highlighted_claims?: Array<{
+    text: string;
+    source_ids: string[];
+    confidence: string;
+  }>;
+  data_health?: {
+    score: number;
+    grade: string;
+    issues: Array<{
+      severity: string;
+      code: string;
+      message: string;
+      suggested_fix: string;
+    }>;
+  };
 }
 
 interface Message {
@@ -166,7 +191,7 @@ const SUGGESTED_PROMPTS = [
   { label: 'What strategic options should I consider for growth?', icon: Lightbulb },
 ];
 
-function StructuredResponseDisplay({ response, messageIndex }: { response: CopilotApiResponse; messageIndex: number }) {
+function StructuredResponseDisplay({ response, messageIndex, showSources }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   
   const toggleSection = (section: string) => {
@@ -175,6 +200,38 @@ function StructuredResponseDisplay({ response, messageIndex }: { response: Copil
   
   return (
     <div className="mt-4 space-y-3">
+      {showSources && response.citations && response.citations.length > 0 && (
+        <Collapsible open={openSections['citations']} onOpenChange={() => toggleSection('citations')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-citations-${messageIndex}`}>
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['citations'] ? 'rotate-180' : ''}`} />
+            <Link2 className="h-4 w-4 text-blue-400" />
+            Sources ({response.citations.length})
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 pl-6 space-y-2">
+            {response.citations.map((citation, i) => (
+              <div key={i} className="p-2 rounded bg-blue-500/5 border border-blue-500/20">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {citation.kind === 'pdf' ? 'PDF' : citation.kind === 'web' ? 'Web' : 'Analysis'}
+                  </Badge>
+                  <span className="text-sm font-medium">{citation.label}</span>
+                </div>
+                {citation.snippet && (
+                  <p className="text-xs text-muted-foreground mt-1 italic">"{citation.snippet}"</p>
+                )}
+                {citation.page && (
+                  <p className="text-xs text-muted-foreground mt-1">Page {citation.page}</p>
+                )}
+                {citation.url && (
+                  <a href={citation.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mt-1 block">
+                    View source
+                  </a>
+                )}
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
       {response.company_snapshot && response.company_snapshot.length > 0 && (
         <Collapsible open={openSections['snapshot']} onOpenChange={() => toggleSection('snapshot')}>
           <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-snapshot-${messageIndex}`}>
@@ -311,6 +368,8 @@ export default function CopilotPage() {
   const [challengeMode, setChallengeMode] = useState(false);
   const [investorLens, setInvestorLens] = useState<string | null>(null);
   const [createDecision, setCreateDecision] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+  const [latestDataHealth, setLatestDataHealth] = useState<CopilotApiResponse['data_health'] | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -372,6 +431,10 @@ export default function CopilotPage() {
           structuredResponse: response,
         };
         setMessages((prev) => [...prev, assistantMessage]);
+        
+        if (response.data_health) {
+          setLatestDataHealth(response.data_health);
+        }
       } catch (error: any) {
         console.error('Copilot API error:', error);
         toast({
@@ -528,7 +591,7 @@ export default function CopilotPage() {
                   )}
                   
                   {message.structuredResponse && (
-                    <StructuredResponseDisplay response={message.structuredResponse} messageIndex={i} />
+                    <StructuredResponseDisplay response={message.structuredResponse} messageIndex={i} showSources={showSources} />
                   )}
                   
                   {message.suggestion && (
@@ -648,6 +711,19 @@ export default function CopilotPage() {
                 Track Decision
               </label>
             </div>
+            
+            <div className="flex items-center gap-1.5">
+              <Switch 
+                id="show-sources" 
+                checked={showSources} 
+                onCheckedChange={setShowSources}
+                data-testid="switch-show-sources"
+              />
+              <label htmlFor="show-sources" className="text-xs flex items-center gap-1 cursor-pointer">
+                <Link2 className="h-3 w-3" />
+                Show Sources
+              </label>
+            </div>
           </div>
           
           <div className="flex gap-2">
@@ -709,6 +785,46 @@ export default function CopilotPage() {
                 </div>
               </CardContent>
             </Card>
+            
+            {latestDataHealth && (
+              <Card className="overflow-visible">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-blue-400" />
+                    Data Health
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl font-bold font-mono" data-testid="text-data-health-score">
+                      {latestDataHealth.score}
+                    </div>
+                    <Badge
+                      className={
+                        latestDataHealth.grade === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
+                        latestDataHealth.grade === 'B' ? 'bg-blue-500/20 text-blue-400' :
+                        latestDataHealth.grade === 'C' ? 'bg-amber-500/20 text-amber-400' :
+                        latestDataHealth.grade === 'D' ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-red-500/20 text-red-400'
+                      }
+                      data-testid="text-data-health-grade"
+                    >
+                      Grade {latestDataHealth.grade}
+                    </Badge>
+                  </div>
+                  {latestDataHealth.issues && latestDataHealth.issues.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {latestDataHealth.issues.slice(0, 2).map((issue, idx) => (
+                        <div key={idx} className="text-xs text-muted-foreground flex items-start gap-1">
+                          <AlertTriangle className={`h-3 w-3 mt-0.5 ${issue.severity === 'error' ? 'text-red-400' : issue.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`} />
+                          {issue.message}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             
             <Card className="overflow-visible">
               <CardHeader className="pb-2">
