@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/api/client';
 
 interface EvalRun {
   id: string;
@@ -63,46 +64,16 @@ export default function EvalsPage() {
 
   const { data: runsResponse, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['/admin/evals/runs', page],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        per_page: perPage.toString(),
-      });
-      const res = await fetch(`/api/admin/evals/runs?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch eval runs');
-      return res.json();
-    },
+    queryFn: () => api.admin.evals.runs(page, perPage),
   });
 
-  const { data: suitesResponse } = useQuery<{ suites: EvalSuite[] }>({
+  const { data: suitesResponse } = useQuery({
     queryKey: ['/admin/evals/suites'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/evals/suites', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (!res.ok) throw new Error('Failed to fetch suites');
-      return res.json();
-    },
+    queryFn: () => api.admin.evals.suites(),
   });
 
   const runEvalMutation = useMutation({
-    mutationFn: async (suiteName: string) => {
-      const res = await fetch('/api/admin/evals/run', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ suite_name: suiteName })
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.detail || 'Failed to run eval');
-      }
-      return res.json();
-    },
+    mutationFn: (suiteName: string) => api.admin.evals.run(suiteName),
     onSuccess: () => {
       toast({ title: 'Evaluation Started', description: 'The evaluation suite is now running.' });
       queryClient.invalidateQueries({ queryKey: ['/admin/evals/runs'] });

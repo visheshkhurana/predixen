@@ -500,5 +500,89 @@ export const api = {
           body: JSON.stringify({ template_type: templateType, to_email: toEmail }),
         }),
     },
+    
+    llmAudit: {
+      list: (page = 1, perPage = 20, piiMode?: string) => {
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        if (piiMode && piiMode !== 'all') params.append('pii_mode', piiMode);
+        return request<{
+          logs: Array<{
+            id: string;
+            company_id: number | null;
+            user_id: number | null;
+            endpoint: string;
+            model: string;
+            pii_mode: string;
+            prompt_hash: string;
+            input_chars_original: number;
+            input_chars_redacted: number;
+            pii_findings_json: Array<{
+              type: string;
+              count: number;
+              examples: string[];
+              confidence: string;
+            }> | null;
+            redacted_prompt_preview: string | null;
+            redacted_output_preview: string | null;
+            tokens_in: number | null;
+            tokens_out: number | null;
+            latency_ms: number | null;
+            created_at: string;
+          }>;
+          total: number;
+          page: number;
+          per_page: number;
+        }>(`/admin/llm-audit?${params}`);
+      },
+      stats: () => request<{
+        period_days: number;
+        total_requests: number;
+        total_tokens_in: number;
+        total_tokens_out: number;
+        avg_latency_ms: number;
+        pii_mode_breakdown: Record<string, number>;
+        requests_with_pii_detected: number;
+      }>('/admin/llm-audit/stats/summary'),
+    },
+    
+    evals: {
+      suites: () => request<{
+        suites: Array<{
+          name: string;
+          description: string;
+          metrics: string[];
+        }>;
+      }>('/admin/evals/suites'),
+      runs: (page = 1, perPage = 10) => {
+        const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+        return request<{
+          runs: Array<{
+            id: string;
+            suite_name: string;
+            inputs_json: Record<string, any> | null;
+            outputs_json: Record<string, any> | null;
+            scores_json: Record<string, {
+              score: number;
+              max_score: number;
+              percentage: number;
+              details: Record<string, any>;
+            }> | null;
+            overall_score: number | null;
+            status: string;
+            error_message: string | null;
+            created_at: string;
+            completed_at: string | null;
+          }>;
+          total: number;
+          page: number;
+          per_page: number;
+        }>(`/admin/evals/runs?${params}`);
+      },
+      run: (suiteName: string) =>
+        request<{ run_id: string; status: string }>('/admin/evals/run', {
+          method: 'POST',
+          body: JSON.stringify({ suite_name: suiteName }),
+        }),
+    },
   },
 };
