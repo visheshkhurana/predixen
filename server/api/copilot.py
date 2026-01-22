@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Literal
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -11,6 +11,7 @@ from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.copilot.context_pack import build_context_pack
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
+from server.lib.privacy.pii_redactor import redact_text, detect_pii
 
 router = APIRouter(tags=["copilot"])
 
@@ -155,6 +156,11 @@ def compare_decisions(
     }
 
 
+class PrivacySettings(BaseModel):
+    """Privacy settings for PII redaction."""
+    pii_mode: str = "standard"
+
+
 class CopilotChatRequest(BaseModel):
     """Request for copilot chat."""
     message: str
@@ -166,6 +172,8 @@ class CopilotChatRequest(BaseModel):
     create_decision: bool = False
     challenge_mode: bool = False
     investor_lens: Optional[str] = None
+    show_sources: bool = False
+    privacy: Optional[PrivacySettings] = None
 
 
 class Citation(BaseModel):
@@ -200,6 +208,8 @@ class CopilotChatResponse(BaseModel):
     citations: Optional[List[Dict[str, Any]]] = None
     highlighted_claims: Optional[List[Dict[str, Any]]] = None
     data_health: Optional[Dict[str, Any]] = None
+    pii_findings: Optional[List[Dict[str, Any]]] = None
+    pii_mode: Optional[str] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -269,6 +279,14 @@ async def copilot_chat(
         except ValueError:
             pass
     
+    pii_mode = "standard"
+    if request.privacy and request.privacy.pii_mode:
+        pii_mode = request.privacy.pii_mode
+    
+    redaction_result = redact_text(request.message, mode=pii_mode)
+    redacted_message = redaction_result.redacted_text
+    pii_findings = redaction_result.findings
+    
     context = {
         "has_document": False,
         "extracted_financials": None,
@@ -276,11 +294,12 @@ async def copilot_chat(
         "mode": request.mode,
         "challenge_mode": request.challenge_mode,
         "investor_lens": request.investor_lens,
-        "scenario_assumptions": scenario_assumptions
+        "scenario_assumptions": scenario_assumptions,
+        "pii_mode": pii_mode
     }
     
     router = RouterAgent()
-    response = await router.process(request.message, ckb, context)
+    response = await router.process(redacted_message, ckb, context)
     
     ckb_storage.save_ckb(ckb)
     
@@ -338,9 +357,11 @@ async def copilot_chat(
         decision_created=decision_created,
         challenge=challenge_result,
         investor_analysis=investor_analysis,
-        citations=citations,
-        highlighted_claims=highlighted_claims,
-        data_health=data_health
+        citations=citations if request.show_sources else None,
+        highlighted_claims=highlighted_claims if request.show_sources else None,
+        data_health=data_health,
+        pii_findings=pii_findings if pii_findings else None,
+        pii_mode=pii_mode
     )
 
 
