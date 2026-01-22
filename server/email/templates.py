@@ -570,6 +570,86 @@ def render_password_reset_template(
     return get_email_wrapper(content)
 
 
+def render_copilot_pitch_template(
+    recipient_name: Optional[str] = None,
+    cta_url: str = "https://predixen.app"
+) -> str:
+    """Render the AI Copilot sales pitch email template."""
+    greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
+    
+    content = f"""
+    {get_header_html("AI Copilot")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                {greeting}
+            </p>
+            <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                What if you could ask a seasoned CFO any question about your business and get an instant, data-backed answer?
+            </p>
+            <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                <strong style="color: {COLORS['navy']};">Introducing Predixen AI Copilot</strong> - your always-available financial intelligence partner.
+            </p>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0; background-color: {COLORS['gray_50']}; border-radius: 12px;">
+                <tr>
+                    <td style="padding: 24px;">
+                        <p style="color: {COLORS['navy']}; font-weight: 600; font-size: 14px; margin: 0 0 12px 0;">Simply ask questions in plain English:</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 14px; font-style: italic; margin: 0 0 8px 0;">"What's my real runway?"</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 14px; font-style: italic; margin: 0 0 8px 0;">"What happens if our Series A slips 3 months?"</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 14px; font-style: italic; margin: 0 0 8px 0;">"How do I extend runway without layoffs?"</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 14px; font-style: italic; margin: 0;">"Who are my competitors and how do I differentiate?"</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <p style="color: {COLORS['navy']}; font-weight: 600; font-size: 16px; margin: 32px 0 16px 0;">Three Specialized AI Agents Working For You</p>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 24px 0;">
+                <tr>
+                    <td style="padding: 16px; background-color: {COLORS['gray_50']}; border-radius: 8px; margin-bottom: 8px;">
+                        <p style="color: {COLORS['primary']}; font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">CFO Agent</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 13px; margin: 0;">Runway analysis, burn optimization, unit economics deep-dives</p>
+                    </td>
+                </tr>
+                <tr><td style="height: 8px;"></td></tr>
+                <tr>
+                    <td style="padding: 16px; background-color: {COLORS['gray_50']}; border-radius: 8px;">
+                        <p style="color: {COLORS['primary']}; font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">Market Agent</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 13px; margin: 0;">Competitor analysis, industry benchmarks, differentiation strategy</p>
+                    </td>
+                </tr>
+                <tr><td style="height: 8px;"></td></tr>
+                <tr>
+                    <td style="padding: 16px; background-color: {COLORS['gray_50']}; border-radius: 8px;">
+                        <p style="color: {COLORS['primary']}; font-weight: 600; font-size: 14px; margin: 0 0 4px 0;">Strategy Agent</p>
+                        <p style="color: {COLORS['gray_600']}; font-size: 13px; margin: 0;">GTM planning, 30/60/90 day roadmaps, growth vs. efficiency trade-offs</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
+                The Copilot analyzes your actual financials and responds with specific, actionable recommendations - not generic advice.
+            </p>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        <a href="{cta_url}" style="display: inline-block; padding: 14px 32px; background-color: {COLORS['primary']}; color: {COLORS['white']}; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px;">Try Copilot Free</a>
+                    </td>
+                </tr>
+            </table>
+            
+            <p style="color: {COLORS['gray_500']}; font-size: 14px; line-height: 1.6; margin: 24px 0 0 0; text-align: center;">
+                Upload your financials once. Ask unlimited questions forever.
+            </p>
+        </td>
+    </tr>
+    {get_footer_html()}
+    """
+    return get_email_wrapper(content)
+
+
 # Standard template configurations for admin UI
 TEMPLATE_CONFIGS = {
     "invite": {
@@ -599,6 +679,13 @@ TEMPLATE_CONFIGS = {
         "variables": ["user_name", "login_url", "dashboard_screenshot_url", "truth_scan_screenshot_url", "simulation_screenshot_url", "decision_screenshot_url"],
         "subject": "Discover Predixen Intelligence OS - Your AI Financial Command Center",
         "render_fn": "render_app_overview_template"
+    },
+    "copilot_pitch": {
+        "name": "AI Copilot Pitch",
+        "description": "Sales pitch email for the AI Copilot feature",
+        "variables": ["recipient_name", "cta_url"],
+        "subject": "Ask any financial question. Get CFO-grade answers.",
+        "render_fn": "render_copilot_pitch_template"
     }
 }
 
@@ -635,6 +722,10 @@ def get_template_preview(template_type: str) -> Optional[str]:
             "truth_scan_screenshot_url": None,
             "simulation_screenshot_url": None,
             "decision_screenshot_url": None
+        },
+        "copilot_pitch": {
+            "recipient_name": "Nikita",
+            "cta_url": "https://predixen.app/copilot"
         }
     }
     
@@ -646,5 +737,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
         return render_password_reset_template(**sample_data["password_reset"])
     elif template_type == "app_overview":
         return render_app_overview_template(**sample_data["app_overview"])
+    elif template_type == "copilot_pitch":
+        return render_copilot_pitch_template(**sample_data["copilot_pitch"])
     
     return None
