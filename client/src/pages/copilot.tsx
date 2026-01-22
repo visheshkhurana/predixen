@@ -472,10 +472,23 @@ export default function CopilotPage() {
         }
       } catch (error: any) {
         console.error('Copilot API error:', error);
+        // Provide more specific error message based on error type
+        let errorMessage = 'Failed to get response from Copilot.';
+        if (error.message) {
+          if (error.message.includes('500')) {
+            errorMessage = 'Server error occurred. Please try again.';
+          } else if (error.message.includes('401') || error.message.includes('403')) {
+            errorMessage = 'Authentication error. Please try logging in again.';
+          } else if (error.message.includes('404')) {
+            errorMessage = 'Service temporarily unavailable. Using fallback mode.';
+          } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Network error. Please check your connection.';
+          }
+        }
         toast({
-          title: 'Error',
-          description: 'Failed to get response from Copilot. Using fallback mode.',
-          variant: 'destructive',
+          title: 'Warning',
+          description: errorMessage + ' Using intelligent fallback.',
+          variant: 'default',
         });
         const fallbackResponse = generateResponse(messageText, metrics, confidence);
         setMessages((prev) => [...prev, fallbackResponse]);
@@ -524,6 +537,16 @@ export default function CopilotPage() {
         metrics: ['runway_months', 'survival_18m', 'cash_balance'],
         dataSources: ['truth_scan', 'simulation', 'scenario'],
         suggestion: { label: 'Run bridge scenario', action: 'bridge_round' },
+        timestamp: new Date(),
+      };
+    }
+    
+    if (lowerQuery.includes('competitor') || lowerQuery.includes('differentiate') || lowerQuery.includes('compete')) {
+      return {
+        role: 'assistant',
+        content: `**Competitive Positioning Analysis**\n\nBased on your SaaS profile, here's how to differentiate:\n\n**Key Differentiators:**\n1. **Superior UX** - Focus on intuitive interface and faster time-to-value\n2. **Integration Ecosystem** - Build stronger API and partner integrations\n3. **Customer Success** - Invest in proactive support and onboarding\n\n**Competitive Advantages Framework:**\n• Technology: What technical capabilities set you apart?\n• Team: What unique expertise does your team bring?\n• Timing: Why is now the right time for your solution?\n\n**Recommended Actions:**\n1. Document your unique value proposition clearly\n2. Identify 3-5 direct competitors and their positioning\n3. Survey customers on why they chose you over alternatives\n\nWould you like me to help create a detailed competitive analysis?`,
+        metrics: ['market_position', 'competitive_advantage'],
+        dataSources: ['market_agent', 'strategy_agent'],
         timestamp: new Date(),
       };
     }

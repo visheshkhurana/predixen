@@ -127,6 +127,25 @@ class MonthlyTarget:
 
 
 @dataclass
+class DifferentiationAnalysis:
+    """Competitive differentiation analysis."""
+    positioning_statement: str = ""
+    key_differentiators: List[str] = field(default_factory=list)
+    competitive_advantages: List[str] = field(default_factory=list)
+    value_proposition: str = ""
+    messaging_framework: Dict[str, str] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "positioning_statement": self.positioning_statement,
+            "key_differentiators": self.key_differentiators,
+            "competitive_advantages": self.competitive_advantages,
+            "value_proposition": self.value_proposition,
+            "messaging_framework": self.messaging_framework
+        }
+
+
+@dataclass
 class MarketResearch:
     """Complete market research output."""
     category: str = ""
@@ -134,6 +153,7 @@ class MarketResearch:
     growth_rate: Optional[str] = None
     
     competitors: List[Competitor] = field(default_factory=list)
+    differentiation: Optional[DifferentiationAnalysis] = None
     icp: Optional[IdealCustomerProfile] = None
     target_customers: List[TargetCustomer] = field(default_factory=list)
     monthly_targets: List[MonthlyTarget] = field(default_factory=list)
@@ -152,6 +172,7 @@ class MarketResearch:
                 "growth_rate": self.growth_rate
             },
             "competitors": [c.to_dict() for c in self.competitors],
+            "differentiation": self.differentiation.to_dict() if self.differentiation else None,
             "icp": self.icp.to_dict() if self.icp else None,
             "target_customers": [tc.to_dict() for tc in self.target_customers],
             "this_month_targets": [mt.to_dict() for mt in self.monthly_targets],
@@ -241,6 +262,13 @@ class MarketAgent(BaseAgent):
             findings.append(f"Retrieved {research.category} industry benchmarks")
         
         research.pricing_signals = self._analyze_pricing(research.category, context)
+        
+        # Add differentiation analysis if relevant keywords detected
+        query_lower = query.lower()
+        diff_keywords = ['differentiate', 'differentiation', 'compete', 'competitive', 'advantage', 'unique', 'stand out']
+        if any(kw in query_lower for kw in diff_keywords):
+            research.differentiation = self._build_differentiation_analysis(research.category, research.competitors, ckb)
+            findings.append("Built competitive differentiation framework")
         
         assumptions = self._identify_assumptions(research, context)
         risks = self._identify_market_risks(research, ckb)
@@ -591,3 +619,81 @@ class MarketAgent(BaseAgent):
         ))
         
         return targets
+    
+    def _build_differentiation_analysis(
+        self,
+        category: str,
+        competitors: List[Competitor],
+        ckb: CompanyKnowledgeBase
+    ) -> DifferentiationAnalysis:
+        """Build competitive differentiation analysis."""
+        
+        diff = DifferentiationAnalysis()
+        
+        # Build positioning statement
+        company_name = ckb.company_name or "Your company"
+        industry = ckb.industry or category
+        diff.positioning_statement = f"For {industry} companies who need scalable solutions, {company_name} provides differentiated value through technology innovation and customer-centric approach."
+        
+        # Category-specific differentiators
+        category_differentiators = {
+            "saas": [
+                "Superior user experience and intuitive interface",
+                "Faster implementation and time-to-value",
+                "Better integration ecosystem",
+                "More flexible pricing and packaging",
+                "Stronger customer success and support"
+            ],
+            "fintech": [
+                "Regulatory compliance built-in",
+                "Better security and risk management",
+                "Faster transaction processing",
+                "Superior API and developer experience",
+                "Lower total cost of ownership"
+            ],
+            "marketplace": [
+                "Better matching algorithms",
+                "Superior trust and safety features",
+                "Lower take rate or better seller economics",
+                "Stronger network effects in niche",
+                "Better buyer/seller experience"
+            ],
+            "ecommerce": [
+                "Faster fulfillment and delivery",
+                "Better product curation",
+                "Superior customer experience",
+                "Stronger brand and community",
+                "More sustainable practices"
+            ],
+            "agtech": [
+                "Better data-driven insights",
+                "Stronger farmer/producer relationships",
+                "Superior supply chain visibility",
+                "More sustainable practices",
+                "Better market access"
+            ]
+        }
+        diff.key_differentiators = category_differentiators.get(category, category_differentiators["saas"])
+        
+        # Competitive advantages framework
+        diff.competitive_advantages = [
+            "Technology: What technical capabilities set you apart?",
+            "Team: What unique expertise does your team bring?",
+            "Timing: Why is now the right time for your solution?",
+            "Traction: What customer success stories demonstrate your value?",
+            "Trust: What relationships and reputation have you built?"
+        ]
+        
+        # Value proposition
+        diff.value_proposition = f"We help {industry} companies achieve better outcomes through our unique combination of technology, expertise, and customer focus."
+        
+        # Messaging framework
+        diff.messaging_framework = {
+            "problem_statement": f"Many {industry} companies struggle with [specific pain point]",
+            "solution_overview": "Our platform provides [key capability] that addresses this challenge",
+            "key_benefits": "Customers see [specific outcome] - typically [metric improvement]",
+            "proof_points": "Companies like [customer examples] have achieved [specific results]",
+            "call_to_action": "Schedule a demo to see how we can help your team"
+        }
+        
+        return diff

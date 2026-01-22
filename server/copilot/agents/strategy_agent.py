@@ -155,7 +155,8 @@ class StrategyAgent(BaseAgent):
         
         if output.options:
             output.recommended = self._rank_options(output.options, ckb)
-            findings.append(f"Recommended: {output.recommended.name}")
+            if output.recommended:
+                findings.append(f"Recommended: {output.recommended.name}")
         
         output.verticals = self._identify_vertical_opportunities(ckb, context)
         if output.verticals:
@@ -251,9 +252,15 @@ class StrategyAgent(BaseAgent):
         
         options = []
         
-        runway = ckb.financials.get("cashflow", {}).get("runway_months", 18)
+        runway_raw = ckb.financials.get("cashflow", {}).get("runway_months", 18)
+        # Handle case where runway might be a dict (e.g., {"value": 18}) or numeric
+        if isinstance(runway_raw, dict):
+            runway = runway_raw.get("value", 18)
+        else:
+            runway = runway_raw
         
-        if runway and runway < 12:
+        # Ensure runway is numeric for comparison
+        if runway and isinstance(runway, (int, float)) and runway < 12:
             options.append(StrategyOption(
                 name="Focus & Extend Runway",
                 description="Cut non-essential spend, focus on core product-market fit",
@@ -353,12 +360,17 @@ class StrategyAgent(BaseAgent):
         self, 
         options: List[StrategyOption], 
         ckb: CompanyKnowledgeBase
-    ) -> StrategyOption:
+    ) -> Optional[StrategyOption]:
         """Rank options and return recommended strategy."""
         
-        runway = ckb.financials.get("cashflow", {}).get("runway_months", 18)
+        runway_raw = ckb.financials.get("cashflow", {}).get("runway_months", 18)
+        # Handle case where runway might be a dict
+        if isinstance(runway_raw, dict):
+            runway = runway_raw.get("value", 18)
+        else:
+            runway = runway_raw
         
-        if runway and runway < 12:
+        if runway and isinstance(runway, (int, float)) and runway < 12:
             for opt in options:
                 if opt.effort == "low" and opt.risk == "low":
                     return opt
@@ -474,8 +486,14 @@ class StrategyAgent(BaseAgent):
         if not ckb.strategy.get("moat"):
             risks.append("No clear moat/defensibility identified - risk of commoditization")
         
-        runway = ckb.financials.get("cashflow", {}).get("runway_months")
-        if runway and runway < 18:
+        runway_raw = ckb.financials.get("cashflow", {}).get("runway_months")
+        # Handle case where runway might be a dict
+        if isinstance(runway_raw, dict):
+            runway = runway_raw.get("value")
+        else:
+            runway = runway_raw
+        
+        if runway and isinstance(runway, (int, float)) and runway < 18:
             risks.append(f"Limited runway ({runway:.0f} months) constrains strategic options")
         
         if not ckb.icp:
