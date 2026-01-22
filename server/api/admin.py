@@ -9,7 +9,7 @@ import json
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.config import settings
-from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite
+from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -792,3 +792,263 @@ async def resend_invite(
         "email_error": email_error
     }
 
+
+class LLMAuditLogResponse(BaseModel):
+    id: str
+    company_id: Optional[int]
+    user_id: Optional[int]
+    endpoint: str
+    model: str
+    pii_mode: str
+    prompt_hash: str
+    input_chars_original: int
+    input_chars_redacted: int
+    pii_findings_json: Optional[List[dict]]
+    redacted_prompt_preview: Optional[str]
+    redacted_output_preview: Optional[str]
+    tokens_in: Optional[int]
+    tokens_out: Optional[int]
+    latency_ms: Optional[int]
+    created_at: datetime
+
+
+class LLMAuditListResponse(BaseModel):
+    logs: List[LLMAuditLogResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+@router.get("/llm-audit")
+def get_llm_audit_logs(
+    company_id: Optional[int] = None,
+    pii_mode: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    page: int = 1,
+    per_page: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get LLM audit logs with filtering."""
+    query = db.query(LLMAuditLog)
+    
+    if company_id:
+        query = query.filter(LLMAuditLog.company_id == company_id)
+    if pii_mode:
+        query = query.filter(LLMAuditLog.pii_mode == pii_mode)
+    if start_date:
+        query = query.filter(LLMAuditLog.created_at >= start_date)
+    if end_date:
+        query = query.filter(LLMAuditLog.created_at <= end_date)
+    
+    total = query.count()
+    logs = query.order_by(LLMAuditLog.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    return {
+        "logs": [log.to_dict() for log in logs],
+        "total": total,
+        "page": page,
+        "per_page": per_page
+    }
+
+
+@router.get("/llm-audit/{log_id}")
+def get_llm_audit_log_detail(
+    log_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get detailed LLM audit log."""
+    import uuid
+    try:
+        log_uuid = uuid.UUID(log_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid log ID format")
+    
+    log = db.query(LLMAuditLog).filter(LLMAuditLog.id == log_uuid).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Audit log not found")
+    
+    return log.to_dict()
+
+
+@router.get("/llm-audit/stats/summary")
+def get_llm_audit_stats(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get LLM audit statistics summary."""
+    from sqlalchemy import func
+    
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    total_requests = db.query(func.count(LLMAuditLog.id)).filter(
+        LLMAuditLog.created_at >= start_date
+    ).scalar()
+    
+    total_tokens_in = db.query(func.sum(LLMAuditLog.tokens_in)).filter(
+        LLMAuditLog.created_at >= start_date
+    ).scalar() or 0
+    
+    total_tokens_out = db.query(func.sum(LLMAuditLog.tokens_out)).filter(
+        LLMAuditLog.created_at >= start_date
+    ).scalar() or 0
+    
+    avg_latency = db.query(func.avg(LLMAuditLog.latency_ms)).filter(
+        LLMAuditLog.created_at >= start_date
+    ).scalar() or 0
+    
+    pii_mode_breakdown = db.query(
+        LLMAuditLog.pii_mode,
+        func.count(LLMAuditLog.id)
+    ).filter(
+        LLMAuditLog.created_at >= start_date
+    ).group_by(LLMAuditLog.pii_mode).all()
+    
+    requests_with_pii = db.query(func.count(LLMAuditLog.id)).filter(
+        LLMAuditLog.created_at >= start_date,
+        LLMAuditLog.pii_findings_json != None,
+        func.jsonb_array_length(LLMAuditLog.pii_findings_json) > 0
+    ).scalar() or 0
+    
+    return {
+        "period_days": days,
+        "total_requests": total_requests,
+        "total_tokens_in": total_tokens_in,
+        "total_tokens_out": total_tokens_out,
+        "avg_latency_ms": round(float(avg_latency), 2),
+        "pii_mode_breakdown": {mode: count for mode, count in pii_mode_breakdown},
+        "requests_with_pii_detected": requests_with_pii
+    }
+
+
+class EvalRunRequest(BaseModel):
+    suite_name: str
+    inputs: Optional[dict] = None
+
+
+class EvalRunResponse(BaseModel):
+    id: str
+    suite_name: str
+    inputs_json: Optional[dict]
+    outputs_json: Optional[dict]
+    scores_json: Optional[dict]
+    overall_score: Optional[float]
+    status: str
+    error_message: Optional[str]
+    created_at: datetime
+    completed_at: Optional[datetime]
+
+
+@router.get("/evals/runs")
+def get_eval_runs(
+    suite_name: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get evaluation runs with filtering."""
+    query = db.query(EvalRun)
+    
+    if suite_name:
+        query = query.filter(EvalRun.suite_name == suite_name)
+    if status:
+        query = query.filter(EvalRun.status == status)
+    
+    total = query.count()
+    runs = query.order_by(EvalRun.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    return {
+        "runs": [run.to_dict() for run in runs],
+        "total": total,
+        "page": page,
+        "per_page": per_page
+    }
+
+
+@router.get("/evals/runs/{run_id}")
+def get_eval_run_detail(
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get detailed eval run."""
+    import uuid
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run ID format")
+    
+    run = db.query(EvalRun).filter(EvalRun.id == run_uuid).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Eval run not found")
+    
+    return run.to_dict()
+
+
+@router.post("/evals/run")
+async def run_eval_suite(
+    request: EvalRunRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Run an evaluation suite."""
+    from server.lib.evals.eval_runner import run_evaluation_suite
+    
+    eval_run = EvalRun(
+        suite_name=request.suite_name,
+        inputs_json=request.inputs or {},
+        status="running"
+    )
+    db.add(eval_run)
+    db.commit()
+    db.refresh(eval_run)
+    
+    try:
+        results = await run_evaluation_suite(request.suite_name, request.inputs or {}, db)
+        
+        eval_run.outputs_json = results.get("outputs", {})
+        eval_run.scores_json = results.get("scores", {})
+        eval_run.overall_score = results.get("overall_score", 0)
+        eval_run.status = "completed"
+        eval_run.completed_at = datetime.utcnow()
+        db.commit()
+        
+        return eval_run.to_dict()
+    except Exception as e:
+        eval_run.status = "failed"
+        eval_run.error_message = str(e)
+        eval_run.completed_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Eval suite failed: {str(e)}")
+
+
+@router.get("/evals/suites")
+def get_available_eval_suites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """Get list of available evaluation suites."""
+    return {
+        "suites": [
+            {
+                "name": "copilot_quality",
+                "description": "Tests Copilot response quality, citation coverage, and structure compliance",
+                "metrics": ["citation_coverage", "structure_compliance", "hallucination_risk", "pii_leak_check"]
+            },
+            {
+                "name": "extraction_accuracy", 
+                "description": "Tests financial data extraction accuracy from documents",
+                "metrics": ["field_accuracy", "numeric_tolerance", "currency_normalization"]
+            },
+            {
+                "name": "pii_redaction",
+                "description": "Tests PII redaction effectiveness across different data types",
+                "metrics": ["email_redaction", "phone_redaction", "card_redaction", "token_redaction"]
+            }
+        ]
+    }
