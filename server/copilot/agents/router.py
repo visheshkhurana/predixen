@@ -72,13 +72,15 @@ class RouterAgent(BaseAgent):
     MARKET_KEYWORDS = [
         "competitors", "customers", "icp", "benchmarks", "pricing", "tam",
         "trends", "market size", "industry", "segments", "target market",
-        "buyer persona", "competition", "market research"
+        "buyer persona", "competition", "market research", "differentiate",
+        "differentiation", "compete", "competitive advantage", "market position"
     ]
     
     STRATEGY_KEYWORDS = [
         "new verticals", "product strategy", "gtm", "expansion", "positioning",
         "business ideas", "growth strategy", "go to market", "roadmap",
-        "pivot", "business model", "value proposition", "moat", "defensibility"
+        "pivot", "business model", "value proposition", "moat", "defensibility",
+        "differentiate", "differentiation", "strategy", "strategic"
     ]
     
     def __init__(self):
@@ -240,7 +242,9 @@ class RouterAgent(BaseAgent):
             "market_and_customers": {
                 "icp": merged.get("market", {}).get("icp"),
                 "target_customers": merged.get("market", {}).get("target_customers"),
-                "competitors": merged.get("market", {}).get("competitors")
+                "competitors": merged.get("market", {}).get("competitors"),
+                "differentiation": merged.get("market", {}).get("differentiation"),
+                "benchmarks": merged.get("market", {}).get("benchmarks")
             },
             "strategy_options": merged.get("strategy", {}).get("options"),
             "recommendations": merged.get("strategy", {}).get("recommendations"),
