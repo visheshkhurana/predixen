@@ -210,6 +210,10 @@ class CopilotChatResponse(BaseModel):
     data_health: Optional[Dict[str, Any]] = None
     pii_findings: Optional[List[Dict[str, Any]]] = None
     pii_mode: Optional[str] = None
+    simulation_result: Optional[Dict[str, Any]] = None
+    intent_detected: Optional[str] = None
+    clarifications: Optional[List[Dict[str, Any]]] = None
+    follow_up_actions: Optional[List[Dict[str, Any]]] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -287,6 +291,64 @@ async def copilot_chat(
     redacted_message = redaction_result.redacted_text
     pii_findings = redaction_result.findings
     
+    from server.copilot.intent_parser import parse_intent, CopilotIntent
+    from server.copilot.simulation_handler import SimulationHandler
+    
+    parsed_intent = parse_intent(redacted_message)
+    simulation_result = None
+    intent_detected = parsed_intent.intent.value
+    clarifications = None
+    follow_up_actions = None
+    
+    simulation_intents = {
+        CopilotIntent.RUN_SIMULATION,
+        CopilotIntent.COMPARE_SCENARIOS,
+        CopilotIntent.SAVE_SCENARIO,
+        CopilotIntent.LOAD_SCENARIO,
+        CopilotIntent.MODIFY_PREVIOUS,
+    }
+    
+    if parsed_intent.intent in simulation_intents:
+        handler = SimulationHandler(db, company_id, current_user.id)
+        sim_response = handler.handle_intent(parsed_intent)
+        
+        if sim_response.get('pass_to_agents'):
+            pass
+        else:
+            simulation_result = sim_response
+            clarifications = sim_response.get('clarifications')
+            follow_up_actions = sim_response.get('follow_up_actions')
+            
+            if sim_response.get('success') or sim_response.get('action') == 'clarification_needed':
+                from server.api.data_health import calculate_data_health
+                data_health = calculate_data_health(truth_scan)
+                
+                return CopilotChatResponse(
+                    executive_summary=[sim_response.get('summary', '')],
+                    company_snapshot=[],
+                    financials=None,
+                    market_and_customers=None,
+                    strategy_options=None,
+                    recommendations=None,
+                    assumptions=[],
+                    risks=[],
+                    next_questions=[],
+                    confidence="High" if sim_response.get('success') else "Medium",
+                    ckb_updated=False,
+                    decision_created=None,
+                    challenge=None,
+                    investor_analysis=None,
+                    citations=None,
+                    highlighted_claims=None,
+                    data_health=data_health,
+                    pii_findings=pii_findings if pii_findings else None,
+                    pii_mode=pii_mode,
+                    simulation_result=simulation_result,
+                    intent_detected=intent_detected,
+                    clarifications=clarifications,
+                    follow_up_actions=follow_up_actions
+                )
+    
     context = {
         "has_document": False,
         "extracted_financials": None,
@@ -361,7 +423,11 @@ async def copilot_chat(
         highlighted_claims=highlighted_claims if request.show_sources else None,
         data_health=data_health,
         pii_findings=pii_findings if pii_findings else None,
-        pii_mode=pii_mode
+        pii_mode=pii_mode,
+        simulation_result=simulation_result,
+        intent_detected=intent_detected,
+        clarifications=clarifications,
+        follow_up_actions=follow_up_actions
     )
 
 

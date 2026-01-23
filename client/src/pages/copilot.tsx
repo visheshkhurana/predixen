@@ -140,6 +140,45 @@ interface CopilotApiResponse {
     confidence: string;
   }>;
   pii_mode?: string;
+  simulation_result?: {
+    success: boolean;
+    intent: string;
+    action: string;
+    summary: string;
+    scenario_id?: number;
+    scenario_name?: string;
+    simulation_id?: number;
+    results?: {
+      runway_months: number;
+      survival_rate: number;
+      final_cash: number;
+      confidence_intervals?: Record<string, number>;
+    };
+    parameters?: {
+      burn_reduction_pct?: number | null;
+      price_change_pct?: number | null;
+      revenue_growth_pct?: number | null;
+      hiring_freeze_months?: number | null;
+      fundraise_amount?: number | null;
+      horizon_months?: number;
+    };
+    comparison?: {
+      scenario_1: { name: string; runway: number; survival: number };
+      scenario_2: { name: string; runway: number; survival: number };
+      differences: { runway_months: number; survival_rate: number };
+    };
+  };
+  intent_detected?: string;
+  clarifications?: Array<{
+    field: string;
+    question: string;
+    options?: string[];
+    example?: string;
+  }>;
+  follow_up_actions?: Array<{
+    label: string;
+    action: string;
+  }>;
 }
 
 interface Message {
@@ -201,6 +240,143 @@ const SUGGESTED_PROMPTS = [
   { label: 'Help me prepare my investor data room checklist', icon: FileText },
 ];
 
+function SimulationResultCard({ response, onAction }: { response: CopilotApiResponse; onAction?: (action: string) => void }) {
+  const simResult = response.simulation_result;
+  if (!simResult) return null;
+
+  const results = simResult.results;
+  const params = simResult.parameters;
+
+  return (
+    <div className="mt-4 p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20" data-testid="simulation-result-card">
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 className="h-5 w-5 text-blue-400" />
+        <span className="font-semibold text-sm">Simulation Results</span>
+        {simResult.scenario_name && (
+          <Badge variant="outline" className="text-xs">{simResult.scenario_name}</Badge>
+        )}
+      </div>
+      
+      {results && (
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
+            <div className="text-2xl font-bold text-blue-400">{results.runway_months?.toFixed(1) || '0'}</div>
+            <div className="text-xs text-muted-foreground">Runway (months)</div>
+          </div>
+          <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
+            <div className="text-2xl font-bold text-emerald-400">{((results.survival_rate || 0) * 100).toFixed(0)}%</div>
+            <div className="text-xs text-muted-foreground">Survival Rate</div>
+          </div>
+          <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
+            <div className="text-2xl font-bold text-purple-400">${((results.final_cash || 0) / 1000).toFixed(0)}K</div>
+            <div className="text-xs text-muted-foreground">Final Cash</div>
+          </div>
+        </div>
+      )}
+
+      {params && Object.entries(params).some(([k, v]) => v !== null && k !== 'horizon_months') && (
+        <div className="mb-4">
+          <p className="text-xs text-muted-foreground mb-2">Parameters Used:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {params.burn_reduction_pct && (
+              <Badge variant="outline" className="text-xs">Burn -{params.burn_reduction_pct}%</Badge>
+            )}
+            {params.price_change_pct && (
+              <Badge variant="outline" className="text-xs">Price {params.price_change_pct > 0 ? '+' : ''}{params.price_change_pct}%</Badge>
+            )}
+            {params.revenue_growth_pct && (
+              <Badge variant="outline" className="text-xs">Growth +{params.revenue_growth_pct}%</Badge>
+            )}
+            {params.hiring_freeze_months && (
+              <Badge variant="outline" className="text-xs">Hiring Freeze {params.hiring_freeze_months}mo</Badge>
+            )}
+            {params.fundraise_amount && (
+              <Badge variant="outline" className="text-xs">Raise ${(params.fundraise_amount / 1000000).toFixed(1)}M</Badge>
+            )}
+            {params.horizon_months && (
+              <Badge variant="outline" className="text-xs text-muted-foreground">{params.horizon_months}mo horizon</Badge>
+            )}
+          </div>
+        </div>
+      )}
+
+      {simResult.comparison && (
+        <div className="mb-4 p-3 rounded-lg bg-card/50 border border-border/30">
+          <p className="text-xs text-muted-foreground mb-2">Comparison</p>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="font-medium">{simResult.comparison.scenario_1.name}:</span>
+              <span className="ml-2">{simResult.comparison.scenario_1.runway.toFixed(1)}mo</span>
+            </div>
+            <div>
+              <span className="font-medium">{simResult.comparison.scenario_2.name}:</span>
+              <span className="ml-2">{simResult.comparison.scenario_2.runway.toFixed(1)}mo</span>
+            </div>
+          </div>
+          <div className="mt-2 text-xs">
+            Difference: <span className={simResult.comparison.differences.runway_months > 0 ? 'text-green-400' : 'text-red-400'}>
+              {simResult.comparison.differences.runway_months > 0 ? '+' : ''}{simResult.comparison.differences.runway_months.toFixed(1)} months
+            </span>
+          </div>
+        </div>
+      )}
+
+      {response.follow_up_actions && response.follow_up_actions.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {response.follow_up_actions.map((action, i) => (
+            <Button
+              key={i}
+              variant="outline"
+              size="sm"
+              onClick={() => onAction?.(action.action)}
+              data-testid={`button-followup-${action.action}`}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClarificationPanel({ response, onSelect }: { response: CopilotApiResponse; onSelect?: (option: string) => void }) {
+  const clarifications = response.clarifications;
+  if (!clarifications || clarifications.length === 0) return null;
+
+  return (
+    <div className="mt-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20" data-testid="clarification-panel">
+      <div className="flex items-center gap-2 mb-3">
+        <HelpCircle className="h-5 w-5 text-amber-400" />
+        <span className="font-semibold text-sm">Need More Details</span>
+      </div>
+      {clarifications.map((c, i) => (
+        <div key={i} className="mb-3">
+          <p className="text-sm">{c.question}</p>
+          {c.options && c.options.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {c.options.map((opt, j) => (
+                <Button
+                  key={j}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSelect?.(opt)}
+                  data-testid={`button-clarification-option-${j}`}
+                >
+                  {opt}
+                </Button>
+              ))}
+            </div>
+          )}
+          {c.example && (
+            <p className="text-xs text-muted-foreground mt-2">Example: "{c.example}"</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StructuredResponseDisplay({ response, messageIndex, showSources }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   
@@ -210,6 +386,9 @@ function StructuredResponseDisplay({ response, messageIndex, showSources }: { re
   
   return (
     <div className="mt-4 space-y-3">
+      {response.simulation_result && <SimulationResultCard response={response} />}
+      {response.clarifications && response.clarifications.length > 0 && <ClarificationPanel response={response} />}
+      
       {showSources && response.citations && response.citations.length > 0 && (
         <Collapsible open={openSections['citations']} onOpenChange={() => toggleSection('citations')}>
           <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors" data-testid={`trigger-citations-${messageIndex}`}>
@@ -416,7 +595,7 @@ export default function CopilotPage() {
       try {
         const res = await apiRequest(
           'POST',
-          `/companies/${currentCompany.id}/chat`,
+          `/api/companies/${currentCompany.id}/chat`,
           { 
             message: messageText,
             mode,
