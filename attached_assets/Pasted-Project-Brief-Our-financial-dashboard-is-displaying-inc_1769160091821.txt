@@ -1,0 +1,55 @@
+Project Brief:
+Our financial dashboard is displaying incorrect metrics (negative net burn, zero growth, missing values).  We need to (1) identify and fix the source of incorrect calculations, (2) improve data validation and unit handling, and (3) redesign the UI to make errors transparent and metrics meaningful.  Use the attached Q2‑2025 financial report as the ground truth.
+
+Objectives:
+1. **Audit Data Ingestion and Calculations**
+   - Write scripts to parse the uploaded financial report (PDF/CSV) and extract key metrics (revenue, cost of goods sold, operating expenses, cash on hand, customer counts).  If OCR is required, use an OCR library (e.g., Tesseract).
+   - Compare extracted values with the values currently stored in the simulator’s database.  Identify discrepancies (e.g., net burn in the system is –$106 M vs. actual –$15 K).
+   - Review the formulas used for Net Burn, Revenue Growth, Burn Multiple and Top‑5 Concentration.  Correct the logic:
+     - Net Burn = (cash outflows – cash inflows) for the selected period.
+     - Revenue Growth = (current period revenue – previous period revenue) / previous period revenue.
+     - Burn Multiple = Net Burn / Net New ARR (should not be 0 when ARR increases).
+     - Top‑5 Concentration = revenue from top 5 customers / total revenue.
+   - Ensure that numbers are normalized to the correct unit (e.g., thousands vs. millions).
+
+2. **Implement Data Validation & Unit Handling**
+   - Create a validation layer that checks incoming metrics against sensible ranges.  For example, if Net Burn absolute value > $10 M for a company with <$1 M revenue, flag as “suspect.”
+   - Normalize units using a helper function:
+     - If value ≥ 1 000 000, display as `$X.X M`.
+     - If value ≥ 1 000, display as `$X.X K`.
+     - Otherwise, display the full value.
+   - Store the original value and unit scaling separately so calculations remain accurate.
+
+3. **Enhance UI/UX**
+   - **Metric Cards:**  Update each KPI card to include:
+     - The value with unit (e.g., `–$15 K`).
+     - A sparkline or small bar showing the last 3–4 periods.
+     - A status indicator (green/yellow/red) based on thresholds.
+     - An info icon.  On hover or click, reveal a modal with:
+       - The formula used.
+       - The data source (e.g., “Derived from Q2‑2025 P&L uploaded on 2025‑06‑02”).
+       - Raw numbers (e.g., revenue = $45 K, COGS = $11 K, Opex = $49 K).
+   - **Missing Data Notification:**  If any metric cannot be computed due to missing inputs, replace its value with a “⚠ Data missing” label.  Provide a “Fix now” link that opens the Data Input wizard.
+   - **Time‑Period Selector:**  Add a dropdown at the top of the dashboard to select the period (e.g., Last Month, This Quarter, Last Quarter).  Recalculate metrics and growth rates based on the chosen period.
+   - **Alerts:**  If a metric deviates significantly from the previous period (e.g., burn multiple > 2× last quarter), display an alert in an “Insights” panel.
+   - **Visual Consistency:**  Ensure fonts, colours and spacing align with the rest of the app.  Use a grid layout to avoid overcrowding.
+
+4. **Update Backend and API**
+   - Add endpoints to fetch metrics for a given period (e.g., `/metrics?start_date=YYYY‑MM‑DD&end_date=YYYY‑MM‑DD`).
+   - Return both raw values and formatted strings (with unit abbreviations) as well as a flag indicating if data is estimated or missing.
+   - Implement an endpoint to return the history needed for sparklines (e.g., last 6 months of net burn).
+
+5. **Testing**
+   - Write unit tests to verify calculations for Net Burn, Revenue Growth, Burn Multiple and Top‑5 Concentration using sample data from the attached report.
+   - Create UI tests to ensure that missing data triggers the correct warning banner and that unit formatting works for values of different magnitudes.
+
+6. **Documentation**
+   - Update user documentation to explain how each metric is calculated and what data is required.
+   - Include a troubleshooting section for common issues (e.g., “Why is my revenue growth showing 0%?”).
+
+Deliverables:
+- Corrected calculation functions with unit normalization.
+- A revamped dashboard UI that displays accurate metrics with context and warns when data is missing or out of range.
+- An updated data ingestion pipeline that parses uploaded financial reports correctly.
+- Comprehensive tests and updated documentation.
+

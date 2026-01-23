@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EnhancedKPICard } from "@/components/enhanced-kpi-card";
 import { CashFlowChart } from "@/components/cash-flow-chart";
@@ -6,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Link } from "wouter";
 import { useFounderStore } from "@/store/founderStore";
 import {
@@ -21,11 +24,24 @@ import {
   AlertCircle,
   Lightbulb,
   BarChart3,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
 
+type TimePeriod = "last_month" | "this_quarter" | "last_quarter" | "this_year" | "last_12_months";
+
+const periodLabels: Record<TimePeriod, string> = {
+  last_month: "Last Month",
+  this_quarter: "This Quarter",
+  last_quarter: "Last Quarter",
+  this_year: "This Year",
+  last_12_months: "Last 12 Months",
+};
+
 export default function Dashboard() {
   const { currentCompany: selectedCompany } = useFounderStore();
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("last_12_months");
   
   const { data: scenarios, isLoading: scenariosLoading } = useQuery<Scenario[]>({
     queryKey: ["/api/scenarios"],
@@ -36,7 +52,12 @@ export default function Dashboard() {
   });
 
   const { data: kpis, isLoading: kpisLoading } = useQuery<DashboardKPIs>({
-    queryKey: ["/api/dashboard/companies", selectedCompany?.id, "kpis"],
+    queryKey: ["/api/dashboard/companies", selectedCompany?.id, "kpis", selectedPeriod],
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/companies/${selectedCompany?.id}/kpis?period=${selectedPeriod}`);
+      if (!res.ok) throw new Error("Failed to fetch KPIs");
+      return res.json();
+    },
     enabled: !!selectedCompany?.id,
   });
 
@@ -63,6 +84,22 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Select
+            value={selectedPeriod}
+            onValueChange={(value) => setSelectedPeriod(value as TimePeriod)}
+          >
+            <SelectTrigger className="w-[160px]" data-testid="select-period">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(periodLabels).map(([value, label]) => (
+                <SelectItem key={value} value={value} data-testid={`select-period-${value}`}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           {kpis && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -89,6 +126,28 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {kpis?.missingData && kpis.missingData.length > 0 && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-missing-data">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800 dark:text-amber-400">Data Missing</AlertTitle>
+          <AlertDescription className="text-amber-700 dark:text-amber-300">
+            <ul className="mt-2 space-y-1">
+              {kpis.missingData.map((item: { field: string; message: string }, idx: number) => (
+                <li key={idx} className="flex items-center gap-2">
+                  <span>{item.message}</span>
+                </li>
+              ))}
+            </ul>
+            <Button asChild variant="outline" size="sm" className="mt-3" data-testid="button-fix-data">
+              <Link href="/ingest">
+                <ExternalLink className="h-3 w-3 mr-1" />
+                Fix Now
+              </Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <div className="space-y-6">

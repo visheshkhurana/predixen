@@ -1,13 +1,23 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Info } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Info, Calculator, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import type { KPITimeSeries } from "@shared/schema";
 
+interface MetricDefinition {
+  name: string;
+  formula: string;
+  description: string;
+  unit: string;
+  data_sources: string[];
+}
+
 interface EnhancedKPICardProps {
-  data: KPITimeSeries;
+  data: KPITimeSeries & { definition?: MetricDefinition };
   title: string;
   format?: "currency" | "percent" | "months" | "number" | "multiple";
   icon?: React.ReactNode;
@@ -140,7 +150,57 @@ export function EnhancedKPICard({
           </div>
           <div className="flex items-center gap-2">
             {getStatusBadge()}
-            {data.benchmark !== null && data.benchmark !== undefined && (
+            {data.definition ? (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <span 
+                    className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                    data-testid={`${testId}-info-trigger`}
+                  >
+                    <Info className="h-3 w-3" />
+                  </span>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Calculator className="h-5 w-5" />
+                      {data.definition.name}
+                    </DialogTitle>
+                    <DialogDescription>{data.definition.description}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Formula</h4>
+                      <code className="block p-3 bg-muted rounded-md text-sm font-mono">
+                        {data.definition.formula}
+                      </code>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                        <Database className="h-4 w-4" />
+                        Data Sources
+                      </h4>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        {data.definition.data_sources.map((source, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            {source}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {data.benchmark !== null && data.benchmark !== undefined && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Benchmark</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {data.benchmarkLabel || "Target"}: <span className="font-medium">{formatValue(data.benchmark)}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : data.benchmark !== null && data.benchmark !== undefined ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span 
@@ -154,7 +214,7 @@ export function EnhancedKPICard({
                   <p>{data.benchmarkLabel || "Benchmark"}: {formatValue(data.benchmark)}</p>
                 </TooltipContent>
               </Tooltip>
-            )}
+            ) : null}
           </div>
         </div>
 
