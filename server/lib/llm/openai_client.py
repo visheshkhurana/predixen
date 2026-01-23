@@ -13,7 +13,18 @@ from server.lib.privacy.pii_redactor import redact_text, redact_object, Redactio
 from server.models.llm_audit_log import LLMAuditLog
 
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+def get_openai_client():
+    """Get OpenAI client with Replit AI Integrations configuration."""
+    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    
+    if not api_key:
+        return None
+    
+    return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+
+
+client = get_openai_client()
 
 
 def compute_prompt_hash(text: str) -> str:
@@ -42,7 +53,9 @@ class AuditedOpenAIClient:
         self.company_id = company_id
         self.user_id = user_id
         self.pii_mode = pii_mode
-        self.client = client
+        self.client = client or get_openai_client()
+        if self.client is None:
+            raise ValueError("OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY environment variable.")
     
     def _create_audit_log(
         self,

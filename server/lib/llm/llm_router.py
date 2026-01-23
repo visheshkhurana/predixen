@@ -120,16 +120,24 @@ class LLMRouter:
         self._anthropic_client: Optional[AuditedAnthropicClient] = None
     
     @property
-    def openai_client(self) -> AuditedOpenAIClient:
-        """Lazy-load OpenAI client."""
+    def openai_client(self) -> Optional[AuditedOpenAIClient]:
+        """Lazy-load OpenAI client. Returns None if not configured."""
         if self._openai_client is None:
-            self._openai_client = get_openai_client(
-                db_session=self.db_session,
-                company_id=self.company_id,
-                user_id=self.user_id,
-                pii_mode=self.pii_mode
-            )
+            try:
+                self._openai_client = get_openai_client(
+                    db_session=self.db_session,
+                    company_id=self.company_id,
+                    user_id=self.user_id,
+                    pii_mode=self.pii_mode
+                )
+            except ValueError:
+                return None
         return self._openai_client
+    
+    @property
+    def openai_available(self) -> bool:
+        """Check if OpenAI is available."""
+        return self.openai_client is not None
     
     @property
     def anthropic_client(self) -> AuditedAnthropicClient:
@@ -193,30 +201,33 @@ class LLMRouter:
             max_tokens = model_config.max_tokens
         
         if model_config.provider == Provider.OPENAI:
-            if system:
-                messages = [{"role": "system", "content": system}] + messages
-            
-            result = self.openai_client.chat_completion(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format=response_format,
-                **kwargs
-            )
-            result["provider"] = "openai"
-            return result
+            if self.openai_available:
+                if system:
+                    messages = [{"role": "system", "content": system}] + messages
+                
+                result = self.openai_client.chat_completion(
+                    messages=messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                    **kwargs
+                )
+                result["provider"] = "openai"
+                return result
+            else:
+                model = "claude-sonnet-4-5"
+                model_config = MODELS[model]
         
-        else:
-            result = self.anthropic_client.chat_completion(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                system=system,
-                **kwargs
-            )
-            return result
+        result = self.anthropic_client.chat_completion(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens or model_config.max_tokens,
+            system=system,
+            **kwargs
+        )
+        return result
     
     def vision(
         self,
@@ -237,6 +248,9 @@ class LLMRouter:
         Returns:
             Dict with 'content', 'usage', 'model', 'provider', 'audit_log_id', 'pii_findings'
         """
+        if not self.openai_available:
+            raise ValueError("Vision requires OpenAI. Configure AI_INTEGRATIONS_OPENAI_API_KEY.")
+        
         result = self.openai_client.vision_completion(
             messages=messages,
             model=model,
