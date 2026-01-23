@@ -389,6 +389,67 @@ def ensure_fundraising_tables(engine: Engine) -> None:
             logger.debug(f"Fundraising tables may already exist: {e}")
 
 
+def ensure_conversations_tables(engine: Engine) -> None:
+    """Ensure the conversations tables exist for enhanced copilot memory."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    title VARCHAR(255),
+                    last_scenario_id INTEGER REFERENCES scenarios(id),
+                    context_metadata JSONB DEFAULT '{}',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conversations_company ON conversations(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conversations_active ON conversations(is_active)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    role VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    intent_type VARCHAR(50),
+                    scenario_id INTEGER REFERENCES scenarios(id),
+                    simulation_id INTEGER,
+                    chart_data JSONB,
+                    message_metadata JSONB DEFAULT '{}',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_messages_conv ON conversation_messages(conversation_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_messages_created ON conversation_messages(created_at)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS conversation_recommendations (
+                    id SERIAL PRIMARY KEY,
+                    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    message_id INTEGER REFERENCES conversation_messages(id),
+                    recommendation_type VARCHAR(50) NOT NULL,
+                    recommendation_text TEXT NOT NULL,
+                    priority INTEGER DEFAULT 0,
+                    context_data JSONB,
+                    feedback VARCHAR(20),
+                    feedback_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_recs_conv ON conversation_recommendations(conversation_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_recs_type ON conversation_recommendations(recommendation_type)"))
+            
+            conn.commit()
+            logger.info("Conversations tables migration complete")
+        except Exception as e:
+            logger.debug(f"Conversations tables may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -404,4 +465,5 @@ def run_migrations(engine: Engine) -> None:
     ensure_llm_audit_logs_table(engine)
     ensure_eval_runs_table(engine)
     ensure_fundraising_tables(engine)
+    ensure_conversations_tables(engine)
     logger.info("Database migrations completed successfully")

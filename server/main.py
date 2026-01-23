@@ -22,6 +22,7 @@ from server.api import connectors as connectors_api
 from server.api import notifications as notifications_api
 from server.api import assumptions as assumptions_api
 from server.api import advanced_simulation as advanced_simulation_api
+from server.api import conversations as conversations_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ app.include_router(connectors_api.router)
 app.include_router(notifications_api.router)
 app.include_router(assumptions_api.router)
 app.include_router(advanced_simulation_api.router)
+app.include_router(conversations_api.router)
 
 @app.get("/")
 def root():

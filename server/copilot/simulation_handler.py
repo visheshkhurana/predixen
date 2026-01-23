@@ -13,6 +13,9 @@ from server.copilot.intent_parser import (
     format_parameters_summary
 )
 from server.copilot.conversation_state import ConversationState, conversation_store
+from server.copilot.recommendation_engine import (
+    RecommendationEngine, UserGoals, Recommendation
+)
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +199,56 @@ class SimulationHandler:
         
         param_summary = format_parameters_summary(params)
         
+        rec_engine = RecommendationEngine(industry="saas")
+        sim_results_for_recs = {
+            'runway_months': runway,
+            'survival_rate': survival * 100 if survival <= 1 else survival,
+            'final_cash': final_cash,
+        }
+        current_financials = {
+            'burn_multiple': burn_rate / max(baseline_revenue, 1) if baseline_revenue else 3.0,
+            'gross_margin': gross_margin / 100,
+            'churn_rate': churn_rate / 100,
+            'growth_rate': baseline_growth / 100,
+        }
+        sim_params_for_recs = {
+            'burn_reduction_pct': params.burn_reduction_pct,
+            'price_change_pct': params.price_change_pct,
+            'fundraise_amount': params.fundraise_amount,
+        }
+        recommendations = rec_engine.analyze(
+            sim_results_for_recs,
+            current_financials,
+            UserGoals(),
+            sim_params_for_recs
+        )
+        
+        rec_text = rec_engine.format_recommendations_for_chat(recommendations)
+        
+        recommendation_ids = {}
+        for rec in recommendations:
+            try:
+                rec_id = conversation_store.add_recommendation(
+                    self.db,
+                    self.company_id,
+                    self.user_id,
+                    recommendation_type=rec.rec_type.value,
+                    recommendation_text=rec.text,
+                    priority=rec.priority,
+                    context_data={
+                        'action_prompt': rec.action_prompt,
+                        'rationale': rec.rationale,
+                        'estimated_impact': rec.estimated_impact,
+                        'scenario_id': scenario.id,
+                        'simulation_id': sim_run.id,
+                    }
+                )
+                recommendation_ids[rec.rec_type.value] = rec_id
+            except Exception as e:
+                logger.warning(f"Failed to persist recommendation: {e}")
+        
+        chart_data = self._generate_chart_data(results, scenario_name)
+        
         response_text = f"""**Simulation Results: {scenario_name}**
 
 I ran a {params.horizon_months}-month simulation with {param_summary}.
@@ -207,10 +260,7 @@ I ran a {params.horizon_months}-month simulation with {param_summary}.
 
 The simulation ran {config.iterations} Monte Carlo iterations to account for uncertainty.
 
-Would you like me to:
-- Save this as a named scenario?
-- Compare it with other scenarios?
-- Adjust any parameters?"""
+{rec_text}"""
         
         return {
             'success': True,
@@ -234,6 +284,17 @@ Would you like me to:
                 'fundraise_amount': params.fundraise_amount,
                 'horizon_months': params.horizon_months,
             },
+            'chart_data': chart_data,
+            'recommendations': [
+                {
+                    'id': recommendation_ids.get(r.rec_type.value),
+                    'type': r.rec_type.value,
+                    'priority': r.priority,
+                    'text': r.text,
+                    'action_prompt': r.action_prompt,
+                }
+                for r in recommendations
+            ],
             'follow_up_actions': [
                 {'label': 'Save as Plan', 'action': 'save_scenario'},
                 {'label': 'Compare Scenarios', 'action': 'compare_scenarios'},
@@ -589,4 +650,50 @@ The simulation accounts for uncertainty through Monte Carlo modeling, running hu
             'action': 'clarification_needed',
             'summary': summary,
             'clarifications': questions
+        }
+    
+    def _generate_chart_data(
+        self, 
+        results: Dict[str, Any], 
+        scenario_name: str
+    ) -> Dict[str, Any]:
+        """Generate chart-ready data for inline visualization in chat."""
+        summary = results.get('summary', {})
+        trajectories = results.get('trajectories', {})
+        
+        runway_data = {
+            'type': 'runway_band',
+            'scenario_name': scenario_name,
+            'metrics': {
+                'p10': summary.get('percentiles', {}).get('p10_runway', 0),
+                'p25': summary.get('percentiles', {}).get('p25_runway', 0),
+                'p50': summary.get('mean_runway_months', 0),
+                'p75': summary.get('percentiles', {}).get('p75_runway', 0),
+                'p90': summary.get('percentiles', {}).get('p90_runway', 0),
+            }
+        }
+        
+        cash_trajectory = []
+        if trajectories.get('mean_cash'):
+            for i, cash in enumerate(trajectories['mean_cash'][:24]):
+                month_data = {'month': i}
+                month_data['mean'] = cash
+                if trajectories.get('p10_cash') and i < len(trajectories['p10_cash']):
+                    month_data['p10'] = trajectories['p10_cash'][i]
+                if trajectories.get('p90_cash') and i < len(trajectories['p90_cash']):
+                    month_data['p90'] = trajectories['p90_cash'][i]
+                cash_trajectory.append(month_data)
+        
+        survival_trajectory = []
+        if trajectories.get('survival_rate'):
+            for i, rate in enumerate(trajectories['survival_rate'][:24]):
+                survival_trajectory.append({
+                    'month': i,
+                    'survival_rate': rate * 100
+                })
+        
+        return {
+            'runway': runway_data,
+            'cash_trajectory': cash_trajectory,
+            'survival_trajectory': survival_trajectory,
         }
