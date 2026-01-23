@@ -8,6 +8,108 @@ from server.models.transaction import TransactionRecord
 from server.models.customer import CustomerRecord
 from server.models.benchmark import Benchmark
 
+
+def validate_metrics(metrics: Dict[str, Any], latest_financial: FinancialRecord) -> Dict[str, Any]:
+    """
+    Validate metrics against sensible ranges and flag anomalies.
+    Returns validation results with flags for suspect values.
+    """
+    validation = {
+        "is_valid": True,
+        "warnings": [],
+        "errors": [],
+        "missing_data": []
+    }
+    
+    net_burn = metrics.get("net_burn", 0)
+    revenue = latest_financial.revenue if latest_financial else 0
+    cash_balance = latest_financial.cash_balance if latest_financial else 0
+    
+    if net_burn < 0 and abs(net_burn) > 10_000_000 and revenue < 1_000_000:
+        validation["warnings"].append({
+            "field": "net_burn",
+            "message": "Net burn seems unusually high for company size",
+            "value": net_burn,
+            "threshold": 10_000_000
+        })
+    
+    if revenue < 0:
+        validation["errors"].append({
+            "field": "revenue",
+            "message": "Revenue cannot be negative",
+            "value": revenue
+        })
+        validation["is_valid"] = False
+    
+    if cash_balance is None or cash_balance == 0:
+        validation["missing_data"].append({
+            "field": "cash_balance",
+            "message": "Cash balance not provided - runway calculations may be inaccurate"
+        })
+    
+    gross_margin = metrics.get("gross_margin", 0)
+    if gross_margin > 100:
+        validation["warnings"].append({
+            "field": "gross_margin",
+            "message": "Gross margin exceeds 100% - check COGS data",
+            "value": gross_margin
+        })
+    elif gross_margin < 0:
+        validation["warnings"].append({
+            "field": "gross_margin",
+            "message": "Negative gross margin indicates COGS exceeds revenue",
+            "value": gross_margin
+        })
+    
+    burn_multiple = metrics.get("burn_multiple")
+    if burn_multiple is None and net_burn > 0:
+        validation["missing_data"].append({
+            "field": "burn_multiple",
+            "message": "Cannot calculate burn multiple - no ARR growth data"
+        })
+    
+    revenue_growth = metrics.get("revenue_growth_yoy", 0)
+    if abs(revenue_growth) > 1000:
+        validation["warnings"].append({
+            "field": "revenue_growth_yoy",
+            "message": "Revenue growth appears unusually high - verify data",
+            "value": revenue_growth
+        })
+    
+    return validation
+
+
+def format_currency(value: float) -> Dict[str, Any]:
+    """
+    Format a currency value with appropriate unit abbreviation.
+    Returns both raw value and formatted string.
+    """
+    if value is None:
+        return {"raw": None, "formatted": "N/A", "unit": None}
+    
+    abs_value = abs(value)
+    sign = "-" if value < 0 else ""
+    
+    if abs_value >= 1_000_000:
+        return {
+            "raw": value,
+            "formatted": f"{sign}${abs_value / 1_000_000:.1f}M",
+            "unit": "millions"
+        }
+    elif abs_value >= 1_000:
+        return {
+            "raw": value,
+            "formatted": f"{sign}${abs_value / 1_000:.1f}K",
+            "unit": "thousands"
+        }
+    else:
+        return {
+            "raw": value,
+            "formatted": f"{sign}${abs_value:.0f}",
+            "unit": "dollars"
+        }
+
+
 def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     financials = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company.id
@@ -54,16 +156,42 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             prev_burn = (prev.cogs + prev.opex + prev.payroll + prev.other_costs) - prev.revenue
             burn_change = net_burn - prev_burn
             metrics["burn_change"] = burn_change
+            
+            net_new_arr = (latest.revenue - prev.revenue) * 12
+            metrics["net_new_arr"] = net_new_arr
         else:
             metrics["revenue_growth_mom"] = 0
             metrics["burn_change"] = 0
+            metrics["net_new_arr"] = 0
         
+        if len(financials) >= 12:
+            prev_year = financials[11]
+            if prev_year.revenue > 0:
+                metrics["revenue_growth_yoy"] = ((latest.revenue - prev_year.revenue) / prev_year.revenue) * 100
+            else:
+                metrics["revenue_growth_yoy"] = 0
+        elif len(financials) >= 2:
+            mom_growth = metrics.get("revenue_growth_mom", 0)
+            metrics["revenue_growth_yoy"] = ((1 + mom_growth/100) ** 12 - 1) * 100
+        else:
+            metrics["revenue_growth_yoy"] = 0
+        
+        net_new_arr = metrics.get("net_new_arr", 0)
         if net_burn > 0:
-            metrics["burn_multiple"] = net_burn / max(1, latest.revenue)
-            runway_months = latest.cash_balance / net_burn
-            metrics["runway_p50"] = round(runway_months, 1)
-            metrics["runway_p10"] = round(runway_months * 0.7, 1)
-            metrics["runway_p90"] = round(runway_months * 1.4, 1)
+            if net_new_arr > 0:
+                metrics["burn_multiple"] = round(net_burn / net_new_arr, 2)
+            else:
+                metrics["burn_multiple"] = None
+            
+            if latest.cash_balance and latest.cash_balance > 0:
+                runway_months = latest.cash_balance / net_burn
+                metrics["runway_p50"] = round(runway_months, 1)
+                metrics["runway_p10"] = round(runway_months * 0.7, 1)
+                metrics["runway_p90"] = round(runway_months * 1.4, 1)
+            else:
+                metrics["runway_p50"] = 0
+                metrics["runway_p10"] = 0
+                metrics["runway_p90"] = 0
             metrics["runway_sustainable"] = False
         else:
             metrics["burn_multiple"] = 0
@@ -71,6 +199,8 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             metrics["runway_p10"] = None
             metrics["runway_p90"] = None
             metrics["runway_sustainable"] = True
+        
+        metrics["data_validation"] = validate_metrics(metrics, latest)
         
         runway_p50 = metrics.get("runway_p50")
         if runway_p50 is not None and runway_p50 < 6:
@@ -354,8 +484,8 @@ def compute_quality_of_growth(metrics: Dict, confidence: int) -> int:
     else:
         score -= 5
     
-    burn_mult = metrics.get("burn_multiple", 0)
-    if burn_mult <= 0:
+    burn_mult = metrics.get("burn_multiple")
+    if burn_mult is None or burn_mult <= 0:
         score += 10
     elif burn_mult <= 1.5:
         score += 8
