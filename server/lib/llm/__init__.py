@@ -44,6 +44,8 @@ from server.lib.llm.anthropic_client import (
     get_audited_anthropic_client,
 )
 
+from server.lib.llm.gemini_client import GeminiClient
+
 __all__ = [
     "LLMRouter",
     "get_llm_router",
@@ -58,4 +60,5 @@ __all__ = [
     "get_openai_client",
     "AuditedAnthropicClient",
     "get_audited_anthropic_client",
+    "GeminiClient",
 ]
