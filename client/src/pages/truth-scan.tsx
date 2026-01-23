@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { MetricCard } from '@/components/MetricCard';
 import { MetricDetailModal } from '@/components/MetricDetailModal';
 import { ExportButton } from '@/components/ExportButton';
@@ -12,7 +13,7 @@ import { BurnBreakdownChart } from '@/components/BurnBreakdownChart';
 import { ScenarioRunwayToggle } from '@/components/ScenarioRunwayToggle';
 import { CashFlowForecast } from '@/components/CashFlowForecast';
 import { HeadcountPanel } from '@/components/HeadcountPanel';
-import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle } from 'lucide-react';
+import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
@@ -21,6 +22,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { formatTruthScanForExport } from '@/lib/exportUtils';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 import { generateMockTrendData } from '@/components/Sparkline';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 const STATUS_EXPLANATIONS = {
   critical: {
@@ -83,10 +87,128 @@ function getScoreActions(score: number, explanationData: typeof QUALITY_OF_GROWT
   return explanationData.improvements[3];
 }
 
+interface Recommendation {
+  type: 'critical' | 'warning' | 'opportunity' | 'success';
+  title: string;
+  description: string;
+  action?: string;
+}
+
+// Helper to extract numeric value from metrics that may be objects with {value, benchmark_percentile}
+function getMetricValue(metric: any): number | null {
+  if (metric === null || metric === undefined) return null;
+  if (typeof metric === 'number') return metric;
+  if (typeof metric === 'object' && 'value' in metric) return metric.value;
+  return null;
+}
+
+function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+  
+  // Extract numeric values (some metrics may be objects with value/benchmark_percentile)
+  const runwayP50 = getMetricValue(metrics.runway_p50);
+  const burnMultiple = getMetricValue(metrics.burn_multiple);
+  const grossMargin = getMetricValue(metrics.gross_margin);
+  const ltvCacRatio = getMetricValue(metrics.ltv_cac_ratio);
+  const nrr = getMetricValue(metrics.net_revenue_retention);
+  const runwaySustainable = metrics.runway_sustainable === true;
+  
+  // Critical: Low runway
+  if (runwayP50 && runwayP50 < 6 && !runwaySustainable) {
+    recommendations.push({
+      type: 'critical',
+      title: 'Runway Below 6 Months',
+      description: `With only ${runwayP50.toFixed(1)} months of runway, immediate action is needed. Consider reducing burn rate by 20-30% or accelerating fundraising conversations.`,
+      action: 'Focus on survival mode: pause non-essential hiring, negotiate extended payment terms with vendors, and explore bridge financing options.'
+    });
+  }
+  
+  // Warning: High burn multiple
+  if (burnMultiple && burnMultiple > 3) {
+    recommendations.push({
+      type: 'warning',
+      title: 'Burn Multiple is Elevated',
+      description: `Your burn multiple of ${burnMultiple.toFixed(1)}x means you're spending $${burnMultiple.toFixed(1)} for every $1 of new ARR. Top-tier startups maintain this below 2x.`,
+      action: 'Review customer acquisition costs and focus on higher-efficiency growth channels. Consider increasing pricing or reducing sales team overhead.'
+    });
+  }
+  
+  // Warning: Low gross margin
+  if (grossMargin && grossMargin < 60) {
+    recommendations.push({
+      type: 'warning',
+      title: 'Gross Margin Below Target',
+      description: `At ${grossMargin.toFixed(0)}%, your gross margin is below the 70%+ target for SaaS. This limits profitability potential and fundraising attractiveness.`,
+      action: 'Review infrastructure costs, vendor contracts, and pricing strategy. Consider usage-based pricing tiers or reducing support intensity for lower-tier customers.'
+    });
+  }
+  
+  // Opportunity: Strong unit economics
+  if (ltvCacRatio && ltvCacRatio >= 3) {
+    recommendations.push({
+      type: 'opportunity',
+      title: 'Strong Unit Economics',
+      description: `Your LTV:CAC ratio of ${ltvCacRatio.toFixed(1)}x indicates healthy customer economics. This is a signal to potentially accelerate growth investment.`,
+      action: 'Consider increasing marketing spend on proven channels. Your unit economics can support more aggressive customer acquisition.'
+    });
+  }
+  
+  // Opportunity: High NRR
+  if (nrr && nrr > 110) {
+    recommendations.push({
+      type: 'opportunity',
+      title: 'Excellent Net Revenue Retention',
+      description: `At ${nrr.toFixed(0)}% NRR, your existing customers are growing significantly. This is a competitive advantage for fundraising.`,
+      action: 'Document your expansion playbook and consider hiring dedicated customer success roles to amplify this strength.'
+    });
+  }
+  
+  // Success: Profitable/sustainable
+  if (runwaySustainable) {
+    recommendations.push({
+      type: 'success',
+      title: 'Cash Flow Positive',
+      description: 'Your company is generating more cash than it spends. This gives you strategic flexibility to grow on your own terms.',
+      action: 'Consider whether to reinvest profits for faster growth or maintain profitability for optionality in uncertain markets.'
+    });
+  }
+  
+  // Add any flags as warnings
+  flags.filter((f: any) => f.severity === 'medium').forEach((flag: any) => {
+    if (flag.title && flag.description) {
+      recommendations.push({
+        type: 'warning',
+        title: String(flag.title),
+        description: String(flag.description),
+        action: flag.action ? String(flag.action) : undefined
+      });
+    }
+  });
+  
+  // Default recommendation if no specific ones
+  if (recommendations.length === 0) {
+    recommendations.push({
+      type: 'success',
+      title: 'Financial Health is Looking Good',
+      description: 'No critical issues detected. Your metrics are within healthy ranges. Continue monitoring key indicators regularly.',
+    });
+    recommendations.push({
+      type: 'opportunity',
+      title: 'Explore Scenario Planning',
+      description: 'Use the Simulation page to model different growth scenarios and understand probabilistic outcomes for fundraising conversations.',
+      action: 'Run a Monte Carlo simulation with optimistic and pessimistic assumptions to prepare for board discussions.'
+    });
+  }
+  
+  return recommendations.slice(0, 5); // Limit to 5 recommendations
+}
+
 export default function TruthScanPage() {
-  const { currentCompany } = useFounderStore();
+  const { currentCompany, setCurrentCompany } = useFounderStore();
   const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
   const runTruthScanMutation = useRunTruthScan();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   
   const [selectedMetric, setSelectedMetric] = useState<{
     definition: MetricDefinition | null;
@@ -96,6 +218,39 @@ export default function TruthScanPage() {
   
   const [qualityExpanded, setQualityExpanded] = useState(false);
   const [confidenceExpanded, setConfidenceExpanded] = useState(false);
+  
+  // Business summary editing state
+  const [isEditingSummary, setIsEditingSummary] = useState(false);
+  const [summaryText, setSummaryText] = useState(currentCompany?.description || '');
+  
+  // Sync summary text when company changes
+  useEffect(() => {
+    setSummaryText(currentCompany?.description || '');
+  }, [currentCompany?.description]);
+  
+  // Mutation to update company description
+  const updateDescriptionMutation = useMutation({
+    mutationFn: async (description: string) => {
+      const res = await apiRequest('PUT', `/api/companies/${currentCompany?.id}`, { description });
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return res.json();
+      }
+      return { description };
+    },
+    onSuccess: (data) => {
+      toast({ title: 'Business summary saved' });
+      // Update current company with new description
+      if (currentCompany) {
+        setCurrentCompany({ ...currentCompany, description: data?.description ?? summaryText });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
+      setIsEditingSummary(false);
+    },
+    onError: () => {
+      toast({ title: 'Failed to save', variant: 'destructive' });
+    }
+  });
 
   const metrics = truthScan?.metrics || {};
   const flags = truthScan?.flags || [];
@@ -105,14 +260,21 @@ export default function TruthScanPage() {
   const trendData = useMemo(() => {
     if (!truthScan?.metrics) return {} as Record<string, number[]>;
     const m = truthScan.metrics;
+    // Extract numeric values from potential object structures
+    const getValue = (v: any): number => {
+      if (v === null || v === undefined) return 0;
+      if (typeof v === 'number') return v;
+      if (typeof v === 'object' && 'value' in v) return getValue(v.value);
+      return 0;
+    };
     return {
-      monthly_revenue: generateMockTrendData(m.monthly_revenue || 100000, 6, 0.08),
-      net_burn: generateMockTrendData(Math.abs(m.net_burn || 50000), 6, 0.12),
-      cash_balance: generateMockTrendData(m.cash_balance || 500000, 6, 0.05),
-      gross_margin: generateMockTrendData((m.gross_margin || 0.65) * 100, 6, 0.03),
-      revenue_growth: generateMockTrendData((m.revenue_growth_mom || 0.1) * 100, 6, 0.15),
-      burn_multiple: generateMockTrendData(m.burn_multiple || 2, 6, 0.1),
-      operating_margin: generateMockTrendData((m.operating_margin || -0.2) * 100 + 50, 6, 0.08),
+      monthly_revenue: generateMockTrendData(getValue(m.monthly_revenue) || 100000, 6, 0.08),
+      net_burn: generateMockTrendData(Math.abs(getValue(m.net_burn) || 50000), 6, 0.12),
+      cash_balance: generateMockTrendData(getValue(m.cash_balance) || 500000, 6, 0.05),
+      gross_margin: generateMockTrendData((getValue(m.gross_margin) || 0.65) * 100, 6, 0.03),
+      revenue_growth: generateMockTrendData((getValue(m.revenue_growth_mom) || 0.1) * 100, 6, 0.15),
+      burn_multiple: generateMockTrendData(getValue(m.burn_multiple) || 2, 6, 0.1),
+      operating_margin: generateMockTrendData((getValue(m.operating_margin) || -0.2) * 100 + 50, 6, 0.08),
     };
   }, [truthScan?.metrics]);
   
@@ -128,12 +290,22 @@ export default function TruthScanPage() {
     );
   }
   
-  const formatCurrency = (value: number | null | undefined) => {
-    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
+  // Extract numeric value from potential object structures
+  const extractValue = (v: any): number | null => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'object' && 'value' in v) return extractValue(v.value);
+    return null;
   };
   
-  const formatPercent = (value: number | null | undefined) => {
-    return formatPct(value);
+  const formatCurrency = (value: any) => {
+    const numValue = extractValue(value);
+    return formatCurrencyAbbrev(numValue, currentCompany?.currency || 'USD');
+  };
+  
+  const formatPercent = (value: any) => {
+    const numValue = extractValue(value);
+    return formatPct(numValue);
   };
   
   const handleRefresh = async () => {
@@ -402,6 +574,89 @@ export default function TruthScanPage() {
         </Collapsible>
       </div>
       
+      {/* Business Summary Section */}
+      <Card className="overflow-visible">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Business Summary
+            </div>
+            {!isEditingSummary && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsEditingSummary(true)}
+                data-testid="button-edit-summary"
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isEditingSummary ? (
+            <div className="space-y-3">
+              <Textarea 
+                value={summaryText}
+                onChange={(e) => setSummaryText(e.target.value)}
+                placeholder="Describe your company, product, market, and key value proposition..."
+                className="min-h-[120px]"
+                data-testid="textarea-summary"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setSummaryText(currentCompany?.description || '');
+                    setIsEditingSummary(false);
+                  }}
+                  data-testid="button-cancel-summary"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => updateDescriptionMutation.mutate(summaryText)}
+                  disabled={updateDescriptionMutation.isPending}
+                  data-testid="button-save-summary"
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  {updateDescriptionMutation.isPending ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {currentCompany?.description ? (
+                <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-summary">
+                  {currentCompany.description}
+                </p>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No business summary yet.</p>
+                  <p className="text-xs">Add a description to help contextualize your metrics.</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-3"
+                    onClick={() => setIsEditingSummary(true)}
+                    data-testid="button-add-summary"
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Add Summary
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">Key Metrics</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -429,14 +684,14 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title={metrics.is_profitable ? "Monthly Surplus" : "Net Burn"} 
-                value={formatCurrency(metrics.is_profitable ? Math.abs(metrics.net_burn) : metrics.net_burn)} 
+                value={formatCurrency(metrics.is_profitable ? Math.abs(extractValue(metrics.net_burn) || 0) : extractValue(metrics.net_burn))} 
                 testId="metric-burn"
                 tooltip={metrics.is_profitable ? "Monthly surplus (revenue exceeds expenses)" : METRIC_DEFINITIONS.net_burn?.shortDescription}
-                variant={metrics.is_profitable ? "success" : metrics.net_burn > 0 ? "danger" : "default"}
+                variant={metrics.is_profitable ? "success" : (extractValue(metrics.net_burn) || 0) > 0 ? "danger" : "default"}
                 trendData={trendData.net_burn}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
-                  value: formatCurrency(metrics.is_profitable ? Math.abs(metrics.net_burn) : metrics.net_burn) 
+                  value: formatCurrency(metrics.is_profitable ? Math.abs(extractValue(metrics.net_burn) || 0) : extractValue(metrics.net_burn)) 
                 })}
               />
               <MetricCard 
@@ -452,13 +707,13 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Runway (P50)" 
-                value={metrics.runway_sustainable ? "Sustainable" : `${metrics.runway_p50?.toFixed(1) || 0} months`} 
+                value={metrics.runway_sustainable ? "Sustainable" : `${(extractValue(metrics.runway_p50) || 0).toFixed(1)} months`} 
                 testId="metric-runway"
                 tooltip={metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
-                variant={metrics.runway_sustainable ? "success" : (metrics.runway_p50 && metrics.runway_p50 < 12 ? "danger" : "default")}
+                variant={metrics.runway_sustainable ? "success" : ((extractValue(metrics.runway_p50) || 0) < 12 ? "danger" : "default")}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('runway_months') || null, 
-                  value: metrics.runway_sustainable ? "Sustainable" : `${metrics.runway_p50?.toFixed(1) || 0} months` 
+                  value: metrics.runway_sustainable ? "Sustainable" : `${(extractValue(metrics.runway_p50) || 0).toFixed(1)} months` 
                 })}
               />
               <MetricCard 
@@ -474,10 +729,18 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Revenue Growth" 
-                value={formatPercent(metrics.revenue_growth_mom)} 
-                subtitle="MoM" 
+                value={(() => {
+                  const val = extractValue(metrics.revenue_growth_mom);
+                  return val !== null ? formatPercent(val) : 'N/A';
+                })()} 
+                subtitle={extractValue(metrics.revenue_growth_mom) === 0 ? "Need 2+ months data" : "MoM"} 
                 testId="metric-growth"
-                tooltip={METRIC_DEFINITIONS.revenue_growth_mom?.shortDescription}
+                tooltip={
+                  extractValue(metrics.revenue_growth_mom) === 0 || extractValue(metrics.revenue_growth_mom) === null
+                    ? "Revenue growth requires at least 2 months of data to calculate month-over-month change."
+                    : METRIC_DEFINITIONS.revenue_growth_mom?.shortDescription
+                }
+                variant={extractValue(metrics.revenue_growth_mom) === 0 ? "default" : undefined}
                 trendData={trendData.revenue_growth}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('revenue_growth_mom') || null, 
@@ -486,13 +749,35 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Burn Multiple" 
-                value={typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A'} 
+                value={(() => {
+                  const val = extractValue(metrics.burn_multiple);
+                  if (val !== null && typeof val === 'number') return `${val.toFixed(1)}x`;
+                  return metrics.runway_sustainable ? 'Profitable' : 'N/A';
+                })()} 
                 testId="metric-burn-mult"
-                tooltip={METRIC_DEFINITIONS.burn_multiple?.shortDescription}
+                tooltip={(() => {
+                  const val = extractValue(metrics.burn_multiple);
+                  if (val === null) {
+                    return metrics.runway_sustainable
+                      ? "Company is profitable - no burn multiple applicable."
+                      : "Burn multiple = Net Burn ÷ Net New ARR. Requires positive ARR growth to calculate.";
+                  }
+                  return METRIC_DEFINITIONS.burn_multiple?.shortDescription;
+                })()}
+                variant={(() => {
+                  const val = extractValue(metrics.burn_multiple);
+                  if (metrics.runway_sustainable) return "success";
+                  if (val !== null && val <= 2) return "success";
+                  if (val !== null && val > 3) return "danger";
+                  return undefined;
+                })()}
                 trendData={trendData.burn_multiple}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('burn_multiple') || null, 
-                  value: typeof metrics.burn_multiple === 'number' ? metrics.burn_multiple.toFixed(1) : 'N/A' 
+                  value: (() => {
+                    const val = extractValue(metrics.burn_multiple);
+                    return typeof val === 'number' ? `${val.toFixed(1)}x` : 'N/A';
+                  })()
                 })}
               />
               <MetricCard 
@@ -514,17 +799,17 @@ export default function TruthScanPage() {
       {/* Unit Economics Section */}
       <UnitEconomicsPanel 
         metrics={{
-          cac: metrics.cac,
-          ltv: metrics.ltv,
-          ltv_cac_ratio: metrics.ltv_cac_ratio,
-          payback_months: metrics.payback_months,
-          mrr: metrics.mrr,
-          arr: metrics.arr,
-          arpu: metrics.arpu,
-          customer_count: metrics.customer_count,
-          churn_rate_customer: metrics.churn_rate_customer,
-          churn_rate_revenue: metrics.churn_rate_revenue,
-          net_revenue_retention: metrics.net_revenue_retention,
+          cac: extractValue(metrics.cac),
+          ltv: extractValue(metrics.ltv),
+          ltv_cac_ratio: extractValue(metrics.ltv_cac_ratio),
+          payback_months: extractValue(metrics.payback_months),
+          mrr: extractValue(metrics.mrr),
+          arr: extractValue(metrics.arr),
+          arpu: extractValue(metrics.arpu),
+          customer_count: extractValue(metrics.customer_count),
+          churn_rate_customer: extractValue(metrics.churn_rate_customer),
+          churn_rate_revenue: extractValue(metrics.churn_rate_revenue),
+          net_revenue_retention: extractValue(metrics.net_revenue_retention),
         }}
         currency={currentCompany?.currency || 'USD'}
       />
@@ -536,9 +821,9 @@ export default function TruthScanPage() {
           currency={currentCompany?.currency || 'USD'}
         />
         <ScenarioRunwayToggle
-          currentRunway={metrics.runway_p50}
-          currentBurn={metrics.net_burn}
-          cashBalance={metrics.cash_balance}
+          currentRunway={extractValue(metrics.runway_p50)}
+          currentBurn={extractValue(metrics.net_burn)}
+          cashBalance={extractValue(metrics.cash_balance)}
           currency={currentCompany?.currency || 'USD'}
         />
       </div>
@@ -550,9 +835,9 @@ export default function TruthScanPage() {
           currency={currentCompany?.currency || 'USD'}
         />
         <HeadcountPanel
-          headcount={metrics.headcount}
-          plannedHires={metrics.planned_hires}
-          revenuePerEmployee={metrics.revenue_per_employee}
+          headcount={extractValue(metrics.headcount)}
+          plannedHires={extractValue(metrics.planned_hires)}
+          revenuePerEmployee={extractValue(metrics.revenue_per_employee)}
           currency={currentCompany?.currency || 'USD'}
         />
       </div>
@@ -560,50 +845,41 @@ export default function TruthScanPage() {
       {/* Insights & Recommendations Section - always shown */}
       <div className="space-y-4" data-testid="insights-section">
         <h2 className="text-xl font-semibold">Insights & Recommendations</h2>
-        <div className="space-y-2">
-          {flags.filter((f: any) => f.severity !== 'high').length > 0 ? (
-            flags.filter((f: any) => f.severity !== 'high').map((flag: any, i: number) => (
-              <Card key={i} className="overflow-visible">
-                <CardContent className="p-4 flex items-start gap-3">
-                  <AlertTriangle className={`h-5 w-5 mt-0.5 ${flag.severity === 'medium' ? 'text-amber-500' : 'text-muted-foreground'}`} />
-                  <div>
-                    <p className="font-medium">{flag.title}</p>
-                    <p className="text-sm text-muted-foreground">{flag.description}</p>
+        <div className="space-y-3">
+          {generateRecommendations(metrics, flags).map((rec, i) => (
+            <Card key={i} className="overflow-visible">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  {rec.type === 'critical' && <AlertTriangle className="h-5 w-5 mt-0.5 text-red-500 shrink-0" />}
+                  {rec.type === 'warning' && <AlertTriangle className="h-5 w-5 mt-0.5 text-amber-500 shrink-0" />}
+                  {rec.type === 'opportunity' && <Lightbulb className="h-5 w-5 mt-0.5 text-primary shrink-0" />}
+                  {rec.type === 'success' && <CheckCircle className="h-5 w-5 mt-0.5 text-emerald-500 shrink-0" />}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{rec.title}</p>
+                      {rec.type === 'critical' && (
+                        <Badge variant="destructive" className="text-xs">Critical</Badge>
+                      )}
+                      {rec.type === 'warning' && (
+                        <Badge className="bg-amber-500/20 text-amber-500 text-xs">Caution</Badge>
+                      )}
+                      {rec.type === 'opportunity' && (
+                        <Badge className="bg-primary/20 text-primary text-xs">Opportunity</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                    {rec.action && (
+                      <div className="mt-2 p-2 bg-secondary/50 rounded-md">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium">Suggested action:</span> {rec.action}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            ))
-          ) : (
-            <>
-              <Card className="overflow-visible">
-                <CardContent className="p-4 flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 mt-0.5 text-emerald-500" />
-                  <div>
-                    <p className="font-medium">Financial Health is Looking Good</p>
-                    <p className="text-sm text-muted-foreground">No critical issues detected. Your metrics are within healthy ranges. Continue monitoring key indicators regularly.</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="overflow-visible">
-                <CardContent className="p-4 flex items-start gap-3">
-                  <Lightbulb className="h-5 w-5 mt-0.5 text-primary" />
-                  <div>
-                    <p className="font-medium">Opportunity: Optimize Your Burn Rate</p>
-                    <p className="text-sm text-muted-foreground">Use the Scenario-Based Runway toggle above to explore how cost reduction strategies could extend your runway.</p>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="overflow-visible">
-                <CardContent className="p-4 flex items-start gap-3">
-                  <TrendingUp className="h-5 w-5 mt-0.5 text-primary" />
-                  <div>
-                    <p className="font-medium">Next Step: Run a Simulation</p>
-                    <p className="text-sm text-muted-foreground">Head to the Simulation page to model different scenarios and understand the probabilistic outcomes for your business.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
       

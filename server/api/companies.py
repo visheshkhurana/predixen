@@ -36,6 +36,7 @@ class CompanyResponse(BaseModel):
     industry: Optional[str]
     stage: Optional[str]
     currency: str
+    description: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -73,6 +74,7 @@ class CompanyUpdate(BaseModel):
     industry: Optional[str] = None
     stage: Optional[str] = None
     currency: Optional[str] = None
+    description: Optional[str] = None  # Business summary
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
@@ -123,6 +125,8 @@ def update_company(
         company.stage = request.stage
     if request.currency is not None:
         company.currency = request.currency
+    if request.description is not None:
+        company.description = request.description
     
     db.commit()
     db.refresh(company)

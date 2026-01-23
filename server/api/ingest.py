@@ -910,12 +910,48 @@ async def extract_onboarding_deck(
         company_info = result.get("company_info", {})
         financials = result.get("financials", {})
         
+        # Normalize industry to valid enum values
+        industry_raw = (company_info.get("industry") or "").lower().strip()
+        industry_mapping = {
+            "saas": "general_saas",
+            "general_saas": "general_saas",
+            "software": "general_saas",
+            "software as a service": "general_saas",
+            "fintech": "fintech",
+            "financial technology": "fintech",
+            "finance": "fintech",
+            "ecommerce": "ecommerce",
+            "e-commerce": "ecommerce",
+            "retail": "ecommerce",
+            "marketplace": "marketplace",
+            "other": "other",
+        }
+        industry = industry_mapping.get(industry_raw, "")
+        
+        # Normalize stage to valid enum values
+        stage_raw = (company_info.get("stage") or "").lower().strip().replace("-", "_").replace(" ", "_")
+        stage_mapping = {
+            "pre_seed": "pre_seed",
+            "preseed": "pre_seed",
+            "seed": "seed",
+            "series_a": "series_a",
+            "seriesa": "series_a",
+            "series a": "series_a",
+            "series_b": "series_b",
+            "seriesb": "series_b",
+            "series b": "series_b",
+            "series b+": "series_b",
+            "series_c": "series_b",
+            "growth": "series_b",
+        }
+        stage = stage_mapping.get(stage_raw, "")
+        
         return OnboardingExtractionResponse(
             company_info={
                 "name": company_info.get("name") or "",
                 "website": company_info.get("website") or "",
-                "industry": company_info.get("industry") or "",
-                "stage": company_info.get("stage") or ""
+                "industry": industry,
+                "stage": stage
             },
             financials={
                 "monthly_revenue": financials.get("monthly_revenue") or financials.get("mrr"),

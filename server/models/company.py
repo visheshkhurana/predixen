@@ -13,6 +13,7 @@ class Company(Base):
     industry = Column(String, nullable=True)
     stage = Column(String, nullable=True)
     currency = Column(String, default="USD")
+    description = Column(String, nullable=True)  # Business summary
     metadata_json = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     

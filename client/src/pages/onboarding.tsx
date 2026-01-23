@@ -131,14 +131,18 @@ export default function OnboardingPage() {
       const data: ExtractedData = await response.json();
       setExtractedData(data);
       
-      // Autofill company data
+      // Autofill company data with extracted values
+      const extractedName = data.company_info?.name || '';
+      const extractedIndustry = data.company_info?.industry || '';
+      const extractedStage = data.company_info?.stage || '';
+      
       if (data.company_info) {
         setCompanyData(prev => ({
           ...prev,
-          name: data.company_info.name || prev.name,
+          name: extractedName || prev.name,
           website: data.company_info.website || prev.website,
-          industry: data.company_info.industry || prev.industry,
-          stage: data.company_info.stage || prev.stage,
+          industry: extractedIndustry || prev.industry,
+          stage: extractedStage || prev.stage,
           currency: data.currency || prev.currency,
         }));
       }
@@ -155,10 +159,23 @@ export default function OnboardingPage() {
         }));
       }
       
-      toast({ 
-        title: 'Information extracted', 
-        description: data.summary || 'Company and financial data has been auto-filled' 
-      });
+      // Build feedback message about what was extracted vs what's missing
+      const missingFields: string[] = [];
+      if (!extractedName) missingFields.push('company name');
+      if (!extractedIndustry) missingFields.push('industry');
+      if (!extractedStage) missingFields.push('stage');
+      
+      if (missingFields.length > 0) {
+        toast({ 
+          title: 'Partial extraction', 
+          description: `Please fill in: ${missingFields.join(', ')}` 
+        });
+      } else {
+        toast({ 
+          title: 'Information extracted', 
+          description: data.summary || 'All company details extracted successfully!' 
+        });
+      }
       
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to extract information';
@@ -378,16 +395,34 @@ export default function OnboardingPage() {
                     </div>
                   ) : extractedData ? (
                     <div className="flex flex-col items-center gap-3 text-center">
-                      <div className="p-3 rounded-full bg-green-500/10">
-                        <Check className="w-8 h-8 text-green-500" />
-                      </div>
+                      {/* Show green if all required fields present, amber if partial */}
+                      {companyData.name && companyData.industry && companyData.stage ? (
+                        <div className="p-3 rounded-full bg-green-500/10">
+                          <Check className="w-8 h-8 text-green-500" />
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-full bg-amber-500/10">
+                          <AlertCircle className="w-8 h-8 text-amber-500" />
+                        </div>
+                      )}
                       <div>
-                        <p className="font-medium text-green-600 dark:text-green-400">
-                          Information extracted successfully
+                        <p className={`font-medium ${companyData.name && companyData.industry && companyData.stage ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {companyData.name && companyData.industry && companyData.stage 
+                            ? 'Information extracted successfully' 
+                            : 'Partial extraction - please complete missing fields'}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {uploadedFile?.name} - Fields auto-filled below
+                          {uploadedFile?.name} - Check fields below
                         </p>
+                        {(!companyData.name || !companyData.industry || !companyData.stage) && (
+                          <p className="text-xs text-amber-500 mt-1">
+                            Missing: {[
+                              !companyData.name && 'Company Name',
+                              !companyData.industry && 'Industry',
+                              !companyData.stage && 'Stage'
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                        )}
                       </div>
                       <Button 
                         type="button" 
