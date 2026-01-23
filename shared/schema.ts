@@ -99,6 +99,51 @@ export const kpiMetricsSchema = z.object({
 
 export type KPIMetrics = z.infer<typeof kpiMetricsSchema>;
 
+// KPI Time Series for Sparklines
+export const kpiTimeSeriesPointSchema = z.object({
+  date: z.string(),
+  value: z.number(),
+});
+
+export type KPITimeSeriesPoint = z.infer<typeof kpiTimeSeriesPointSchema>;
+
+export const kpiTimeSeriesSchema = z.object({
+  metricName: z.string(),
+  currentValue: z.number(),
+  previousValue: z.number().nullable(),
+  changePercent: z.number().nullable(),
+  trend: z.enum(["up", "down", "stable"]),
+  history: z.array(kpiTimeSeriesPointSchema),
+  benchmark: z.number().nullable().optional(),
+  benchmarkLabel: z.string().optional(),
+  status: z.enum(["healthy", "warning", "critical", "missing"]).default("healthy"),
+});
+
+export type KPITimeSeries = z.infer<typeof kpiTimeSeriesSchema>;
+
+// Dashboard KPI Summary with historical data
+export const dashboardKPIsSchema = z.object({
+  dataConfidence: z.number().min(0).max(100),
+  qualityOfGrowthIndex: z.number().nullable(),
+  runway: kpiTimeSeriesSchema,
+  netBurn: kpiTimeSeriesSchema,
+  grossMargin: kpiTimeSeriesSchema,
+  revenueGrowth: kpiTimeSeriesSchema,
+  burnMultiple: kpiTimeSeriesSchema,
+  mrr: kpiTimeSeriesSchema,
+  cashOnHand: kpiTimeSeriesSchema,
+  topConcentration: z.number().nullable(),
+  recommendations: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    priority: z.enum(["high", "medium", "low"]),
+    action: z.string().optional(),
+  })),
+});
+
+export type DashboardKPIs = z.infer<typeof dashboardKPIsSchema>;
+
 // Distribution Types for Monte Carlo Simulations
 export const distributionTypeSchema = z.enum([
   "fixed",

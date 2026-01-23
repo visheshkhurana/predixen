@@ -1,0 +1,82 @@
+Project Context:
+We are enhancing the Predixen financial dashboard to make it more founder‑friendly. The current UI shows data confidence, quality of growth index, net burn, runway P50, gross margin, revenue growth, burn multiple, and top‑5 concentration. However, some fields display “N/A”, and the page lacks trend context and actionable guidance. We need to implement a series of UI/UX changes and extend the underlying data model.
+
+Goals:
+1. Clarify missing data and improve data confidence messaging.
+2. Improve visual hierarchy and readability of key metrics.
+3. Add trend visualizations (sparklines) for each KPI.
+4. Populate the “Top Recommendations” section with dynamic suggestions.
+5. Make metric cards interactive with drill‑down details.
+6. Introduce alerts/notifications when thresholds are reached.
+7. Surface additional founder‑focused metrics (cash forecasting, revenue breakdown, customer metrics, efficiency benchmarks, fundraising/dilution modelling, team/hiring impact, OKR tracking).
+8. Provide an optional loading state/error handling for Copilot responses.
+
+Tasks:
+
+1. **Data Model Enhancements**
+   - Extend the backend/API schema to include:
+     - Historical time‑series for each KPI (MRR, ARR, net burn, gross margin, runway).
+     - Customer metrics (CAC, LTV, churn, payback period, top‑5 concentration).
+     - Efficiency metrics (burn multiple over time, Rule of 40 components).
+     - Fundraising scenarios (round amount, timing, valuation → dilution/runway impact).
+     - Team/hiring plans (headcount forecast and cost).
+     - OKR targets and progress.
+   - Add a status field for each metric to indicate whether data is present or missing; use this to drive the “N/A” placeholders and data confidence score.
+
+2. **UI Layout & Visual Hierarchy**
+   - Redesign the metric cards:
+     - Enlarge the Runway P50 card and use a contrasting colour to make it the focal point.
+     - Use consistent typography and spacing across all cards.
+     - Show the current value and, if available, a small sparkline (see below) beneath it.
+     - If data is missing, overlay a subtle indicator (e.g., “Data needed”) with a tooltip linking to data input.
+   - Place the data confidence score and quality of growth index in a top bar with an info icon; clicking the icon should show which inputs affect the score.
+
+3. **Trends & Sparklines**
+   - For each KPI card, use a lightweight charting library (e.g., Chart.js or D3) to render a sparkline representing the last 6–12 months.
+   - Use a neutral colour scheme that adapts to dark mode.
+   - When the user hovers over the sparkline, show tooltips with exact values and dates.
+
+4. **Interactive Metric Drill‑downs**
+   - Make each card clickable:
+     - On click, open a side panel or modal showing a more detailed chart (full‑size), data table, and interpretation of the metric (e.g., breakdown of expenses for net burn, customer cohorts for revenue).
+     - Include benchmark comparisons (e.g., industry quartiles for gross margin) where applicable.
+   - Ensure the side panel can be dismissed easily and doesn’t disrupt the overall navigation.
+
+5. **Top Recommendations Section**
+   - Implement logic to generate context‑aware suggestions, e.g.:
+     - If runway < 12 months, suggest cutting burn or raising prices.
+     - If gross margin < industry benchmark, suggest optimising COGS.
+     - If revenue concentration is high, suggest diversifying customer base.
+   - Display up to three recommendations as cards with short descriptions and a link/button to explore a simulation or data input.
+   - When data is missing, use the first recommendation to prompt the user to complete their data.
+
+6. **Alerts & Notifications**
+   - Set up threshold rules (runway < 6 months, burn multiple > 2, churn > 5%) and trigger notifications.
+   - Use a notification bell icon in the header that shows the count of active alerts; clicking it reveals a drop‑down with alert messages.
+   - Allow users to dismiss or snooze alerts.
+
+7. **Additional Dashboards for Founders**
+   - **Cash Forecasting:** Create a tab or section with a multi‑scenario cash‑flow projection chart (P10/P50/P90). Allow users to adjust assumptions (revenue growth, burn reduction, fundraising).
+   - **Revenue Breakdown:** Build a chart showing MRR/ARR trends segmented by product line or customer cohort. Include churn and net revenue retention metrics.
+   - **Customer Metrics:** Display CAC, LTV, payback period and churn alongside graphs. Highlight where data is missing.
+   - **Efficiency Benchmarks:** Compare burn multiple and Rule of 40 against industry benchmarks, indicating whether the company is above/below target.
+   - **Fundraising & Dilution Modelling:** Provide a simple simulator where users can input raise amount, valuation and timing to see how dilution affects ownership and runway.
+   - **Team & Hiring Impact:** Show planned headcount growth and its effect on burn/runway. Provide controls to test delaying hires.
+   - **OKR Progress:** Integrate with an OKR tracking API or database. Show key objectives, current progress, and whether the company is on track.
+
+8. **Error Handling & Loading States**
+   - When the Copilot fails to respond, present a user‑friendly message explaining that no answer is available and suggest alternative actions (e.g., “Try again later” or “Contact support”). Avoid raw error toasts.
+   - Implement loading spinners when fetching data or running simulations.
+
+9. **Accessibility & Theming**
+   - Ensure all new components meet WCAG AA guidelines: adequate colour contrast, keyboard navigation, and screen‑reader labels.
+   - Maintain the existing dark/light theme switcher; ensure charts and sparklines adapt accordingly.
+
+Deliverables:
+- Updated front‑end components (metric cards, recommendations panel, alerts dropdown).
+- Backend/API endpoints for new metrics and historical data.
+- New pages or sections for cash forecasting, revenue breakdown, customer metrics, efficiency benchmarks, fundraising modelling, team/hiring impact and OKR tracking.
+- Comprehensive error and loading state handling.
+- Basic unit tests for the new components and API calls.
+
+Please organise the project into modular components and ensure that the code is clean, well‑documented, and responsive. When finished, provide a demo of the improved dashboard in Replit and update any relevant README documentation to reflect the new functionality.
