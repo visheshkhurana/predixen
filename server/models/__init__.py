@@ -41,6 +41,8 @@ from server.models.fundraising import (
     PipelineStage,
 )
 from server.models.assumption_set import AssumptionSetModel, SimulationCache
+from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
+from server.models.simulation_job import SimulationJob, ScenarioVersion, SensitivityAnalysis, SimulationJobStatus
 
 __all__ = [
     "User",
@@ -88,4 +90,11 @@ __all__ = [
     "PipelineStage",
     "AssumptionSetModel",
     "SimulationCache",
+    "MacroEnvironment",
+    "SensitivityRun",
+    "Recommendation",
+    "SimulationJob",
+    "ScenarioVersion",
+    "SensitivityAnalysis",
+    "SimulationJobStatus",
 ]
