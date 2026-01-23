@@ -95,8 +95,9 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Resend Integration**: Uses Resend API for reliable email delivery.
     -   **Recipients**: nikita@predixen.ai and vysheshk@gmail.com receive all feature notifications.
     -   **Professional Templates**: HTML email templates with branding, change lists, and deployment timestamps.
-    -   **API Endpoint**: `POST /api/notifications/feature` to trigger feature update notifications.
+    -   **API Endpoint**: `POST /notifications/feature` to trigger feature update notifications.
     -   **Notification Types**: Feature updates, bug fixes, enhancements, and deployments.
+    -   **IMPORTANT**: After completing any development task, ALWAYS send a notification email to both recipients summarizing the changes made. Use the notification endpoint with feature_name, description, changes array, category, and author fields.
 
 ### User Roles
 **Platform Level:**
