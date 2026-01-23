@@ -28,6 +28,15 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class Constraint:
+    """Constraint on a metric during optimization."""
+    metric: str
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    weight: float = 1.0
+
+
+@dataclass
 class OptimizationConfig:
     target_metric: str = "runway"
     target_value: float = 18.0
@@ -38,6 +47,9 @@ class OptimizationConfig:
     search_method: str = "random"
     tolerance: float = 0.5
     seed: Optional[int] = None
+    constraints: List[Constraint] = field(default_factory=list)
+    multi_objective: bool = False
+    objective_weights: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -121,6 +133,238 @@ def evaluate_assumptions(
     
     metric_key = metric_map.get(target_metric, target_metric)
     return float(summary.get(metric_key, 0.0) or 0.0)
+
+
+def evaluate_with_constraints(
+    assumptions: AssumptionSet,
+    baseline_metrics: Dict[str, float],
+    config: OptimizationConfig,
+    sim_iterations: int = 200,
+    seed: Optional[int] = None
+) -> Tuple[float, Dict[str, float], bool]:
+    """
+    Evaluate assumptions and check constraints.
+    
+    Returns:
+        - Primary metric value
+        - Dictionary of all metric values
+        - Whether all constraints are satisfied
+    """
+    inputs = transform_assumptions_to_inputs(assumptions, baseline_metrics)
+    
+    sim_config = SimulationConfig(
+        iterations=sim_iterations,
+        horizon_months=24,
+        seed=seed,
+        confidence_intervals=[10, 50, 90]
+    )
+    
+    results = run_enhanced_monte_carlo(inputs, sim_config)
+    summary = results.get("summary", {})
+    
+    metric_map = {
+        "runway": "mean_runway_months",
+        "survival": "survival_rate",
+        "cash": "mean_final_cash",
+        "revenue": "mean_final_revenue",
+        "growth": "mean_final_growth",
+        "dilution": "dilution",
+        "gross_margin": "gross_margin",
+        "burn_multiple": "burn_multiple"
+    }
+    
+    all_metrics = {}
+    for name, key in metric_map.items():
+        all_metrics[name] = float(summary.get(key, 0.0) or 0.0)
+    
+    if "dilution" not in summary:
+        fundraise = assumptions.fundraise
+        if fundraise and fundraise.raise_probability > 0:
+            all_metrics["dilution"] = 0.20
+        else:
+            all_metrics["dilution"] = 0.0
+    
+    if "gross_margin" not in summary:
+        all_metrics["gross_margin"] = baseline_metrics.get("gross_margin", 0.70)
+    
+    primary_value = all_metrics.get(config.target_metric, 0.0)
+    
+    constraints_satisfied = True
+    for constraint in config.constraints:
+        metric_value = all_metrics.get(constraint.metric, 0.0)
+        
+        if constraint.min_value is not None and metric_value < constraint.min_value:
+            constraints_satisfied = False
+            break
+        
+        if constraint.max_value is not None and metric_value > constraint.max_value:
+            constraints_satisfied = False
+            break
+    
+    return primary_value, all_metrics, constraints_satisfied
+
+
+def compute_multi_objective_score(
+    metrics: Dict[str, float],
+    objective_weights: Dict[str, float],
+    directions: Dict[str, str] = None
+) -> float:
+    """
+    Compute a weighted multi-objective score.
+    
+    Args:
+        metrics: Dictionary of metric values
+        objective_weights: Weight for each metric (higher = more important)
+        directions: Whether to maximize or minimize each metric
+    
+    Returns:
+        Combined weighted score
+    """
+    if directions is None:
+        directions = {
+            "runway": "maximize",
+            "survival": "maximize",
+            "cash": "maximize",
+            "revenue": "maximize",
+            "growth": "maximize",
+            "dilution": "minimize",
+            "burn_multiple": "minimize"
+        }
+    
+    normalizers = {
+        "runway": 24.0,
+        "survival": 1.0,
+        "cash": 1000000.0,
+        "revenue": 500000.0,
+        "growth": 0.50,
+        "dilution": 0.50,
+        "burn_multiple": 5.0,
+        "gross_margin": 1.0
+    }
+    
+    total_weight = sum(objective_weights.values())
+    if total_weight == 0:
+        return 0.0
+    
+    score = 0.0
+    for metric, weight in objective_weights.items():
+        value = metrics.get(metric, 0.0)
+        normalizer = normalizers.get(metric, 1.0)
+        normalized_value = value / normalizer if normalizer else 0.0
+        
+        direction = directions.get(metric, "maximize")
+        if direction == "minimize":
+            normalized_value = 1.0 - min(normalized_value, 1.0)
+        else:
+            normalized_value = min(normalized_value, 1.0)
+        
+        score += (weight / total_weight) * normalized_value
+    
+    return score
+
+
+def constrained_random_search(
+    assumptions: AssumptionSet,
+    baseline_metrics: Dict[str, float],
+    config: OptimizationConfig
+) -> OptimizationResult:
+    """
+    Random search with constraint handling.
+    
+    Uses penalty method: infeasible solutions get penalized score.
+    """
+    start_time = datetime.utcnow()
+    job_id = str(uuid.uuid4())
+    
+    if config.seed:
+        np.random.seed(config.seed)
+    
+    best_value = None
+    best_assumptions = None
+    best_metrics = None
+    convergence_history = []
+    feasible_count = 0
+    
+    for i in range(config.max_iterations):
+        test_assumptions = deepcopy(assumptions)
+        sample_values = {}
+        
+        for fld in config.optimize_fields:
+            bounds = PARAMETER_BOUNDS.get(fld, (0.0, 0.20))
+            value = np.random.uniform(bounds[0], bounds[1])
+            sample_values[fld] = value
+            test_assumptions = set_nested_field_value(test_assumptions, fld, value)
+        
+        primary_value, all_metrics, is_feasible = evaluate_with_constraints(
+            test_assumptions,
+            baseline_metrics,
+            config,
+            config.simulation_iterations,
+            config.seed
+        )
+        
+        if config.multi_objective and config.objective_weights:
+            objective_value = compute_multi_objective_score(
+                all_metrics,
+                config.objective_weights
+            )
+        else:
+            objective_value = primary_value
+        
+        if not is_feasible:
+            objective_value = objective_value * 0.5
+        else:
+            feasible_count += 1
+        
+        convergence_history.append({
+            "iteration": i + 1,
+            "objective_value": objective_value,
+            "primary_metric": primary_value,
+            "is_feasible": is_feasible,
+            **sample_values,
+            **{f"metric_{k}": v for k, v in all_metrics.items()}
+        })
+        
+        is_better = False
+        if best_value is None:
+            is_better = True
+        elif is_feasible:
+            if config.direction == "maximize" and objective_value > best_value:
+                is_better = True
+            elif config.direction == "minimize" and objective_value < best_value:
+                is_better = True
+        elif not best_metrics or not best_metrics.get("is_feasible", False):
+            if config.direction == "maximize" and objective_value > best_value:
+                is_better = True
+            elif config.direction == "minimize" and objective_value < best_value:
+                is_better = True
+        
+        if is_better:
+            best_value = objective_value
+            best_assumptions = test_assumptions.model_dump()
+            best_metrics = {**all_metrics, "is_feasible": is_feasible}
+    
+    elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
+    
+    result = OptimizationResult(
+        job_id=job_id,
+        status="completed",
+        best_assumptions=best_assumptions,
+        best_metric_value=best_value,
+        iterations_run=len(convergence_history),
+        convergence_history=convergence_history,
+        search_space={f: PARAMETER_BOUNDS.get(f, (0.0, 0.20)) for f in config.optimize_fields},
+        elapsed_time_ms=int(elapsed)
+    )
+    
+    result.constraints_summary = {
+        "total_iterations": len(convergence_history),
+        "feasible_solutions": feasible_count,
+        "feasibility_rate": feasible_count / len(convergence_history) if convergence_history else 0,
+        "best_is_feasible": best_metrics.get("is_feasible", False) if best_metrics else False
+    }
+    
+    return result
 
 
 def grid_search(
