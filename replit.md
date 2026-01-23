@@ -1,7 +1,7 @@
 # Predixen Intelligence OS
 
 ## Overview
-Predixen Intelligence OS is an AI-powered financial intelligence platform for startups. It provides investor-grade diligence, probabilistic simulation, and ranked decision recommendations to guide startups through financial planning. The platform's core functionality revolves around a flow of Truth (data validation and benchmarking), Simulation (probabilistic forecasting), Decision (actionable recommendations), and Copilot (AI-assisted guidance). Its primary purpose is to help startups understand their financial health, predict future outcomes, and make informed strategic decisions to maximize survival and growth while minimizing downside risk and dilution.
+Predixen Intelligence OS is an AI-powered financial intelligence platform for startups. It provides investor-grade diligence, probabilistic simulation, and ranked decision recommendations to guide startups through financial planning. The platform helps startups understand their financial health, predict future outcomes, and make informed strategic decisions to maximize survival and growth while minimizing downside risk and dilution.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,131 +9,46 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Core Design Principles
-The platform is built on a modern full-stack architecture with React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations. Key architectural decisions include:
-- **Modular Design**: Separation of concerns with distinct modules for ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities.
-- **Scalability**: FastAPI and PostgreSQL provide a robust and scalable backend.
-- **User Experience**: Intuitive UI/UX with a focus on data visualization, interactive components, and actionable insights. Tailwind CSS and shadcn/ui are used for consistent styling and component design.
-- **Data Integrity**: Strong data validation using Zod and Pydantic, along with Alembic for database migrations.
-- **Security**: JWT-based authentication and role-based access control (RBAC) ensure secure access and operations.
+The platform is built on a modern full-stack architecture with React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations through a modular design for ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities. Scalability is ensured with FastAPI and PostgreSQL. UI/UX focuses on data visualization and interactive components, using Tailwind CSS and shadcn/ui. Data integrity is maintained with Zod, Pydantic, and Alembic, while security relies on JWT-based authentication and RBAC.
 
 ### Frontend Architecture
-- **Frameworks**: React 18 with TypeScript, Wouter for routing, Zustand for state management, TanStack React Query for server state.
-- **UI/UX**: Tailwind CSS (dark mode default), shadcn/ui (built on Radix UI), Recharts for advanced data visualization (survival curves, distributions).
-- **Forms**: React Hook Form with Zod validation.
-- **Build Tool**: Vite.
-- **Key UI Components**:
-    - **Executive Summary**: Best scenario analysis, runway, key recommendations.
-    - **RiskGauge/TrafficLight**: Visual risk indicators.
-    - **ProjectionChart**: Interactive month-by-month projections with milestones, benchmarks, and brush zoom.
-    - **DrillDownChart**: Zoom/pan capability, metric switching, benchmark overlays.
-    - **ScenarioCard**: Interactive expandable cards with mini-charts.
-    - **GlossaryModal**: Definitions of financial terms.
+-   **Frameworks**: React 18 with TypeScript, Wouter for routing, Zustand for state management, TanStack React Query for server state.
+-   **UI/UX**: Tailwind CSS (dark mode default), shadcn/ui, Recharts for data visualization.
+-   **Forms**: React Hook Form with Zod validation.
+-   **Build Tool**: Vite.
 
 ### Backend Architecture
-- **Framework**: FastAPI (Python 3.11).
-- **Database**: PostgreSQL with SQLAlchemy ORM, Alembic for migrations.
-- **Authentication**: JWT-based with bcrypt.
-- **Validation**: Pydantic models.
-- **Asynchronous Tasks**: FastAPI BackgroundTasks.
+-   **Framework**: FastAPI (Python 3.11).
+-   **Database**: PostgreSQL with SQLAlchemy ORM, Alembic for migrations.
+-   **Authentication**: JWT-based.
+-   **Validation**: Pydantic models.
 
 ### Key Features and Technical Implementations
-1.  **Ingestion**: CSV upload, manual baseline, and AI-powered extraction from Excel/PDF using OpenAI.
-    -   **Two-Stage PDF Extraction**: Text extraction with pdfplumber + GPT-4o analysis, with automatic fallback to OpenAI Vision for scanned/image-based PDFs.
-    -   **Vision Fallback**: PDF pages converted to images and analyzed by GPT-4o vision when text extraction fails or produces insufficient content.
+1.  **Data Ingestion**: Supports CSV upload, manual baseline entry, and AI-powered extraction from Excel/PDFs using OpenAI, with a two-stage PDF extraction process including Vision fallback for scanned documents.
 2.  **Truth Scan**: Computes 24 financial metrics, benchmarks against industry data, and assigns confidence scores.
-3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections.
-    -   **Distribution-Aware Simulation**: Supports fixed, normal, lognormal, uniform, triangular, and discrete probability distributions for event impacts.
-    -   **Configurable Iterations**: 100 to 10,000 iterations with configurable confidence intervals (P10/P25/P50/P75/P90).
-    -   **Async Job Execution**: Background job processing with progress tracking via `/api/simulations/run` and `/api/simulations/jobs/{id}`.
-    -   **Regime-aware Simulation**: Base, Downturn, and Breakout regimes with correlated driver sampling.
-    -   **Custom Events**: 12 event types with probability-weighted impacts on revenue, costs, growth, churn, margin, headcount, and cash.
-    -   **Event Conditions**: Conditional event triggering based on metric thresholds.
-4.  **Sensitivity Analysis**: Tornado chart data generation via `/api/simulations/sensitivity`.
-    -   **Parameter Sweeps**: Analyze impact of varying parameters on runway.
-    -   **Ranked Drivers**: Top drivers sorted by impact magnitude.
-    -   **Visual Insights**: TornadoChart and SensitivityPanel UI components.
-    -   **OAT Perturbation**: One-At-a-Time sensitivity method with ±20% parameter variation.
-5.  **Scenario Versioning**: Full version control for scenarios via `/api/simulations/versions`.
-    -   **Macro-Economic Modifiers**: 5 presets (optimistic, neutral, pessimistic, stagflation, boom) with interest rate, inflation, and market growth factors.
-    -   **API Endpoints**: `GET/PUT /simulator/macros` for preset management.
-6.  **Constrained Multi-Objective Optimization**: Advanced optimizer with constraint handling.
-    -   **Constraints**: Min/max bounds on metrics (runway, survival, cash, revenue, growth, dilution, gross_margin, burn_multiple).
-    -   **Multi-Objective Scoring**: Weighted composite score across multiple objectives with normalized metrics.
-    -   **Penalty Method**: Infeasible solutions penalized with configurable constraint weights.
-    -   **Feasibility Tracking**: Reports feasibility rate and best feasible solution.
-    -   **API Endpoint**: `POST /simulator/optimise/constrained/{assumption_set_id}` with validation for supported metrics.
-7.  **Automated Recommendations Engine**: Health-based recommendation generation.
-    -   **Health Thresholds**: Runway (critical <6mo, warning <9mo, healthy >12mo), survival (critical <50%, warning <70%, healthy >85%).
-    -   **8 Recommendation Types**: reduce_burn, increase_revenue, delay_hiring, adjust_pricing, fundraise, reduce_churn, extend_runway, improve_margins.
-    -   **API Endpoint**: `POST /simulator/recommendations/{assumption_set_id}`.
-    -   **Version History**: Create, list, and restore scenario versions.
-    -   **Diff View**: Compare changes between versions (inputs, events, tags).
-    -   **Rollback**: Restore to any previous version with audit trail.
-8.  **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
-9.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
-10.  **Multi-Agent Fund Flow Copilot V2+**: Production-ready AI system with specialized agents and enhanced features.
-    -   **Router/Orchestrator Agent**: Analyzes incoming queries and routes to appropriate specialist agents.
-    -   **CFO Agent**: Financial analysis, metrics extraction, FX conversion (INR, EUR, GBP, CAD, AUD, JPY, CNY), and runway optimization.
-    -   **Market Agent**: Competitor analysis, ICP definition, target customer segmentation, and industry benchmarks (SaaS, Fintech, Marketplace, E-commerce, AgTech).
-    -   **Strategy Agent**: Business strategy, GTM planning, vertical expansion, and 30/60/90 day execution plans.
-    -   **Company Knowledge Base (CKB)**: Persistent context storage per company in `metadata_json` column, maintains: overview, financials, market, strategy, ICP, competitors, risks, decisions_made.
-    -   **API Endpoints**: `/companies/{company_id}/chat` for chat, `/companies/{company_id}/ckb` for CKB management.
-    -   **Structured Responses**: Each agent returns findings, assumptions, risks, next_questions, and confidence levels.
-    -   **Truth-First Citations**: Source tracking from PDFs and web sources with highlighted claims.
-    -   **Data Health Scoring**: 0-100 score with grades A-F based on data completeness (P&L, cash, unit economics) and consistency.
-    -   **Operating Cadence**: Workstreams API for weekly metrics, monthly board memos, quarterly strategy reviews with configurable KPIs.
-    -   **Automated Alerts**: Rule-based alerts for runway <9mo, revenue decline >10%, CAC spike >15%.
-    -   **Driver-Based Forecasting**: Templates for SaaS, marketplace, and services models with 12-month projections.
-9.  **Copilot V6: Fundraising OS**: Comprehensive fundraising management module.
-    -   **Cap Table Management**: Database models for cap tables with common shares, preferred shares, option pools, and convertible notes.
-    -   **Cap Table Engine**: Pure Python functions for dilution calculations including `compute_fully_diluted`, `apply_equity_round`, `apply_safe_or_note`, `compute_ownership_summary`, and `simulate_round_scenarios`.
-    -   **Fundraising Rounds**: Track rounds with name, target raise, pre/post-money valuations, instrument type (equity/SAFE/note), and option pool refresh.
-    -   **Dilution Simulator**: Model the impact of fundraising rounds on ownership with multi-scenario comparison.
-    -   **Investor Room**: Automated generation of investor materials including markdown investor memo, stage-aware data room checklist (Legal, Finance, Team, Product, GTM categories), KPI snapshots from latest financials, and mode-specific FAQ (VC/Growth PE/Strategic).
-    -   **Investor Pipeline**: Track investors through stages (cold, warm, active, term_sheet, closed) with contact info and notes.
-    -   **Database Models**: `company_cap_tables`, `fundraising_rounds`, `round_terms`, `investors`, `investor_pipeline` tables.
-    -   **API Endpoints**: `/companies/{id}/cap-tables`, `/companies/{id}/fundraising/rounds`, `/companies/{id}/fundraising/simulate`, `/companies/{id}/investor-room/generate`.
-10. **Forecasting**: Holt-Winters exponential smoothing, linear regression.
-11. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
-12. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
-13. **Payroll & ERP Connector Framework**: Extensible connector system for syncing financial data from Indian payroll and ERP providers.
-    -   **BaseConnector**: Abstract base class for all connectors with authentication, data fetching, and normalization methods.
-    -   **ConnectorRegistry**: Decorator-based registration and discovery of connector implementations.
-    -   **Supported Providers**: RazorpayX Payroll, GreytHR, Keka HR, Zoho Books, Tally ERP (with additional providers coming soon).
-    -   **Data Types**: EmployeeRecord, PayrollRunRecord, LedgerEntry, InvoiceRecord with normalization to internal FinancialRecord schema.
-    -   **Authentication**: Supports API_KEY, OAUTH2, BASIC, and CUSTOM auth types.
-    -   **API Endpoints**: `/connectors/providers`, `/connectors/companies/{id}/connect`, `/connectors/companies/{id}/sync/{provider}`, `/connectors/companies/{id}/sync-history`.
-    -   **UI Integration**: Integrations page with dedicated Payroll and ERP tabs showing provider cards, connection dialogs, and sync status.
-14. **Feature Notification System**: Automated email notifications for platform changes and updates.
-    -   **Resend Integration**: Uses Resend API for reliable email delivery.
-    -   **Recipients**: nikita@predixen.ai, vysheshk@gmail.com, and nikita.luther@gmail.com receive all feature notifications.
-    -   **Professional Templates**: HTML email templates with branding, change lists, and deployment timestamps.
-    -   **API Endpoint**: `POST /notifications/feature` to trigger feature update notifications.
-    -   **Notification Types**: Feature updates, bug fixes, enhancements, and deployments.
-    -   **IMPORTANT**: After completing any development task, ALWAYS send a notification email to both recipients summarizing the changes made. Use the notification endpoint with feature_name, description, changes array, category, and author fields.
+3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, supporting various probability distributions, configurable iterations, and asynchronous job execution. It includes regime-aware simulations (Base, Downturn, Breakout) and custom event modeling with conditional triggering.
+4.  **Sensitivity Analysis**: Generates data for tornado charts by performing One-At-a-Time (OAT) perturbation to identify key drivers impacting runway.
+5.  **Scenario Versioning**: Provides full version control for scenarios, including macro-economic modifiers (optimistic, neutral, pessimistic, stagflation, boom) and API endpoints for managing presets.
+6.  **Constrained Multi-Objective Optimization**: An advanced optimizer that handles constraints on key financial metrics (e.g., runway, survival, cash) and uses a weighted composite score for multi-objective decision-making.
+7.  **Automated Recommendations Engine**: Generates health-based recommendations (e.g., reduce burn, fundraise) based on predefined thresholds for financial health indicators like runway and survival probability. It also includes version history, diff views, and rollback capabilities for scenarios.
+8.  **Multi-Agent Fund Flow Copilot V2+**: A production-ready AI system featuring a Router/Orchestrator Agent that routes queries to specialized agents (CFO, Market, Strategy). It maintains a Company Knowledge Base (CKB) for persistent context, provides structured responses with truth-first citations, and includes data health scoring, operating cadence management, and automated alerts.
+9.  **Copilot V6: Fundraising OS**: A comprehensive fundraising module with cap table management (common, preferred shares, option pools, convertible notes), a cap table engine for dilution calculations, fundraising round tracking, and a dilution simulator. It also includes an Investor Room for generating investor materials and managing an investor pipeline.
+10. **Forecasting**: Utilizes Holt-Winters exponential smoothing and linear regression.
+11. **Alerts**: Implements Z-score anomaly detection, threshold monitoring, and runway warnings.
+12. **Admin Dashboard**: Centralized management for users, companies, billing, and platform metrics with RBAC, accessible only by the platform admin.
+13. **Payroll & ERP Connector Framework**: An extensible system for syncing financial data from Indian payroll and ERP providers (e.g., RazorpayX Payroll, GreytHR, Zoho Books, Tally ERP) with a `BaseConnector` and `ConnectorRegistry` for various authentication types and data normalization.
+14. **Feature Notification System**: Automated email notifications for platform changes and updates, delivered via Resend, with predefined recipients and professional HTML templates.
+15. **Multi-LLM Router**: Unified interface for intelligent task-based model selection across multiple AI providers (OpenAI GPT-4o, Anthropic Claude, Google Gemini). It features intelligent task routing to optimal models, graceful fallback mechanisms, feature-aware routing for specific requests (e.g., JSON mode), PII redaction, and audit logging.
 
 ### User Roles
-**Platform Level:**
-- **Platform Admin**: Only the user whose email matches `ADMIN_MASTER_EMAIL` env variable can access the Admin dashboard. This is the application owner, not a database role.
-
-**Company Level (within the platform):**
-- `owner`: Company owner with full access to their company's data.
-- `admin`: Company admin with management access.
-- `analyst`: Standard platform access.
-- `viewer`: Read-only standard platform access.
-
-**Security Note**: The Admin section in the sidebar is restricted to the platform owner only (checked via `is_platform_admin` flag from authentication). Regular users, even with 'owner' or 'admin' company roles, cannot see or access the admin dashboard.
-
-### Project Structure (High-Level)
-- `client/`: React frontend (components, pages, state management, API hooks).
-- `server/`: FastAPI backend (main app, core services, database models, API routes, specific engines for truth, simulate, decision, copilot).
-- `shared/`: Shared types.
+-   **Platform Admin**: Application owner with access to the Admin dashboard.
+-   **Company Level Roles**: `owner`, `admin`, `analyst`, `viewer` with varying access levels to company data.
 
 ## External Dependencies
 
--   **OpenAI**: Used for AI extraction of financial metrics from Excel/PDF documents.
--   **PostgreSQL**: Primary relational database for all application data.
--   **QuickBooks/Xero**: Planned integrations for accounting data synchronization.
--   **Salesforce/HubSpot**: Planned integrations for CRM data synchronization.
--   **Google Fonts**: Inter (primary font), IBM Plex Mono (for financial figures).
--   **Resend**: Email delivery service for feature notifications and platform updates.
+-   **OpenAI**: GPT-4o for financial analysis, metrics extraction, vision tasks (via Replit AI Integrations).
+-   **Anthropic**: Claude Opus/Sonnet/Haiku for complex reasoning, coding, strategy (via Replit AI Integrations).
+-   **Google Gemini**: Gemini 2.5/3 Flash/Pro for general chat, high-volume tasks (via Replit AI Integrations).
+-   **PostgreSQL**: Primary relational database.
+-   **Google Fonts**: Inter, IBM Plex Mono.
+-   **Resend**: Email delivery service.
