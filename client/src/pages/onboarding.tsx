@@ -19,6 +19,23 @@ const STEPS = [
   { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
 ];
 
+const SAMPLE_COMPANY = {
+  name: 'TechFlow AI',
+  website: 'https://techflow.ai',
+  industry: 'general_saas',
+  stage: 'seed',
+  currency: 'USD',
+};
+
+const SAMPLE_FINANCIALS = {
+  monthly_revenue: 85000,
+  gross_margin_pct: 75,
+  opex: 25000,
+  payroll: 45000,
+  other_costs: 8000,
+  cash_balance: 750000,
+};
+
 interface ExtractedData {
   company_info: {
     name?: string;
@@ -60,6 +77,8 @@ export default function OnboardingPage() {
     cash_balance: 500000,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSampleMode, setIsSampleMode] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   
   // File upload state
   const [isDragging, setIsDragging] = useState(false);
@@ -180,6 +199,31 @@ export default function OnboardingPage() {
   const manualBaselineMutation = useManualBaseline();
   const runTruthScanMutation = useRunTruthScan();
   
+  const loadSampleCompany = async () => {
+    if (isSubmitting || createCompanyMutation.isPending) return;
+    
+    setIsSubmitting(true);
+    setIsSampleMode(true);
+    setCompanyData(SAMPLE_COMPANY);
+    setBaselineData(SAMPLE_FINANCIALS);
+    
+    try {
+      const company = await createCompanyMutation.mutateAsync(SAMPLE_COMPANY);
+      setCurrentCompany(company);
+      toast({ 
+        title: 'Sample company loaded', 
+        description: 'TechFlow AI has been created with sample financials' 
+      });
+      setStep(2);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to create sample company.';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+      setIsSampleMode(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
   const handleCompanySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
@@ -228,6 +272,8 @@ export default function OnboardingPage() {
     
     if (isSubmitting) return;
     
+    setScanError(null);
+    
     const validationError = validateBaseline();
     if (validationError) {
       toast({ title: 'Validation Error', description: validationError, variant: 'destructive' });
@@ -236,17 +282,23 @@ export default function OnboardingPage() {
     
     const { currentCompany } = useFounderStore.getState();
     if (!currentCompany) {
-      toast({ title: 'Error', description: 'No company selected. Please go back and create a company first.', variant: 'destructive' });
+      toast({ 
+        title: 'Error', 
+        description: 'No company selected. Please go back and create a company first.', 
+        variant: 'destructive' 
+      });
+      setStep(1);
       return;
     }
     
     setIsSubmitting(true);
+    setStep(3);
+    
     try {
       await manualBaselineMutation.mutateAsync({
         companyId: currentCompany.id,
         data: baselineData,
       });
-      setStep(3);
       
       const truthScan = await runTruthScanMutation.mutateAsync(currentCompany.id);
       setTruthScan(truthScan);
@@ -258,6 +310,7 @@ export default function OnboardingPage() {
       const message = err instanceof ApiError 
         ? err.message 
         : 'Failed to run Truth Scan. Please check your financial data and try again.';
+      setScanError(message);
       toast({ title: 'Error', description: message, variant: 'destructive' });
       setStep(2);
     } finally {
@@ -485,6 +538,36 @@ export default function OnboardingPage() {
                 >
                   {isSubmitting || createCompanyMutation.isPending ? 'Creating...' : 'Continue'}
                 </Button>
+                
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or try with sample data</span>
+                  </div>
+                </div>
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={loadSampleCompany}
+                  disabled={isSubmitting || createCompanyMutation.isPending}
+                  data-testid="button-load-sample"
+                >
+                  {isSubmitting && isSampleMode ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading Sample Company...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Load Sample Company
+                    </>
+                  )}
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -494,9 +577,22 @@ export default function OnboardingPage() {
           <Card>
             <CardHeader>
               <CardTitle>Financial Baseline</CardTitle>
-              <CardDescription>Enter your current monthly financials. These values will be used to compute your first Truth Scan.</CardDescription>
+              <CardDescription>
+                {isSampleMode 
+                  ? 'Sample financials are pre-filled below. Click "Run First Truth Scan" to continue.'
+                  : 'Enter your current monthly financials. These values will be used to compute your first Truth Scan.'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
+              {scanError && (
+                <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-destructive">Truth Scan Failed</p>
+                    <p className="text-xs text-muted-foreground">{scanError}</p>
+                  </div>
+                </div>
+              )}
               <form onSubmit={handleBaselineSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -646,9 +742,16 @@ export default function OnboardingPage() {
                   disabled={isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending}
                   data-testid="button-run-scan"
                 >
-                  {isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending
-                    ? 'Running Truth Scan...'
-                    : 'Run First Truth Scan'}
+                  {isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Running Truth Scan...
+                    </>
+                  ) : scanError ? (
+                    'Retry Truth Scan'
+                  ) : (
+                    'Run First Truth Scan'
+                  )}
                 </Button>
               </form>
             </CardContent>
