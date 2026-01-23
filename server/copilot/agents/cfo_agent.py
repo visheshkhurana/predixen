@@ -143,6 +143,8 @@ class CFOAgent(BaseAgent):
     """
     CFO Agent that handles financial extraction, normalization,
     validation, and metric computation.
+    
+    Uses GPT-4o via LLM Router for financial analysis (best at structured data).
     """
     
     FX_RATES = {
@@ -155,8 +157,8 @@ class CFOAgent(BaseAgent):
         "CNY": 7.24
     }
     
-    def __init__(self):
-        super().__init__(AgentType.CFO)
+    def __init__(self, llm_router=None):
+        super().__init__(AgentType.CFO, llm_router)
     
     async def process(
         self, 
@@ -205,6 +207,10 @@ class CFOAgent(BaseAgent):
                      ConfidenceLevel.MEDIUM if metrics.confidence == "medium" else \
                      ConfidenceLevel.LOW
         
+        llm_insights = await self._generate_llm_insights(query, metrics, ckb, context)
+        if llm_insights:
+            findings.append(llm_insights)
+        
         return AgentResponse(
             agent_type=AgentType.CFO,
             findings=findings,
@@ -212,7 +218,8 @@ class CFOAgent(BaseAgent):
             assumptions=assumptions,
             risks=risks,
             next_questions=next_questions[:3],
-            confidence=confidence
+            confidence=confidence,
+            raw_response=llm_insights or ""
         )
     
     def _process_extracted_data(
@@ -436,3 +443,51 @@ class CFOAgent(BaseAgent):
                 risks.append(f"Burn multiple of {burn_multiple:.1f}x is high - focus on efficiency")
         
         return risks
+    
+    async def _generate_llm_insights(
+        self,
+        query: str,
+        metrics: FinancialMetrics,
+        ckb: "CompanyKnowledgeBase",
+        context: Dict[str, Any]
+    ) -> Optional[str]:
+        """Generate LLM-powered financial insights using GPT-4o."""
+        if not self.llm_router:
+            return None
+        
+        metrics_summary = []
+        if self._is_number(metrics.revenue):
+            metrics_summary.append(f"Monthly Revenue: {self.format_currency(metrics.revenue, metrics.currency_base)}")
+        if self._is_number(metrics.gross_margin):
+            metrics_summary.append(f"Gross Margin: {float(metrics.gross_margin):.1f}%")
+        if self._is_number(metrics.burn_rate):
+            metrics_summary.append(f"Monthly Burn: {self.format_currency(metrics.burn_rate, metrics.currency_base)}")
+        if self._is_number(metrics.runway_months):
+            metrics_summary.append(f"Runway: {float(metrics.runway_months):.1f} months")
+        if self._is_number(metrics.ltv_cac_ratio):
+            metrics_summary.append(f"LTV/CAC: {float(metrics.ltv_cac_ratio):.1f}x")
+        if self._is_number(metrics.churn_rate):
+            metrics_summary.append(f"Monthly Churn: {float(metrics.churn_rate):.1f}%")
+        
+        if not metrics_summary:
+            return None
+        
+        prompt = f"""Based on the following financial metrics for {ckb.company_name} ({ckb.industry or 'startup'}):
+
+{chr(10).join(metrics_summary)}
+
+User question: {query}
+
+Provide a brief, actionable financial insight (2-3 sentences) focused on the most important financial implication. Be specific and data-driven."""
+        
+        try:
+            response = self._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt=CFO_SYSTEM_PROMPT,
+                task_type="financial_analysis",
+                temperature=0.5
+            )
+            return response
+        except Exception as e:
+            self.logger.warning(f"LLM insight generation failed: {e}")
+            return None

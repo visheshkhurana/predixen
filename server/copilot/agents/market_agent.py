@@ -187,6 +187,8 @@ class MarketAgent(BaseAgent):
     """
     Market Agent that conducts market research, competitor analysis,
     and customer segmentation.
+    
+    Uses Claude Sonnet via LLM Router for market research (balanced performance).
     """
     
     INDUSTRY_BENCHMARKS = {
@@ -218,8 +220,8 @@ class MarketAgent(BaseAgent):
         }
     }
     
-    def __init__(self):
-        super().__init__(AgentType.MARKET)
+    def __init__(self, llm_router=None):
+        super().__init__(AgentType.MARKET, llm_router)
     
     async def process(
         self, 
@@ -287,6 +289,10 @@ class MarketAgent(BaseAgent):
         elif not ckb.industry:
             confidence = ConfidenceLevel.LOW
         
+        llm_insights = await self._generate_llm_insights(query, research, ckb, context)
+        if llm_insights:
+            findings.append(llm_insights)
+        
         return AgentResponse(
             agent_type=AgentType.MARKET,
             findings=findings,
@@ -294,7 +300,8 @@ class MarketAgent(BaseAgent):
             assumptions=assumptions,
             risks=risks,
             next_questions=next_questions[:3],
-            confidence=confidence
+            confidence=confidence,
+            raw_response=llm_insights or ""
         )
     
     def _determine_category(self, industry: str, query: str) -> str:
@@ -697,3 +704,51 @@ class MarketAgent(BaseAgent):
         }
         
         return diff
+    
+    async def _generate_llm_insights(
+        self,
+        query: str,
+        research: "MarketResearch",
+        ckb: CompanyKnowledgeBase,
+        context: Dict[str, Any]
+    ) -> Optional[str]:
+        """Generate LLM-powered market insights using Claude Sonnet."""
+        if not self.llm_router:
+            return None
+        
+        market_summary = []
+        if research.category:
+            market_summary.append(f"Category: {research.category}")
+        if research.tam_estimate:
+            market_summary.append(f"TAM Estimate: {research.tam_estimate}")
+        if research.competitors:
+            comp_names = [c.name for c in research.competitors[:3]]
+            market_summary.append(f"Key Competitors: {', '.join(comp_names)}")
+        if research.icp:
+            if research.icp.segments:
+                market_summary.append(f"Target Segments: {', '.join(research.icp.segments[:2])}")
+            if research.icp.pain_points:
+                market_summary.append(f"Key Pain Points: {', '.join(research.icp.pain_points[:2])}")
+        
+        if not market_summary:
+            return None
+        
+        prompt = f"""Based on the following market research for {ckb.company_name} in {ckb.industry or 'the tech sector'}:
+
+{chr(10).join(market_summary)}
+
+User question: {query}
+
+Provide a brief, actionable market insight (2-3 sentences) focused on competitive positioning or market opportunity. Be specific about what makes this company's position unique or what market gaps exist."""
+        
+        try:
+            response = self._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt=MARKET_SYSTEM_PROMPT,
+                task_type="strategy",
+                temperature=0.6
+            )
+            return response
+        except Exception as e:
+            self.logger.warning(f"LLM insight generation failed: {e}")
+            return None
