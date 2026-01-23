@@ -26,6 +26,7 @@ import { DrillDownChart } from '@/components/DrillDownChart';
 import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
 import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
+import { SimulationInsights } from '@/components/SimulationInsights';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
@@ -902,6 +903,12 @@ export default function ScenariosPage() {
                 </div>
                 <GlossaryModal />
               </div>
+              
+              <SimulationInsights
+                simulation={simulation}
+                scenarioName={currentScenarioName}
+                testId="simulation-insights-results"
+              />
               
               {simulation.month_data && simulation.month_data.length > 0 && (
                 <>
