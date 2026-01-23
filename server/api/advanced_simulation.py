@@ -644,6 +644,9 @@ class ConstrainedOptimizationRequest(BaseModel):
     simulation_iterations: int = Field(default=200, ge=100, le=1000)
 
 
+SUPPORTED_OPTIMIZATION_METRICS = {"runway", "survival", "cash", "revenue", "growth", "dilution", "gross_margin", "burn_multiple"}
+
+
 @router.post("/optimise/constrained/{assumption_set_id}", response_model=Dict[str, Any])
 async def run_constrained_optimization(
     assumption_set_id: int,
@@ -656,6 +659,8 @@ async def run_constrained_optimization(
     
     Finds optimal assumption configuration while respecting constraints
     on multiple metrics (e.g., maximize runway while keeping dilution < 20%).
+    
+    Supported metrics: runway, survival, cash, revenue, growth, dilution, gross_margin, burn_multiple
     """
     from server.models.assumption_set import AssumptionSetModel
     from server.simulate.optimizer import (
@@ -665,6 +670,27 @@ async def run_constrained_optimization(
     )
     from server.simulate.assumptions import AssumptionSet
     from server.truth.truth_scan import run_truth_scan
+    
+    if request.target_metric not in SUPPORTED_OPTIMIZATION_METRICS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid target_metric. Supported: {', '.join(SUPPORTED_OPTIMIZATION_METRICS)}"
+        )
+    
+    for c in request.constraints:
+        if c.metric not in SUPPORTED_OPTIMIZATION_METRICS:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid constraint metric '{c.metric}'. Supported: {', '.join(SUPPORTED_OPTIMIZATION_METRICS)}"
+            )
+    
+    if request.objective_weights:
+        invalid_weights = [k for k in request.objective_weights.keys() if k not in SUPPORTED_OPTIMIZATION_METRICS]
+        if invalid_weights:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid objective_weights keys: {invalid_weights}. Supported: {', '.join(SUPPORTED_OPTIMIZATION_METRICS)}"
+            )
     
     assumption = db.query(AssumptionSetModel).filter(
         AssumptionSetModel.id == assumption_set_id
