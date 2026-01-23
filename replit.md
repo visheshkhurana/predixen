@@ -83,6 +83,14 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 10. **Forecasting**: Holt-Winters exponential smoothing, linear regression.
 11. **Alerts**: Z-score anomaly detection, threshold monitoring, runway warnings.
 12. **Admin Dashboard**: Centralized management for users, companies, billing, platform metrics, and audit logs with RBAC.
+13. **Payroll & ERP Connector Framework**: Extensible connector system for syncing financial data from Indian payroll and ERP providers.
+    -   **BaseConnector**: Abstract base class for all connectors with authentication, data fetching, and normalization methods.
+    -   **ConnectorRegistry**: Decorator-based registration and discovery of connector implementations.
+    -   **Supported Providers**: RazorpayX Payroll, GreytHR, Keka HR, Zoho Books, Tally ERP (with additional providers coming soon).
+    -   **Data Types**: EmployeeRecord, PayrollRunRecord, LedgerEntry, InvoiceRecord with normalization to internal FinancialRecord schema.
+    -   **Authentication**: Supports API_KEY, OAUTH2, BASIC, and CUSTOM auth types.
+    -   **API Endpoints**: `/connectors/providers`, `/connectors/companies/{id}/connect`, `/connectors/companies/{id}/sync/{provider}`, `/connectors/companies/{id}/sync-history`.
+    -   **UI Integration**: Integrations page with dedicated Payroll and ERP tabs showing provider cards, connection dialogs, and sync status.
 
 ### User Roles
 **Platform Level:**

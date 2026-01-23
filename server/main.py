@@ -18,6 +18,7 @@ from server.api import workstreams as workstreams_api
 from server.api import driver_models as driver_models_api
 from server.api import fundraising as fundraising_api
 from server.api import dashboard_kpis as dashboard_kpis_api
+from server.api import connectors as connectors_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,6 +91,7 @@ app.include_router(workstreams_api.router)
 app.include_router(driver_models_api.router)
 app.include_router(fundraising_api.router)
 app.include_router(dashboard_kpis_api.router)
+app.include_router(connectors_api.router)
 
 @app.get("/")
 def root():
