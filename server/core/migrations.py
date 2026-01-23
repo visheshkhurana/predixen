@@ -86,6 +86,19 @@ def ensure_company_metadata_column(engine: Engine) -> None:
             logger.debug(f"metadata_json column may already exist: {e}")
 
 
+def ensure_company_description_column(engine: Engine) -> None:
+    """Ensure the description column exists in companies table for business summary."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS description TEXT"
+            ))
+            conn.commit()
+            logger.info("Companies description column migration complete")
+        except Exception as e:
+            logger.debug(f"description column may already exist: {e}")
+
+
 def ensure_company_decisions_table(engine: Engine) -> None:
     """Ensure the company_decisions table exists for copilot decision tracking."""
     with engine.connect() as conn:
@@ -456,6 +469,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_financial_record_columns(engine)
     ensure_invites_table(engine)
     ensure_company_metadata_column(engine)
+    ensure_company_description_column(engine)
     ensure_company_decisions_table(engine)
     ensure_company_scenarios_table(engine)
     ensure_company_sources_table(engine)
