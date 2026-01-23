@@ -577,9 +577,10 @@ class StrategyAgent(BaseAgent):
             if diag.get("primary_focus"):
                 strategy_summary.append(f"Focus: {diag.get('primary_focus')}")
         if output.recommended:
-            strategy_summary.append(f"Recommended: {output.recommended.title}")
-        if output.growth_levers:
-            strategy_summary.append(f"Growth Levers: {', '.join(output.growth_levers[:3])}")
+            strategy_summary.append(f"Recommended: {output.recommended.name}")
+        if output.options:
+            option_names = [o.name for o in output.options[:3]]
+            strategy_summary.append(f"Options: {', '.join(option_names)}")
         if output.risks:
             strategy_summary.append(f"Key Risks: {', '.join(output.risks[:2])}")
         
