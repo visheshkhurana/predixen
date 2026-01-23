@@ -1,0 +1,109 @@
+Project Title: Fix Custom Scenario Skip Button & Rebuild Simulation Results Page
+
+Context:
+In the Simulation module, the “Custom Scenario” builder’s **Skip** button is unresponsive.  It should advance the user to the next step or directly to the simulation results.  Additionally, the existing simulation results page needs to be redesigned to deliver comprehensive, actionable insights in an intuitive layout, as the simulator is the core value proposition of the app.
+
+Goals:
+1. Fix the “Skip” button behaviour in the custom scenario flow.
+2. Redesign the simulation results page from scratch to make it informative, actionable and visually engaging.
+
+### Part 1: Fix Skip Button Functionality
+
+- **Identify the Component & Handler**
+  - Locate the component responsible for the custom scenario wizard (likely in `Simulation/CustomScenario.jsx` or similar).
+  - Find the “Skip” button element and ensure it has an `onClick` handler bound to a method like `handleSkip()`.
+
+- **Define Skip Behaviour**
+  - If the scenario builder consists of multiple steps (e.g., Revenue Assumptions → Cost Assumptions → Team Assumptions), decide what “Skip” does at each step:
+    - Option A: Skips the current input and moves to the next step with default values.
+    - Option B: Immediately generates a scenario with existing assumptions.
+  - Implement logic to:
+    - Populate any skipped fields with sensible defaults or baseline values.
+    - Increment the step index state or trigger the simulation run.
+
+- **State & Validation**
+  - Ensure that skipping doesn’t break validation; skipped inputs should be marked as optional.
+  - When the user reaches the end, call the simulation engine to run with the collected assumptions.
+
+- **User Feedback**
+  - Provide visual feedback when skipping (e.g., progress bar update).
+  - Disable the button while processing to avoid duplicate clicks.
+
+### Part 2: Redesign Simulation Results Page
+
+1. **Define Required Data**
+   - Gather all outputs from the simulation engine, including:
+     - Runway projections (P10/P50/P90).
+     - Cash balance over the simulation horizon.
+     - Revenue and expense projections.
+     - Burn multiple, revenue growth, churn, gross margin.
+     - Top‑customer concentration, CAC/LTV (if available).
+     - Any probabilistic outcomes (e.g., survival probability).
+
+2. **Create a Summary Panel**
+   - At the top of the results page, display a high‑level summary:
+     - Current runway P50 and P10/P90 ranges.
+     - Projected ARR at the end of the horizon.
+     - Burn multiple and churn rate.
+   - Use coloured badges or icons to indicate health (green/yellow/red).
+
+3. **Implement Interactive Charts**
+   - Use a charting library (e.g., Chart.js, ECharts) to render:
+     - A line or area chart for projected cash balance over time with confidence bands.
+     - Bar charts for monthly revenue vs. expenses.
+     - A waterfall chart illustrating how different assumptions impact runway.
+   - Allow users to hover over points to see exact values.
+
+4. **Actionable Insights & Recommendations**
+   - Develop a recommendation engine that analyses simulation outcomes and industry benchmarks to produce specific advice:
+     - If burn multiple > 2: Suggest cost reduction or revenue acceleration.
+     - If runway < 6 months: Recommend fundraising or cutting expenditures.
+     - If churn is high: Advise retention efforts.
+   - Display recommendations in a clearly labelled panel with icons and links to relevant parts of the app (e.g., Data Input for cost breakdown).
+
+5. **Scenario Comparison Widget**
+   - Enable users to select two or more saved scenarios to compare.
+   - Show a table or chart overlaying key metrics for each scenario.
+   - Provide a diff view highlighting where metrics diverge.
+
+6. **Narrative Summary**
+   - Generate a short narrative (2–3 paragraphs) summarising:
+     - Key outcomes and risks.
+     - How the scenario differs from baseline.
+     - What strategic actions the founder might consider.
+   - Use templates to create consistent language and embed key numbers.
+
+7. **Drill‑Down & Transparency**
+   - Add clickable elements on each metric that reveal:
+     - The formula used.
+     - The underlying assumptions.
+     - The raw values (e.g., monthly revenue).
+   - This builds trust and helps users learn.
+
+8. **UI/UX Layout**
+   - Organise the page into logical sections:
+     - Summary at top.
+     - Charts/metrics in the middle.
+     - Insights and recommendations at the bottom.
+     - Scenario comparison panel collapsible on the side.
+   - Ensure responsive design for different screen sizes.
+
+9. **Testing & Iteration**
+   - Write unit tests for skip functionality.
+   - Create end‑to‑end tests to ensure that running a simulation with defaults/skip navigates to the results.
+   - Gather feedback from alpha testers on the new results design and iterate.
+
+### Deliverables
+
+- A fixed custom scenario flow with a working Skip button that advances the user.
+- A redesigned simulation results page with summary, charts, actionable insights, narrative text and comparison tools.
+- Updated simulation engine hooks to supply all necessary data points.
+- CSS/styling updates for consistent and intuitive UI.
+- Documentation of new components and user guides on interpreting results.
+
+### Success Criteria
+
+- Clicking “Skip” during custom scenario creation uses default assumptions and moves the user forward instead of doing nothing.
+- The simulation results page displays comprehensive, interactive information; users can quickly understand key metrics and receive clear recommendations.
+- Testers report that the simulator is intuitive, informative, and central to the app’s value proposition.
+
