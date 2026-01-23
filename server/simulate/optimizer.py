@@ -135,6 +135,9 @@ def evaluate_assumptions(
     return float(summary.get(metric_key, 0.0) or 0.0)
 
 
+SUPPORTED_METRICS = {"runway", "survival", "cash", "revenue", "growth", "dilution", "gross_margin", "burn_multiple"}
+
+
 def evaluate_with_constraints(
     assumptions: AssumptionSet,
     baseline_metrics: Dict[str, float],
@@ -174,24 +177,52 @@ def evaluate_with_constraints(
     }
     
     all_metrics = {}
-    for name, key in metric_map.items():
-        all_metrics[name] = float(summary.get(key, 0.0) or 0.0)
+    available_metrics = set()
     
-    if "dilution" not in summary:
+    for name, key in metric_map.items():
+        value = summary.get(key)
+        if value is not None:
+            all_metrics[name] = float(value)
+            available_metrics.add(name)
+        else:
+            all_metrics[name] = None
+    
+    if all_metrics.get("dilution") is None:
         fundraise = assumptions.fundraise
         if fundraise and fundraise.raise_probability > 0:
-            all_metrics["dilution"] = 0.20
+            raise_amount = fundraise.raise_amount or 500000
+            valuation = raise_amount / 0.20
+            all_metrics["dilution"] = raise_amount / valuation
         else:
             all_metrics["dilution"] = 0.0
+        available_metrics.add("dilution")
     
-    if "gross_margin" not in summary:
+    if all_metrics.get("gross_margin") is None:
         all_metrics["gross_margin"] = baseline_metrics.get("gross_margin", 0.70)
+        available_metrics.add("gross_margin")
     
-    primary_value = all_metrics.get(config.target_metric, 0.0)
+    for name in ["runway", "survival", "cash", "revenue", "growth"]:
+        if all_metrics.get(name) is None:
+            if name == "runway":
+                all_metrics[name] = 12.0
+            elif name == "survival":
+                all_metrics[name] = 0.5
+            else:
+                all_metrics[name] = 0.0
+            available_metrics.add(name)
+    
+    primary_value = all_metrics.get(config.target_metric, 0.0) or 0.0
     
     constraints_satisfied = True
     for constraint in config.constraints:
-        metric_value = all_metrics.get(constraint.metric, 0.0)
+        if constraint.metric not in SUPPORTED_METRICS:
+            constraints_satisfied = False
+            break
+        
+        metric_value = all_metrics.get(constraint.metric)
+        if metric_value is None:
+            constraints_satisfied = False
+            break
         
         if constraint.min_value is not None and metric_value < constraint.min_value:
             constraints_satisfied = False
@@ -201,7 +232,8 @@ def evaluate_with_constraints(
             constraints_satisfied = False
             break
     
-    return primary_value, all_metrics, constraints_satisfied
+    final_metrics = {k: v if v is not None else 0.0 for k, v in all_metrics.items()}
+    return primary_value, final_metrics, constraints_satisfied
 
 
 def compute_multi_objective_score(
@@ -272,6 +304,7 @@ def constrained_random_search(
     Random search with constraint handling.
     
     Uses penalty method: infeasible solutions get penalized score.
+    When multi_objective is enabled, always maximizes the composite score.
     """
     start_time = datetime.utcnow()
     job_id = str(uuid.uuid4())
@@ -279,9 +312,12 @@ def constrained_random_search(
     if config.seed:
         np.random.seed(config.seed)
     
+    effective_direction = "maximize" if config.multi_objective else config.direction
+    
     best_value = None
     best_assumptions = None
     best_metrics = None
+    best_is_feasible = False
     convergence_history = []
     feasible_count = 0
     
@@ -304,15 +340,21 @@ def constrained_random_search(
         )
         
         if config.multi_objective and config.objective_weights:
+            valid_weights = {k: v for k, v in config.objective_weights.items() if k in SUPPORTED_METRICS}
             objective_value = compute_multi_objective_score(
                 all_metrics,
-                config.objective_weights
+                valid_weights
             )
         else:
             objective_value = primary_value
         
+        penalty = 1.0
         if not is_feasible:
-            objective_value = objective_value * 0.5
+            penalty = 0.5
+            for constraint in config.constraints:
+                if constraint.weight > 1.0:
+                    penalty *= (0.5 ** (constraint.weight - 1))
+            objective_value = objective_value * penalty
         else:
             feasible_count += 1
         
@@ -328,21 +370,19 @@ def constrained_random_search(
         is_better = False
         if best_value is None:
             is_better = True
-        elif is_feasible:
-            if config.direction == "maximize" and objective_value > best_value:
+        elif is_feasible and not best_is_feasible:
+            is_better = True
+        elif is_feasible == best_is_feasible:
+            if effective_direction == "maximize" and objective_value > best_value:
                 is_better = True
-            elif config.direction == "minimize" and objective_value < best_value:
-                is_better = True
-        elif not best_metrics or not best_metrics.get("is_feasible", False):
-            if config.direction == "maximize" and objective_value > best_value:
-                is_better = True
-            elif config.direction == "minimize" and objective_value < best_value:
+            elif effective_direction == "minimize" and objective_value < best_value:
                 is_better = True
         
         if is_better:
             best_value = objective_value
             best_assumptions = test_assumptions.model_dump()
             best_metrics = {**all_metrics, "is_feasible": is_feasible}
+            best_is_feasible = is_feasible
     
     elapsed = (datetime.utcnow() - start_time).total_seconds() * 1000
     
