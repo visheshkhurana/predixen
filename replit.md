@@ -52,13 +52,26 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Parameter Sweeps**: Analyze impact of varying parameters on runway.
     -   **Ranked Drivers**: Top drivers sorted by impact magnitude.
     -   **Visual Insights**: TornadoChart and SensitivityPanel UI components.
+    -   **OAT Perturbation**: One-At-a-Time sensitivity method with ±20% parameter variation.
 5.  **Scenario Versioning**: Full version control for scenarios via `/api/simulations/versions`.
+    -   **Macro-Economic Modifiers**: 5 presets (optimistic, neutral, pessimistic, stagflation, boom) with interest rate, inflation, and market growth factors.
+    -   **API Endpoints**: `GET/PUT /simulator/macros` for preset management.
+6.  **Constrained Multi-Objective Optimization**: Advanced optimizer with constraint handling.
+    -   **Constraints**: Min/max bounds on metrics (runway, survival, cash, revenue, growth, dilution, gross_margin, burn_multiple).
+    -   **Multi-Objective Scoring**: Weighted composite score across multiple objectives with normalized metrics.
+    -   **Penalty Method**: Infeasible solutions penalized with configurable constraint weights.
+    -   **Feasibility Tracking**: Reports feasibility rate and best feasible solution.
+    -   **API Endpoint**: `POST /simulator/optimise/constrained/{assumption_set_id}` with validation for supported metrics.
+7.  **Automated Recommendations Engine**: Health-based recommendation generation.
+    -   **Health Thresholds**: Runway (critical <6mo, warning <9mo, healthy >12mo), survival (critical <50%, warning <70%, healthy >85%).
+    -   **8 Recommendation Types**: reduce_burn, increase_revenue, delay_hiring, adjust_pricing, fundraise, reduce_churn, extend_runway, improve_margins.
+    -   **API Endpoint**: `POST /simulator/recommendations/{assumption_set_id}`.
     -   **Version History**: Create, list, and restore scenario versions.
     -   **Diff View**: Compare changes between versions (inputs, events, tags).
     -   **Rollback**: Restore to any previous version with audit trail.
-6.  **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
-7.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
-8.  **Multi-Agent Fund Flow Copilot V2+**: Production-ready AI system with specialized agents and enhanced features.
+8.  **Decision Scoring**: Weighted composite score for ranked recommendations (survival, growth, downside risk, dilution, complexity).
+9.  **Decision Engine**: Generates and ranks top 3 deterministic action recommendations.
+10.  **Multi-Agent Fund Flow Copilot V2+**: Production-ready AI system with specialized agents and enhanced features.
     -   **Router/Orchestrator Agent**: Analyzes incoming queries and routes to appropriate specialist agents.
     -   **CFO Agent**: Financial analysis, metrics extraction, FX conversion (INR, EUR, GBP, CAD, AUD, JPY, CNY), and runway optimization.
     -   **Market Agent**: Competitor analysis, ICP definition, target customer segmentation, and industry benchmarks (SaaS, Fintech, Marketplace, E-commerce, AgTech).
