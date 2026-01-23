@@ -1,0 +1,82 @@
+Project Title: Rebuild Predixen Simulator Backend for Robust, Probabilistic Modelling
+
+Context:
+The current simulator provides deterministic outputs using static formulas and has limited ability to handle uncertainty or optimise for founder goals.  It also lacks a clean separation between data ingestion, transformation, simulation and analytics.  We aim to redesign the simulator’s backend to be modular, scalable, and more insightful for founders exploring strategic scenarios.
+
+Objectives:
+
+1. **Modular Architecture**
+   - Separate the backend into four layers:
+     1. **Data Ingestion:** Interfaces to pull raw time‑series data from external systems (accounting, payroll, CRM) via connectors.
+     2. **Transformation & Validation:** Normalise currencies/units, cleanse data, infer missing values, and validate ranges.
+     3. **Simulation Engine:** Accept a set of assumptions and produce projections using probabilistic models (Monte Carlo) rather than single point estimates.
+     4. **Analytics & API:** Summarise results into key metrics, provide historical comparisons, and expose everything via a REST/GraphQL API.
+
+2. **Probabilistic Modelling**
+   - Replace deterministic calculations with stochastic ones for key variables (e.g., revenue growth, churn, cost escalation).  Use appropriate distributions (e.g., normal, log‑normal, beta) informed by historical data or industry benchmarks.
+   - Implement a Monte Carlo simulation framework:
+     - Given an assumption set, run N (e.g., 1 000) iterations, each sampling from the distributions.
+     - For each iteration, compute cash flows, runway, ARR growth, burn multiple, dilution, etc., across the chosen horizon (e.g., 24 months).
+     - Aggregate outputs to derive percentiles (P10/P50/P90) and survival probabilities.
+
+3. **Assumption Sets & Strategy Templates**
+   - Define a JSON schema for an assumption set, including:
+     - `revenue_growth` (mean, variance)
+     - `churn_rate`
+     - `price_change`
+     - `burn_reduction`
+     - `headcount_plan` (hires by month)
+     - `fundraise` (amount, timing, valuation)
+     - `capex` and other custom fields.
+   - Implement strategy templates (e.g., “Extend Runway”, “Aggressive Growth”) that map to specific assumption sets.  Allow users to override any parameter.
+   - Store templates in the database for reuse.
+
+4. **Goal‑Seeking and Optimisation**
+   - Create an optimisation module that takes a goal (e.g., maintain 18 months runway with dilution < 20 %) and searches the assumption space for variable combinations that meet the goal.
+   - For initial implementation, use a simple grid search or random search across plausible ranges; later you can integrate more advanced optimisation (e.g., Bayesian optimisation).
+
+5. **API‑First Design**
+   - Build a set of endpoints to interact with the simulator:
+     - `POST /assumptions` → create or update an assumption set.
+     - `POST /simulate` → trigger a simulation run (returns a job ID).
+     - `GET /simulate/{job_id}` → retrieve simulation results (including raw iteration data and aggregated percentiles).
+     - `GET /metrics` → return summary metrics for the latest run or baseline scenario.
+     - `GET /templates` → list available strategy templates.
+     - `POST /optimise` → accept a goal definition and return recommended assumption sets.
+   - Ensure endpoints are stateless and support asynchronous processing for long‑running simulations (e.g., via a task queue and job status).
+
+6. **Data Storage & Performance**
+   - Use a relational or document database to store:
+     - Raw imported data (timestamped metrics)
+     - Assumption sets and templates
+     - Simulation runs (inputs + outputs + metadata)
+   - Consider storing simulation iteration results in a columnar format (e.g., Parquet files) for efficient aggregation.
+   - Implement caching for repeated assumption sets to avoid recomputing identical scenarios.
+
+7. **Validation & Logging**
+   - Build a validation layer to check inputs:
+     - Range checks (e.g., churn rate between 0 and 1)
+     - Consistency checks (e.g., headcount plan must not reduce below current headcount)
+   - Log each simulation run with timestamps, data version and simulator version.  Provide audit trails for debugging.
+
+8. **Testing & Documentation**
+   - Write unit tests for each calculation function and distribution sampling.
+   - Create integration tests that simulate end‑to‑end runs with synthetic data.
+   - Document the API endpoints, assumption schema, and strategy templates (e.g., using OpenAPI/Swagger).
+   - Provide a developer guide explaining how to add new distributions or templates.
+
+Milestones:
+
+- **M1:** Design data models and assumption schema; implement ingestion and transformation modules.
+- **M2:** Develop core simulation engine with Monte Carlo support; expose basic API endpoints.
+- **M3:** Add strategy templates and goal‑seeking; integrate caching.
+- **M4:** Build optimisation endpoint; finalise documentation and tests.
+
+Deliverables:
+
+- Source code for the modular backend (preferably in Python/TypeScript) with clear separation of concerns.
+- A working simulation API that supports asynchronous runs and returns percentile outputs.
+- Sample strategy templates and an optimisation example.
+- Unit and integration test suites.
+- Updated README and API docs.
+
