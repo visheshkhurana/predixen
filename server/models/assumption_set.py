@@ -34,9 +34,9 @@ class SimulationCache(Base):
     __tablename__ = "simulation_cache"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    cache_key = Column(String(128), unique=True, nullable=False, index=True)
+    cache_key = Column(String(64), unique=True, nullable=False, index=True)
     assumption_set_id = Column(Integer, ForeignKey("assumption_sets.id"), nullable=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
     
     config_json = Column(JSON, nullable=True)
     results_json = Column(JSON, nullable=False)
@@ -47,3 +47,11 @@ class SimulationCache(Base):
     created_at = Column(DateTime, server_default=func.now())
     expires_at = Column(DateTime, nullable=True)
     hit_count = Column(Integer, default=0)
+    
+    @property
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired."""
+        from datetime import datetime
+        if self.expires_at is None:
+            return False
+        return datetime.utcnow() > self.expires_at
