@@ -93,7 +93,7 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **UI Integration**: Integrations page with dedicated Payroll and ERP tabs showing provider cards, connection dialogs, and sync status.
 14. **Feature Notification System**: Automated email notifications for platform changes and updates.
     -   **Resend Integration**: Uses Resend API for reliable email delivery.
-    -   **Recipients**: nikita@predixen.ai and vysheshk@gmail.com receive all feature notifications.
+    -   **Recipients**: nikita@predixen.ai, vysheshk@gmail.com, and nikita.luther@gmail.com receive all feature notifications.
     -   **Professional Templates**: HTML email templates with branding, change lists, and deployment timestamps.
     -   **API Endpoint**: `POST /notifications/feature` to trigger feature update notifications.
     -   **Notification Types**: Feature updates, bug fixes, enhancements, and deployments.

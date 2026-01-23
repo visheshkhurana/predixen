@@ -11,7 +11,8 @@ from datetime import datetime
 
 NOTIFICATION_RECIPIENTS = [
     "nikita@predixen.ai",
-    "vysheshk@gmail.com"
+    "vysheshk@gmail.com",
+    "nikita.luther@gmail.com"
 ]
 
 
