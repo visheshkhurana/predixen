@@ -61,6 +61,12 @@ class RouterAgent(BaseAgent):
     """
     Router/Orchestrator that determines which specialist agents to call
     and merges their responses into a final structured output.
+    
+    Uses Gemini Flash via LLM Router for fast orchestration and response synthesis.
+    Passes LLM Router to child agents for model-specific tasks:
+    - CFO Agent → GPT-4o (financial analysis)
+    - Market Agent → Claude Sonnet (market research)
+    - Strategy Agent → Claude Sonnet (strategy/planning)
     """
     
     CFO_KEYWORDS = [
@@ -83,8 +89,8 @@ class RouterAgent(BaseAgent):
         "differentiate", "differentiation", "strategy", "strategic"
     ]
     
-    def __init__(self):
-        super().__init__(AgentType.ROUTER)
+    def __init__(self, llm_router=None):
+        super().__init__(AgentType.ROUTER, llm_router)
     
     def determine_routing(self, query: str, has_document: bool = False) -> RoutingDecision:
         """Determine which agents to call based on the query."""
@@ -130,7 +136,7 @@ class RouterAgent(BaseAgent):
         
         if routing.call_cfo:
             from .cfo_agent import CFOAgent
-            cfo = CFOAgent()
+            cfo = CFOAgent(llm_router=self.llm_router)
             cfo_response = await cfo.process(query, ckb, context)
             agent_responses.append(cfo_response)
             
@@ -139,7 +145,7 @@ class RouterAgent(BaseAgent):
         
         if routing.call_market:
             from .market_agent import MarketAgent
-            market = MarketAgent()
+            market = MarketAgent(llm_router=self.llm_router)
             market_response = await market.process(query, ckb, context)
             agent_responses.append(market_response)
             
@@ -150,7 +156,7 @@ class RouterAgent(BaseAgent):
         
         if routing.call_strategy:
             from .strategy_agent import StrategyAgent
-            strategy = StrategyAgent()
+            strategy = StrategyAgent(llm_router=self.llm_router)
             strategy_response = await strategy.process(query, ckb, context)
             agent_responses.append(strategy_response)
             
@@ -198,6 +204,8 @@ class RouterAgent(BaseAgent):
             merged_output, ckb, unique_findings, unique_questions
         )
         
+        synthesis = self._synthesize_response(unique_findings, unique_risks, ckb)
+        
         return AgentResponse(
             agent_type=AgentType.ROUTER,
             findings=unique_findings,
@@ -205,7 +213,8 @@ class RouterAgent(BaseAgent):
             assumptions=unique_assumptions,
             risks=unique_risks,
             next_questions=unique_questions,
-            confidence=overall_confidence
+            confidence=overall_confidence,
+            raw_response=synthesis or ""
         )
     
     def _structure_final_output(
@@ -252,3 +261,41 @@ class RouterAgent(BaseAgent):
             "next_questions": questions,
             "ckb": ckb.to_dict()
         }
+    
+    def _synthesize_response(
+        self,
+        findings: List[str],
+        risks: List[str],
+        ckb: CompanyKnowledgeBase
+    ) -> Optional[str]:
+        """
+        Synthesize a cohesive executive summary from agent findings.
+        Uses Gemini Flash for fast orchestration.
+        """
+        if not self.llm_router or not findings:
+            return None
+        
+        findings_text = "\n".join([f"- {f}" for f in findings[:8]])
+        risks_text = "\n".join([f"- {r}" for r in risks[:4]]) if risks else "No specific risks identified"
+        
+        prompt = f"""You are synthesizing insights from multiple financial analysis agents for {ckb.company_name}.
+
+Key Findings:
+{findings_text}
+
+Key Risks:
+{risks_text}
+
+Provide a 2-3 sentence executive summary that captures the most important insights. Be direct, specific, and actionable."""
+        
+        try:
+            response = self._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt="You are an expert financial analyst synthesizing insights for startup founders.",
+                task_type="general_chat",
+                temperature=0.5
+            )
+            return response if response else "Analysis complete. Review the detailed findings above for specific insights."
+        except Exception as e:
+            self.logger.warning(f"Synthesis generation failed: {e}")
+            return "Analysis complete. Review the detailed findings above for specific insights."

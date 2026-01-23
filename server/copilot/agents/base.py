@@ -1,11 +1,20 @@
 """
 Base Agent class for the Fund Flow Copilot multi-agent system.
+
+All agents use the Multi-LLM Router for intelligent model selection:
+- CFO Agent → GPT-4o (best for financial analysis)
+- Market Agent → Claude Sonnet (balanced for market research)
+- Strategy Agent → Claude Sonnet (strategy and planning)
+- Router Agent → Gemini Flash (fast orchestration)
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from enum import Enum
 import logging
+
+if TYPE_CHECKING:
+    from server.lib.llm.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -213,9 +222,14 @@ class CompanyKnowledgeBase:
 class BaseAgent(ABC):
     """Base class for all specialist agents."""
     
-    def __init__(self, agent_type: AgentType):
+    def __init__(self, agent_type: AgentType, llm_router: Optional["LLMRouter"] = None):
         self.agent_type = agent_type
+        self.llm_router = llm_router
         self.logger = logging.getLogger(f"copilot.{agent_type.value}")
+    
+    def set_llm_router(self, llm_router: "LLMRouter") -> None:
+        """Set the LLM router for this agent."""
+        self.llm_router = llm_router
     
     @abstractmethod
     async def process(
@@ -226,6 +240,48 @@ class BaseAgent(ABC):
     ) -> AgentResponse:
         """Process a query and return structured response."""
         pass
+    
+    def _call_llm(
+        self,
+        messages: List[Dict[str, str]],
+        system_prompt: str,
+        task_type: str = "general_chat",
+        model: Optional[str] = None,
+        temperature: float = 0.7
+    ) -> Optional[str]:
+        """
+        Call the LLM router with the given messages.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            system_prompt: System prompt for the model
+            task_type: Task type for model routing (e.g., 'financial_analysis', 'strategy')
+            model: Optional explicit model override
+            temperature: Sampling temperature
+        
+        Returns:
+            Response content as string, or None if LLM not available
+        """
+        if not self.llm_router:
+            self.logger.warning(f"LLM router not available for {self.agent_type.value} agent")
+            return None
+        
+        try:
+            from server.lib.llm.llm_router import TaskType
+            task = TaskType(task_type) if task_type in [t.value for t in TaskType] else TaskType.GENERAL_CHAT
+            
+            result = self.llm_router.chat(
+                messages=messages,
+                task_type=task,
+                model=model,
+                system=system_prompt,
+                temperature=temperature
+            )
+            
+            return result.get("content", "")
+        except Exception as e:
+            self.logger.error(f"LLM call failed for {self.agent_type.value}: {e}")
+            return None
     
     def format_currency(self, value: float, currency: str = "USD") -> str:
         """Format currency in human-readable format (e.g., USD 14.5M)."""

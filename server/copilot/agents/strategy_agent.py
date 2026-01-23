@@ -131,10 +131,12 @@ class StrategyAgent(BaseAgent):
     """
     Strategy Agent that provides business strategy,
     GTM planning, and vertical expansion recommendations.
+    
+    Uses Claude Sonnet via LLM Router for strategy and planning.
     """
     
-    def __init__(self):
-        super().__init__(AgentType.STRATEGY)
+    def __init__(self, llm_router=None):
+        super().__init__(AgentType.STRATEGY, llm_router)
     
     async def process(
         self, 
@@ -178,6 +180,10 @@ class StrategyAgent(BaseAgent):
         
         confidence = self._assess_confidence(ckb, context)
         
+        llm_insights = await self._generate_llm_insights(query, output, ckb, context)
+        if llm_insights:
+            findings.append(llm_insights)
+        
         return AgentResponse(
             agent_type=AgentType.STRATEGY,
             findings=findings,
@@ -188,7 +194,8 @@ class StrategyAgent(BaseAgent):
             assumptions=assumptions,
             risks=output.risks,
             next_questions=next_questions[:3],
-            confidence=confidence
+            confidence=confidence,
+            raw_response=llm_insights or ""
         )
     
     def _diagnose_business(
@@ -548,3 +555,53 @@ class StrategyAgent(BaseAgent):
             return ConfidenceLevel.MEDIUM
         else:
             return ConfidenceLevel.LOW
+    
+    async def _generate_llm_insights(
+        self,
+        query: str,
+        output: "StrategyOutput",
+        ckb: CompanyKnowledgeBase,
+        context: Dict[str, Any]
+    ) -> Optional[str]:
+        """Generate LLM-powered strategic insights using Claude Sonnet."""
+        if not self.llm_router:
+            return None
+        
+        strategy_summary = []
+        if output.business_diagnosis:
+            diag = output.business_diagnosis
+            if diag.get("stage"):
+                strategy_summary.append(f"Stage: {diag.get('stage')}")
+            if diag.get("revenue_model"):
+                strategy_summary.append(f"Revenue Model: {diag.get('revenue_model')}")
+            if diag.get("primary_focus"):
+                strategy_summary.append(f"Focus: {diag.get('primary_focus')}")
+        if output.recommended:
+            strategy_summary.append(f"Recommended: {output.recommended.title}")
+        if output.growth_levers:
+            strategy_summary.append(f"Growth Levers: {', '.join(output.growth_levers[:3])}")
+        if output.risks:
+            strategy_summary.append(f"Key Risks: {', '.join(output.risks[:2])}")
+        
+        if not strategy_summary:
+            return None
+        
+        prompt = f"""Based on the following strategic analysis for {ckb.company_name}:
+
+{chr(10).join(strategy_summary)}
+
+User question: {query}
+
+Provide a brief, actionable strategic insight (2-3 sentences) focused on the most important strategic move the company should consider. Be specific about timing, priorities, and expected outcomes."""
+        
+        try:
+            response = self._call_llm(
+                messages=[{"role": "user", "content": prompt}],
+                system_prompt=STRATEGY_SYSTEM_PROMPT,
+                task_type="strategy",
+                temperature=0.6
+            )
+            return response
+        except Exception as e:
+            self.logger.warning(f"LLM insight generation failed: {e}")
+            return None

@@ -244,6 +244,7 @@ async def copilot_chat(
     from server.copilot.agents.base import CompanyKnowledgeBase
     from server.copilot.ckb_storage import CKBStorage
     from server.models.company_decision import CompanyDecision, CompanyScenario
+    from server.lib.llm.llm_router import get_llm_router
     import uuid as uuid_lib
     
     company = db.query(Company).filter(
@@ -360,7 +361,14 @@ async def copilot_chat(
         "pii_mode": pii_mode
     }
     
-    router = RouterAgent()
+    llm_router = get_llm_router(
+        db_session=db,
+        company_id=company_id,
+        user_id=current_user.id,
+        pii_mode=pii_mode
+    )
+    
+    router = RouterAgent(llm_router=llm_router)
     response = await router.process(redacted_message, ckb, context)
     
     ckb_storage.save_ckb(ckb)

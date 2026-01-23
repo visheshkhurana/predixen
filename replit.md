@@ -31,7 +31,11 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 5.  **Scenario Versioning**: Provides full version control for scenarios, including macro-economic modifiers (optimistic, neutral, pessimistic, stagflation, boom) and API endpoints for managing presets.
 6.  **Constrained Multi-Objective Optimization**: An advanced optimizer that handles constraints on key financial metrics (e.g., runway, survival, cash) and uses a weighted composite score for multi-objective decision-making.
 7.  **Automated Recommendations Engine**: Generates health-based recommendations (e.g., reduce burn, fundraise) based on predefined thresholds for financial health indicators like runway and survival probability. It also includes version history, diff views, and rollback capabilities for scenarios.
-8.  **Multi-Agent Fund Flow Copilot V2+**: A production-ready AI system featuring a Router/Orchestrator Agent that routes queries to specialized agents (CFO, Market, Strategy). It maintains a Company Knowledge Base (CKB) for persistent context, provides structured responses with truth-first citations, and includes data health scoring, operating cadence management, and automated alerts.
+8.  **Multi-Agent Fund Flow Copilot V2+**: A production-ready AI system featuring a Router/Orchestrator Agent that routes queries to specialized agents (CFO, Market, Strategy). It maintains a Company Knowledge Base (CKB) for persistent context, provides structured responses with truth-first citations, and includes data health scoring, operating cadence management, and automated alerts. The copilot now uses multi-LLM integration with task-specific model selection:
+    - CFO Agent: GPT-4o for financial analysis (best at structured data)
+    - Market Agent: Claude Sonnet for market research (balanced reasoning)
+    - Strategy Agent: Claude Sonnet for strategic planning
+    - Router Agent: Gemini Flash for orchestration and response synthesis
 9.  **Copilot V6: Fundraising OS**: A comprehensive fundraising module with cap table management (common, preferred shares, option pools, convertible notes), a cap table engine for dilution calculations, fundraising round tracking, and a dilution simulator. It also includes an Investor Room for generating investor materials and managing an investor pipeline.
 10. **Forecasting**: Utilizes Holt-Winters exponential smoothing and linear regression.
 11. **Alerts**: Implements Z-score anomaly detection, threshold monitoring, and runway warnings.
