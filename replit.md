@@ -91,6 +91,12 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     -   **Authentication**: Supports API_KEY, OAUTH2, BASIC, and CUSTOM auth types.
     -   **API Endpoints**: `/connectors/providers`, `/connectors/companies/{id}/connect`, `/connectors/companies/{id}/sync/{provider}`, `/connectors/companies/{id}/sync-history`.
     -   **UI Integration**: Integrations page with dedicated Payroll and ERP tabs showing provider cards, connection dialogs, and sync status.
+14. **Feature Notification System**: Automated email notifications for platform changes and updates.
+    -   **Resend Integration**: Uses Resend API for reliable email delivery.
+    -   **Recipients**: nikita@predixen.ai and vysheshk@gmail.com receive all feature notifications.
+    -   **Professional Templates**: HTML email templates with branding, change lists, and deployment timestamps.
+    -   **API Endpoint**: `POST /api/notifications/feature` to trigger feature update notifications.
+    -   **Notification Types**: Feature updates, bug fixes, enhancements, and deployments.
 
 ### User Roles
 **Platform Level:**
@@ -116,3 +122,4 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 -   **QuickBooks/Xero**: Planned integrations for accounting data synchronization.
 -   **Salesforce/HubSpot**: Planned integrations for CRM data synchronization.
 -   **Google Fonts**: Inter (primary font), IBM Plex Mono (for financial figures).
+-   **Resend**: Email delivery service for feature notifications and platform updates.
