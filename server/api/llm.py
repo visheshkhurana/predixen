@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from server.core.db import get_db
-from server.core.auth import get_current_user
+from server.core.security import get_current_user
 from server.models.user import User
 from server.lib.llm import get_llm_router, TaskType, MODELS, TASK_TO_MODEL, TASK_DESCRIPTIONS
 
