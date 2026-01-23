@@ -23,6 +23,13 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 -   **Authentication**: JWT-based.
 -   **Validation**: Pydantic models.
 
+### Production Hardening (Jan 2026)
+-   **CORS**: Env-driven origins via `CORS_ORIGINS` (no wildcard with credentials). Defaults to localhost in dev, empty in prod.
+-   **Process Supervision**: Node spawns uvicorn with graceful shutdown (SIGTERM/SIGKILL) and auto-restart with exponential backoff (max 5 attempts).
+-   **DB Initialization Flags**: Schema creation, migrations, and seeding gated by env vars (`CREATE_SCHEMA`, `RUN_MIGRATIONS`, `SEED_BENCHMARKS`, `SEED_DEMO_DATA`). Default true in dev, false in prod.
+-   **Health Endpoints**: `/health` on Node (includes FastAPI status) and `/health` on FastAPI.
+-   **Pytest**: Configured via `pytest.ini` with pythonpath for test discovery from repo root.
+
 ### Key Features and Technical Implementations
 1.  **Data Ingestion**: Supports CSV upload, manual baseline entry, and AI-powered extraction from Excel/PDFs using OpenAI, with a two-stage PDF extraction process including Vision fallback for scanned documents.
 2.  **Truth Scan**: Computes 24 financial metrics, benchmarks against industry data, and assigns confidence scores.
