@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import logging
 from server.core.db import engine, Base, SessionLocal
 from server.core.migrations import run_migrations
+from server.core.config import settings
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration, scenarios
@@ -30,20 +31,45 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Log startup configuration (without secrets)
+    logger.info(f"Starting Predixen Intelligence OS v1.0.0")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"CORS origins: {settings.cors_origins_list}")
+    logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
+    
     try:
-        logger.info("Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+        # Gated schema creation
+        if settings.should_create_schema:
+            logger.info("Creating database tables...")
+            Base.metadata.create_all(bind=engine)
+            logger.info("Database tables created successfully")
+        else:
+            logger.info("Skipping schema creation (CREATE_SCHEMA=false)")
         
-        # Run migrations to add any new columns to existing tables
-        run_migrations(engine)
+        # Gated migrations
+        if settings.should_run_migrations:
+            logger.info("Running migrations...")
+            run_migrations(engine)
+            logger.info("Migrations completed")
+        else:
+            logger.info("Skipping migrations (RUN_MIGRATIONS=false)")
         
+        # Gated seeding
         db = SessionLocal()
         try:
-            logger.info("Running seed scripts...")
-            seed_benchmarks(db)
-            seed_demo_data(db)
-            logger.info("Seed scripts completed successfully")
+            if settings.should_seed_benchmarks:
+                logger.info("Seeding benchmark data...")
+                seed_benchmarks(db)
+                logger.info("Benchmark data seeded")
+            else:
+                logger.info("Skipping benchmark seeding (SEED_BENCHMARKS=false)")
+            
+            if settings.should_seed_demo_data:
+                logger.info("Seeding demo data...")
+                seed_demo_data(db)
+                logger.info("Demo data seeded")
+            else:
+                logger.info("Skipping demo data seeding (SEED_DEMO_DATA=false)")
         except Exception as e:
             logger.error(f"Error during seeding: {e}")
             raise
@@ -53,7 +79,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during startup: {e}")
         raise
     
+    logger.info("Startup complete - FastAPI server ready")
     yield
+    logger.info("Shutting down FastAPI server...")
 
 app = FastAPI(
     title="Predixen Intelligence OS",
@@ -62,9 +90,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS configuration - uses env-driven origins list (no wildcard with credentials)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
