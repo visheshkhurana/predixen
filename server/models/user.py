@@ -26,3 +26,4 @@ class User(Base):
     audit_logs = relationship("AuditLog", back_populates="user")
     login_history = relationship("LoginHistory", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
+    conversations = relationship("Conversation", back_populates="user")

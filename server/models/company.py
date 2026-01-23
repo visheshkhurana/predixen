@@ -38,3 +38,4 @@ class Company(Base):
     fundraising_rounds = relationship("FundraisingRound", back_populates="company")
     investors = relationship("Investor", back_populates="company")
     assumption_sets = relationship("AssumptionSetModel", back_populates="company")
+    conversations = relationship("Conversation", back_populates="company")

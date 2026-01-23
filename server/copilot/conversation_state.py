@@ -109,6 +109,7 @@ class ConversationStateStore:
     
     def __init__(self):
         self._states: Dict[str, ConversationState] = {}
+        self._conversation_ids: Dict[str, int] = {}
     
     def _key(self, company_id: int, user_id: int) -> str:
         return f"{company_id}:{user_id}"
@@ -133,18 +134,131 @@ class ConversationStateStore:
         key = self._key(company_id, user_id)
         if key in self._states:
             del self._states[key]
+        if key in self._conversation_ids:
+            del self._conversation_ids[key]
+    
+    def get_or_create_conversation(self, db, company_id: int, user_id: int) -> int:
+        """Get or create a Conversation record and return its ID."""
+        from server.models.conversation import Conversation
+        
+        key = self._key(company_id, user_id)
+        if key in self._conversation_ids:
+            return self._conversation_ids[key]
+        
+        conversation = db.query(Conversation).filter(
+            Conversation.company_id == company_id,
+            Conversation.user_id == user_id,
+            Conversation.is_active == True
+        ).order_by(Conversation.updated_at.desc()).first()
+        
+        if not conversation:
+            conversation = Conversation(
+                company_id=company_id,
+                user_id=user_id,
+                title="Chat Session",
+                is_active=True
+            )
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
+        
+        self._conversation_ids[key] = conversation.id
+        return conversation.id
+    
+    def add_message_to_conversation(
+        self, 
+        db, 
+        company_id: int, 
+        user_id: int, 
+        role: str, 
+        content: str,
+        intent_type: Optional[str] = None,
+        scenario_id: Optional[int] = None,
+        simulation_id: Optional[int] = None,
+        chart_data: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        """Add a message to the Conversation record."""
+        from server.models.conversation import ConversationMessage, Conversation
+        
+        conversation_id = self.get_or_create_conversation(db, company_id, user_id)
+        
+        message = ConversationMessage(
+            conversation_id=conversation_id,
+            role=role,
+            content=content[:10000] if content else "",
+            intent_type=intent_type,
+            scenario_id=scenario_id,
+            simulation_id=simulation_id,
+            chart_data=chart_data,
+            message_metadata=metadata or {}
+        )
+        db.add(message)
+        
+        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if conversation:
+            conversation.updated_at = datetime.utcnow()
+            if scenario_id:
+                conversation.last_scenario_id = scenario_id
+            state = self.get(company_id, user_id)
+            conversation.context_metadata = {
+                'last_simulation_params': state.last_simulation_params,
+                'last_scenario_name': state.last_scenario_name,
+            }
+        
+        db.commit()
+    
+    def add_recommendation(
+        self,
+        db,
+        company_id: int,
+        user_id: int,
+        recommendation_type: str,
+        recommendation_text: str,
+        priority: int = 0,
+        context_data: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """Add a recommendation to the current conversation."""
+        from server.models.conversation import ConversationRecommendation
+        
+        conversation_id = self.get_or_create_conversation(db, company_id, user_id)
+        
+        recommendation = ConversationRecommendation(
+            conversation_id=conversation_id,
+            recommendation_type=recommendation_type,
+            recommendation_text=recommendation_text,
+            priority=priority,
+            context_data=context_data
+        )
+        db.add(recommendation)
+        db.commit()
+        db.refresh(recommendation)
+        return recommendation.id
     
     def persist_to_db(self, db, company_id: int, user_id: int):
-        """Persist state to company's metadata_json."""
+        """Persist state to company's metadata_json (legacy) and Conversation model."""
         from server.models.company import Company
+        from server.models.conversation import Conversation
         
         state = self.get(company_id, user_id)
+        
         company = db.query(Company).filter(Company.id == company_id).first()
         if company:
             metadata = company.metadata_json or {}
             metadata['copilot_state'] = state.to_dict()
             company.metadata_json = metadata
-            db.commit()
+        
+        conversation_id = self.get_or_create_conversation(db, company_id, user_id)
+        conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if conversation:
+            conversation.context_metadata = {
+                'last_simulation_params': state.last_simulation_params,
+                'last_scenario_name': state.last_scenario_name,
+            }
+            if state.last_scenario_id:
+                conversation.last_scenario_id = state.last_scenario_id
+        
+        db.commit()
     
     def load_from_db(self, db, company_id: int, user_id: int) -> ConversationState:
         """Load state from company's metadata_json."""

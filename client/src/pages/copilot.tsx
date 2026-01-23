@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { 
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, Cell, ReferenceLine
+} from 'recharts';
+import { 
   Send, 
   Sparkles, 
   TrendingUp, 
@@ -167,6 +171,21 @@ interface CopilotApiResponse {
       scenario_2: { name: string; runway: number; survival: number };
       differences: { runway_months: number; survival_rate: number };
     };
+    chart_data?: {
+      runway?: {
+        type: string;
+        scenario_name: string;
+        metrics: { p10: number; p25: number; p50: number; p75: number; p90: number };
+      };
+      cash_trajectory?: Array<{ month: number; mean: number; p10?: number; p90?: number }>;
+      survival_trajectory?: Array<{ month: number; survival_rate: number }>;
+    };
+    recommendations?: Array<{
+      type: string;
+      priority: number;
+      text: string;
+      action_prompt: string;
+    }>;
   };
   intent_detected?: string;
   clarifications?: Array<{
@@ -240,21 +259,136 @@ const SUGGESTED_PROMPTS = [
   { label: 'Help me prepare my investor data room checklist', icon: FileText },
 ];
 
-function SimulationResultCard({ response, onAction }: { response: CopilotApiResponse; onAction?: (action: string) => void }) {
+function RunwayBandChart({ chartData }: { chartData: NonNullable<CopilotApiResponse['simulation_result']>['chart_data'] }) {
+  if (!chartData?.runway?.metrics) return null;
+  
+  const { metrics } = chartData.runway;
+  const data = [
+    { name: 'P10', value: metrics.p10, fill: '#ef4444' },
+    { name: 'P25', value: metrics.p25, fill: '#f97316' },
+    { name: 'P50', value: metrics.p50, fill: '#22c55e' },
+    { name: 'P75', value: metrics.p75, fill: '#3b82f6' },
+    { name: 'P90', value: metrics.p90, fill: '#8b5cf6' },
+  ];
+  
+  return (
+    <div className="h-24 w-full" data-testid="runway-band-chart">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 30 }}>
+          <XAxis type="number" tick={{ fontSize: 10, fill: '#888' }} domain={[0, 'auto']} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#888' }} />
+          <Tooltip 
+            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+            formatter={(value: number) => [`${value.toFixed(1)} months`, 'Runway']}
+          />
+          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.fill} />
+            ))}
+          </Bar>
+          <ReferenceLine x={12} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: '12mo', position: 'top', fontSize: 10, fill: '#fbbf24' }} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function CashTrajectoryChart({ chartData }: { chartData: NonNullable<CopilotApiResponse['simulation_result']>['chart_data'] }) {
+  if (!chartData?.cash_trajectory || chartData.cash_trajectory.length === 0) return null;
+  
+  const data = chartData.cash_trajectory.map(d => ({
+    ...d,
+    meanK: d.mean / 1000,
+    p10K: d.p10 ? d.p10 / 1000 : undefined,
+    p90K: d.p90 ? d.p90 / 1000 : undefined,
+  }));
+  
+  return (
+    <div className="h-32 w-full" data-testid="cash-trajectory-chart">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+          <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(v) => `M${v}`} />
+          <YAxis tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(v) => `$${v}K`} />
+          <Tooltip 
+            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+            formatter={(value: number) => [`$${value.toFixed(0)}K`, 'Cash']}
+          />
+          {data[0]?.p10K !== undefined && (
+            <Area type="monotone" dataKey="p10K" stroke="transparent" fill="#ef444433" />
+          )}
+          {data[0]?.p90K !== undefined && (
+            <Area type="monotone" dataKey="p90K" stroke="transparent" fill="#22c55533" />
+          )}
+          <Area type="monotone" dataKey="meanK" stroke="#3b82f6" fill="#3b82f666" strokeWidth={2} />
+          <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="3 3" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function RecommendationsPanel({ recommendations, onTryPrompt }: { recommendations?: NonNullable<CopilotApiResponse['simulation_result']>['recommendations']; onTryPrompt?: (prompt: string) => void }) {
+  if (!recommendations || recommendations.length === 0) return null;
+  
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20" data-testid="recommendations-panel">
+      <div className="flex items-center gap-2 mb-2">
+        <Lightbulb className="h-4 w-4 text-amber-400" />
+        <span className="text-xs font-semibold">Suggested Next Steps</span>
+      </div>
+      <div className="space-y-2">
+        {recommendations.slice(0, 3).map((rec, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span className="text-xs text-muted-foreground mt-0.5">{i + 1}.</span>
+            <div className="flex-1">
+              <p className="text-xs">{rec.text}</p>
+              {rec.action_prompt && (
+                <Button 
+                  variant="link" 
+                  size="sm" 
+                  className="h-auto p-0 text-xs text-blue-400"
+                  onClick={() => onTryPrompt?.(rec.action_prompt.replace(/^Try: '|'$/g, '').replace(/^"|"$/g, ''))}
+                  data-testid={`button-rec-${i}`}
+                >
+                  {rec.action_prompt}
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SimulationResultCard({ response, onAction, onTryPrompt }: { response: CopilotApiResponse; onAction?: (action: string) => void; onTryPrompt?: (prompt: string) => void }) {
   const simResult = response.simulation_result;
+  const [showCharts, setShowCharts] = useState(true);
   if (!simResult) return null;
 
   const results = simResult.results;
   const params = simResult.parameters;
+  const chartData = simResult.chart_data;
+  const recommendations = simResult.recommendations;
 
   return (
     <div className="mt-4 p-4 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20" data-testid="simulation-result-card">
-      <div className="flex items-center gap-2 mb-3">
-        <BarChart3 className="h-5 w-5 text-blue-400" />
-        <span className="font-semibold text-sm">Simulation Results</span>
-        {simResult.scenario_name && (
-          <Badge variant="outline" className="text-xs">{simResult.scenario_name}</Badge>
-        )}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-blue-400" />
+          <span className="font-semibold text-sm">Simulation Results</span>
+          {simResult.scenario_name && (
+            <Badge variant="outline" className="text-xs">{simResult.scenario_name}</Badge>
+          )}
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setShowCharts(!showCharts)}
+          className="h-6 px-2 text-xs"
+        >
+          {showCharts ? 'Hide' : 'Show'} Charts
+        </Button>
       </div>
       
       {results && (
@@ -271,6 +405,23 @@ function SimulationResultCard({ response, onAction }: { response: CopilotApiResp
             <div className="text-2xl font-bold text-purple-400">${((results.final_cash || 0) / 1000).toFixed(0)}K</div>
             <div className="text-xs text-muted-foreground">Final Cash</div>
           </div>
+        </div>
+      )}
+
+      {showCharts && chartData && (
+        <div className="mb-4 space-y-3">
+          {chartData.runway && (
+            <div className="p-2 rounded-lg bg-card/30 border border-border/20">
+              <p className="text-xs text-muted-foreground mb-1">Runway Distribution (P10-P90)</p>
+              <RunwayBandChart chartData={chartData} />
+            </div>
+          )}
+          {chartData.cash_trajectory && chartData.cash_trajectory.length > 0 && (
+            <div className="p-2 rounded-lg bg-card/30 border border-border/20">
+              <p className="text-xs text-muted-foreground mb-1">Cash Trajectory</p>
+              <CashTrajectoryChart chartData={chartData} />
+            </div>
+          )}
         </div>
       )}
 
@@ -320,6 +471,8 @@ function SimulationResultCard({ response, onAction }: { response: CopilotApiResp
           </div>
         </div>
       )}
+
+      <RecommendationsPanel recommendations={recommendations} onTryPrompt={onTryPrompt} />
 
       {response.follow_up_actions && response.follow_up_actions.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
@@ -377,7 +530,7 @@ function ClarificationPanel({ response, onSelect }: { response: CopilotApiRespon
   );
 }
 
-function StructuredResponseDisplay({ response, messageIndex, showSources }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean }) {
+function StructuredResponseDisplay({ response, messageIndex, showSources, onTryPrompt }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean; onTryPrompt?: (prompt: string) => void }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   
   const toggleSection = (section: string) => {
@@ -386,7 +539,7 @@ function StructuredResponseDisplay({ response, messageIndex, showSources }: { re
   
   return (
     <div className="mt-4 space-y-3">
-      {response.simulation_result && <SimulationResultCard response={response} />}
+      {response.simulation_result && <SimulationResultCard response={response} onTryPrompt={onTryPrompt} />}
       {response.clarifications && response.clarifications.length > 0 && <ClarificationPanel response={response} />}
       
       {showSources && response.citations && response.citations.length > 0 && (
@@ -828,7 +981,15 @@ export default function CopilotPage() {
                   )}
                   
                   {message.structuredResponse && (
-                    <StructuredResponseDisplay response={message.structuredResponse} messageIndex={i} showSources={showSources} />
+                    <StructuredResponseDisplay 
+                      response={message.structuredResponse} 
+                      messageIndex={i} 
+                      showSources={showSources}
+                      onTryPrompt={(prompt) => {
+                        setInput(prompt);
+                        setTimeout(() => sendMessage(prompt), 100);
+                      }}
+                    />
                   )}
                   
                   {message.suggestion && (
