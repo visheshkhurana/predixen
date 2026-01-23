@@ -59,6 +59,17 @@ const providerIcons: Record<string, React.ReactNode> = {
   netsuite: <Database className="h-6 w-6" />,
   pipedrive: <Users className="h-6 w-6" />,
   zoho: <Users className="h-6 w-6" />,
+  zoho_books: <FileText className="h-6 w-6" />,
+  tally: <Database className="h-6 w-6" />,
+  razorpayx_payroll: <DollarSign className="h-6 w-6" />,
+  greythr: <Users className="h-6 w-6" />,
+  keka: <Users className="h-6 w-6" />,
+  peoplestrong: <Users className="h-6 w-6" />,
+  quikchex: <DollarSign className="h-6 w-6" />,
+  deskera: <Database className="h-6 w-6" />,
+  sap_b1: <Database className="h-6 w-6" />,
+  odoo: <Database className="h-6 w-6" />,
+  marg: <Database className="h-6 w-6" />,
 };
 
 const integrationBenefits: Record<string, { dataImported: string[]; permissions: string[] }> = {
@@ -174,6 +185,76 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View customer records",
     ],
   },
+  razorpayx_payroll: {
+    dataImported: [
+      "Employee salary data",
+      "PF/ESI contributions",
+      "TDS deductions",
+      "Reimbursements",
+      "Monthly payroll runs",
+    ],
+    permissions: [
+      "Read employee data",
+      "Access payroll records",
+      "View compliance details",
+    ],
+  },
+  greythr: {
+    dataImported: [
+      "Employee directory",
+      "Leave & attendance",
+      "Salary structures",
+      "Payroll history",
+      "Expense claims",
+    ],
+    permissions: [
+      "Read employee records",
+      "Access payroll data",
+      "View attendance logs",
+    ],
+  },
+  keka: {
+    dataImported: [
+      "Employee profiles",
+      "Payroll runs",
+      "Time tracking data",
+      "Performance data",
+      "Expense management",
+    ],
+    permissions: [
+      "Read employee data",
+      "Access payroll info",
+      "View time logs",
+    ],
+  },
+  zoho_books: {
+    dataImported: [
+      "Chart of accounts",
+      "Invoices & bills",
+      "Ledger entries",
+      "Bank transactions",
+      "GST reports",
+    ],
+    permissions: [
+      "Read accounting data",
+      "Access invoices",
+      "View reports",
+    ],
+  },
+  tally: {
+    dataImported: [
+      "Ledger accounts",
+      "Voucher entries",
+      "Stock items",
+      "Financial reports",
+      "GST data",
+    ],
+    permissions: [
+      "Read accounting data",
+      "Access vouchers",
+      "View reports",
+    ],
+  },
 };
 
 const additionalAccountingProviders: IntegrationProvider[] = [
@@ -183,6 +264,18 @@ const additionalAccountingProviders: IntegrationProvider[] = [
     description: "Oracle NetSuite ERP for enterprise accounting",
     features: ["Multi-subsidiary", "Revenue Recognition", "Advanced Reporting"],
     comingSoon: true,
+  },
+  {
+    id: "zoho_books",
+    name: "Zoho Books",
+    description: "Cloud accounting for growing businesses",
+    features: ["Invoices & Payments", "Expenses", "Ledger & Journal Entries", "GST Compliance"],
+  },
+  {
+    id: "tally",
+    name: "Tally ERP",
+    description: "On-premise accounting and ERP for Indian businesses",
+    features: ["Ledger Accounts", "Vouchers", "Stock Items", "GST Reports"],
   },
 ];
 
@@ -199,6 +292,72 @@ const additionalCrmProviders: IntegrationProvider[] = [
     name: "Zoho CRM",
     description: "Comprehensive CRM with sales automation",
     features: ["Lead Management", "Sales Automation", "Analytics"],
+    comingSoon: true,
+  },
+];
+
+const payrollProviders: IntegrationProvider[] = [
+  {
+    id: "razorpayx_payroll",
+    name: "RazorpayX Payroll",
+    description: "Automated payroll and compliance for Indian startups",
+    features: ["Employee Salaries", "Statutory Payments (PF, ESI, TDS)", "Reimbursements", "Payslips"],
+  },
+  {
+    id: "greythr",
+    name: "GreytHR",
+    description: "Full-suite HRMS and payroll management",
+    features: ["Employee Data", "Leave & Attendance", "Salary Structures", "Payroll Processing"],
+  },
+  {
+    id: "keka",
+    name: "Keka HR",
+    description: "Modern HR and payroll platform",
+    features: ["Employee Management", "Payroll Runs", "Time Tracking", "Expense Management"],
+  },
+  {
+    id: "peoplestrong",
+    name: "PeopleStrong",
+    description: "Enterprise HR and talent management",
+    features: ["HR Analytics", "Payroll", "Talent Acquisition", "Workforce Management"],
+    comingSoon: true,
+  },
+  {
+    id: "quikchex",
+    name: "QuikChex",
+    description: "Cloud payroll for Indian SMEs",
+    features: ["Payroll Processing", "Statutory Compliance", "Employee Self-Service"],
+    comingSoon: true,
+  },
+];
+
+const erpProviders: IntegrationProvider[] = [
+  {
+    id: "deskera",
+    name: "Deskera",
+    description: "All-in-one business management software",
+    features: ["Accounting", "Inventory", "CRM", "Payroll"],
+    comingSoon: true,
+  },
+  {
+    id: "sap_b1",
+    name: "SAP Business One",
+    description: "Enterprise ERP for small and midsize businesses",
+    features: ["Financial Management", "Supply Chain", "Operations", "Analytics"],
+    comingSoon: true,
+  },
+  {
+    id: "odoo",
+    name: "Odoo",
+    description: "Open-source business applications suite",
+    features: ["Accounting", "Inventory", "Sales", "Manufacturing"],
+    comingSoon: true,
+  },
+  {
+    id: "marg",
+    name: "Marg ERP",
+    description: "GST-ready business software for India",
+    features: ["Billing", "Inventory", "GST Filing", "Financial Reports"],
     comingSoon: true,
   },
 ];
@@ -234,10 +393,27 @@ export default function IntegrationsPage() {
   }>({
     queryKey: ["/api/integrations/companies", companyId, "status"],
   });
+  
+  const { data: connectorStatus } = useQuery<{
+    company_id: number;
+    connectors: Array<{
+      provider_id: string;
+      connected: boolean;
+      last_sync: string | null;
+      records_synced: number;
+      error: string | null;
+    }>;
+  }>({
+    queryKey: ["/api/connectors/companies", companyId, "status"],
+  });
 
   const syncMutation = useMutation({
-    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments"; provider: string }) => {
+    mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
       setSyncingProvider(provider);
+      if (type === "payroll" || type === "erp") {
+        const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/sync/${provider}`);
+        return res.json();
+      }
       const res = await apiRequest("POST", `/api/integrations/companies/${companyId}/${type}/sync?provider=${provider}`);
       return res.json();
     },
@@ -247,6 +423,7 @@ export default function IntegrationsPage() {
         description: `Synced ${data.records_synced} records successfully`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
       setSyncingProvider(null);
     },
     onError: (error) => {
@@ -269,15 +446,30 @@ export default function IntegrationsPage() {
     ...additionalCrmProviders,
   ];
 
-  const renderProviderCard = (provider: IntegrationProvider, type: "accounting" | "crm" | "payments") => {
-    const isConnected = type === "payments" 
-      ? status?.integrations.payments?.connected === provider.id
-      : status?.integrations[type]?.connected === provider.id;
+  type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp";
+  
+  const getConnectorInfo = (providerId: string) => {
+    return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
+  };
+  
+  const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
+    const connectorInfo = getConnectorInfo(provider.id);
+    const isConnected = (type === "payroll" || type === "erp")
+      ? connectorInfo?.connected || false
+      : type === "payments" 
+        ? status?.integrations.payments?.connected === provider.id
+        : status?.integrations[type]?.connected === provider.id;
     const integrationStatus = type === "payments" 
       ? status?.integrations.payments 
-      : status?.integrations[type];
-    const lastSync = integrationStatus?.last_sync;
-    const syncDetails = integrationStatus?.sync_details;
+      : type === "payroll" || type === "erp"
+        ? undefined
+        : status?.integrations[type];
+    const lastSync = (type === "payroll" || type === "erp") 
+      ? connectorInfo?.last_sync 
+      : integrationStatus?.last_sync;
+    const syncDetails = (type === "payroll" || type === "erp")
+      ? connectorInfo ? { records_synced: connectorInfo.records_synced, last_error: connectorInfo.error } : undefined
+      : integrationStatus?.sync_details;
     const isSyncing = syncingProvider === provider.id && syncMutation.isPending;
     
     return (
@@ -361,13 +553,15 @@ export default function IntegrationsPage() {
       <div>
         <h1 className="text-2xl font-bold" data-testid="text-page-title">Integrations</h1>
         <p className="text-muted-foreground">
-          Connect your accounting and CRM systems to import financial data automatically
+          Connect your accounting, payroll, and ERP systems to import financial data automatically
         </p>
       </div>
 
       <Tabs defaultValue="accounting">
-        <TabsList data-testid="tabs-integration-type">
+        <TabsList data-testid="tabs-integration-type" className="flex-wrap gap-1">
           <TabsTrigger value="accounting" data-testid="tab-accounting">Accounting</TabsTrigger>
+          <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
+          <TabsTrigger value="erp" data-testid="tab-erp">ERP</TabsTrigger>
           <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
           <TabsTrigger value="payments" data-testid="tab-payments">Payments</TabsTrigger>
         </TabsList>
@@ -376,6 +570,35 @@ export default function IntegrationsPage() {
           <div className="grid md:grid-cols-2 gap-4">
             {allAccountingProviders.map((provider) =>
               renderProviderCard(provider, "accounting")
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="payroll" className="space-y-4">
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+            <h3 className="font-medium mb-2">Indian Payroll Providers</h3>
+            <p className="text-sm text-muted-foreground">
+              Connect your payroll system to automatically import employee costs, statutory contributions (PF, ESI, TDS), 
+              and compensation data for accurate financial modeling.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {payrollProviders.map((provider) =>
+              renderProviderCard(provider, "payroll")
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="erp" className="space-y-4">
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+            <h3 className="font-medium mb-2">Enterprise Resource Planning</h3>
+            <p className="text-sm text-muted-foreground">
+              Connect your ERP system to sync inventory, operations, and financial data for comprehensive business insights.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {erpProviders.map((provider) =>
+              renderProviderCard(provider, "erp")
             )}
           </div>
         </TabsContent>
@@ -403,65 +626,88 @@ export default function IntegrationsPage() {
           <CardDescription>Overview of your connected data sources</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-              <div className="p-2 bg-background rounded-full">
+              <div className="p-2 bg-background rounded-full shrink-0">
                 {status?.integrations.accounting.connected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium">Accounting</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground truncate">
                   {status?.integrations.accounting.connected || "Not connected"}
                 </p>
-                {status?.integrations.accounting.last_sync && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Last synced: {formatDistanceToNow(new Date(status.integrations.accounting.last_sync), { addSuffix: true })}
-                  </p>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-              <div className="p-2 bg-background rounded-full">
+              <div className="p-2 bg-background rounded-full shrink-0">
+                {connectorStatus?.connectors?.some(c => 
+                  ["razorpayx_payroll", "greythr", "keka"].includes(c.provider_id) && c.connected
+                ) ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">Payroll</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {connectorStatus?.connectors?.find(c => 
+                    ["razorpayx_payroll", "greythr", "keka"].includes(c.provider_id) && c.connected
+                  )?.provider_id?.replace(/_/g, " ") || "Not connected"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+              <div className="p-2 bg-background rounded-full shrink-0">
+                {connectorStatus?.connectors?.some(c => 
+                  ["tally", "zoho_books"].includes(c.provider_id) && c.connected
+                ) ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">ERP</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {connectorStatus?.connectors?.find(c => 
+                    ["tally", "zoho_books"].includes(c.provider_id) && c.connected
+                  )?.provider_id?.replace(/_/g, " ") || "Not connected"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+              <div className="p-2 bg-background rounded-full shrink-0">
                 {status?.integrations.crm.connected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium">CRM</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground truncate">
                   {status?.integrations.crm.connected || "Not connected"}
                 </p>
-                {status?.integrations.crm.last_sync && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Last synced: {formatDistanceToNow(new Date(status.integrations.crm.last_sync), { addSuffix: true })}
-                  </p>
-                )}
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
-              <div className="p-2 bg-background rounded-full">
+              <div className="p-2 bg-background rounded-full shrink-0">
                 {status?.integrations.payments?.connected ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium">Payments</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground truncate">
                   {status?.integrations.payments?.connected || "Not connected"}
                 </p>
-                {status?.integrations.payments?.last_sync && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Last synced: {formatDistanceToNow(new Date(status.integrations.payments.last_sync), { addSuffix: true })}
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -520,13 +766,38 @@ function SyncStatusDisplay({
   );
 }
 
+const providerCredentialFields: Record<string, { field: string; label: string; placeholder: string }[]> = {
+  razorpayx_payroll: [
+    { field: "api_key", label: "API Key", placeholder: "Enter RazorpayX API Key" },
+    { field: "api_secret", label: "API Secret", placeholder: "Enter RazorpayX API Secret" },
+  ],
+  greythr: [
+    { field: "api_access_id", label: "API Access ID", placeholder: "Enter GreytHR Access ID" },
+    { field: "api_secret", label: "API Secret", placeholder: "Enter GreytHR API Secret" },
+    { field: "base_url", label: "Base URL", placeholder: "https://yourcompany.greythr.com" },
+  ],
+  keka: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Keka API Key" },
+    { field: "tenant_id", label: "Tenant ID", placeholder: "Enter your Keka Tenant ID" },
+  ],
+  zoho_books: [
+    { field: "client_id", label: "Client ID", placeholder: "Enter Zoho Client ID" },
+    { field: "client_secret", label: "Client Secret", placeholder: "Enter Zoho Client Secret" },
+    { field: "organization_id", label: "Organization ID", placeholder: "Enter Zoho Organization ID" },
+  ],
+  tally: [
+    { field: "tally_url", label: "Tally Server URL", placeholder: "http://localhost:9000" },
+    { field: "company_name", label: "Company Name", placeholder: "Enter your Tally Company name" },
+  ],
+};
+
 function ConnectDialog({
   provider,
   type,
   companyId,
 }: {
   provider: IntegrationProvider;
-  type: "accounting" | "crm" | "payments";
+  type: "accounting" | "crm" | "payments" | "payroll" | "erp";
   companyId: number;
 }) {
   const { toast } = useToast();
@@ -535,6 +806,13 @@ function ConnectDialog({
   const [step, setStep] = useState<"benefits" | "oauth" | "credentials">("benefits");
   const [apiKey, setApiKey] = useState("");
   const [oauthProgress, setOauthProgress] = useState(0);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+
+  const credentialFields = providerCredentialFields[provider.id] || [
+    { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
+  ];
+  
+  const isPayrollOrErp = type === "payroll" || type === "erp";
 
   const benefits = integrationBenefits[provider.id] || {
     dataImported: ["Financial data", "Transaction history"],
@@ -543,6 +821,14 @@ function ConnectDialog({
 
   const connectMutation = useMutation({
     mutationFn: async () => {
+      if (isPayrollOrErp) {
+        const creds = credentialFields.length > 1 ? credentials : { api_key: apiKey };
+        const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/connect`, {
+          provider_id: provider.id,
+          credentials: creds,
+        });
+        return res.json();
+      }
       const res = await apiRequest("POST", `/api/integrations/companies/${companyId}/${type}/connect`, {
         provider: provider.id,
         credentials: { access_token: apiKey },
@@ -557,7 +843,9 @@ function ConnectDialog({
       setOpen(false);
       setStep("benefits");
       setApiKey("");
+      setCredentials({});
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
     },
     onError: (error) => {
       toast({
@@ -569,6 +857,10 @@ function ConnectDialog({
   });
 
   const handleOAuthSimulation = () => {
+    if (isPayrollOrErp) {
+      setStep("credentials");
+      return;
+    }
     setStep("oauth");
     setOauthProgress(0);
     
@@ -590,6 +882,7 @@ function ConnectDialog({
       setStep("benefits");
       setApiKey("");
       setOauthProgress(0);
+      setCredentials({});
     }
   };
 
@@ -743,20 +1036,41 @@ function ConnectDialog({
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="api-key">API Key / Access Token</Label>
-                <Input
-                  id="api-key"
-                  type="password"
-                  placeholder="Enter your API key (demo: any value)"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  data-testid="input-api-key"
-                />
-                <p className="text-xs text-muted-foreground">
-                  For demo purposes, enter any value to simulate a connection.
-                </p>
-              </div>
+              {isPayrollOrErp && credentialFields.length > 1 ? (
+                <div className="space-y-4">
+                  {credentialFields.map((cf) => (
+                    <div key={cf.field} className="space-y-2">
+                      <Label htmlFor={cf.field}>{cf.label}</Label>
+                      <Input
+                        id={cf.field}
+                        type={cf.field.includes("secret") || cf.field.includes("key") || cf.field.includes("password") ? "password" : "text"}
+                        placeholder={cf.placeholder}
+                        value={credentials[cf.field] || ""}
+                        onChange={(e) => setCredentials(prev => ({ ...prev, [cf.field]: e.target.value }))}
+                        data-testid={`input-${cf.field}`}
+                      />
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    For demo purposes, enter any values to simulate a connection.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="api-key">API Key / Access Token</Label>
+                  <Input
+                    id="api-key"
+                    type="password"
+                    placeholder="Enter your API key (demo: any value)"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    data-testid="input-api-key"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For demo purposes, enter any value to simulate a connection.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-start gap-2 p-3 bg-muted rounded-lg">
                 <Shield className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -772,7 +1086,9 @@ function ConnectDialog({
               </Button>
               <Button
                 onClick={() => connectMutation.mutate()}
-                disabled={!apiKey || connectMutation.isPending}
+                disabled={(isPayrollOrErp && credentialFields.length > 1 
+                  ? !credentialFields.every(cf => credentials[cf.field])
+                  : !apiKey) || connectMutation.isPending}
                 data-testid="button-confirm-connect"
               >
                 {connectMutation.isPending ? (
