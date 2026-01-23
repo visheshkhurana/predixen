@@ -40,6 +40,7 @@ from server.models.fundraising import (
     InvestorType,
     PipelineStage,
 )
+from server.models.assumption_set import AssumptionSetModel, SimulationCache
 
 __all__ = [
     "User",
@@ -85,4 +86,6 @@ __all__ = [
     "RoundStatus",
     "InvestorType",
     "PipelineStage",
+    "AssumptionSetModel",
+    "SimulationCache",
 ]
