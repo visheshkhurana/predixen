@@ -50,3 +50,6 @@ integrations = ["javascript_openai_ai_integrations:2.0.0", "resend:1.0.0", "java
 
 [userenv.shared]
 APP_BASE_URL = "https://predixen.app"
+
+[userenv.production]
+CORS_ORIGINS = "https://predixen.app,https://predixen-intelligence-os.replit.app"
