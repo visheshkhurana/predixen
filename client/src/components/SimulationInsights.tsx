@@ -216,22 +216,40 @@ function getImpactColor(impact: Recommendation['impact']) {
 }
 
 export function SimulationInsights({ simulation, scenarioName, testId = 'simulation-insights' }: SimulationInsightsProps) {
-  const recommendations = generateRecommendations(simulation);
-  const narrative = generateNarrativeSummary(simulation, scenarioName);
-  
   const runwayP50 = simulation.runway?.p50 || 0;
   const survival18m = simulation.survival?.['18m'] || 0;
   
+  const hasValidData = runwayP50 > 0 || survival18m > 0;
+  
+  if (!hasValidData) {
+    return (
+      <div className="space-y-4" data-testid={testId}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Simulation Analysis</CardTitle>
+            <CardDescription>
+              No simulation data available yet. Run a simulation to see insights.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+  
+  const recommendations = generateRecommendations(simulation);
+  const narrative = generateNarrativeSummary(simulation, scenarioName);
+  
   const overallHealth = survival18m >= 80 ? 'healthy' : survival18m >= 50 ? 'warning' : 'critical';
+  
+  const healthColors = {
+    healthy: 'border-emerald-500',
+    warning: 'border-amber-500',
+    critical: 'border-red-500'
+  };
   
   return (
     <div className="space-y-4" data-testid={testId}>
-      <Card className={cn(
-        "border-l-4",
-        overallHealth === 'healthy' && "border-l-emerald-500",
-        overallHealth === 'warning' && "border-l-amber-500",
-        overallHealth === 'critical' && "border-l-red-500"
-      )}>
+      <Card className={cn("border-2", healthColors[overallHealth])}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2">

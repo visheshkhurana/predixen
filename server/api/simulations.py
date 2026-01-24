@@ -18,8 +18,25 @@ from server.simulate.models import (
     WhatMustBeTrueReport
 )
 from dataclasses import asdict
+from typing import Union
 
 router = APIRouter(tags=["simulations"])
+
+
+def extract_metric_value(metric: Any, default: float = 0) -> float:
+    """
+    Extract the raw numeric value from a metric.
+    Metrics can be either:
+    - A raw number (int or float)
+    - A dict with {value, benchmark_percentile} structure
+    """
+    if metric is None:
+        return default
+    if isinstance(metric, dict):
+        return float(metric.get("value", default))
+    if isinstance(metric, (int, float)):
+        return float(metric)
+    return default
 
 class HiringPlan(BaseModel):
     role: str
@@ -334,14 +351,15 @@ def run_simulation(
     metrics = truth_scan.outputs_json.get("metrics", {})
     scenario_inputs = scenario.inputs_json
     
+    # Extract raw numeric values from metrics (which may be dicts with {value, benchmark_percentile})
     inputs = SimulationInputs(
-        baseline_revenue=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
         growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
         burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
@@ -533,13 +551,13 @@ def simulate_multiple_scenarios(
     metrics = truth_scan.outputs_json.get("metrics", {})
     
     base_inputs = SimulationInputs(
-        baseline_revenue=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         n_simulations=request.n_sims,
         horizon_months=request.horizon_months
     )
@@ -635,13 +653,13 @@ def simulate_enhanced(
     metrics = truth_scan.outputs_json.get("metrics", {})
     
     inputs = EnrichedSimulationInputs(
-        baseline_mrr=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         churn_rate=request.churn_rate,
         cac=request.cac,
         dso=request.dso,
@@ -702,13 +720,13 @@ def simulate_scenarios_enhanced(
     metrics = truth_scan.outputs_json.get("metrics", {})
     
     base_inputs = EnrichedSimulationInputs(
-        baseline_mrr=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         churn_rate=request.churn_rate,
         cac=request.cac,
         dso=request.dso,
@@ -848,13 +866,13 @@ def run_sensitivity_analysis(
     metrics = truth_scan.outputs_json.get("metrics", {})
     
     inputs = EnrichedSimulationInputs(
-        baseline_mrr=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         n_simulations=500,
         horizon_months=24
     )

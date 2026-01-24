@@ -15,6 +15,7 @@ from server.models.company_decision import CompanyDecision
 from server.models.truth_scan import TruthScan
 from server.decision.decision_engine import generate_recommendations
 from server.simulate.simulation_engine import SimulationInputs
+from server.api.simulations import extract_metric_value
 
 router = APIRouter(tags=["decisions"])
 
@@ -92,13 +93,13 @@ def generate_decisions(
     confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
     
     baseline_inputs = SimulationInputs(
-        baseline_revenue=metrics.get("monthly_revenue", 50000),
-        baseline_growth_rate=metrics.get("revenue_growth_mom", 5),
-        gross_margin=metrics.get("gross_margin", 70),
-        opex=metrics.get("opex", 20000),
-        payroll=metrics.get("payroll", 30000),
-        other_costs=metrics.get("other_costs", 5000),
-        cash_balance=metrics.get("cash_balance", 500000),
+        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
         n_simulations=500
     )
     
