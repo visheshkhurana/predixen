@@ -45,11 +45,14 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
-function getDeltaIndicator(value: number, baseline: number, higherIsBetter: boolean = true) {
-  if (value === baseline) return { icon: Minus, color: 'text-muted-foreground', label: '0' };
+function getDeltaIndicator(value: number | undefined, baseline: number | undefined, higherIsBetter: boolean = true) {
+  const safeValue = value ?? 0;
+  const safeBaseline = baseline ?? 0;
   
-  const diff = value - baseline;
-  const percentDiff = baseline !== 0 ? ((diff / baseline) * 100).toFixed(1) : 'N/A';
+  if (safeValue === safeBaseline) return { icon: Minus, color: 'text-muted-foreground', label: '0' };
+  
+  const diff = safeValue - safeBaseline;
+  const percentDiff = safeBaseline !== 0 ? ((diff / safeBaseline) * 100).toFixed(1) : 'N/A';
   const isBetter = higherIsBetter ? diff > 0 : diff < 0;
   
   return {
@@ -153,7 +156,7 @@ export function ScenarioComparisonView({
                     key={scenario.name}
                     className={cn(
                       isSelected && "bg-muted/50",
-                      isBest && "border-l-2 border-l-primary"
+                      isBest && "bg-primary/5"
                     )}
                     data-testid={`${testId}-row-${index}`}
                   >

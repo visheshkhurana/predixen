@@ -32,9 +32,9 @@ interface KPICardProps {
 
 function KPICard({ title, value, subtitle, trend, trendValue, status = 'neutral', icon, tooltip, testId }: KPICardProps) {
   const statusColors = {
-    healthy: 'border-emerald-500/50 bg-emerald-500/5',
-    warning: 'border-amber-500/50 bg-amber-500/5',
-    critical: 'border-red-500/50 bg-red-500/5',
+    healthy: 'border-emerald-500/50 dark:border-emerald-400/50 bg-emerald-500/5 dark:bg-emerald-500/10',
+    warning: 'border-amber-500/50 dark:border-amber-400/50 bg-amber-500/5 dark:bg-amber-500/10',
+    critical: 'border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-500/10',
     neutral: 'border-border',
   };
   
