@@ -109,6 +109,17 @@ export default function OnboardingPage() {
       return;
     }
     
+    const { token } = useFounderStore.getState();
+    if (!token) {
+      toast({ 
+        title: 'Session expired', 
+        description: 'Please log in again to continue.', 
+        variant: 'destructive' 
+      });
+      setLocation('/auth');
+      return;
+    }
+    
     setUploadedFile(file);
     setIsExtracting(true);
     setExtractionError(null);
@@ -120,10 +131,22 @@ export default function OnboardingPage() {
       
       const response = await fetch('/api/ingest/onboarding/extract-deck', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          toast({ 
+            title: 'Session expired', 
+            description: 'Please log in again to continue.', 
+            variant: 'destructive' 
+          });
+          setLocation('/auth');
+          return;
+        }
         const error = await response.json();
         throw new Error(error.detail || 'Extraction failed');
       }
@@ -219,6 +242,17 @@ export default function OnboardingPage() {
   const loadSampleCompany = async () => {
     if (isSubmitting || createCompanyMutation.isPending) return;
     
+    const { token } = useFounderStore.getState();
+    if (!token) {
+      toast({ 
+        title: 'Session expired', 
+        description: 'Please log in again to continue.', 
+        variant: 'destructive' 
+      });
+      setLocation('/auth');
+      return;
+    }
+    
     setIsSubmitting(true);
     setIsSampleMode(true);
     setCompanyData(SAMPLE_COMPANY);
@@ -233,7 +267,16 @@ export default function OnboardingPage() {
       });
       setStep(2);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create sample company.';
+      if (err instanceof ApiError && err.status === 401) {
+        toast({ 
+          title: 'Session expired', 
+          description: 'Please log in again to continue.', 
+          variant: 'destructive' 
+        });
+        setLocation('/auth');
+        return;
+      }
+      const message = err instanceof ApiError ? err.message : 'Failed to create sample company. Please try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
       setIsSampleMode(false);
     } finally {
@@ -245,6 +288,17 @@ export default function OnboardingPage() {
     e.preventDefault();
     
     if (isSubmitting || createCompanyMutation.isPending) return;
+    
+    const { token } = useFounderStore.getState();
+    if (!token) {
+      toast({ 
+        title: 'Session expired', 
+        description: 'Please log in again to continue.', 
+        variant: 'destructive' 
+      });
+      setLocation('/auth');
+      return;
+    }
     
     if (!companyData.name.trim()) {
       toast({ title: 'Validation Error', description: 'Company name is required', variant: 'destructive' });
@@ -267,6 +321,15 @@ export default function OnboardingPage() {
       setCurrentCompany(company);
       setStep(2);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast({ 
+          title: 'Session expired', 
+          description: 'Please log in again to continue.', 
+          variant: 'destructive' 
+        });
+        setLocation('/auth');
+        return;
+      }
       const message = err instanceof ApiError ? err.message : 'Failed to create company. Please try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
     } finally {
@@ -297,7 +360,17 @@ export default function OnboardingPage() {
       return;
     }
     
-    const { currentCompany } = useFounderStore.getState();
+    const { currentCompany, token } = useFounderStore.getState();
+    if (!token) {
+      toast({ 
+        title: 'Session expired', 
+        description: 'Please log in again to continue.', 
+        variant: 'destructive' 
+      });
+      setLocation('/auth');
+      return;
+    }
+    
     if (!currentCompany) {
       toast({ 
         title: 'Error', 
@@ -324,6 +397,15 @@ export default function OnboardingPage() {
       toast({ title: 'Setup complete!', description: 'Your first Truth Scan is ready.' });
       setTimeout(() => setLocation('/'), 1500);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast({ 
+          title: 'Session expired', 
+          description: 'Please log in again to continue.', 
+          variant: 'destructive' 
+        });
+        setLocation('/auth');
+        return;
+      }
       const message = err instanceof ApiError 
         ? err.message 
         : 'Failed to run Truth Scan. Please check your financial data and try again.';
