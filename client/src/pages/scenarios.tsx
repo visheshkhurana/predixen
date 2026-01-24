@@ -27,6 +27,8 @@ import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
 import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
 import { SimulationInsights } from '@/components/SimulationInsights';
+import { DashboardKPICards } from '@/components/DashboardKPICards';
+import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
@@ -720,6 +722,21 @@ export default function ScenariosPage() {
               
               <MultiScenarioSummary comparison={multiSimResults.comparison} />
               
+              <ScenarioComparisonView
+                scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
+                  name: scenario.name || key,
+                  runway_p50: scenario.summary?.runway_p50 || 0,
+                  runway_p10: scenario.summary?.runway_p10,
+                  runway_p90: scenario.summary?.runway_p90,
+                  survival_18m: scenario.summary?.survival_18m || 0,
+                  survival_12m: scenario.summary?.survival_12m,
+                  end_cash: scenario.summary?.end_cash_p50,
+                  avg_burn: scenario.summary?.monthly_burn_p50,
+                  score: scenario.score,
+                }))}
+                testId="scenario-comparison-view"
+              />
+              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => (
                   <ScenarioCard
@@ -884,6 +901,12 @@ export default function ScenariosPage() {
                   filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
                 />
               </div>
+              
+              <DashboardKPICards
+                simulation={simulation}
+                metrics={baseMetrics}
+                testId="dashboard-kpis-results"
+              />
               
               <SimulationSummaryBanner
                 runwayP50={simulation.runway?.p50 || 0}

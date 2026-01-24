@@ -241,6 +241,160 @@ PRICING_INCREASE_TEMPLATE = {
     "tags": ["pricing", "revenue", "strategic"],
 }
 
+MARKET_ENTRY_APAC_TEMPLATE = {
+    "id": "market_entry_apac",
+    "name": "Market Entry APAC",
+    "description": "Expand into Asia-Pacific markets with localized pricing and regional partnerships.",
+    "category": "aggressive",
+    "inputs": {
+        "growth_rate": 0.10,  # Strong growth from new market
+        "churn_rate": 0.035,  # Slightly higher as you learn the market
+        "gross_margin": 0.62,  # Lower margins in new markets
+        "burn_rate_change": 0.25,  # Investment required
+        "headcount_change": 5,  # Regional team
+        "cac": None,
+        "price_change": -0.15,  # Lower pricing for emerging markets
+    },
+    "events": [
+        {
+            "type": "market_entry",
+            "month": 2,
+            "region": "apac",
+            "description": "Launch in India and Southeast Asia",
+        },
+        {
+            "type": "hiring_plan",
+            "month": 3,
+            "headcount_change": 3,
+            "description": "Hire regional sales and support team",
+        },
+        {
+            "type": "marketing_spend_change",
+            "month": 2,
+            "impact_pct": 40,
+            "description": "Regional marketing campaign launch",
+        },
+    ],
+    "regime_weights": {
+        "base": 0.5,
+        "downturn": 0.2,
+        "breakout": 0.3,
+    },
+    "tags": ["expansion", "apac", "international", "aggressive"],
+}
+
+PRODUCT_LED_GROWTH_TEMPLATE = {
+    "id": "plg",
+    "name": "Product-Led Growth",
+    "description": "Shift to PLG model with freemium tier. Lower CAC through viral growth, higher volume.",
+    "category": "strategic",
+    "inputs": {
+        "growth_rate": 0.15,  # Strong organic growth
+        "churn_rate": 0.04,  # Higher churn on free tier
+        "gross_margin": 0.68,  # Infrastructure costs
+        "burn_rate_change": 0.05,  # Slightly higher
+        "headcount_change": 2,  # Product and eng focus
+        "cac": None,  # Significantly lower CAC
+        "price_change": -0.20,  # Free tier introduction
+    },
+    "events": [
+        {
+            "type": "product_launch",
+            "month": 2,
+            "description": "Launch freemium tier",
+        },
+        {
+            "type": "marketing_spend_change",
+            "month": 2,
+            "impact_pct": -30,
+            "description": "Reduce paid marketing, focus on product",
+        },
+        {
+            "type": "expansion_revenue",
+            "month": 4,
+            "impact_pct": 20,
+            "description": "Self-serve upgrade path optimization",
+        },
+    ],
+    "regime_weights": {
+        "base": 0.55,
+        "downturn": 0.15,
+        "breakout": 0.30,
+    },
+    "tags": ["plg", "freemium", "product", "strategic"],
+}
+
+ENTERPRISE_FOCUS_TEMPLATE = {
+    "id": "enterprise_focus",
+    "name": "Enterprise Focus",
+    "description": "Pivot toward enterprise customers with higher ACV and longer sales cycles.",
+    "category": "strategic",
+    "inputs": {
+        "growth_rate": 0.03,  # Slower but larger deals
+        "churn_rate": 0.015,  # Very low enterprise churn
+        "gross_margin": 0.80,  # Higher margins
+        "burn_rate_change": 0.10,  # Investment in sales
+        "headcount_change": 3,  # Enterprise sales team
+        "cac": None,  # Higher CAC but worth it
+        "price_change": 0.50,  # 50% higher pricing
+    },
+    "events": [
+        {
+            "type": "hiring_plan",
+            "month": 1,
+            "headcount_change": 2,
+            "description": "Hire enterprise account executives",
+        },
+        {
+            "type": "product_launch",
+            "month": 3,
+            "description": "Launch enterprise features (SSO, audit logs)",
+        },
+    ],
+    "regime_weights": {
+        "base": 0.65,
+        "downturn": 0.25,
+        "breakout": 0.10,
+    },
+    "tags": ["enterprise", "b2b", "high-acv", "strategic"],
+}
+
+LEAN_PROFITABILITY_TEMPLATE = {
+    "id": "lean_profitability",
+    "name": "Path to Profitability",
+    "description": "Focus on reaching profitability within 12 months through efficiency gains.",
+    "category": "conservative",
+    "inputs": {
+        "growth_rate": 0.02,  # Modest growth
+        "churn_rate": 0.025,  # Focus on retention
+        "gross_margin": 0.78,  # Margin optimization
+        "burn_rate_change": -0.35,  # Significant cost reduction
+        "headcount_change": -4,  # Restructuring
+        "cac": None,
+        "price_change": 0.10,  # Slight price increase
+    },
+    "events": [
+        {
+            "type": "cost_cut",
+            "month": 1,
+            "impact_pct": -25,
+            "description": "Operating expense reduction",
+        },
+        {
+            "type": "churn_initiative",
+            "month": 2,
+            "impact_pct": -20,
+            "description": "Customer success focus to reduce churn",
+        },
+    ],
+    "regime_weights": {
+        "base": 0.70,
+        "downturn": 0.25,
+        "breakout": 0.05,
+    },
+    "tags": ["profitability", "efficiency", "conservative", "runway"],
+}
+
 # All templates in a list
 ALL_TEMPLATES = [
     BASELINE_TEMPLATE,
@@ -250,6 +404,10 @@ ALL_TEMPLATES = [
     DOWNTURN_TEMPLATE,
     EXPANSION_REVENUE_TEMPLATE,
     PRICING_INCREASE_TEMPLATE,
+    MARKET_ENTRY_APAC_TEMPLATE,
+    PRODUCT_LED_GROWTH_TEMPLATE,
+    ENTERPRISE_FOCUS_TEMPLATE,
+    LEAN_PROFITABILITY_TEMPLATE,
 ]
 
 

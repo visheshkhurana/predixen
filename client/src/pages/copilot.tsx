@@ -37,7 +37,9 @@ import {
   FileText,
   Shield,
   Link2,
-  Activity
+  Activity,
+  GitCompare,
+  Terminal
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -248,15 +250,23 @@ const DATA_SOURCE_CONFIG: Record<DataSource, { label: string; icon: typeof Datab
   },
 };
 
+const SIMULATION_COMMANDS = [
+  { label: 'Run a simulation cutting burn by 20%', icon: Play, category: 'simulation' },
+  { label: 'Compare current vs aggressive growth scenario', icon: GitCompare, category: 'simulation' },
+  { label: 'What happens if revenue grows 15% next quarter?', icon: TrendingUp, category: 'simulation' },
+  { label: 'Show me 18-month runway with a $500K fundraise', icon: DollarSign, category: 'simulation' },
+  { label: 'Model a hiring freeze for 6 months', icon: Users, category: 'simulation' },
+];
+
 const SUGGESTED_PROMPTS = [
-  { label: 'How can I extend my runway by 6 months?', icon: TrendingUp },
-  { label: "What's the riskiest assumption in my financials?", icon: TrendingDown },
-  { label: 'What if my fundraise slips by 3 months?', icon: DollarSign },
-  { label: 'Who are my top competitors and how do I differentiate?', icon: Users },
-  { label: 'What strategic options should I consider for growth?', icon: Lightbulb },
-  { label: 'How much dilution will I face in the next round?', icon: DollarSign },
-  { label: 'What valuation should I target for my Series A?', icon: TrendingUp },
-  { label: 'Help me prepare my investor data room checklist', icon: FileText },
+  { label: 'How can I extend my runway by 6 months?', icon: TrendingUp, category: 'strategy' },
+  { label: "What's the riskiest assumption in my financials?", icon: TrendingDown, category: 'analysis' },
+  { label: 'What if my fundraise slips by 3 months?', icon: DollarSign, category: 'scenario' },
+  { label: 'Who are my top competitors and how do I differentiate?', icon: Users, category: 'market' },
+  { label: 'What strategic options should I consider for growth?', icon: Lightbulb, category: 'strategy' },
+  { label: 'How much dilution will I face in the next round?', icon: DollarSign, category: 'fundraising' },
+  { label: 'What valuation should I target for my Series A?', icon: TrendingUp, category: 'fundraising' },
+  { label: 'Help me prepare my investor data room checklist', icon: FileText, category: 'fundraising' },
 ];
 
 function RunwayBandChart({ chartData }: { chartData: NonNullable<CopilotApiResponse['simulation_result']>['chart_data'] }) {
@@ -1036,21 +1046,50 @@ export default function CopilotPage() {
         </ScrollArea>
         
         <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {SUGGESTED_PROMPTS.map((prompt, i) => (
-              <Button
-                key={i}
-                variant="outline"
-                size="sm"
-                onClick={() => handlePromptClick(prompt.label)}
-                disabled={isTyping}
-                className="whitespace-normal text-left h-auto py-2"
-                data-testid={`button-prompt-${i}`}
-              >
-                <prompt.icon className="h-4 w-4 mr-2 flex-shrink-0" />
-                <span>{prompt.label}</span>
-              </Button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Terminal className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Simulation Commands</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {SIMULATION_COMMANDS.map((cmd, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePromptClick(cmd.label)}
+                  disabled={isTyping}
+                  className="whitespace-normal text-left h-auto py-2 border-primary/30 hover:border-primary/50"
+                  data-testid={`button-sim-cmd-${i}`}
+                >
+                  <cmd.icon className="h-4 w-4 mr-2 flex-shrink-0 text-primary" />
+                  <span>{cmd.label}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Quick Prompts</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTED_PROMPTS.map((prompt, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePromptClick(prompt.label)}
+                  disabled={isTyping}
+                  className="whitespace-normal text-left h-auto py-2"
+                  data-testid={`button-prompt-${i}`}
+                >
+                  <prompt.icon className="h-4 w-4 mr-2 flex-shrink-0" />
+                  <span>{prompt.label}</span>
+                </Button>
+              ))}
+            </div>
           </div>
           
           <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-secondary/50 border border-border/30">
