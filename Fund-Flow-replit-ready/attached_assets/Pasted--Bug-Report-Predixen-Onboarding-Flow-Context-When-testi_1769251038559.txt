@@ -1,0 +1,25 @@
+### Bug Report: Predixen Onboarding Flow
+
+**Context:**
+When testing the Predixen app’s onboarding flow at `https://predixen.app/onboarding`, the “Load Sample Company” button and the “Continue” button (after manually entering company details) both fail. A toast notification appears with “Error: Request failed,” and the flow does not advance to the next step.
+
+**Steps to Reproduce:**
+1. Navigate to the onboarding page (`/onboarding`).
+2. Click “Load Sample Company.”  
+   – Observe that an error toast appears and no sample data is loaded.
+3. Alternatively, fill in the manual fields (Company Name, Website) and select Industry and Stage.
+4. Click “Continue.”  
+   – Observe that nothing happens; the page remains on the same step and the error toast may appear in the background.
+
+**Expected Behavior:**
+- Clicking “Load Sample Company” should call an API endpoint (e.g., `/api/sample-company`) to populate the onboarding form with demo data and advance to the next step.
+- Clicking “Continue” after entering valid data should create or update a company record (e.g., via `/api/companies`) and proceed to the next onboarding step (e.g., data input or truth scan).
+
+**Suggested Fix:**
+- Check the API routes invoked by the onboarding buttons (likely via Axios/fetch in the onboarding component). Ensure the endpoints are correct and reachable in the deployed environment.
+- Add error handling around the API calls to surface a meaningful error message to the user if the request fails (e.g., network issue, CORS, missing authorization).
+- Consider adding a fallback: if sample data fails to load, pre-fill the form with a local JSON object so testers can proceed.
+- Verify that the frontend correctly updates component state after the API call resolves and triggers navigation to the next route.
+
+Please open the relevant onboarding component in the project (e.g., `OnboardingForm.jsx` or similar), locate the `loadSampleCompany` and `handleContinue` functions, and ensure they correctly handle responses and errors.
+

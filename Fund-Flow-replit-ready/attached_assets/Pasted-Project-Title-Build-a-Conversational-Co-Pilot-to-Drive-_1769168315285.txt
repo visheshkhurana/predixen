@@ -1,0 +1,72 @@
+Project Title: Build a Conversational Co‑Pilot to Drive Simulations and Strategy Debates
+
+Overview:
+We want to enhance the Co‑Pilot module so that users can type free‑form questions or commands (e.g., “Simulate a 10% price increase and hiring freeze for 6 months” or “Compare aggressive growth vs conservative cut”) and have the system translate those into simulation parameters, run the model, and engage in a guided discussion about the results.  This conversational interface should feel like talking to a virtual CFO/strategist.
+
+Key Components:
+
+1. **Chat Interface & UX**
+   - Add a chat panel to the Co‑Pilot page with:
+     - A scrollable message history showing user queries and system responses.
+     - An input box where users can type questions/commands.
+     - Quick‑prompt buttons for common questions (retain existing prompts).
+   - Display “typing” indicators or loading spinners while a simulation or NLP parsing is in progress.
+   - Include buttons in system responses for saving scenarios (“Save as Plan X”), comparing scenarios, or tweaking inputs (e.g., “Reduce burn by 5 %”).
+   - Allow users to switch between “Guided” and “Expert” modes: guided mode prompts follow‑up questions to clarify assumptions; expert mode accepts complex instructions directly.
+
+2. **Natural‑Language Parsing**
+   - Implement an NLP layer (could be a simple rule‑based parser to start, with plans to integrate an LLM or external API later) that can:
+     - Detect intent: run simulation, compare scenarios, explain results, save scenario.
+     - Extract parameters: numeric values (percentages, months), variables (burn, price, hiring), timeframes.
+     - Identify scenario names (e.g., “compare Plan A and Plan B”).
+   - Define a mapping schema from natural language to simulation-engine parameters.  For example:
+     - “increase price by 10%” → `price_change: +10%`
+     - “freeze hiring for 6 months” → `headcount_plan: no new hires until month +6`
+     - “compare aggressive growth vs conservative cut” → load two saved scenarios and fetch summary metrics.
+
+3. **Simulation Engine Integration**
+   - Expose an internal API endpoint (or function) that accepts structured simulation requests and returns results (e.g., P10/P50/P90 runway, ARR, burn multiple, dilution).
+   - When the parser identifies a simulation request, build the appropriate parameter object and call this endpoint.
+   - For comparisons, retrieve results of existing scenarios from the database and format a comparative summary.
+
+4. **Conversational Flow & State Management**
+   - Maintain conversation context so the system can reference previous messages (e.g., if the user says “now delay the fundraise by 3 months,” apply it to the latest scenario).
+   - Ask clarifying questions when needed: if a command is ambiguous (“cut burn”), ask “By what percentage and over what period?”
+   - Offer follow‑up suggestions based on results (e.g., “Runway increased by only 2 months—would you like to explore a bigger cost cut?”).
+
+5. **Saving, Loading & Comparing Scenarios**
+   - Allow users to save the current simulation parameters and results with a name and optional notes.
+   - Implement commands like “save this scenario as ‘Plan B’”, “load Plan B”, and “compare Plan A to Plan B”.
+   - Show a side‑by‑side comparison of key metrics and charts when comparing scenarios.
+
+6. **Backend & API Enhancements**
+   - Create endpoints or internal functions to:
+     - Parse a natural‑language query into a structured request.
+     - Run a simulation based on parsed parameters.
+     - Retrieve previous simulation results by scenario name.
+     - Generate summaries and comparative analysis.
+   - Ensure the parsing and simulation calls are asynchronous to keep the UI responsive.
+
+7. **Error Handling & User Guidance**
+   - Return user‑friendly error messages when the system cannot parse a command (“Sorry, I couldn’t understand that. You can ask me things like ‘Simulate cutting burn by 20%’.”).
+   - Log unknown intents for future improvement.
+
+8. **Future Considerations**
+   - Plan for integrating a more sophisticated LLM via an API for complex language understanding when budgets and policies permit.
+   - Incorporate voice input and output for accessibility.
+   - Add a “Why” feature where users can ask “Why did runway only improve by 2 months?” and the system explains which variables had the biggest impact.
+
+Deliverables:
+- Front‑end chat UI integrated into the Co‑Pilot page, with message history and input field.
+- NLP parsing layer with intent and parameter extraction.
+- Simulation dispatcher that takes parsed commands and invokes existing simulation services.
+- Scenario save/load/compare functionality exposed via the chat.
+- Documentation describing available commands, example queries and how the parser maps them to parameters.
+- Unit tests for the parsing logic and simulation invocation.
+
+Success Criteria:
+- A user can type a plain‑language command (e.g., “Simulate a 20% burn reduction and 5% price increase for 12 months”) and receive simulation results in chat form.
+- The system can handle follow‑up commands that modify the current scenario.
+- Users can save and compare named scenarios via chat commands.
+- The co‑pilot provides meaningful summaries and follow‑up suggestions to help users refine their strategies.
+

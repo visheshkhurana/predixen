@@ -1,0 +1,158 @@
+Project Title: Predixen 2.0 – Comprehensive Business Simulator and Decision Platform
+
+Prepared by: [Your Name], Product Manager
+
+Vision:
+Transform Predixen from a basic financial runway calculator into a holistic, intelligent decision platform that founders, CXOs and finance leaders will gladly pay for. It should ingest real operational data, model scenarios across finance, product, marketing, operations and team, deliver probabilistic insights and benchmark‑based recommendations, facilitate collaboration and provide a conversational interface. The product must be reliable, intuitive and valuable enough to become a central planning tool.
+
+---
+
+## Objectives
+
+1. **Seamless Data Onboarding & Integration**
+   - Build robust connectors for accounting, payroll, CRM and marketing platforms.
+   - Simplify onboarding with automated extraction from pitch decks and public sources.
+   - Offer a “Load Sample Company” feature for quick exploration.
+
+2. **Multi‑Dimensional Simulation Engine**
+   - Extend simulations beyond finances to include product launches, pricing changes, marketing spend, hiring plans and operational events.
+   - Use probabilistic models to capture uncertainty (Monte Carlo) and present P10/P50/P90 outcomes.
+   - Provide event timelines and scenario templates for common strategies.
+
+3. **Actionable Insights & Benchmarks**
+   - Generate specific recommendations based on simulation results and compare against industry benchmarks.
+   - Create narrative summaries tailored to different detail levels.
+
+4. **Rich, Intuitive User Experience**
+   - Redesign dashboards and results pages with summary cards, interactive charts, drill‑down capabilities and polished empty states.
+   - Ensure all buttons and navigation links work reliably (e.g., fix “Skip” and “Continue” issues).
+
+5. **Conversational Co‑Pilot**
+   - Implement a free‑form chat interface that accepts natural‑language commands, runs simulations and explains results.
+   - Provide adaptive guidance, visual responses and context memory.
+
+6. **Collaboration & Sharing**
+   - Allow multiple users per organisation to save, version, annotate and share scenarios.
+   - Enable exports to PDF/PowerPoint and generate shareable links with access controls.
+
+7. **Community & Learning**
+   - Embed micro‑lessons and curated resources.
+   - Offer peer benchmarking and optional scenario marketplace.
+
+---
+
+## Key Features & Requirements
+
+### 1. Data Onboarding & Integration
+
+- **Connectors**: Implement OAuth‑based connectors for QuickBooks, Xero, Tally, RazorpayX, Keka, GreytHR, Salesforce, HubSpot and Google Analytics. Design a connector abstraction to simplify adding new integrations.
+- **Pitch Deck Extraction**: Use the existing PDF parser to extract company name, industry, stage and high‑level metrics. Provide fallback to manual entry when extraction fails.
+- **Public Data Fetch**: If the deck lacks a summary, fetch company descriptions from Crunchbase or the company’s website.
+- **Data Completeness Dashboard**: Display which metrics are populated and which sources are connected. Highlight missing data needed for certain calculations (e.g., churn, CAC).
+
+### 2. Simulation Engine Enhancements
+
+- **Domain Modules**: Create plug‑ins for:
+  - Finance (revenue, burn, fundraise events)
+  - Product & R&D (feature launches, R&D spend)
+  - Market & Customers (pricing, marketing spend, conversion funnels, churn)
+  - Operations & Supply Chain (inventory, capacity, logistics)
+  - HR & Culture (hiring, attrition, morale)
+- **Monte Carlo Support**: Accept input distributions for key variables; run N iterations and return percentile outcomes.
+- **Event Timeline Editor**: Design UI to add events (e.g., “Launch Freemium Tier”, “Raise Series A”) and schedule them within the simulation horizon.
+- **Scenario Templates**: Provide built‑in templates and allow users to save custom ones.
+
+### 3. Insight & Recommendation Engine
+
+- **Metric Calculations**: Ensure all metrics (burn multiple, revenue growth, churn, CAC/LTV) are computed correctly and never display N/A unless truly unavailable. Show tooltips explaining calculations and reasons for missing data.
+- **Benchmark Database**: Maintain benchmark ranges for key metrics by industry and stage.
+- **Recommendation Logic**: Create rules that trigger specific advice based on metrics, benchmarks and user goals. Rank recommendations by impact.
+- **Narratives**: Use templating to output summaries in plain language, with options for summary/detailed/technical depth.
+
+### 4. UI/UX Redesign
+
+- **Onboarding Flow**: Fix issues where “Continue” or “Skip” buttons fail. Provide progress indicators and allow skipping non‑critical steps with sensible defaults.
+- **Results Dashboard**: Show summary cards at the top (runway, ARR, burn multiple, churn, top‑5 concentration). Add interactive line/area charts with confidence bands, waterfalls, radar charts and sensitivity (tornado) charts. Provide scenario comparison tools and context‑aware tooltips.
+- **Tables**: Only use detailed tables on demand; replace primary tables with visual summaries.
+- **Empty States & Validation**: Always explain why data is missing and guide the user to the next step.
+
+### 5. Conversational Co‑Pilot
+
+- **Chat UI**: Build a message history, input box and quick‑prompt buttons. Support multi‑user conversations with typing indicators.
+- **NLP Parsing**: Detect intents (simulate, compare, explain, save) and extract parameters. Ask clarifying questions when needed.
+- **Adaptive Suggestions**: Proactively propose next simulations based on outcomes and user goals.
+- **Rich Responses**: Include mini‑charts or summary tables in chat messages and allow saving scenarios directly from chat.
+
+### 6. Collaboration & Export
+
+- **Scenario Management**: Save scenarios with names, notes and versions. Provide clone and diff tools.
+- **Permissions**: Support organisation, team and role levels. Enable commenting and notifications.
+- **Export**: Allow export to PDF/PPT with charts, narratives and metrics. Provide secure shareable links with expiration.
+
+### 7. Community & Learning
+
+- **Learning Hub**: Embed short articles and videos on startup metrics and strategy. Suggest relevant resources based on user questions.
+- **Peer Benchmarking**: Offer opt‑in anonymised data pooling to share medians and ranges for metrics.
+- **Scenario Marketplace**: Let users publish and discover scenario templates (free or paid) for common situations.
+
+---
+
+## Implementation Phases & Milestones
+
+1. **Phase 1: Foundations (Month 1)**
+   - Fix critical onboarding bugs (Continue/Skip).
+   - Build a new connector abstraction and implement two primary connectors.
+   - Improve metric calculations (burn multiple, revenue growth).
+
+2. **Phase 2: Multi‑Domain Simulation (Months 2–3)**
+   - Implement domain modules and Monte Carlo support.
+   - Add event timeline editor and scenario templates.
+   - Expose new simulation endpoints.
+
+3. **Phase 3: Insights & UI Overhaul (Months 4–5)**
+   - Build the benchmark database and recommendation engine.
+   - Redesign results dashboard and onboard narrative generation.
+   - Replace tables with visual summaries.
+
+4. **Phase 4: Conversational Co‑Pilot (Months 6–7)**
+   - Build chat UI and integrate NLP parser.
+   - Implement adaptive suggestions and visual responses.
+   - Connect the co‑pilot to scenario management.
+
+5. **Phase 5: Collaboration & Community (Months 8–9)**
+   - Implement multi‑user permissions, comments and notifications.
+   - Launch scenario marketplace and learning hub.
+   - Add export and shareable link functionality.
+
+6. **Phase 6: Polish & Launch (Month 10)**
+   - Conduct comprehensive QA and user acceptance testing.
+  - Optimise performance and fix remaining bugs.
+   - Finalise documentation and prepare marketing materials.
+
+---
+
+## Success Metrics
+
+- **Adoption**: Increase number of active users and scenarios created per week.
+- **Engagement**: Track usage of advanced features (co‑pilot queries, scenario comparisons, exports).
+- **Accuracy**: Reduce instances of N/A metrics to near zero; maintain consistency across simulations.
+- **Net Promoter Score (NPS)**: Achieve a high satisfaction rating from founders and finance teams.
+- **Revenue**: Convert free users to paid subscriptions once advanced features are released.
+
+---
+
+## Risks & Mitigations
+
+- **Complexity Overload**: Adding many modules could overwhelm users. Mitigate with guided onboarding, presets, and progressive disclosure.
+- **Data Privacy**: Handle sensitive financial data responsibly. Use encryption and strict access controls.
+- **Third‑Party Integration Failures**: Provide fallback manual inputs and clear error messages when connectors fail.
+- **Development Scope**: The roadmap is ambitious; prioritize high‑impact features and iterate based on user feedback.
+
+---
+
+## Next Steps
+
+1. Review and refine this specification with the engineering and design teams.
+2. Break down milestones into detailed epics and user stories.
+3. Begin Phase 1 with a focus on fixing bugs and establishing solid foundations.
+

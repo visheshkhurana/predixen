@@ -1,0 +1,201 @@
+Below is a **compiled Replit prompt** you can paste directly into Replit’s AI/collaboration tool.  It includes a concise project description, recommended architecture choices, data model definitions, API design, front‑end layout guidance and example code snippets to help implement an admin dashboard for your Fund Flow / Predixen application.
+
+````
+# Project: Build an Admin Dashboard for Fund Flow / Predixen
+
+## Goal
+Create a centralized admin interface that allows super‑admins (i.e., the product owner) to:
+- Manage users (view, invite, modify roles, suspend/activate).
+- Manage companies/tenants and their metadata.
+- View and control subscriptions and payments.
+- Inspect high‑level analytics (runway, burn, growth metrics).
+- Oversee templates, simulations and decision recommendations.
+- Monitor data ingestion, alerts and integrations (QuickBooks, Xero).
+- Provide audit logs and RBAC security.
+
+## Suggested Architecture
+
+### Technology Stack
+- **Front‑End:** Next.js (React) with Tailwind CSS and Radix UI (or Headless UI).
+- **State Management:** Zustand or Redux Toolkit.
+- **API Layer:** tRPC or REST (FastAPI/Express).
+- **Database/ORM:** PostgreSQL with Prisma ORM.
+- **Authentication:** NextAuth.js (with JWT) or custom Passport.js.
+- **Payments:** Stripe (for subscriptions/invoices) with webhook handlers.
+- **Hosting:** Deploy on Replit (autoscale; secrets stored via Replit secrets).
+
+### Data Models (Prisma)
+```prisma
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  hashedPwd    String
+  role         Role      @default(VIEWER)
+  companies    Company[] @relation("UserCompanies")
+  subscriptions Subscription[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Company {
+  id             String     @id @default(cuid())
+  name           String
+  foundingDate   DateTime?
+  stage          String?
+  industry       String?
+  description    String?
+  employeeCount  Int?
+  users          User[]      @relation("UserCompanies")
+  subscriptions  Subscription[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  user          User?    @relation(fields: [userId], references: [id])
+  userId        String?
+  company       Company? @relation(fields: [companyId], references: [id])
+  companyId     String?
+  stripeId      String?  // external processor id
+  plan          String
+  status        SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime
+  createdAt     DateTime @default(now())
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+````
+
+*(Add an `AuditLog` model to capture admin actions for compliance.)*
+
+### Backend API Design
+
+Define endpoints under `/api/admin` secured by role checks:
+
+* **Users:** `GET /users`, `POST /users` (invite/create), `PATCH /users/:id` (change role or suspend), `DELETE /users/:id` (soft delete).
+* **Companies:** `GET /companies`, `POST /companies`, `PATCH /companies/:id`.
+* **Subscriptions:** `GET /subscriptions` (list), `POST /subscriptions/:companyId/upgrade` (change tier).
+* **Metrics:** `GET /metrics` for aggregated KPIs.
+
+Example Next.js API route with RBAC:
+
+```ts
+// pages/api/admin/users/index.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
+import prisma from '../../../lib/prisma';
+import { isAdmin } from '../../../lib/auth';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res);
+  if (!session || !isAdmin(session.user)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (req.method === 'GET') {
+    const users = await prisma.user.findMany({
+      include: { companies: true, subscriptions: true },
+    });
+    return res.json(users);
+  }
+  if (req.method === 'POST') {
+    const { email, role } = req.body;
+    const newUser = await prisma.user.create({ data: { email, role } });
+    return res.status(201).json(newUser);
+  }
+  res.setHeader('Allow', ['GET','POST']);
+  return res.status(405).end(`Method ${req.method} Not Allowed`);
+}
+```
+
+Implement Stripe webhooks at `/api/webhooks/stripe` to update `Subscription` statuses when invoices are paid/failed.
+
+### Front‑End Layout
+
+1. **Sidebar:** Add an “Admin” section with links: Dashboard, Users, Companies, Billing, Metrics, Templates, Settings.
+2. **Dashboard Home:** Cards summarising total users, active companies, MRR, churn. Mirror the look and feel of existing cards used for “Quality of Growth Index” and “Runway” metrics.
+3. **Users Page:** Table listing users with columns (Email, Role, Companies, Status), with actions to edit role or deactivate/reactivate accounts.
+4. **Companies Page:** Show each company with key metadata (name, stage, industry, employee count). Provide links to view company’s simulations, decisions and alerts.
+5. **Billing Page:** List current subscriptions: plan tier, seat counts, renewal dates. Allow upgrades/downgrades via Stripe.
+6. **Metrics Page:** Charts (e.g., bar and line charts) aggregating KPIs across companies (runway, net burn, growth). Use client-side chart library (e.g., Chart.js or D3) and provide filters by time range or company.
+7. **RBAC Guard:** Wrap admin routes in a component that checks `session.user.role` and redirects unauthorized users away.
+
+Example React component for listing users:
+
+```tsx
+import { useQuery } from '@tanstack/react-query';
+
+export function UserList() {
+  const { data: users, isLoading } = useQuery(['users'], async () => {
+    const res = await fetch('/api/admin/users');
+    if (!res.ok) throw new Error('Failed to fetch');
+    return res.json();
+  });
+
+  if (isLoading) return <div>Loading…</div>;
+
+  return (
+    <table className="min-w-full divide-y divide-gray-700">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Companies</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {users.map((user) => (
+          <tr key={user.id}>
+            <td>{user.email}</td>
+            <td>{user.role}</td>
+            <td>{user.companies.map((c) => c.name).join(', ')}</td>
+            <td>{user.deletedAt ? 'Suspended' : 'Active'}</td>
+            <td>
+              {/* Buttons for edit/suspend */}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+```
+
+### Security & Deployment Notes
+
+* Use NextAuth.js (or equivalent) for session handling and implement role checks on both client and server.
+* Store Stripe keys and any secrets using Replit’s secrets management.
+* Protect all `/api/admin/*` routes with CSRF tokens and RBAC.
+* Add logging (e.g., using Replit logs or Sentry) to trace errors.
+* Consider audit logging to track changes made by administrators.
+
+## Step‑by‑Step Instructions
+
+1. **Create or fork a branch** in your Replit project for admin dashboard development.
+2. **Extend the Prisma schema** with `User`, `Company`, `Subscription` and run `npx prisma migrate dev`.
+3. **Implement the API endpoints** for admin actions under `/api/admin`. Secure them using your auth middleware.
+4. **Add Stripe integration**: configure product/price IDs in Stripe, create a subscription flow for new companies, and handle webhooks.
+5. **Build the admin UI pages** in `pages/admin/*` using React components and Tailwind/Radix UI.
+6. **Add RBAC guards** on the client to restrict admin pages to users with `OWNER` or `ADMIN` roles.
+7. **Seed data** (optional) to test with multiple users/companies.
+8. **Deploy** your updated app on Replit and verify all admin features work end‑to‑end.
+
+---
+
+Paste this prompt into Replit and use it as a blueprint to scaffold your admin dashboard.  Adapt code snippets and component names as needed to fit the existing codebase and styling.
+
+```
+```

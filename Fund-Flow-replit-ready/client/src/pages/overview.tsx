@@ -1,0 +1,534 @@
+import { useEffect, useState } from 'react';
+import { useLocation } from 'wouter';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { MetricCard } from '@/components/MetricCard';
+import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send, Info, HelpCircle } from 'lucide-react';
+import { useFounderStore } from '@/store/founderStore';
+import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
+import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+
+const DECISION_STATUSES_KEY = 'decision_statuses_';
+
+const METRIC_TOOLTIPS = {
+  runway: {
+    title: "Runway (P50)",
+    calculation: "Cash Balance / Monthly Net Burn, simulated across 1000 scenarios",
+    goodRange: "12+ months is healthy, 18+ months is ideal for fundraising",
+    badRange: "Less than 6 months is critical, 6-12 months requires attention",
+    dataSource: "Cash balance and expenses from Data Input",
+  },
+  netBurn: {
+    title: "Net Burn",
+    calculation: "Total Monthly Expenses - Monthly Revenue",
+    goodRange: "Lower burn is better; negative burn means profitable",
+    badRange: "High burn relative to cash reduces runway",
+    dataSource: "Revenue and expense data from Data Input",
+  },
+  revenueGrowth: {
+    title: "Revenue Growth",
+    calculation: "(Current Month Revenue - Previous Month) / Previous Month",
+    goodRange: "10%+ MoM for early-stage, 5-10% for growth stage",
+    badRange: "Negative or flat growth may signal product-market fit issues",
+    dataSource: "Monthly revenue from financial records",
+  },
+  grossMargin: {
+    title: "Gross Margin",
+    calculation: "(Revenue - COGS) / Revenue",
+    goodRange: "70%+ for SaaS, 50%+ for most tech companies",
+    badRange: "Below 50% may indicate pricing or cost issues",
+    dataSource: "Revenue and COGS from Data Input",
+  },
+  burnMultiple: {
+    title: "Burn Multiple",
+    calculation: "Net Burn / Net New ARR",
+    goodRange: "Below 1.5x is excellent, 1.5-2x is good",
+    badRange: "Above 3x indicates inefficient growth",
+    dataSource: "Burn rate and revenue growth from financial data",
+  },
+  concentration: {
+    title: "Top 5 Customer Concentration",
+    calculation: "Revenue from Top 5 Customers / Total Revenue",
+    goodRange: "Below 25% is healthy diversification",
+    badRange: "Above 50% creates significant revenue risk",
+    dataSource: "Customer revenue data from CRM or manual entry",
+  },
+};
+
+const getConfidenceExplanation = (score: number, metrics: any) => {
+  const factors: { label: string; status: 'good' | 'warning' | 'missing' }[] = [];
+  
+  if (metrics.revenue_growth_mom != null) {
+    factors.push({ label: "Revenue data", status: 'good' });
+  } else {
+    factors.push({ label: "Revenue data", status: 'missing' });
+  }
+  
+  if (metrics.net_burn != null) {
+    factors.push({ label: "Expense data", status: 'good' });
+  } else {
+    factors.push({ label: "Expense data", status: 'missing' });
+  }
+  
+  if (metrics.gross_margin != null) {
+    factors.push({ label: "COGS/Margin data", status: 'good' });
+  } else {
+    factors.push({ label: "COGS/Margin data", status: 'warning' });
+  }
+  
+  if (metrics.concentration_top5 != null) {
+    factors.push({ label: "Customer data", status: 'good' });
+  } else {
+    factors.push({ label: "Customer data", status: 'warning' });
+  }
+  
+  return factors;
+};
+
+const getQoGExplanation = (score: number) => {
+  const components = [
+    { name: "Revenue Growth Efficiency", weight: "25%", description: "Growth rate relative to burn" },
+    { name: "Gross Margin Health", weight: "20%", description: "Profitability of core business" },
+    { name: "Burn Efficiency", weight: "20%", description: "Cash efficiency in acquiring growth" },
+    { name: "Customer Concentration", weight: "15%", description: "Revenue diversification" },
+    { name: "Runway Safety", weight: "20%", description: "Time to sustain operations" },
+  ];
+  return components;
+};
+
+const COPILOT_PROMPTS = [
+  "How do I extend runway by 6 months?",
+  "What's the riskiest assumption?",
+  "What if fundraise slips 3 months?",
+];
+
+export default function OverviewPage() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const { currentCompany, setTruthScan, setCurrentStep } = useFounderStore();
+  const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
+  const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
+  const runTruthScanMutation = useRunTruthScan();
+  const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
+
+  useEffect(() => {
+    if (currentCompany?.id) {
+      try {
+        const stored = localStorage.getItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`);
+        if (stored) {
+          setDecisionStatuses(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.warn('Failed to load decision statuses');
+      }
+    }
+  }, [currentCompany?.id]);
+  
+  useEffect(() => {
+    if (truthScan) {
+      setTruthScan(truthScan);
+    }
+  }, [truthScan, setTruthScan]);
+
+  const handleAdoptPlan = (recId: string, recTitle: string) => {
+    if (!currentCompany?.id) return;
+    
+    const updated = { ...decisionStatuses, [recId]: 'adopted' as DecisionStatus };
+    setDecisionStatuses(updated);
+    
+    try {
+      localStorage.setItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save decision status');
+    }
+    
+    toast({
+      title: 'Plan Adopted',
+      description: `"${recTitle}" has been marked as adopted. View in Decisions page.`,
+    });
+  };
+
+  const handleRunScenario = (recTitle: string) => {
+    setCurrentStep('simulation');
+    toast({
+      title: 'Opening Scenario Builder',
+      description: `Create a scenario based on "${recTitle}"`,
+    });
+    setLocation('/scenarios');
+  };
+
+  const handleStatusChange = (recId: string, status: DecisionStatus) => {
+    if (!currentCompany?.id) return;
+    
+    const updated = { ...decisionStatuses, [recId]: status };
+    setDecisionStatuses(updated);
+    
+    try {
+      localStorage.setItem(`${DECISION_STATUSES_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save decision status');
+    }
+    
+    toast({
+      title: 'Status Updated',
+      description: `Decision marked as ${status}`,
+    });
+  };
+  
+  if (!currentCompany) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <h2 className="text-xl font-semibold mb-2">No Company Selected</h2>
+            <p className="text-muted-foreground mb-4">Create a company to get started</p>
+            <Button onClick={() => setLocation('/onboarding')} data-testid="button-create-company">
+              Get Started
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  const metrics = truthScan?.metrics || {};
+  const flags = truthScan?.flags || [];
+  const confidence = truthScan?.data_confidence_score || 0;
+  const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
+  
+  const formatCurrency = (value: number | null | undefined) => {
+    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
+  };
+  
+  const formatPercent = (value: number | null | undefined) => {
+    return formatPct(value);
+  };
+  
+  const safeToFixed = (value: any, digits: number = 1): string => {
+    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
+    return value.toFixed(digits);
+  };
+  
+  const getConfidenceBadge = () => {
+    if (confidence < 60) {
+      return <Badge variant="destructive">Low Confidence ({confidence})</Badge>;
+    } else if (confidence < 80) {
+      return <Badge className="bg-amber-500/20 text-amber-400">Medium Confidence ({confidence})</Badge>;
+    }
+    return <Badge className="bg-emerald-500/20 text-emerald-400">High Confidence ({confidence})</Badge>;
+  };
+  
+  const handleRefreshScan = async () => {
+    if (!currentCompany) return;
+    await runTruthScanMutation.mutateAsync(currentCompany.id);
+  };
+  
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-company-name">{currentCompany.name}</h1>
+          <p className="text-muted-foreground">Financial Intelligence Overview</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {getConfidenceBadge()}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshScan}
+            disabled={runTruthScanMutation.isPending}
+            data-testid="button-refresh-scan"
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${runTruthScanMutation.isPending ? 'animate-spin' : ''}`} />
+            Refresh Scan
+          </Button>
+        </div>
+      </div>
+      
+      {flags.filter((f: any) => f.severity === 'high').length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/10">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              <div>
+                <h3 className="font-medium text-destructive">Critical Issues Detected</h3>
+                <ul className="mt-1 text-sm text-muted-foreground space-y-1">
+                  {flags.filter((f: any) => f.severity === 'high').map((flag: any, i: number) => (
+                    <li key={i}>{flag.title}: {flag.description}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="overflow-visible">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Quality of Growth Index
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-qog-info">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80" side="bottom">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">How QoG is Calculated</h4>
+                    <p className="text-sm text-muted-foreground">
+                      A weighted composite score measuring growth quality:
+                    </p>
+                    <div className="space-y-2">
+                      {getQoGExplanation(qualityOfGrowth).map((comp, i) => (
+                        <div key={i} className="flex justify-between text-sm">
+                          <span>{comp.name}</span>
+                          <span className="text-muted-foreground">{comp.weight}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t text-sm">
+                      <p><span className="text-emerald-500">80+:</span> Excellent growth quality</p>
+                      <p><span className="text-amber-500">50-79:</span> Moderate, room for improvement</p>
+                      <p><span className="text-red-500">&lt;50:</span> Needs attention</p>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {truthLoading ? (
+              <Skeleton className="h-16 w-24" />
+            ) : (
+              <div className="text-4xl font-bold font-mono" data-testid="text-quality-index">
+                {qualityOfGrowth}
+                <span className="text-lg text-muted-foreground">/100</span>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">
+              Composite score based on growth, efficiency, and risk factors
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card className="overflow-visible">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              Data Confidence Score
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-confidence-info">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80" side="bottom">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Data Completeness Factors</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Score based on available data fields:
+                    </p>
+                    <div className="space-y-2">
+                      {getConfidenceExplanation(confidence, metrics).map((factor, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span>{factor.label}</span>
+                          <Badge variant="secondary" className={
+                            factor.status === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
+                            factor.status === 'warning' ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-red-500/20 text-red-400'
+                          }>
+                            {factor.status === 'good' ? 'Complete' : factor.status === 'warning' ? 'Partial' : 'Missing'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-2 border-t">
+                      <Button variant="ghost" size="sm" className="p-0 h-auto text-primary underline-offset-4 hover:underline" onClick={() => setLocation('/data')} data-testid="link-add-data">
+                        Add more data to improve score
+                      </Button>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {truthLoading ? (
+              <Skeleton className="h-16 w-24" />
+            ) : (
+              <div className="text-4xl font-bold font-mono" data-testid="text-confidence-score">
+                {confidence}
+                <span className="text-lg text-muted-foreground">/100</span>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">
+              Based on data completeness and consistency
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+      
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {truthLoading ? (
+          Array(6).fill(0).map((_, i) => (
+            <Card key={i} className="overflow-visible">
+              <CardContent className="p-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <MetricCard
+              title="Runway (P50)"
+              value={`${safeToFixed(metrics.runway_p50)} mo`}
+              subtitle={`P10: ${safeToFixed(metrics.runway_p10)}, P90: ${safeToFixed(metrics.runway_p90)}`}
+              variant={typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 6 ? 'danger' : typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 12 ? 'warning' : 'success'}
+              testId="metric-runway"
+              tooltip={`${METRIC_TOOLTIPS.runway.calculation}. Good: ${METRIC_TOOLTIPS.runway.goodRange}. Data from: ${METRIC_TOOLTIPS.runway.dataSource}`}
+            />
+            <MetricCard
+              title="Net Burn"
+              value={formatCurrency(metrics.net_burn)}
+              trend={metrics.burn_change < 0 ? 'down' : metrics.burn_change > 0 ? 'up' : 'stable'}
+              trendValue={`${metrics.burn_change >= 0 ? '+' : ''}${formatCurrency(metrics.burn_change)}`}
+              testId="metric-burn"
+              tooltip={`${METRIC_TOOLTIPS.netBurn.calculation}. Good: ${METRIC_TOOLTIPS.netBurn.goodRange}. Data from: ${METRIC_TOOLTIPS.netBurn.dataSource}`}
+            />
+            <MetricCard
+              title="Revenue Growth"
+              value={formatPercent(metrics.revenue_growth_mom)}
+              subtitle="MoM"
+              trend={metrics.revenue_growth_mom > 0 ? 'up' : metrics.revenue_growth_mom < 0 ? 'down' : 'stable'}
+              testId="metric-growth"
+              tooltip={`${METRIC_TOOLTIPS.revenueGrowth.calculation}. Good: ${METRIC_TOOLTIPS.revenueGrowth.goodRange}. Data from: ${METRIC_TOOLTIPS.revenueGrowth.dataSource}`}
+            />
+            <MetricCard
+              title="Gross Margin"
+              value={formatPercent(metrics.gross_margin)}
+              variant={metrics.gross_margin < 50 ? 'warning' : 'default'}
+              testId="metric-margin"
+              tooltip={`${METRIC_TOOLTIPS.grossMargin.calculation}. Good: ${METRIC_TOOLTIPS.grossMargin.goodRange}. Data from: ${METRIC_TOOLTIPS.grossMargin.dataSource}`}
+            />
+            <MetricCard
+              title="Burn Multiple"
+              value={safeToFixed(metrics.burn_multiple)}
+              variant={typeof metrics.burn_multiple === 'number' && metrics.burn_multiple > 3 ? 'warning' : 'default'}
+              testId="metric-burn-multiple"
+              tooltip={`${METRIC_TOOLTIPS.burnMultiple.calculation}. Good: ${METRIC_TOOLTIPS.burnMultiple.goodRange}. Data from: ${METRIC_TOOLTIPS.burnMultiple.dataSource}`}
+            />
+            <MetricCard
+              title="Top 5 Concentration"
+              value={formatPercent(metrics.concentration_top5)}
+              variant={metrics.concentration_top5 > 50 ? 'warning' : 'default'}
+              testId="metric-concentration"
+              tooltip={`${METRIC_TOOLTIPS.concentration.calculation}. Good: ${METRIC_TOOLTIPS.concentration.goodRange}. Data from: ${METRIC_TOOLTIPS.concentration.dataSource}`}
+            />
+          </>
+        )}
+      </div>
+      
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Top Recommendations</h2>
+          <Button variant="ghost" size="sm" onClick={() => { setCurrentStep('decision'); setLocation('/decisions'); }} data-testid="button-view-all-decisions">
+            View All <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+        
+        {decisionsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Array(3).fill(0).map((_, i) => (
+              <Card key={i} className="overflow-visible">
+                <CardContent className="p-4">
+                  <Skeleton className="h-6 w-32 mb-2" />
+                  <Skeleton className="h-4 w-full mb-4" />
+                  <Skeleton className="h-16 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : decisions?.recommendations?.length ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {decisions.recommendations.slice(0, 3).map((rec: any) => (
+              <DecisionCard
+                key={rec.id}
+                id={rec.id}
+                rank={rec.rank}
+                title={rec.title}
+                rationale={rec.rationale}
+                expectedImpact={rec.expected_impact}
+                risks={rec.risks}
+                keyAssumption={rec.key_assumption}
+                status={decisionStatuses[rec.id] || 'pending'}
+                onAdoptPlan={() => handleAdoptPlan(rec.id, rec.title)}
+                onRunScenario={() => handleRunScenario(rec.title)}
+                onStatusChange={(status) => handleStatusChange(rec.id, status)}
+                testId={`decision-card-${rec.rank}`}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground">No recommendations yet. Run a simulation to generate decisions.</p>
+              <Button className="mt-4" onClick={() => { setCurrentStep('simulation'); setLocation('/scenarios'); }} data-testid="button-run-simulation">
+                Run Simulation
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+      
+      <Card className="overflow-visible">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Ask Copilot
+          </CardTitle>
+          <CardDescription>Get AI-powered insights grounded in your data</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ask about your metrics, scenarios, or decisions..."
+              className="flex-1"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setLocation('/copilot');
+                }
+              }}
+              data-testid="input-copilot-quick"
+            />
+            <Button onClick={() => setLocation('/copilot')} data-testid="button-copilot-go">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {COPILOT_PROMPTS.map((prompt, i) => (
+              <Button
+                key={i}
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation('/copilot')}
+                data-testid={`button-copilot-prompt-${i}`}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

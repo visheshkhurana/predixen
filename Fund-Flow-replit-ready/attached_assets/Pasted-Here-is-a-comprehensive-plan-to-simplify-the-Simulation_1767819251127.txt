@@ -1,0 +1,145 @@
+Here is a comprehensive plan to simplify the Simulation Results UI, add month‑on‑month result displays, support multiple scenarios, and implement a backend algorithm for generating the most common scenarios. Following the plan is a detailed Replit prompt you can provide to a developer or coding assistant.
+
+---
+
+## 🔍 Current Results Screen Observations
+
+* The current UI displays large cumulative charts for metrics like revenue and cash balance, with timelines on the x‑axis but no granular month‑by‑month breakdown.
+* Users cannot easily compare multiple scenarios at once; the interface shows aggregated P10/P90 and median curves, but no way to view several scenario outcomes side‑by‑side.
+* The dark colour scheme with minimal annotations makes it difficult to extract precise values for each month.
+
+---
+
+## 🎯 Goals for the Enhanced Results UI
+
+1. **Simplify Presentation**: Offer a concise month‑by‑month view of key metrics such as revenue, burn, cash balance, and runway.
+2. **Support Multiple Scenarios**: Generate and display results for at least five distinct scenario types (e.g., baseline, conservative, moderate growth, aggressive growth, and cost‑cutting).
+3. **Enable Easy Comparison**: Let users toggle or view multiple scenarios side‑by‑side to compare outcomes over time.
+4. **Retain Interactive Charts** (optional): Provide interactive charts that sync with the month‑by‑month table, allowing users to hover and see exact values.
+5. **Backend Algorithm**: Develop a robust simulation algorithm that runs multiple scenarios, sampling from distributions to produce monthly projections with P10/P50/P90 statistics.
+
+---
+
+## 🧠 Suggested Backend Algorithm
+
+Below is a high‑level algorithm for generating five common scenarios. Adapt it to your existing data structures.
+
+1. **Define Scenario Parameters**:
+
+   * **Baseline**: Current growth and burn rates, no fundraising.
+   * **Conservative Cut**: Lower growth, reduced expenses (burn reduction).
+   * **Moderate Growth**: Slightly higher growth and modest burn reduction.
+   * **Aggressive Growth**: High growth uplift, possibly increased burn and pricing uplift.
+   * **Cost‑Cutting**: Significant burn reduction, minimal growth.
+
+2. **Parameter Distributions**:
+
+   * For each scenario, specify probability distributions for key variables (pricing change %, growth uplift %, burn reduction %, gross margin %, fundraising month and amount).
+   * Example: Baseline growth uplift ~ Normal(0%, σ=1%), aggressive growth uplift ~ Normal(10%, σ=3%), burn reduction ~ Normal(−5%, σ=2%), etc.
+
+3. **Monte Carlo Simulation**:
+
+   * For each scenario, perform N simulations (e.g., 1 000) over the forecast horizon (e.g., 24 months).
+   * For each simulation:
+
+     1. Sample the key variables from their distributions.
+     2. Calculate revenue, costs, and cash flow for each month based on the sampled parameters and current financial model.
+     3. Update cash balance month by month.
+   * Collect results to compute percentiles (P10, P50, P90) for each month.
+
+4. **Output Structure**:
+
+   * Produce a data structure that holds month‑indexed metrics for each scenario. For example:
+
+     ```json
+     {
+       "Baseline": {
+         "month": [1, 2, 3, ...],
+         "revenue_p50": [...],
+         "revenue_p10": [...],
+         "revenue_p90": [...],
+         "cash_p50": [...],
+         "burn_p50": [...]
+       },
+       ...
+     }
+     ```
+
+5. **Selecting “Most Common” Scenarios**:
+
+   * If user history or data indicates frequently used strategies, prioritize those. Otherwise use the five typical scenarios above.
+   * Optionally allow users to customize which scenarios are generated.
+
+6. **Backend API Endpoint**:
+
+   * Create an endpoint (e.g., `POST /simulate`) that accepts scenario definitions and returns the month‑indexed simulation results.
+
+---
+
+## ✍️ Detailed Replit Prompt
+
+Use this prompt to instruct a Replit developer or code generator to implement the updated UI and backend.
+
+> **Project Overview**
+>
+> We have a startup financial simulator (“RunwayAI”) currently built with a React front‑end and simple back‑end. The existing Simulation Results page shows aggregated charts with limited granularity. Users have requested a simpler, month‑by‑month breakdown and the ability to compare multiple scenarios (minimum of five). We also need a backend algorithm to generate these scenarios and expose them via an API.
+>
+> **Objectives**
+>
+> 1. Refactor the results UI to present clear month‑by‑month data.
+> 2. Allow generation and comparison of at least five common scenarios (Baseline, Conservative Cut, Moderate Growth, Aggressive Growth, Cost‑Cutting).
+> 3. Implement a Monte Carlo simulation algorithm on the backend to produce P10/P50/P90 metrics for each month and scenario.
+> 4. Integrate the UI with the new API to display data in both tables and interactive charts.
+>
+> **Detailed Requirements**
+>
+> ### 1. Backend (Python / Node.js)
+>
+> * **Scenario Definitions**: Define default parameter distributions for at least five scenarios. Accept custom scenarios from the client.
+> * **Monte Carlo Simulation**:
+>
+>   * Accept the number of simulations (e.g., 1 000) and time horizon (e.g., 24 months).
+>   * For each scenario, sample random variables (pricing change, growth uplift, burn reduction, etc.) from scenario‑specific distributions.
+>   * Calculate monthly revenue, costs, burn, cash balance, and runway based on sampled parameters and an initial cash position.
+>   * Aggregate results across simulations to compute P10, P50, and P90 statistics for each metric.
+> * **API Endpoint** (`/simulate`):
+>
+>   * Accept a POST request containing scenario definitions and simulation settings.
+>   * Return JSON with month‑indexed P10/P50/P90 values for each scenario and metric.
+>
+> ### 2. Front‑End (React)
+>
+> * **Scenario Selection and Generation**:
+>
+>   * Provide a simple selector allowing users to choose up to five scenarios to compare. Preload the five common scenarios.
+>   * Include a “Generate” button to call the `/simulate` endpoint with selected scenarios.
+> * **Month‑By‑Month Results Table**:
+>
+>   * Create a responsive table where rows are months (1‑24) and columns are metrics (e.g., revenue, burn, cash balance) with P50 values as default.
+>   * Use subheaders to separate scenarios or allow scenario selection via tabs. Each scenario’s results can be toggled.
+>   * Optionally allow users to switch between P10, P50, and P90 views for risk assessment.
+> * **Interactive Charts** (optional but recommended):
+>
+>   * Replace the current static area charts with interactive charts (e.g., using Chart.js or Recharts).
+>   * Sync chart tooltips with the table: hovering a month in the chart should highlight the same row in the table.
+> * **UI Simplification**:
+>
+>   * Employ clear typographic hierarchy and spacing.
+>   * Use collapsible panels or tabs to hide details until needed (e.g., detailed metrics can be hidden under an “Advanced Metrics” section).
+>   * Provide a summary at the top showing key outcomes (e.g., how many months of runway each scenario provides).
+> * **Accessibility & Responsiveness**:
+>
+>   * Ensure all elements are keyboard‑navigable.
+>   * Use semantic HTML and ARIA labels for interactive components.
+>   * Make the layout responsive so the month table and charts adapt to mobile and desktop screens.
+>
+> **Deliverables**
+>
+> * Updated backend code with `/simulate` endpoint and Monte Carlo algorithm.
+> * React components for Scenario selection, month‑by‑month table, and interactive charts.
+> * Integration between front‑end and back‑end (API calls, loading states, error handling).
+> * A README describing how to run simulations, define scenarios, and extend the algorithm.
+
+---
+
+By following this roadmap and using the provided Replit prompt, you can create a results page that is clearer, more functional, and capable of comparing multiple scenarios in a meaningful, month‑by‑month format.

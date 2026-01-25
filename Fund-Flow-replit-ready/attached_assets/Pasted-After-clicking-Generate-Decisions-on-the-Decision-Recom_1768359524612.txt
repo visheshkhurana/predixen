@@ -1,0 +1,60 @@
+After clicking **Generate Decisions** on the **Decision Recommendations** page, the application attempted to produce ranked recommendations but failed. A red toast appeared at the bottom of the page with the message **“Error: Invalid authentication credentials”**.
+
+### Interpretation of the Error
+
+This suggests that the front‑end is making an API call to generate decision recommendations without valid authentication information (e.g., missing or expired token). Consequently, the server returns an authentication error, and the UI surfaces this as a toast.
+
+### Detailed Replit Prompt to Fix the Error
+
+You can use the following prompt in Replit’s AI developer tool (or share it with your developer) to resolve the authentication error and improve the user experience when generating decisions:
+
+---
+
+**Replit Prompt – Fix “Invalid authentication credentials” Error on Generate Decisions**
+
+I’m encountering an error when clicking “Generate Decisions” on our **Decision Recommendations** page. A toast appears saying “Error: Invalid authentication credentials”. I need to ensure that the API call responsible for generating decision recommendations is authenticated properly and to handle any authentication failures gracefully. Please help me implement the following fixes:
+
+1. **Identify the API request for decision generation**
+
+   * Locate the function triggered by the `Generate Decisions` button (likely in a component such as `DecisionRecommendations.tsx` or a related service file).
+   * Confirm the endpoint being called (e.g., `POST /api/decisions` or `/api/scenario/{id}/decisions`) and examine how authentication headers (e.g., Bearer token or session cookie) are added.
+
+2. **Ensure valid authentication is included**
+
+   * If using JWT or session tokens, ensure that the token is retrieved from user context or local storage and attached to the `Authorization` header for this request.
+
+     ```typescript
+     const token = getAuthToken(); // retrieve stored token
+     await fetch('/api/decisions', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         'Authorization': `Bearer ${token}`,
+       },
+       body: JSON.stringify({ scenarioId }),
+     });
+     ```
+   * If the token is missing or expired, trigger a refresh process (if you have a refresh token flow) or redirect the user to log in again.
+
+3. **Graceful error handling**
+
+   * Catch authentication errors (`401 Unauthorized` or `403 Forbidden`) and display a user-friendly message, such as “Your session has expired. Please sign in again to generate decisions.”
+   * Provide a link or button to re-authenticate. For example, redirect to a login page or open a modal prompting the user to sign back in.
+   * Avoid showing raw backend error messages to the user in production.
+
+4. **Optional: Prevent button spam and show loading state**
+
+   * Disable the “Generate Decisions” button and show a spinner while the API call is in progress.
+   * Once the call completes successfully, enable the button again or replace it with a “Regenerate Decisions” button.
+
+5. **Verify server-side authentication**
+
+   * Check your backend route for decision generation. Ensure it verifies the user’s authentication token and returns an appropriate error message if invalid credentials are supplied.
+   * If authentication is handled via middleware, confirm that the middleware is correctly configured for the decisions endpoint.
+
+6. **Add unit/integration tests**
+
+   * Write tests that simulate both authenticated and unauthenticated requests to the decisions API. Ensure the client-side logic properly attaches tokens and handles authentication failures.
+   * Test the UI component to confirm it displays the correct messages when authentication is missing or invalid.
+
+By ensuring the front‑end sends the correct authentication headers and by adding clear error handling and re-authentication flows, the “Generate Decisions” feature will work reliably and provide a better experience for your users.

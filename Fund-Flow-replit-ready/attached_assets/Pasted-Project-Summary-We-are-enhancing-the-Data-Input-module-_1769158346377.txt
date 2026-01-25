@@ -1,0 +1,54 @@
+Project Summary:
+We are enhancing the Data Input module by integrating with common payroll and ERP providers.  To ensure accurate implementation, each connector will rely on the official API documentation for that provider.  The following sections outline the key resources and integration steps.
+
+### 1. API Documentation References
+
+Before coding each connector, review the official API docs to understand authentication, endpoints and rate limits:
+
+- **RazorpayX Payroll (Opfin)** – JSON‑based API with `auth`, `request` and `data` sections:contentReference[oaicite:5]{index=5}.  See: https://documenter.getpostman.com/ (search RazorpayX Payroll).  
+- **GreytHR API** – covers employee, leave, attendance and salary modules for third‑party integration:contentReference[oaicite:6]{index=6}.  See: https://api-docs.greythr.com/ for V2 endpoints.  
+- **Keka API** – offers a partner program and marketplace.  Review the introduction and partner process:contentReference[oaicite:7]{index=7}.  See: https://developers.keka.com/ and https://apidocs.keka.com/.  
+- **Zoho Books API** – RESTful API with predictable URLs; an OpenAPI spec is available:contentReference[oaicite:8]{index=8}.  See: https://www.zoho.com/books/api/v3/.  
+- **Tally API (Tally Developer Docs)** – REST API accessible over HTTPS; base URL `https://api.tally.so` :contentReference[oaicite:9]{index=9}.  Note: this is for Tally’s online form service; Tally ERP integration is typically done via XML‑over‑HTTP.  See: https://developers.tallysolutions.com/ for ERP integration.
+
+For each additional provider (PeopleStrong, QuikChex, HR Blizz, HONO, Deskera, SAP Business One, NetSuite, Odoo, Marg, ECERP, Proctur), locate their developer documentation or integration guide.  When official docs aren’t publicly available, consider using a third‑party aggregation service (e.g., Codat, Merge, Apideck) that exposes unified APIs for multiple HR/payroll/ERP systems.
+
+### 2. Connector Framework
+
+1. **Define Connector Interface**
+   - Each connector implements methods for authentication (`authenticate()`), data retrieval (`fetchEmployees()`, `fetchPayrollRuns()`, `fetchLedger()`, etc.) and mapping to the simulator schema.
+   - Use the endpoints specified in the API docs—for example, GreytHR’s `GET /employee/v2/employees?page=1&size=25` for employee lists (see docs) or Zoho Books’ `GET /invoices` to fetch invoices.
+
+2. **Authentication & OAuth**
+   - Follow the prescribed auth flow for each API:
+     - RazorpayX Payroll: API key/secret; send JSON payloads as described.
+     - GreytHR: generate API users and keys via Admin portal; store API access ID and secret.
+     - Keka: generate API keys (API/Webhook add‑on) from an admin account.
+     - Zoho Books: implement OAuth 2.0 flow; obtain access and refresh tokens:contentReference[oaicite:10]{index=10}.
+     - Tally ERP: for on‑prem installations, configure Tally to accept XML over HTTP (TallyPrime integration); for Tally forms API, use `https://api.tally.so`.
+
+3. **Endpoints & Data Mapping**
+   - Identify core endpoints from docs:
+     - RazorpayX Payroll: employees, payroll runs, reimbursements, statutory payments.
+     - GreytHR: employees (`/employee/v2/employees`), leaves, attendance, salary structures.
+     - Keka: employees, payroll, timesheets; review `apidocs.keka.com`.
+     - Zoho Books: invoices (`/invoices`), items (`/items`), expenses (`/expenses`), contacts, payments.
+     - Tally ERP: use XML requests to fetch ledger, vouchers, stock items.
+   - Map the fields returned by these endpoints to internal models: employee ID, salary components, gross pay, net pay, tax deductions; ledger account codes; invoice amounts; etc.
+
+4. **Connector UI**
+   - In the Data Input screen, present each provider as a card with a “Connect” button.  Link out to the provider’s documentation for users who want to understand what data will be accessed.
+   - After connection, display the last sync timestamp and key stats (e.g., number of employees synced) to reassure the user.
+
+5. **Error Handling & Throttling**
+   - Respect rate limits as specified in the API docs.  Implement exponential back‑off and retries where appropriate.
+   - Surface user‑friendly messages when authentication fails (e.g., invalid API key) or data is incomplete.
+
+6. **Testing**
+   - Use Postman or similar tools to explore the API endpoints (many providers provide downloadable Postman collections).  For example, Zoho Books offers a sample environment file and collection:contentReference[oaicite:11]{index=11}.
+   - Create unit tests that mock API responses to verify the connectors work as expected.
+
+### 3. Updating the Prompt as New Docs Emerge
+
+This prompt references the current public documentation discovered via web search.  As you add more connectors, repeat the process: search for “[Provider Name] API documentation,” review the authentication requirements and endpoints, and update the connector interface accordingly.
+

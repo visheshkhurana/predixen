@@ -1,0 +1,21 @@
+I’ve extended the Replit prompt to clarify that the same verification and data‑completion procedure should be applied regardless of how the financial data is supplied—whether via Excel upload, PDF upload, or manual entry. You can use the following prompt in the simulator’s chat box:
+
+---
+
+**Prompt for the AI assistant:**
+
+> **Task:** Analyze the financial data provided by the user (whether it comes from an uploaded Excel file, a PDF report, or manual data entry) to verify that key metrics are extracted correctly, then supply reasonable industry‑standard values for any missing fields to improve simulation accuracy.
+>
+> **Steps:**
+>
+> 1. **Load and parse the data:** If the user uploads a spreadsheet, open the appropriate sheet (e.g., “Income Statement”) and focus on the latest month to pull figures for metrics such as **Revenue**, **COGS**, **Gross Profit**, **Sales and Marketing**, **Other Opex**, and **Operating Income**. If the user uploads a PDF or enters data manually, extract or read these same metrics from the provided figures.
+> 2. **Verify extracted values:** Compare each extracted metric with the corresponding value in the source data. Confirm that values like monthly revenue, total monthly expenses, marketing spend, COGS, and gross profit match what’s in the file or manual entry.
+> 3. **Identify missing metrics:** Determine which fields are absent—commonly **cashOnHand**, **monthlyGrowthRate**, and **payroll**—regardless of whether the data source is Excel, PDF, or manual.
+> 4. **Provide industry‑standard estimates:** For any missing field, use widely accepted benchmarks:
+>
+>    * **cashOnHand:** Suggest holding cash equal to roughly six months of operating expenses. For example, if monthly expenses total ~US$9.89 M, cash on hand should be around **US$59 M**.
+>    * **monthlyGrowthRate:** High‑growth companies often target 5–10 % month‑over‑month revenue growth; use **5 %** (0.05) as a conservative default.
+>    * **payroll:** Payroll commonly accounts for 40–60 % of operating expenses; estimate **≈ US$5 M** per month for payroll when total monthly expenses are around US$9.9 M.
+> 5. **Output a clean summary:** Present the final set of metrics—including verified values from the uploaded or manually entered data and the industry‑standard estimates for missing fields—so the simulator can use them in runway and growth projections.
+
+> **Goal:** Ensure the financial simulator has a complete and realistic dataset to run accurate scenarios, regardless of whether the information comes from Excel, PDF, or manual input.

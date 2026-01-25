@@ -1,0 +1,354 @@
+You are my senior full-stack engineer + product engineer + QA. Implement a financially correct ingestion + verification pipeline for Predixen “Data Input” (Excel/PDF/manual). This is a correctness-critical release.
+
+GOAL
+Fix negative expense display + wrong burn/runway outcomes by:
+
+1. robust auto-classification (revenue vs expense vs derived vs headers)
+2. sign normalization (expenses always positive internally)
+3. month selection (latest month default, allow last-3mo avg)
+4. Data Verification Screen UX (preview + editable + confidence + warnings)
+5. benchmark defaults injection when data missing (clearly labeled)
+6. apply to Excel uploads, PDF uploads, and manual entry uniformly
+7. add tests so this never regresses
+
+CONTEXT / CURRENT BUG
+Uploaded finance files often follow accounting convention:
+
+* revenue positive
+* expenses negative
+  Predixen currently sums “Total Monthly Expenses” directly, resulting in negative expenses shown in UI and incorrect “Net burn” and runway (e.g., revenue - (-expenses) makes burn look positive / profitable incorrectly).
+  We must store all expenses internally as positive numbers and compute burn correctly:
+* burn = expenses - revenue (positive = burning cash; negative = surplus/profitable)
+
+STACK
+Frontend: React + TypeScript + Vite, Tailwind, Zustand, React Query, Recharts
+Backend: FastAPI (Python), Pydantic, SQLAlchemy ORM, Alembic
+Use existing patterns: scenario engine and founder mode metrics style
+
+========================================
+A) DATA MODEL CHANGES (Backend)
+===============================
+
+1. Add canonical normalized schema for imported time series metrics:
+
+Entity: FinancialMetricPoint
+
+* id (uuid)
+* company_id (uuid)
+* period (date)  // month bucket, e.g., 2025-03-01
+* metric_key (enum/string):
+  "revenue", "cogs", "marketing", "payroll", "operating",
+  "total_expenses", "gross_profit", "operating_income",
+  "net_burn", "cash_on_hand", "growth_rate_mom", etc.
+* value (float) // canonical normalized value
+* value_raw (float|null) // original value from source row (optional)
+* unit ("USD" default)
+* source_type (enum): "excel" | "pdf" | "manual" | "benchmark"
+* source_label (string|null) // original row label text
+* confidence (enum): "high" | "medium" | "low"
+* classification (enum): "revenue" | "expense" | "derived" | "header" | "other"
+* expense_bucket (enum|null): "cogs" | "marketing" | "payroll" | "operating"
+* include_in_totals (bool default true)
+* created_at, updated_at
+
+Entity: ImportSession
+
+* id (uuid)
+* company_id
+* source_type ("excel"/"pdf")
+* filename
+* uploaded_at
+* detected_sign_convention ("accounting"|"all_positive"|"mixed")
+* detected_time_granularity ("monthly"|"unknown")
+* selected_period_mode ("latest"|"avg_3mo"|"custom")
+* selected_period (date|null)
+* status ("parsed"|"verified"|"saved")
+* warnings (json)
+* errors (json)
+
+Migration via Alembic.
+
+========================================
+B) CLASSIFICATION + NORMALIZATION ENGINE
+========================================
+
+Implement a deterministic scoring-based classifier for row labels + values.
+
+B1) Row Label Parsing + Hierarchy
+
+* Parse indentation/hierarchy from Excel row labels:
+
+  * If label begins with spaces, bullets, or obvious indentation markers → treat as child under last non-indented header.
+  * Maintain parent->children mapping.
+
+B2) Sign Convention Detection (File-level)
+From parsed rows across periods:
+
+* Identify candidate expense-like rows via keywords (see B3 expense keywords).
+* If >60% of candidate expense-like row values are negative AND revenue-like rows are mostly positive → sign_convention="accounting"
+* Else if most values are positive → "all_positive"
+* Else → "mixed"
+  Store in ImportSession.detected_sign_convention.
+
+B3) Classification Scoring
+For each row label (case-insensitive, normalized whitespace):
+Compute scores:
+
+Revenue keywords (boost):
+
+* "revenue", "revenues", "sales", "gmv", "bookings", "collections", "income" (careful: "operating income" is derived)
+  Expense keywords (boost):
+* "expense", "expenses", "cost", "cogs", "opex", "payroll", "salary", "wages", "marketing", "ads", "rent", "hosting", "cloud",
+  "logistics", "packaging", "commission", "payout", "contractor", "support", "payment processing", "fulfillment"
+  Derived/KPI keywords (boost):
+* "gross profit", "operating income", "ebit", "ebitda", "margin", "rule of", "magic number", "burn multiple", "ltv", "cac", "payback"
+  Header/Section rows (detect exact matches OR common group headings):
+* exact label in ["revenue", "cogs", "sales and marketing", "other opex", "gross profit", "operating income"]
+  Also treat rows with children as "header" (unless clearly leaf).
+
+Tie-breakers using values:
+
+* If values are consistently negative across months → strongly favor "expense"
+* If values are consistently positive and label is revenue-like → favor "revenue"
+* If derived keyword present → "derived" no matter sign
+
+Final decision:
+
+1. If derived_score highest and above threshold → classification="derived"
+2. Else if header detected or has children → classification="header"
+3. Else if expense_score > revenue_score and above threshold → classification="expense"
+4. Else if revenue_score above threshold → classification="revenue"
+5. Else "other"
+
+B4) Expense Bucket Mapping (for classification="expense")
+Map to:
+
+* bucket="marketing" if contains: marketing, ads, acquisition, growth, brand, performance, ua
+* bucket="payroll" if contains: salary, payroll, wages, people, contractor, benefits
+* bucket="cogs" if contains: cogs, payout, commission, astrologer, payment processing, fulfillment, logistics, packaging
+* else bucket="operating"
+
+Special case mappings for Astrotalk style:
+
+* "Astrologer Expenses" → cogs
+* "Logistics And Packaging" → cogs unless user toggles to operating
+* "Astromall Expenses" → cogs by default
+
+B5) Normalization Rules (NON-NEGOTIABLE)
+Canonical storage:
+
+* For classification="expense": normalized_value = abs(raw_value)
+* For classification="revenue": normalized_value = abs(raw_value) (but warn if raw is negative)
+* For derived/header/other: keep raw_value as-is but DO NOT use for totals unless user includes explicitly
+
+B6) Month Selection
+If time series exists:
+
+* Default selected_period_mode="latest" and selected_period=latest completed month in file
+* Offer "avg_3mo": compute 3-month rolling average for baseline metrics
+
+========================================
+C) BASELINE METRICS + BURN/RUNWAY FORMULAS (Fix)
+================================================
+
+Implement baseline computation for selected period (or avg_3mo):
+
+* revenue = sum(all included revenue rows for that period) OR user-selected primary revenue row if multiple candidates exist
+* total_expenses = sum(all included expense rows (normalized) for that period)
+* net_burn = total_expenses - revenue
+* status:
+
+  * if net_burn < 0 → "Profitable / Surplus"
+  * else → "Burning Cash"
+* runway:
+
+  * if net_burn <= 0 → runway="Sustainable"
+  * else runway_months = cash_on_hand / net_burn (require cash_on_hand; if missing show warning and set runway_months=null)
+
+IMPORTANT UI RULE:
+Never display negative expenses. Ever.
+Display burn as:
+
+* “Monthly Burn” if net_burn > 0 (value positive)
+* “Monthly Surplus” if net_burn < 0 (display abs(net_burn))
+
+Astrotalk post-fix expected behavior:
+For the latest month in the given Excel format, total expenses should be positive and net_burn likely negative (surplus). UI should show “Sustainable” not “36 months runway” if profitable.
+
+========================================
+D) BENCHMARK DEFAULTS (Missing Data)
+====================================
+
+Implement a small benchmark table + deterministic selection logic.
+
+D1) Company profile inputs (minimal)
+Add to Company data:
+
+* industry (enum): "saas" | "marketplace" | "d2c" | "fintech" | "consumer_sub" | "services"
+* stage (enum): "pre_seed" | "seed" | "series_a" | "series_b_plus"
+* geography (enum optional): "india" | "gcc" | "us_eu" | "global"
+
+D2) Benchmark table (store in DB or static JSON initially)
+For each (industry, stage):
+
+* growth_rate_mom_range (min,max)
+* gross_margin_range (min,max)
+* marketing_pct_revenue_range (min,max)
+* operating_pct_revenue_range (min,max)
+* payroll_pct_revenue_range (min,max) (optional)
+
+Start with sensible defaults:
+SaaS:
+
+* Seed: growth 8–15%, gross margin 70–85%, S&M 40–80%, Opex 20–45%
+* Series A: growth 5–10%, gross margin 70–85%, S&M 30–60%, Opex 15–40%
+  Marketplace (net):
+* Seed: growth 4–8%, gross margin 40–70%, S&M 30–70%
+  D2C:
+* growth 3–7%, gross margin 35–60%, marketing high 25–60%
+
+D3) Injection rules
+If baseline metric missing:
+
+* If growth rate missing → set to midpoint of benchmark range, source_type="benchmark", confidence="low", editable=true
+* If expense breakdown missing but total expenses present → optionally split by benchmark ratios ONLY if user opts-in (default OFF)
+* If total expenses missing but revenue present → estimate expenses using benchmark expense ratios (must show big warning and require explicit user confirmation)
+
+All benchmark-inserted values must be clearly tagged and shown in verification UI.
+
+========================================
+E) DATA VERIFICATION SCREEN UX (Frontend)
+=========================================
+
+Create a new step between upload parse and “Save All Data”:
+Route: /data/verify (or modal inside Data Input)
+
+E1) Top Summary Bar
+
+* Filename, source type
+* “Detected sign convention: Accounting (expenses negative) ✅” / Mixed / All-positive
+* Period selector: Latest (default) / Avg last 3 months / Custom month dropdown
+* Currency selector (optional later)
+
+E2) Key Baseline Metrics (Editable Cards)
+Cards with input fields:
+
+* Cash on hand (required if net_burn > 0)
+* Monthly revenue (primary) (dropdown if multiple candidates)
+* Total monthly expenses (auto) (read-only by default but can toggle “override”)
+* Growth rate MoM (auto if time series else benchmark default)
+  Show confidence chips: High/Med/Low + source chips: Excel/PDF/Manual/Benchmark
+
+E3) Extraction Preview Table
+Table columns:
+
+* Source Label (row label)
+* Classification (Revenue/Expense/Derived/Header/Other)
+* Bucket (COGS/Marketing/Payroll/Operating)
+* Raw Value (as in file for selected period)
+* Normalized Value (stored value)
+* Include in totals (toggle)
+* Confidence (chip)
+* Notes (e.g., “header row; children sum mismatch 8%”)
+
+E4) Warnings Banner (Sticky)
+Hard blockers (must resolve to enable Save):
+
+* No revenue selected
+* No expenses included
+* Period not selected
+  Soft warnings:
+* Multiple revenue candidates found → choose primary
+* Header total differs from children sum > 5%
+* Revenue negative in file (normalized) → please confirm
+
+E5) Actions
+
+* “Save as Baseline”
+* “Save + Generate 5 Standard Scenarios”
+* “Download Normalized CSV”
+
+========================================
+F) INTEGRATION INTO EXISTING DATA INPUT PAGE
+============================================
+
+On /data:
+
+* Upload Excel/PDF → backend returns ImportSession + parsed rows + detected convention
+* Frontend routes to verification screen automatically (do NOT write directly into Financials without verification)
+* After verification save, populate Financial Metrics inputs on /data (Company/Financials tabs) from saved baseline.
+
+Also apply normalization when user enters manual values:
+
+* If they input negative expenses, auto flip to positive and show a small hint: “Stored as positive expense.”
+
+========================================
+G) API ENDPOINTS
+================
+
+Add endpoints:
+POST /api/imports/excel  -> upload, parse, return ImportSession + preview rows
+POST /api/imports/pdf    -> upload, parse, return ImportSession + preview rows
+GET  /api/imports/{id}   -> fetch session + preview
+POST /api/imports/{id}/verify -> payload:
+
+* selected_period_mode, selected_period
+* revenue_primary_row_id (or metric mapping)
+* include_in_totals toggles
+* overrides (cash_on_hand, revenue_override, expense_override)
+* benchmark_opt_in flags
+  Returns computed baseline (revenue, expenses, net_burn, runway) + warnings
+  POST /api/imports/{id}/save -> persists FinancialMetricPoint entries and marks session verified/saved
+
+========================================
+H) TESTS (MANDATORY)
+====================
+
+Backend unit tests (pytest):
+
+1. Expense normalization:
+
+* Given expense raw=-1000 → stored +1000
+
+2. Burn formula:
+
+* revenue=1000, expenses=1500 → net_burn=500
+* revenue=1500, expenses=1000 → net_burn=-500 (profitable)
+
+3. Runway:
+
+* net_burn<=0 → runway="Sustainable"
+* net_burn>0 & cash_on_hand missing → runway_months=null + warning
+
+4. Sign convention detection:
+
+* Mostly negative expense-like rows + positive revenue-like rows → accounting
+
+5. Multiple revenue candidates:
+
+* Verify API returns warning + requires primary selection
+
+Frontend tests (if present) or QA checklist:
+
+* Negative expenses never displayed
+* Verification screen shows raw and normalized values
+* Include toggle changes totals live
+* Save disabled on blockers
+* Benchmark chips visible and editable
+
+========================================
+I) ACCEPTANCE CRITERIA
+======================
+
+* Uploading Excel with negative expense convention results in:
+
+  * UI shows total expenses as positive
+  * net burn computed as expenses - revenue
+  * if net burn negative → runway shows “Sustainable”
+* Verification screen is required step for uploads (Excel/PDF)
+* Benchmark defaults appear only when missing and are clearly labeled “Benchmark / Low confidence”
+* Manual entry also enforces positive expenses storage
+* Tests added and passing; no regression
+
+DELIVERABLE
+Implement end-to-end: backend parsing/classification/normalization + verification UX + save pipeline + tests.
