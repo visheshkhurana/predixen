@@ -12,6 +12,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { DataVerificationCopilot } from '@/components/DataVerificationCopilot';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -720,6 +721,7 @@ export default function OnboardingPage() {
         )}
         
         {step === 2 && (
+          <>
           <Card>
             <CardHeader>
               <CardTitle>Financial Baseline</CardTitle>
@@ -902,6 +904,17 @@ export default function OnboardingPage() {
               </form>
             </CardContent>
           </Card>
+          
+          {extractedData && (
+            <DataVerificationCopilot
+              extractedData={extractedData}
+              baselineData={baselineData}
+              onUpdateBaseline={(updates) => setBaselineData({ ...baselineData, ...updates })}
+              companyStage={companyData.stage}
+              currency={companyData.currency}
+            />
+          )}
+          </>
         )}
         
         {step === 3 && (
