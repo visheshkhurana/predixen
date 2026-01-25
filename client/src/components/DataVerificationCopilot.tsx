@@ -297,7 +297,7 @@ export function DataVerificationCopilot({
   const warningCount = issues.filter(i => i.severity === 'warning').length;
 
   return (
-    <Card className="border-l-4 border-l-primary">
+    <Card className="border-2 border-primary/30">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
