@@ -34,6 +34,15 @@ interface MetricVerification {
   issue?: VerificationIssue;
 }
 
+interface BaselineData {
+  monthly_revenue: number;
+  gross_margin_pct: number;
+  opex: number;
+  payroll: number;
+  other_costs: number;
+  cash_balance: number;
+}
+
 interface DataVerificationCopilotProps {
   extractedData: {
     company_info?: {
@@ -58,15 +67,8 @@ interface DataVerificationCopilotProps {
     };
     confidence?: { company_info: number; financials: number };
   } | null;
-  baselineData: {
-    monthly_revenue: number;
-    gross_margin_pct: number;
-    opex: number;
-    payroll: number;
-    other_costs: number;
-    cash_balance: number;
-  };
-  onUpdateBaseline: (updates: Partial<typeof baselineData>) => void;
+  baselineData: BaselineData;
+  onUpdateBaseline: (updates: Partial<BaselineData>) => void;
   companyStage?: string;
   currency?: string;
 }
