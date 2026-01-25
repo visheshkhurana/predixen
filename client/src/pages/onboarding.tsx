@@ -46,10 +46,22 @@ interface ExtractedData {
   financials: {
     monthly_revenue?: number;
     gross_margin_pct?: number;
+    operating_margin_pct?: number;
     opex?: number;
     payroll?: number;
     other_costs?: number;
     cash_balance?: number;
+    net_burn?: number;
+  };
+  computed_metrics?: {
+    revenue_growth_mom?: number;
+    revenue_growth_yoy?: number;
+    cmgr?: number;
+    burn_multiple?: number;
+    concentration_top5?: number;
+    ndr?: number;
+    churn_rate?: number;
+    ltv_cac_ratio?: number;
   };
   currency?: string;
   confidence?: { company_info: number; financials: number };
@@ -317,7 +329,13 @@ export default function OnboardingPage() {
     
     setIsSubmitting(true);
     try {
-      const company = await createCompanyMutation.mutateAsync(companyData);
+      // Include extracted data for use by truth scan
+      const companyPayload = {
+        ...companyData,
+        extracted_metrics: extractedData?.computed_metrics || null,
+        extracted_financials: extractedData?.financials || null
+      };
+      const company = await createCompanyMutation.mutateAsync(companyPayload);
       setCurrentCompany(company);
       setStep(2);
     } catch (err) {
