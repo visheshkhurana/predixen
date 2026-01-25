@@ -578,7 +578,7 @@ export default function OnboardingPage() {
               
               <form onSubmit={handleCompanySubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="company-name">Company Name</Label>
+                  <Label htmlFor="company-name">Company Name <span className="text-destructive">*</span></Label>
                   <Input
                     id="company-name"
                     value={companyData.name}
@@ -586,7 +586,7 @@ export default function OnboardingPage() {
                     required
                     placeholder="Your Company"
                     data-testid="input-company-name"
-                    className={extractedData?.company_info?.name ? 'border-green-500/50' : ''}
+                    className={extractedData?.company_info?.name ? 'border-green-500/50' : !companyData.name.trim() ? 'border-amber-500/50' : ''}
                   />
                 </div>
                 
@@ -611,7 +611,7 @@ export default function OnboardingPage() {
                     >
                       <SelectTrigger 
                         data-testid="select-industry"
-                        className={extractedData?.company_info?.industry ? 'border-green-500/50' : ''}
+                        className={extractedData?.company_info?.industry ? 'border-green-500/50' : !companyData.industry ? 'border-amber-500/50' : ''}
                       >
                         <SelectValue placeholder="Select industry..." />
                       </SelectTrigger>
@@ -633,7 +633,7 @@ export default function OnboardingPage() {
                     >
                       <SelectTrigger 
                         data-testid="select-stage"
-                        className={extractedData?.company_info?.stage ? 'border-green-500/50' : ''}
+                        className={extractedData?.company_info?.stage ? 'border-green-500/50' : !companyData.stage ? 'border-amber-500/50' : ''}
                       >
                         <SelectValue placeholder="Select stage..." />
                       </SelectTrigger>
@@ -647,10 +647,21 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 
+                {/* Show validation message if form is incomplete */}
+                {(!companyData.name.trim() || !companyData.industry || !companyData.stage) && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-sm text-amber-600 dark:text-amber-400">
+                    Please fill in all required fields: {[
+                      !companyData.name.trim() && 'Company Name',
+                      !companyData.industry && 'Industry',
+                      !companyData.stage && 'Stage'
+                    ].filter(Boolean).join(', ')}
+                  </div>
+                )}
+                
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isSubmitting || createCompanyMutation.isPending}
+                  disabled={isSubmitting || createCompanyMutation.isPending || !companyData.name.trim() || !companyData.industry || !companyData.stage}
                   data-testid="button-next-step"
                 >
                   {isSubmitting || createCompanyMutation.isPending ? 'Creating...' : 'Continue'}
