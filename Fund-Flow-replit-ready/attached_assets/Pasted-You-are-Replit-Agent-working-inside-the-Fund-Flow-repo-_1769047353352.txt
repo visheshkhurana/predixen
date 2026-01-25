@@ -1,0 +1,296 @@
+You are Replit Agent working inside the **Fund Flow** repo. Implement **Copilot V2+ (Prompt v2)** focused on: **Truth-first citations, Data Health score, Operating Cadence + Reminders, and Driver-based Forecast scaffolding**. Keep scope controlled, do not break existing flows, and verify everything works end-to-end.
+
+========================================================
+0) REPO ORIENTATION (FAST)
+==========================
+
+1. Locate the Copilot stack:
+
+   * Frontend: client/src/pages/copilot.tsx (+ any copilot components)
+   * Backend: server routes/services for copilot chat + CKB storage
+   * DB schema: drizzle tables for companies/ckb/decisions/scenarios/messages
+   * Document ingestion/extraction pipeline (pdf parsing, tables, verification pages)
+
+2. Create docs/copilot_v2_prompt_v2_plan.md with:
+
+   * current architecture summary
+   * files you will edit
+   * new tables/endpoints
+   * testing checklist
+
+========================================================
+
+1. TRUTH-FIRST CITATIONS (PDF + WEB) — “SHOW RECEIPTS”
+   ========================================================
+   Goal: Every important number/claim can show its provenance.
+
+A) Data model additions
+
+1. Add table: company_sources
+   Fields:
+
+* id (uuid)
+* company_id (fk)
+* kind (enum: "pdf" | "web" | "manual")
+* title (text)
+* url (text nullable for web)
+* doc_id (text nullable)           // internal doc identifier
+* page (int nullable)
+* table_id (text nullable)
+* row_ref (text nullable)
+* cell_ref (text nullable)
+* snippet (text nullable)          // short excerpt
+* created_at
+
+2. Extend CKB facts/financials structures to support citations:
+   For any extracted metric/claim, store:
+
+* value
+* unit
+* period
+* source_ids: string[] (FKs into company_sources)
+* confidence: "high|medium|low"
+
+B) PDF citations
+
+1. Update the PDF extraction pipeline to emit **source anchors**:
+
+* When extracting a table cell or row, attach:
+
+  * page number
+  * table index or inferred table_id
+  * row label and column label when possible
+* Insert corresponding rows into company_sources.
+* Return source_ids along with extracted metrics.
+
+If the current extractor cannot reliably locate table/cell coordinates, implement a minimal version:
+
+* page number + snippet + table ordinal (“table_3”) is acceptable.
+* mark confidence as medium/low if anchor granularity is weak.
+
+C) Web citations
+
+1. In Market Agent web research, store web sources into company_sources:
+
+* title, url, snippet, created_at
+* Return source_ids in the agent output.
+
+D) API and UI
+
+1. Chat response must include:
+   {
+   "answer_markdown": string,
+   "citations": [
+   { "source_id": "...", "label": "PDF p12 Table 3" | "Web: Crunchbase ..." }
+   ],
+   "highlighted_claims": [
+   { "text": "Revenue grew 32% YoY", "source_ids": ["..."], "confidence": "high" }
+   ]
+   }
+
+2. UI changes in Copilot:
+
+* Add a “Show sources” toggle.
+* Render citations inline like [1], [2] in markdown.
+* Show a right-side drawer or modal listing citations with:
+
+  * kind, title, page/table, snippet, and link (for web)
+* Clicking [1] scrolls/open citation item.
+
+========================================================
+2) DATA HEALTH SCORE (TRUST LAYER)
+==================================
+
+Goal: show “Data Health: 0–100” based on completeness + consistency.
+
+A) Add endpoint: GET /companies/:companyId/data-health
+Return:
+{
+"score": number,
+"grade": "A|B|C|D|F",
+"issues": [
+{ "severity": "high|medium|low", "code": "MISSING_PNL_PERIODS", "message": "...", "suggested_fix": "..." }
+],
+"coverage": {
+"pnl_periods": number,
+"cash_periods": number,
+"balance_sheet_present": boolean,
+"unit_econ_present": boolean,
+"currency_consistent": boolean
+}
+}
+
+B) Scoring rules (implement deterministic scoring):
+Start at 100, subtract penalties:
+
+* Missing last 6 months or last 4 quarters of revenue: -25
+* Missing COGS or gross margin: -10
+* Missing opex breakdown: -10
+* Missing cash balance: -10
+* No burn/runway computable: -10
+* Currency mismatch or ambiguous INR crore/lakh not resolved: -10
+* Period mismatch (FY vs calendar) unresolved: -5
+* Large extraction anomalies (e.g. decimals/commas) detected: -10
+  Clamp 0–100.
+
+C) UI:
+
+* Show “Data Health” widget on Copilot page and Company Overview page.
+* “Fix it” button opens a modal listing issues + recommended uploads/actions.
+
+========================================================
+3) OPERATING CADENCE + ALERTS / REMINDERS (STICKINESS)
+======================================================
+
+Goal: Copilot becomes a weekly/monthly operating system.
+
+A) DB tables
+
+1. company_workstreams
+
+* id, company_id
+* name (e.g. “Weekly Metrics Review”)
+* cadence (enum: weekly|monthly|quarterly)
+* enabled (bool)
+* config_json (json) // KPIs to track, thresholds, owners
+* created_at, updated_at
+
+2. company_alerts
+
+* id, company_id
+* type (enum: "runway_drop" | "cac_spike" | "revenue_miss" | "churn_spike" | "custom")
+* severity (high|medium|low)
+* message (text)
+* rule_json (json) // threshold definition
+* triggered_at
+* resolved_at nullable
+* status (enum: open|resolved|snoozed)
+
+B) Rules engine (minimal viable)
+Implement a server-side evaluator that runs:
+
+* on new data ingestion OR on demand endpoint call.
+  Rules:
+* Runway below X months (default 9) → runway_drop
+* CAC up >15% MoM (if available) → cac_spike
+* Revenue down >10% vs previous period (if available) → revenue_miss
+  If metrics not available, do not trigger; record “insufficient data” in Data Health instead.
+
+C) Endpoints
+
+* GET /companies/:companyId/workstreams
+* POST /companies/:companyId/workstreams (create default templates)
+* PATCH /companies/:companyId/workstreams/:id (enable/disable/config)
+* GET /companies/:companyId/alerts?status=open
+* POST /companies/:companyId/alerts/evaluate (runs evaluator now)
+
+D) UI
+
+* New page: client/src/pages/alerts.tsx already exists → enhance it to show open alerts with severity.
+* In Copilot: show “Operating Cadence” section with toggles:
+
+  * Weekly Metrics Review
+  * Monthly Board Memo
+  * Quarterly Strategy Refresh
+* “Run Weekly Review Now” button:
+
+  * calls the chat endpoint with a special mode “weekly_review”
+  * outputs a structured review: KPIs, deltas, issues, decisions suggested.
+
+========================================================
+4) DRIVER-BASED FORECASTING (SCAFFOLDING)
+=========================================
+
+Goal: build a simple, extensible forecasting framework (not a full FP&A product yet).
+
+A) DB
+Add company_driver_models
+
+* id, company_id
+* model_name (text)
+* drivers_json (json)
+* assumptions_json (json)
+* outputs_json (json)
+* created_at, updated_at
+
+B) Driver schema (start simple)
+Support 3 revenue model templates:
+
+1. SaaS:
+
+   * new_customers_per_month
+   * arpa
+   * churn_pct
+2. Marketplace/GMV take-rate:
+
+   * gmv
+   * take_rate
+   * contribution_margin_pct
+3. Services:
+
+   * billable_headcount
+   * utilization_pct
+   * blended_rate
+
+C) Backend service
+Implement:
+
+* POST /companies/:companyId/driver-models (create/update)
+* POST /companies/:companyId/driver-models/:id/run (compute outputs)
+  Outputs:
+* 12-month forecast: revenue, gross profit (if margin known), opex (if provided), cash runway (if cash known)
+  Use conservative defaults if missing but clearly label them as assumptions and store in assumptions_json.
+
+D) UI
+
+* Enhance scenarios.tsx (or create a small section in scenarios page):
+
+  * Choose template (SaaS/Marketplace/Services)
+  * Enter driver inputs
+  * Run forecast
+  * Show a simple table (Month 1..12) with revenue + cash (if available)
+  * Show assumptions and confidence.
+
+========================================================
+5) ROUTER PROMPT UPDATES (COPILOT BEHAVIOR)
+===========================================
+
+Update the router and agents so they:
+
+* Always emit citations for key numbers and factual web claims.
+* Include Data Health score summary when relevant.
+* Provide “Next Actions” buttons (3 items) tailored to Data Health issues.
+
+Add special modes:
+
+* weekly_review: structured KPI review + issues + decisions to consider
+* monthly_board_memo: returns memo markdown + cites sources
+* quarterly_strategy_refresh: re-evaluates ICP, competitors, pricing, and priorities
+
+========================================================
+6) QA / TEST PLAN (DO NOT SHIP WITHOUT THIS)
+============================================
+
+1. Run migrations successfully in dev and production.
+2. Upload a PDF with financial tables:
+
+   * verify extracted revenue shows citations with correct page/table references.
+3. Toggle “Show sources” in Copilot UI and confirm modal/drawer works.
+4. Verify Data Health endpoint returns a score and issues.
+5. Create workstreams, run evaluate alerts:
+
+   * if runway <9 months, see open runway alert.
+6. Create a driver model, run forecast, ensure outputs persist.
+7. No console errors, TypeScript types pass, lint clean.
+
+========================================================
+7) FINAL DELIVERABLES
+=====================
+
+* Working citations system (pdf + web)
+* Data Health score widget + endpoint
+* Workstreams + Alerts evaluator + UI
+* Driver-based forecast scaffold (templates + run + UI)
+* Updated docs/copilot_v2_prompt_v2_plan.md with schema + endpoints + screenshots notes
+
+If any part of PDF extraction cannot reliably anchor citations, implement the best-effort fallback (page + snippet + table ordinal) and clearly mark confidence as medium/low. Do not block shipping on perfect table coordinates.

@@ -1,0 +1,208 @@
+Below is a **compiled Replit prompt** that captures the expanded feature set for your admin dashboard, along with architecture recommendations and illustrative code.  You can paste this prompt into Replit’s AI/Dev environment to kick‑start development.
+
+````
+# Project: Enhanced Admin Dashboard for Fund Flow / Predixen
+
+## Overview
+We need to build a robust admin dashboard that empowers super‑admins to manage users, companies, subscriptions, templates, alerts and more. The dashboard should offer granular role/permission controls, rich analytics and a polished user experience. Additionally, we want new features like bulk actions, impersonation, global notifications, report exports and a customizable UI.
+
+## Feature Requirements
+
+1. **User & Role Management**
+   - List all users with avatars, status badges, roles and last login.
+   - Invite new users; bulk suspend/reactivate or change roles.
+   - Role & permission matrix to allow fine‑grained access control.
+   - Impersonation mode for admins to view the app as a specific user (with audit logging).
+
+2. **Company Directory**
+   - Show all companies/tenants with summary metrics (runway, growth index, burn multiple).
+   - Edit company information (name, stage, industry, description, employees).
+   - Link to each company’s simulations, decisions and alerts.
+
+3. **Subscription & Billing**
+   - Integrate Stripe (or Paddle) to display current plan, renewal dates, seat counts.
+   - Upgrade/downgrade plans; handle payment failures; issue credits/refunds.
+   - Export invoice history for accounting.
+
+4. **Template & Scenario Management**
+   - Central library of simulation templates: create, duplicate, edit, retire and categorize.
+   - Show template usage statistics.
+
+5. **Notifications & Alerts**
+   - Global notifications center combining anomalies, threshold breaches, failed simulations and payment issues.
+   - Filter alerts by severity, company, date.
+   - Configurable alert thresholds and defaults per plan.
+
+6. **Login History & Audit Trail**
+   - Log every login with IP, device, browser, timestamp and success/failure.
+   - Searchable audit trail of admin actions with filters by user, action type and date.
+
+7. **Reports & Exports**
+   - Generate CSV/Excel reports for user lists, login history, subscription details, or aggregated metrics.
+   - Schedule periodic exports via email.
+
+8. **Support & Ticket Integration**
+   - Pull in tickets from a helpdesk system (Zendesk, Intercom) and associate them with users/companies.
+
+9. **Customization & Preferences**
+   - Customizable dashboard layout (add/remove KPI cards, reorder).
+   - Theme toggle (dark/light) with saved preference.
+   - Configure default templates and alert thresholds by subscription tier.
+
+## Architecture Recommendations
+
+### Tech Stack
+- **Frontend:** Next.js (React) with TypeScript, Tailwind CSS, Radix UI or Headless UI for accessible components. Zustand for state management.
+- **API Layer:** tRPC or RESTful routes via Next.js API or a separate FastAPI/Express service, using JWT‑based auth with NextAuth.js.
+- **Database:** PostgreSQL with Prisma ORM. Tables: `User`, `Company`, `Subscription`, `Template`, `LoginHistory`, `AuditLog`, `Notification`, etc.
+- **Payments:** Stripe with product/price IDs configured per plan. Webhook endpoint at `/api/webhooks/stripe`.
+- **Auth & RBAC:** Use NextAuth.js sessions; extend session object with `role` and `permissions` fields; implement middleware for route protection.
+- **Hosting:** Continue using Replit’s deployment platform; store secrets via Replit secrets.
+
+### Example Data Models (Prisma)
+```prisma
+model Notification {
+  id        String   @id @default(cuid())
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  type      NotificationType
+  severity  NotificationSeverity
+  message   String
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false)
+}
+
+enum NotificationType {
+  LOGIN_FAILURE
+  PAYMENT_FAILURE
+  ALERT_THRESHOLD
+  DATA_IMPORT_ERROR
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+````
+
+*(Extend existing `User`, `Company`, `Subscription` models from the previous prompt. Add `LoginHistory` and `AuditLog` with relevant fields.)*
+
+### API Endpoints Outline
+
+* `GET /api/admin/users` – list users; accepts filters & search.
+* `POST /api/admin/users` – invite user with role.
+* `PATCH /api/admin/users/:id` – change role/status, impersonate.
+* `GET /api/admin/companies` – list companies with metrics.
+* `GET /api/admin/subscriptions` – list subscriptions and payment info.
+* `POST /api/admin/templates` – create a new template.
+* `GET /api/admin/notifications` – fetch global notifications.
+* `GET /api/admin/login-history` – fetch login events.
+* `GET /api/admin/audit-logs` – fetch audit trail.
+* `GET /api/admin/reports` – generate/download CSVs.
+* `POST /api/admin/settings` – update customizable settings (theme, thresholds).
+
+All endpoints should validate the admin’s role and permissions.
+
+### Sample Code Snippet: Notification API Route
+
+```ts
+// pages/api/admin/notifications/index.ts
+import { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
+import prisma from '../../../../lib/prisma';
+import { isAdmin } from '../../../../lib/auth';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res);
+  if (!session || !isAdmin(session.user)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  if (req.method === 'GET') {
+    const { severity, unread } = req.query;
+    const where: any = {};
+    if (severity) where.severity = severity;
+    if (unread) where.read = unread === 'true';
+    const notifications = await prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return res.json(notifications);
+  }
+  res.setHeader('Allow', ['GET']);
+  return res.status(405).end(`Method ${req.method} Not Allowed`);
+}
+```
+
+### Front‑End Layout & UX Guidelines
+
+1. **Dashboard Home:**
+
+   * Display KPI cards (total users, active companies, MRR, churn).
+   * Activity trends chart (e.g., line chart of logins over 30 days).
+   * Real‑time feed listing recent logins, plan changes, alerts.
+
+2. **Users Management Page:**
+
+   * Data table with search bar, filters by role/company.
+   * Bulk selection for mass actions.
+   * Inline modals for editing roles/suspension.
+   * Button to impersonate a user.
+
+3. **Companies Page:**
+
+   * Grid/list with company name, stage, industry, key KPIs.
+   * Actions: edit company, view simulations, view alerts.
+
+4. **Billing Page:**
+
+   * List all active subscriptions with plan, seats, renewal.
+   * Buttons to change plan, cancel or resume.
+
+5. **Templates/Scenarios Page:**
+
+   * Library of simulation templates with tags (growth, cost‑cutting).
+   * Usage counts to show popularity.
+   * Edit/duplicate/retire actions.
+
+6. **Notifications Center:**
+
+   * Badge in header indicating count of unread notifications.
+   * Panel or page showing a list with filters (severity/type/date).
+   * Mark all as read functionality.
+
+7. **Reports & Exports Page:**
+
+   * Form to choose report type and date range.
+   * Generate CSV/Excel and provide download link.
+
+8. **UI/UX Enhancements:**
+
+   * Responsive design with collapsible sidebar on small screens.
+   * Global search bar to find users, companies, invoices quickly.
+   * Customizable dashboard sections (drag‑and‑drop or toggle visibility).
+   * Accessible design: proper color contrast, keyboard navigation, ARIA labels.
+   * Skeleton loaders during data fetches and optimistic UI on actions.
+   * Theme toggle (dark/light) with saved preference.
+
+## Implementation Steps
+
+1. **Fork your existing Replit project** and create a new branch for admin features.
+2. **Update Prisma schema** with new models (`Notification`, `LoginHistory`, `AuditLog`) and run migrations.
+3. **Configure Stripe** with plans/prices; add webhook handlers to update `Subscription` statuses.
+4. **Implement API endpoints** as described above; enforce RBAC checks on every route.
+5. **Create admin pages and components** under `pages/admin` in Next.js, following the layout guidelines.
+6. **Add state management** for notifications and customization settings using Zustand/Redux.
+7. **Integrate chart library** (e.g., Chart.js) for trend visualizations.
+8. **Test thoroughly** with seeded data to verify user flows (invite, suspend, change plan, impersonate).
+9. **Deploy** to Replit, set environment variables (database URL, Stripe keys) using Replit secrets.
+
+---
+
+This compiled prompt should give Replit’s AI clear instructions on the expanded feature set, the underlying architecture and example code, enabling it to assist in scaffolding your enhanced admin dashboard.
+
+```
+```

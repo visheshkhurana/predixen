@@ -1,0 +1,104 @@
+Below is a comprehensive Replit prompt you can use to guide a developer (or AI code assistant) in implementing the suggested UX/UI improvements for the results screen and adding an AI assistant for decision discussions.
+
+---
+
+### 🛠 Replit Prompt for Results Screen Redesign with AI Assistant
+
+> **Project Background**
+> We are enhancing the results screen of our startup financial simulator, **RunwayAI**. The current UI shows large cumulative charts for revenue and cash balance, which users find difficult to interpret. We want a simpler, more informative results page that offers detailed analyses (month‑by‑month breakdowns, scenario comparisons) and integrates an AI assistant for interactive discussion and brainstorming.
+>
+> **Goals**
+>
+> 1. **Simplify the UI** by summarizing key metrics and providing month‑by‑month tables.
+> 2. **Enable multiple scenario comparisons** in a clear, side‑by‑side format.
+> 3. **Integrate an AI assistant** that can explain results, suggest strategies, and answer user questions.
+> 4. Maintain accessibility and responsiveness across devices.
+
+---
+
+#### 1. Redesign the Results Page Layout
+
+* **Summary Cards**:
+  Create a section at the top of the results page with cards summarizing key metrics such as runway length (in months), cash balance at the end of simulation, peak burn rate, and growth rate. Use icons or simple graphics to make each card visually distinct.
+
+* **Month‑By‑Month Table**:
+  Build a responsive table component where each row corresponds to a month (e.g., Month 1 to Month 24) and columns show metrics like revenue, burn, cash balance, and runway. Include P50 values by default. Provide a toggle or dropdown to switch between P10, P50, and P90 percentiles.
+
+* **Scenario Comparison Panel**:
+  Allow users to select up to five scenarios (e.g., Baseline, Conservative Cut, Moderate Growth, Aggressive Growth, Cost‑Cutting). Display the month‑by‑month table side‑by‑side for each selected scenario or allow switching via tabs. Highlight differences between scenarios—for instance, use conditional formatting to emphasize when a scenario yields a longer runway or higher cash burn.
+
+* **Interactive Charts**:
+  Replace the static area charts with interactive ones using a library like Chart.js or Recharts. Key features should include:
+
+  * Tooltips showing exact values for each month when hovered.
+  * Ability to filter which metric is displayed (revenue, burn, cash balance, etc.).
+  * Syncing with the table: hovering over a month on the chart should highlight the corresponding row in the table.
+
+* **Annotations and Markers**:
+  Annotate important events (e.g., fundraising round, cost‑cut implementation) directly on the chart with labeled markers.
+
+* **Accessibility and Responsiveness**:
+  Ensure all components (cards, tables, charts) are keyboard-navigable and accessible via screen readers. Provide dark/light mode toggles with high contrast ratios.
+
+#### 2. Backend API Enhancements
+
+* **Simulation Endpoint**:
+  Adapt or create an endpoint (e.g., `POST /simulate`) that:
+
+  1. Accepts definitions for multiple scenarios.
+  2. Runs Monte Carlo simulations to generate P10/P50/P90 metrics for each scenario across the specified time horizon.
+  3. Returns structured data for the month‑by‑month table and chart (e.g., arrays of values per metric per percentile).
+
+* **Scenario Definitions**:
+  Support a payload that can define or select scenarios (Baseline, Conservative Cut, Moderate Growth, Aggressive Growth, Cost‑Cutting). The backend should validate these inputs and use appropriate parameter distributions.
+
+* **AI Assistant Backend**:
+  (If you plan to integrate a language model) Create an endpoint (e.g., `POST /assistant`) that:
+
+  * Takes user questions or commands.
+  * Accesses simulation results and metadata.
+  * Uses an AI model (e.g., OpenAI’s ChatGPT API) to generate responses that reference simulation metrics and scenario differences.
+  * Returns the assistant’s answer to the frontend.
+
+* **Caching and Performance**:
+  Since simulation can be computationally heavy, implement caching strategies or background job queues (e.g., using Redis or Celery for Python) to handle repeated simulation requests efficiently.
+
+#### 3. Frontend – AI Assistant Integration
+
+* **Chat Interface**:
+
+  * Add a collapsible chat sidebar or floating button labeled “Ask the Assistant.”
+  * When expanded, show a chat box where users can type questions such as “Why does the runway drop in month 8?” or “What if I cut burn by 10%?”
+  * Use websockets or polling to handle asynchronous responses from the backend AI endpoint.
+  * Display responses in a conversational format, with the assistant’s messages clearly distinguished from the user’s.
+
+* **Contextual Prompts**:
+
+  * Provide pre‑written buttons or suggestions (e.g., “Summarize this scenario,” “Compare baseline vs. moderate growth,” “Suggest ways to extend runway”) that auto‑fill common questions into the chat.
+  * Make the assistant context-aware—when the user has selected multiple scenarios, the assistant should mention those scenario names in its responses.
+
+* **Data Access**:
+
+  * Ensure that the assistant has access to the current simulation data (perhaps stored in state or in the backend session) so it can refer to specific numbers in its answers.
+
+#### 4. Implementation Notes
+
+* **Technology Stack**:
+
+  * Backend: Node.js with Express or Python with Flask/FastAPI for REST endpoints; integrate with your existing database/model layer.
+  * Frontend: React with functional components and hooks; use a charting library like Recharts or Chart.js; consider Context API or Redux for state management if multiple components need access to simulation data.
+
+* **Testing**:
+
+  * Write unit tests for the simulation algorithm to verify correct percentile calculations.
+  * Test UI components for responsiveness and accessibility (keyboard navigation, ARIA labels).
+  * If using AI, implement guardrails to avoid hallucinations and ensure accurate referencing of numerical outputs.
+
+* **Documentation**:
+
+  * Document how to add new scenarios or modify existing ones.
+  * Provide instructions for deploying and configuring the AI assistant (including necessary API keys).
+
+---
+
+By following this detailed prompt, a developer or code‑generating system on Replit should be able to refactor the results page into a more user‑friendly interface that offers detailed month‑by‑month analyses, supports multi‑scenario comparisons, and integrates an AI assistant for interactive decision‑making and brainstorming.

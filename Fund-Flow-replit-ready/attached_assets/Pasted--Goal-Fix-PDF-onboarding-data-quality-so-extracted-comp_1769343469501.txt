@@ -1,0 +1,105 @@
+**Goal:** Fix PDF onboarding + data quality so extracted company metrics are visible, persisted as business context, validated by an AI “Data Verification Copilot,” and used reliably in Step 2 (strategy + simulations).
+
+### 1) PDF Extraction → Show in UI (immediately)
+
+* When a user uploads a PDF, extract **all available company + financial + operating metrics** and display them in the UI right away (no silent defaults).
+* Show:
+
+  * **Raw extracted value**
+  * **Source evidence** (page number + snippet/table row reference)
+  * **Confidence score**
+  * **Normalized value** (after unit/sign conversions)
+
+### 2) Persist as Company “Business Context” (for Copilot + Step 2)
+
+* Save the extracted dataset as structured **Company Context** tied to the company/workspace:
+
+  * Company profile: name, industry, stage, geography, business model, revenue model, key products
+  * Core metrics: monthly revenue, revenue growth (MoM), gross margin, churn, cash balance, payroll, opex, other costs, net burn, runway
+  * Customer metrics: top customer concentration, top 5 concentration, number of customers (if available)
+  * Any assumptions the system inferred (with confidence + evidence)
+* This context must be retrievable by the Copilot for Step 2 to discuss strategy and debate options with the user.
+
+### 3) Add “Data Verification Copilot” (conversational AI agent)
+
+Add a conversational AI agent on the verification screen that:
+
+* Reviews extracted metrics and flags **anomalies, missing fields, and contradictions**.
+* Examples of anomalies to detect:
+
+  * Payroll = 30,000 but headcount / salary ranges imply it should be materially different
+  * Other costs = 5,000 but opex breakdown suggests mismatch
+  * Revenue growth shows 0 while revenue trend suggests change
+  * Net burn is negative (e.g., -$1.2M) but the company is profitable / cash flow positive (sign convention may be inverted)
+  * Runway / top-5 concentration / churn show **N/A or 0** because extraction failed or defaults were applied
+* The agent should behave like a **finance consultant**:
+
+  * Ask the user the minimum set of clarifying questions needed to fix values (units, time period, currency, revenue recognition, one-time items)
+  * Propose corrected values **with reasoning + evidence**
+  * Let the user accept/edit values inline
+  * Require confirmation on any low-confidence corrections
+
+### 4) Strong Rules: No “0” or “N/A” by Default
+
+* Do **not** default to 0 or N/A when the metric is missing.
+* Instead:
+
+  * Mark as **Missing**
+  * Show **why** it’s missing (no evidence found / parsing uncertain)
+  * Provide a suggested way to fill it (ask user, derive from other fields, or request a document section)
+
+### 5) Correct Financial Sign + Unit Normalization
+
+* Ensure consistent normalization:
+
+  * Currency handling (USD/AED/INR) + exchange if needed (store both raw + normalized)
+  * Monthly vs quarterly vs annual conversion with explicit period labels
+  * Burn must be consistent: if profitable, “net burn” should become **net profit / net cash generation** (or clearly label as negative burn = profit)
+* Run sanity checks:
+
+  * If runway is computed from cash balance / burn, it must change when burn changes
+  * If burn is 0 or missing, runway must NOT become a fixed constant (e.g., always 36 months)
+
+### 6) Fix Simulation Outputs + Explanations
+
+* The simulation narrative currently states identical numbers (e.g., runway P10=P50=P90 all 36 months). That is likely wrong.
+* Update simulation text generation to:
+
+  * Use actual distribution outputs (P10, P50, P90) from computed data
+  * If distribution is degenerate (all same), explain why (e.g., no variance inputs) and prompt user to add drivers
+* Ensure graphs are readable and show actual numeric tooltips/labels.
+
+### 7) Scenario Builder Must Reflect Verified Metrics
+
+* In scenario builder, “monthly revenue, cash balance, net burn, churn rate” should not show 0 if verified values exist.
+* After verification, propagate values to:
+
+  * Dashboard KPIs
+  * Scenario baseline inputs
+  * Truth Scan module
+  * Simulation engine inputs
+
+### 8) Deliverables
+
+Implement:
+
+* A “Verification” step UI with:
+
+  * Metric table (raw, normalized, confidence, evidence, status)
+  * Inline edit + accept buttons
+  * Copilot chat panel for guided verification
+* Backend storage for:
+
+  * raw extraction
+  * normalized dataset
+  * final user-verified dataset
+  * audit trail of edits (who/when/why)
+* A validation/anomaly engine with clear flags and user prompts.
+
+**Acceptance criteria:**
+
+* Upload PDF → extracted data is visible and persisted
+* Missing values do not become 0/N/A silently
+* Copilot flags anomalies and helps user correct them
+* Scenario builder + simulations use verified values
+* Simulation narrative and charts reflect real computed distributions (not constant 36 months unless genuinely true)

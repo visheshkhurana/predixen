@@ -1,0 +1,237 @@
+You are my senior full-stack engineer. Fix the “Data Input → Financials” screen so that when a user uploads a PDF or Excel, the financial metric inputs auto-populate from the extracted values.
+
+CONTEXT
+
+* Screen has buttons: “PDF”, “Excel”, “Company”, “Financials”, “Goals”
+* Under “Financial Metrics” there are inputs:
+
+  * cashOnHand (Cash on Hand $)
+  * monthlyRevenue (Monthly Revenue $)
+  * totalMonthlyExpenses (Total Monthly Expenses $)
+  * monthlyGrowthRate (Monthly Growth Rate %)
+* Optional “Expense Breakdown” inputs:
+
+  * payroll, marketing, operating
+* “Calculated Metrics” display:
+
+  * netBurnRate ($/mo)
+  * runwayMonths (months)
+* There is “Save All Data” button
+
+GOAL
+
+1. Uploading a file (PDF or XLS/XLSX) should:
+
+   * Parse and extract financial values
+   * Map extracted values into the company dataset (baseline metrics)
+   * Auto-fill the Financials form inputs with those values
+   * Immediately recompute calculated metrics
+2. Provide clear UI feedback: “Parsing…”, success toast, and “Couldn’t find X—please fill manually” warnings.
+3. Persist both:
+
+   * The extracted “raw” output (for audit / reprocessing)
+   * The normalized baseline metrics that drive simulations
+
+IMPLEMENTATION REQUIREMENTS
+A) Frontend changes (React + TS)
+
+1. Replace/extend the existing PDF/Excel buttons to open a file picker.
+
+   * Accept:
+
+     * PDF: application/pdf
+     * Excel: .xls, .xlsx
+   * Show upload progress state + disabled buttons during processing.
+
+2. Add a unified handler:
+
+   * onFileSelected(file, fileType)
+   * POST file to backend endpoint:
+
+     * POST /api/ingest/financials (multipart/form-data)
+       fields: file, fileType ("pdf" | "excel"), companyId
+   * While processing:
+
+     * show spinner “Extracting metrics…”
+   * On success:
+
+     * response returns:
+       {
+       extracted: { ...rawParsed },        // raw extraction + confidence per field
+       normalized: {
+       cashOnHand,
+       monthlyRevenue,
+       totalMonthlyExpenses,
+       monthlyGrowthRate,
+       expenseBreakdown: { payroll, marketing, operating },
+       currency,
+       asOfDate
+       },
+       missingFields: string[],
+       confidence: { fieldName: 0..1 }
+       }
+     * Auto-populate form inputs from normalized values:
+
+       * If a value is present and confidence >= 0.60, set it
+       * If confidence < 0.60, set it only if input is empty AND show a “low confidence” badge next to the field
+     * If missingFields not empty:
+
+       * show inline hints under those fields: “Not detected from file”
+
+3. State management:
+
+   * Add/extend Zustand store for financial baseline:
+
+     * setFinancialBaseline(normalized)
+     * setExtractionAudit(extracted, confidence, fileMeta)
+     * recomputeCalculatedMetrics() automatically when baseline changes
+   * Ensure UI inputs are controlled and reflect store values.
+   * Ensure “Calculated Metrics” always recompute from current store values.
+
+4. “Save All Data” behavior:
+
+   * POST /api/company/{companyId}/financials/save
+   * Save normalized baseline + keep a link to the audit record (upload id)
+
+B) Backend changes (FastAPI)
+
+1. Create ingestion endpoints:
+
+   * POST /api/ingest/financials
+
+     * multipart form upload
+     * returns extracted + normalized + missingFields + confidence
+
+2. Parsing pipeline:
+
+   * If excel:
+
+     * Use openpyxl or pandas to read sheets
+     * Heuristics:
+
+       * Identify likely financial sheet(s) by name: "P&L", "Profit", "Income", "Financials", "Summary"
+       * Locate key labels: cash/bank, revenue, sales, expenses, opex, payroll, marketing, operating, growth rate
+       * Support values either in a single “summary” row OR monthly columns
+       * If monthly columns exist, compute:
+
+         * monthlyRevenue = most recent month revenue (or average last 3 months if noisy)
+         * totalMonthlyExpenses = most recent month total expenses (or avg last 3)
+         * monthlyGrowthRate = MoM % change in revenue between last two months (fallback: 0 if not enough)
+   * If pdf:
+
+     * Use a two-stage approach:
+
+       1. Text extraction: pdfplumber or pypdf to get text + tables
+       2. LLM extraction with OpenAI for robust mapping
+     * Send ONLY extracted text/tables to OpenAI (never the whole file if not needed)
+     * Use function/tool-style structured output (JSON schema) to avoid hallucinations
+     * Ask the model to return:
+
+       * candidate values + where found (quote snippet) + confidence per field
+
+3. Normalization + validation:
+
+   * Normalize all money numbers:
+
+     * handle commas, parentheses, currency symbols
+     * allow k/m/b suffix
+   * Convert to numeric floats (store as integers for cents if you already do that)
+   * Enforce non-negative:
+
+     * cashOnHand >= 0
+     * revenue >= 0
+     * expenses >= 0
+   * growth rate can be negative (-100..+500), clamp or warn if absurd.
+   * Derive:
+
+     * netBurnRate = max(0, totalMonthlyExpenses - monthlyRevenue)
+     * runwayMonths = cashOnHand / netBurnRate if netBurnRate > 0 else Infinity (show as “∞”)
+   * Return missingFields list for any field not confidently detected.
+
+4. Database/storage:
+
+   * Add tables/models:
+
+     * uploads (id, company_id, file_name, file_type, storage_path, created_at)
+     * extraction_audit (upload_id, extracted_json, confidence_json, model_version, created_at)
+     * company_financial_baseline (company_id, cash_on_hand, monthly_revenue, total_monthly_expenses, monthly_growth_rate, payroll, marketing, operating, currency, as_of_date, updated_at, source_upload_id)
+   * Store file in local storage or S3-compatible bucket (depending on current setup). At minimum, persist to server disk with safe name.
+
+C) OpenAI integration (backend)
+
+1. Add OPENAI_API_KEY and use the official OpenAI SDK.
+2. Implement “extract_financials_from_pdf_text(text)”:
+
+   * Provide a strict JSON schema:
+     {
+     cashOnHand: { value:number|null, confidence:number, evidence:string|null },
+     monthlyRevenue: { value:number|null, confidence:number, evidence:string|null },
+     totalMonthlyExpenses: { value:number|null, confidence:number, evidence:string|null },
+     monthlyGrowthRate: { value:number|null, confidence:number, evidence:string|null },
+     payroll: { value:number|null, confidence:number, evidence:string|null },
+     marketing: { value:number|null, confidence:number, evidence:string|null },
+     operating: { value:number|null, confidence:number, evidence:string|null },
+     currency: { value:string|null, confidence:number, evidence:string|null },
+     asOfDate: { value:string|null, confidence:number, evidence:string|null }
+     }
+   * Instruct model:
+
+     * If not found, return null with low confidence
+     * Never invent numbers
+     * Provide short evidence snippet (<= 160 chars)
+
+D) UX rules
+
+* If user uploads file, and parsing succeeds:
+
+  * Auto-fill fields
+  * Show “Imported from PDF/Excel” pill near the Financials header
+  * For each field:
+
+    * If confidence < 0.60 show “Low confidence” tooltip + do not overwrite if user already typed value
+* If parsing fails:
+
+  * Show error toast with reason
+  * Keep manual inputs usable
+* Add a small “View extraction” drawer/modal:
+
+  * Show extracted evidence snippets and confidence per field
+  * Allow “Apply suggested values” toggle if you chose not to auto-apply low-confidence fields
+
+E) Testing checklist
+
+1. Upload sample Excel:
+
+   * values in a “Summary” sheet
+   * values in a monthly table (last column = most recent month)
+2. Upload sample PDF:
+
+   * simple text numbers
+   * table format
+3. Confirm:
+
+   * inputs auto-populate
+   * calculated metrics update instantly
+   * Save persists baseline + audit record
+   * reload screen shows saved baseline without needing re-upload
+
+DELIVERABLES
+
+* Frontend:
+
+  * Updated Financials screen component
+  * Zustand store updates
+  * API client function for /api/ingest/financials
+  * Extraction drawer/modal component
+* Backend:
+
+  * FastAPI endpoints + services
+  * PDF parsing util + OpenAI structured extraction
+  * Excel parsing util
+  * DB migrations (Alembic)
+  * Unit tests for normalization + parsing heuristics
+
+IMPORTANT
+
+* Do not break existing simulation flows. Baseline metrics should be the single source of truth that simulations read from.
+* Keep code clean, typed, and production-safe (timeouts, file size limits, and clear errors).

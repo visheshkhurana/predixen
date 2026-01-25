@@ -1,0 +1,120 @@
+Below is a comprehensive Replit project prompt that incorporates the enhancements we discussed. It’s structured to guide a developer through implementing a more sophisticated simulation engine on Replit, addressing the limitations observed in your current tool (e.g., identical outcomes for Baseline and Conservative Cut).
+
+---
+
+## 🛠️ Replit Project Prompt: Advanced Startup Simulation Engine
+
+### 📌 Context
+
+Your existing simulator produces identical outputs for different scenarios (Baseline and Conservative Cut both yield a 36‑month runway with 100 % survival at 18 months). This suggests the model isn’t sensitive to driver variations or uncertainty. To become a decision‑grade tool, the simulator must:
+
+* Account for risk using Monte Carlo methods (model a range of outcomes and probabilities).
+* Incorporate design principles for scenario engines (separation of scoring and estimation, standardized forecasting, parameterized inputs).
+* Differentiate scenarios through realistic driver overrides, correlations and macro regimes.
+* Provide actionable insights (driver sensitivities, scenario rankings).
+
+### 🎯 Objectives
+
+Build a modular Python application on Replit that:
+
+1. **Models the startup’s financial state on a monthly basis**: cash, revenue, COGS, opex, headcount, ARR/MRR, CAC, churn, DSO, debt, etc.
+2. **Runs advanced Monte Carlo simulations** with appropriate distributions and correlations to quantify risk and uncertainty.
+3. **Implements an event‑driven scenario engine** that allows pricing changes, hiring adjustments, cost cuts, fundraising rounds and macro shocks.
+4. **Ranks scenarios** based on survival probabilities, expected growth, downside risk and dilution.
+5. **Provides dashboards** showing survival curves, cash‑projection bands, runway distributions and sensitivity analyses.
+
+### 🔧 Implementation Plan
+
+#### 1. Project Structure
+
+```
+/backend/
+  ├── models.py            # Data classes for CompanyState, Drivers, Decisions
+  ├── simulator.py         # Core simulation functions and Monte Carlo engine
+  ├── scenarios.py         # Event definitions and scenario manager
+  ├── ranker.py            # Scoring and ranking logic
+  ├── calibrator.py        # Benchmark lookup, input validation and imputation
+  └── forecasting.py       # Optional ML/time-series forecasting utilities
+/frontend/
+  ├── app.py               # Streamlit or Flask UI
+  ├── components/          # UI components: scenario builder, results viewer
+  └── assets/              # Charts, CSS (optional)
+README.md
+requirements.txt
+```
+
+#### 2. Core Simulation Logic
+
+* **State Machine**: Define a `CompanyState` class capturing monthly financial variables. Implement an update function `next_state = evolve(current_state, drivers, decisions)` that computes the next month’s state.
+* **Driver Distributions**: For each uncertain driver (growth rate, churn, conversion, CAC, DSO, gross margin), define a probability distribution that matches its nature (Beta for rates, log‑normal for CAC, truncated normal for DSO). Use correlations so changes in one driver affect others.
+* **Macro Regimes**: Define base, downturn and breakout regimes that shift means and volatilities. During simulation, randomly assign a regime or allow the user to choose scenario‑specific regimes.
+
+#### 3. Monte Carlo Engine
+
+* Implement a `MonteCarloSimulator` class that:
+
+  * Samples correlated driver values for each month across `n` runs.
+  * Evolves the `CompanyState` month by month using the sampled drivers and scenario events.
+  * Stores P10/P50/P90 results for key metrics (runway, cash, revenue, EBITDA).
+* Include ability to run alternative distribution assumptions (uniform vs triangular vs normal) for stress‑testing, as suggested in Monte Carlo best practices.
+
+#### 4. Scenario/Event System
+
+* Represent scenarios as lists of `Event` objects with attributes:
+
+  * `event_type`: pricing_change, hire_plan, cost_cut, fundraising_round, macro_shock, etc.
+  * `start_month`, `end_month`
+  * `magnitude` or parameters (e.g., +10 % price, -20 % hiring).
+  * Optional `decay` to model short‑lived effects.
+* Provide templates (Baseline, Conservative Cut, Moderate Growth Push, etc.) and let users create custom scenarios via the UI.
+
+#### 5. Decision Ranking
+
+* Define an objective function to score scenarios:
+
+  * `P_survival(t)` = probability of positive cash balance at month `t`.
+  * `E_growth` = expected ARR at target month.
+  * `DownsideRisk` = CVaR or worst‑case percentile of cash.
+  * `Dilution` = expected equity given fundraising events.
+  * `Complexity` = measure of operational difficulty.
+* Compute a weighted sum to rank scenarios and present the top options.
+
+#### 6. Sensitivity Analysis
+
+* After simulation, run a variance‑based sensitivity analysis or use SHAP values on a surrogate model to identify which drivers most affect runway and valuation.
+* Output a “what‑must‑be‑true” checklist (e.g., churn < 3.5 %, CAC payback < 8 months) for achieving a given runway target.
+
+#### 7. Input Calibration & Validation
+
+* Implement a `calibrator` module that:
+
+  * Normalizes user inputs (e.g., currency, units, monthly vs annual).
+  * Imputes missing values using external benchmarks (industry averages for churn, CAC, gross margin) and flags imputed fields.
+  * Validates inputs to prevent impossible values (e.g., negative CAC, churn > 1).
+  * Attaches confidence scores to each input (high for user‑provided, medium for extracted, low for imputed).
+
+#### 8. User Interface
+
+* Use **Streamlit** for a rapid, interactive UI:
+
+  * **Scenario Builder Tab**: choose templates or build custom scenarios by adding events.
+  * **Simulation Results Tab**: display survival curves, cash‑projection bands, and runway distributions for each run.
+  * **Compare Scenarios Tab**: side‑by‑side comparisons of P10/P50/P90 metrics and decision scores.
+  * **Driver Sensitivity Tab**: show bar charts or tables of driver importance and “what‑must‑be‑true” statements.
+* Provide export options (CSV/PDF) for sharing results.
+
+#### 9. Best Practices
+
+* Follow financial modeling guidelines by keeping inputs separate from calculations and designing with outputs in mind.
+* Maintain clean code with type hints, docstrings and modular functions. Document assumptions clearly.
+* Write unit tests for the core simulation functions (state evolution, event handling, distribution sampling) to ensure correctness.
+
+### ✅ Deliverables
+
+* A working Replit project implementing the above architecture.
+* Documentation explaining how to extend the simulator (adding new drivers, events, ranking metrics).
+* Sample scenarios that demonstrate differentiation (e.g., Baseline vs Conservative Cut vs Aggressive Growth) with non‑identical outputs.
+
+---
+
+This prompt uses the observed limitations of your current tool as motivation and lays out a detailed roadmap for building a much more powerful simulator. Incorporating risk‑aware Monte Carlo methods, scenario‑analysis best practices, and rigorous sensitivity analysis should ensure the tool produces differentiated, actionable results rather than uniform projections.

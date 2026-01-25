@@ -1,0 +1,141 @@
+Below is a comprehensive Replit project brief that consolidates all the improvements we’ve discussed so far—fixing data inconsistencies, enhancing the simulation engine, and layering on advanced analytics, collaboration and integration features. This prompt is intended to guide a developer or team through building a full‑featured financial simulator on Replit.
+
+---
+
+## 🧰 Replit Project Prompt: Next‑Gen Startup Simulator
+
+### 🚀 Overview
+
+You’re tasked with transforming a simple financial simulator (which currently outputs a 36‑month runway regardless of scenario) into a robust FP&A platform. It will validate and clean input data, run advanced Monte Carlo simulations with event‑driven scenarios, and provide rich insights for founders, CFOs and investors. Beyond core forecasting, the tool should support cohort‑level analytics, machine‑learning forecasts, collaboration features and integrations with external systems.
+
+### 📌 Key Goals
+
+1. **Data Integrity & Confidence**
+   Ensure all input metrics (cash balance, net burn, revenue, COGS, headcount, etc.) are realistic and internally consistent. Flag missing or anomalous values and provide guidance on improving data confidence.
+
+2. **Advanced Simulation Engine**
+   Implement a monthly state machine with correlated Monte Carlo drivers, event‑based scenarios, sensitivity analysis, and decision ranking. Scenarios should produce distinct and meaningful outputs.
+
+3. **Deeper Financial Insight**
+   Extend the model to capture cohort‑based retention/churn, working capital timing, debt covenants, and interest expense. Provide context via industry benchmarks and clear explanations.
+
+4. **Smart Forecasting & AI**
+   Integrate time‑series forecasting to establish a baseline from historical data. Implement anomaly detection on drivers and generate natural‑language explanations of scenario results.
+
+5. **Collaboration & User Experience**
+   Allow scenario versioning, comments, interactive dashboards and real‑time adjustment of drivers. Provide intuitive visualizations and warnings for unrealistic inputs.
+
+6. **Integration & Automation**
+   Support connections to external systems (accounting, CRM, payment processors) for automatic data ingestion. Offer API endpoints and export options.
+
+7. **Governance & Monitoring**
+   Track model usage, enforce guardrails on extreme assumptions, and monitor forecast accuracy versus actuals.
+
+### 🛠️ Suggested Architecture
+
+```
+/backend/
+  models.py         # CompanyState, Drivers, Cohort definitions
+  validators.py     # Input validation and imputation functions
+  simulator.py      # Core simulation engine (state evolution + Monte Carlo)
+  scenarios.py      # Event system and scenario manager
+  ranker.py         # Decision scoring and ranking logic
+  forecasting.py    # ML/time-series models (e.g., Prophet, ARIMA)
+  analytics.py      # Cohort analysis, working-capital calculations, covenants
+  alerts.py         # Driver anomaly detection and notifications
+  integrations/
+    accounting.py   # e.g., QuickBooks/Xero connectors
+    crm.py          # e.g., Salesforce/HubSpot connectors
+  api.py            # REST API for simulation and results
+/frontend/
+  app.py            # Streamlit or FastAPI + React (as preferred)
+  pages/
+    data_input.py   # Input forms, validation feedback
+    truth_scan.py   # Display quality of growth index, data confidence
+    scenario_builder.py
+    simulation_results.py
+    compare.py
+    settings.py     # Integrations and preferences
+  components/       # UI widgets (sliders, tables, charts, modals)
+  templates/        # Scenario templates (Baseline, Conservative Cut, Aggressive)
+  assets/
+/tests/             # Unit tests for validation, simulation, ranking
+README.md
+requirements.txt
+```
+
+### 🔍 Detailed Task Breakdown
+
+#### 1. Data Validation & Imputation
+
+* Implement checks for non‑negative cash balance, realistic net burn, and revenue/expense consistency.
+* Build a confidence score algorithm based on proportion of user-provided vs. imputed fields.
+* Use benchmark data to fill gaps and adjust uncertainty; warn users when relying on imputed values.
+* Add UI alerts when anomalies (e.g., revenue with zero cash balance) are detected.
+
+#### 2. Simulation Engine Enhancements
+
+* **State Machine:** Represent monthly state variables; incorporate working‑capital dynamics (AR, AP, inventory) and debt with covenant checks.
+* **Monte Carlo:** Use distributions tailored to each driver; support correlations and macro regimes. Include stress‑test modes that run simulations under different distribution assumptions.
+* **Event System:** Enable event types: pricing change, hiring plan adjustment, cost cut, fundraising round (with success probability and dilution), macro shock, and debt issuance.
+* **Cohort Analysis:** Track customer cohorts and retention over time; allow churn and expansion rates to vary by cohort or acquisition channel.
+* **Decision Ranking:** Define multi-objective scoring (survival, growth, downside risk, dilution). Rank scenarios and highlight top recommended plays.
+* **Sensitivity Analysis:** Compute driver importance (e.g., via Sobol indices or SHAP values) and generate “what‑must‑be‑true” statements.
+
+#### 3. Benchmarking & Truth Scan
+
+* Expand Truth Scan to show:
+
+  * Quality of Growth Index and Data Confidence Score.
+  * Key metrics (monthly revenue, net burn, cash balance, gross margin, revenue growth, burn multiple, operating margin) with benchmarks for comparable companies (quartile ranges).
+  * Cohort‑specific metrics, such as gross retention, net retention and CAC payback.
+* Provide actionable suggestions to improve each metric (e.g., “increase gross margin to 75 % to reach top‑quartile performance”).
+
+#### 4. Smart Forecasting & AI
+
+* Use time‑series models (e.g., Prophet) to forecast baseline revenue and churn from historical data.
+* Run anomaly detection on new driver inputs; alert users when a value deviates significantly from historical trends.
+* Generate natural‑language summaries of scenario outcomes (use a template-based approach or a lightweight language model) to explain results in plain English.
+
+#### 5. Collaboration & User Experience
+
+* Implement scenario versioning, with the ability to duplicate, rename and comment on scenarios.
+* Provide interactive dashboards: allow users to modify key drivers via sliders and see real‑time impact on runway and cash.
+* Support multi‑user editing and comments (simple server‑side storage with user IDs).
+* Add tooltips and help modals explaining how each metric is calculated and how to interpret it.
+
+#### 6. Integrations & Automation
+
+* Build connectors to accounting systems (QuickBooks, Xero), CRMs (Salesforce, HubSpot) and payment processors (Stripe) to import actuals and update driver baselines automatically.
+* Expose core simulation endpoints via a REST API (e.g., `/run_simulation`, `/get_scenario_results`, `/list_scenarios`) for integration with other tools.
+* Add export functionality to PDF/CSV/Excel for board decks and investor reports.
+
+#### 7. Governance & Monitoring
+
+* Implement guardrails on input sliders (e.g., churn cannot exceed 30 %, CAC cannot be less than $0).
+* Log user actions and simulation runs with timestamps and user identifiers.
+* Add a monitor that compares actual financial performance to forecast ranges. If actuals deviate beyond P10/P90 bounds, prompt users to recalibrate driver distributions.
+
+#### 8. Testing & Documentation
+
+* Write unit tests for each module (validation, simulation, scenario engine, ranking, forecasting).
+* Create an extensive README and inline docs covering:
+
+  * How to configure and run the app on Replit.
+  * Required API keys for integrations (if any).
+  * Explanation of all metrics, models and algorithms used.
+  * Guidance for end‑users on interpreting outputs and improving their data confidence.
+
+### ✅ Deliverables
+
+By the end of the project, the Replit repo should include:
+
+1. Fully functional backend (Python) implementing state machine, Monte Carlo, scenario/event engine, cohort analytics, forecasting, anomaly detection, integrations and decision ranking.
+2. Frontend (Streamlit or equivalent) with pages for data input/validation, truth scan/benchmarking, scenario building, simulation results, comparisons, and settings.
+3. API endpoints for programmatic access.
+4. Test suite covering critical functions.
+5. Documentation and example scenarios demonstrating use cases (e.g., effect of delaying fundraising, raising prices, cutting costs).
+
+---
+
+This prompt incorporates all the earlier suggestions—fixing errors in the metrics and adding robust simulation logic, plus deeper financial insights (cohort analysis, working capital), smart forecasting, collaboration features and system integrations. It should serve as a detailed blueprint for building a truly comprehensive startup simulator on Replit.
