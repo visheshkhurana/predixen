@@ -52,8 +52,21 @@ async function request<T>(
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new ApiError(response.status, error.detail || error.message || 'Request failed');
+    let errorMessage = 'Request failed';
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        errorMessage = error.detail || error.message || `Request failed (${response.status})`;
+      } else {
+        const text = await response.text();
+        errorMessage = text || `Request failed (${response.status})`;
+      }
+    } catch {
+      errorMessage = `Request failed (${response.status})`;
+    }
+    console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
+    throw new ApiError(response.status, errorMessage);
   }
   
   return response.json();
