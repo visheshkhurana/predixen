@@ -178,3 +178,121 @@ async def send_deployment_notification(
         changes=[f"Version: {version}"] if version else ["Latest changes deployed"],
         category="Deployment"
     )
+
+
+async def send_beta_invite_email(
+    to_emails: List[str],
+    invited_by: str = "Predixen Team"
+) -> dict:
+    """
+    Send beta test invitation emails with click-to-join functionality.
+    
+    Args:
+        to_emails: List of email addresses to invite
+        invited_by: Name/email of the person sending the invite
+    
+    Returns:
+        Dict with success status and list of sent/failed emails
+    """
+    import os
+    
+    try:
+        credentials = await get_resend_credentials()
+        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px; text-align: center;">
+            <div style="display: inline-block; width: 48px; height: 48px; background-color: #0ea5e9; border-radius: 12px; text-align: center; line-height: 48px; color: #ffffff; font-weight: 700; font-size: 24px; margin-bottom: 16px;">P</div>
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">Predixen Intelligence OS</h1>
+            <p style="color: #94a3b8; margin: 8px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Beta Test Invitation</p>
+        </div>
+        
+        <div style="padding: 40px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+                <span style="display: inline-block; background-color: #fef3c7; color: #b45309; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Exclusive Access</span>
+            </div>
+            
+            <h2 style="color: #0f172a; margin: 0 0 16px 0; font-size: 24px; font-weight: 600; text-align: center;">You're Invited to Test Predixen</h2>
+            
+            <p style="font-size: 16px; color: #475569; line-height: 1.7; margin: 0 0 24px 0; text-align: center;">
+                <strong style="color: #0ea5e9;">{invited_by}</strong> has invited you to experience the future of startup financial intelligence.
+            </p>
+            
+            <div style="background-color: #f8fafc; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                <p style="margin: 0 0 12px 0; font-size: 12px; font-weight: 600; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">What You'll Get Access To:</p>
+                <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.8;">
+                    <li>AI-powered financial document extraction</li>
+                    <li>Monte Carlo simulations for runway forecasting</li>
+                    <li>Sensitivity analysis with tornado charts</li>
+                    <li>Smart decision recommendations ranked by survival probability</li>
+                    <li>Multi-LLM copilot for financial questions</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="{base_url}/auth" style="display: inline-block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); border-radius: 10px; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);">Start Testing Now</a>
+            </div>
+            
+            <p style="text-align: center; color: #94a3b8; font-size: 13px; margin: 24px 0 0 0;">
+                Click the button above to create your account and start exploring.
+            </p>
+        </div>
+        
+        <div style="background-color: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Predixen</p>
+            <p style="margin: 0; font-size: 12px; color: #64748b;">AI-Powered Financial Intelligence for Startups</p>
+            <p style="margin: 12px 0 0 0; font-size: 11px; color: #94a3b8;">Sent on {timestamp}</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        sent = []
+        failed = []
+        
+        async with httpx.AsyncClient() as client:
+            for email in to_emails:
+                response = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {credentials['api_key']}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "from": credentials.get("from_email", "noreply@predixen.ai"),
+                        "to": [email],
+                        "subject": "You're Invited to Test Predixen Intelligence OS",
+                        "html": html_content
+                    }
+                )
+                
+                if response.status_code in (200, 201):
+                    sent.append(email)
+                else:
+                    failed.append(email)
+        
+        return {
+            "success": len(failed) == 0,
+            "sent": sent,
+            "failed": failed,
+            "message": f"Sent {len(sent)} invite(s), {len(failed)} failed"
+        }
+        
+    except Exception as e:
+        print(f"Error sending beta invites: {e}")
+        return {
+            "success": False,
+            "sent": [],
+            "failed": to_emails,
+            "error": str(e)
+        }
