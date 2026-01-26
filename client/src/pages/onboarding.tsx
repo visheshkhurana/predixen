@@ -131,16 +131,9 @@ export default function OnboardingPage() {
       return;
     }
     
+    // Note: extract-deck endpoint is unauthenticated to support onboarding before login
+    // Auth token is optional - send if available for better logging
     const { token } = useFounderStore.getState();
-    if (!token) {
-      toast({ 
-        title: 'Session expired', 
-        description: 'Please log in again to continue.', 
-        variant: 'destructive' 
-      });
-      setLocation('/auth');
-      return;
-    }
     
     setUploadedFile(file);
     setIsExtracting(true);
@@ -151,11 +144,14 @@ export default function OnboardingPage() {
       const formData = new FormData();
       formData.append('file', file);
       
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch('/api/ingest/onboarding/extract-deck', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers,
         body: formData,
       });
       
