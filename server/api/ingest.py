@@ -658,7 +658,6 @@ Analyze the provided document and extract the following information. Return ONLY
   "financials": {
     "monthly_revenue": "number - current monthly revenue in base currency units (not millions), or null",
     "gross_margin_pct": "number - gross margin as percentage (e.g., 70 for 70%), or null", 
-    "operating_margin_pct": "number - operating margin as percentage, or null",
     "opex": "number - monthly operating expenses in base currency units, or null",
     "payroll": "number - monthly payroll/salaries in base currency units, or null",
     "other_costs": "number - other monthly costs in base currency units, or null",
@@ -667,18 +666,7 @@ Analyze the provided document and extract the following information. Return ONLY
     "mrr": "number - monthly recurring revenue if mentioned, or null",
     "headcount": "number - number of employees if mentioned, or null",
     "runway_months": "number - runway in months if mentioned, or null",
-    "burn_rate": "number - monthly burn rate if mentioned, or null",
-    "net_burn": "number - net monthly burn (expenses minus revenue), or null"
-  },
-  "computed_metrics": {
-    "revenue_growth_mom": "number - month-over-month revenue growth as percentage (e.g., 5 for 5%), or null",
-    "revenue_growth_yoy": "number - year-over-year revenue growth as multiplier (e.g., 1.24 for 24% growth), or null",
-    "cmgr": "number - compound monthly growth rate as percentage, or null",
-    "burn_multiple": "number - net burn divided by net new ARR (can be negative if profitable), or null",
-    "concentration_top5": "number - top 5 customer concentration as percentage, or null",
-    "ndr": "number - net dollar retention as percentage (e.g., 110 for 110%), or null",
-    "churn_rate": "number - monthly churn rate as percentage, or null",
-    "ltv_cac_ratio": "number - LTV to CAC ratio, or null"
+    "burn_rate": "number - monthly burn rate if mentioned, or null"
   },
   "currency": "string - detected currency code (USD, EUR, GBP, INR, etc.), default USD",
   "confidence": {
@@ -712,7 +700,6 @@ Extract company information and financial metrics from these images. Return ONLY
   "financials": {
     "monthly_revenue": "number in base units or null",
     "gross_margin_pct": "number as percentage or null",
-    "operating_margin_pct": "number as percentage or null",
     "opex": "number in base units or null",
     "payroll": "number in base units or null",
     "other_costs": "number in base units or null",
@@ -721,18 +708,7 @@ Extract company information and financial metrics from these images. Return ONLY
     "mrr": "number or null",
     "headcount": "number or null",
     "runway_months": "number or null",
-    "burn_rate": "number or null",
-    "net_burn": "number or null"
-  },
-  "computed_metrics": {
-    "revenue_growth_mom": "number - MoM growth percentage or null",
-    "revenue_growth_yoy": "number - YoY growth as multiplier (1.24 for 24% growth) or null",
-    "cmgr": "number - compound monthly growth rate percentage or null",
-    "burn_multiple": "number - burn multiple (can be negative if profitable) or null",
-    "concentration_top5": "number - top 5 customer concentration percentage or null",
-    "ndr": "number - net dollar retention percentage or null",
-    "churn_rate": "number - monthly churn rate percentage or null",
-    "ltv_cac_ratio": "number or null"
+    "burn_rate": "number or null"
   },
   "currency": "string - currency code (USD, EUR, etc.)",
   "confidence": {
@@ -751,7 +727,6 @@ Use null for missing fields - do not guess.
 class OnboardingExtractionResponse(BaseModel):
     company_info: Dict[str, Any]
     financials: Dict[str, Any]
-    computed_metrics: Optional[Dict[str, Any]] = None
     currency: str
     confidence: Dict[str, float]
     summary: str
@@ -971,9 +946,6 @@ async def extract_onboarding_deck(
         }
         stage = stage_mapping.get(stage_raw, "")
         
-        # Get computed metrics if extracted
-        computed_metrics = result.get("computed_metrics", {})
-        
         return OnboardingExtractionResponse(
             company_info={
                 "name": company_info.get("name") or "",
@@ -984,7 +956,6 @@ async def extract_onboarding_deck(
             financials={
                 "monthly_revenue": financials.get("monthly_revenue") or financials.get("mrr"),
                 "gross_margin_pct": financials.get("gross_margin_pct"),
-                "operating_margin_pct": financials.get("operating_margin_pct"),
                 "opex": financials.get("opex"),
                 "payroll": financials.get("payroll"),
                 "other_costs": financials.get("other_costs"),
@@ -993,19 +964,8 @@ async def extract_onboarding_deck(
                 "mrr": financials.get("mrr"),
                 "headcount": financials.get("headcount"),
                 "runway_months": financials.get("runway_months"),
-                "burn_rate": financials.get("burn_rate"),
-                "net_burn": financials.get("net_burn")
+                "burn_rate": financials.get("burn_rate")
             },
-            computed_metrics={
-                "revenue_growth_mom": computed_metrics.get("revenue_growth_mom"),
-                "revenue_growth_yoy": computed_metrics.get("revenue_growth_yoy"),
-                "cmgr": computed_metrics.get("cmgr"),
-                "burn_multiple": computed_metrics.get("burn_multiple"),
-                "concentration_top5": computed_metrics.get("concentration_top5"),
-                "ndr": computed_metrics.get("ndr"),
-                "churn_rate": computed_metrics.get("churn_rate"),
-                "ltv_cac_ratio": computed_metrics.get("ltv_cac_ratio")
-            } if computed_metrics else None,
             currency=result.get("currency", "USD"),
             confidence=result.get("confidence", {"company_info": 0.5, "financials": 0.5}),
             summary=result.get("summary", ""),

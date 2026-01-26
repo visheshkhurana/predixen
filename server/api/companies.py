@@ -22,16 +22,12 @@ from server.models.scenario_version import MacroEnvironment, SensitivityRun, Rec
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
-from typing import Any, Dict
-
 class CompanyCreate(BaseModel):
     name: str
     website: Optional[str] = None
     industry: Optional[str] = None
     stage: Optional[str] = None
     currency: str = "USD"
-    extracted_metrics: Optional[Dict[str, Any]] = None  # Computed metrics extracted from PDF (growth, burn multiple, etc.)
-    extracted_financials: Optional[Dict[str, Any]] = None  # Baseline financials from PDF (revenue, cash, burn, etc.)
 
 class CompanyResponse(BaseModel):
     id: int
@@ -51,21 +47,13 @@ def create_company(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Store extracted data in metadata_json for use by truth scan
-    metadata = {}
-    if request.extracted_metrics:
-        metadata["extracted_metrics"] = request.extracted_metrics
-    if request.extracted_financials:
-        metadata["extracted_financials"] = request.extracted_financials
-    
     company = Company(
         user_id=current_user.id,
         name=request.name,
         website=request.website,
         industry=request.industry,
         stage=request.stage,
-        currency=request.currency,
-        metadata_json=metadata if metadata else None
+        currency=request.currency
     )
     db.add(company)
     db.commit()
