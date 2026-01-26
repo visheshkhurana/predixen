@@ -623,6 +623,20 @@ def validate_and_correct_metrics(metrics: Dict[str, Any]) -> tuple[Dict[str, Any
         if cmgr_val is not None and cmgr_val > 30:
             warnings.append(f"{cmgr_key.upper()} of {cmgr_val}% is unusually high for monthly growth - please verify")
     
+    # Validate payroll is reasonable relative to revenue
+    # Payroll is typically 20-60% of revenue for most companies
+    payroll = metrics.get('payroll')
+    if payroll is not None and monthly_rev is not None and monthly_rev > 0:
+        payroll_pct = (payroll / monthly_rev) * 100
+        if payroll_pct < 1:
+            # Payroll less than 1% of revenue is suspiciously low - likely extraction error
+            warnings.append(f"Payroll (${payroll:,.0f}) is only {payroll_pct:.1f}% of revenue - this seems too low. Setting to null.")
+            logger.warning(f"Payroll {payroll} is suspiciously low ({payroll_pct:.1f}% of revenue), likely extraction error")
+            # Clear the suspicious value
+            metrics['payroll'] = None
+        elif payroll_pct < 5:
+            warnings.append(f"Payroll (${payroll:,.0f}) is only {payroll_pct:.1f}% of revenue - unusually low, please verify")
+    
     # Check for large revenue values that might be misscaled
     if monthly_rev and monthly_rev > 500_000_000:  # > $500M monthly
         warnings.append(f"Monthly revenue of ${monthly_rev/1_000_000:.1f}M is extremely high - please verify units")

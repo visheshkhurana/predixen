@@ -911,6 +911,19 @@ async def extract_onboarding_deck(
         company_info = result.get("company_info", {})
         financials = result.get("financials", {})
         
+        # Validate payroll is reasonable relative to revenue
+        # Payroll less than 1% of revenue is likely an extraction error
+        monthly_revenue = financials.get("monthly_revenue") or financials.get("mrr") or 0
+        payroll = financials.get("payroll")
+        if payroll is not None and monthly_revenue > 0:
+            payroll_pct = (payroll / monthly_revenue) * 100
+            if payroll_pct < 1:
+                # Suspiciously low payroll - likely extraction error, clear it
+                logger.warning(f"Payroll {payroll} is only {payroll_pct:.2f}% of revenue {monthly_revenue} - clearing as likely error")
+                financials["payroll"] = None
+            elif payroll_pct < 5:
+                logger.warning(f"Payroll {payroll} is only {payroll_pct:.1f}% of revenue - unusually low")
+        
         # Normalize industry to valid enum values
         industry_raw = (company_info.get("industry") or "").lower().strip()
         industry_mapping = {
