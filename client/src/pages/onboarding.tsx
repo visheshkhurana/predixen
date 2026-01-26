@@ -148,6 +148,10 @@ export default function OnboardingPage() {
           return;
         }
         const error = await response.json();
+        // Handle 422 (unprocessable/corrupted file) specifically
+        if (response.status === 422) {
+          throw new Error(error.detail || 'The file could not be processed. Please try a different PDF or enter details manually.');
+        }
         throw new Error(error.detail || 'Extraction failed');
       }
       

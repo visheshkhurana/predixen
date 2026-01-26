@@ -898,9 +898,10 @@ async def extract_onboarding_deck(
                 
             except Exception as vision_error:
                 logger.error(f"Vision extraction also failed: {vision_error}")
+                # Return 422 (Unprocessable Entity) instead of 500 for invalid/corrupted files
                 raise HTTPException(
-                    status_code=500, 
-                    detail="Could not extract information from the document. Please try a different file or enter details manually."
+                    status_code=422, 
+                    detail="Could not extract information from the document. The file may be corrupted or in an unsupported format. Please try a different file or enter details manually."
                 )
         
         if not result:
