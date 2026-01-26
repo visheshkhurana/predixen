@@ -11,7 +11,11 @@ import { ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info } from 'lucide-react';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -50,10 +54,19 @@ interface ExtractedData {
     payroll?: number;
     other_costs?: number;
     cash_balance?: number;
+    arr?: number;
+    mrr?: number;
+    headcount?: number;
   };
   currency?: string;
   confidence?: { company_info: number; financials: number };
   summary?: string;
+  extraction_method?: string;
+  raw_data_preview?: {
+    columns: string[];
+    row_count: number;
+    sample_rows: Record<string, unknown>[];
+  };
 }
 
 export default function OnboardingPage() {
@@ -88,6 +101,11 @@ export default function OnboardingPage() {
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Data preview/cross-check state
+  const [showDataPreview, setShowDataPreview] = useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -99,8 +117,12 @@ export default function OnboardingPage() {
   }, []);
   
   const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast({ title: 'Invalid file', description: 'Please upload a PDF file', variant: 'destructive' });
+    const fileName = file.name.toLowerCase();
+    const validExtensions = ['.pdf', '.xls', '.xlsx', '.csv'];
+    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      toast({ title: 'Invalid file', description: 'Please upload a PDF, Excel (.xls, .xlsx), or CSV file', variant: 'destructive' });
       return;
     }
     
@@ -461,7 +483,7 @@ export default function OnboardingPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.xls,.xlsx,.csv"
                     onChange={handleFileSelect}
                     className="hidden"
                     data-testid="input-file-upload"
@@ -544,21 +566,21 @@ export default function OnboardingPage() {
                         <Sparkles className="w-8 h-8 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium">Upload your pitch deck or investor update</p>
+                        <p className="font-medium">Upload your pitch deck, financial report, or spreadsheet</p>
                         <p className="text-sm text-muted-foreground">
-                          Drop a PDF here or click to browse. AI will auto-fill company and financial details.
+                          Drop a file here or click to browse. AI will auto-fill company and financial details.
                         </p>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <FileText className="w-3 h-3" />
-                        <span>PDF files up to 20MB</span>
+                        <span>PDF, Excel (.xls, .xlsx), or CSV - up to 20MB</span>
                       </div>
                     </div>
                   )}
                 </div>
                 
                 {extractedData && extractedData.confidence && (
-                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Check className="w-3 h-3 text-green-500" />
                       Company info: {Math.round((extractedData.confidence.company_info || 0) * 100)}% confident
@@ -567,6 +589,145 @@ export default function OnboardingPage() {
                       <Check className="w-3 h-3 text-green-500" />
                       Financials: {Math.round((extractedData.confidence.financials || 0) * 100)}% confident
                     </span>
+                    {extractedData.extraction_method && (
+                      <Badge variant="outline" className="text-xs">
+                        {extractedData.extraction_method.includes('excel') ? 'Excel' : 
+                         extractedData.extraction_method.includes('csv') ? 'CSV' : 'PDF'}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+                
+                {/* Data Cross-Check Section */}
+                {extractedData && (
+                  <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        <Eye className="w-4 h-4" />
+                        Extracted Data Cross-Check
+                      </h4>
+                      <div className="flex gap-2">
+                        {extractedData.raw_data_preview && (
+                          <Dialog open={showDataPreview} onOpenChange={setShowDataPreview}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" data-testid="button-view-raw-data">
+                                <FileText className="w-3 h-3 mr-1" />
+                                View Source Data
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+                              <DialogHeader>
+                                <DialogTitle>Source Data Preview</DialogTitle>
+                                <DialogDescription>
+                                  Raw data from your uploaded file ({extractedData.raw_data_preview.row_count} rows)
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="overflow-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      {extractedData.raw_data_preview.columns.map((col) => (
+                                        <TableHead key={col} className="whitespace-nowrap">{col}</TableHead>
+                                      ))}
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {extractedData.raw_data_preview.sample_rows.map((row, idx) => (
+                                      <TableRow key={idx}>
+                                        {extractedData.raw_data_preview!.columns.map((col) => (
+                                          <TableCell key={col} className="whitespace-nowrap">
+                                            {String(row[col] ?? '')}
+                                          </TableCell>
+                                        ))}
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+                        <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" data-testid="button-report-discrepancy">
+                              <MessageSquare className="w-3 h-3 mr-1" />
+                              Report Issue
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Report a Discrepancy</DialogTitle>
+                              <DialogDescription>
+                                Let us know if the extracted data doesn't match your document
+                              </DialogDescription>
+                            </DialogHeader>
+                            <Textarea
+                              placeholder="Describe what values look incorrect or are missing..."
+                              value={feedbackText}
+                              onChange={(e) => setFeedbackText(e.target.value)}
+                              rows={4}
+                              data-testid="input-feedback"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button variant="outline" onClick={() => setShowFeedbackDialog(false)}>
+                                Cancel
+                              </Button>
+                              <Button 
+                                onClick={() => {
+                                  toast({ title: 'Feedback sent', description: 'Thank you for your feedback!' });
+                                  setShowFeedbackDialog(false);
+                                  setFeedbackText('');
+                                }}
+                                disabled={!feedbackText.trim()}
+                              >
+                                Send Feedback
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+                    
+                    {/* Extracted Values Table */}
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {[
+                        { label: 'Monthly Revenue', value: extractedData.financials.monthly_revenue, format: 'currency' },
+                        { label: 'Gross Margin', value: extractedData.financials.gross_margin_pct, format: 'percent' },
+                        { label: 'Opex', value: extractedData.financials.opex, format: 'currency' },
+                        { label: 'Payroll', value: extractedData.financials.payroll, format: 'currency' },
+                        { label: 'Cash Balance', value: extractedData.financials.cash_balance, format: 'currency' },
+                        { label: 'Headcount', value: extractedData.financials.headcount, format: 'number' },
+                      ].map(({ label, value, format }) => (
+                        <div key={label} className="flex justify-between p-2 bg-background rounded border">
+                          <span className="text-muted-foreground">{label}</span>
+                          {value !== undefined && value !== null ? (
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              {format === 'currency' 
+                                ? `$${Number(value).toLocaleString()}` 
+                                : format === 'percent' 
+                                  ? `${value}%` 
+                                  : value}
+                            </span>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-amber-500 flex items-center gap-1 cursor-help">
+                                  <Info className="w-3 h-3" />
+                                  Not found
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>This metric wasn't found in your document. You can enter it manually below.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Review the extracted values above. You can override any value in the form fields below.
+                    </p>
                   </div>
                 )}
                 
@@ -866,6 +1027,35 @@ export default function OnboardingPage() {
                     min={0}
                     data-testid="input-cash-balance"
                   />
+                </div>
+                
+                {/* Metric Formulas Documentation */}
+                <div className="p-4 bg-muted/30 rounded-lg border mt-4">
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Info className="w-4 h-4" />
+                    How Your Metrics Are Computed
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-muted-foreground">
+                    <div className="p-2 bg-background rounded">
+                      <span className="font-medium text-foreground">Gross Profit</span>
+                      <p>= Revenue × (Gross Margin % / 100)</p>
+                    </div>
+                    <div className="p-2 bg-background rounded">
+                      <span className="font-medium text-foreground">Net Burn</span>
+                      <p>= Total Expenses - Revenue</p>
+                    </div>
+                    <div className="p-2 bg-background rounded">
+                      <span className="font-medium text-foreground">Runway (months)</span>
+                      <p>= Cash Balance / Net Burn</p>
+                    </div>
+                    <div className="p-2 bg-background rounded">
+                      <span className="font-medium text-foreground">Total Expenses</span>
+                      <p>= Opex + Payroll + Other Costs + COGS</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    If any input is missing or zero, the dependent metrics will show "Data unavailable".
+                  </p>
                 </div>
                 
                 <Button

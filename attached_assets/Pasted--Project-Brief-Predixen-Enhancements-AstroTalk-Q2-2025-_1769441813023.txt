@@ -1,0 +1,61 @@
+# 🚀 Project Brief: Predixen Enhancements (AstroTalk Q2 2025 Feedback)
+
+## Objective
+Implement improvements to the Predixen startup health assessment tool based on user feedback. The goals are to ensure accurate payroll calculations, support multiple file formats, cross‑validate data from uploads, handle missing metrics gracefully, and enhance the overall user experience with extra features.
+
+## Core Tasks
+
+1. **Fix Payroll Calculation**
+   - Audit the payroll extraction logic to ensure all relevant items (salaries, bonuses, taxes, benefits) are captured.
+   - Add a reconciliation step to compare the extracted payroll total with the displayed figure. Highlight discrepancies and allow user review.
+   - Introduce server‑side logging for payroll calculation steps to aid debugging and user support.
+
+2. **Enhance File Upload (Step 1)**
+   - Allow uploading of both PDF and Excel (XLS/XLSX/CSV) files.
+   - Detect file type and parse accordingly:
+     - For PDF: use OCR/embedded text extraction to read tables and figures.
+     - For Excel: read specified columns via appropriate libraries.
+   - Provide a preview of parsed data and let users confirm or correct before proceeding.
+   - Offer clear template guidelines for Excel uploads (required columns, date formats, currency fields).
+
+3. **Implement Data Cross‑Check**
+   - Display a comparison table showing each extracted value (e.g. payroll, revenue, cash balance, burn rate) next to the value used by the app.
+   - Flag mismatches, allow users to override or confirm values, and persist user choices.
+   - Save the uploaded data and the reconciled results for audit trails and future recalculations.
+
+4. **Handle Missing or Zero Metrics**
+   - Define formulas for key metrics (e.g. revenue growth, runway, customer concentration).
+   - If inputs are missing or zero, display “Data unavailable” with a tooltip explaining why the metric can’t be computed.
+   - Provide manual input fields where users can supply missing values; persist these entries.
+   - Document the formula used for each metric so users understand the calculation.
+
+5. **User Guidance and Error Handling**
+   - Add tooltips or help icons explaining each metric and required data fields.
+   - Validate uploads for missing columns, incorrect formats, and date mismatches. Provide descriptive error messages with steps to fix the issue.
+   - Include a “Report a discrepancy” or “Send feedback” button on results pages to capture user insights.
+
+## Product‑Manager Suggestions for Enhanced Value
+
+- **Interactive Metric Explorer**: Let users click any metric to see historical trends (if multiple uploads exist) and drill down into components (e.g. payroll breakdown by department).
+- **Scenario Simulation**: Offer a simple “What‑If” tool where users can adjust inputs (like revenue or burn rate) to see impacts on growth indices and runway. Leverage the existing simulation mode but make it more prominent.
+- **Automated Alerts**: Enable notifications when certain metrics cross thresholds (e.g. runway dropping below six months, revenue growth turning negative) so founders can act proactively.
+- **CSV/JSON Export**: Allow users to export the reconciled data and computed metrics for offline analysis or reporting to investors.
+- **Integration APIs**: Plan for future integrations with accounting software (e.g. QuickBooks, Xero) to fetch financial data automatically, reducing manual uploads.
+- **Accessibility & Localization**: Ensure upload and reporting interfaces are accessible (ARIA labels, keyboard navigation) and easily localizable for global users.
+- **Version Control & Audit Trail**: Maintain versions of each scan with timestamped snapshots, enabling users to compare past and current analyses and see how the tool has evolved.
+
+## Technical Stack (Suggested)
+- Front‑end: React or Vue with TypeScript, using a component library for consistent UI.
+- File Parsing: Node.js with libraries like `pdf-parse` for PDFs and `xlsx`/`papaparse` for Excel/CSV files. Consider a Python microservice for OCR/text extraction if needed.
+- State Management: Use Redux/Pinia to persist user overrides and maintain cross‑step state.
+- Back‑end: Express.js or FastAPI for API endpoints; store data in a database with versioning (e.g. PostgreSQL).
+- Testing: Implement unit tests for all calculation logic and integration tests for file upload flows.
+
+## Acceptance Criteria
+- Users can upload either PDFs or Excel files in Step 1.
+- Payroll, revenue, and other key metrics displayed match uploaded data, or discrepancies are highlighted.
+- Metrics like revenue growth, runway, and concentration either show correct values or clear “Data unavailable” messages with tooltips.
+- Users can manually input missing values and see them persist.
+- Additional product features (metric explorer, simulation triggers, alerts, exports) are scoped for inclusion or phased implementation.
+
+# Start implementing these changes in Replit!

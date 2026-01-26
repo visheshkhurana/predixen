@@ -731,6 +731,7 @@ class OnboardingExtractionResponse(BaseModel):
     confidence: Dict[str, float]
     summary: str
     extraction_method: str
+    raw_data_preview: Optional[Dict[str, Any]] = None  # For cross-check UI with Excel/CSV
 
 
 def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
@@ -836,8 +837,9 @@ async def extract_onboarding_deck(
     file: UploadFile = File(...)
 ):
     """
-    Extract company information and financials from a pitch deck or company document.
-    Supports PDF files. Uses text extraction with GPT-4o, falling back to vision for image-based PDFs.
+    Extract company information and financials from a pitch deck or financial document.
+    Supports PDF, Excel (XLS/XLSX), and CSV files.
+    Uses text extraction with GPT-4o, falling back to vision for image-based PDFs.
     
     This endpoint does NOT require authentication - it's used during onboarding before user creation.
     """
@@ -845,8 +847,12 @@ async def extract_onboarding_deck(
         raise HTTPException(status_code=400, detail="No file uploaded")
     
     file_ext = os.path.splitext(file.filename)[1].lower()
-    if file_ext not in ['.pdf']:
-        raise HTTPException(status_code=400, detail="Only PDF files are supported. Please upload a PDF pitch deck.")
+    supported_extensions = ['.pdf', '.xls', '.xlsx', '.csv']
+    if file_ext not in supported_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file format. Please upload PDF, Excel (.xls, .xlsx), or CSV files."
+        )
     
     temp_file = None
     try:
@@ -863,46 +869,108 @@ async def extract_onboarding_deck(
         
         extraction_method = "text"
         result = None
+        raw_data_preview = None  # For cross-check UI
         
-        # Try text extraction first
-        try:
-            pdf_text = extract_text_from_pdf(temp_file)
-            
-            if pdf_text and len(pdf_text.strip()) > 500:
-                # Good text content, use text-based extraction
-                result = extract_onboarding_data_with_openai(pdf_text)
-                extraction_method = "text+gpt4o"
-            else:
-                raise ValueError("Insufficient text content")
-                
-        except Exception as text_error:
-            logger.info(f"Text extraction insufficient, trying vision: {text_error}")
-            
-            # Fall back to vision
+        # Handle Excel/CSV files
+        if file_ext in ['.xls', '.xlsx', '.csv']:
             try:
-                from pdf2image import convert_from_path
-                import base64
-                from io import BytesIO
+                import pandas as pd
                 
-                images = convert_from_path(temp_file, dpi=150, first_page=1, last_page=8)
-                image_base64_list = []
+                # Read file based on type
+                if file_ext == '.csv':
+                    df = pd.read_csv(temp_file, nrows=100)
+                    extraction_method = "csv+gpt4o"
+                else:
+                    df = pd.read_excel(temp_file, nrows=100)
+                    extraction_method = "excel+gpt4o"
                 
-                for img in images:
-                    buffered = BytesIO()
-                    img.save(buffered, format="PNG", optimize=True)
-                    img_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                    image_base64_list.append(img_b64)
+                # Convert to text for GPT analysis
+                excel_text = f"File: {file.filename}\n\n"
+                excel_text += "Columns: " + ", ".join(str(c) for c in df.columns) + "\n\n"
+                excel_text += "Data preview:\n"
+                excel_text += df.to_string(index=True, max_rows=50, max_cols=20)
                 
-                result = extract_onboarding_data_with_vision(image_base64_list)
-                extraction_method = "vision+gpt4o"
+                # Store raw data for preview/cross-check
+                raw_data_preview = {
+                    "columns": [str(c) for c in df.columns.tolist()],
+                    "row_count": len(df),
+                    "sample_rows": df.head(10).to_dict(orient='records')
+                }
                 
-            except Exception as vision_error:
-                logger.error(f"Vision extraction also failed: {vision_error}")
-                # Return 422 (Unprocessable Entity) instead of 500 for invalid/corrupted files
+                # Use GPT to extract structured data
+                result = extract_onboarding_data_with_openai(excel_text)
+                
+                # Also try direct structured extraction for known formats
+                try:
+                    structured_result = process_termina_excel(temp_file)
+                    if structured_result and structured_result.get('metrics'):
+                        metrics = structured_result['metrics']
+                        # Merge structured extraction if we got better data
+                        if not result.get('financials'):
+                            result['financials'] = {}
+                        if metrics.get('revenue') and not result['financials'].get('monthly_revenue'):
+                            result['financials']['monthly_revenue'] = metrics['revenue']
+                        if metrics.get('gross_margin') and not result['financials'].get('gross_margin_pct'):
+                            result['financials']['gross_margin_pct'] = metrics['gross_margin']
+                        if metrics.get('cash_balance') and not result['financials'].get('cash_balance'):
+                            result['financials']['cash_balance'] = metrics['cash_balance']
+                        if metrics.get('payroll') and not result['financials'].get('payroll'):
+                            result['financials']['payroll'] = metrics['payroll']
+                        if metrics.get('opex') and not result['financials'].get('opex'):
+                            result['financials']['opex'] = metrics['opex']
+                        if metrics.get('operating_income') and not result['financials'].get('operating_income'):
+                            result['financials']['operating_income'] = metrics['operating_income']
+                except Exception as struct_err:
+                    logger.warning(f"Structured Excel extraction failed, using GPT result: {struct_err}")
+                
+            except Exception as excel_error:
+                logger.error(f"Excel/CSV extraction failed: {excel_error}")
                 raise HTTPException(
-                    status_code=422, 
-                    detail="Could not extract information from the document. The file may be corrupted or in an unsupported format. Please try a different file or enter details manually."
+                    status_code=422,
+                    detail=f"Could not parse the spreadsheet. Please ensure it contains financial data. Error: {str(excel_error)}"
                 )
+        
+        # Handle PDF files
+        else:
+            # Try text extraction first
+            try:
+                pdf_text = extract_text_from_pdf(temp_file)
+                
+                if pdf_text and len(pdf_text.strip()) > 500:
+                    # Good text content, use text-based extraction
+                    result = extract_onboarding_data_with_openai(pdf_text)
+                    extraction_method = "text+gpt4o"
+                else:
+                    raise ValueError("Insufficient text content")
+                    
+            except Exception as text_error:
+                logger.info(f"Text extraction insufficient, trying vision: {text_error}")
+                
+                # Fall back to vision
+                try:
+                    from pdf2image import convert_from_path
+                    import base64
+                    from io import BytesIO
+                    
+                    images = convert_from_path(temp_file, dpi=150, first_page=1, last_page=8)
+                    image_base64_list = []
+                    
+                    for img in images:
+                        buffered = BytesIO()
+                        img.save(buffered, format="PNG", optimize=True)
+                        img_b64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+                        image_base64_list.append(img_b64)
+                    
+                    result = extract_onboarding_data_with_vision(image_base64_list)
+                    extraction_method = "vision+gpt4o"
+                    
+                except Exception as vision_error:
+                    logger.error(f"Vision extraction also failed: {vision_error}")
+                    # Return 422 (Unprocessable Entity) instead of 500 for invalid/corrupted files
+                    raise HTTPException(
+                        status_code=422, 
+                        detail="Could not extract information from the document. The file may be corrupted or in an unsupported format. Please try a different file or enter details manually."
+                    )
         
         if not result:
             raise HTTPException(status_code=500, detail="Extraction failed - no data returned")
@@ -912,17 +980,25 @@ async def extract_onboarding_deck(
         financials = result.get("financials", {})
         
         # Validate payroll is reasonable relative to revenue
-        # Payroll less than 1% of revenue is likely an extraction error
+        # Enhanced payroll extraction logging for debugging and reconciliation
         monthly_revenue = financials.get("monthly_revenue") or financials.get("mrr") or 0
         payroll = financials.get("payroll")
+        logger.info(f"[PAYROLL_AUDIT] File: {file.filename}, Extracted payroll: {payroll}, Monthly revenue: {monthly_revenue}")
+        
         if payroll is not None and monthly_revenue > 0:
             payroll_pct = (payroll / monthly_revenue) * 100
+            logger.info(f"[PAYROLL_AUDIT] Payroll percentage of revenue: {payroll_pct:.2f}%")
+            
             if payroll_pct < 1:
                 # Suspiciously low payroll - likely extraction error, clear it
-                logger.warning(f"Payroll {payroll} is only {payroll_pct:.2f}% of revenue {monthly_revenue} - clearing as likely error")
+                logger.warning(f"[PAYROLL_AUDIT] DISCREPANCY: Payroll {payroll} is only {payroll_pct:.2f}% of revenue {monthly_revenue} - clearing as likely extraction error")
                 financials["payroll"] = None
             elif payroll_pct < 5:
-                logger.warning(f"Payroll {payroll} is only {payroll_pct:.1f}% of revenue - unusually low")
+                logger.warning(f"[PAYROLL_AUDIT] WARNING: Payroll {payroll} is only {payroll_pct:.1f}% of revenue - unusually low, user should verify")
+            elif payroll_pct > 80:
+                logger.warning(f"[PAYROLL_AUDIT] WARNING: Payroll {payroll} is {payroll_pct:.1f}% of revenue - unusually high, user should verify")
+            else:
+                logger.info(f"[PAYROLL_AUDIT] OK: Payroll is {payroll_pct:.1f}% of revenue (normal range: 20-60%)")
         
         # Normalize industry to valid enum values
         industry_raw = (company_info.get("industry") or "").lower().strip()
@@ -983,9 +1059,127 @@ async def extract_onboarding_deck(
             currency=result.get("currency", "USD"),
             confidence=result.get("confidence", {"company_info": 0.5, "financials": 0.5}),
             summary=result.get("summary", ""),
-            extraction_method=extraction_method
+            extraction_method=extraction_method,
+            raw_data_preview=raw_data_preview
         )
         
     finally:
         if temp_file and os.path.exists(temp_file):
             os.unlink(temp_file)
+
+
+# ============================================================================
+# DATA EXPORT ENDPOINTS
+# ============================================================================
+
+@router.get("/companies/{company_id}/financials/export")
+async def export_financials(
+    company_id: int,
+    format: str = "json",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Export reconciled financial data and computed metrics in CSV or JSON format.
+    
+    Query parameters:
+    - format: 'json' or 'csv' (default: 'json')
+    """
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Get all financial records for the company
+    records = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).all()
+    
+    if not records:
+        raise HTTPException(status_code=404, detail="No financial data found")
+    
+    # Build export data
+    export_data = []
+    for record in records:
+        row = {
+            "period_start": record.period_start.isoformat() if record.period_start else None,
+            "period_end": record.period_end.isoformat() if record.period_end else None,
+            "revenue": float(record.revenue) if record.revenue else None,
+            "cogs": float(record.cogs) if record.cogs else None,
+            "gross_profit": float(record.gross_profit) if record.gross_profit else None,
+            "gross_margin": float(record.gross_margin) if record.gross_margin else None,
+            "opex": float(record.opex) if record.opex else None,
+            "payroll": float(record.payroll) if record.payroll else None,
+            "marketing_expense": float(record.marketing_expense) if record.marketing_expense else None,
+            "other_costs": float(record.other_costs) if record.other_costs else None,
+            "operating_income": float(record.operating_income) if record.operating_income else None,
+            "operating_margin": float(record.operating_margin) if record.operating_margin else None,
+            "net_burn": float(record.net_burn) if record.net_burn else None,
+            "burn_multiple": float(record.burn_multiple) if record.burn_multiple else None,
+            "cash_balance": float(record.cash_balance) if record.cash_balance else None,
+            "runway_months": float(record.runway_months) if record.runway_months else None,
+            "mrr": float(record.mrr) if record.mrr else None,
+            "arr": float(record.arr) if record.arr else None,
+            "mom_growth": float(record.mom_growth) if record.mom_growth else None,
+            "yoy_growth": float(record.yoy_growth) if record.yoy_growth else None,
+            "headcount": int(record.headcount) if record.headcount else None,
+            "customers": int(record.customers) if record.customers else None,
+            "ndr": float(record.ndr) if record.ndr else None,
+            "ltv": float(record.ltv) if record.ltv else None,
+            "cac": float(record.cac) if record.cac else None,
+            "ltv_cac_ratio": float(record.ltv_cac_ratio) if record.ltv_cac_ratio else None,
+            "arpu": float(record.arpu) if record.arpu else None,
+            "source_type": record.source_type,
+        }
+        
+        # Add computed metrics
+        revenue = row["revenue"] or 0
+        expenses = row["opex"] or 0
+        cash = row["cash_balance"] or 0
+        
+        net_burn_computed = max(0, expenses - revenue)
+        runway_computed = (cash / net_burn_computed) if net_burn_computed > 0 else None
+        
+        row["computed_net_burn"] = net_burn_computed
+        row["computed_runway_months"] = runway_computed
+        row["is_profitable"] = revenue >= expenses
+        
+        export_data.append(row)
+    
+    if format.lower() == "csv":
+        # Generate CSV
+        output = io.StringIO()
+        if export_data:
+            writer = csv.DictWriter(output, fieldnames=export_data[0].keys())
+            writer.writeheader()
+            writer.writerows(export_data)
+        
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={company.name}_financials.csv"
+            }
+        )
+    else:
+        # Return JSON
+        return {
+            "company": {
+                "id": company.id,
+                "name": company.name,
+                "industry": company.industry,
+                "stage": company.stage,
+                "currency": company.currency,
+            },
+            "export_date": datetime.now().isoformat(),
+            "record_count": len(export_data),
+            "records": export_data,
+        }
