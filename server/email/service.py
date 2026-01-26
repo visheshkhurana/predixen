@@ -101,8 +101,7 @@ def get_resend_api_key() -> Optional[str]:
 
 def get_from_email() -> str:
     """Get the default from email address."""
-    creds = get_resend_credentials()
-    return creds.get("from_email", "noreply@predixen.ai") if creds else "noreply@predixen.ai"
+    return "Predixen <hello@predixen.app>"
 
 
 def is_email_configured() -> bool:
@@ -129,7 +128,7 @@ def _send_email_sync(
         }
     
     resend.api_key = creds["api_key"]
-    sender_email = from_email or creds.get("from_email", "noreply@predixen.ai")
+    sender_email = from_email or "Predixen <hello@predixen.app>"
     
     try:
         params = {
