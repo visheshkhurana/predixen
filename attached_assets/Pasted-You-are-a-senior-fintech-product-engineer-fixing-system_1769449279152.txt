@@ -1,0 +1,327 @@
+You are a senior fintech product engineer fixing systemic financial data integrity issues in a startup financial simulator (Predixen).
+
+### CONTEXT
+
+The system ingests financial data from PDFs/Excel/CSV (Income Statements, MIS, decks), auto-classifies rows (revenue, expense, derived), and shows:
+
+* Summary cards (Monthly Revenue, Total Expenses, Monthly Surplus, Runway)
+* Expense breakdown
+* Extracted data preview table
+* “Save as Baseline” workflow
+
+Currently, the UI shows inflated revenue, incorrect expenses, and wrong surplus due to:
+
+1. Double counting parent + child rows
+2. Incorrect sign handling (expenses flipped positive)
+3. Misclassification (e.g. Sales & Marketing treated as revenue)
+4. Missing hierarchy awareness
+5. No validation layer between extraction and aggregation
+6. No persistent storage of the uploaded artifact for later audit/debug
+
+Your task is to implement a **future-proof ingestion + verification + storage + AI review** system so these errors never recur.
+
+---
+
+## 0️⃣ NEW REQUIREMENT: PERSIST UPLOAD ARTIFACTS (MUST)
+
+When a user uploads a file, persist it permanently (or per retention policy) so:
+
+* The system can re-run extraction later
+* The AI agent can reference the original document
+* Audit/debug is possible (“why was this number produced?”)
+
+### Implement:
+
+* Upload object storage: S3/R2/GCS (or equivalent)
+* Store `file_id`, `sha256`, `filename`, `mime_type`, `size_bytes`, `uploaded_by`, `uploaded_at`, `company_id`, `workspace_id`, `source="excel|pdf|csv"`, `period_hint`
+* Versioning: each upload is an immutable version
+* Create a “Data Room / Uploads” view: list uploads, show status, rerun extraction, download original
+
+### DB Tables (example)
+
+```sql
+uploads(
+  id, company_id, workspace_id, filename, mime_type, size_bytes,
+  sha256, storage_url, uploaded_by, uploaded_at, status,
+  extraction_version, notes
+)
+
+extraction_runs(
+  id, upload_id, started_at, finished_at, status,
+  model_version, parser_version, warnings_json, metrics_json
+)
+
+financial_rows(
+  id, upload_id, run_id, period, currency, label,
+  statement_type, category, sub_category,
+  value_raw, value_normalized,
+  confidence, is_parent, parent_id,
+  aggregation_rule, include_in_totals,
+  provenance_json
+)
+```
+
+---
+
+## 1️⃣ DATA MODEL FIX (MANDATORY)
+
+Introduce a normalized internal schema for all extracted rows:
+
+```ts
+FinancialRow {
+  id: string
+  upload_id: string
+  run_id: string
+
+  label: string
+  statement_type: "income_statement" | "balance_sheet" | "cashflow"
+
+  category: "revenue" | "expense" | "derived"
+  sub_category?: "cogs" | "marketing" | "payroll" | "operating"
+
+  value_raw: number        // exactly as extracted (can be negative)
+  value_normalized: number // system-normalized sign (see rules below)
+
+  currency: "USD" | "INR" | "AED" | ...
+  period: string           // e.g. 2025-03
+  confidence: "high" | "medium" | "low"
+
+  is_parent: boolean
+  parent_id?: string
+  aggregation_rule: "sum_children" | "leaf_only" | "derived"
+
+  include_in_totals: boolean
+
+  provenance: {
+    source_cell?: string        // excel cell refs if available
+    source_sheet?: string
+    page?: number               // pdf page if available
+    raw_text_snippet?: string
+    extractor?: "rule"|"ml"|"llm"
+  }
+}
+```
+
+---
+
+## 2️⃣ SIGN NORMALIZATION RULES (NON-NEGOTIABLE)
+
+Implement one single source of truth for sign handling (normalize once, right after extraction):
+
+* Revenue → `value_normalized = abs(value_raw)`
+* Expense → `value_normalized = abs(value_raw)`
+* Derived → computed, never summed
+
+❌ Never infer sign from UI
+❌ Never flip sign during aggregation
+✅ Normalize once during ingestion
+
+---
+
+## 3️⃣ HIERARCHY & DOUBLE-COUNTING PREVENTION
+
+Rules:
+
+* If a row is `is_parent = true` and `aggregation_rule = sum_children` → **exclude it from totals**
+* Only leaf nodes (`!is_parent`) contribute
+* If both parent and children exist:
+
+  * auto-set parent `include_in_totals = false`
+  * UI badge: “Derived from sub-rows”
+
+---
+
+## 4️⃣ CLASSIFICATION SAFETY NET (CRITICAL)
+
+Add deterministic overrides (always win):
+
+```ts
+CLASSIFICATION_OVERRIDES = {
+  "sales and marketing": { category: "expense", sub_category: "marketing" },
+  "marketing": { category: "expense", sub_category: "marketing" },
+  "cogs": { category: "expense", sub_category: "cogs" },
+  "other opex": { category: "expense", sub_category: "operating" },
+  "payroll": { category: "expense", sub_category: "payroll" },
+  "gross profit": { category: "derived" },
+  "operating income": { category: "derived" }
+}
+```
+
+If LLM conflicts with overrides:
+
+* force override
+* log mismatch
+* downgrade confidence
+* surface warning
+
+---
+
+## 5️⃣ AGGREGATION LOGIC (EXACT DEFINITIONS)
+
+Monthly Revenue:
+
+```
+SUM(rows where category="revenue" AND include_in_totals=true AND is_parent=false)
+```
+
+Total Expenses:
+
+```
+SUM(rows where category="expense" AND include_in_totals=true AND is_parent=false)
+```
+
+Monthly Surplus:
+
+```
+Monthly Revenue - Total Expenses
+```
+
+❌ Never sum derived rows (Operating Income, Gross Profit, margins, magic numbers)
+
+---
+
+## 6️⃣ NEW: ENHANCED AI REVIEW AGENT (MANDATORY)
+
+Add an “Upload Analyst Agent” that runs automatically after each upload and before save.
+
+### Agent Goals
+
+1. Validate extracted data against accounting logic
+2. Detect anomalies, misclassifications, double-counting, missing metrics
+3. Propose fixes (auto-fix when safe, otherwise ask user)
+4. Produce an audit report (“what changed and why”)
+5. Persist the report and link it to the upload/run
+
+### Architecture
+
+* Run pipeline:
+
+  1. Parse + extract rows
+  2. Normalize signs
+  3. Build hierarchy candidates
+  4. Apply deterministic overrides
+  5. **AI review agent** executes
+  6. Truth checks (hard rules)
+  7. Produce “Verified Dataset” output used by UI + simulation
+
+### What the agent should do (Specific checks)
+
+* **Double counting**: detect if a parent total exists with children that already sum to it
+
+  * Action: set parent include=false, keep children
+* **Misclassification**: e.g., Sales & Marketing marked as revenue
+
+  * Action: reclassify to expense/marketing, add warning
+* **Sign errors**: expenses positive/negative inconsistently
+
+  * Action: normalize; if row seems reversed (refunds/returns), flag for user review
+* **Derived row leakage**: derived metrics included in totals
+
+  * Action: mark derived exclude, show as display-only
+* **Missing key lines**: payroll/opex/cash missing when expected
+
+  * Action: ask targeted questions or suggest uploading Balance Sheet / Cashflow
+* **Currency mismatch**: document has INR but UI uses USD
+
+  * Action: detect currency cues; require explicit confirmation + FX rate if conversion is needed
+* **Sanity checks**:
+
+  * Gross Profit ≈ Revenue − COGS (tolerance)
+  * Operating Income ≈ Gross Profit − (S&M + Other Opex + Payroll) (tolerance)
+  * Surplus displayed ≈ Revenue − Expenses (hard check)
+
+### Auto-fix Policy
+
+Auto-fix ONLY when confidence is high and deterministic:
+
+* override known labels
+* exclude parent totals when children exist
+* exclude derived rows from totals
+* normalize sign per category
+  Everything else → “Needs confirmation” with a suggested value + rationale.
+
+### Agent Output (persist + show in UI)
+
+Create a structured “Upload Analysis Report”:
+
+```json
+{
+  "upload_id": "...",
+  "run_id": "...",
+  "status": "passed|auto_fixed|blocked",
+  "currency_detected": "USD",
+  "issues": [
+    {
+      "severity": "high|medium|low",
+      "type": "double_counting|misclassification|sign|missing|currency|derived_leak",
+      "row_ids": ["..."],
+      "explanation": "...",
+      "proposed_fix": {...},
+      "applied": true|false
+    }
+  ],
+  "final_totals": {
+    "monthly_revenue": 14246988.40,
+    "total_expenses": 9890700.00,
+    "monthly_surplus": 4356288.40
+  }
+}
+```
+
+UI requirements:
+
+* Show the report on “Verify Financial Data”
+* Badge on top: ✅ Verified / ⚠️ Auto-fixed / ❌ Blocked
+* “Show diffs” view (before vs after)
+* “Re-run analysis” button
+* “Download original upload” button
+
+---
+
+## 7️⃣ VERIFICATION LAYER (BLOCKING BEFORE SAVE)
+
+Before “Save as Baseline”, run hard checks:
+
+Block save if:
+
+* Monthly Revenue includes parent totals AND children (double counting not resolved)
+* Any known expense category is classified as revenue (e.g., S&M)
+* Monthly Surplus ≠ Revenue − Expenses (beyond tolerance)
+* Currency is uncertain
+
+Allow save if:
+
+* Passed or auto-fixed with full diff report
+
+---
+
+## 8️⃣ REGRESSION TESTS (MUST ADD)
+
+Create golden tests:
+
+* Parent + child revenues present (ensure no double count)
+* Expenses negative (ensure normalized)
+* “Sales & Marketing” mislabeled (ensure override)
+* Derived rows present (ensure excluded from totals)
+* Currency detection edge cases
+
+Fail build if:
+
+* Revenue inflated
+* Expenses exclude major known categories
+* Surplus mismatch
+* UI totals differ from backend “Verified Dataset”
+
+---
+
+## OUTPUT EXPECTATION
+
+Deliver:
+
+1. Backend pipeline changes (normalize, hierarchy, overrides, verified dataset)
+2. Persistent upload storage + versioning
+3. Enhanced AI Upload Analyst Agent with auto-fix + report
+4. UI changes to surface verification, diffs, and allow reruns
+5. Regression tests + golden dataset harness
+
+Think like a CFO + auditor. Optimize for correctness, traceability, and repeatability.

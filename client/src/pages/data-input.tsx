@@ -1563,9 +1563,9 @@ export default function DataInput() {
                                       {warning.code === 'PAYROLL_NOT_FOUND' && (
                                         <Button
                                           type="button"
-                                          variant="link"
+                                          variant="ghost"
                                           size="sm"
-                                          className="p-0 h-auto text-xs mt-1"
+                                          className="p-0 h-auto text-xs mt-1 underline"
                                           onClick={() => {
                                             setActiveTab('financials');
                                           }}

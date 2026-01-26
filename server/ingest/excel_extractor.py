@@ -12,7 +12,7 @@ MAX_EXCEL_SIZE_MB = 20
 MIN_METRICS_COUNT = 3  # Minimum metrics to consider extraction successful
 
 
-def format_number_as_words(value: float, currency: str = "USD", is_percentage: bool = False) -> str:
+def format_number_as_words(value: float, currency: str = "USD", is_percentage: bool = False) -> Optional[str]:
     """Convert a numeric value to a word-based representation.
     
     Examples:
