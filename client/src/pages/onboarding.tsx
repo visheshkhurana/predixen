@@ -12,7 +12,6 @@ import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { DataVerificationCopilot } from '@/components/DataVerificationCopilot';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -47,22 +46,10 @@ interface ExtractedData {
   financials: {
     monthly_revenue?: number;
     gross_margin_pct?: number;
-    operating_margin_pct?: number;
     opex?: number;
     payroll?: number;
     other_costs?: number;
     cash_balance?: number;
-    net_burn?: number;
-  };
-  computed_metrics?: {
-    revenue_growth_mom?: number;
-    revenue_growth_yoy?: number;
-    cmgr?: number;
-    burn_multiple?: number;
-    concentration_top5?: number;
-    ndr?: number;
-    churn_rate?: number;
-    ltv_cac_ratio?: number;
   };
   currency?: string;
   confidence?: { company_info: number; financials: number };
@@ -330,13 +317,7 @@ export default function OnboardingPage() {
     
     setIsSubmitting(true);
     try {
-      // Include extracted data for use by truth scan
-      const companyPayload = {
-        ...companyData,
-        extracted_metrics: extractedData?.computed_metrics || null,
-        extracted_financials: extractedData?.financials || null
-      };
-      const company = await createCompanyMutation.mutateAsync(companyPayload);
+      const company = await createCompanyMutation.mutateAsync(companyData);
       setCurrentCompany(company);
       setStep(2);
     } catch (err) {
@@ -721,7 +702,6 @@ export default function OnboardingPage() {
         )}
         
         {step === 2 && (
-          <>
           <Card>
             <CardHeader>
               <CardTitle>Financial Baseline</CardTitle>
@@ -904,17 +884,6 @@ export default function OnboardingPage() {
               </form>
             </CardContent>
           </Card>
-          
-          {extractedData && (
-            <DataVerificationCopilot
-              extractedData={extractedData}
-              baselineData={baselineData}
-              onUpdateBaseline={(updates) => setBaselineData({ ...baselineData, ...updates })}
-              companyStage={companyData.stage}
-              currency={companyData.currency}
-            />
-          )}
-          </>
         )}
         
         {step === 3 && (

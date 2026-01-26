@@ -123,13 +123,6 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         CustomerRecord.company_id == company.id
     ).all()
     
-    # Get extracted data from company metadata (from PDF upload during onboarding)
-    extracted_metrics = {}
-    extracted_financials = {}
-    if company.metadata_json and isinstance(company.metadata_json, dict):
-        extracted_metrics = company.metadata_json.get("extracted_metrics", {})
-        extracted_financials = company.metadata_json.get("extracted_financials", {})
-    
     metrics = {}
     flags = []
     
@@ -167,15 +160,7 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             net_new_arr = (latest.revenue - prev.revenue) * 12
             metrics["net_new_arr"] = net_new_arr
         else:
-            # Use extracted metrics as fallback when only one data point exists
-            extracted_growth_mom = extracted_metrics.get("revenue_growth_mom")
-            extracted_cmgr = extracted_metrics.get("cmgr")
-            if extracted_growth_mom is not None:
-                metrics["revenue_growth_mom"] = extracted_growth_mom
-            elif extracted_cmgr is not None:
-                metrics["revenue_growth_mom"] = extracted_cmgr
-            else:
-                metrics["revenue_growth_mom"] = None  # Use None instead of 0 to indicate missing
+            metrics["revenue_growth_mom"] = 0
             metrics["burn_change"] = 0
             metrics["net_new_arr"] = 0
         
@@ -186,31 +171,17 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             else:
                 metrics["revenue_growth_yoy"] = 0
         elif len(financials) >= 2:
-            mom_growth = metrics.get("revenue_growth_mom", 0) or 0
+            mom_growth = metrics.get("revenue_growth_mom", 0)
             metrics["revenue_growth_yoy"] = ((1 + mom_growth/100) ** 12 - 1) * 100
         else:
-            # Use extracted YoY growth if available (converted from multiplier to percentage)
-            extracted_yoy = extracted_metrics.get("revenue_growth_yoy")
-            if extracted_yoy is not None:
-                # If stored as multiplier (e.g., 1.24), convert to percentage
-                if extracted_yoy > 0 and extracted_yoy < 10:
-                    metrics["revenue_growth_yoy"] = (extracted_yoy - 1) * 100
-                else:
-                    metrics["revenue_growth_yoy"] = extracted_yoy
-            else:
-                metrics["revenue_growth_yoy"] = None  # Use None instead of 0 to indicate missing
+            metrics["revenue_growth_yoy"] = 0
         
         net_new_arr = metrics.get("net_new_arr", 0)
         if net_burn > 0:
             if net_new_arr > 0:
                 metrics["burn_multiple"] = round(net_burn / net_new_arr, 2)
             else:
-                # Use extracted burn multiple if available
-                extracted_burn_multiple = extracted_metrics.get("burn_multiple")
-                if extracted_burn_multiple is not None:
-                    metrics["burn_multiple"] = extracted_burn_multiple
-                else:
-                    metrics["burn_multiple"] = None
+                metrics["burn_multiple"] = None
             
             if latest.cash_balance and latest.cash_balance > 0:
                 runway_months = latest.cash_balance / net_burn
@@ -218,17 +189,12 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
                 metrics["runway_p10"] = round(runway_months * 0.7, 1)
                 metrics["runway_p90"] = round(runway_months * 1.4, 1)
             else:
-                metrics["runway_p50"] = None  # Use None instead of 0
-                metrics["runway_p10"] = None
-                metrics["runway_p90"] = None
+                metrics["runway_p50"] = 0
+                metrics["runway_p10"] = 0
+                metrics["runway_p90"] = 0
             metrics["runway_sustainable"] = False
         else:
-            # Company is profitable - use extracted burn multiple if available, or 0
-            extracted_burn_multiple = extracted_metrics.get("burn_multiple")
-            if extracted_burn_multiple is not None:
-                metrics["burn_multiple"] = extracted_burn_multiple
-            else:
-                metrics["burn_multiple"] = 0  # 0 burn multiple for profitable companies
+            metrics["burn_multiple"] = 0
             metrics["runway_p50"] = None
             metrics["runway_p10"] = None
             metrics["runway_p90"] = None
@@ -260,98 +226,18 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
                 "metrics_involved": ["gross_margin"]
             })
     else:
-        # No FinancialRecord exists - use extracted_financials from PDF if available
-        if extracted_financials:
-            monthly_rev = extracted_financials.get("monthly_revenue")
-            cash = extracted_financials.get("cash_balance")
-            burn = extracted_financials.get("net_burn")
-            
-            metrics["monthly_revenue"] = monthly_rev
-            metrics["cash_balance"] = cash
-            
-            # Compute net_burn if not directly provided
-            if burn is not None:
-                metrics["net_burn"] = burn
-            else:
-                opex = extracted_financials.get("opex", 0) or 0
-                payroll = extracted_financials.get("payroll", 0) or 0
-                other = extracted_financials.get("other_costs", 0) or 0
-                gross_margin_pct = extracted_financials.get("gross_margin_pct", 70) or 70
-                
-                if monthly_rev:
-                    cogs = monthly_rev * (1 - gross_margin_pct / 100)
-                    total_costs = cogs + opex + payroll + other
-                    burn = total_costs - monthly_rev
-                    metrics["net_burn"] = burn
-                else:
-                    # Pre-revenue: burn is just total expenses
-                    total_costs = opex + payroll + other
-                    if total_costs > 0:
-                        metrics["net_burn"] = total_costs
-                    else:
-                        metrics["net_burn"] = None
-            
-            # Compute margins
-            gm = extracted_financials.get("gross_margin_pct")
-            om = extracted_financials.get("operating_margin_pct")
-            metrics["gross_margin"] = gm
-            metrics["operating_margin"] = om
-            
-            # Compute runway if we have cash and burn
-            if cash is not None and metrics.get("net_burn") is not None and metrics["net_burn"] > 0:
-                runway = cash / metrics["net_burn"]
-                metrics["runway_p50"] = runway
-                metrics["runway_p10"] = runway * 0.6  # Conservative estimate
-                metrics["runway_p90"] = runway * 1.4  # Optimistic estimate
-            else:
-                metrics["runway_p50"] = None
-                metrics["runway_p10"] = None
-                metrics["runway_p90"] = None
-            
-            # Use extracted computed metrics
-            metrics["revenue_growth_mom"] = extracted_metrics.get("revenue_growth_mom")
-            
-            # Convert YoY growth from multiplier to percentage if needed (same logic as financials branch)
-            extracted_yoy = extracted_metrics.get("revenue_growth_yoy")
-            if extracted_yoy is not None:
-                # If value looks like a multiplier (e.g., 1.24 = 24% growth), convert it
-                if extracted_yoy > 0 and extracted_yoy < 10:
-                    metrics["revenue_growth_yoy"] = (extracted_yoy - 1) * 100
-                else:
-                    metrics["revenue_growth_yoy"] = extracted_yoy
-            else:
-                metrics["revenue_growth_yoy"] = None
-                
-            metrics["burn_multiple"] = extracted_metrics.get("burn_multiple")
-            metrics["burn_change"] = 0
-            metrics["net_new_arr"] = 0
-            
-            flags.append({
-                "severity": "medium",
-                "title": "PDF Data Only",
-                "description": "Metrics based on PDF extraction. Connect integrations for real-time data.",
-                "metrics_involved": []
-            })
-        else:
-            # No financial data at all
-            metrics["monthly_revenue"] = None
-            metrics["cash_balance"] = None
-            metrics["net_burn"] = None
-            metrics["runway_p50"] = None
-            metrics["runway_p10"] = None
-            metrics["runway_p90"] = None
-            metrics["gross_margin"] = None
-            metrics["operating_margin"] = None
-            metrics["revenue_growth_mom"] = None
-            metrics["burn_change"] = 0
-            metrics["net_new_arr"] = 0
-            
-            flags.append({
-                "severity": "high",
-                "title": "No Financial Data",
-                "description": "Upload financial data to enable analysis",
-                "metrics_involved": []
-            })
+        metrics["monthly_revenue"] = 0
+        metrics["cash_balance"] = 0
+        metrics["net_burn"] = 0
+        metrics["runway_p50"] = 0
+        metrics["runway_p10"] = 0
+        metrics["runway_p90"] = 0
+        flags.append({
+            "severity": "high",
+            "title": "No Financial Data",
+            "description": "Upload financial data to enable analysis",
+            "metrics_involved": []
+        })
     
     if transactions:
         customer_revenue = {}
@@ -381,14 +267,8 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
                 "metrics_involved": ["concentration_top5"]
             })
     else:
-        # Use extracted concentration if available
-        extracted_top5 = extracted_metrics.get("concentration_top5")
-        if extracted_top5 is not None:
-            metrics["concentration_top5"] = extracted_top5
-            metrics["concentration_top1"] = None  # Individual values not available
-        else:
-            metrics["concentration_top1"] = None
-            metrics["concentration_top5"] = None
+        metrics["concentration_top1"] = None
+        metrics["concentration_top5"] = None
     
     if customers and transactions:
         customer_ids = set(c.customer_id for c in customers)
