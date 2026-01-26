@@ -146,7 +146,7 @@ This is an automated notification from Predixen Intelligence OS.
                     "Content-Type": "application/json"
                 },
                 json={
-                    "from": credentials["from_email"],
+                    "from": "Predixen <hello@predixen.app>",
                     "to": NOTIFICATION_RECIPIENTS,
                     "subject": f"[Predixen] {category}: {feature_name}",
                     "html": html_content,
@@ -269,7 +269,7 @@ async def send_beta_invite_email(
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": credentials.get("from_email", "noreply@predixen.ai"),
+                        "from": "Predixen <hello@predixen.app>",
                         "to": [email],
                         "subject": "You're Invited to Test Predixen Intelligence OS",
                         "html": html_content
