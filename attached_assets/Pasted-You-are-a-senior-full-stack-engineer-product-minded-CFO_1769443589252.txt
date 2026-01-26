@@ -1,0 +1,280 @@
+You are a senior full-stack engineer + product-minded CFO building Predixen (RunwayAI). We have critical discrepancies between values shown in **Step 1: Data Input** UI and values parsed from an uploaded Excel. Implement the fixes below end-to-end with tests.
+
+## Context (current bugs)
+
+UI shows:
+
+* Total Monthly Expenses = **$6.4M** (computed)
+* Breakdown: Payroll **$50K**, Marketing **$15K**, Operating **$643.9K**, COGS **$5.7M**
+* Monthly Revenue blank/0
+* Net Burn Rate shows **+25.7M/mo (Net positive)** (wrong sign/logic)
+* Runway “Profitable / Sustainable” but derived from wrong numbers
+
+Excel reality (latest month in file: **Mar 2025**):
+
+* Total Revenue ≈ **$14.25M**
+* COGS ≈ **$5.65M**
+* Marketing (sum of all marketing sub-lines) ≈ **$3.59M**
+* Other Opex ≈ **$0.64M**
+* Payroll is **NOT present** as a line item (must not be fabricated)
+* Total expenses should be ≈ **$9.9–$10.1M**
+* Profit ≈ **Revenue - Expenses** (~$4.2M), so net burn should be **negative** (i.e., net positive cashflow)
+
+## Goal
+
+Fix Excel ingestion + normalization + UI binding so:
+
+1. UI always reflects parsed data accurately (latest month default + configurable)
+2. Breakdown categories are computed correctly (no missing marketing; no fabricated payroll)
+3. Net burn/runway computed correctly with clear sign conventions
+4. Add validation + anomaly detection to prevent “garbage in → garbage out”
+5. Add regression tests using the provided Excel file as a golden dataset
+
+---
+
+# 1) Implement canonical Financial Model (single source of truth)
+
+## 1.1 Create a canonical schema
+
+Create `src/lib/finance/schema.ts`:
+
+* `NormalizedMonthlyFinancials`:
+
+  * `period: { year: number; month: number; label: string }`
+  * `revenue: number`
+  * `expenses: { cogs: number; marketing: number; payroll: number | null; operating: number; other: number }`
+  * `totalExpenses: number`
+  * `netBurn: number`  // **expenses - revenue** (positive = burning, negative = profitable)
+  * `runwayMonths: number | null` // if netBurn > 0 and cashOnHand > 0 => cash/netBurn else null
+  * `isProfitable: boolean` // revenue >= expenses
+  * `sources: { [key: string]: { sheet?: string; row?: string; cellRange?: string } }` // traceability
+  * `validation: { warnings: ValidationWarning[]; errors: ValidationError[] }`
+
+Define:
+
+* `type ValidationSeverity = "info" | "warn" | "error"`
+* `ValidationWarning = { code: string; message: string; fields: string[]; severity: ValidationSeverity }`
+* `ValidationError = { code: string; message: string; fields: string[]; severity: "error" }`
+
+## 1.2 Define sign conventions (must be consistent everywhere)
+
+* Store all costs as **positive numbers** in the model.
+* `netBurn = totalExpenses - revenue`
+
+  * `netBurn > 0` => burning cash
+  * `netBurn < 0` => net positive (profitable)
+* UI must label properly:
+
+  * If `netBurn < 0` show “Net Positive: +$X/mo” where X = abs(netBurn)
+  * If `netBurn > 0` show “Net Burn: -$X/mo” or “Burn: $X/mo” (choose one and be consistent)
+* Runway:
+
+  * If `netBurn <= 0` => show “Profitable / Sustainable” and runwayMonths = null
+  * Else runwayMonths = cashOnHand / netBurn
+
+---
+
+# 2) Fix Excel ingestion + mapping (root cause)
+
+We are missing marketing aggregation and fabricating payroll. Implement robust mapping.
+
+## 2.1 Ingestion entrypoint
+
+Create `src/lib/finance/importers/excelImporter.ts` that:
+
+* uses `xlsx` to read workbook
+* detects candidate sheets (“Income Statement”, “P&L”, “Profit and Loss”, etc.)
+* extracts monthly columns (dates) and row labels
+* returns a raw table: `rows: { label: string; valuesByPeriod: Record<string, number> }[]`
+
+## 2.2 Normalization + mapping
+
+Create `src/lib/finance/normalize/mapPnLToCanonical.ts`:
+
+* Input: raw rows + target period (default latest)
+* Output: `NormalizedMonthlyFinancials`
+
+### Mapping rules (IMPORTANT)
+
+* Revenue:
+
+  * match rows containing: “Total Revenue”, “Revenue”, “Net Revenue”, “Sales”
+* COGS:
+
+  * match: “COGS”, “Cost of Goods”, “Cost of revenue”, “Direct costs”
+* Marketing:
+
+  * sum ALL rows matching:
+
+    * “Marketing”
+    * “Sales & Marketing”
+    * “User acquisition”
+    * “Brand”
+    * “Performance marketing”
+    * “India Marketing”, “International Marketing”, etc.
+  * **Do not** pick only one sub-row; aggregate all marketing-related rows.
+* Payroll:
+
+  * match only if row label contains:
+
+    * “Payroll”, “Salaries”, “Wages”, “Employee costs”, “Compensation”
+  * If no payroll row present => `payroll = null` and add validation warning `PAYROLL_NOT_FOUND`.
+  * Never default payroll to 50K or any constant.
+* Operating:
+
+  * match “Operating”, “G&A”, “General & Admin”, “Administration”, “Office”
+* Other:
+
+  * match “Other”, “Misc”, “Utilities”, etc.
+* Total expenses:
+
+  * compute = cogs + marketing + (payroll ?? 0) + operating + other
+  * If raw sheet has “Total Expenses” row, compare and warn if mismatch > 2%
+
+### Traceability
+
+For each mapped field, populate `sources` pointing to which rows/cells contributed (sheet + row label + period key).
+
+---
+
+# 3) Period selection logic (latest month default)
+
+In `src/lib/finance/period.ts`:
+
+* parse period keys into sortable dates
+* choose latest available period by default
+* expose helper to compute:
+
+  * `momGrowthRate` from last two periods
+  * `threeMonthAvgRevenue`
+    If user hasn’t selected a month, UI uses latest.
+
+Update UI:
+
+* Add a Month dropdown above metrics (default: “Latest (Mar 2025)”)
+* When month changes, recompute the financial summary and re-render.
+
+---
+
+# 4) UI binding fixes (Step 1 Data Input)
+
+Update Step 1 so the displayed metrics come ONLY from `NormalizedMonthlyFinancials`:
+
+* Monthly Revenue = `revenue`
+* Total Monthly Expenses = `totalExpenses`
+* Expense breakdown cards:
+
+  * Payroll: if null => show “Not detected” + CTA “Add payroll manually”
+  * Marketing: show aggregated marketing
+  * Operating: show operating
+  * COGS: show cogs
+  * Other: show other
+
+Net Burn Rate label:
+
+* If netBurn < 0 => show “Net Positive: +$abs(netBurn)/mo”
+* If netBurn > 0 => show “Net Burn: $netBurn/mo”
+
+Runway:
+
+* If netBurn <= 0 => “Profitable / Sustainable”
+* Else show “X.X months”
+
+Also: fix the current “Computed from breakdown: $6.4M” line to reflect the canonical computed value.
+
+---
+
+# 5) Validation + anomaly detection (prevent similar errors)
+
+Create `src/lib/finance/validate/validators.ts` and run validators after normalization:
+
+### Required fields checks
+
+* revenue must be >= 0
+* cogs/marketing/operating/other >= 0
+* totalExpenses = sum components (within small epsilon)
+
+### Anomaly rules (warn)
+
+* If `marketing > revenue * 0.8` => WARN (possible mapping issue)
+* If `marketing < revenue * 0.001` and revenue > 1M => WARN (likely missing marketing)
+* If payroll is null => WARN “Payroll not detected”
+* If netBurn magnitude is suspicious:
+
+  * abs(netBurn) > revenue * 2 => WARN
+* If any category is 0 but raw sheet had matching rows => WARN
+
+### UI display for validation
+
+Add a “Data Quality” panel on Step 1:
+
+* show warnings/errors with codes and recommended action
+* block “Continue” to Step 2 if any **errors**
+* allow continue with warnings but require checkbox “I confirm these numbers are correct”
+
+---
+
+# 6) Golden dataset regression tests (must do)
+
+Add `vitest` tests under `src/lib/finance/__tests__/excelImport.test.ts`:
+
+* Load the provided excel file placed in repo at `./testdata/deal-2642-export.xlsx`
+* Parse latest period
+* Expectations (approx with tolerance):
+
+  * revenue ≈ 14_250_000
+  * cogs ≈ 5_650_000
+  * marketing ≈ 3_590_000
+  * operating ≈ 640_000
+  * payroll === null
+  * totalExpenses ≈ 9_9xx_000 to 10_1xx_000
+  * netBurn = totalExpenses - revenue should be negative (~ -4.2M)
+* Ensure validator produces:
+
+  * warning PAYROLL_NOT_FOUND present
+  * no error for marketing missing
+
+Also add snapshot test for `sources` to ensure traceability is populated (non-empty).
+
+---
+
+# 7) Manual override flow (best practice)
+
+Add optional “Manual Overrides” section:
+
+* user can input payroll if missing
+* user can override category mapping via “Edit mapping” modal:
+
+  * shows all matched rows for each category
+  * checkboxes to include/exclude rows
+  * saves mapping rules in DB per company
+
+Persist:
+
+* `company_financial_mappings` table:
+
+  * companyId
+  * category
+  * includeRowPatterns[]
+  * excludeRowPatterns[]
+  * updatedAt
+
+If override exists, use it before heuristics.
+
+---
+
+# 8) Export parity (PDF/Excel export)
+
+When exporting, export the canonical model + chosen period so exported numbers match UI exactly.
+
+---
+
+# Deliverables
+
+1. PR implementing canonical model, importer, normalizer, validators, UI binding fixes
+2. Tests with the provided file as golden dataset
+3. Data Quality panel + blocking rules
+4. Manual overrides (payroll + mapping editor) persisted in DB
+5. Ensure net burn/runway labels are correct and consistent everywhere
+
+Now implement this in the current codebase, update any existing components/services accordingly, and ensure Step 1 shows accurate values for the provided Excel.

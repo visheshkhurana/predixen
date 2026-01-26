@@ -341,7 +341,7 @@ export default function DataInput() {
         totalMonthlyExpenses: normalized.totalMonthlyExpenses,
         monthlyGrowthRate: normalized.monthlyGrowthRate,
         expenseBreakdown: {
-          payroll: normalized.expenseBreakdown?.payroll || null,
+          payroll: normalized.expenseBreakdown?.payroll ?? null,
           marketing: normalized.expenseBreakdown?.marketing || null,
           operating: normalized.expenseBreakdown?.operating || null,
           cogs: normalized.expenseBreakdown?.cogs || null,
@@ -349,6 +349,9 @@ export default function DataInput() {
         },
         currency: normalized.currency || 'USD',
         asOfDate: normalized.asOfDate,
+        validationWarnings: result.validationWarnings || [],
+        validationErrors: result.validationErrors || [],
+        sources: result.sources || {},
       };
 
       setFinancialBaseline(baseline);
@@ -1523,6 +1526,56 @@ export default function DataInput() {
                                   <span className="text-xs text-muted-foreground w-10 text-right">
                                     {((item.value / summedExpenses) * 100).toFixed(0)}%
                                   </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {financialBaseline?.validationWarnings && financialBaseline.validationWarnings.length > 0 && (
+                          <div className="mt-4 pt-4 border-t">
+                            <div className="flex items-center gap-2 mb-3">
+                              <AlertTriangle className="h-4 w-4 text-amber-500" />
+                              <h4 className="text-sm font-medium">Data Quality Warnings</h4>
+                            </div>
+                            <div className="space-y-2">
+                              {financialBaseline.validationWarnings.map((warning, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className={`p-3 rounded-md text-sm ${
+                                    warning.severity === 'error' 
+                                      ? 'bg-red-500/10 text-red-600 dark:text-red-400' 
+                                      : warning.severity === 'warn'
+                                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                      : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                  }`}
+                                  data-testid={`warning-${warning.code}`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {warning.severity === 'error' ? (
+                                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                    ) : (
+                                      <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                                    )}
+                                    <div>
+                                      <p className="font-medium">{warning.code.replace(/_/g, ' ')}</p>
+                                      <p className="text-xs mt-0.5 opacity-80">{warning.message}</p>
+                                      {warning.code === 'PAYROLL_NOT_FOUND' && (
+                                        <Button
+                                          type="button"
+                                          variant="link"
+                                          size="sm"
+                                          className="p-0 h-auto text-xs mt-1"
+                                          onClick={() => {
+                                            setActiveTab('financials');
+                                          }}
+                                          data-testid="button-add-payroll"
+                                        >
+                                          Add payroll manually
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               ))}
                             </div>

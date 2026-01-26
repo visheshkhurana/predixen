@@ -548,20 +548,228 @@ def validate_excel_metrics(metrics: Dict[str, Any]) -> tuple:
     return metrics, warnings, suggested_corrections
 
 
-def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB) -> Dict[str, Any]:
+def aggregate_rows_by_keywords(df: pd.DataFrame, column: str, keywords: List[str], 
+                                exclude_keywords: Optional[List[str]] = None) -> tuple:
+    """
+    Aggregate values from ALL rows that match any of the keywords.
+    
+    Returns: (total_value, matched_rows: List[str])
+    """
+    exclude_keywords = exclude_keywords or []
+    total = 0.0
+    matched_rows = []
+    
+    for idx in df.index:
+        if not isinstance(idx, str):
+            continue
+        
+        idx_lower = idx.strip().lower()
+        
+        excluded = any(excl.lower() in idx_lower for excl in exclude_keywords)
+        if excluded:
+            continue
+        
+        matched = any(kw.lower() in idx_lower for kw in keywords)
+        if matched:
+            try:
+                value = df.loc[idx, column]
+                if pd.notna(value):
+                    num_value = float(value)
+                    if num_value < 0:
+                        num_value = abs(num_value)
+                    total += num_value
+                    matched_rows.append(idx.strip())
+            except (ValueError, TypeError):
+                continue
+    
+    return (total if matched_rows else None, matched_rows)
+
+
+def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = None) -> Dict[str, Any]:
+    """
+    Parse Income Statement with PROPER marketing aggregation and canonical model.
+    
+    Key differences from parse_income_statement():
+    1. Aggregates ALL marketing-related rows (not just picks one)
+    2. Sets payroll=None when not found (with warning)
+    3. Returns canonical NormalizedMonthlyFinancials structure
+    4. Includes full traceability (sources)
+    """
+    from server.models.canonical_financials import (
+        NormalizedMonthlyFinancials, Period, ExpenseBreakdown, SourceReference,
+        MARKETING_KEYWORDS, PAYROLL_KEYWORDS, COGS_KEYWORDS, OPERATING_KEYWORDS,
+        OTHER_OPEX_KEYWORDS, REVENUE_KEYWORDS, run_validation
+    )
+    
+    try:
+        xl = pd.ExcelFile(file_path)
+        
+        sheet_name = None
+        for name in xl.sheet_names:
+            if "income" in name.lower() and "statement" in name.lower():
+                sheet_name = name
+                break
+        
+        if not sheet_name:
+            for name in xl.sheet_names:
+                if "income" in name.lower() or "p&l" in name.lower() or "profit" in name.lower():
+                    sheet_name = name
+                    break
+        
+        if not sheet_name:
+            sheet_name = xl.sheet_names[0]
+            logger.warning(f"No Income Statement sheet found, using first sheet: {sheet_name}")
+        
+        df = pd.read_excel(xl, sheet_name=sheet_name)
+        
+        if len(df.columns) > 0 and df.columns[0] in ['index', 'Index', 'Metric', 'metric', 'Unnamed: 0']:
+            df = df.set_index(df.columns[0])
+        
+        detected_currency = detect_currency(df, file_path)
+        logger.info(f"[CANONICAL] Detected currency: {detected_currency}")
+        
+        date_columns = []
+        for col in df.columns:
+            try:
+                if isinstance(col, datetime):
+                    date_columns.append((col, col))
+                elif isinstance(col, str):
+                    for fmt in ['%Y-%m', '%Y-%m-%d', '%m/%Y', '%B %Y', '%b %Y']:
+                        try:
+                            parsed = datetime.strptime(col, fmt)
+                            date_columns.append((col, parsed))
+                            break
+                        except ValueError:
+                            continue
+            except Exception:
+                continue
+        
+        if not date_columns:
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            if numeric_cols:
+                latest_col = numeric_cols[-1]
+                latest_date = datetime.now()
+            else:
+                raise ValueError("No date or numeric columns found in the spreadsheet")
+        else:
+            sorted_dates = sorted(date_columns, key=lambda x: x[1])
+            latest_col = sorted_dates[-1][0]
+            latest_date = sorted_dates[-1][1]
+        
+        logger.info(f"[CANONICAL] Using latest column: {latest_col}")
+        
+        sources = {}
+        
+        revenue_val, revenue_rows = aggregate_rows_by_keywords(
+            df, latest_col, REVENUE_KEYWORDS,
+            exclude_keywords=['net revenues (', 'net revenue india', 'net revenue international', 'net revenue ecommerce']
+        )
+        if revenue_val is None:
+            all_rev, all_rev_rows = aggregate_rows_by_keywords(df, latest_col, ['revenue', 'sales', 'income'])
+            if all_rev:
+                revenue_val = all_rev
+                revenue_rows = all_rev_rows
+        sources['revenue'] = SourceReference(sheet=sheet_name, row_labels=revenue_rows, column=str(latest_col))
+        
+        cogs_val, cogs_rows = aggregate_rows_by_keywords(df, latest_col, COGS_KEYWORDS)
+        sources['cogs'] = SourceReference(sheet=sheet_name, row_labels=cogs_rows, column=str(latest_col), raw_value=cogs_val)
+        
+        marketing_val, marketing_rows = aggregate_rows_by_keywords(
+            df, latest_col, MARKETING_KEYWORDS,
+            exclude_keywords=['cogs', 'payroll', 'salary']
+        )
+        sources['marketing'] = SourceReference(sheet=sheet_name, row_labels=marketing_rows, column=str(latest_col), raw_value=marketing_val)
+        logger.info(f"[CANONICAL] Marketing aggregation: ${marketing_val:,.0f} from {len(marketing_rows)} rows: {marketing_rows}")
+        
+        payroll_val, payroll_rows = aggregate_rows_by_keywords(df, latest_col, PAYROLL_KEYWORDS)
+        sources['payroll'] = SourceReference(sheet=sheet_name, row_labels=payroll_rows, column=str(latest_col), raw_value=payroll_val)
+        if not payroll_rows:
+            logger.info("[CANONICAL] PAYROLL_NOT_FOUND - No payroll rows detected, setting to null")
+        
+        operating_val, operating_rows = aggregate_rows_by_keywords(
+            df, latest_col, OPERATING_KEYWORDS,
+            exclude_keywords=['operating income', 'operating profit', 'operating margin', 'marketing', 'payroll', 'cogs']
+        )
+        sources['operating'] = SourceReference(sheet=sheet_name, row_labels=operating_rows, column=str(latest_col), raw_value=operating_val)
+        
+        other_val, other_rows = aggregate_rows_by_keywords(
+            df, latest_col, OTHER_OPEX_KEYWORDS,
+            exclude_keywords=['operating income', 'cogs', 'marketing', 'payroll']
+        )
+        sources['other'] = SourceReference(sheet=sheet_name, row_labels=other_rows, column=str(latest_col), raw_value=other_val)
+        
+        def convert_if_needed(val):
+            if val is None:
+                return None
+            if detected_currency != 'USD':
+                return convert_currency(val, detected_currency, 'USD', fx_rate)
+            return val
+        
+        period = Period(
+            year=latest_date.year,
+            month=latest_date.month,
+            label=latest_date.strftime('%b %Y')
+        )
+        
+        financials = NormalizedMonthlyFinancials(
+            period=period,
+            revenue=convert_if_needed(revenue_val) or 0,
+            expenses=ExpenseBreakdown(
+                cogs=convert_if_needed(cogs_val),
+                marketing=convert_if_needed(marketing_val),
+                payroll=convert_if_needed(payroll_val),
+                operating=convert_if_needed(operating_val),
+                other=convert_if_needed(other_val),
+            ),
+            sources=sources,
+            currency='USD',
+            detected_currency=detected_currency,
+            fx_rate_used=fx_rate if detected_currency != 'USD' else None
+        )
+        
+        financials.compute_derived_metrics()
+        financials = run_validation(financials)
+        
+        logger.info(f"[CANONICAL] Results: revenue=${financials.revenue:,.0f}, totalExp=${financials.total_expenses:,.0f}, netBurn=${financials.net_burn:,.0f}, isProfitable={financials.is_profitable}")
+        
+        return {
+            'success': True,
+            'canonical': financials.to_dict(),
+            'sheet_name': sheet_name,
+            'available_rows': list(df.index)[:100],
+            'extraction_method': 'canonical_structured'
+        }
+        
+    except Exception as e:
+        logger.error(f"[CANONICAL] Parsing failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
+
+def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB, use_canonical: bool = True) -> Dict[str, Any]:
     """Process a Termina Excel export and extract financial metrics.
     
     Uses a two-stage approach:
     1. Try structured parsing for known formats (faster, works for standard layouts)
     2. Fall back to OpenAI analysis for complex/unknown formats
+    
+    When use_canonical=True (default), uses the new canonical model with proper
+    marketing aggregation and payroll null handling.
     """
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
     if file_size_mb > max_size_mb:
         raise ValueError(f"Excel file too large ({file_size_mb:.1f}MB). Maximum allowed is {max_size_mb}MB.")
     
     extraction_method = "structured"
+    canonical_result = None
     
-    # Stage 1: Try structured parsing
+    if use_canonical:
+        canonical_result = parse_income_statement_canonical(file_path)
+        if canonical_result.get('success'):
+            logger.info("[CANONICAL] Using canonical extraction")
+            extraction_method = "canonical"
+    
     parsed = parse_income_statement(file_path)
     metrics = parsed.get('metrics', {})
     
@@ -683,7 +891,7 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
     
     baseline_data_with_words = {**baseline_data, **word_representations}
     
-    return {
+    result = {
         "source": "excel",
         "sheet_name": parsed.get("sheet_name"),
         "report_date": parsed.get("report_date"),
@@ -700,3 +908,30 @@ def process_termina_excel(file_path: str, max_size_mb: float = MAX_EXCEL_SIZE_MB
         "validation_warnings": validation_warnings,
         "suggested_corrections": suggested_corrections,
     }
+    
+    if canonical_result and canonical_result.get('success'):
+        canonical = canonical_result['canonical']
+        result['canonical'] = canonical
+        
+        result['baseline_data']['monthly_revenue'] = canonical.get('revenue')
+        result['baseline_data']['cogs'] = canonical['expenses'].get('cogs')
+        result['baseline_data']['sales_and_marketing'] = canonical['expenses'].get('marketing')
+        result['baseline_data']['other_opex'] = canonical['expenses'].get('other')
+        
+        if canonical['expenses'].get('payroll') is None:
+            result['baseline_data']['payroll'] = None
+        else:
+            result['baseline_data']['payroll'] = canonical['expenses'].get('payroll')
+        
+        result['baseline_data']['total_expenses'] = canonical.get('total_expenses')
+        result['baseline_data']['net_burn'] = canonical.get('net_burn')
+        result['baseline_data']['is_profitable'] = canonical.get('is_profitable')
+        result['baseline_data']['runway_months'] = canonical.get('runway_months')
+        
+        result['validation_warnings'] = canonical.get('validation', {}).get('warnings', [])
+        result['validation_errors'] = canonical.get('validation', {}).get('errors', [])
+        result['sources'] = canonical.get('sources', {})
+        
+        logger.info(f"[CANONICAL] Merged canonical data into result: revenue=${canonical.get('revenue'):,.0f}, marketing=${canonical['expenses'].get('marketing') or 0:,.0f}")
+    
+    return result
