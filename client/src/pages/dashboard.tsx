@@ -26,6 +26,7 @@ import {
   BarChart3,
   AlertTriangle,
   ExternalLink,
+  Download,
 } from "lucide-react";
 import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
 
@@ -115,6 +116,63 @@ export default function Dashboard() {
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
                 <p>Data confidence score reflects the completeness and accuracy of your financial inputs. Upload more data to improve this score.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {selectedCompany?.id && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Select
+                  onValueChange={async (format) => {
+                    const { token } = useFounderStore.getState();
+                    const url = `/api/companies/${selectedCompany.id}/financials/export?format=${format}`;
+                    try {
+                      const res = await fetch(url, {
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                      });
+                      if (!res.ok) {
+                        if (res.status === 404) {
+                          console.warn('No financial data to export');
+                          return;
+                        }
+                        throw new Error('Export failed');
+                      }
+                      let downloadUrl: string;
+                      if (format === 'csv') {
+                        const blob = await res.blob();
+                        downloadUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = `${selectedCompany.name || 'financials'}_export.csv`;
+                        a.click();
+                      } else {
+                        const data = await res.json();
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        downloadUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = `${selectedCompany.name || 'financials'}_export.json`;
+                        a.click();
+                      }
+                      // Clean up download URL after a short delay
+                      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+                    } catch (err) {
+                      console.error('Export failed:', err);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]" data-testid="select-export-format">
+                    <Download className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Export Data" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv" data-testid="select-export-csv">Export CSV</SelectItem>
+                    <SelectItem value="json" data-testid="select-export-json">Export JSON</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Download your reconciled financial data</p>
               </TooltipContent>
             </Tooltip>
           )}
