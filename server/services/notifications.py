@@ -58,7 +58,8 @@ async def send_feature_notification(
     description: str,
     changes: List[str],
     category: str = "Feature Update",
-    author: Optional[str] = None
+    author: Optional[str] = None,
+    from_email: str = "Predixen Updates <changes@predixen.app>"
 ) -> bool:
     """
     Send email notification about a new feature or change.
@@ -146,7 +147,7 @@ This is an automated notification from Predixen Intelligence OS.
                     "Content-Type": "application/json"
                 },
                 json={
-                    "from": "Predixen <hello@predixen.app>",
+                    "from": from_email,
                     "to": NOTIFICATION_RECIPIENTS,
                     "subject": f"[Predixen] {category}: {feature_name}",
                     "html": html_content,
