@@ -27,6 +27,13 @@ interface TruthScan {
   computed_at: string;
 }
 
+export interface ValidationWarning {
+  code: string;
+  message: string;
+  fields: string[];
+  severity: 'info' | 'warn' | 'error';
+}
+
 export interface FinancialBaseline {
   cashOnHand: number | null;
   monthlyRevenue: number | null;
@@ -42,6 +49,9 @@ export interface FinancialBaseline {
   hasManualExpenseOverride?: boolean;
   currency: string | null;
   asOfDate: string | null;
+  validationWarnings?: ValidationWarning[];
+  validationErrors?: ValidationWarning[];
+  sources?: Record<string, any>;
 }
 
 export interface ExtractionField {
@@ -149,7 +159,7 @@ export const useFounderStore = create<FounderState>()(
       getCalculatedMetrics: () => {
         const baseline = get().financialBaseline;
         if (!baseline) {
-          return { netBurnRate: 0, runwayMonths: null, isProfitable: false, isSustainable: false };
+          return { netBurnRate: 0, runwayMonths: null, isProfitable: false, isSustainable: false, totalExpenses: 0 };
         }
         
         const revenue = baseline.monthlyRevenue || 0;
@@ -162,16 +172,18 @@ export const useFounderStore = create<FounderState>()(
           (baseline.expenseBreakdown?.cogs || 0) +
           (baseline.expenseBreakdown?.otherOpex || 0);
         
-        const expenses = baseline.hasManualExpenseOverride
+        const totalExpenses = baseline.hasManualExpenseOverride
           ? (baseline.totalMonthlyExpenses || 0)
           : (breakdownSum > 0 ? breakdownSum : (baseline.totalMonthlyExpenses || 0));
         
-        const netBurnRate = expenses - revenue;
+        const netBurnRate = totalExpenses - revenue;
+        
         const isProfitable = netBurnRate < 0;
         const isSustainable = netBurnRate <= 0;
-        const runwayMonths = netBurnRate > 0 ? cash / netBurnRate : null;
         
-        return { netBurnRate, runwayMonths, isProfitable, isSustainable };
+        const runwayMonths = netBurnRate > 0 && cash > 0 ? cash / netBurnRate : null;
+        
+        return { netBurnRate, runwayMonths, isProfitable, isSustainable, totalExpenses };
       },
       
       isAdmin: () => {
