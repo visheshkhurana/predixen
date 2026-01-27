@@ -230,43 +230,56 @@ interface ProjectedMetrics {
   grossMargin: number;
 }
 
+const computeMonthlyProjections = (baseData: typeof DUMMY_BASE_DATA, assumptions: ScenarioAssumptions, months: number): ProjectedMetrics[] => {
+  const results: ProjectedMetrics[] = [];
+  
+  let mrr = baseData.mrr;
+  let cash = baseData.cash;
+  let customers = baseData.totalCustomers;
+  
+  const monthlyGrowthRate = Math.pow(1 + assumptions.growthRate / 100, 1/12) - 1;
+  const monthlyPricingEffect = assumptions.pricingChange / 100 / 12;
+  const monthlyHiringEffect = (assumptions.hiringRate / 100) * 0.8 / 12;
+  const monthlyCacReduction = assumptions.cacReduction / 100 / 12;
+  const monthlyChurnEffect = assumptions.churnRate / 10 / 12;
+  
+  for (let month = 1; month <= months; month++) {
+    mrr = mrr * (1 + monthlyGrowthRate) * (1 + monthlyPricingEffect);
+    customers = Math.round(customers * (1 + monthlyGrowthRate));
+    
+    const burnMultiplier = 1 + monthlyHiringEffect * month;
+    const burn = baseData.burnRate * burnMultiplier;
+    cash = cash - burn;
+    
+    const cacMultiplier = 1 - monthlyCacReduction * month;
+    const cac = baseData.cac * Math.max(0.5, cacMultiplier);
+    
+    const churn = baseData.churnRate + monthlyChurnEffect * month;
+    const pricingMultiplier = 1 + monthlyPricingEffect * month;
+    const ltv = baseData.ltv * pricingMultiplier * (1 - churn / 100);
+    
+    results.push({
+      mrr,
+      arr: mrr * 12,
+      cash: Math.max(0, cash),
+      burnRate: burn,
+      runway: cash > 0 ? cash / burn : 0,
+      cac,
+      ltv,
+      ltvCacRatio: ltv / cac,
+      paybackPeriod: cac / (mrr / customers),
+      totalCustomers: customers,
+      churnRate: churn,
+      grossMargin: baseData.grossMargin + (assumptions.pricingChange * 0.5) * (month / 12),
+    });
+  }
+  
+  return results;
+};
+
 const computeProjectedMetrics = (baseData: typeof DUMMY_BASE_DATA, assumptions: ScenarioAssumptions): ProjectedMetrics => {
-  const months = 12;
-  
-  const growthMultiplier = 1 + assumptions.growthRate / 100;
-  const pricingMultiplier = 1 + assumptions.pricingChange / 100;
-  const adjustedChurn = baseData.churnRate * (1 - assumptions.cacReduction / 100) + assumptions.churnRate / 10;
-  
-  const projectedMrr = baseData.mrr * Math.pow(growthMultiplier, months) * pricingMultiplier;
-  const projectedArr = projectedMrr * 12;
-  
-  const burnIncrease = 1 + (assumptions.hiringRate / 100) * 0.8;
-  const projectedBurn = baseData.burnRate * burnIncrease;
-  
-  const projectedCash = baseData.cash - (projectedBurn * months * 0.5);
-  const runway = projectedCash > 0 ? projectedCash / projectedBurn : 0;
-  
-  const adjustedCac = baseData.cac * (1 - assumptions.cacReduction / 100);
-  const adjustedLtv = baseData.ltv * pricingMultiplier * (1 - adjustedChurn / 100);
-  const ltvCacRatio = adjustedLtv / adjustedCac;
-  const paybackPeriod = adjustedCac / (projectedMrr / baseData.totalCustomers);
-  
-  const projectedCustomers = Math.round(baseData.totalCustomers * growthMultiplier);
-  
-  return {
-    mrr: projectedMrr,
-    arr: projectedArr,
-    cash: projectedCash,
-    burnRate: projectedBurn,
-    runway,
-    cac: adjustedCac,
-    ltv: adjustedLtv,
-    ltvCacRatio,
-    paybackPeriod,
-    totalCustomers: projectedCustomers,
-    churnRate: adjustedChurn,
-    grossMargin: baseData.grossMargin + assumptions.pricingChange * 0.5,
-  };
+  const projections = computeMonthlyProjections(baseData, assumptions, 12);
+  return projections[11];
 };
 
 const getSensitivityData = (baseMetrics: ProjectedMetrics, assumptions: ScenarioAssumptions) => {
@@ -464,6 +477,7 @@ export default function OverviewPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [assumptionsPanelOpen, setAssumptionsPanelOpen] = useState(false);
+  const [selectedDrillDownMetric, setSelectedDrillDownMetric] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -497,22 +511,102 @@ export default function OverviewPage() {
   }, [assumptions]);
 
   const chartData = useMemo(() => {
-    const data = [];
-    let currentMrr = DUMMY_BASE_DATA.mrr;
-    const growthRate = assumptions.growthRate / 100;
+    const baseData = DUMMY_BASE_DATA;
+    const projections = computeMonthlyProjections(baseData, assumptions, 12);
     
-    for (let month = 0; month <= 12; month++) {
+    const data = [];
+    data.push({
+      month: new Date(2026, 0, 1).toLocaleDateString('en-US', { month: 'short' }),
+      revenue: Math.round(baseData.mrr),
+      projected: null,
+      baseline: baseData.mrr,
+    });
+    
+    for (let month = 1; month <= 12; month++) {
       const monthName = new Date(2026, month, 1).toLocaleDateString('en-US', { month: 'short' });
+      const projectedMrr = projections[month - 1].mrr;
       data.push({
         month: monthName,
-        revenue: Math.round(currentMrr),
-        projected: month > 0 ? Math.round(currentMrr) : null,
-        baseline: DUMMY_BASE_DATA.mrr * Math.pow(1.05, month),
+        revenue: Math.round(projectedMrr),
+        projected: Math.round(projectedMrr),
+        baseline: baseData.mrr * Math.pow(1.05, month),
       });
-      currentMrr *= (1 + growthRate / 12);
     }
     return data;
-  }, [assumptions.growthRate]);
+  }, [assumptions]);
+
+  const getDrillDownData = useCallback((metricKey: string) => {
+    const baseData = DUMMY_BASE_DATA;
+    const metricTitles: Record<string, string> = {
+      mrr: 'Monthly Recurring Revenue',
+      arr: 'Annual Recurring Revenue',
+      cash: 'Cash on Hand',
+      burnRate: 'Monthly Burn Rate',
+      cac: 'Customer Acquisition Cost',
+      ltv: 'Customer Lifetime Value',
+    };
+    
+    const getMetricValue = (metrics: ProjectedMetrics, key: string): number => {
+      const metricMap: Record<string, number> = {
+        mrr: metrics.mrr,
+        arr: metrics.arr,
+        cash: metrics.cash,
+        burnRate: metrics.burnRate,
+        cac: metrics.cac,
+        ltv: metrics.ltv,
+      };
+      return metricMap[key] || 0;
+    };
+    
+    const baseMetricMap: Record<string, number> = {
+      mrr: baseData.mrr,
+      arr: baseData.mrr * 12,
+      cash: baseData.cash,
+      burnRate: baseData.burnRate,
+      cac: baseData.cac,
+      ltv: baseData.ltv,
+    };
+    const currentValue = baseMetricMap[metricKey] || 0;
+    
+    const historicalGrowthFactors = [0.82, 0.86, 0.90, 0.94, 0.97, 1.0];
+    const history = historicalGrowthFactors.map(factor => {
+      if (metricKey === 'cac' || metricKey === 'burnRate') {
+        return currentValue * (2 - factor);
+      }
+      return currentValue * factor;
+    });
+    
+    const monthlyProjections = computeMonthlyProjections(baseData, assumptions, 12);
+    const projections = monthlyProjections.map(m => getMetricValue(m, metricKey));
+    
+    return {
+      title: metricTitles[metricKey] || metricKey,
+      unit: 'USD',
+      history,
+      projections,
+      format: (v: number) => formatCurrency(v),
+    };
+  }, [assumptions]);
+
+  const drillDownChartData = useMemo(() => {
+    if (!selectedDrillDownMetric) return [];
+    const metricData = getDrillDownData(selectedDrillDownMetric);
+    if (!metricData) return [];
+    
+    const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const history = metricData.history;
+    const projections = metricData.projections;
+    
+    return months.map((month, i) => {
+      const isHistorical = i < history.length;
+      return {
+        month,
+        historical: isHistorical ? history[i] : null,
+        projected: !isHistorical ? projections[i - history.length] : null,
+        isProjection: !isHistorical,
+      };
+    });
+  }, [selectedDrillDownMetric, getDrillDownData]);
 
   const saveScenario = useCallback(() => {
     if (!newScenarioName.trim() || !currentCompany?.id) return;
@@ -991,6 +1085,7 @@ export default function OverviewPage() {
           trend="up"
           trendValue={`+${assumptions.growthRate}%`}
           testId="metric-mrr"
+          onClick={() => setSelectedDrillDownMetric('mrr')}
         />
         <MetricCard
           title="ARR"
@@ -998,6 +1093,7 @@ export default function OverviewPage() {
           subtitle="Annual Recurring Revenue"
           trend="up"
           testId="metric-arr"
+          onClick={() => setSelectedDrillDownMetric('arr')}
         />
         <MetricCard
           title="Cash on Hand"
@@ -1005,11 +1101,13 @@ export default function OverviewPage() {
           subtitle={`Runway: ${safeToFixed(projectedMetrics.runway)} mo`}
           variant={projectedMetrics.runway < 6 ? 'danger' : projectedMetrics.runway < 12 ? 'warning' : 'success'}
           testId="metric-cash"
+          onClick={() => setSelectedDrillDownMetric('cash')}
         />
         <MetricCard
           title="Burn Rate"
           value={formatCurrency(projectedMetrics.burnRate)}
           subtitle="/month"
+          onClick={() => setSelectedDrillDownMetric('burnRate')}
           testId="metric-burn-rate"
         />
         <MetricCard
@@ -1017,6 +1115,7 @@ export default function OverviewPage() {
           value={formatCurrency(projectedMetrics.cac)}
           subtitle="Cost to Acquire"
           testId="metric-cac"
+          onClick={() => setSelectedDrillDownMetric('cac')}
         />
         <MetricCard
           title="LTV"
@@ -1024,6 +1123,7 @@ export default function OverviewPage() {
           subtitle={`LTV:CAC = ${safeToFixed(projectedMetrics.ltvCacRatio)}x`}
           variant={projectedMetrics.ltvCacRatio < 3 ? 'warning' : 'success'}
           testId="metric-ltv"
+          onClick={() => setSelectedDrillDownMetric('ltv')}
         />
       </div>
 
@@ -1515,6 +1615,135 @@ export default function OverviewPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog 
+        open={!!selectedDrillDownMetric} 
+        onOpenChange={(open) => !open && setSelectedDrillDownMetric(null)}
+      >
+        <DialogContent className="sm:max-w-[700px]" data-testid="dialog-metric-drilldown">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              {selectedDrillDownMetric && getDrillDownData(selectedDrillDownMetric)?.title}
+            </DialogTitle>
+            <DialogDescription>
+              Illustrative trend (last 6 months) and 12-month projections based on current assumptions
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedDrillDownMetric && drillDownChartData.length > 0 && (
+            <div className="space-y-4">
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={drillDownChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="historicalGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="projectedGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="month" 
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <YAxis 
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickFormatter={(value) => {
+                        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+                        if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+                        return `$${value}`;
+                      }}
+                    />
+                    <RechartsTooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                      labelStyle={{ color: 'hsl(var(--foreground))' }}
+                      formatter={(value: number) => [formatCurrency(value), '']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="historical"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      fill="url(#historicalGradient)"
+                      connectNulls={false}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="projected"
+                      stroke="hsl(var(--chart-2))"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      fill="url(#projectedGradient)"
+                      connectNulls={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              
+              <div className="flex items-center justify-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-0.5 bg-primary" />
+                  <span className="text-muted-foreground">Illustrative Trend</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: 'hsl(var(--chart-2))' }} />
+                  <span className="text-muted-foreground">Projected</span>
+                </div>
+              </div>
+              
+              {(() => {
+                const data = getDrillDownData(selectedDrillDownMetric);
+                if (!data) return null;
+                const current = data.history.at(-1) || 1;
+                const projected = data.projections.at(-1) || 0;
+                const change = ((projected - current) / current) * 100;
+                const isPositive = change > 0;
+                
+                return (
+                  <div className="grid grid-cols-3 gap-4 pt-2">
+                    <Card className="overflow-visible">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Current Value</p>
+                        <p className="text-lg font-semibold font-mono">
+                          {data.format(current)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="overflow-visible">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Projected (12mo)</p>
+                        <p className="text-lg font-semibold font-mono">
+                          {data.format(projected)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="overflow-visible">
+                      <CardContent className="p-3">
+                        <p className="text-xs text-muted-foreground">Change</p>
+                        <p className={`text-lg font-semibold font-mono flex items-center gap-1 ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                          {isPositive ? '+' : ''}{change.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
