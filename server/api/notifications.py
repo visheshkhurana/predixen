@@ -16,6 +16,7 @@ class FeatureNotificationRequest(BaseModel):
     changes: List[str]
     category: str = "Feature Update"
     author: Optional[str] = None
+    from_email: Optional[str] = None
 
 
 class NotificationResponse(BaseModel):
@@ -30,13 +31,17 @@ async def notify_feature_update(request: FeatureNotificationRequest):
     Send email notification about a new feature or platform change.
     Sends to configured recipients: nikita@predixen.ai and vysheshk@gmail.com
     """
-    success = await send_feature_notification(
-        feature_name=request.feature_name,
-        description=request.description,
-        changes=request.changes,
-        category=request.category,
-        author=request.author
-    )
+    kwargs = {
+        "feature_name": request.feature_name,
+        "description": request.description,
+        "changes": request.changes,
+        "category": request.category,
+        "author": request.author
+    }
+    if request.from_email:
+        kwargs["from_email"] = request.from_email
+    
+    success = await send_feature_notification(**kwargs)
     
     if success:
         return NotificationResponse(
