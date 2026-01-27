@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -39,7 +41,12 @@ import {
   Link2,
   Activity,
   GitCompare,
-  Terminal
+  Terminal,
+  Plus,
+  X,
+  StickyNote,
+  Cpu,
+  Sliders
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -269,6 +276,27 @@ const SUGGESTED_PROMPTS = [
   { label: 'Help me prepare my investor data room checklist', icon: FileText, category: 'fundraising' },
 ];
 
+const SLASH_COMMANDS = [
+  { command: '/run-scenario', description: 'Run a scenario simulation with assumptions', icon: Play },
+  { command: '/fetch-metric', description: 'Fetch a specific metric value', icon: Database },
+  { command: '/compare', description: 'Compare two scenarios', icon: GitCompare },
+  { command: '/extend-runway', description: 'Analyze ways to extend runway', icon: TrendingUp },
+  { command: '/help', description: 'Show available commands', icon: HelpCircle },
+];
+
+interface PinnedNote {
+  id: string;
+  content: string;
+  timestamp: Date;
+}
+
+interface ScenarioAssumptions {
+  growthRate: number;
+  priceChange: number;
+  hiringRate: number;
+  burnReduction: number;
+}
+
 function RunwayBandChart({ chartData }: { chartData: NonNullable<CopilotApiResponse['simulation_result']>['chart_data'] }) {
   if (!chartData?.runway?.metrics) return null;
   
@@ -354,9 +382,9 @@ function RecommendationsPanel({ recommendations, onTryPrompt }: { recommendation
               <p className="text-xs">{rec.text}</p>
               {rec.action_prompt && (
                 <Button 
-                  variant="link" 
+                  variant="ghost" 
                   size="sm" 
-                  className="h-auto p-0 text-xs text-blue-400"
+                  className="h-auto p-0 text-xs text-blue-400 hover:text-blue-300 hover:bg-transparent"
                   onClick={() => onTryPrompt?.(rec.action_prompt.replace(/^Try: '|'$/g, '').replace(/^"|"$/g, ''))}
                   data-testid={`button-rec-${i}`}
                 >
@@ -725,8 +753,29 @@ export default function CopilotPage() {
   const [latestDataHealth, setLatestDataHealth] = useState<CopilotApiResponse['data_health'] | null>(null);
   const [latestPiiFindings, setLatestPiiFindings] = useState<any[] | null>(null);
   
+  // Scenario Runner state
+  const [scenarioAssumptions, setScenarioAssumptions] = useState<ScenarioAssumptions>({
+    growthRate: 15,
+    priceChange: 0,
+    hiringRate: 10,
+    burnReduction: 0,
+  });
+  const [scenarioMetrics, setScenarioMetrics] = useState({
+    projectedRevenue: 120000,
+    projectedCash: 450000,
+    projectedRunway: 16.5,
+  });
+  
+  // Pinned Notes state
+  const [pinnedNotes, setPinnedNotes] = useState<PinnedNote[]>([]);
+  const [newNoteContent, setNewNoteContent] = useState('');
+  
+  // Slash command autocomplete state
+  const [showSlashCommands, setShowSlashCommands] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
@@ -741,6 +790,88 @@ export default function CopilotPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
+  
+  // Scenario Runner function
+  const runScenario = () => {
+    const baseRevenue = metrics.mrr?.value || 100000;
+    const baseCash = metrics.cash_balance?.value || 500000;
+    const baseRunway = metrics.runway_months?.value || 16.5;
+    
+    const projectedRevenue = baseRevenue * (1 + scenarioAssumptions.growthRate / 100) * (1 + scenarioAssumptions.priceChange / 100);
+    const burnSavings = (metrics.net_burn?.value || 80000) * (scenarioAssumptions.burnReduction / 100);
+    const hiringCost = (scenarioAssumptions.hiringRate / 100) * 10000; // Simplified
+    const projectedCash = baseCash + burnSavings * 12 - hiringCost * 12;
+    const projectedRunway = baseRunway * (1 + scenarioAssumptions.burnReduction / 100 * 0.8);
+    
+    setScenarioMetrics({
+      projectedRevenue: Math.round(projectedRevenue),
+      projectedCash: Math.round(projectedCash),
+      projectedRunway: Math.round(projectedRunway * 10) / 10,
+    });
+    
+    // Send scenario to chat
+    const scenarioMessage = `Run scenario with: ${scenarioAssumptions.growthRate}% growth, ${scenarioAssumptions.priceChange}% price change, ${scenarioAssumptions.hiringRate}% hiring rate, ${scenarioAssumptions.burnReduction}% burn reduction`;
+    sendMessage(scenarioMessage);
+  };
+  
+  // Pinned Notes functions
+  const addNote = () => {
+    if (!newNoteContent.trim()) return;
+    const note: PinnedNote = {
+      id: Date.now().toString(),
+      content: newNoteContent.trim(),
+      timestamp: new Date(),
+    };
+    setPinnedNotes(prev => [note, ...prev]);
+    setNewNoteContent('');
+  };
+  
+  const deleteNote = (id: string) => {
+    setPinnedNotes(prev => prev.filter(note => note.id !== id));
+  };
+  
+  // Slash command handling
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    setShowSlashCommands(value.startsWith('/') && value.length <= 15);
+  };
+  
+  const handleSlashCommand = (command: string) => {
+    if (command === '/help') {
+      setInput('');
+      setShowSlashCommands(false);
+      const helpMessage: Message = {
+        role: 'assistant',
+        content: 'Available commands:\n\n• **/run-scenario** - Run a scenario with your current assumptions\n• **/fetch-metric {name}** - Get a specific metric (mrr, arr, runway, cac, ltv)\n• **/compare** - Compare current scenario vs baseline\n• **/extend-runway** - Get strategies to extend runway\n• **/help** - Show this help message',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, helpMessage]);
+    } else if (command === '/run-scenario') {
+      setInput('');
+      setShowSlashCommands(false);
+      runScenario();
+    } else if (command.startsWith('/fetch-metric')) {
+      setInput('/fetch-metric ');
+      setShowSlashCommands(false);
+    } else if (command === '/compare') {
+      setInput('');
+      setShowSlashCommands(false);
+      sendMessage('Compare current scenario vs baseline');
+    } else if (command === '/extend-runway') {
+      setInput('');
+      setShowSlashCommands(false);
+      sendMessage('How can I extend my runway by 6 months?');
+    }
+  };
+  
+  // Filter slash commands based on input
+  const filteredSlashCommands = useMemo(() => {
+    if (!input.startsWith('/')) return [];
+    const searchTerm = input.toLowerCase();
+    return SLASH_COMMANDS.filter(cmd => 
+      cmd.command.toLowerCase().startsWith(searchTerm)
+    );
+  }, [input]);
   
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isTyping || !currentCompany) return;
@@ -921,12 +1052,21 @@ export default function CopilotPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       <div className="flex-1 flex flex-col p-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" />
-            Copilot
-          </h1>
-          <p className="text-sm text-muted-foreground">AI-powered financial advisor grounded in your data</p>
+        <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold flex items-center gap-2">
+              <Sparkles className="h-6 w-6 text-primary" />
+              Copilot
+            </h1>
+            <p className="text-sm text-muted-foreground">AI-powered financial advisor grounded in your data</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50" data-testid="model-indicator">
+            <Cpu className="h-4 w-4 text-primary" />
+            <span className="text-xs font-medium">Multi-LLM Router</span>
+            <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+              GPT-4o / Claude / Gemini
+            </Badge>
+          </div>
         </div>
         
         <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
@@ -1180,18 +1320,46 @@ export default function CopilotPage() {
             </div>
           </div>
           
-          <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about your metrics, scenarios, or decisions..."
-              disabled={isTyping}
-              data-testid="input-copilot"
-            />
-            <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className="relative">
+            {showSlashCommands && filteredSlashCommands.length > 0 && (
+              <div className="absolute bottom-full mb-2 left-0 right-0 bg-card border border-border rounded-lg shadow-lg p-2 z-10" data-testid="slash-command-dropdown">
+                <p className="text-xs text-muted-foreground mb-2 px-2">Commands</p>
+                {filteredSlashCommands.map((cmd) => (
+                  <button
+                    key={cmd.command}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-secondary text-left transition-colors"
+                    onClick={() => handleSlashCommand(cmd.command)}
+                    data-testid={`slash-cmd-${cmd.command.slice(1)}`}
+                  >
+                    <cmd.icon className="h-4 w-4 text-primary" />
+                    <div>
+                      <p className="text-sm font-medium">{cmd.command}</p>
+                      <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !showSlashCommands) {
+                    handleSend();
+                  } else if (e.key === 'Escape') {
+                    setShowSlashCommands(false);
+                  }
+                }}
+                placeholder="Type / for commands or ask a question..."
+                disabled={isTyping}
+                data-testid="input-copilot"
+              />
+              <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -1315,6 +1483,163 @@ export default function CopilotPage() {
                   </>
                 ) : (
                   <p className="text-muted-foreground">No simulation run yet</p>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Separator className="my-4" />
+            
+            <Card className="overflow-visible">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-cyan-400" />
+                  Scenario Runner
+                </CardTitle>
+                <CardDescription className="text-xs">Adjust assumptions and run</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Growth Rate</span>
+                    <span className="font-mono">{scenarioAssumptions.growthRate}%</span>
+                  </div>
+                  <Slider
+                    value={[scenarioAssumptions.growthRate]}
+                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, growthRate: v }))}
+                    min={-20}
+                    max={50}
+                    step={1}
+                    data-testid="slider-growth-rate"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Price Change</span>
+                    <span className="font-mono">{scenarioAssumptions.priceChange}%</span>
+                  </div>
+                  <Slider
+                    value={[scenarioAssumptions.priceChange]}
+                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, priceChange: v }))}
+                    min={-20}
+                    max={30}
+                    step={1}
+                    data-testid="slider-price-change"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Hiring Rate</span>
+                    <span className="font-mono">{scenarioAssumptions.hiringRate}%</span>
+                  </div>
+                  <Slider
+                    value={[scenarioAssumptions.hiringRate]}
+                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, hiringRate: v }))}
+                    min={0}
+                    max={30}
+                    step={1}
+                    data-testid="slider-hiring-rate"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span>Burn Reduction</span>
+                    <span className="font-mono">{scenarioAssumptions.burnReduction}%</span>
+                  </div>
+                  <Slider
+                    value={[scenarioAssumptions.burnReduction]}
+                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, burnReduction: v }))}
+                    min={0}
+                    max={40}
+                    step={1}
+                    data-testid="slider-burn-reduction"
+                  />
+                </div>
+                
+                <div className="pt-2 space-y-2">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 rounded bg-secondary">
+                      <p className="text-xs text-muted-foreground">Revenue</p>
+                      <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedRevenue / 1000).toFixed(0)}K</p>
+                    </div>
+                    <div className="p-2 rounded bg-secondary">
+                      <p className="text-xs text-muted-foreground">Cash</p>
+                      <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedCash / 1000).toFixed(0)}K</p>
+                    </div>
+                    <div className="p-2 rounded bg-secondary">
+                      <p className="text-xs text-muted-foreground">Runway</p>
+                      <p className="text-sm font-mono font-medium">{scenarioMetrics.projectedRunway}mo</p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={runScenario}
+                    disabled={isTyping}
+                    data-testid="button-run-scenario"
+                  >
+                    <Play className="h-3 w-3 mr-2" />
+                    Run Scenario
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="overflow-visible">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <StickyNote className="h-4 w-4 text-amber-400" />
+                  Pinned Notes
+                </CardTitle>
+                <CardDescription className="text-xs">Quick ideas and reminders</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addNote()}
+                    placeholder="Add a note..."
+                    className="text-xs h-8"
+                    data-testid="input-new-note"
+                  />
+                  <Button 
+                    size="icon" 
+                    variant="outline" 
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={addNote}
+                    disabled={!newNoteContent.trim()}
+                    data-testid="button-add-note"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                
+                {pinnedNotes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">No notes yet</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {pinnedNotes.map((note) => (
+                      <div 
+                        key={note.id} 
+                        className="p-2 rounded bg-secondary/50 border border-border/30 group"
+                        data-testid={`note-${note.id}`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <p className="text-xs flex-1">{note.content}</p>
+                          <button
+                            onClick={() => deleteNote(note.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            data-testid={`button-delete-note-${note.id}`}
+                          >
+                            <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {note.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

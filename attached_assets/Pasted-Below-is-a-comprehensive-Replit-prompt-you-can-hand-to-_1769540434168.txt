@@ -1,0 +1,95 @@
+Below is a comprehensive Replit prompt you can hand to a developer to kick‑start implementation of the redesigned Copilot screen.  It outlines the expected features and provides guidance on tech choices and structure.  The goal is to build a functional prototype that demonstrates the conversational AI advisor concept, even if it uses placeholder data or dummy API responses.
+
+```
+# Copilot Screen Prototype Prompt
+
+Your task is to create a web‑based “Copilot” interface that serves as an AI advisor for founders/CXOs.  This screen combines a chat‑style conversation area with contextual panels that surface business data and tools for running scenarios.  The underlying LLM integration can be simulated with dummy responses for now; focus on the UI/UX and data flow.
+
+## Tech Stack
+
+- **Front‑End:** Use React (with hooks) for interactive UI.  You may use a component library (e.g. MUI, Chakra UI) to speed up layout, but keep custom styling simple.
+- **Back‑End:** Optionally use a lightweight Node.js/Express server or simple mock functions within the React app to simulate LLM responses and data retrieval.  Since Replit supports full‑stack projects, you can keep everything in a single repo.
+- **Charting:** Use a library like Chart.js or Recharts for inline charts/data cards.
+
+## Core Features to Implement
+
+1. **Chat Interface**
+   - Build a central chat panel displaying message bubbles from “User” and “Copilot”.  
+   - Implement an input box (and optional voice button) at the bottom.  When a message is submitted, append it to the chat history and call a `getAIResponse(userMessage)` function that returns a dummy reply (e.g. echo the message or a canned response).  
+   - Persist chat history in component state so the conversation persists across re-renders.
+
+2. **Context Panels**
+   - Design a split‑pane layout: the main area is the chat, and a right sidebar (collapsible) contains contextual tools:
+     - **Data Cards:** Create small cards that display key business metrics (MRR/ARR, cash on hand, burn rate, CAC, LTV, etc.).  Use hard‑coded dummy values for now.  Each card can show a number and a tiny sparkline using Chart.js.
+     - **Scenario Runner:** Provide a simple form with sliders or numeric inputs for assumptions (growth rate %, price change %, hiring rate).  When the user adjusts a value and clicks “Run Scenario”, call a dummy `runScenario(assumptions)` function that returns updated projections (e.g. revenue grows by growthRate%).  Update the data cards accordingly.
+     - **Pinned Notes/Ideas:** Allow the user to add short notes.  Display them in a list with timestamps.
+
+3. **Inline AI Responses with Data**
+   - Enhance `getAIResponse` so that if the user asks about a metric (e.g. includes the word “revenue” or “burn”), the function returns a response that includes the relevant dummy metric and a generated chart.  For example, parse the message and, if it includes “revenue”, embed a `<LineChart>` component in the Copilot’s reply.
+
+4. **Command Palette / Slash Commands**
+   - Detect if the user types a slash command (e.g. `/run-scenario`, `/fetch-metric`).  For the prototype, support:
+     - `/fetch-metric {metricName}`: returns the value from the data cards.
+     - `/run-scenario {growthRate}`: updates projections using the scenario runner logic.
+   - Display helpful autocomplete suggestions when the user types `/`.
+
+5. **Model Indicator and Source Transparency**
+   - In the chat header, show which “model” is answering (hard‑code something like “GPT‑4 Prototype”).  In responses, include a “Sources” section with placeholder citations (e.g. [Business DB], [Live Web]) so the UI is ready for real citation data later.
+
+6. **Responsive Layout**
+   - Ensure the interface is usable on a desktop and tablet.  The sidebar should collapse on narrow screens, with a toggle button.
+
+## Suggested File Structure (React)
+
+```
+
+/src
+/components
+ChatPanel.jsx       // Chat history and input
+MessageBubble.jsx   // Individual chat message
+Sidebar.jsx         // Holds DataCards, ScenarioRunner, Notes
+DataCard.jsx        // Displays a single metric and sparkline
+ScenarioRunner.jsx  // Assumption controls and run button
+Notes.jsx           // Add/list pinned notes
+/utils
+aiMock.js           // Dummy AI response logic
+scenarioUtils.js    // Dummy scenario calculation functions
+App.jsx               // Layout and routing (if any)
+index.js              // Entry point
+
+```
+
+## Development Steps
+
+1. **Set up the Replit project**  
+   - Start a new Node.js + React template.  
+   - Install dependencies: `npm install react-chartjs-2 chart.js`.
+
+2. **Build the chat components**  
+   - Create `ChatPanel` and `MessageBubble`.  
+   - Implement state to track an array of messages `{ role: 'user' | 'copilot', content: ReactNode }`.  
+   - On submit, push the user message and await a mocked AI response from `aiMock.getAIResponse()`.
+
+3. **Implement the sidebar**  
+   - Create dummy metrics in state (e.g. revenue = 10000, cash = 50000) and render `DataCard` components.  
+   - In `ScenarioRunner`, provide sliders for assumptions; on change, call a function that updates metric state (e.g. revenue = revenue * (1 + growthRate/100)).  
+   - Add a simple `Notes` component with an input to add a note to an array.
+
+4. **Wire slash commands**  
+   - In the chat input handler, detect if the input starts with `/`.  Parse command and execute appropriate function (e.g. update metrics, fetch a metric).
+
+5. **Enhance AI mock responses**  
+   - In `aiMock.js`, inspect the user’s message and return an object with `text` and optional `chartData`.  The chat panel should render charts when present.
+
+6. **Polish and test**  
+   - Style the layout using CSS or a UI library.  
+   - Test adding notes, running scenarios, and sending messages that trigger charts.  
+   - Ensure responsiveness.
+
+## Stretch Goals (If Time Permits)
+
+- Integrate a real LLM API (e.g. OpenAI) using Replit secrets for the API key.  Replace `aiMock` with actual API calls and stream responses.  
+- Add authentication so multiple team members can have their own sessions and persistent notes.
+
+Use this prompt as your detailed guide.  The key is to demonstrate the conversational AI interface with contextual business data and simple scenario manipulation.  Once the prototype works with dummy data, it can later be wired up to real business databases and live internet/LLM APIs.
+```
