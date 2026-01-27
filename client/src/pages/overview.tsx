@@ -1,21 +1,109 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import { MetricCard } from '@/components/MetricCard';
 import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { AlertTriangle, TrendingUp, ArrowRight, RefreshCw, Sparkles, Send, Info, HelpCircle } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import {
+  AlertTriangle,
+  TrendingUp,
+  ArrowRight,
+  RefreshCw,
+  Sparkles,
+  Send,
+  Info,
+  HelpCircle,
+  SlidersHorizontal,
+  Save,
+  Download,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Target,
+  Users,
+  DollarSign,
+  Percent,
+  Calendar,
+  MessageSquare,
+} from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+  ReferenceLine,
+} from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
+const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
+const COMMENTS_STORAGE_KEY = 'overview_comments_';
+
+interface ScenarioAssumptions {
+  growthRate: number;
+  pricingChange: number;
+  hiringRate: number;
+  churnRate: number;
+  cacReduction: number;
+}
+
+interface SavedScenario {
+  id: string;
+  name: string;
+  assumptions: ScenarioAssumptions;
+  createdAt: string;
+}
+
+interface Comment {
+  id: string;
+  text: string;
+  createdAt: string;
+  scenarioName?: string;
+}
+
+const DEFAULT_ASSUMPTIONS: ScenarioAssumptions = {
+  growthRate: 10,
+  pricingChange: 0,
+  hiringRate: 5,
+  churnRate: 5,
+  cacReduction: 0,
+};
+
+const DUMMY_BASE_DATA = {
+  mrr: 10000,
+  arr: 120000,
+  cash: 500000,
+  burnRate: 50000,
+  cac: 500,
+  ltv: 3000,
+  grossMargin: 70,
+  paybackPeriod: 10,
+  totalCustomers: 200,
+  churnRate: 5,
+  conversionRate: 3.5,
+  profitabilityDate: 'Dec 2026',
+};
 
 const METRIC_TOOLTIPS = {
   runway: {
@@ -109,6 +197,50 @@ const COPILOT_PROMPTS = [
   "What if fundraise slips 3 months?",
 ];
 
+const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' | 'red' => {
+  if (value === null || value === undefined) return 'red';
+  
+  switch (metric) {
+    case 'runway':
+      if (value >= 18) return 'green';
+      if (value >= 12) return 'yellow';
+      return 'red';
+    case 'grossMargin':
+      if (value >= 70) return 'green';
+      if (value >= 50) return 'yellow';
+      return 'red';
+    case 'churnRate':
+      if (value <= 3) return 'green';
+      if (value <= 7) return 'yellow';
+      return 'red';
+    case 'ltv_cac':
+      if (value >= 3) return 'green';
+      if (value >= 2) return 'yellow';
+      return 'red';
+    case 'growthRate':
+      if (value >= 15) return 'green';
+      if (value >= 5) return 'yellow';
+      return 'red';
+    case 'paybackPeriod':
+      if (value <= 12) return 'green';
+      if (value <= 18) return 'yellow';
+      return 'red';
+    default:
+      return 'yellow';
+  }
+};
+
+const KpiStatusIcon = ({ status }: { status: 'green' | 'yellow' | 'red' }) => {
+  switch (status) {
+    case 'green':
+      return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+    case 'yellow':
+      return <AlertCircle className="h-4 w-4 text-amber-500" />;
+    case 'red':
+      return <XCircle className="h-4 w-4 text-red-500" />;
+  }
+};
+
 export default function OverviewPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -117,6 +249,14 @@ export default function OverviewPage() {
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
+  
+  const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_ASSUMPTIONS);
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
+  const [newScenarioName, setNewScenarioName] = useState('');
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [assumptionsPanelOpen, setAssumptionsPanelOpen] = useState(false);
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -125,8 +265,16 @@ export default function OverviewPage() {
         if (stored) {
           setDecisionStatuses(JSON.parse(stored));
         }
+        const storedScenarios = localStorage.getItem(`${SCENARIOS_STORAGE_KEY}${currentCompany.id}`);
+        if (storedScenarios) {
+          setSavedScenarios(JSON.parse(storedScenarios));
+        }
+        const storedComments = localStorage.getItem(`${COMMENTS_STORAGE_KEY}${currentCompany.id}`);
+        if (storedComments) {
+          setComments(JSON.parse(storedComments));
+        }
       } catch (e) {
-        console.warn('Failed to load decision statuses');
+        console.warn('Failed to load stored data');
       }
     }
   }, [currentCompany?.id]);
@@ -136,6 +284,125 @@ export default function OverviewPage() {
       setTruthScan(truthScan);
     }
   }, [truthScan, setTruthScan]);
+
+  const projectedMetrics = useMemo(() => {
+    const baseData = DUMMY_BASE_DATA;
+    const months = 12;
+    
+    const growthMultiplier = 1 + assumptions.growthRate / 100;
+    const pricingMultiplier = 1 + assumptions.pricingChange / 100;
+    const adjustedChurn = baseData.churnRate * (1 - assumptions.cacReduction / 100) + assumptions.churnRate / 10;
+    
+    const projectedMrr = baseData.mrr * Math.pow(growthMultiplier, months) * pricingMultiplier;
+    const projectedArr = projectedMrr * 12;
+    
+    const burnIncrease = 1 + (assumptions.hiringRate / 100) * 0.8;
+    const projectedBurn = baseData.burnRate * burnIncrease;
+    
+    const projectedCash = baseData.cash - (projectedBurn * months * 0.5);
+    const runway = projectedCash > 0 ? projectedCash / projectedBurn : 0;
+    
+    const adjustedCac = baseData.cac * (1 - assumptions.cacReduction / 100);
+    const adjustedLtv = baseData.ltv * pricingMultiplier * (1 - adjustedChurn / 100);
+    const ltvCacRatio = adjustedLtv / adjustedCac;
+    const paybackPeriod = adjustedCac / (projectedMrr / baseData.totalCustomers);
+    
+    const projectedCustomers = Math.round(baseData.totalCustomers * growthMultiplier);
+    
+    return {
+      mrr: projectedMrr,
+      arr: projectedArr,
+      cash: projectedCash,
+      burnRate: projectedBurn,
+      runway,
+      cac: adjustedCac,
+      ltv: adjustedLtv,
+      ltvCacRatio,
+      paybackPeriod,
+      totalCustomers: projectedCustomers,
+      churnRate: adjustedChurn,
+      grossMargin: baseData.grossMargin + assumptions.pricingChange * 0.5,
+    };
+  }, [assumptions]);
+
+  const chartData = useMemo(() => {
+    const data = [];
+    let currentMrr = DUMMY_BASE_DATA.mrr;
+    const growthRate = assumptions.growthRate / 100;
+    
+    for (let month = 0; month <= 12; month++) {
+      const monthName = new Date(2026, month, 1).toLocaleDateString('en-US', { month: 'short' });
+      data.push({
+        month: monthName,
+        revenue: Math.round(currentMrr),
+        projected: month > 0 ? Math.round(currentMrr) : null,
+        baseline: DUMMY_BASE_DATA.mrr * Math.pow(1.05, month),
+      });
+      currentMrr *= (1 + growthRate / 12);
+    }
+    return data;
+  }, [assumptions.growthRate]);
+
+  const saveScenario = useCallback(() => {
+    if (!newScenarioName.trim() || !currentCompany?.id) return;
+    
+    const scenario: SavedScenario = {
+      id: Date.now().toString(),
+      name: newScenarioName.trim(),
+      assumptions: { ...assumptions },
+      createdAt: new Date().toISOString(),
+    };
+    
+    const updated = [...savedScenarios, scenario];
+    setSavedScenarios(updated);
+    setNewScenarioName('');
+    setSelectedScenarioId(scenario.id);
+    
+    try {
+      localStorage.setItem(`${SCENARIOS_STORAGE_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save scenario');
+    }
+    
+    toast({
+      title: 'Scenario Saved',
+      description: `"${scenario.name}" has been saved successfully.`,
+    });
+  }, [newScenarioName, assumptions, savedScenarios, currentCompany?.id, toast]);
+
+  const loadScenario = useCallback((scenarioId: string) => {
+    const scenario = savedScenarios.find(s => s.id === scenarioId);
+    if (scenario) {
+      setAssumptions(scenario.assumptions);
+      setSelectedScenarioId(scenarioId);
+      toast({
+        title: 'Scenario Loaded',
+        description: `Loaded "${scenario.name}"`,
+      });
+    }
+  }, [savedScenarios, toast]);
+
+  const addComment = useCallback(() => {
+    if (!newComment.trim() || !currentCompany?.id) return;
+    
+    const currentScenario = savedScenarios.find(s => s.id === selectedScenarioId);
+    const comment: Comment = {
+      id: Date.now().toString(),
+      text: newComment.trim(),
+      createdAt: new Date().toISOString(),
+      scenarioName: currentScenario?.name,
+    };
+    
+    const updated = [comment, ...comments];
+    setComments(updated);
+    setNewComment('');
+    
+    try {
+      localStorage.setItem(`${COMMENTS_STORAGE_KEY}${currentCompany.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to save comment');
+    }
+  }, [newComment, currentCompany?.id, selectedScenarioId, savedScenarios, comments]);
 
   const handleAdoptPlan = (recId: string, recTitle: string) => {
     if (!currentCompany?.id) return;
@@ -218,17 +485,41 @@ export default function OverviewPage() {
   
   const getConfidenceBadge = () => {
     if (confidence < 60) {
-      return <Badge variant="destructive">Low Confidence ({confidence})</Badge>;
+      return (
+        <Badge variant="destructive" data-testid="badge-confidence">
+          <XCircle className="h-3 w-3 mr-1" />
+          Low Confidence ({confidence})
+        </Badge>
+      );
     } else if (confidence < 80) {
-      return <Badge className="bg-amber-500/20 text-amber-400">Medium Confidence ({confidence})</Badge>;
+      return (
+        <Badge variant="secondary" data-testid="badge-confidence">
+          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
+          Medium Confidence ({confidence})
+        </Badge>
+      );
     }
-    return <Badge className="bg-emerald-500/20 text-emerald-400">High Confidence ({confidence})</Badge>;
+    return (
+      <Badge variant="secondary" data-testid="badge-confidence">
+        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
+        High Confidence ({confidence})
+      </Badge>
+    );
   };
   
   const handleRefreshScan = async () => {
     if (!currentCompany) return;
     await runTruthScanMutation.mutateAsync(currentCompany.id);
   };
+
+  const kpiHealthData = [
+    { name: 'Runway', value: projectedMetrics.runway, metric: 'runway' },
+    { name: 'Gross Margin', value: projectedMetrics.grossMargin, metric: 'grossMargin' },
+    { name: 'Churn Rate', value: projectedMetrics.churnRate, metric: 'churnRate' },
+    { name: 'LTV/CAC', value: projectedMetrics.ltvCacRatio, metric: 'ltv_cac' },
+    { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate' },
+    { name: 'Payback', value: projectedMetrics.paybackPeriod, metric: 'paybackPeriod' },
+  ];
   
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -239,6 +530,155 @@ export default function OverviewPage() {
         </div>
         <div className="flex items-center gap-2">
           {getConfidenceBadge()}
+          <Sheet open={assumptionsPanelOpen} onOpenChange={setAssumptionsPanelOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" data-testid="button-open-assumptions">
+                <SlidersHorizontal className="h-4 w-4 mr-1" />
+                Assumptions
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Scenario Assumptions</SheetTitle>
+                <SheetDescription>
+                  Adjust key parameters to see how they affect your projections in real-time.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-6 space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="growth-rate">Monthly Growth Rate</Label>
+                      <span className="text-sm font-mono text-muted-foreground">{assumptions.growthRate}%</span>
+                    </div>
+                    <Slider
+                      id="growth-rate"
+                      value={[assumptions.growthRate]}
+                      onValueChange={(v) => setAssumptions(prev => ({ ...prev, growthRate: v[0] }))}
+                      min={-10}
+                      max={50}
+                      step={1}
+                      data-testid="slider-growth-rate"
+                    />
+                    <p className="text-xs text-muted-foreground">Expected MoM revenue growth percentage</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="pricing-change">Pricing Change</Label>
+                      <span className="text-sm font-mono text-muted-foreground">{assumptions.pricingChange}%</span>
+                    </div>
+                    <Slider
+                      id="pricing-change"
+                      value={[assumptions.pricingChange]}
+                      onValueChange={(v) => setAssumptions(prev => ({ ...prev, pricingChange: v[0] }))}
+                      min={-30}
+                      max={50}
+                      step={1}
+                      data-testid="slider-pricing-change"
+                    />
+                    <p className="text-xs text-muted-foreground">Percentage change to current pricing</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="hiring-rate">Hiring Rate</Label>
+                      <span className="text-sm font-mono text-muted-foreground">{assumptions.hiringRate}%</span>
+                    </div>
+                    <Slider
+                      id="hiring-rate"
+                      value={[assumptions.hiringRate]}
+                      onValueChange={(v) => setAssumptions(prev => ({ ...prev, hiringRate: v[0] }))}
+                      min={0}
+                      max={50}
+                      step={1}
+                      data-testid="slider-hiring-rate"
+                    />
+                    <p className="text-xs text-muted-foreground">Annual team growth rate (impacts burn)</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="churn-rate">Churn Adjustment</Label>
+                      <span className="text-sm font-mono text-muted-foreground">{assumptions.churnRate}%</span>
+                    </div>
+                    <Slider
+                      id="churn-rate"
+                      value={[assumptions.churnRate]}
+                      onValueChange={(v) => setAssumptions(prev => ({ ...prev, churnRate: v[0] }))}
+                      min={0}
+                      max={20}
+                      step={0.5}
+                      data-testid="slider-churn-rate"
+                    />
+                    <p className="text-xs text-muted-foreground">Expected monthly customer churn</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="cac-reduction">CAC Reduction</Label>
+                      <span className="text-sm font-mono text-muted-foreground">{assumptions.cacReduction}%</span>
+                    </div>
+                    <Slider
+                      id="cac-reduction"
+                      value={[assumptions.cacReduction]}
+                      onValueChange={(v) => setAssumptions(prev => ({ ...prev, cacReduction: v[0] }))}
+                      min={0}
+                      max={50}
+                      step={1}
+                      data-testid="slider-cac-reduction"
+                    />
+                    <p className="text-xs text-muted-foreground">Marketing efficiency improvement</p>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                  <h4 className="font-medium">Scenario Management</h4>
+                  
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Scenario name..."
+                      value={newScenarioName}
+                      onChange={(e) => setNewScenarioName(e.target.value)}
+                      className="flex-1"
+                      data-testid="input-scenario-name"
+                    />
+                    <Button onClick={saveScenario} disabled={!newScenarioName.trim()} data-testid="button-save-scenario">
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  </div>
+                  
+                  {savedScenarios.length > 0 && (
+                    <Select value={selectedScenarioId} onValueChange={loadScenario}>
+                      <SelectTrigger data-testid="select-load-scenario">
+                        <SelectValue placeholder="Load a saved scenario..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {savedScenarios.map((s, index) => (
+                          <SelectItem key={s.id} value={s.id} data-testid={`select-item-scenario-${index}`}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssumptions(DEFAULT_ASSUMPTIONS)}
+                    className="w-full"
+                    data-testid="button-reset-assumptions"
+                  >
+                    Reset to Defaults
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
           <Button
             variant="outline"
             size="sm"
@@ -269,7 +709,172 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       )}
-      
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <MetricCard
+          title="MRR"
+          value={formatCurrency(projectedMetrics.mrr)}
+          subtitle="Monthly Recurring Revenue"
+          trend="up"
+          trendValue={`+${assumptions.growthRate}%`}
+          testId="metric-mrr"
+        />
+        <MetricCard
+          title="ARR"
+          value={formatCurrency(projectedMetrics.arr)}
+          subtitle="Annual Recurring Revenue"
+          trend="up"
+          testId="metric-arr"
+        />
+        <MetricCard
+          title="Cash on Hand"
+          value={formatCurrency(projectedMetrics.cash)}
+          subtitle={`Runway: ${safeToFixed(projectedMetrics.runway)} mo`}
+          variant={projectedMetrics.runway < 6 ? 'danger' : projectedMetrics.runway < 12 ? 'warning' : 'success'}
+          testId="metric-cash"
+        />
+        <MetricCard
+          title="Burn Rate"
+          value={formatCurrency(projectedMetrics.burnRate)}
+          subtitle="/month"
+          testId="metric-burn-rate"
+        />
+        <MetricCard
+          title="CAC"
+          value={formatCurrency(projectedMetrics.cac)}
+          subtitle="Cost to Acquire"
+          testId="metric-cac"
+        />
+        <MetricCard
+          title="LTV"
+          value={formatCurrency(projectedMetrics.ltv)}
+          subtitle={`LTV:CAC = ${safeToFixed(projectedMetrics.ltvCacRatio)}x`}
+          variant={projectedMetrics.ltvCacRatio < 3 ? 'warning' : 'success'}
+          testId="metric-ltv"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 overflow-visible">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Revenue Projection</CardTitle>
+            <CardDescription>12-month forecast based on current assumptions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]" data-testid="chart-revenue-projection">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                  <YAxis
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 12 }}
+                    className="text-muted-foreground"
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                  />
+                  <Legend />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="hsl(var(--primary))"
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    strokeWidth={2}
+                    name="Projected Revenue"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="baseline"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeDasharray="5 5"
+                    dot={false}
+                    name="Baseline (5% growth)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-visible">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              KPI Health
+              <HoverCard>
+                <HoverCardTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-kpi-health-info">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-64" side="bottom">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">KPI Status Legend</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        <span>On Target</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        <span>Needs Attention</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <XCircle className="h-4 w-4 text-red-500" />
+                        <span>Critical</span>
+                      </div>
+                    </div>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            </CardTitle>
+            <CardDescription>Real-time status of key metrics</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3" data-testid="kpi-health-grid">
+              {kpiHealthData.map((kpi) => {
+                const status = getKpiStatus(kpi.value, kpi.metric);
+                return (
+                  <Card
+                    key={kpi.metric}
+                    className="overflow-visible"
+                    data-testid={`kpi-${kpi.metric}`}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-medium text-muted-foreground truncate">{kpi.name}</span>
+                        <Badge variant="secondary" data-testid={`kpi-${kpi.metric}-status`}>
+                          <KpiStatusIcon status={status} />
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-semibold mt-1 font-mono" data-testid={`kpi-${kpi.metric}-value`}>
+                        {kpi.metric === 'runway' || kpi.metric === 'paybackPeriod'
+                          ? `${safeToFixed(kpi.value)} mo`
+                          : kpi.metric === 'ltv_cac'
+                          ? `${safeToFixed(kpi.value)}x`
+                          : `${safeToFixed(kpi.value)}%`}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="overflow-visible">
           <CardHeader className="pb-2">
@@ -278,9 +883,9 @@ export default function OverviewPage() {
               Quality of Growth Index
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-qog-info">
+                  <Button variant="ghost" size="icon" data-testid="button-qog-info">
                     <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  </button>
+                  </Button>
                 </HoverCardTrigger>
                 <HoverCardContent className="w-80" side="bottom">
                   <div className="space-y-3">
@@ -324,118 +929,41 @@ export default function OverviewPage() {
         <Card className="overflow-visible">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center gap-2">
-              Data Confidence Score
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <button className="inline-flex items-center justify-center rounded-full p-0.5 hover-elevate" data-testid="button-confidence-info">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-80" side="bottom">
-                  <div className="space-y-3">
-                    <h4 className="font-semibold">Data Completeness Factors</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Score based on available data fields:
-                    </p>
-                    <div className="space-y-2">
-                      {getConfidenceExplanation(confidence, metrics).map((factor, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span>{factor.label}</span>
-                          <Badge variant="secondary" className={
-                            factor.status === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
-                            factor.status === 'warning' ? 'bg-amber-500/20 text-amber-400' :
-                            'bg-red-500/20 text-red-400'
-                          }>
-                            {factor.status === 'good' ? 'Complete' : factor.status === 'warning' ? 'Partial' : 'Missing'}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="pt-2 border-t">
-                      <Button variant="ghost" size="sm" className="p-0 h-auto text-primary underline-offset-4 hover:underline" onClick={() => setLocation('/data')} data-testid="link-add-data">
-                        Add more data to improve score
-                      </Button>
-                    </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
+              <Target className="h-5 w-5 text-primary" />
+              Milestones
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {truthLoading ? (
-              <Skeleton className="h-16 w-24" />
-            ) : (
-              <div className="text-4xl font-bold font-mono" data-testid="text-confidence-score">
-                {confidence}
-                <span className="text-lg text-muted-foreground">/100</span>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Projected Profitability</span>
               </div>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">
-              Based on data completeness and consistency
-            </p>
+              <Badge variant="secondary">{DUMMY_BASE_DATA.profitabilityDate}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Total Customers</span>
+              </div>
+              <span className="font-mono font-medium">{projectedMetrics.totalCustomers}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Percent className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Conversion Rate</span>
+              </div>
+              <span className="font-mono font-medium">{DUMMY_BASE_DATA.conversionRate}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">Gross Margin</span>
+              </div>
+              <span className="font-mono font-medium">{safeToFixed(projectedMetrics.grossMargin)}%</span>
+            </div>
           </CardContent>
         </Card>
-      </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {truthLoading ? (
-          Array(6).fill(0).map((_, i) => (
-            <Card key={i} className="overflow-visible">
-              <CardContent className="p-4">
-                <Skeleton className="h-4 w-20 mb-2" />
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <>
-            <MetricCard
-              title="Runway (P50)"
-              value={`${safeToFixed(metrics.runway_p50)} mo`}
-              subtitle={`P10: ${safeToFixed(metrics.runway_p10)}, P90: ${safeToFixed(metrics.runway_p90)}`}
-              variant={typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 6 ? 'danger' : typeof metrics.runway_p50 === 'number' && metrics.runway_p50 < 12 ? 'warning' : 'success'}
-              testId="metric-runway"
-              tooltip={`${METRIC_TOOLTIPS.runway.calculation}. Good: ${METRIC_TOOLTIPS.runway.goodRange}. Data from: ${METRIC_TOOLTIPS.runway.dataSource}`}
-            />
-            <MetricCard
-              title="Net Burn"
-              value={formatCurrency(metrics.net_burn)}
-              trend={metrics.burn_change < 0 ? 'down' : metrics.burn_change > 0 ? 'up' : 'stable'}
-              trendValue={`${metrics.burn_change >= 0 ? '+' : ''}${formatCurrency(metrics.burn_change)}`}
-              testId="metric-burn"
-              tooltip={`${METRIC_TOOLTIPS.netBurn.calculation}. Good: ${METRIC_TOOLTIPS.netBurn.goodRange}. Data from: ${METRIC_TOOLTIPS.netBurn.dataSource}`}
-            />
-            <MetricCard
-              title="Revenue Growth"
-              value={formatPercent(metrics.revenue_growth_mom)}
-              subtitle="MoM"
-              trend={metrics.revenue_growth_mom > 0 ? 'up' : metrics.revenue_growth_mom < 0 ? 'down' : 'stable'}
-              testId="metric-growth"
-              tooltip={`${METRIC_TOOLTIPS.revenueGrowth.calculation}. Good: ${METRIC_TOOLTIPS.revenueGrowth.goodRange}. Data from: ${METRIC_TOOLTIPS.revenueGrowth.dataSource}`}
-            />
-            <MetricCard
-              title="Gross Margin"
-              value={formatPercent(metrics.gross_margin)}
-              variant={metrics.gross_margin < 50 ? 'warning' : 'default'}
-              testId="metric-margin"
-              tooltip={`${METRIC_TOOLTIPS.grossMargin.calculation}. Good: ${METRIC_TOOLTIPS.grossMargin.goodRange}. Data from: ${METRIC_TOOLTIPS.grossMargin.dataSource}`}
-            />
-            <MetricCard
-              title="Burn Multiple"
-              value={safeToFixed(metrics.burn_multiple)}
-              variant={typeof metrics.burn_multiple === 'number' && metrics.burn_multiple > 3 ? 'warning' : 'default'}
-              testId="metric-burn-multiple"
-              tooltip={`${METRIC_TOOLTIPS.burnMultiple.calculation}. Good: ${METRIC_TOOLTIPS.burnMultiple.goodRange}. Data from: ${METRIC_TOOLTIPS.burnMultiple.dataSource}`}
-            />
-            <MetricCard
-              title="Top 5 Concentration"
-              value={formatPercent(metrics.concentration_top5)}
-              variant={metrics.concentration_top5 > 50 ? 'warning' : 'default'}
-              testId="metric-concentration"
-              tooltip={`${METRIC_TOOLTIPS.concentration.calculation}. Good: ${METRIC_TOOLTIPS.concentration.goodRange}. Data from: ${METRIC_TOOLTIPS.concentration.dataSource}`}
-            />
-          </>
-        )}
       </div>
       
       <div className="space-y-4">
@@ -489,6 +1017,53 @@ export default function OverviewPage() {
           </Card>
         )}
       </div>
+
+      <Card className="overflow-visible">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
+            Notes & Annotations
+          </CardTitle>
+          <CardDescription>Add notes about the current scenario or assumptions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Textarea
+              placeholder="Add a note about this scenario..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="flex-1 min-h-[80px]"
+              data-testid="textarea-comment"
+            />
+          </div>
+          <Button onClick={addComment} disabled={!newComment.trim()} data-testid="button-add-comment">
+            Add Note
+          </Button>
+          
+          {comments.length > 0 && (
+            <div className="space-y-2 mt-4" data-testid="comments-list">
+              <h4 className="text-sm font-medium text-muted-foreground">Previous Notes</h4>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {comments.map((comment, index) => (
+                  <Card key={comment.id} className="overflow-visible" data-testid={`comment-item-${index}`}>
+                    <CardContent className="p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs text-muted-foreground" data-testid={`comment-date-${index}`}>
+                          {new Date(comment.createdAt).toLocaleDateString()}
+                        </span>
+                        {comment.scenarioName && (
+                          <Badge variant="secondary" className="text-xs" data-testid={`comment-scenario-${index}`}>{comment.scenarioName}</Badge>
+                        )}
+                      </div>
+                      <p data-testid={`comment-text-${index}`}>{comment.text}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       
       <Card className="overflow-visible">
         <CardHeader>

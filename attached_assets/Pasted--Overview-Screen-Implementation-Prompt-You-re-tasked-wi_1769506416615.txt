@@ -1,0 +1,47 @@
+# Overview Screen Implementation Prompt
+
+You’re tasked with building the initial version of a web‑based “Overview” dashboard for a business‑strategy simulator.  Refer to the PRD below and implement a minimal, but functional prototype.  You are free to choose the tech stack (e.g. React + Node.js, Vue, or Python/Flask with a JS front‑end), but the app must run on Replit and display in the browser.
+
+## Core Features to Implement
+
+1. **Metrics Display**
+   - Show current and projected Monthly/Annual Recurring Revenue (MRR/ARR).
+   - Display cash on hand, burn rate and runway (months of cash remaining).
+   - Present unit economics: Customer Acquisition Cost (CAC), Customer Lifetime Value (LTV), gross margin and payback period.
+   - Visualize growth trajectory: total users/customers, funnel conversion rates and churn/retention percentages.
+   - Include a simple milestones section (e.g., projected profitability date) using placeholder dates.
+
+2. **Scenario Assumptions Panel**
+   - Implement a sidebar or modal where a user can view and adjust key assumptions (e.g., growth rate %, pricing change %, hiring rate).  Use sliders or numeric input fields.
+   - Changing a value should recompute the projections in real time.  For this prototype, simulate projections with simple formulas (e.g., MRR grows by growth rate).
+
+3. **KPI Health Indicators**
+   - For each core metric, show a status indicator (green/yellow/red) based on thresholds you define in the code.
+   - Optionally, include a heat‑map‑style grid showing which KPIs are on target.
+
+4. **Scenario Management**
+   - Allow the user to save the current set of assumptions as a “scenario” with a name.
+   - Provide a dropdown list to load saved scenarios.  For the prototype, store scenarios in memory (e.g., a JSON array).
+
+5. **Interactive Charts**
+   - Use a charting library (e.g. Chart.js, Plotly.js) to render at least one chart (e.g. revenue over time).
+   - Enable basic interactivity such as hover tooltips.
+
+6. **Comments/Annotations (Optional)**
+   - Add a textarea below the dashboard where users can leave a comment or note about the current scenario.  Display comments in a list.
+
+## Development Hints
+
+- Use dummy data for initial values (e.g. starting MRR of \$10 000, burn rate of \$5 000/month).
+- Use modern responsive CSS to layout the dashboard.  Flexbox or CSS Grid works well.
+- Keep the code modular.  Create separate components/modules for metrics display, scenario panel, charts, and scenario management.
+- Document any assumptions or simplifications you make in comments.
+
+## Acceptance Criteria (Prototype Level)
+
+- The dashboard runs in a browser on Replit without errors.
+- All metrics display correctly using the dummy data.
+- Adjusting assumptions updates the projections and reflects in the charts/metrics.
+- Scenarios can be saved, named, and reloaded during a single session.
+
+Refer back to the PRD for the conceptual model and expand the prototype as needed.  Focus on delivering a clear, interactive overview that a founder could use to experiment with business strategies.
