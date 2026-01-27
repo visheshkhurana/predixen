@@ -215,41 +215,101 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
   return alerts;
 };
 
-const getSensitivityData = (baseMetrics: any, assumptions: ScenarioAssumptions) => {
-  const runwayBase = baseMetrics.runway;
+interface ProjectedMetrics {
+  mrr: number;
+  arr: number;
+  cash: number;
+  burnRate: number;
+  runway: number;
+  cac: number;
+  ltv: number;
+  ltvCacRatio: number;
+  paybackPeriod: number;
+  totalCustomers: number;
+  churnRate: number;
+  grossMargin: number;
+}
+
+const computeProjectedMetrics = (baseData: typeof DUMMY_BASE_DATA, assumptions: ScenarioAssumptions): ProjectedMetrics => {
+  const months = 12;
   
-  return [
+  const growthMultiplier = 1 + assumptions.growthRate / 100;
+  const pricingMultiplier = 1 + assumptions.pricingChange / 100;
+  const adjustedChurn = baseData.churnRate * (1 - assumptions.cacReduction / 100) + assumptions.churnRate / 10;
+  
+  const projectedMrr = baseData.mrr * Math.pow(growthMultiplier, months) * pricingMultiplier;
+  const projectedArr = projectedMrr * 12;
+  
+  const burnIncrease = 1 + (assumptions.hiringRate / 100) * 0.8;
+  const projectedBurn = baseData.burnRate * burnIncrease;
+  
+  const projectedCash = baseData.cash - (projectedBurn * months * 0.5);
+  const runway = projectedCash > 0 ? projectedCash / projectedBurn : 0;
+  
+  const adjustedCac = baseData.cac * (1 - assumptions.cacReduction / 100);
+  const adjustedLtv = baseData.ltv * pricingMultiplier * (1 - adjustedChurn / 100);
+  const ltvCacRatio = adjustedLtv / adjustedCac;
+  const paybackPeriod = adjustedCac / (projectedMrr / baseData.totalCustomers);
+  
+  const projectedCustomers = Math.round(baseData.totalCustomers * growthMultiplier);
+  
+  return {
+    mrr: projectedMrr,
+    arr: projectedArr,
+    cash: projectedCash,
+    burnRate: projectedBurn,
+    runway,
+    cac: adjustedCac,
+    ltv: adjustedLtv,
+    ltvCacRatio,
+    paybackPeriod,
+    totalCustomers: projectedCustomers,
+    churnRate: adjustedChurn,
+    grossMargin: baseData.grossMargin + assumptions.pricingChange * 0.5,
+  };
+};
+
+const getSensitivityData = (baseMetrics: ProjectedMetrics, assumptions: ScenarioAssumptions) => {
+  const baseRunway = baseMetrics.runway;
+  
+  const perturbations: { name: string; plusAssumptions: ScenarioAssumptions; minusAssumptions: ScenarioAssumptions }[] = [
     {
-      variable: 'Growth Rate',
-      positive: Math.round((runwayBase * (1 - assumptions.growthRate * 0.02) - runwayBase)),
-      negative: Math.round((runwayBase * (1 + assumptions.growthRate * 0.015) - runwayBase)),
-      impact: assumptions.growthRate * 0.3,
+      name: 'Growth Rate',
+      plusAssumptions: { ...assumptions, growthRate: assumptions.growthRate + 10 },
+      minusAssumptions: { ...assumptions, growthRate: Math.max(0, assumptions.growthRate - 10) },
     },
     {
-      variable: 'Burn Rate',
-      positive: Math.round(runwayBase * 0.25),
-      negative: Math.round(-runwayBase * 0.35),
-      impact: 35,
+      name: 'Hiring Rate',
+      plusAssumptions: { ...assumptions, hiringRate: Math.max(0, assumptions.hiringRate - 10) },
+      minusAssumptions: { ...assumptions, hiringRate: assumptions.hiringRate + 10 },
     },
     {
-      variable: 'Pricing',
-      positive: Math.round(runwayBase * (assumptions.pricingChange * 0.01)),
-      negative: Math.round(-runwayBase * (assumptions.pricingChange * 0.005)),
-      impact: assumptions.pricingChange * 0.8,
+      name: 'Pricing',
+      plusAssumptions: { ...assumptions, pricingChange: assumptions.pricingChange + 10 },
+      minusAssumptions: { ...assumptions, pricingChange: assumptions.pricingChange - 10 },
     },
     {
-      variable: 'Churn Rate',
-      positive: Math.round(runwayBase * 0.15),
-      negative: Math.round(-runwayBase * 0.2),
-      impact: assumptions.churnRate * 2,
+      name: 'Churn Rate',
+      plusAssumptions: { ...assumptions, churnRate: Math.max(0, assumptions.churnRate - 2) },
+      minusAssumptions: { ...assumptions, churnRate: assumptions.churnRate + 2 },
     },
     {
-      variable: 'Hiring Rate',
-      positive: 0,
-      negative: Math.round(-runwayBase * assumptions.hiringRate * 0.01),
-      impact: assumptions.hiringRate * 0.5,
+      name: 'CAC Efficiency',
+      plusAssumptions: { ...assumptions, cacReduction: Math.min(50, assumptions.cacReduction + 10) },
+      minusAssumptions: { ...assumptions, cacReduction: Math.max(0, assumptions.cacReduction - 10) },
     },
-  ].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+  ];
+  
+  return perturbations
+    .map(p => ({
+      variable: p.name,
+      positive: Math.round(computeProjectedMetrics(DUMMY_BASE_DATA, p.plusAssumptions).runway - baseRunway),
+      negative: Math.round(computeProjectedMetrics(DUMMY_BASE_DATA, p.minusAssumptions).runway - baseRunway),
+    }))
+    .sort((a, b) => 
+      Math.max(Math.abs(b.positive), Math.abs(b.negative)) - 
+      Math.max(Math.abs(a.positive), Math.abs(a.negative))
+    );
 };
 
 const METRIC_TOOLTIPS = {
@@ -433,43 +493,7 @@ export default function OverviewPage() {
   }, [truthScan, setTruthScan]);
 
   const projectedMetrics = useMemo(() => {
-    const baseData = DUMMY_BASE_DATA;
-    const months = 12;
-    
-    const growthMultiplier = 1 + assumptions.growthRate / 100;
-    const pricingMultiplier = 1 + assumptions.pricingChange / 100;
-    const adjustedChurn = baseData.churnRate * (1 - assumptions.cacReduction / 100) + assumptions.churnRate / 10;
-    
-    const projectedMrr = baseData.mrr * Math.pow(growthMultiplier, months) * pricingMultiplier;
-    const projectedArr = projectedMrr * 12;
-    
-    const burnIncrease = 1 + (assumptions.hiringRate / 100) * 0.8;
-    const projectedBurn = baseData.burnRate * burnIncrease;
-    
-    const projectedCash = baseData.cash - (projectedBurn * months * 0.5);
-    const runway = projectedCash > 0 ? projectedCash / projectedBurn : 0;
-    
-    const adjustedCac = baseData.cac * (1 - assumptions.cacReduction / 100);
-    const adjustedLtv = baseData.ltv * pricingMultiplier * (1 - adjustedChurn / 100);
-    const ltvCacRatio = adjustedLtv / adjustedCac;
-    const paybackPeriod = adjustedCac / (projectedMrr / baseData.totalCustomers);
-    
-    const projectedCustomers = Math.round(baseData.totalCustomers * growthMultiplier);
-    
-    return {
-      mrr: projectedMrr,
-      arr: projectedArr,
-      cash: projectedCash,
-      burnRate: projectedBurn,
-      runway,
-      cac: adjustedCac,
-      ltv: adjustedLtv,
-      ltvCacRatio,
-      paybackPeriod,
-      totalCustomers: projectedCustomers,
-      churnRate: adjustedChurn,
-      grossMargin: baseData.grossMargin + assumptions.pricingChange * 0.5,
-    };
+    return computeProjectedMetrics(DUMMY_BASE_DATA, assumptions);
   }, [assumptions]);
 
   const chartData = useMemo(() => {
@@ -662,6 +686,14 @@ export default function OverviewPage() {
   const riskAlerts = useMemo(() => getRiskAlerts(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
   const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
   
+  const getBenchmarkStatus = (value: number, benchmark: typeof INDUSTRY_BENCHMARKS.revenueGrowth) => {
+    if (benchmark.direction === 'higher') {
+      return value >= benchmark.p50 ? 'above' : value >= benchmark.p25 ? 'median' : 'below';
+    } else {
+      return value <= benchmark.p50 ? 'above' : value <= benchmark.p25 ? 'median' : 'below';
+    }
+  };
+  
   const benchmarkComparison = useMemo(() => [
     { 
       metric: 'Growth Rate', 
@@ -670,7 +702,7 @@ export default function OverviewPage() {
       p50: INDUSTRY_BENCHMARKS.revenueGrowth.p50, 
       p75: INDUSTRY_BENCHMARKS.revenueGrowth.p75,
       unit: '%',
-      status: assumptions.growthRate >= INDUSTRY_BENCHMARKS.revenueGrowth.p50 ? 'above' : assumptions.growthRate >= INDUSTRY_BENCHMARKS.revenueGrowth.p25 ? 'median' : 'below',
+      status: getBenchmarkStatus(assumptions.growthRate, INDUSTRY_BENCHMARKS.revenueGrowth),
     },
     { 
       metric: 'Gross Margin', 
@@ -679,7 +711,7 @@ export default function OverviewPage() {
       p50: INDUSTRY_BENCHMARKS.grossMargin.p50, 
       p75: INDUSTRY_BENCHMARKS.grossMargin.p75,
       unit: '%',
-      status: projectedMetrics.grossMargin >= INDUSTRY_BENCHMARKS.grossMargin.p50 ? 'above' : projectedMetrics.grossMargin >= INDUSTRY_BENCHMARKS.grossMargin.p25 ? 'median' : 'below',
+      status: getBenchmarkStatus(projectedMetrics.grossMargin, INDUSTRY_BENCHMARKS.grossMargin),
     },
     { 
       metric: 'LTV:CAC', 
@@ -688,7 +720,7 @@ export default function OverviewPage() {
       p50: INDUSTRY_BENCHMARKS.ltvCac.p50, 
       p75: INDUSTRY_BENCHMARKS.ltvCac.p75,
       unit: 'x',
-      status: projectedMetrics.ltvCacRatio >= INDUSTRY_BENCHMARKS.ltvCac.p50 ? 'above' : projectedMetrics.ltvCacRatio >= INDUSTRY_BENCHMARKS.ltvCac.p25 ? 'median' : 'below',
+      status: getBenchmarkStatus(projectedMetrics.ltvCacRatio, INDUSTRY_BENCHMARKS.ltvCac),
     },
     { 
       metric: 'Runway', 
@@ -697,11 +729,38 @@ export default function OverviewPage() {
       p50: INDUSTRY_BENCHMARKS.runway.p50, 
       p75: INDUSTRY_BENCHMARKS.runway.p75,
       unit: 'mo',
-      status: projectedMetrics.runway >= INDUSTRY_BENCHMARKS.runway.p50 ? 'above' : projectedMetrics.runway >= INDUSTRY_BENCHMARKS.runway.p25 ? 'median' : 'below',
+      status: getBenchmarkStatus(projectedMetrics.runway, INDUSTRY_BENCHMARKS.runway),
+    },
+    { 
+      metric: 'Churn Rate', 
+      value: projectedMetrics.churnRate, 
+      p25: INDUSTRY_BENCHMARKS.churnRate.p25, 
+      p50: INDUSTRY_BENCHMARKS.churnRate.p50, 
+      p75: INDUSTRY_BENCHMARKS.churnRate.p75,
+      unit: '%',
+      status: getBenchmarkStatus(projectedMetrics.churnRate, INDUSTRY_BENCHMARKS.churnRate),
+    },
+    { 
+      metric: 'Burn Multiple', 
+      value: projectedMetrics.burnRate > 0 ? projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1) : 0, 
+      p25: INDUSTRY_BENCHMARKS.burnMultiple.p25, 
+      p50: INDUSTRY_BENCHMARKS.burnMultiple.p50, 
+      p75: INDUSTRY_BENCHMARKS.burnMultiple.p75,
+      unit: 'x',
+      status: getBenchmarkStatus(projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1), INDUSTRY_BENCHMARKS.burnMultiple),
     },
   ], [assumptions.growthRate, projectedMetrics]);
 
   const exportToCSV = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    const companyName = currentCompany?.name || 'Company';
+    
+    const header = [
+      `# ${companyName} Financial Metrics Export`,
+      `# Generated: ${timestamp}`,
+      `# `,
+    ];
+    
     const data = [
       ['Metric', 'Value', 'Unit'],
       ['MRR', projectedMetrics.mrr.toFixed(0), 'USD'],
@@ -716,11 +775,11 @@ export default function OverviewPage() {
       ['Churn Rate', projectedMetrics.churnRate.toFixed(1), '%'],
     ];
     
-    const csvContent = data.map(row => row.join(',')).join('\n');
+    const csvContent = [...header, ...data.map(row => row.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${currentCompany?.name || 'company'}_metrics_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `${companyName}_metrics_${timestamp.split('T')[0]}.csv`;
     link.click();
     
     toast({ title: 'Export Complete', description: 'Metrics exported to CSV file.' });
