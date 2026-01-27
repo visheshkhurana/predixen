@@ -37,12 +37,22 @@ import {
   Percent,
   Calendar,
   MessageSquare,
+  Bell,
+  BarChart3,
+  FileDown,
+  ImageIcon,
+  Zap,
+  TrendingDown,
+  Scale,
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   LineChart,
   Line,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -50,6 +60,7 @@ import {
   ResponsiveContainer,
   Legend,
   ReferenceLine,
+  Cell,
 } from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
@@ -103,6 +114,142 @@ const DUMMY_BASE_DATA = {
   churnRate: 5,
   conversionRate: 3.5,
   profitabilityDate: 'Dec 2026',
+};
+
+const INDUSTRY_BENCHMARKS = {
+  revenueGrowth: { p25: 5, p50: 10, p75: 20, unit: '%', direction: 'higher' },
+  grossMargin: { p25: 60, p50: 70, p75: 80, unit: '%', direction: 'higher' },
+  burnMultiple: { p25: 1.5, p50: 2.5, p75: 4, unit: 'x', direction: 'lower' },
+  runway: { p25: 12, p50: 18, p75: 24, unit: 'mo', direction: 'higher' },
+  ltvCac: { p25: 2, p50: 3, p75: 5, unit: 'x', direction: 'higher' },
+  churnRate: { p25: 8, p50: 5, p75: 3, unit: '%', direction: 'lower' },
+};
+
+interface RiskAlert {
+  id: string;
+  type: 'critical' | 'warning' | 'info';
+  title: string;
+  description: string;
+  metric: string;
+  threshold: string;
+}
+
+const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAlert[] => {
+  const alerts: RiskAlert[] = [];
+  
+  if (metrics.runway < 6) {
+    alerts.push({
+      id: 'runway-critical',
+      type: 'critical',
+      title: 'Cash Runway Critical',
+      description: `Only ${metrics.runway.toFixed(1)} months of runway remaining. Immediate action required.`,
+      metric: 'runway',
+      threshold: '< 6 months',
+    });
+  } else if (metrics.runway < 12) {
+    alerts.push({
+      id: 'runway-warning',
+      type: 'warning',
+      title: 'Low Runway Warning',
+      description: `${metrics.runway.toFixed(1)} months of runway. Consider fundraising or reducing burn.`,
+      metric: 'runway',
+      threshold: '< 12 months',
+    });
+  }
+  
+  if (metrics.burnRate > metrics.mrr * 3) {
+    alerts.push({
+      id: 'burn-high',
+      type: 'warning',
+      title: 'High Burn Rate',
+      description: 'Monthly burn exceeds 3x MRR. Growth efficiency may be compromised.',
+      metric: 'burnRate',
+      threshold: '> 3x MRR',
+    });
+  }
+  
+  if (assumptions.hiringRate > 30) {
+    alerts.push({
+      id: 'hiring-aggressive',
+      type: 'warning',
+      title: 'Aggressive Hiring Plan',
+      description: `${assumptions.hiringRate}% annual hiring rate may strain resources and dilute culture.`,
+      metric: 'hiringRate',
+      threshold: '> 30%',
+    });
+  }
+  
+  if (metrics.ltvCacRatio < 2) {
+    alerts.push({
+      id: 'ltv-cac-low',
+      type: 'warning',
+      title: 'Poor Unit Economics',
+      description: `LTV:CAC ratio of ${metrics.ltvCacRatio.toFixed(1)}x is below industry minimum.`,
+      metric: 'ltvCac',
+      threshold: '< 2x',
+    });
+  }
+  
+  if (metrics.churnRate > 10) {
+    alerts.push({
+      id: 'churn-high',
+      type: 'critical',
+      title: 'Churn Rate Critical',
+      description: `${metrics.churnRate.toFixed(1)}% churn will severely impact growth.`,
+      metric: 'churnRate',
+      threshold: '> 10%',
+    });
+  }
+  
+  if (metrics.cash < 100000) {
+    alerts.push({
+      id: 'cash-low',
+      type: 'critical',
+      title: 'Cash Balance Critical',
+      description: 'Cash reserves dangerously low. Immediate fundraising required.',
+      metric: 'cash',
+      threshold: '< $100K',
+    });
+  }
+  
+  return alerts;
+};
+
+const getSensitivityData = (baseMetrics: any, assumptions: ScenarioAssumptions) => {
+  const runwayBase = baseMetrics.runway;
+  
+  return [
+    {
+      variable: 'Growth Rate',
+      positive: Math.round((runwayBase * (1 - assumptions.growthRate * 0.02) - runwayBase)),
+      negative: Math.round((runwayBase * (1 + assumptions.growthRate * 0.015) - runwayBase)),
+      impact: assumptions.growthRate * 0.3,
+    },
+    {
+      variable: 'Burn Rate',
+      positive: Math.round(runwayBase * 0.25),
+      negative: Math.round(-runwayBase * 0.35),
+      impact: 35,
+    },
+    {
+      variable: 'Pricing',
+      positive: Math.round(runwayBase * (assumptions.pricingChange * 0.01)),
+      negative: Math.round(-runwayBase * (assumptions.pricingChange * 0.005)),
+      impact: assumptions.pricingChange * 0.8,
+    },
+    {
+      variable: 'Churn Rate',
+      positive: Math.round(runwayBase * 0.15),
+      negative: Math.round(-runwayBase * 0.2),
+      impact: assumptions.churnRate * 2,
+    },
+    {
+      variable: 'Hiring Rate',
+      positive: 0,
+      negative: Math.round(-runwayBase * assumptions.hiringRate * 0.01),
+      impact: assumptions.hiringRate * 0.5,
+    },
+  ].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
 };
 
 const METRIC_TOOLTIPS = {
@@ -512,6 +659,73 @@ export default function OverviewPage() {
     await runTruthScanMutation.mutateAsync(currentCompany.id);
   };
 
+  const riskAlerts = useMemo(() => getRiskAlerts(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
+  const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
+  
+  const benchmarkComparison = useMemo(() => [
+    { 
+      metric: 'Growth Rate', 
+      value: assumptions.growthRate, 
+      p25: INDUSTRY_BENCHMARKS.revenueGrowth.p25, 
+      p50: INDUSTRY_BENCHMARKS.revenueGrowth.p50, 
+      p75: INDUSTRY_BENCHMARKS.revenueGrowth.p75,
+      unit: '%',
+      status: assumptions.growthRate >= INDUSTRY_BENCHMARKS.revenueGrowth.p50 ? 'above' : assumptions.growthRate >= INDUSTRY_BENCHMARKS.revenueGrowth.p25 ? 'median' : 'below',
+    },
+    { 
+      metric: 'Gross Margin', 
+      value: projectedMetrics.grossMargin, 
+      p25: INDUSTRY_BENCHMARKS.grossMargin.p25, 
+      p50: INDUSTRY_BENCHMARKS.grossMargin.p50, 
+      p75: INDUSTRY_BENCHMARKS.grossMargin.p75,
+      unit: '%',
+      status: projectedMetrics.grossMargin >= INDUSTRY_BENCHMARKS.grossMargin.p50 ? 'above' : projectedMetrics.grossMargin >= INDUSTRY_BENCHMARKS.grossMargin.p25 ? 'median' : 'below',
+    },
+    { 
+      metric: 'LTV:CAC', 
+      value: projectedMetrics.ltvCacRatio, 
+      p25: INDUSTRY_BENCHMARKS.ltvCac.p25, 
+      p50: INDUSTRY_BENCHMARKS.ltvCac.p50, 
+      p75: INDUSTRY_BENCHMARKS.ltvCac.p75,
+      unit: 'x',
+      status: projectedMetrics.ltvCacRatio >= INDUSTRY_BENCHMARKS.ltvCac.p50 ? 'above' : projectedMetrics.ltvCacRatio >= INDUSTRY_BENCHMARKS.ltvCac.p25 ? 'median' : 'below',
+    },
+    { 
+      metric: 'Runway', 
+      value: projectedMetrics.runway, 
+      p25: INDUSTRY_BENCHMARKS.runway.p25, 
+      p50: INDUSTRY_BENCHMARKS.runway.p50, 
+      p75: INDUSTRY_BENCHMARKS.runway.p75,
+      unit: 'mo',
+      status: projectedMetrics.runway >= INDUSTRY_BENCHMARKS.runway.p50 ? 'above' : projectedMetrics.runway >= INDUSTRY_BENCHMARKS.runway.p25 ? 'median' : 'below',
+    },
+  ], [assumptions.growthRate, projectedMetrics]);
+
+  const exportToCSV = useCallback(() => {
+    const data = [
+      ['Metric', 'Value', 'Unit'],
+      ['MRR', projectedMetrics.mrr.toFixed(0), 'USD'],
+      ['ARR', projectedMetrics.arr.toFixed(0), 'USD'],
+      ['Cash on Hand', projectedMetrics.cash.toFixed(0), 'USD'],
+      ['Burn Rate', projectedMetrics.burnRate.toFixed(0), 'USD/month'],
+      ['Runway', projectedMetrics.runway.toFixed(1), 'months'],
+      ['CAC', projectedMetrics.cac.toFixed(0), 'USD'],
+      ['LTV', projectedMetrics.ltv.toFixed(0), 'USD'],
+      ['LTV:CAC Ratio', projectedMetrics.ltvCacRatio.toFixed(2), 'x'],
+      ['Gross Margin', projectedMetrics.grossMargin.toFixed(1), '%'],
+      ['Churn Rate', projectedMetrics.churnRate.toFixed(1), '%'],
+    ];
+    
+    const csvContent = data.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${currentCompany?.name || 'company'}_metrics_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    toast({ title: 'Export Complete', description: 'Metrics exported to CSV file.' });
+  }, [projectedMetrics, currentCompany, toast]);
+
   const kpiHealthData = [
     { name: 'Runway', value: projectedMetrics.runway, metric: 'runway' },
     { name: 'Gross Margin', value: projectedMetrics.grossMargin, metric: 'grossMargin' },
@@ -754,6 +968,52 @@ export default function OverviewPage() {
         />
       </div>
 
+      {riskAlerts.length > 0 && (
+        <Card className="overflow-visible" data-testid="risk-alerts-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Risk Alerts
+              <Badge variant="secondary">{riskAlerts.length}</Badge>
+            </CardTitle>
+            <CardDescription>Automatic alerts based on metric thresholds</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {riskAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`flex items-start gap-3 p-3 rounded-lg border ${
+                    alert.type === 'critical' ? 'border-red-500/30 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'
+                  }`}
+                  data-testid={`alert-${alert.id}`}
+                >
+                  {alert.type === 'critical' ? (
+                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h4 className="font-medium text-sm">{alert.title}</h4>
+                      <Badge variant="secondary" className="text-xs">Threshold: {alert.threshold}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{alert.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={exportToCSV} data-testid="button-export-csv">
+          <FileDown className="h-4 w-4 mr-1" />
+          Export CSV
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 overflow-visible">
           <CardHeader className="pb-2">
@@ -962,6 +1222,98 @@ export default function OverviewPage() {
               </div>
               <span className="font-mono font-medium">{safeToFixed(projectedMetrics.grossMargin)}%</span>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="overflow-visible" data-testid="benchmarks-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              Industry Benchmarks
+            </CardTitle>
+            <CardDescription>Compare your metrics against SaaS industry averages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {benchmarkComparison.map((item, index) => (
+                <div key={item.metric} className="space-y-1" data-testid={`benchmark-${index}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{item.metric}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-semibold">
+                        {safeToFixed(item.value)}{item.unit}
+                      </span>
+                      <Badge 
+                        variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
+                        data-testid={`benchmark-${index}-status`}
+                      >
+                        {item.status === 'above' ? (
+                          <TrendingUp className="h-3 w-3 mr-1 text-emerald-500" />
+                        ) : item.status === 'median' ? (
+                          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
+                        ) : (
+                          <TrendingDown className="h-3 w-3 mr-1" />
+                        )}
+                        {item.status === 'above' ? 'Above P50' : item.status === 'median' ? 'P25-P50' : 'Below P25'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>P25: {item.p25}{item.unit}</span>
+                    <span>P50: {item.p50}{item.unit}</span>
+                    <span>P75: {item.p75}{item.unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-visible" data-testid="sensitivity-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Sensitivity Analysis
+            </CardTitle>
+            <CardDescription>Impact of assumptions on runway (months)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[200px]" data-testid="chart-sensitivity">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={sensitivityData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="variable"
+                    tick={{ fontSize: 11 }}
+                    width={70}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                    formatter={(value: number, name: string) => [
+                      `${value > 0 ? '+' : ''}${value} months`,
+                      name === 'positive' ? 'Improvement' : 'Degradation'
+                    ]}
+                  />
+                  <Bar dataKey="positive" fill="hsl(var(--primary))" name="Improvement" />
+                  <Bar dataKey="negative" fill="hsl(var(--destructive))" name="Degradation" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Shows runway impact when each variable improves (blue) or degrades (red)
+            </p>
           </CardContent>
         </Card>
       </div>

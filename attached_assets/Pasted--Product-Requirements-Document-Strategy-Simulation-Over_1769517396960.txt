@@ -1,0 +1,131 @@
+# Product Requirements Document – Strategy‑Simulation Overview Screen
+
+## 1. Purpose
+
+Create a revamped Overview screen for the strategy‑simulation application that provides founders with a comprehensive yet succinct view of their business health and projections. The screen should surface key financial metrics, scenario analysis levers, and strategic insights in an interactive, easy‑to‑use layout.
+
+## 2. Background & Motivation
+
+A paying customer reported that the current overview lacks the most critical information needed to make informed strategic decisions. They requested visibility into core financial and growth metrics, scenario assumptions, strategic insights and usability features like scenario management and collaborative commenting.
+
+## 3. Objectives & Goals
+
+* Present real‑time and projected financial and growth metrics (MRR/ARR, cash flow, unit economics, growth trajectory).
+* Allow founders to quickly assess the impact of key assumptions on future outcomes.
+* Highlight which metrics are meeting targets and which require attention.
+* Enable interactive exploration (e.g., drill‑downs, scenario toggling) and collaboration.
+
+## 4. User Stories
+
+1. **Founder views financial health**
+
+   * *As a founder*, I want to see current revenue, burn rate, cash on hand and runway, so that I can understand my company’s financial health at a glance.
+
+2. **Founder assesses unit economics**
+
+   * *As a founder*, I want to view CAC, LTV, gross margin and payback period, so that I can evaluate the efficiency of my business model.
+
+3. **Founder monitors growth trajectory**
+
+   * *As a founder*, I want to track user/customer counts, funnel conversion rates and churn/retention rates, so that I can measure growth and identify bottlenecks.
+
+4. **Founder explores scenario assumptions**
+
+   * *As a founder*, I want to see the assumptions driving each scenario (growth rate, pricing changes, hiring plans) and tweak them, so that I can understand their impact on projections.
+
+5. **Founder identifies sensitive levers**
+
+   * *As a founder*, I want to know which assumptions have the greatest effect on outcomes, so that I can focus my efforts effectively.
+
+6. **Founder tracks milestones**
+
+   * *As a founder*, I want to see projected milestone dates (profitability, market share, funding needs), so that I can plan accordingly.
+
+7. **Founder reviews KPI health**
+
+   * *As a founder*, I want a heat map that highlights which KPIs are on track or off track, so that I can prioritize issues quickly.
+
+8. **Founder compares market benchmarks**
+
+   * *As a founder*, I want to compare my metrics against industry benchmarks or competitors, so that I can contextualize performance.
+
+9. **Founder receives risk alerts**
+
+   * *As a founder*, I want automatic alerts for potential risks (e.g., cash shortfalls, over‑hiring), so that I can take preventive action.
+
+10. **Founder interacts with data**
+
+    * *As a founder*, I want interactive charts and tables with drill‑down capability and export options, so that I can analyze and share insights.
+
+11. **Founder manages scenarios**
+
+    * *As a founder*, I want to save and label different scenarios and revisit them later, so that I can compare various strategies.
+
+12. **Founder collaborates with team**
+
+    * *As a founder*, I want to add comments or annotations to the overview, so that my team stays aligned on decisions.
+
+## 5. Functional Requirements
+
+* **Metrics Display**
+
+  * Display current and projected MRR/ARR.
+  * Show cash on hand, burn rate and runway (months of cash left).
+  * Present unit economics: CAC, LTV, gross margin, payback period.
+  * Visualize growth trajectory: user/customer counts, conversion funnel rates, churn/retention.
+  * Include milestone progress (dates for profitability, market share, funding needs).
+
+* **Scenario Assumptions Panel**
+
+  * List the key variables for each scenario (growth rate, pricing, hiring, etc.).
+  * Allow the user to adjust these variables via sliders or input fields.
+  * Highlight the variables that most strongly influence outcomes via sensitivity analysis.
+
+* **KPI Health Heat Map**
+
+  * Use color coding (e.g., green, yellow, red) to indicate KPI status relative to goals.
+  * Enable clicking on a KPI to view detailed history and projection.
+
+* **Benchmarks & Comparisons**
+
+  * Pull industry average data or user‑provided competitor metrics.
+  * Display side‑by‑side comparisons for selected metrics.
+
+* **Risk Alerts**
+
+  * Define thresholds for cash shortfall, over‑aggressive hiring, etc.
+  * Show alert banners or icons when a metric crosses a threshold.
+
+* **Interactive Visualization**
+
+  * Implement charts with hover tooltips and drill‑down to segments (products, regions).
+  * Provide export options to CSV/Excel or image formats.
+
+* **Scenario Management**
+
+  * Allow saving, naming and loading multiple scenarios.
+  * Show a summary list of saved scenarios with key differences.
+
+* **Collaborative Commenting**
+
+  * Permit users to add comments/annotations to the overview screen.
+  * Display comments in context (e.g. pinned to a chart or metric).
+
+## 6. Non‑Functional Requirements
+
+* **Performance:** The overview screen should load within 2 seconds for an average dataset (<10 000 data points) and remain responsive when interacting with charts.
+* **Security:** Ensure that all sensitive financial data is properly secured and only visible to authorized users.
+* **Usability:** Follow established UI/UX patterns; prioritize clarity and avoid clutter. Tooltips and in‑app help should guide new users.
+* **Compatibility:** Screen should be responsive and work on modern browsers (Chrome, Firefox, Safari, Edge).
+
+## 7. Acceptance Criteria
+
+* When a founder logs in and navigates to the Overview screen, they see all core metrics (MRR/ARR, cash, runway, CAC, LTV, growth trajectory and churn) populated with their data.
+* The scenario assumptions panel shows the current values for each scenario; adjusting a value updates projections in near‑real time.
+* The heat map clearly indicates at least three categories of KPI status (on target, warning, critical).
+* Users can save a scenario with a custom name and later reload it from a list; the Overview updates to reflect that scenario.
+* Clicking a metric opens a detailed view or a drill‑down chart with historical and projected data.
+* Comments can be added and viewed by all authorized users, pinned to a particular chart or metric.
+* Export functionality allows charts/tables to be downloaded as CSV or image.
+
+By implementing these features, the Overview screen will align with the founder’s feedback, providing an actionable dashboard that enhances strategic decision‑making and delivers value to paying customers.
