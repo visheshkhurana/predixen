@@ -772,6 +772,7 @@ export default function CopilotPage() {
   
   // Slash command autocomplete state
   const [showSlashCommands, setShowSlashCommands] = useState(false);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -833,7 +834,11 @@ export default function CopilotPage() {
   // Slash command handling
   const handleInputChange = (value: string) => {
     setInput(value);
-    setShowSlashCommands(value.startsWith('/') && value.length <= 15);
+    const shouldShow = value.startsWith('/') && value.length <= 15;
+    setShowSlashCommands(shouldShow);
+    if (shouldShow) {
+      setSelectedCommandIndex(0);
+    }
   };
   
   const handleSlashCommand = (command: string) => {
@@ -1323,18 +1328,21 @@ export default function CopilotPage() {
           <div className="relative">
             {showSlashCommands && filteredSlashCommands.length > 0 && (
               <div className="absolute bottom-full mb-2 left-0 right-0 bg-card border border-border rounded-lg shadow-lg p-2 z-10" data-testid="slash-command-dropdown">
-                <p className="text-xs text-muted-foreground mb-2 px-2">Commands</p>
-                {filteredSlashCommands.map((cmd) => (
+                <p className="text-xs text-muted-foreground mb-2 px-2" data-testid="text-commands-header">Commands</p>
+                {filteredSlashCommands.map((cmd, idx) => (
                   <button
                     key={cmd.command}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-secondary text-left transition-colors"
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors hover-elevate ${
+                      idx === selectedCommandIndex ? 'bg-secondary' : ''
+                    }`}
                     onClick={() => handleSlashCommand(cmd.command)}
+                    onMouseEnter={() => setSelectedCommandIndex(idx)}
                     data-testid={`slash-cmd-${cmd.command.slice(1)}`}
                   >
                     <cmd.icon className="h-4 w-4 text-primary" />
                     <div>
-                      <p className="text-sm font-medium">{cmd.command}</p>
-                      <p className="text-xs text-muted-foreground">{cmd.description}</p>
+                      <p className="text-sm font-medium" data-testid={`text-cmd-name-${cmd.command.slice(1)}`}>{cmd.command}</p>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-cmd-desc-${cmd.command.slice(1)}`}>{cmd.description}</p>
                     </div>
                   </button>
                 ))}
@@ -1346,10 +1354,25 @@ export default function CopilotPage() {
                 value={input}
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !showSlashCommands) {
+                  if (showSlashCommands && filteredSlashCommands.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSelectedCommandIndex(prev => 
+                        prev < filteredSlashCommands.length - 1 ? prev + 1 : 0
+                      );
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSelectedCommandIndex(prev => 
+                        prev > 0 ? prev - 1 : filteredSlashCommands.length - 1
+                      );
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSlashCommand(filteredSlashCommands[selectedCommandIndex].command);
+                    } else if (e.key === 'Escape') {
+                      setShowSlashCommands(false);
+                    }
+                  } else if (e.key === 'Enter') {
                     handleSend();
-                  } else if (e.key === 'Escape') {
-                    setShowSlashCommands(false);
                   }
                 }}
                 placeholder="Type / for commands or ask a question..."
@@ -1593,19 +1616,18 @@ export default function CopilotPage() {
                 <CardDescription className="text-xs">Quick ideas and reminders</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <Input
                     value={newNoteContent}
                     onChange={(e) => setNewNoteContent(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && addNote()}
                     placeholder="Add a note..."
-                    className="text-xs h-8"
+                    className="text-xs"
                     data-testid="input-new-note"
                   />
                   <Button 
                     size="icon" 
                     variant="outline" 
-                    className="h-8 w-8 flex-shrink-0"
                     onClick={addNote}
                     disabled={!newNoteContent.trim()}
                     data-testid="button-add-note"
