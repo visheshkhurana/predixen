@@ -25,6 +25,7 @@ from server.api import assumptions as assumptions_api
 from server.api import advanced_simulation as advanced_simulation_api
 from server.api import conversations as conversations_api
 from server.api import llm as llm_api
+from server.api import simulation_copilot as simulation_copilot_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -146,6 +147,7 @@ app.include_router(assumptions_api.router)
 app.include_router(advanced_simulation_api.router)
 app.include_router(conversations_api.router)
 app.include_router(llm_api.router)
+app.include_router(simulation_copilot_api.router)
 
 @app.get("/")
 def root():

@@ -227,7 +227,7 @@ def _generate_low_value_warning(assumption: str, value: float) -> str:
         "burn_reduction_pct": f"Increasing burn by {abs(value):.0f}% will shorten runway.",
         "churn_change_pct": f"A {abs(value):.0f}% churn reduction is optimistic - validate with retention data."
     }
-    return warnings.get(assumption)
+    return warnings.get(assumption, f"Value of {value}% may be outside typical ranges.")
 
 
 def _generate_natural_language_prompt(
