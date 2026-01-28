@@ -38,11 +38,21 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 5.  **Scenario Versioning**: Provides full version control for scenarios, including macro-economic modifiers (optimistic, neutral, pessimistic, stagflation, boom) and API endpoints for managing presets.
 6.  **Constrained Multi-Objective Optimization**: An advanced optimizer that handles constraints on key financial metrics (e.g., runway, survival, cash) and uses a weighted composite score for multi-objective decision-making.
 7.  **Automated Recommendations Engine**: Generates health-based recommendations (e.g., reduce burn, fundraise) based on predefined thresholds for financial health indicators like runway and survival probability. It also includes version history, diff views, and rollback capabilities for scenarios.
-8.  **Multi-Agent Fund Flow Copilot V2+**: A production-ready AI system featuring a Router/Orchestrator Agent that routes queries to specialized agents (CFO, Market, Strategy). It maintains a Company Knowledge Base (CKB) for persistent context, provides structured responses with truth-first citations, and includes data health scoring, operating cadence management, and automated alerts. The copilot now uses multi-LLM integration with task-specific model selection:
+8.  **Multi-Agent Fund Flow Copilot V2+**: A production-ready AI system featuring a Router/Orchestrator Agent that routes queries to specialized agents (CFO, Market, Strategy, Decision Advisor). It maintains a Company Knowledge Base (CKB) for persistent context, provides structured responses with truth-first citations, and includes data health scoring, operating cadence management, and automated alerts. The copilot now uses multi-LLM integration with task-specific model selection:
     - CFO Agent: GPT-4o for financial analysis (best at structured data)
     - Market Agent: Claude Sonnet for market research (balanced reasoning)
     - Strategy Agent: Claude Sonnet for strategic planning
+    - Decision Advisor Agent: GPT-4o for decision-first, probability-driven advice
     - Router Agent: Gemini Flash for orchestration and response synthesis
+    
+    **Decision Advisor Agent (Jan 2026)**: A new specialized agent that transforms user questions into actionable, simulation-backed recommendations:
+    - Automatically detects decision-oriented queries (e.g., "how can I extend runway", "what should I do about burn")
+    - Extracts decision context including type, timeframe, and constraints
+    - Maps decisions to quantitative financial levers with feasibility ratings (easy/moderate/difficult)
+    - Runs automatic Monte Carlo simulations showing P10/P50/P90 runway and survival probabilities
+    - Provides risk analysis with sensitivity tables and failure cascade narratives
+    - Delivers opinionated recommendations with confidence levels (high/medium/low) and reasoning
+    - Renders in a dedicated DecisionAdvisorPanel UI with collapsible sections for simulations, levers, and risks
 9.  **Copilot V6: Fundraising OS**: A comprehensive fundraising module with cap table management (common, preferred shares, option pools, convertible notes), a cap table engine for dilution calculations, fundraising round tracking, and a dilution simulator. It also includes an Investor Room for generating investor materials and managing an investor pipeline.
 10. **Forecasting**: Utilizes Holt-Winters exponential smoothing and linear regression.
 11. **Alerts**: Implements Z-score anomaly detection, threshold monitoring, and runway warnings.

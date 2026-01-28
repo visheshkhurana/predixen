@@ -1,0 +1,78 @@
+# 🛠️ Predixen Copilot Enhancement Prompt (for Replit Devs)
+
+## Overview
+You are a developer working on Predixen’s Copilot, an AI financial advisor for startup founders/CXOs. Recent tests highlighted strengths (pulling real company metrics, identifying risk areas) and weaknesses (generic advice, lack of decision-first guidance). The goal of this task is to implement a **decision-first, probability-driven Copilot** that earns founders’ trust and willingness to pay.
+
+### Key Insights From Testing
+- Copilot currently gives generic suggestions when asked to extend runway, identify risky assumptions, or assess fundraising delays. It fails to prioritize levers, quantify trade-offs, or challenge optimistic assumptions:contentReference[oaicite:0]{index=0}.
+- The tool is aware of company metrics (burn rate, revenue, gross margin) but does not translate them into actionable decisions.
+- When asked about a delayed fundraising round, Copilot prompts the user to define a simulation instead of automatically running one.
+
+### Primary Objective
+Transform Copilot into a **decision-first advisor** that:
+1. Restates the user’s decision in plain English.
+2. Maps decisions to underlying levers (burn, revenue, fundraising timing).
+3. Runs simulations (multi-future Monte Carlo) with the user’s actual data.
+4. Presents outcome distributions (best, median, worst) and survival probabilities.
+5. Pinpoints the riskiest assumptions and failure cascades.
+6. Ends with a single, opinionated recommendation and confidence level.
+
+---
+
+## Tasks
+
+### 1. Implement Decision-First Interaction Flow
+- **Hook triggers:** When the user asks an open-ended question (e.g. “How can I extend my runway?”), invoke a function `clarifyDecision(question)` that extracts the core decision (e.g. “extend runway by 6 months”) and restates it.
+- **Ask minimal clarifications:** If the decision is ambiguous, ask up to 2 specific questions (e.g. “Do you want to cut costs, increase revenue, or both?”) then proceed.
+
+### 2. Map Decisions to Financial Levers
+- Create an internal function `mapDecisionToLevers(decision, financialSnapshot)` that translates high-level actions into quantitative adjustments:
+  - Extend runway → reduce burn, raise funds, increase margins.
+  - Delay fundraising → adjust cash inflow date, recalculate runway, dilutions.
+  - Hire freeze → adjust payroll growth.
+- Use the company’s current burn rate, revenue, gross margin, and cash balance to calculate the magnitude of change needed.
+
+### 3. Run Multi-Future Simulations
+- For each decision, call `runSimulation(levers, horizon, confidenceMode)` which:
+  - Runs Monte Carlo simulations (5K iterations) with distributions for key variables (growth, margin, churn, burn).
+  - Returns a distribution (best 10%, median, worst 10%) for runway and probability of cash-out at 12/18/24 months.
+- Ensure the UI displays these distributions rather than single point estimates.
+
+### 4. Surface Risk and Sensitivity
+- Implement `identifyRisks(simulationResults)` to:
+  - Highlight the riskiest assumptions (e.g. sustainability of an 82.4% gross margin).
+  - Provide a sensitivity analysis showing how a ±5% change in margin or growth affects runway.
+  - Generate a failure cascade narrative (e.g. “If revenue lags, burn stays fixed → runway compresses → emergency raise needed”).
+
+### 5. Prioritize Levers and Recommend Actions
+- Create `recommendAction(simulationResults)` that:
+  - Calculates which single lever (e.g. delaying 30% of hires by 2 months) yields the largest survival improvement.
+  - Generates an opinionated recommendation with a confidence level (Low/Medium/High).
+  - Explains what would change the recommendation (e.g. if churn increases by 2%).
+
+### 6. UI Integration
+- **Advisor Panel**: Add a right-hand panel to display the decision summary, assumption challenges, simulation outcomes, and recommendations.
+- **Automatic Scenario Setup**: When the user asks about a fundraise slip, auto‑create a scenario with the fundraising date shifted by three months and compare to baseline.
+- **Outcome Presentation**: Present survival probabilities (12/18/24 months), best/median/worst distributions, and a clear “One Thing That Matters Most” section.
+- **Action Buttons**: Include calls to action such as “Use realistic assumptions”, “Run simulation”, and “Export board memo”.
+
+### 7. Feedback & Confidence Indicators
+- Attach “Helpful”/“Not helpful” buttons to each response and log them for further training.
+- Display a confidence meter based on data quality and assumption realism; gate simulation runs if data anomalies exist (e.g. negative burn, missing revenue).
+
+---
+
+## Acceptance Criteria
+- Copilot responses must be anchored to the user’s financials and specific decision.
+- Every answer includes distribution-based outcomes and a recommended action.
+- Risky assumptions are surfaced with sensitivity analysis.
+- The user no longer sees generic “what would you like to simulate” prompts when context is clear.
+- The panel is ready for board-level output with concise, defensible language.
+
+---
+
+### Notes
+- This task does **not** involve building the simulation engine itself; assume `runSimulation` exists.
+- Do **not** expose raw formulas to the user unless requested.
+- Use plain English and avoid financial jargon where possible.
+

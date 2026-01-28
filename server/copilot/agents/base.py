@@ -24,6 +24,7 @@ class AgentType(Enum):
     CFO = "cfo"
     MARKET = "market"
     STRATEGY = "strategy"
+    DECISION_ADVISOR = "decision_advisor"
 
 
 class ConfidenceLevel(Enum):
@@ -43,9 +44,10 @@ class AgentResponse:
     next_questions: List[str] = field(default_factory=list)
     confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM
     raw_response: str = ""
+    decision_advisor_output: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        result = {
             "agent_type": self.agent_type.value,
             "findings": self.findings,
             "structured_output": self.structured_output,
@@ -55,6 +57,9 @@ class AgentResponse:
             "confidence": self.confidence.value,
             "raw_response": self.raw_response
         }
+        if self.decision_advisor_output:
+            result["decision_advisor_output"] = self.decision_advisor_output
+        return result
 
 
 @dataclass

@@ -215,6 +215,7 @@ class CopilotChatResponse(BaseModel):
     intent_detected: Optional[str] = None
     clarifications: Optional[List[Dict[str, Any]]] = None
     follow_up_actions: Optional[List[Dict[str, Any]]] = None
+    decision_advisor: Optional[Dict[str, Any]] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -436,7 +437,8 @@ async def copilot_chat(
         simulation_result=simulation_result,
         intent_detected=intent_detected,
         clarifications=clarifications,
-        follow_up_actions=follow_up_actions
+        follow_up_actions=follow_up_actions,
+        decision_advisor=response.decision_advisor_output
     )
 
 
