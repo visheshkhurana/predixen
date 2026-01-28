@@ -297,3 +297,178 @@ async def send_beta_invite_email(
             "failed": to_emails,
             "error": str(e)
         }
+
+
+async def send_early_member_invite(
+    to_emails: Optional[List[str]] = None,
+    invited_by: str = "Nikita Luther, Founder"
+) -> dict:
+    """
+    Send early member invitation emails for exclusive platform access.
+    
+    Args:
+        to_emails: List of email addresses to invite (defaults to NOTIFICATION_RECIPIENTS)
+        invited_by: Name of the person sending the invite
+    
+    Returns:
+        Dict with success status and list of sent/failed emails
+    """
+    import os
+    
+    if to_emails is None:
+        to_emails = NOTIFICATION_RECIPIENTS
+    
+    try:
+        credentials = await get_resend_credentials()
+        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 40px 20px;">
+    <div style="max-width: 600px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 32px;">
+            <div style="display: inline-block; width: 56px; height: 56px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 14px; text-align: center; line-height: 56px; color: #ffffff; font-weight: 700; font-size: 28px;">P</div>
+        </div>
+        
+        <div style="background-color: #1e293b; border-radius: 16px; overflow: hidden; border: 1px solid #334155;">
+            <div style="padding: 40px 32px; text-align: center;">
+                <div style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 6px 16px; border-radius: 20px; margin-bottom: 24px;">
+                    <span style="color: #ffffff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Early Access</span>
+                </div>
+                
+                <h1 style="color: #ffffff; margin: 0 0 16px 0; font-size: 32px; font-weight: 700; line-height: 1.2;">You're One of the First</h1>
+                
+                <p style="color: #94a3b8; font-size: 18px; line-height: 1.6; margin: 0 0 32px 0;">
+                    Welcome to the founding circle of <span style="color: #a5b4fc;">Predixen Intelligence OS</span> - 
+                    the AI-powered financial command center built for ambitious startups.
+                </p>
+                
+                <div style="background-color: #0f172a; border-radius: 12px; padding: 24px; margin-bottom: 32px; text-align: left;">
+                    <p style="color: #6366f1; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">As an early member, you get:</p>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
+                        <span style="color: #e2e8f0; font-size: 14px;">Full platform access with all AI features</span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
+                        <span style="color: #e2e8f0; font-size: 14px;">Monte Carlo simulations for runway forecasting</span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
+                        <span style="color: #e2e8f0; font-size: 14px;">Multi-agent AI copilot (CFO, Market, Strategy, Decision Advisor)</span>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
+                        <span style="color: #e2e8f0; font-size: 14px;">Direct line to the founding team for feedback</span>
+                    </div>
+                    <div>
+                        <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
+                        <span style="color: #e2e8f0; font-size: 14px;">Priority access to new features as they ship</span>
+                    </div>
+                </div>
+                
+                <a href="{base_url}" style="display: inline-block; padding: 18px 56px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4); transition: all 0.2s;">Experience Predixen</a>
+                
+                <p style="color: #64748b; font-size: 13px; margin: 24px 0 0 0;">
+                    No credit card required. Just sign up and start exploring.
+                </p>
+            </div>
+            
+            <div style="background-color: #0f172a; padding: 24px 32px; border-top: 1px solid #334155;">
+                <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
+                    "We built Predixen to give every startup founder the same financial clarity that top-tier VCs demand. You're helping us shape the future of startup finance."
+                </p>
+                <p style="color: #6366f1; font-size: 14px; font-weight: 600; margin: 16px 0 0 0; text-align: center;">
+                    — {invited_by}
+                </p>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 32px;">
+            <p style="color: #475569; font-size: 12px; margin: 0;">
+                Predixen Intelligence OS • {timestamp}
+            </p>
+            <p style="color: #334155; font-size: 11px; margin: 8px 0 0 0;">
+                You received this because you were invited to early access.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        text_content = f"""
+You're One of the First
+
+Welcome to the founding circle of Predixen Intelligence OS - the AI-powered financial command center built for ambitious startups.
+
+As an early member, you get:
+- Full platform access with all AI features
+- Monte Carlo simulations for runway forecasting
+- Multi-agent AI copilot (CFO, Market, Strategy, Decision Advisor)
+- Direct line to the founding team for feedback
+- Priority access to new features as they ship
+
+Experience Predixen: {base_url}
+
+No credit card required. Just sign up and start exploring.
+
+---
+
+"We built Predixen to give every startup founder the same financial clarity that top-tier VCs demand. You're helping us shape the future of startup finance."
+
+— {invited_by}
+
+---
+Predixen Intelligence OS • {timestamp}
+"""
+        
+        sent = []
+        failed = []
+        
+        async with httpx.AsyncClient() as client:
+            for email in to_emails:
+                response = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {credentials['api_key']}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "from": "Predixen <hello@predixen.app>",
+                        "to": [email],
+                        "subject": "You're One of the First - Early Access to Predixen",
+                        "html": html_content,
+                        "text": text_content
+                    }
+                )
+                
+                if response.status_code in (200, 201):
+                    sent.append(email)
+                    print(f"Early member invite sent to: {email}")
+                else:
+                    failed.append(email)
+                    print(f"Failed to send to {email}: {response.status_code}")
+        
+        return {
+            "success": len(failed) == 0,
+            "sent": sent,
+            "failed": failed,
+            "message": f"Sent {len(sent)} early member invite(s), {len(failed)} failed"
+        }
+        
+    except Exception as e:
+        print(f"Error sending early member invites: {e}")
+        return {
+            "success": False,
+            "sent": [],
+            "failed": to_emails or [],
+            "error": str(e)
+        }
