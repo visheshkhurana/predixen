@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AnnotatedSlider } from '@/components/AnnotatedSlider';
+import { AICopilotGuidance } from '@/components/AICopilotGuidance';
 import { ScenarioTutorial, TutorialTrigger } from '@/components/ScenarioTutorial';
 import { ScenarioSummarySidebar } from '@/components/ScenarioSummarySidebar';
 import { CustomEventBuilder, type ScenarioEvent } from '@/components/CustomEventBuilder';
@@ -66,6 +67,7 @@ interface ScenarioWizardProps {
   templates: ScenarioTemplate[];
   onComplete: (scenario: ScenarioParams) => Promise<void>;
   isRunning: boolean;
+  companyId?: number;
   baseMetrics?: {
     cashOnHand: number;
     monthlyExpenses: number;
@@ -309,12 +311,14 @@ export function ScenarioWizard({
   templates,
   onComplete,
   isRunning,
+  companyId,
   baseMetrics,
 }: ScenarioWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [activeSlider, setActiveSlider] = useState<{ name: string; previousValue: number } | null>(null);
   const [params, setParams] = useState<ScenarioParams>({
     name: 'Custom Scenario',
     pricing_change_pct: 0,
@@ -685,7 +689,13 @@ export function ScenarioWizard({
                     label="Pricing Change"
                     icon={<Tag className="h-4 w-4 text-green-500" />}
                     value={params.pricing_change_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, pricing_change_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'pricing_change_pct') {
+                        setActiveSlider({ name: 'pricing_change_pct', previousValue: params.pricing_change_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, pricing_change_pct: v }); 
+                    }}
                     min={-20}
                     max={30}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.description}
@@ -710,7 +720,13 @@ export function ScenarioWizard({
                     label="Growth Uplift"
                     icon={<TrendingUp className="h-4 w-4 text-green-500" />}
                     value={params.growth_uplift_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, growth_uplift_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'growth_uplift_pct') {
+                        setActiveSlider({ name: 'growth_uplift_pct', previousValue: params.growth_uplift_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, growth_uplift_pct: v }); 
+                    }}
                     min={-10}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.description}
@@ -735,7 +751,13 @@ export function ScenarioWizard({
                     label="Burn Reduction"
                     icon={<Scissors className="h-4 w-4 text-orange-500" />}
                     value={params.burn_reduction_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, burn_reduction_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'burn_reduction_pct') {
+                        setActiveSlider({ name: 'burn_reduction_pct', previousValue: params.burn_reduction_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, burn_reduction_pct: v }); 
+                    }}
                     min={-20}
                     max={40}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.description}
@@ -760,7 +782,13 @@ export function ScenarioWizard({
                     label="Gross Margin Change"
                     icon={<Percent className="h-4 w-4 text-blue-500" />}
                     value={params.gross_margin_delta_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, gross_margin_delta_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'gross_margin_delta_pct') {
+                        setActiveSlider({ name: 'gross_margin_delta_pct', previousValue: params.gross_margin_delta_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, gross_margin_delta_pct: v }); 
+                    }}
                     min={-10}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.description}
@@ -785,7 +813,13 @@ export function ScenarioWizard({
                     label="Churn Rate Change"
                     icon={<Users className="h-4 w-4 text-red-500" />}
                     value={params.churn_change_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, churn_change_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'churn_change_pct') {
+                        setActiveSlider({ name: 'churn_change_pct', previousValue: params.churn_change_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, churn_change_pct: v }); 
+                    }}
                     min={-5}
                     max={5}
                     step={0.5}
@@ -811,7 +845,13 @@ export function ScenarioWizard({
                     label="CAC Change"
                     icon={<UserPlus className="h-4 w-4 text-purple-500" />}
                     value={params.cac_change_pct}
-                    onChange={(v) => { setActivePreset(null); setParams({ ...params, cac_change_pct: v }); }}
+                    onChange={(v) => { 
+                      if (!activeSlider || activeSlider.name !== 'cac_change_pct') {
+                        setActiveSlider({ name: 'cac_change_pct', previousValue: params.cac_change_pct });
+                      }
+                      setActivePreset(null); 
+                      setParams({ ...params, cac_change_pct: v }); 
+                    }}
                     min={-30}
                     max={20}
                     tooltip={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.description}
@@ -830,6 +870,18 @@ export function ScenarioWizard({
                     </span>
                   </div>
                 </div>
+                
+                {companyId && activeSlider && (
+                  <div className="mt-6 pt-6 border-t">
+                    <AICopilotGuidance
+                      companyId={companyId}
+                      assumption={activeSlider.name}
+                      value={params[activeSlider.name as keyof ScenarioParams] as number}
+                      previousValue={activeSlider.previousValue}
+                      testId="ai-copilot-guidance-params"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

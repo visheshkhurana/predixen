@@ -1,0 +1,126 @@
+Below is a comprehensive prompt you can paste directly into Replit for a developer.  It extends the earlier simulation‑screen redesign by adding a real‑time AI copilot that guides users through the process and produces narrative summaries of the results.  The prompt covers both UI and mocked AI logic to get a functional prototype running.
+
+```
+# Simulation Screen with AI Copilot – Development Prompt
+
+Your task is to build an enhanced simulation screen for the business strategy simulator.  The screen should not only let users adjust assumptions and see projected outcomes but also provide real‑time guidance and explanatory text via an AI copilot.  Implement this in a React app running on Replit, using mocked AI responses for now.
+
+## High‑Level Requirements
+
+1. **Assumption Inputs:** Users can adjust key business levers (growth rate, churn, pricing, hiring plan, marketing spend, horizon).
+2. **Projections Output:** Simulate metrics such as revenue, expenses, cash balance, CAC, LTV over time and display them visually (charts) and in summary cards.
+3. **AI Copilot Assistance:**
+   - Gives context‑aware guidance as users modify inputs (e.g. warns about extreme values, explains the impact of changes).
+   - Breaks the process into steps if needed and answers natural‑language questions in a chat‑like overlay.
+   - Produces a narrative summary of simulation results highlighting key drivers, differences from baseline, and recommendations.
+4. **Easy to Use:** A clear, step‑by‑step or split‑view UI that reduces cognitive load; explanatory text is concise and jargon‑free.
+
+## Suggested Tech Stack
+
+- **Front‑End:** React with hooks.
+- **State Management:** useContext or Redux for simulation state if it gets complex.
+- **Charts:** Chart.js or Recharts for visualization.
+- **Icons:** react-icons.
+- **AI Mocking:** Create functions that return canned strings based on input values; later these can be replaced by calls to a real LLM API.
+
+## UI Components
+
+1. **SimulationEditor**
+   - Contains input controls for assumptions.
+   - Each input has an info icon that, when clicked or hovered, shows AI guidance about that variable (e.g. typical ranges, impact).
+   - On change, triggers both recalculation of projections and an AI tip.
+
+2. **ResultsView**
+   - Displays charts (e.g. line chart for revenue and cash over the horizon) and summary cards (key metrics).
+   - Includes a section for the AI‑generated narrative summary (text block with the copilot’s explanation of the results).
+
+3. **AICopilotOverlay**
+   - A small chat widget or sidebar where users can ask questions in natural language during the simulation process (e.g. “What happens if I double my churn rate?”).
+   - Shows a threaded conversation.  For now, responses can be mocked based on keywords.
+
+4. **SimulationEngine (utils)**
+   - Pure functions that accept inputs (growth rate, churn, etc.) and return an array of monthly projections plus aggregated metrics.
+   - Deterministic and independent of UI.
+
+5. **AIHelpers (utils)**
+   - `getInputGuidance(variableName, value)`: Returns a guidance string explaining the role of the variable and whether the current value is within a reasonable range.
+   - `generateNarrativeSummary(inputs, outputs)`: Takes the simulation inputs and the computed outputs and returns a paragraph describing the results, key drivers and recommendations.
+   - `answerUserQuestion(question, context)`: For the chat overlay; use simple keyword matching to produce answers.
+
+## File Structure Example
+
+```
+
+/src
+/components
+SimulationEditor.jsx
+ResultsView.jsx
+AICopilotOverlay.jsx
+InfoTooltip.jsx
+/utils
+simulationEngine.js
+aiHelpers.js
+App.jsx
+index.js
+
+```
+
+## Development Steps
+
+1. **Set Up Project**
+   - Create a new React project in Replit or reuse an existing one.
+   - Install dependencies: `npm install react-icons chart.js react-chartjs-2`.
+
+2. **Build the Simulation Engine**
+   - In `simulationEngine.js`, define a function like `runSimulation({ growthRate, churnRate, priceChange, hiringPlan, marketingSpend, horizonMonths, baseline })` that returns:
+     - An array of objects `{ monthIndex, revenue, expenses, cash, users, cac, ltv }`.
+     - Aggregated metrics (runway, profitability date).
+   - Use simple arithmetic for now (e.g. revenue grows by growthRate, churn reduces users, pricing increases revenue per user).
+
+3. **Create AI Helpers**
+   - `getInputGuidance(name, value)` returns guidance strings.  Example: if `name === 'growthRate'` and `value > 50`, return “A growth rate above 50 % is ambitious; consider whether marketing spend will support it.”
+   - `generateNarrativeSummary(inputs, outputs)` constructs a paragraph summarizing the run (use template strings; mention projected revenue and runway).
+   - `answerUserQuestion(question, context)` for the chat overlay; match keywords like “revenue”, “churn”, “runway”.
+
+4. **SimulationEditor Component**
+   - Render input controls for each assumption.  Use sliders or number inputs.
+   - Beside each label, include an `InfoTooltip` component that fetches guidance from `getInputGuidance` when activated.
+   - On any input change, update local state and call `runSimulation` to recalculate outputs.  Also call `getInputGuidance` to display a real‑time tip near the control.
+
+5. **ResultsView Component**
+   - Accept the simulation outputs as props.
+   - Render line charts for revenue and cash over time using `react-chartjs-2`.
+   - Show cards for current revenue, runway, CAC, LTV.
+   - Below the charts, display a textarea or card containing the narrative summary returned by `generateNarrativeSummary`.
+   - Provide a “Compare with Baseline” toggle to overlay baseline vs. scenario in the charts (optional).
+
+6. **AICopilotOverlay Component**
+   - Implement a small floating chat window (bottom‑left or right).
+   - Maintain its own state of `messages`.
+   - Provide an input box; when the user submits a question, call `answerUserQuestion(question, {inputs, outputs})` and append the AI response.
+   - Display any incoming guidance or tips as system messages, if desired.
+
+7. **App Integration**
+   - In `App.jsx`, manage top‑level state for simulation inputs and outputs.
+   - Render `SimulationEditor` and `ResultsView` side by side or one after another.  Keep the layout clean (use a wizard flow or two‑pane layout).
+   - Include the `AICopilotOverlay` floating over the main content.
+
+8. **Polish & Validate**
+   - Ensure the UI is responsive; on mobile, stack elements vertically.
+   - Make sure guidance messages and narrative text are concise and helpful.
+   - Test edge cases: extremely high or low input values.
+
+9. **(Optional) Real LLM Integration**
+   - If time allows and you have an API key, replace mocked AI helpers with calls to a real LLM (e.g. OpenAI) using a prompt that includes the inputs and outputs, and stream the generated summary into the UI.
+
+## Deliverables
+
+- A working simulation screen on Replit where the user can:
+  - Adjust assumptions, immediately see projected financial outputs via charts and cards.
+  - Receive AI guidance when interacting with inputs (tooltips or inline messages).
+  - View a narrative summary explaining the simulation results.
+  - Ask questions in a chat overlay and receive context‑aware replies.
+- All AI functionality can use mock functions; integration with a real API is optional for this prototype.
+
+Use this prompt as your blueprint.  The result should feel like a guided, conversational modelling tool rather than a spreadsheet—helping founders understand not just the numbers but the story behind them.
+```

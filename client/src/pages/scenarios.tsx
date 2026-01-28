@@ -27,6 +27,7 @@ import { StackedBurnRevenueChart } from '@/components/StackedBurnRevenueChart';
 import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
 import { SimulationInsights } from '@/components/SimulationInsights';
+import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users } from 'lucide-react';
@@ -590,6 +591,7 @@ export default function ScenariosPage() {
             templates={SCENARIO_TEMPLATES}
             onComplete={handleWizardComplete}
             isRunning={isCreating || isRunning}
+            companyId={currentCompany.id}
             baseMetrics={baseMetrics}
           />
         </TabsContent>
@@ -931,6 +933,13 @@ export default function ScenariosPage() {
                 simulation={simulation}
                 scenarioName={currentScenarioName}
                 testId="simulation-insights-results"
+              />
+              
+              <AISummaryCard
+                companyId={currentCompany.id}
+                simulationResults={simulation}
+                scenarioName={currentScenarioName}
+                testId="ai-summary-card-results"
               />
               
               {simulation.month_data && simulation.month_data.length > 0 && (
