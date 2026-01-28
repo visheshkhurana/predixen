@@ -323,6 +323,10 @@ async def send_early_member_invite(
         base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
         timestamp = datetime.now().strftime("%B %d, %Y")
         
+        screenshot_dashboard = f"{base_url}/screenshots/dashboard.png"
+        screenshot_copilot = f"{base_url}/screenshots/copilot.png"
+        screenshot_simulation = f"{base_url}/screenshots/simulation.png"
+        
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -331,7 +335,7 @@ async def send_early_member_invite(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 40px 20px;">
-    <div style="max-width: 600px; margin: 0 auto;">
+    <div style="max-width: 640px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 32px;">
             <div style="display: inline-block; width: 56px; height: 56px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 14px; text-align: center; line-height: 56px; color: #ffffff; font-weight: 700; font-size: 28px;">P</div>
         </div>
@@ -344,37 +348,88 @@ async def send_early_member_invite(
                 
                 <h1 style="color: #ffffff; margin: 0 0 16px 0; font-size: 32px; font-weight: 700; line-height: 1.2;">You're One of the First</h1>
                 
-                <p style="color: #94a3b8; font-size: 18px; line-height: 1.6; margin: 0 0 32px 0;">
-                    Welcome to the founding circle of <span style="color: #a5b4fc;">Predixen Intelligence OS</span> - 
-                    the AI-powered financial command center built for ambitious startups.
+                <p style="color: #94a3b8; font-size: 18px; line-height: 1.6; margin: 0 0 16px 0;">
+                    Welcome to the founding circle of <span style="color: #a5b4fc;">Predixen Intelligence OS</span>
                 </p>
                 
-                <div style="background-color: #0f172a; border-radius: 12px; padding: 24px; margin-bottom: 32px; text-align: left;">
+                <p style="color: #e2e8f0; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0;">
+                    The <strong>AI-powered decision simulator</strong> that helps startup founders make better choices by running thousands of "what-if" scenarios in seconds.
+                </p>
+            </div>
+            
+            <!-- Feature 1: Decision Advisor -->
+            <div style="padding: 0 32px 32px 32px;">
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
+                    <img src="{screenshot_copilot}" alt="AI Decision Advisor" style="width: 100%; height: auto; display: block;" />
+                    <div style="padding: 20px;">
+                        <div style="display: inline-block; background-color: #22c55e; padding: 4px 10px; border-radius: 4px; margin-bottom: 12px;">
+                            <span style="color: #ffffff; font-size: 10px; font-weight: 600; text-transform: uppercase;">NEW</span>
+                        </div>
+                        <h3 style="color: #ffffff; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">AI Decision Advisor</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Ask questions like <em>"How can I extend my runway by 6 months?"</em> and get actionable recommendations backed by probability simulations. The AI analyzes your options, runs Monte Carlo scenarios, and tells you exactly what to do with confidence levels.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Feature 2: Scenario Simulator -->
+            <div style="padding: 0 32px 32px 32px;">
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
+                    <img src="{screenshot_simulation}" alt="Scenario Simulator" style="width: 100%; height: auto; display: block;" />
+                    <div style="padding: 20px;">
+                        <h3 style="color: #ffffff; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Scenario Simulator</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Run 10,000+ simulations to see P10/P50/P90 outcomes for runway, survival probability, and cash position. Compare "reduce burn by 20%" vs "raise a bridge round" vs "freeze hiring" — all in one view with sensitivity analysis.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Feature 3: Multi-Agent Copilot -->
+            <div style="padding: 0 32px 32px 32px;">
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
+                    <img src="{screenshot_dashboard}" alt="Intelligence Dashboard" style="width: 100%; height: auto; display: block;" />
+                    <div style="padding: 20px;">
+                        <h3 style="color: #ffffff; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Multi-Agent AI Copilot</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Four specialized AI agents work together: <strong>CFO Agent</strong> (financial analysis), <strong>Market Agent</strong> (competitive intelligence), <strong>Strategy Agent</strong> (growth planning), and <strong>Decision Advisor</strong> (actionable recommendations). Each uses the best AI model for its task.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- What You Get -->
+            <div style="padding: 0 32px 32px 32px;">
+                <div style="background-color: #0f172a; border-radius: 12px; padding: 24px; text-align: left;">
                     <p style="color: #6366f1; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">As an early member, you get:</p>
                     
                     <div style="margin-bottom: 12px;">
                         <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
-                        <span style="color: #e2e8f0; font-size: 14px;">Full platform access with all AI features</span>
+                        <span style="color: #e2e8f0; font-size: 14px;"><strong>Full platform access</strong> — All AI features, unlimited simulations</span>
                     </div>
                     <div style="margin-bottom: 12px;">
                         <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
-                        <span style="color: #e2e8f0; font-size: 14px;">Monte Carlo simulations for runway forecasting</span>
+                        <span style="color: #e2e8f0; font-size: 14px;"><strong>Decision simulations</strong> — See outcomes before committing</span>
                     </div>
                     <div style="margin-bottom: 12px;">
                         <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
-                        <span style="color: #e2e8f0; font-size: 14px;">Multi-agent AI copilot (CFO, Market, Strategy, Decision Advisor)</span>
+                        <span style="color: #e2e8f0; font-size: 14px;"><strong>AI document extraction</strong> — Upload financials, get insights instantly</span>
                     </div>
                     <div style="margin-bottom: 12px;">
                         <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
-                        <span style="color: #e2e8f0; font-size: 14px;">Direct line to the founding team for feedback</span>
+                        <span style="color: #e2e8f0; font-size: 14px;"><strong>Direct founder access</strong> — Shape the product with your feedback</span>
                     </div>
                     <div>
                         <span style="color: #22c55e; margin-right: 8px;">&#10003;</span>
-                        <span style="color: #e2e8f0; font-size: 14px;">Priority access to new features as they ship</span>
+                        <span style="color: #e2e8f0; font-size: 14px;"><strong>Priority features</strong> — First access to new capabilities</span>
                     </div>
                 </div>
-                
-                <a href="{base_url}" style="display: inline-block; padding: 18px 56px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4); transition: all 0.2s;">Experience Predixen</a>
+            </div>
+            
+            <!-- CTA -->
+            <div style="padding: 0 32px 40px 32px; text-align: center;">
+                <a href="{base_url}" style="display: inline-block; padding: 18px 56px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);">Start Simulating Decisions</a>
                 
                 <p style="color: #64748b; font-size: 13px; margin: 24px 0 0 0;">
                     No credit card required. Just sign up and start exploring.
@@ -383,7 +438,7 @@ async def send_early_member_invite(
             
             <div style="background-color: #0f172a; padding: 24px 32px; border-top: 1px solid #334155;">
                 <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
-                    "We built Predixen to give every startup founder the same financial clarity that top-tier VCs demand. You're helping us shape the future of startup finance."
+                    "We built Predixen so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
                 </p>
                 <p style="color: #6366f1; font-size: 14px; font-weight: 600; margin: 16px 0 0 0; text-align: center;">
                     — {invited_by}
@@ -407,22 +462,40 @@ async def send_early_member_invite(
         text_content = f"""
 You're One of the First
 
-Welcome to the founding circle of Predixen Intelligence OS - the AI-powered financial command center built for ambitious startups.
+Welcome to the founding circle of Predixen Intelligence OS
+
+The AI-powered decision simulator that helps startup founders make better choices by running thousands of "what-if" scenarios in seconds.
+
+═══════════════════════════════════════════════════════
+
+FEATURE: AI Decision Advisor [NEW]
+Ask questions like "How can I extend my runway by 6 months?" and get actionable recommendations backed by probability simulations. The AI analyzes your options, runs Monte Carlo scenarios, and tells you exactly what to do with confidence levels.
+
+FEATURE: Scenario Simulator
+Run 10,000+ simulations to see P10/P50/P90 outcomes for runway, survival probability, and cash position. Compare "reduce burn by 20%" vs "raise a bridge round" vs "freeze hiring" — all in one view with sensitivity analysis.
+
+FEATURE: Multi-Agent AI Copilot
+Four specialized AI agents work together: CFO Agent (financial analysis), Market Agent (competitive intelligence), Strategy Agent (growth planning), and Decision Advisor (actionable recommendations). Each uses the best AI model for its task.
+
+═══════════════════════════════════════════════════════
 
 As an early member, you get:
-- Full platform access with all AI features
-- Monte Carlo simulations for runway forecasting
-- Multi-agent AI copilot (CFO, Market, Strategy, Decision Advisor)
-- Direct line to the founding team for feedback
-- Priority access to new features as they ship
 
-Experience Predixen: {base_url}
+✓ Full platform access — All AI features, unlimited simulations
+✓ Decision simulations — See outcomes before committing
+✓ AI document extraction — Upload financials, get insights instantly
+✓ Direct founder access — Shape the product with your feedback
+✓ Priority features — First access to new capabilities
+
+═══════════════════════════════════════════════════════
+
+Start Simulating Decisions: {base_url}
 
 No credit card required. Just sign up and start exploring.
 
 ---
 
-"We built Predixen to give every startup founder the same financial clarity that top-tier VCs demand. You're helping us shape the future of startup finance."
+"We built Predixen so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
 
 — {invited_by}
 
