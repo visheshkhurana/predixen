@@ -1,0 +1,29 @@
+Building on the previous redesign, adding an AI copilot that actively guides users through the simulation process and produces narrative explanations will make the feature far more approachable and insightful. Here’s how to integrate this capability:
+
+### Real‑Time AI Assistance During Simulation
+
+* **Context‑Aware Prompts:** As the founder adjusts assumptions (e.g. moves a growth rate slider), a small chat or tooltip area could show the copilot’s commentary: “Increasing growth rate from 15 % to 25 % will raise CAC because you’ll need to spend more on marketing” or “Doubling prices may reduce user growth unless you also invest in value‑adding features.”
+* **Input Validation & Recommendations:** The AI can warn about unrealistic inputs (“A churn rate of –5 % isn’t possible”) and suggest typical ranges based on industry benchmarks. It might propose alternative levers to achieve a goal (“To extend runway, consider reducing hiring rather than slashing marketing spend completely”).
+* **Guided Workflow:** For complex simulations, the copilot could break the process into steps (“Step 1: set growth assumptions; Step 2: define pricing changes; Step 3: review hiring plans”) and provide explanations at each step. Users can ask questions in natural language, and the AI responds contextually.
+
+### Narrative, Explanatory Output
+
+* **Text Summary:** Alongside charts and tables, generate a paragraph that explains the simulation results in plain language. For example:
+  *“Under the Aggressive Growth scenario, revenue is projected to reach $5M in 12 months, but burn increases to $450K per month, shortening runway to 9 months. CAC climbs due to higher marketing spend, but LTV/CAC remains healthy at 4:1. Profitability is expected by Q3 2027.”*
+* **Comparative Insights:** If the user compares two scenarios, the AI can highlight the key differences: “Compared to the baseline, your Lean Mode scenario reduces headcount growth, extending runway by 6 months but slowing revenue growth by 20 %.”
+* **Highlight Drivers:** Point out which assumptions have the biggest impact on outcomes (“The single largest driver of cash runway in this scenario is hiring. Reducing monthly hires from 10 to 5 extends runway by 4 months.”).
+* **Actionable Recommendations:** Conclude with suggestions or questions, such as “Consider revising your pricing strategy to offset increased CAC” or “Would you like to simulate the impact of launching a new product line?”
+
+### Integrating the Copilot into the UI
+
+* **Side Panel or Overlay Chat:** The simulation screen can include a small chat widget where the copilot provides messages as the user interacts. This keeps the main UI clean while still offering conversational guidance.
+* **Inline Explanations:** For each input field or slider, display a small “info” icon that, when hovered or clicked, shows an AI‑generated explanation of that variable’s importance and typical values.
+* **Summary Card:** After running the simulation, display an “AI Summary” card at the top of the results, containing the narrative explanation and recommendations.
+
+### Backend Considerations
+
+* **Prompt Engineering:** Feed both the scenario inputs and the computed outputs into your LLM prompt to generate the explanatory text. E.g. *“Given these inputs (growth rate = 20 %, price increase = 10 %), and the following outputs (projected revenue, cash, CAC, etc.), write a concise summary of the results and highlight the main drivers.”*
+* **Latency Management:** Generate short AI guidance snippets quickly. For more detailed summaries, you could show a “Generating summary…” placeholder and stream the LLM’s output.
+* **User Data Privacy:** Ensure sensitive financial data is not inadvertently sent to external AI services without consent; anonymize or aggregate where appropriate.
+
+By weaving the copilot into the simulation workflow, founders will not only see the numbers change but also understand *why* they change. This combination of quantitative modelling and qualitative explanation makes the tool more approachable and empowers users to make informed strategic decisions.
