@@ -1,0 +1,125 @@
+Below is a single, comprehensive prompt you can copy and paste directly into Replit for a developer.  It combines the redesign vision (a ChatGPT‑like, uncluttered AI chat screen) with detailed implementation guidance.
+
+```
+# Copilot Chat Screen – Combined Design & Implementation Prompt
+
+## Vision
+
+Redesign the Copilot screen to feel like a modern AI chat assistant (similar to ChatGPT) while still offering access to business metrics and scenario‑simulation tools.  The interface should be clean and conversational: the chat occupies center stage, controls are hidden until needed, and contextual information appears inline or via a collapsible panel.
+
+### Key UX Goals
+- **Uncluttered Layout:** A single main column for the conversation.  No heavy sidebars by default.
+- **Collapsible Context:** Secondary elements (metrics, scenarios, notes) live in a slide‑out panel that is hidden until invoked.
+- **Floating Tools:** A small floating action button or slash commands provide access to actions without cluttering the interface.
+- **Inline Visuals:** When the AI needs to show data (e.g. a revenue chart), embed it directly in the chat stream as a card.
+- **Responsive & Accessible:** The layout should adapt to mobile/tablet and include clear typography and contrast.
+
+## Implementation Plan
+
+You’ll build a React‑based prototype that embodies this design.  It will run entirely in Replit and use mocked data/AI responses.
+
+### Tech Stack
+- **React** with functional components and hooks.
+- **CSS or a lightweight UI library** (e.g. Tailwind or Chakra) for styling.  Keep colors neutral and spacing generous.
+- **react-icons** for icons (FAB, collapse handle).
+- No back‑end is required; mock AI responses and business data in the front‑end.
+
+### Core Components
+
+1. **ChatContainer**
+   - Displays chat messages (user and AI) in a clean, vertical flow.
+   - Utilizes `ChatMessage` components for each message, distinguishing user vs. AI via alignment and color.
+   - Includes a fixed footer with a textarea input and send button.  Supports slash command detection (`/metrics`, `/run-scenario`, `/note`).
+   - Placeholder text: “Ask a question about your business…”
+
+2. **SidePanel**
+   - Hidden by default; slides in from the right when opened (overlaying on desktop, full‑screen on mobile).
+   - Contains tabbed sections for:
+     - **Metrics:** Shows dummy business metrics (MRR/ARR, cash on hand, burn rate, CAC, LTV) as simple cards or a list.
+     - **Scenario Controls:** Sliders or input fields for assumptions (e.g. growth rate %).  Running a scenario updates the dummy metrics.
+     - **Notes:** Allows users to add short notes/ideas; displays a list of saved notes.
+   - Controlled via state `isPanelOpen` and a selected tab.
+
+3. **FloatingActionButton**
+   - A circular button anchored at the bottom‑right of the chat view.
+   - On click, expands to show actions (“View Metrics”, “Run Scenario”, “Add Note”).
+   - Selecting an action opens the side panel and switches to the corresponding tab.
+
+4. **Slash Command Handler**
+   - If a user begins their message with `/`, present a dropdown of available commands.
+   - Executing `/metrics`, `/run-scenario`, or `/note` triggers the same actions as the FAB (e.g. open panel).
+
+5. **Mock AI Logic**
+   - Implement a function `mockAIResponse(message, context)` that returns dummy responses based on keywords.
+   - Example: if `message` includes “revenue”, return a response like “Your current MRR is $10 000” and include a simple card or chart component.
+
+### Suggested File Structure
+
+```
+
+/src
+/components
+ChatContainer.jsx
+ChatMessage.jsx
+SidePanel.jsx
+MetricCard.jsx
+ScenarioControls.jsx
+NotesPanel.jsx
+FloatingActionButton.jsx
+/hooks
+useSlashCommands.js
+/utils
+mockAIResponse.js
+dummyData.js
+App.jsx
+index.js
+
+```
+
+### Development Steps
+
+1. **Project Setup**
+   - Initialize a new React project in Replit.
+   - Install `react-icons` and any CSS framework if used.
+
+2. **Chat Container & Messages**
+   - Create `ChatContainer` with state for `messages` (array of objects with `role` and `content`).
+   - Build `ChatMessage` for individual messages (apply different styles for user vs AI).
+   - Add an input area at the bottom.  On submit, either process a slash command or call `mockAIResponse` and append the response.
+
+3. **Side Panel**
+   - Implement `SidePanel` using CSS transitions for sliding in/out.
+   - Inside, create the Metrics tab (render values from `dummyData.js`), Scenario Controls tab (sliders updating dummy data), and Notes tab (list with add/remove).
+
+4. **Floating Action Button**
+   - Add a `FloatingActionButton` that toggles a small menu.  Use state to control its open/closed state.
+   - Selecting an item sets `isPanelOpen` and the active tab accordingly.
+
+5. **Slash Commands**
+   - Implement `useSlashCommands` hook to detect `/` at the start of input and show suggestions.
+   - When a recognized command is submitted, bypass AI response and open the relevant panel.
+
+6. **Mock AI Responses**
+   - In `mockAIResponse.js`, write simple logic: search the user’s message for keywords like “revenue”, “cash”, or “scenario”.  Return an object with text and optional JSX elements (e.g. a `MetricCard`).
+   - Simulate latency with `setTimeout`.
+
+7. **Styling & Responsiveness**
+   - Use flexbox to layout the chat container and side panel.
+   - Ensure the side panel covers the full screen on mobile.
+   - Apply a neutral color scheme and ensure sufficient contrast.
+
+8. **Testing**
+   - Validate that the chat area remains uncluttered; the side panel stays hidden until invoked.
+   - Confirm that metrics update when scenario controls change dummy values.
+   - Test slash commands and the FAB for opening the panel.
+
+### Deliverable
+
+A single Replit project that demonstrates:
+- A chat interface similar in feel to ChatGPT (clean message flow, minimal chrome).
+- A collapsible side panel housing metrics, scenario controls and notes.
+- A floating action button and slash commands for invoking hidden tools.
+- Mocked AI replies that can embed simple data cards inline.
+
+Use this prompt as your complete brief.  The result should be a polished, uncluttered conversational interface with contextual power beneath the surface, ready for future integration with live business data and LLM APIs.
+```
