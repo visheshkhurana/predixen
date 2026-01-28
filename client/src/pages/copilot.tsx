@@ -211,6 +211,53 @@ interface CopilotApiResponse {
     label: string;
     action: string;
   }>;
+  decision_advisor?: {
+    decision_context: {
+      type: string;
+      core_decision: string;
+      timeframe_months: number;
+      target?: string;
+      constraints: string[];
+    };
+    levers: Array<{
+      name: string;
+      change_percent: number;
+      impact: string;
+      feasibility: string;
+      time_to_implement: number;
+    }>;
+    simulations: Array<{
+      scenario: string;
+      runway: { p10: number; p50: number; p90: number };
+      survival: { '12m': number; '18m': number; '24m': number };
+      risks: string[];
+    }>;
+    risk_analysis: {
+      riskiest_assumptions: Array<{
+        assumption: string;
+        risk_level: string;
+        impact: string;
+        mitigation: string;
+      }>;
+      sensitivity: Array<{
+        variable: string;
+        current: number;
+        sensitivity: string;
+        runway_impact: string;
+        survival_impact: string;
+      }>;
+      failure_cascade: string;
+    };
+    recommendation: {
+      primary_action: string;
+      details: string;
+      expected_impact: string;
+      confidence: string;
+      confidence_reasoning: string;
+      alternatives: string[];
+      what_changes: string;
+    };
+  };
 }
 
 interface Message {
@@ -574,6 +621,240 @@ function ClarificationPanel({ response, onSelect }: { response: CopilotApiRespon
   );
 }
 
+function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decision_advisor'] }) {
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    decision: true,
+    simulations: true,
+    recommendation: true
+  });
+
+  if (!advisor) return null;
+
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const { decision_context, levers, simulations, risk_analysis, recommendation } = advisor;
+
+  return (
+    <div className="space-y-4 mt-4" data-testid="decision-advisor-panel">
+      <Card className="overflow-visible border-primary/30 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            Decision Analysis
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {decision_context.core_decision}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="text-xs">
+              {decision_context.type.replace(/_/g, ' ')}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {decision_context.timeframe_months} month horizon
+            </Badge>
+            {decision_context.constraints.map((c, i) => (
+              <Badge key={i} variant="outline" className="text-xs text-amber-400 border-amber-500/30">
+                {c}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {recommendation && (
+        <Card className="overflow-visible border-emerald-500/30 bg-emerald-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Zap className="h-4 w-4 text-emerald-400" />
+              Recommendation
+              <Badge 
+                variant="outline" 
+                className={`ml-auto text-xs ${
+                  recommendation.confidence === 'high' ? 'text-emerald-400 border-emerald-500/30' :
+                  recommendation.confidence === 'medium' ? 'text-amber-400 border-amber-500/30' :
+                  'text-red-400 border-red-500/30'
+                }`}
+              >
+                {recommendation.confidence.toUpperCase()} Confidence
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="font-medium text-sm">{recommendation.primary_action}</p>
+              <p className="text-xs text-muted-foreground mt-1">{recommendation.details}</p>
+            </div>
+            <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/20">
+              <p className="text-xs font-medium text-emerald-400">Expected Impact</p>
+              <p className="text-sm">{recommendation.expected_impact}</p>
+            </div>
+            {recommendation.alternatives.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Alternatives:</p>
+                <div className="flex flex-wrap gap-1">
+                  {recommendation.alternatives.map((alt, i) => (
+                    <Badge key={i} variant="outline" className="text-xs">{alt}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground italic">{recommendation.what_changes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {simulations && simulations.length > 0 && (
+        <Collapsible open={openSections['simulations']} onOpenChange={() => toggleSection('simulations')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors">
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['simulations'] ? 'rotate-180' : ''}`} />
+            <BarChart3 className="h-4 w-4 text-blue-400" />
+            Simulation Results ({simulations.length} scenarios)
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2">
+            {simulations.map((sim, i) => (
+              <div key={i} className="p-3 rounded-lg bg-card border border-border/50">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{sim.scenario}</span>
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs ${
+                      sim.survival['18m'] >= 80 ? 'text-emerald-400' :
+                      sim.survival['18m'] >= 60 ? 'text-amber-400' : 'text-red-400'
+                    }`}
+                  >
+                    {sim.survival['18m']}% @ 18m
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded bg-secondary/50">
+                    <p className="text-xs text-muted-foreground">P10</p>
+                    <p className="text-sm font-mono">{sim.runway.p10.toFixed(1)}mo</p>
+                  </div>
+                  <div className="p-2 rounded bg-secondary/50">
+                    <p className="text-xs text-muted-foreground">P50</p>
+                    <p className="text-sm font-mono font-medium">{sim.runway.p50.toFixed(1)}mo</p>
+                  </div>
+                  <div className="p-2 rounded bg-secondary/50">
+                    <p className="text-xs text-muted-foreground">P90</p>
+                    <p className="text-sm font-mono">{sim.runway.p90.toFixed(1)}mo</p>
+                  </div>
+                </div>
+                <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                  <span>12m: {sim.survival['12m']}%</span>
+                  <span>18m: {sim.survival['18m']}%</span>
+                  <span>24m: {sim.survival['24m']}%</span>
+                </div>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {levers && levers.length > 0 && (
+        <Collapsible open={openSections['levers']} onOpenChange={() => toggleSection('levers')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors">
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['levers'] ? 'rotate-180' : ''}`} />
+            <Sliders className="h-4 w-4 text-cyan-400" />
+            Available Levers ({levers.length})
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2">
+            {levers.map((lever, i) => (
+              <div key={i} className="p-2 rounded bg-card/50 border border-border/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{lever.name}</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={`text-xs ${
+                      lever.feasibility === 'easy' ? 'text-emerald-400' :
+                      lever.feasibility === 'moderate' ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {lever.feasibility}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {lever.change_percent > 0 ? '+' : ''}{lever.change_percent}%
+                    </Badge>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{lever.impact}</p>
+                <p className="text-xs text-muted-foreground">Implementation: {lever.time_to_implement} month(s)</p>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {risk_analysis && (
+        <Collapsible open={openSections['risks']} onOpenChange={() => toggleSection('risks')}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-sm font-medium hover:text-primary transition-colors">
+            <ChevronDown className={`h-4 w-4 transition-transform ${openSections['risks'] ? 'rotate-180' : ''}`} />
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
+            Risk Analysis
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-3">
+            {risk_analysis.riskiest_assumptions.length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2">Riskiest Assumptions</p>
+                {risk_analysis.riskiest_assumptions.map((risk, i) => (
+                  <div key={i} className="p-2 rounded bg-amber-500/5 border border-amber-500/20 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">{risk.assumption}</span>
+                      <Badge variant="outline" className={`text-xs ${
+                        risk.risk_level === 'High' ? 'text-red-400' : 'text-amber-400'
+                      }`}>
+                        {risk.risk_level}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{risk.impact}</p>
+                    <p className="text-xs text-emerald-400 mt-1">Mitigation: {risk.mitigation}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {risk_analysis.sensitivity.length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-2">Sensitivity Analysis</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/50">
+                        <th className="text-left py-1">Variable</th>
+                        <th className="text-right py-1">Change</th>
+                        <th className="text-right py-1">Runway</th>
+                        <th className="text-right py-1">Survival</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {risk_analysis.sensitivity.map((s, i) => (
+                        <tr key={i} className="border-b border-border/30">
+                          <td className="py-1">{s.variable}</td>
+                          <td className="text-right py-1">{s.sensitivity}</td>
+                          <td className="text-right py-1 text-red-400">{s.runway_impact}</td>
+                          <td className="text-right py-1 text-red-400">{s.survival_impact}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            
+            {risk_analysis.failure_cascade && (
+              <div className="p-2 rounded bg-red-500/5 border border-red-500/20">
+                <p className="text-xs font-medium text-red-400 mb-1">Failure Cascade</p>
+                <p className="text-xs text-muted-foreground">{risk_analysis.failure_cascade}</p>
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
 function StructuredResponseDisplay({ response, messageIndex, showSources, onTryPrompt }: { response: CopilotApiResponse; messageIndex: number; showSources?: boolean; onTryPrompt?: (prompt: string) => void }) {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
   
@@ -583,6 +864,7 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
   
   return (
     <div className="mt-4 space-y-3">
+      {response.decision_advisor && <DecisionAdvisorPanel advisor={response.decision_advisor} />}
       {response.simulation_result && <SimulationResultCard response={response} onTryPrompt={onTryPrompt} />}
       {response.clarifications && response.clarifications.length > 0 && <ClarificationPanel response={response} />}
       

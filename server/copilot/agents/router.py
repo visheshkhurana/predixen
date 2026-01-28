@@ -54,6 +54,7 @@ class RoutingDecision:
     call_cfo: bool = False
     call_market: bool = False
     call_strategy: bool = False
+    call_decision_advisor: bool = False
     reasoning: str = ""
 
 
@@ -89,6 +90,15 @@ class RouterAgent(BaseAgent):
         "differentiate", "differentiation", "strategy", "strategic"
     ]
     
+    DECISION_KEYWORDS = [
+        "how can i", "what should i", "how do i", "should i",
+        "extend runway", "reduce burn", "increase revenue", "cut costs",
+        "delay fundrais", "postpone round", "when should", "what if",
+        "survive longer", "last longer", "stretch cash", "hiring freeze",
+        "layoff", "simulate", "scenario", "compare options", "what happens",
+        "improve position", "is it worth", "trade-off", "tradeoff"
+    ]
+    
     def __init__(self, llm_router=None):
         super().__init__(AgentType.ROUTER, llm_router)
     
@@ -98,6 +108,10 @@ class RouterAgent(BaseAgent):
         
         decision = RoutingDecision()
         reasons = []
+        
+        if any(kw in query_lower for kw in self.DECISION_KEYWORDS):
+            decision.call_decision_advisor = True
+            reasons.append("Decision-first analysis with simulations")
         
         if has_document or any(kw in query_lower for kw in self.CFO_KEYWORDS):
             decision.call_cfo = True
@@ -111,7 +125,7 @@ class RouterAgent(BaseAgent):
             decision.call_strategy = True
             reasons.append("Strategy advice needed")
         
-        if not any([decision.call_cfo, decision.call_market, decision.call_strategy]):
+        if not any([decision.call_cfo, decision.call_market, decision.call_strategy, decision.call_decision_advisor]):
             decision.call_cfo = True
             decision.call_strategy = True
             reasons.append("General advisory - using CFO + Strategy")
@@ -134,7 +148,20 @@ class RouterAgent(BaseAgent):
         
         agent_responses: List[AgentResponse] = []
         
-        if routing.call_cfo:
+        if routing.call_decision_advisor:
+            from .decision_advisor import DecisionAdvisorAgent
+            advisor = DecisionAdvisorAgent(llm_router=self.llm_router)
+            advisor_response = await advisor.process(query, ckb, context)
+            agent_responses.append(advisor_response)
+            
+            if advisor_response.structured_output.get("recommendation"):
+                ckb.decisions_v2.append({
+                    "query": query,
+                    "recommendation": advisor_response.structured_output.get("recommendation"),
+                    "simulations": advisor_response.structured_output.get("simulations", [])
+                })
+        
+        if routing.call_cfo and not routing.call_decision_advisor:
             from .cfo_agent import CFOAgent
             cfo = CFOAgent(llm_router=self.llm_router)
             cfo_response = await cfo.process(query, ckb, context)
@@ -154,7 +181,7 @@ class RouterAgent(BaseAgent):
             if market_response.structured_output.get("icp"):
                 ckb.icp = market_response.structured_output.get("icp", {})
         
-        if routing.call_strategy:
+        if routing.call_strategy and not routing.call_decision_advisor:
             from .strategy_agent import StrategyAgent
             strategy = StrategyAgent(llm_router=self.llm_router)
             strategy_response = await strategy.process(query, ckb, context)
@@ -179,6 +206,7 @@ class RouterAgent(BaseAgent):
         all_risks = []
         all_questions = []
         merged_output = {}
+        decision_advisor_output = None
         
         for resp in responses:
             all_findings.extend(resp.findings)
@@ -186,6 +214,9 @@ class RouterAgent(BaseAgent):
             all_risks.extend(resp.risks)
             all_questions.extend(resp.next_questions[:3])
             merged_output[resp.agent_type.value] = resp.structured_output
+            
+            if resp.decision_advisor_output:
+                decision_advisor_output = resp.decision_advisor_output
         
         unique_findings = list(dict.fromkeys(all_findings))[:10]
         unique_assumptions = list(dict.fromkeys(all_assumptions))
@@ -214,7 +245,8 @@ class RouterAgent(BaseAgent):
             risks=unique_risks,
             next_questions=unique_questions,
             confidence=overall_confidence,
-            raw_response=synthesis or ""
+            raw_response=synthesis or "",
+            decision_advisor_output=decision_advisor_output
         )
     
     def _structure_final_output(
