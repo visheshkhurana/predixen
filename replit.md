@@ -53,13 +53,20 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
     - Provides risk analysis with sensitivity tables and failure cascade narratives
     - Delivers opinionated recommendations with confidence levels (high/medium/low) and reasoning
     - Renders in a dedicated DecisionAdvisorPanel UI with collapsible sections for simulations, levers, and risks
-9.  **Copilot V6: Fundraising OS**: A comprehensive fundraising module with cap table management (common, preferred shares, option pools, convertible notes), a cap table engine for dilution calculations, fundraising round tracking, and a dilution simulator. It also includes an Investor Room for generating investor materials and managing an investor pipeline.
-10. **Forecasting**: Utilizes Holt-Winters exponential smoothing and linear regression.
-11. **Alerts**: Implements Z-score anomaly detection, threshold monitoring, and runway warnings.
-12. **Admin Dashboard**: Centralized management for users, companies, billing, and platform metrics with RBAC, accessible only by the platform admin.
-13. **Payroll & ERP Connector Framework**: An extensible system for syncing financial data from Indian payroll and ERP providers (e.g., RazorpayX Payroll, GreytHR, Zoho Books, Tally ERP) with a `BaseConnector` and `ConnectorRegistry` for various authentication types and data normalization.
-14. **Feature Notification System**: Automated email notifications for platform changes and updates, delivered via Resend, with predefined recipients and professional HTML templates.
-15. **Multi-LLM Router**: Unified interface for intelligent task-based model selection across multiple AI providers (OpenAI GPT-4o, Anthropic Claude, Google Gemini). It features intelligent task routing to optimal models, graceful fallback mechanisms, feature-aware routing for specific requests (e.g., JSON mode), PII redaction, and audit logging.
+9.  **Real-Time Simulation Copilot (Jan 2026)**: AI-powered guidance integrated into the simulation workflow:
+    - **Context-Aware Prompts**: As users adjust simulation parameters (pricing, growth, burn, margins, churn, CAC), the AI explains the impact of each change on key metrics like runway, survival probability, and cash position
+    - **Debounced API Calls**: Uses 300ms debounce to prevent excessive API calls while users drag sliders
+    - **Impact Level Indicators**: Displays high/medium/low impact badges for parameter changes
+    - **Narrative Summaries**: Generates plain-language explanations of simulation results including health status (healthy/warning/critical), top 5 key drivers by impact score, comparative insights, and actionable recommendations
+    - **Components**: `AICopilotGuidance` for real-time slider feedback, `AISummaryCard` for result narratives
+    - **Endpoints**: `/simulation-copilot/prompt/{company_id}` and `/simulation-copilot/narrative/{company_id}`
+10.  **Copilot V6: Fundraising OS**: A comprehensive fundraising module with cap table management (common, preferred shares, option pools, convertible notes), a cap table engine for dilution calculations, fundraising round tracking, and a dilution simulator. It also includes an Investor Room for generating investor materials and managing an investor pipeline.
+11. **Forecasting**: Utilizes Holt-Winters exponential smoothing and linear regression.
+12. **Alerts**: Implements Z-score anomaly detection, threshold monitoring, and runway warnings.
+13. **Admin Dashboard**: Centralized management for users, companies, billing, and platform metrics with RBAC, accessible only by the platform admin.
+14. **Payroll & ERP Connector Framework**: An extensible system for syncing financial data from Indian payroll and ERP providers (e.g., RazorpayX Payroll, GreytHR, Zoho Books, Tally ERP) with a `BaseConnector` and `ConnectorRegistry` for various authentication types and data normalization.
+15. **Feature Notification System**: Automated email notifications for platform changes and updates, delivered via Resend, with predefined recipients and professional HTML templates.
+16. **Multi-LLM Router**: Unified interface for intelligent task-based model selection across multiple AI providers (OpenAI GPT-4o, Anthropic Claude, Google Gemini). It features intelligent task routing to optimal models, graceful fallback mechanisms, feature-aware routing for specific requests (e.g., JSON mode), PII redaction, and audit logging.
 
 ### User Roles
 -   **Platform Admin**: Application owner with access to the Admin dashboard.
