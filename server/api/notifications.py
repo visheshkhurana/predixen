@@ -4,8 +4,13 @@ API endpoints for notification management.
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
-from server.services.notifications import send_feature_notification, NOTIFICATION_RECIPIENTS
+from typing import List, Optional, Dict, Any
+from server.services.notifications import (
+    send_feature_notification, 
+    send_publish_notification,
+    parse_changelog,
+    NOTIFICATION_RECIPIENTS
+)
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -60,3 +65,35 @@ async def notify_feature_update(request: FeatureNotificationRequest):
 async def get_notification_recipients():
     """Get the list of notification recipients."""
     return {"recipients": NOTIFICATION_RECIPIENTS}
+
+
+@router.post("/publish")
+async def trigger_publish_notification() -> Dict[str, Any]:
+    """
+    Manually trigger a publish notification.
+    This is automatically called on app startup in production.
+    Reads from CHANGELOG.md and sends email about new features.
+    """
+    result = await send_publish_notification()
+    
+    if result.get("success"):
+        return {
+            "success": True,
+            "message": f"Publish notification sent for version {result.get('version')}",
+            "version": result.get("version"),
+            "changes_count": result.get("changes_count"),
+            "recipients": result.get("recipients")
+        }
+    else:
+        return {
+            "success": False,
+            "message": result.get("reason", "Failed to send notification")
+        }
+
+
+@router.get("/changelog")
+async def get_changelog() -> Dict[str, Any]:
+    """
+    Get the parsed changelog with latest version info.
+    """
+    return parse_changelog()

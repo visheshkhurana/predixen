@@ -75,6 +75,21 @@ async def lifespan(app: FastAPI):
             raise
         finally:
             db.close()
+        
+        # Send publish notification in production (runs in background)
+        if settings.ENVIRONMENT == "production":
+            try:
+                from server.services.notifications import check_and_send_publish_notification
+                import asyncio
+                logger.info("Checking for publish notification...")
+                task = asyncio.create_task(check_and_send_publish_notification())
+                task.add_done_callback(
+                    lambda t: logger.info(f"Publish notification task completed: {t.exception() or 'success'}")
+                    if t.done() else None
+                )
+            except Exception as e:
+                logger.warning(f"Could not send publish notification: {e}")
+                
     except Exception as e:
         logger.error(f"Error during startup: {e}")
         raise

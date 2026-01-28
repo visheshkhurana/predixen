@@ -4,9 +4,11 @@ Uses Resend integration for email delivery.
 """
 
 import os
+import re
 import httpx
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+from pathlib import Path
 
 
 NOTIFICATION_RECIPIENTS = [
@@ -545,3 +547,165 @@ Predixen Intelligence OS • {timestamp}
             "failed": to_emails or [],
             "error": str(e)
         }
+
+
+def parse_changelog() -> Dict[str, Any]:
+    """
+    Parse CHANGELOG.md to extract the latest version's changes.
+    
+    Returns:
+        Dict with version, date, and categorized changes (Added, Changed, Fixed, etc.)
+    """
+    changelog_path = Path(__file__).parent.parent.parent / "CHANGELOG.md"
+    
+    if not changelog_path.exists():
+        return {"version": None, "changes": {}}
+    
+    content = changelog_path.read_text()
+    
+    version_pattern = r'## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})'
+    version_matches = list(re.finditer(version_pattern, content))
+    
+    if not version_matches:
+        return {"version": None, "changes": {}}
+    
+    latest_match = version_matches[0]
+    version = latest_match.group(1)
+    date = latest_match.group(2)
+    
+    start_pos = latest_match.end()
+    end_pos = version_matches[1].start() if len(version_matches) > 1 else len(content)
+    
+    version_content = content[start_pos:end_pos]
+    
+    changes = {}
+    section_pattern = r'### (Added|Changed|Fixed|Removed|Deprecated|Security)\n(.*?)(?=### |$)'
+    for section_match in re.finditer(section_pattern, version_content, re.DOTALL):
+        category = section_match.group(1)
+        items_text = section_match.group(2).strip()
+        
+        items = []
+        for line in items_text.split('\n'):
+            line = line.strip()
+            if line.startswith('- '):
+                item = line[2:].strip()
+                if item.startswith('**') and '**:' in item:
+                    title_end = item.index('**:') + 3
+                    title = item[2:title_end-3]
+                    desc = item[title_end:].strip()
+                    items.append({"title": title, "description": desc})
+                else:
+                    items.append({"title": item, "description": ""})
+        
+        if items:
+            changes[category] = items
+    
+    return {
+        "version": version,
+        "date": date,
+        "changes": changes
+    }
+
+
+def get_last_notified_version() -> Optional[str]:
+    """Get the last version that was notified about."""
+    try:
+        version_file = Path(__file__).parent.parent.parent / ".last_notified_version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+    except Exception as e:
+        print(f"Warning: Could not read last notified version: {e}")
+    return None
+
+
+def set_last_notified_version(version: str) -> None:
+    """Set the last notified version. Fails gracefully if write is not possible."""
+    try:
+        version_file = Path(__file__).parent.parent.parent / ".last_notified_version"
+        version_file.write_text(version)
+    except Exception as e:
+        print(f"Warning: Could not save last notified version: {e}")
+
+
+async def send_publish_notification() -> Dict[str, Any]:
+    """
+    Send email notification about new features when app is published.
+    Reads from CHANGELOG.md and only sends if there's a new version.
+    
+    Returns:
+        Dict with success status and details
+    """
+    import os
+    
+    if os.getenv("ENVIRONMENT", "development") != "production":
+        print("Skipping publish notification in non-production environment")
+        return {"success": False, "reason": "Not in production environment"}
+    
+    changelog = parse_changelog()
+    
+    if not changelog.get("version"):
+        return {"success": False, "reason": "No version found in changelog"}
+    
+    current_version = changelog["version"]
+    last_notified = get_last_notified_version()
+    
+    if last_notified == current_version:
+        print(f"Version {current_version} already notified, skipping")
+        return {"success": False, "reason": f"Version {current_version} already notified"}
+    
+    changes = changelog.get("changes", {})
+    if not changes:
+        return {"success": False, "reason": "No changes found in changelog"}
+    
+    all_changes = []
+    for category, items in changes.items():
+        for item in items:
+            if item.get("description"):
+                all_changes.append(f"[{category}] {item['title']}: {item['description']}")
+            else:
+                all_changes.append(f"[{category}] {item['title']}")
+    
+    added_features = changes.get("Added", [])
+    feature_highlights = []
+    for feature in added_features[:3]:
+        if feature.get("title"):
+            feature_highlights.append(feature["title"])
+    
+    description = f"Version {current_version} has been deployed with the following updates."
+    if feature_highlights:
+        description += f" Key new features: {', '.join(feature_highlights)}."
+    
+    success = await send_feature_notification(
+        feature_name=f"v{current_version} Released",
+        description=description,
+        changes=all_changes,
+        category="New Release",
+        author="Predixen Team"
+    )
+    
+    if success:
+        set_last_notified_version(current_version)
+        print(f"Publish notification sent for version {current_version}")
+        return {
+            "success": True,
+            "version": current_version,
+            "changes_count": len(all_changes),
+            "recipients": NOTIFICATION_RECIPIENTS
+        }
+    else:
+        return {"success": False, "reason": "Failed to send email"}
+
+
+async def check_and_send_publish_notification() -> None:
+    """
+    Check if a new version has been deployed and send notification.
+    This is called on application startup in production.
+    """
+    try:
+        result = await send_publish_notification()
+        if result.get("success"):
+            print(f"Publish notification sent successfully: {result}")
+        else:
+            print(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
+    except Exception as e:
+        print(f"Error in publish notification check: {e}")
