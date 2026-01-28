@@ -729,49 +729,6 @@ class DecisionAdvisorAgent(BaseAgent):
         findings.append(f"Recommendation: {recommendation.primary_action}")
         findings.append(f"Confidence: {recommendation.confidence.value.upper()}")
         
-        structured_output = {
-            "decision_context": {
-                "type": decision.decision_type.value,
-                "core_decision": decision.core_decision,
-                "timeframe_months": decision.timeframe_months,
-                "target": decision.target_outcome,
-                "constraints": decision.constraints
-            },
-            "levers": [
-                {
-                    "name": l.name,
-                    "change_percent": l.change_percent,
-                    "impact": l.impact_description,
-                    "feasibility": l.feasibility,
-                    "time_to_implement": l.time_to_implement_months
-                }
-                for l in levers
-            ],
-            "simulations": [
-                {
-                    "scenario": ", ".join(s.lever_combination),
-                    "runway": {"p10": s.runway_p10, "p50": s.runway_p50, "p90": s.runway_p90},
-                    "survival": {"12m": s.survival_12m, "18m": s.survival_18m, "24m": s.survival_24m},
-                    "risks": s.risk_factors
-                }
-                for s in simulations
-            ],
-            "risk_analysis": {
-                "riskiest_assumptions": risks.riskiest_assumptions,
-                "sensitivity": risks.sensitivity_analysis,
-                "failure_cascade": risks.failure_cascade
-            },
-            "recommendation": {
-                "primary_action": recommendation.primary_action,
-                "details": recommendation.action_details,
-                "expected_impact": recommendation.expected_impact,
-                "confidence": recommendation.confidence.value,
-                "confidence_reasoning": recommendation.confidence_reasoning,
-                "alternatives": recommendation.alternative_actions,
-                "what_changes": recommendation.what_would_change_recommendation
-            }
-        }
-        
         assumptions = [
             f"Assumes {r['assumption']}" for r in risks.riskiest_assumptions[:3]
         ]
@@ -791,11 +748,11 @@ class DecisionAdvisorAgent(BaseAgent):
         
         decision_advisor_output = {
             "decision_context": {
-                "type": context.decision_type.value,
-                "core_decision": context.core_decision,
-                "target": context.target_outcome,
-                "timeframe_months": context.timeframe_months,
-                "constraints": context.constraints
+                "type": decision.decision_type.value,
+                "core_decision": decision.core_decision,
+                "target": decision.target_outcome,
+                "timeframe_months": decision.timeframe_months,
+                "constraints": decision.constraints
             },
             "levers": [
                 {
@@ -846,7 +803,7 @@ class DecisionAdvisorAgent(BaseAgent):
         return AgentResponse(
             agent_type=AgentType.DECISION_ADVISOR,
             findings=findings,
-            structured_output=structured_output,
+            structured_output=decision_advisor_output,
             assumptions=assumptions,
             risks=risk_list,
             next_questions=next_questions,
