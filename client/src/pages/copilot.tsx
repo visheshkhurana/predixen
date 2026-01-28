@@ -46,7 +46,11 @@ import {
   X,
   StickyNote,
   Cpu,
-  Sliders
+  Sliders,
+  PanelRightClose,
+  PanelRight,
+  Menu,
+  ChevronRight
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -277,7 +281,9 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const SLASH_COMMANDS = [
-  { command: '/run-scenario', description: 'Run a scenario simulation with assumptions', icon: Play },
+  { command: '/run-scenario', description: 'Run a scenario simulation with assumptions', icon: Sliders },
+  { command: '/metrics', description: 'View your key business metrics', icon: BarChart3 },
+  { command: '/notes', description: 'View your pinned notes', icon: StickyNote },
   { command: '/fetch-metric', description: 'Fetch a specific metric value', icon: Database },
   { command: '/compare', description: 'Compare two scenarios', icon: GitCompare },
   { command: '/extend-runway', description: 'Analyze ways to extend runway', icon: TrendingUp },
@@ -774,6 +780,11 @@ export default function CopilotPage() {
   const [showSlashCommands, setShowSlashCommands] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   
+  // Collapsible panel state (ChatGPT-like design)
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [activePanelTab, setActivePanelTab] = useState<'metrics' | 'scenario' | 'notes'>('metrics');
+  const [isFabOpen, setIsFabOpen] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -847,14 +858,25 @@ export default function CopilotPage() {
       setShowSlashCommands(false);
       const helpMessage: Message = {
         role: 'assistant',
-        content: 'Available commands:\n\n• **/run-scenario** - Run a scenario with your current assumptions\n• **/fetch-metric {name}** - Get a specific metric (mrr, arr, runway, cac, ltv)\n• **/compare** - Compare current scenario vs baseline\n• **/extend-runway** - Get strategies to extend runway\n• **/help** - Show this help message',
+        content: 'Available commands:\n\n• **/run-scenario** - Run a scenario with your current assumptions\n• **/fetch-metric {name}** - Get a specific metric (mrr, arr, runway, cac, ltv)\n• **/compare** - Compare current scenario vs baseline\n• **/extend-runway** - Get strategies to extend runway\n• **/metrics** - View your key metrics\n• **/notes** - View your pinned notes\n• **/help** - Show this help message',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, helpMessage]);
     } else if (command === '/run-scenario') {
       setInput('');
       setShowSlashCommands(false);
-      runScenario();
+      setActivePanelTab('scenario');
+      setIsPanelOpen(true);
+    } else if (command === '/metrics') {
+      setInput('');
+      setShowSlashCommands(false);
+      setActivePanelTab('metrics');
+      setIsPanelOpen(true);
+    } else if (command === '/notes') {
+      setInput('');
+      setShowSlashCommands(false);
+      setActivePanelTab('notes');
+      setIsPanelOpen(true);
     } else if (command.startsWith('/fetch-metric')) {
       setInput('/fetch-metric ');
       setShowSlashCommands(false);
@@ -867,6 +889,13 @@ export default function CopilotPage() {
       setShowSlashCommands(false);
       sendMessage('How can I extend my runway by 6 months?');
     }
+  };
+  
+  // FAB action handler
+  const handleFabAction = (action: 'metrics' | 'scenario' | 'notes') => {
+    setActivePanelTab(action);
+    setIsPanelOpen(true);
+    setIsFabOpen(false);
   };
   
   // Filter slash commands based on input
@@ -1055,27 +1084,33 @@ export default function CopilotPage() {
   }
   
   return (
-    <div className="h-[calc(100vh-4rem)] flex">
-      <div className="flex-1 flex flex-col p-4">
-        <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              Copilot
-            </h1>
-            <p className="text-sm text-muted-foreground">AI-powered financial advisor grounded in your data</p>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary border border-border/50" data-testid="model-indicator">
-            <Cpu className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium">Multi-LLM Router</span>
-            <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-              GPT-4o / Claude / Gemini
+    <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
+      {/* Main Chat Container - Centered */}
+      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${isPanelOpen ? 'lg:mr-80' : ''}`}>
+        {/* Minimal Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <span className="font-medium">Copilot</span>
+            <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30" data-testid="model-indicator">
+              Multi-LLM
             </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              data-testid="button-toggle-panel"
+            >
+              {isPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
         
-        <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
-          <div className="space-y-4 pb-4">
+        {/* Chat Messages - Centered with max width */}
+        <ScrollArea className="flex-1" ref={scrollAreaRef}>
+          <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
             {messages.map((message, i) => (
               <div
                 key={i}
@@ -1190,483 +1225,398 @@ export default function CopilotPage() {
           </div>
         </ScrollArea>
         
-        <div className="mt-4 space-y-3">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Terminal className="h-4 w-4 text-primary" />
-              <span className="text-xs font-medium text-muted-foreground">Simulation Commands</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SIMULATION_COMMANDS.map((cmd, i) => (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePromptClick(cmd.label)}
-                  disabled={isTyping}
-                  className="whitespace-normal text-left h-auto py-2 border-primary/30 hover:border-primary/50"
-                  data-testid={`button-sim-cmd-${i}`}
-                >
-                  <cmd.icon className="h-4 w-4 mr-2 flex-shrink-0 text-primary" />
-                  <span>{cmd.label}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Quick Prompts</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTED_PROMPTS.map((prompt, i) => (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePromptClick(prompt.label)}
-                  disabled={isTyping}
-                  className="whitespace-normal text-left h-auto py-2"
-                  data-testid={`button-prompt-${i}`}
-                >
-                  <prompt.icon className="h-4 w-4 mr-2 flex-shrink-0" />
-                  <span>{prompt.label}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-secondary/50 border border-border/30">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Mode:</span>
-              <Select value={mode} onValueChange={(v) => setMode(v as 'advisor' | 'analyst' | 'pitch')}>
-                <SelectTrigger className="w-24 h-7 text-xs" data-testid="select-mode">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="advisor">Advisor</SelectItem>
-                  <SelectItem value="analyst">Analyst</SelectItem>
-                  <SelectItem value="pitch">Pitch</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Investor Lens:</span>
-              <Select value={investorLens || 'none'} onValueChange={(v) => setInvestorLens(v === 'none' ? null : v)}>
-                <SelectTrigger className="w-28 h-7 text-xs" data-testid="select-investor-lens">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="seed">Seed</SelectItem>
-                  <SelectItem value="series_a">Series A</SelectItem>
-                  <SelectItem value="series_b">Series B</SelectItem>
-                  <SelectItem value="pe">PE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <Switch 
-                id="challenge-mode" 
-                checked={challengeMode} 
-                onCheckedChange={setChallengeMode}
-                data-testid="switch-challenge-mode"
-              />
-              <label htmlFor="challenge-mode" className="text-xs flex items-center gap-1 cursor-pointer">
-                <Shield className="h-3 w-3" />
-                Challenge
-              </label>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <Switch 
-                id="create-decision" 
-                checked={createDecision} 
-                onCheckedChange={setCreateDecision}
-                data-testid="switch-create-decision"
-              />
-              <label htmlFor="create-decision" className="text-xs flex items-center gap-1 cursor-pointer">
-                <FileText className="h-3 w-3" />
-                Track Decision
-              </label>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <Switch 
-                id="show-sources" 
-                checked={showSources} 
-                onCheckedChange={setShowSources}
-                data-testid="switch-show-sources"
-              />
-              <label htmlFor="show-sources" className="text-xs flex items-center gap-1 cursor-pointer">
-                <Link2 className="h-3 w-3" />
-                Show Sources
-              </label>
-            </div>
-            
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs flex items-center gap-1">
-                <Shield className="h-3 w-3" />
-                Privacy:
-              </label>
-              <Select value={piiMode} onValueChange={(v: 'off' | 'standard' | 'strict') => setPiiMode(v)} data-testid="select-pii-mode">
-                <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-pii-mode-trigger">
-                  <SelectValue placeholder="Mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="off">Off</SelectItem>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="strict">Strict</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="relative">
-            {showSlashCommands && filteredSlashCommands.length > 0 && (
-              <div className="absolute bottom-full mb-2 left-0 right-0 bg-card border border-border rounded-lg shadow-lg p-2 z-10" data-testid="slash-command-dropdown">
-                <p className="text-xs text-muted-foreground mb-2 px-2" data-testid="text-commands-header">Commands</p>
-                {filteredSlashCommands.map((cmd, idx) => (
-                  <button
-                    key={cmd.command}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors hover-elevate ${
-                      idx === selectedCommandIndex ? 'bg-secondary' : ''
-                    }`}
-                    onClick={() => handleSlashCommand(cmd.command)}
-                    onMouseEnter={() => setSelectedCommandIndex(idx)}
-                    data-testid={`slash-cmd-${cmd.command.slice(1)}`}
-                  >
-                    <cmd.icon className="h-4 w-4 text-primary" />
-                    <div>
-                      <p className="text-sm font-medium" data-testid={`text-cmd-name-${cmd.command.slice(1)}`}>{cmd.command}</p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-cmd-desc-${cmd.command.slice(1)}`}>{cmd.description}</p>
-                    </div>
-                  </button>
-                ))}
+        {/* Clean Input Area at Bottom */}
+        <div className="border-t border-border/50 p-4">
+          <div className="max-w-3xl mx-auto">
+            {/* Quick prompts - collapsed by default, expandable */}
+            {messages.length === 1 && (
+              <div className="mb-4">
+                <p className="text-xs text-muted-foreground mb-2">Try asking:</p>
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTED_PROMPTS.slice(0, 3).map((prompt, i) => (
+                    <Button
+                      key={i}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePromptClick(prompt.label)}
+                      disabled={isTyping}
+                      className="text-xs"
+                      data-testid={`button-prompt-${i}`}
+                    >
+                      <prompt.icon className="h-3 w-3 mr-1.5" />
+                      <span className="truncate max-w-[180px]">{prompt.label}</span>
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (showSlashCommands && filteredSlashCommands.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setSelectedCommandIndex(prev => 
-                        prev < filteredSlashCommands.length - 1 ? prev + 1 : 0
-                      );
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setSelectedCommandIndex(prev => 
-                        prev > 0 ? prev - 1 : filteredSlashCommands.length - 1
-                      );
+            
+            <div className="relative">
+              {showSlashCommands && filteredSlashCommands.length > 0 && (
+                <div className="absolute bottom-full mb-2 left-0 right-0 bg-card border border-border rounded-lg shadow-lg p-2 z-10" data-testid="slash-command-dropdown">
+                  <p className="text-xs text-muted-foreground mb-2 px-2" data-testid="text-commands-header">Commands</p>
+                  {filteredSlashCommands.map((cmd, idx) => (
+                    <button
+                      key={cmd.command}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors hover-elevate ${
+                        idx === selectedCommandIndex ? 'bg-secondary' : ''
+                      }`}
+                      onClick={() => handleSlashCommand(cmd.command)}
+                      onMouseEnter={() => setSelectedCommandIndex(idx)}
+                      data-testid={`slash-cmd-${cmd.command.slice(1)}`}
+                    >
+                      <cmd.icon className="h-4 w-4 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium" data-testid={`text-cmd-name-${cmd.command.slice(1)}`}>{cmd.command}</p>
+                        <p className="text-xs text-muted-foreground" data-testid={`text-cmd-desc-${cmd.command.slice(1)}`}>{cmd.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => handleInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (showSlashCommands && filteredSlashCommands.length > 0) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        setSelectedCommandIndex(prev => 
+                          prev < filteredSlashCommands.length - 1 ? prev + 1 : 0
+                        );
+                      } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setSelectedCommandIndex(prev => 
+                          prev > 0 ? prev - 1 : filteredSlashCommands.length - 1
+                        );
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSlashCommand(filteredSlashCommands[selectedCommandIndex].command);
+                      } else if (e.key === 'Escape') {
+                        setShowSlashCommands(false);
+                      }
                     } else if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSlashCommand(filteredSlashCommands[selectedCommandIndex].command);
-                    } else if (e.key === 'Escape') {
-                      setShowSlashCommands(false);
+                      handleSend();
                     }
-                  } else if (e.key === 'Enter') {
-                    handleSend();
-                  }
-                }}
-                placeholder="Type / for commands or ask a question..."
-                disabled={isTyping}
-                data-testid="input-copilot"
-              />
-              <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
-                <Send className="h-4 w-4" />
-              </Button>
+                  }}
+                  placeholder="Type / for commands or ask a question..."
+                  disabled={isTyping}
+                  data-testid="input-copilot"
+                />
+                <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
       
-      <div className="w-80 border-l p-4 hidden lg:block">
-        <h2 className="text-lg font-medium mb-4">Context</h2>
-        
-        {truthLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+      {/* Sliding Panel - Hidden by default */}
+      <div className={`fixed right-0 top-0 h-full w-80 bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out z-40 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant={activePanelTab === 'metrics' ? 'secondary' : 'ghost'}
+              onClick={() => setActivePanelTab('metrics')}
+              data-testid="button-tab-metrics"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+            <Button 
+              size="sm" 
+              variant={activePanelTab === 'scenario' ? 'secondary' : 'ghost'}
+              onClick={() => setActivePanelTab('scenario')}
+              data-testid="button-tab-scenario"
+            >
+              <Sliders className="h-4 w-4" />
+            </Button>
+            <Button 
+              size="sm" 
+              variant={activePanelTab === 'notes' ? 'secondary' : 'ghost'}
+              onClick={() => setActivePanelTab('notes')}
+              data-testid="button-tab-notes"
+            >
+              <StickyNote className="h-4 w-4" />
+            </Button>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Database className="h-4 w-4 text-emerald-400" />
-                  Data Confidence
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold font-mono" data-testid="text-context-confidence">
-                  {confidence}/100
-                </div>
-                <Badge
-                  variant={confidence < 60 ? 'destructive' : 'secondary'}
-                  className={confidence >= 80 ? 'bg-emerald-500/20 text-emerald-400' : confidence >= 60 ? 'bg-amber-500/20 text-amber-400' : ''}
-                >
-                  {confidence < 60 ? 'Low' : confidence < 80 ? 'Medium' : 'High'}
-                </Badge>
-              </CardContent>
-            </Card>
-            
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-amber-400" />
-                  Quality of Growth
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold font-mono" data-testid="text-context-qog">
-                  {qualityOfGrowth}/100
-                </div>
-              </CardContent>
-            </Card>
-            
-            {latestDataHealth && (
-              <Card className="overflow-visible">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-blue-400" />
-                    Data Health
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2">
-                    <div className="text-2xl font-bold font-mono" data-testid="text-data-health-score">
-                      {latestDataHealth.score}
+          <Button size="icon" variant="ghost" onClick={() => setIsPanelOpen(false)} data-testid="button-close-panel">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        <ScrollArea className="h-[calc(100%-4rem)] p-4">
+          {/* Metrics Tab */}
+          {activePanelTab === 'metrics' && (
+            truthLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Card className="overflow-visible">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Database className="h-4 w-4 text-emerald-400" />
+                      Data Confidence
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold font-mono" data-testid="text-context-confidence">
+                      {confidence}/100
                     </div>
                     <Badge
-                      className={
-                        latestDataHealth.grade === 'A' ? 'bg-emerald-500/20 text-emerald-400' :
-                        latestDataHealth.grade === 'B' ? 'bg-blue-500/20 text-blue-400' :
-                        latestDataHealth.grade === 'C' ? 'bg-amber-500/20 text-amber-400' :
-                        latestDataHealth.grade === 'D' ? 'bg-orange-500/20 text-orange-400' :
-                        'bg-red-500/20 text-red-400'
-                      }
-                      data-testid="text-data-health-grade"
+                      variant={confidence < 60 ? 'destructive' : 'secondary'}
+                      className={confidence >= 80 ? 'bg-emerald-500/20 text-emerald-400' : confidence >= 60 ? 'bg-amber-500/20 text-amber-400' : ''}
                     >
-                      Grade {latestDataHealth.grade}
+                      {confidence < 60 ? 'Low' : confidence < 80 ? 'Medium' : 'High'}
                     </Badge>
-                  </div>
-                  {latestDataHealth.issues && latestDataHealth.issues.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {latestDataHealth.issues.slice(0, 2).map((issue, idx) => (
-                        <div key={idx} className="text-xs text-muted-foreground flex items-start gap-1">
-                          <AlertTriangle className={`h-3 w-3 mt-0.5 ${issue.severity === 'error' ? 'text-red-400' : issue.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`} />
-                          {issue.message}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-            
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Target className="h-4 w-4 text-purple-400" />
-                  Current Scenario
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                {latestScenario ? (
-                  <>
-                    <p className="font-medium text-foreground">{latestScenario.name}</p>
-                    <p>Pricing: {latestScenario.pricing_change_pct > 0 ? '+' : ''}{latestScenario.pricing_change_pct}%</p>
-                    <p>Burn cut: {latestScenario.burn_reduction_pct}%</p>
-                  </>
-                ) : (
-                  <p>No scenario selected</p>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-blue-400" />
-                  Latest Simulation
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm">
-                {simulation ? (
-                  <>
-                    <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50?.toFixed(1)} mo</span></p>
-                    <p>Survival 18m: <span className="font-mono font-medium">{simulation.survival?.['18m']}%</span></p>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">No simulation run yet</p>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Separator className="my-4" />
-            
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Sliders className="h-4 w-4 text-cyan-400" />
-                  Scenario Runner
-                </CardTitle>
-                <CardDescription className="text-xs">Adjust assumptions and run</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Growth Rate</span>
-                    <span className="font-mono">{scenarioAssumptions.growthRate}%</span>
-                  </div>
-                  <Slider
-                    value={[scenarioAssumptions.growthRate]}
-                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, growthRate: v }))}
-                    min={-20}
-                    max={50}
-                    step={1}
-                    data-testid="slider-growth-rate"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Price Change</span>
-                    <span className="font-mono">{scenarioAssumptions.priceChange}%</span>
-                  </div>
-                  <Slider
-                    value={[scenarioAssumptions.priceChange]}
-                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, priceChange: v }))}
-                    min={-20}
-                    max={30}
-                    step={1}
-                    data-testid="slider-price-change"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Hiring Rate</span>
-                    <span className="font-mono">{scenarioAssumptions.hiringRate}%</span>
-                  </div>
-                  <Slider
-                    value={[scenarioAssumptions.hiringRate]}
-                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, hiringRate: v }))}
-                    min={0}
-                    max={30}
-                    step={1}
-                    data-testid="slider-hiring-rate"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>Burn Reduction</span>
-                    <span className="font-mono">{scenarioAssumptions.burnReduction}%</span>
-                  </div>
-                  <Slider
-                    value={[scenarioAssumptions.burnReduction]}
-                    onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, burnReduction: v }))}
-                    min={0}
-                    max={40}
-                    step={1}
-                    data-testid="slider-burn-reduction"
-                  />
-                </div>
+                  </CardContent>
+                </Card>
                 
-                <div className="pt-2 space-y-2">
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="p-2 rounded bg-secondary">
-                      <p className="text-xs text-muted-foreground">Revenue</p>
-                      <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedRevenue / 1000).toFixed(0)}K</p>
+                <Card className="overflow-visible">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-amber-400" />
+                      Quality of Growth
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold font-mono" data-testid="text-context-qog">
+                      {qualityOfGrowth}/100
                     </div>
-                    <div className="p-2 rounded bg-secondary">
-                      <p className="text-xs text-muted-foreground">Cash</p>
-                      <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedCash / 1000).toFixed(0)}K</p>
-                    </div>
-                    <div className="p-2 rounded bg-secondary">
-                      <p className="text-xs text-muted-foreground">Runway</p>
-                      <p className="text-sm font-mono font-medium">{scenarioMetrics.projectedRunway}mo</p>
-                    </div>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    className="w-full" 
-                    onClick={runScenario}
-                    disabled={isTyping}
-                    data-testid="button-run-scenario"
-                  >
-                    <Play className="h-3 w-3 mr-2" />
-                    Run Scenario
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="overflow-visible">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <StickyNote className="h-4 w-4 text-amber-400" />
-                  Pinned Notes
-                </CardTitle>
-                <CardDescription className="text-xs">Quick ideas and reminders</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2 items-center">
-                  <Input
-                    value={newNoteContent}
-                    onChange={(e) => setNewNoteContent(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addNote()}
-                    placeholder="Add a note..."
-                    className="text-xs"
-                    data-testid="input-new-note"
-                  />
-                  <Button 
-                    size="icon" 
-                    variant="outline" 
-                    onClick={addNote}
-                    disabled={!newNoteContent.trim()}
-                    data-testid="button-add-note"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
+                  </CardContent>
+                </Card>
                 
-                {pinnedNotes.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">No notes yet</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {pinnedNotes.map((note) => (
-                      <div 
-                        key={note.id} 
-                        className="p-2 rounded bg-secondary/50 border border-border/30 group"
-                        data-testid={`note-${note.id}`}
-                      >
-                        <div className="flex justify-between items-start gap-2">
-                          <p className="text-xs flex-1">{note.content}</p>
-                          <button
-                            onClick={() => deleteNote(note.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                            data-testid={`button-delete-note-${note.id}`}
-                          >
-                            <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {note.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+                <Card className="overflow-visible">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Target className="h-4 w-4 text-purple-400" />
+                      Current Scenario
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {latestScenario ? (
+                      <>
+                        <p className="font-medium text-foreground">{latestScenario.name}</p>
+                        <p>Pricing: {latestScenario.pricing_change_pct > 0 ? '+' : ''}{latestScenario.pricing_change_pct}%</p>
+                        <p>Burn cut: {latestScenario.burn_reduction_pct}%</p>
+                      </>
+                    ) : (
+                      <p>No scenario selected</p>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                <Card className="overflow-visible">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-blue-400" />
+                      Latest Simulation
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm">
+                    {simulation ? (
+                      <>
+                        <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50?.toFixed(1)} mo</span></p>
+                        <p>Survival 18m: <span className="font-mono font-medium">{simulation.survival?.['18m']}%</span></p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">No simulation run yet</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )
+          )}
+          
+          {/* Scenario Tab */}
+          {activePanelTab === 'scenario' && (
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>Growth Rate</span>
+                  <span className="font-mono">{scenarioAssumptions.growthRate}%</span>
+                </div>
+                <Slider
+                  value={[scenarioAssumptions.growthRate]}
+                  onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, growthRate: v }))}
+                  min={-20}
+                  max={50}
+                  step={1}
+                  data-testid="slider-growth-rate"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>Price Change</span>
+                  <span className="font-mono">{scenarioAssumptions.priceChange}%</span>
+                </div>
+                <Slider
+                  value={[scenarioAssumptions.priceChange]}
+                  onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, priceChange: v }))}
+                  min={-20}
+                  max={30}
+                  step={1}
+                  data-testid="slider-price-change"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>Hiring Rate</span>
+                  <span className="font-mono">{scenarioAssumptions.hiringRate}%</span>
+                </div>
+                <Slider
+                  value={[scenarioAssumptions.hiringRate]}
+                  onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, hiringRate: v }))}
+                  min={0}
+                  max={30}
+                  step={1}
+                  data-testid="slider-hiring-rate"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span>Burn Reduction</span>
+                  <span className="font-mono">{scenarioAssumptions.burnReduction}%</span>
+                </div>
+                <Slider
+                  value={[scenarioAssumptions.burnReduction]}
+                  onValueChange={([v]) => setScenarioAssumptions(prev => ({ ...prev, burnReduction: v }))}
+                  min={0}
+                  max={40}
+                  step={1}
+                  data-testid="slider-burn-reduction"
+                />
+              </div>
+              
+              <Separator />
+              
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 rounded bg-secondary">
+                  <p className="text-xs text-muted-foreground">Revenue</p>
+                  <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedRevenue / 1000).toFixed(0)}K</p>
+                </div>
+                <div className="p-2 rounded bg-secondary">
+                  <p className="text-xs text-muted-foreground">Cash</p>
+                  <p className="text-sm font-mono font-medium">${(scenarioMetrics.projectedCash / 1000).toFixed(0)}K</p>
+                </div>
+                <div className="p-2 rounded bg-secondary">
+                  <p className="text-xs text-muted-foreground">Runway</p>
+                  <p className="text-sm font-mono font-medium">{scenarioMetrics.projectedRunway}mo</p>
+                </div>
+              </div>
+              
+              <Button 
+                className="w-full" 
+                onClick={runScenario}
+                disabled={isTyping}
+                data-testid="button-run-scenario"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Run Scenario
+              </Button>
+            </div>
+          )}
+          
+          {/* Notes Tab */}
+          {activePanelTab === 'notes' && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addNote()}
+                  placeholder="Add a note..."
+                  data-testid="input-new-note"
+                />
+                <Button 
+                  size="icon" 
+                  variant="outline" 
+                  onClick={addNote}
+                  disabled={!newNoteContent.trim()}
+                  data-testid="button-add-note"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {pinnedNotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No notes yet. Add one above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {pinnedNotes.map((note) => (
+                    <div 
+                      key={note.id} 
+                      className="p-3 rounded-lg bg-secondary/50 border border-border/30 group"
+                      data-testid={`note-${note.id}`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <p className="text-sm flex-1">{note.content}</p>
+                        <button
+                          onClick={() => deleteNote(note.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          data-testid={`button-delete-note-${note.id}`}
+                        >
+                          <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {note.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+      
+      {/* Floating Action Button */}
+      <div className={`fixed bottom-6 right-6 z-30 transition-all duration-300 ${isPanelOpen ? 'lg:right-[22rem]' : ''}`}>
+        <div className="relative">
+          {isFabOpen && (
+            <div className="absolute bottom-16 right-0 bg-card border border-border rounded-lg shadow-xl p-2 w-48" data-testid="fab-menu">
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover-elevate text-left"
+                onClick={() => handleFabAction('metrics')}
+                data-testid="fab-action-metrics"
+              >
+                <BarChart3 className="h-4 w-4 text-emerald-400" />
+                <span className="text-sm">View Metrics</span>
+              </button>
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover-elevate text-left"
+                onClick={() => handleFabAction('scenario')}
+                data-testid="fab-action-scenario"
+              >
+                <Sliders className="h-4 w-4 text-cyan-400" />
+                <span className="text-sm">Run Scenario</span>
+              </button>
+              <button
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover-elevate text-left"
+                onClick={() => handleFabAction('notes')}
+                data-testid="fab-action-notes"
+              >
+                <StickyNote className="h-4 w-4 text-amber-400" />
+                <span className="text-sm">Add Note</span>
+              </button>
+            </div>
+          )}
+          <Button
+            size="icon"
+            className="h-14 w-14 rounded-full shadow-lg"
+            onClick={() => setIsFabOpen(!isFabOpen)}
+            data-testid="button-fab"
+          >
+            {isFabOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </Button>
+        </div>
       </div>
     </div>
   );
