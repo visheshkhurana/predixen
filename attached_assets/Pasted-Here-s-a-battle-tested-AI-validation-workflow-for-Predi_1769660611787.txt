@@ -1,0 +1,276 @@
+Here’s a **battle-tested AI validation workflow** for Predixen-style uploads (PDF + Excel + CSV) that auto-verifies, flags anomalies, fixes what it safely can, and asks crisp questions when it can’t.
+
+## The core idea
+
+Treat every upload as a **data pipeline with gates**:
+
+1. **Ingest + Parse** → 2) **Normalize** → 3) **Validate (rules + ML/LLM)** → 4) **Reconcile sources** → 5) **Repair** → 6) **Explain + Ask** → 7) **Lock + Audit** → 8) **Feed Copilot + Simulator**
+
+You’ll get: fewer “0 / N/A everywhere”, consistent currency/timebase, and a clean “truth” dataset the simulator can trust.
+
+---
+
+## System architecture (agents + responsibilities)
+
+### A) Extractor Agent (Deterministic)
+
+**Goal:** pull structured tables from PDF/Excel reliably.
+
+* PDF: use table extraction + OCR fallback + header inference
+* Excel/CSV: sheet detection + column mapping + row grouping
+  **Output:** `raw_tables[]` with provenance (source file, sheet/page, cell refs).
+
+### B) Normalizer Agent (Deterministic + LLM-assisted mapping)
+
+**Goal:** convert messy inputs into canonical schema.
+
+* Detect: currency (INR/USD), scale (₹ vs ₹ Lakhs vs ₹ Cr), units (monthly/quarterly/annual)
+* Convert dates to `YYYY-MM`, align fiscal years
+* Map synonyms: “Payroll” ~ “Salaries” ~ “People cost”
+  **Output:** `normalized_facts` + `mapping_decisions` (every assumption logged).
+
+### C) Validator Agent (Rules engine + LLM critic)
+
+**Goal:** catch nonsense early and label severity.
+
+* Rule checks (fast): arithmetic, ranges, missingness, sign conventions
+* LLM checks (smart): semantic sanity (“profitable but burn negative?”, “revenue is 0 but COGS > 0?”)
+  **Output:** `issues[]` with severity + confidence + suggested fixes.
+
+### D) Reconciler Agent (Source-of-truth builder)
+
+**Goal:** resolve conflicts across sources (PDF vs Excel vs manual inputs).
+
+* Weighted trust: Excel cell values > structured PDF tables > OCR text
+* Detect duplicates (same metric repeated in different places)
+  **Output:** `truth_dataset` + `conflict_report`.
+
+### E) Repair Agent (Safe auto-fix + propose fix)
+
+**Goal:** automatically fix only what’s safe; otherwise propose.
+**Safe auto-fixes:**
+
+* Currency conversion if rate provided or file declares currency
+* Timebase conversions if explicit (monthly → annual)
+* Fill derived metrics: burn = expenses − revenue, runway = cash / burn (with sign logic)
+* “N/A” -> compute if inputs exist
+  **Not safe:** changing actual numbers without traceability → ask user.
+
+### F) Interviewer Copilot (Conversational)
+
+**Goal:** ask *minimum* questions to unblock correctness.
+
+* Asks 3–7 questions max, in priority order, with answer buttons.
+* Example: “Is revenue monthly or annual?”, “Is payroll ₹30,000 or ₹30,00,000 (30L)?”
+  **Output:** user-confirmed overrides → updated `truth_dataset`.
+
+### G) Auditor (Governance)
+
+**Goal:** keep a full audit trail for trust + debugging.
+
+* Every derived value stores:
+
+  * source(s), formula, version, timestamp, agent decision notes
+
+---
+
+## Canonical data model (what everything maps into)
+
+### 1) Company & assumptions
+
+* `currency`: INR/USD/…
+* `scale`: unit / thousands / lakhs / crores
+* `time_granularity`: monthly / quarterly / annual
+* `fiscal_year_start_month`
+
+### 2) Financial facts (time series)
+
+* `revenue[month]`
+* `cogs[month]`
+* `opex_by_category[month][category]` (payroll, marketing, rent, other)
+* `cash_balance[month]`
+* `debt[month]` (optional)
+
+### 3) Derived metrics (computed)
+
+* `gross_margin`, `net_burn`, `runway_months`
+* `revenue_growth_mom`, `revenue_growth_yoy`
+* `concentration_top5` (needs customer revenue breakdown)
+
+### 4) Provenance (mandatory)
+
+Every numeric field includes:
+
+* `value`
+* `confidence`
+* `sources[]` (file id, sheet/page, cell/range)
+* `derivation` (formula if computed)
+
+---
+
+## Validation rules (what gets flagged)
+
+### Tier 1: Structural (hard fail)
+
+* Missing currency OR timebase
+* No time series for revenue/opex/cash (sim can’t run)
+* Dates not parseable
+
+### Tier 2: Arithmetic & accounting (high severity)
+
+* Revenue = 0 but expenses > 0 and cash changes inconsistent
+* Payroll wildly low/high relative to headcount (if headcount exists)
+* Burn sign mismatch: profitable month but “net burn” shown as negative or vice versa
+* Runway computed when burn <= 0 (should show “infinite / cash-generating”)
+
+### Tier 3: Plausibility (medium severity)
+
+* Growth = 0 for all months while revenue varies
+* Concentration = N/A when customer breakdown exists
+* Churn = 0 with subscription metrics present
+
+### Tier 4: Completeness (low severity)
+
+* Optional metrics missing (CAC, churn, ARPU) → ask if SaaS
+
+---
+
+## Conflict resolution policy (PDF vs Excel vs manual)
+
+Use explicit deterministic policy:
+
+1. **User-confirmed values** (highest)
+2. **Excel cell values** (structured, less lossy)
+3. **PDF tables** (structured extraction)
+4. **PDF OCR text / narrative** (lowest)
+
+If conflicts remain:
+
+* Keep both as candidates
+* Ask the user one targeted question
+* Log the decision
+
+---
+
+## UX flow inside Predixen (what user sees)
+
+### Upload Step → “Truth Scan” Gate
+
+**A single screen** before simulation:
+
+**Left:** “What we found” (key metrics)
+**Right:** “Issues & Fixes” with 3 tabs:
+
+1. **Auto-fixed** (green)
+2. **Needs confirmation** (yellow, 1-click buttons)
+3. **Blocked** (red, must answer)
+
+Each issue is phrased like:
+
+* “Payroll looks like ₹30,000/month — is this **₹30,000** or **₹30,00,000 (30L)**?”
+  Buttons: `₹30K` / `₹30L` / `Enter custom`
+
+When resolved, the simulator unlocks.
+
+---
+
+## “Repair” logic (the safe formulas)
+
+* **Net burn (monthly)** = `opex_total + cogs − revenue`
+
+  * If negative → show “Net profit” not “-burn”
+
+* **Runway months**:
+
+  * If `burn <= 0`: runway = “Cash-generating”
+  * Else runway = `cash / burn`
+
+* **Revenue growth**:
+
+  * MoM = `(rev_t − rev_t-1) / rev_t-1` (handle rev_t-1 = 0 gracefully)
+  * If multiple months missing → show “insufficient data” not 0
+
+---
+
+## How the LLM should be used (safely)
+
+Use the LLM for:
+
+* Column mapping + category classification
+* Explaining anomalies in plain English
+* Generating user questions
+* Suggesting possible scale/currency mistakes
+
+**Do NOT let the LLM write numeric truth directly** without citing source cells/ranges.
+
+---
+
+## Storage & versioning (critical for “refer later” Copilot)
+
+When a file is uploaded:
+
+* Save original file + parsed tables + normalized dataset + truth dataset
+* Version them (e.g. `company_id/upload_id/version`)
+* Copilot always uses latest **truth dataset**, but can inspect history:
+
+  * “Why did payroll change?” → show audit trail
+
+---
+
+## The “Validation Report” object (what you persist)
+
+Store a JSON blob per upload:
+
+* `summary` (coverage %, confidence, timebase, currency)
+* `issues[]` (id, severity, metric, evidence, suggestion)
+* `decisions[]` (what changed and why)
+* `truth_dataset_pointer`
+
+This becomes the single source for:
+
+* UI “Truth Scan”
+* Copilot context
+* Debugging “why is runway same across scenarios?”
+
+---
+
+## Copy-paste system prompts (agents)
+
+### Validator Agent prompt (LLM critic)
+
+* Inputs: `normalized_facts`, `derived_metrics`, `provenance`, `company_assumptions`
+* Output strict JSON `issues[]`
+  Key instructions:
+* Flag inconsistent signs
+* Never invent values
+* Always cite evidence from provenance
+
+### Interviewer Copilot prompt
+
+* Inputs: top unresolved `issues[]`
+* Output: max 7 questions ranked by “impact on simulation correctness”
+* Provide button options if likely
+
+(If you want, I can generate these prompts exactly in your Replit-friendly format + JSON schemas.)
+
+---
+
+## Implementation notes (fast path)
+
+* Use a **rules engine** first (cheap, deterministic)
+* LLM runs only when:
+
+  * mapping confidence < threshold
+  * severity >= medium
+  * conflicts exist
+* Cache LLM outputs per file hash
+* Add a “developer mode” panel: view raw extraction + mapping
+
+---
+
+If you tell me what your stack is for Predixen right now (Node/TS? Python? Prisma? DB?), I’ll turn this into a **single copy-paste Replit prompt** with:
+
+* DB schema (Upload, ParsedTable, TruthDataset, ValidationIssue, DecisionLog)
+* API endpoints
+* UI screens (“Truth Scan”)
+* Agent prompts + orchestration logic + confidence scoring.
