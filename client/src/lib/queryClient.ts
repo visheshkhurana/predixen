@@ -1,21 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-
-class ApiError extends Error {
-  status: number;
-  code?: string;
-  detail?: any;
-  upload_id?: string;
-  
-  constructor(status: number, message: string, detail?: any) {
-    super(message);
-    this.status = status;
-    this.detail = detail;
-    if (detail && typeof detail === 'object') {
-      this.code = detail.code;
-      this.upload_id = detail.upload_id;
-    }
-  }
-}
+import { ApiError } from "./errors";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
