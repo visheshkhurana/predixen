@@ -31,6 +31,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
+import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
@@ -282,18 +283,18 @@ export default function ScenariosPage() {
       setActiveTab('results');
       toast({ title: 'Simulation complete!' });
     } catch (err: any) {
-      const isTruthScanRequired = 
-        err?.code === 'TRUTH_SCAN_REQUIRED' || 
-        err?.detail?.code === 'TRUTH_SCAN_REQUIRED' ||
-        err?.status === 409 ||
-        err?.message?.includes('TRUTH_SCAN_REQUIRED');
-      
-      if (isTruthScanRequired) {
-        const uploadId = err?.upload_id || err?.detail?.upload_id;
+      if (isTruthScanRequired(err)) {
+        const uploadId = getTruthScanUploadId(err);
         if (uploadId) {
           setTruthScanModal({ open: true, uploadId });
-          return;
+        } else {
+          toast({ 
+            title: 'Data Validation Required', 
+            description: 'Please validate your financial data in the Truth Scan before running simulations.', 
+            variant: 'destructive' 
+          });
         }
+        return;
       }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -312,18 +313,18 @@ export default function ScenariosPage() {
       setActiveTab('results');
       toast({ title: 'Simulation complete!' });
     } catch (err: any) {
-      const isTruthScanRequired = 
-        err?.code === 'TRUTH_SCAN_REQUIRED' || 
-        err?.detail?.code === 'TRUTH_SCAN_REQUIRED' ||
-        err?.status === 409 ||
-        err?.message?.includes('TRUTH_SCAN_REQUIRED');
-      
-      if (isTruthScanRequired) {
-        const uploadId = err?.upload_id || err?.detail?.upload_id;
+      if (isTruthScanRequired(err)) {
+        const uploadId = getTruthScanUploadId(err);
         if (uploadId) {
           setTruthScanModal({ open: true, uploadId });
-          return;
+        } else {
+          toast({ 
+            title: 'Data Validation Required', 
+            description: 'Please validate your financial data in the Truth Scan before running simulations.', 
+            variant: 'destructive' 
+          });
         }
+        return;
       }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -342,6 +343,19 @@ export default function ScenariosPage() {
       setMultiSimResults(result);
       toast({ title: 'All scenarios simulated successfully!' });
     } catch (err: any) {
+      if (isTruthScanRequired(err)) {
+        const uploadId = getTruthScanUploadId(err);
+        if (uploadId) {
+          setTruthScanModal({ open: true, uploadId });
+        } else {
+          toast({ 
+            title: 'Data Validation Required', 
+            description: 'Please validate your financial data in the Truth Scan before running simulations.', 
+            variant: 'destructive' 
+          });
+        }
+        return;
+      }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };
@@ -358,6 +372,19 @@ export default function ScenariosPage() {
       setSensitivityResults(result);
       toast({ title: 'Sensitivity analysis complete!' });
     } catch (err: any) {
+      if (isTruthScanRequired(err)) {
+        const uploadId = getTruthScanUploadId(err);
+        if (uploadId) {
+          setTruthScanModal({ open: true, uploadId });
+        } else {
+          toast({ 
+            title: 'Data Validation Required', 
+            description: 'Please validate your financial data in the Truth Scan before running simulations.', 
+            variant: 'destructive' 
+          });
+        }
+        return;
+      }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };
@@ -395,6 +422,19 @@ export default function ScenariosPage() {
       setEnhancedResults(result);
       toast({ title: 'Enhanced simulation complete!' });
     } catch (err: any) {
+      if (isTruthScanRequired(err)) {
+        const uploadId = getTruthScanUploadId(err);
+        if (uploadId) {
+          setTruthScanModal({ open: true, uploadId });
+        } else {
+          toast({ 
+            title: 'Data Validation Required', 
+            description: 'Please validate your financial data in the Truth Scan before running simulations.', 
+            variant: 'destructive' 
+          });
+        }
+        return;
+      }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };

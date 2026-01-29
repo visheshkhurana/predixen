@@ -1,21 +1,7 @@
-const API_BASE = '/api';
+import { ApiError } from '@/lib/errors';
+export { ApiError };
 
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  detail?: any;
-  upload_id?: string;
-  
-  constructor(status: number, message: string, detail?: any) {
-    super(message);
-    this.status = status;
-    this.detail = detail;
-    if (detail && typeof detail === 'object') {
-      this.code = detail.code;
-      this.upload_id = detail.upload_id;
-    }
-  }
-}
+const API_BASE = '/api';
 
 // Helper to get token from localStorage or Zustand persisted storage
 function getAuthToken(): string | null {
@@ -145,7 +131,9 @@ export const api = {
       
       if (!response.ok) {
         const error = await response.json();
-        throw new ApiError(response.status, error.detail);
+        const detail = error.detail;
+        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
       }
       
       return response.json();
@@ -178,7 +166,9 @@ export const api = {
       
       if (!response.ok) {
         const error = await response.json();
-        throw new ApiError(response.status, error.detail);
+        const detail = error.detail;
+        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
       }
       
       return response.json();
@@ -199,7 +189,9 @@ export const api = {
       
       if (!response.ok) {
         const error = await response.json();
-        throw new ApiError(response.status, error.detail);
+        const detail = error.detail;
+        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
       }
       
       return response.json();
