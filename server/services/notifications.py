@@ -183,6 +183,197 @@ async def send_deployment_notification(
     )
 
 
+async def send_ai_copilot_feature_update(
+    to_emails: Optional[List[str]] = None,
+    author: str = "Predixen Team"
+) -> dict:
+    """
+    Send feature update email about the new AI Copilot features with click-to-test button.
+    
+    Args:
+        to_emails: List of email addresses (defaults to NOTIFICATION_RECIPIENTS)
+        author: Name of the person sending the update
+    
+    Returns:
+        Dict with success status and list of sent/failed emails
+    """
+    import os
+    
+    if to_emails is None:
+        to_emails = NOTIFICATION_RECIPIENTS
+    
+    try:
+        credentials = await get_resend_credentials()
+        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 40px 20px;">
+    <div style="max-width: 640px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; text-align: center; line-height: 48px; color: #ffffff; font-weight: 700; font-size: 24px;">P</div>
+        </div>
+        
+        <div style="background-color: #1e293b; border-radius: 16px; overflow: hidden; border: 1px solid #334155;">
+            <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 32px; text-align: center;">
+                <div style="display: inline-block; background-color: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; margin-bottom: 16px;">
+                    <span style="color: #ffffff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">New Feature Release</span>
+                </div>
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; line-height: 1.2;">Real-Time AI Simulation Copilot</h1>
+                <p style="color: rgba(255,255,255,0.8); margin: 12px 0 0 0; font-size: 14px;">Deployed on {timestamp}</p>
+            </div>
+            
+            <div style="padding: 32px;">
+                <p style="color: #e2e8f0; font-size: 16px; line-height: 1.7; margin: 0 0 24px 0;">
+                    We've just shipped a major upgrade to the simulation experience. Now, as you adjust scenario parameters, an <strong style="color: #a5b4fc;">AI copilot provides real-time guidance</strong> explaining exactly how each change impacts your runway, survival probability, and cash position.
+                </p>
+                
+                <div style="background-color: #0f172a; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                    <h3 style="color: #22c55e; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">What's New</h3>
+                    
+                    <div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #6366f1;">
+                        <h4 style="color: #ffffff; font-size: 16px; font-weight: 600; margin: 0 0 6px 0;">Context-Aware AI Guidance</h4>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            As you adjust pricing, growth, burn rate, margins, churn, or CAC sliders, the AI instantly explains the impact on your key metrics with high/medium/low severity indicators.
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #8b5cf6;">
+                        <h4 style="color: #ffffff; font-size: 16px; font-weight: 600; margin: 0 0 6px 0;">Narrative Result Summaries</h4>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            After running simulations, get plain-language explanations of your results including health status, top 5 key drivers ranked by impact, and actionable recommendations.
+                        </p>
+                    </div>
+                    
+                    <div style="padding-left: 24px; border-left: 3px solid #0ea5e9;">
+                        <h4 style="color: #ffffff; font-size: 16px; font-weight: 600; margin: 0 0 6px 0;">Smart Debouncing</h4>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            AI calls are optimized with 300ms debounce so you get smooth slider interactions without API overload while still getting instant feedback.
+                        </p>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="{base_url}/scenarios" style="display: inline-block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 10px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);">Test It Now</a>
+                </div>
+                
+                <p style="text-align: center; color: #64748b; font-size: 13px; margin: 0;">
+                    Click the button above to open the Scenarios page and try the new AI copilot.
+                </p>
+            </div>
+            
+            <div style="background-color: #0f172a; padding: 24px 32px; border-top: 1px solid #334155;">
+                <h4 style="color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 12px 0;">How to Test</h4>
+                <ol style="color: #e2e8f0; font-size: 14px; line-height: 1.8; margin: 0; padding-left: 20px;">
+                    <li>Go to <strong>Scenarios</strong> page</li>
+                    <li>Click <strong>"New Scenario"</strong> or edit an existing one</li>
+                    <li>Adjust any parameter slider (pricing, growth, burn, etc.)</li>
+                    <li>Watch the AI guidance panel update in real-time</li>
+                    <li>Run a simulation and see the AI narrative summary</li>
+                </ol>
+            </div>
+            
+            <div style="padding: 20px 32px; border-top: 1px solid #334155; text-align: center;">
+                <p style="color: #64748b; font-size: 12px; margin: 0;">
+                    Questions or feedback? Reply directly to this email.<br>
+                    <span style="color: #6366f1;">— {author}</span>
+                </p>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 24px;">
+            <p style="color: #475569; font-size: 11px; margin: 0;">
+                Predixen Intelligence OS • Automated Feature Update
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        text_content = f"""
+REAL-TIME AI SIMULATION COPILOT
+New Feature Release - Deployed on {timestamp}
+
+We've just shipped a major upgrade to the simulation experience. Now, as you adjust scenario parameters, an AI copilot provides real-time guidance explaining exactly how each change impacts your runway, survival probability, and cash position.
+
+WHAT'S NEW:
+
+1. Context-Aware AI Guidance
+   As you adjust pricing, growth, burn rate, margins, churn, or CAC sliders, the AI instantly explains the impact on your key metrics with high/medium/low severity indicators.
+
+2. Narrative Result Summaries
+   After running simulations, get plain-language explanations of your results including health status, top 5 key drivers ranked by impact, and actionable recommendations.
+
+3. Smart Debouncing
+   AI calls are optimized with 300ms debounce so you get smooth slider interactions without API overload while still getting instant feedback.
+
+HOW TO TEST:
+1. Go to Scenarios page
+2. Click "New Scenario" or edit an existing one
+3. Adjust any parameter slider (pricing, growth, burn, etc.)
+4. Watch the AI guidance panel update in real-time
+5. Run a simulation and see the AI narrative summary
+
+Test it now: {base_url}/scenarios
+
+Questions or feedback? Reply directly to this email.
+— {author}
+
+---
+Predixen Intelligence OS • Automated Feature Update
+"""
+        
+        sent = []
+        failed = []
+        
+        async with httpx.AsyncClient() as client:
+            for email in to_emails:
+                response = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {credentials['api_key']}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "from": "Predixen Updates <updates@predixen.app>",
+                        "to": [email],
+                        "subject": "[Predixen] New Feature: Real-Time AI Simulation Copilot",
+                        "html": html_content,
+                        "text": text_content
+                    }
+                )
+                
+                if response.status_code in (200, 201):
+                    sent.append(email)
+                    print(f"Feature update sent to: {email}")
+                else:
+                    failed.append(email)
+                    print(f"Failed to send to {email}: {response.status_code} - {response.text}")
+        
+        return {
+            "success": len(failed) == 0,
+            "sent": sent,
+            "failed": failed,
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+        }
+        
+    except Exception as e:
+        print(f"Error sending AI copilot feature update: {e}")
+        return {
+            "success": False,
+            "sent": [],
+            "failed": to_emails or [],
+            "error": str(e)
+        }
+
+
 async def send_beta_invite_email(
     to_emails: List[str],
     invited_by: str = "Predixen Team"
