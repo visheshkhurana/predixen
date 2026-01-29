@@ -61,7 +61,7 @@ async def send_feature_notification(
     changes: List[str],
     category: str = "Feature Update",
     author: Optional[str] = None,
-    from_email: str = "Predixen Updates <changes@predixen.app>"
+    from_email: str = "Predixen Updates <newchange@predixen.app>"
 ) -> bool:
     """
     Send email notification about a new feature or change.
