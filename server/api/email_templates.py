@@ -11,6 +11,7 @@ from server.core.security import get_current_user
 from server.models import User, UserRole
 from server.email.templates import TEMPLATE_CONFIGS, get_template_preview
 from server.email.service import is_email_configured, send_email
+from server.services.notifications import send_ai_copilot_feature_update, NOTIFICATION_RECIPIENTS
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
@@ -152,4 +153,36 @@ async def send_test_email(
         "success": True,
         "message": f"Test email sent to {request.to_email}",
         "template_type": request.template_type
+    }
+
+
+class FeatureUpdateRequest(BaseModel):
+    emails: Optional[List[str]] = None
+    author: str = "Predixen Team"
+
+
+@router.post("/send-ai-copilot-update")
+async def send_ai_copilot_update_emails(
+    request: Optional[FeatureUpdateRequest] = None,
+    current_user: User = Depends(require_admin)
+) -> dict:
+    """Send AI Copilot feature update emails to specified recipients or all notification recipients."""
+    req = request if request else FeatureUpdateRequest()
+    
+    result = await send_ai_copilot_feature_update(
+        to_emails=req.emails,
+        author=req.author
+    )
+    
+    if not result["success"] and "error" in result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["error"]
+        )
+    
+    return {
+        "success": result["success"],
+        "sent_to": result["sent"],
+        "failed": result["failed"],
+        "message": result["message"]
     }
