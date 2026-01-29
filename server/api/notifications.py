@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
+    send_early_member_invite,
     parse_changelog,
     NOTIFICATION_RECIPIENTS
 )
@@ -97,3 +98,21 @@ async def get_changelog() -> Dict[str, Any]:
     Get the parsed changelog with latest version info.
     """
     return parse_changelog()
+
+
+class EarlyMemberInviteRequest(BaseModel):
+    to_emails: Optional[List[str]] = None
+    invited_by: str = "Nikita Luther, Founder"
+
+
+@router.post("/early-member-invite")
+async def trigger_early_member_invite(request: EarlyMemberInviteRequest) -> Dict[str, Any]:
+    """
+    Send early member invitation emails individually to each recipient.
+    If no emails provided, sends to default NOTIFICATION_RECIPIENTS.
+    """
+    result = await send_early_member_invite(
+        to_emails=request.to_emails,
+        invited_by=request.invited_by
+    )
+    return result
