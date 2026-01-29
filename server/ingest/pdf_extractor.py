@@ -10,7 +10,7 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-MAX_PDF_SIZE_MB = 10
+MAX_PDF_SIZE_MB = 25
 MIN_TEXT_LENGTH = 100  # Minimum characters to consider text extraction successful
 
 
