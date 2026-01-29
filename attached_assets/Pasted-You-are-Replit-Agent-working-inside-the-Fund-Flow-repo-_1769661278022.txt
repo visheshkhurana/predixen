@@ -1,0 +1,385 @@
+You are Replit Agent working inside the Fund-Flow repo.
+
+## Objective
+
+Implement a “Truth Scan” validation gate after uploads (PDF/Excel/CSV/manual baseline) and before /simulation-jobs/run. Reuse existing models:
+
+* ImportSession (parsed/verified/saved)
+* FinancialMetricPoint (metric-level provenance)
+* FinancialRecord (period aggregates + derived metrics)
+* Dataset (CSV datasets metadata)
+
+Add a dedicated Truth Scan layer:
+
+* TruthDataset = canonical monthly time series + derived metrics + assumptions + provenance pointers
+* ValidationReport/Issues = what’s wrong, what was auto-fixed, what needs user confirmation
+* DecisionLog = audit trail of fixes & user overrides
+  Then block /simulation-jobs/run until a finalized TruthDataset exists.
+
+---
+
+# 1) Minimal database additions (Alembic + SQLAlchemy)
+
+### A) Add columns to existing tables (small, high leverage)
+
+## ImportSession
+
+Extend status flow to include Truth Scan:
+
+* status enum/string now supports: parsed -> verified -> truth_scan -> saved
+  (Keep backward compatible; do not break existing values.)
+
+Add optional metadata:
+
+* truth_scan_upload_id (UUID, nullable)  // points to Upload row below
+* truth_dataset_id (UUID, nullable)      // latest dataset for this import session
+
+## FinancialMetricPoint
+
+Keep as-is, but enforce/standardize:
+
+* unit should represent currency (USD/INR), NOT “Lakhs/Crores”. Add scale to TruthDataset assumptions.
+* Add optional: normalized_value (Float, nullable) if you want to store post-scale normalization; otherwise keep normalization inside TruthDataset JSON.
+
+### B) New tables (Truth Scan layer)
+
+## truth_scan_uploads
+
+Represents a “Truth Scan run input pointer” (ImportSession or Dataset or manual baseline).
+
+* id UUID pk
+* company_id int fk companies.id (indexed)
+* source_kind enum: IMPORT_SESSION | DATASET | MANUAL_BASELINE
+* import_session_id int fk import_sessions.id nullable (indexed)
+* dataset_id int fk datasets.id nullable (indexed)
+* manual_baseline_payload jsonb nullable  // store baseline metrics for audit if needed
+* file_hash_sha256 string indexed nullable
+* status enum: RECEIVED | NORMALIZED | VALIDATED | NEEDS_USER | FINALIZED | FAILED
+* created_at, updated_at
+
+## truth_datasets
+
+* id UUID pk
+
+* company_id int fk companies.id (indexed)
+
+* source_upload_id UUID fk truth_scan_uploads.id (indexed)
+
+* version int NOT NULL (indexed; monotonic per company)
+
+* finalized boolean default false (indexed)
+
+* is_latest boolean default false (indexed)
+
+* assumptions jsonb NOT NULL:
+  {currency: "USD"|"INR"|..., scale: "unit"|"thousands"|"lakhs"|"crores", time_granularity:"monthly"|"quarterly"|"annual", fiscal_year_start_month:int}
+
+* facts jsonb NOT NULL:
+  canonical monthly:
+  revenue[YYYY-MM], cogs[YYYY-MM], cash_balance[YYYY-MM]
+  opex_by_category[YYYY-MM][category] (payroll, marketing, rent, other_costs, opex_total)
+
+Each numeric field in JSON must have:
+{value, confidence, sources:[{import_session_id, metric_point_id?, financial_record_id?, row_index, source_label, source_type, unit, extraction_confidence, period}], derivation?}
+
+* derived jsonb NOT NULL:
+  net_burn_monthly, runway_months, gross_margin, growth_mom, growth_yoy, concentration_top5 (if available)
+
+* coverage jsonb NOT NULL (percent coverage by metric)
+
+* confidence_summary jsonb NOT NULL
+
+* created_at
+
+## validation_reports
+
+* id UUID pk
+* company_id int fk companies.id
+* source_upload_id UUID fk truth_scan_uploads.id (indexed)
+* truth_dataset_id UUID fk truth_datasets.id (indexed)
+* summary jsonb NOT NULL  (coverage%, key assumptions, confidence)
+* created_at
+
+## validation_issues
+
+* id UUID pk
+* report_id UUID fk validation_reports.id (indexed)
+* severity enum: BLOCKED | HIGH | MEDIUM | LOW
+* category enum: STRUCTURAL | ARITHMETIC | ACCOUNTING | PLAUSIBILITY | COMPLETENESS | CONFLICT
+* metric_key string indexed (e.g. "revenue", "opex.payroll", "assumptions.scale")
+* message string NOT NULL
+* evidence jsonb NOT NULL (MUST cite sources: metric_point ids / record ids / row_index / source_label)
+* suggestion jsonb nullable (button options)
+* can_autofix boolean default false
+* autofix_patch jsonb nullable (JSON patch ops against truth_datasets.facts/assumptions/derived)
+* status enum: OPEN | AUTO_FIXED | USER_NEEDED | RESOLVED | IGNORED
+* created_at, resolved_at
+
+## truth_decision_logs
+
+* id UUID pk
+* source_upload_id UUID fk truth_scan_uploads.id (indexed)
+* issue_id UUID fk validation_issues.id nullable
+* action enum: AUTO_FIX_APPLIED | USER_OVERRIDE_APPLIED | CONFLICT_RESOLVED | DATASET_FINALIZED
+* patch jsonb NOT NULL
+* rationale string
+* actor enum: SYSTEM | USER | ADMIN
+* created_at
+
+## companies
+
+Add:
+
+* latest_truth_dataset_id UUID nullable (indexed)
+
+Create alembic migrations + SQLAlchemy models for the new tables + new columns.
+
+---
+
+# 2) Truth Scan computation: use existing data first
+
+## Input sources
+
+A) ImportSession:
+
+* Use FinancialMetricPoint rows as the primary source of time series (period + metric_key + value/value_raw).
+* Optionally use FinancialRecord rows for cross-checks (period_start/end aggregates).
+
+B) Dataset:
+
+* For financial dataset type: pull from FinancialRecord rows produced by CSV ingestion.
+* For transactions/customers: only used to compute optional metrics (concentration, churn proxies) later.
+
+C) Manual baseline:
+
+* treat as one “period” (selected_period or current month), with low confidence unless user confirms.
+
+## Canonical mapping
+
+Map metric_key -> canonical:
+
+* revenue -> revenue
+* cogs -> cogs
+* cash_balance -> cash_balance
+* payroll -> opex_by_category.payroll
+* marketing_expense -> opex_by_category.marketing
+* other_costs -> opex_by_category.other_costs
+* opex (if present) -> opex_total
+  If both opex_total and categories exist, validate reconciliation.
+
+Use ImportSession.detected_time_granularity and detected_sign_convention as priors for assumptions, but still confirm if ambiguous.
+
+---
+
+# 3) Services: server/services/truth_scan.py
+
+Implement a deterministic pipeline:
+
+1. create_truth_scan_upload(company_id, source_kind, import_session_id|dataset_id|baseline_payload)
+2. infer_assumptions(upload):
+
+   * currency: from FinancialMetricPoint.unit if consistent; else company default; else NEEDS_USER (BLOCKED)
+   * scale: infer from labels if available in raw_data/extraction_summary; else assume "unit" with MEDIUM confidence and ask if values look 100x/1000x off
+   * time_granularity: from ImportSession.detected_time_granularity; else infer from period spacing
+3. build_truth_dataset(upload):
+
+   * Build monthly facts JSON with provenance:
+
+     * For each month+metric, store sources referencing metric_point ids (and record ids if used)
+     * confidence: map "high/medium/low" -> float (0.9/0.6/0.3)
+     * if value_raw exists and differs, store derivation note
+4. rule_validate(truth_dataset):
+   Implement the exact tiers:
+
+TIER 1 STRUCTURAL (BLOCKED)
+
+* missing currency OR time_granularity
+* no time series for revenue OR (opex_total or payroll/other_costs) OR cash_balance
+* dates not parseable to YYYY-MM
+
+TIER 2 ARITHMETIC/ACCOUNTING (HIGH)
+
+* Revenue=0 for all months but expenses>0 AND cash deltas inconsistent
+* Burn sign mismatch (profitable month but net_burn negative labeling)
+* Runway computed when burn<=0: must be “Cash-generating”
+* Net burn formula per month:
+  burn = (opex_total + cogs - revenue)
+  If burn < 0 => label as profit and set runway="Cash-generating"
+
+TIER 3 PLAUSIBILITY (MEDIUM)
+
+* growth==0 for all months while revenue varies
+* concentration N/A when customer breakdown exists
+* churn==0 when subscription metrics exist
+
+TIER 4 COMPLETENESS (LOW)
+
+* optional metrics missing
+
+CONFLICT
+
+* if multiple sources disagree for same month+metric beyond tolerance, create CONFLICT issue with both evidences.
+
+5. safe_repair(truth_dataset, issues):
+   Auto-fix ONLY:
+
+* derive net_burn_monthly using formula
+* runway logic with burn<=0 => “Cash-generating”
+* growth calculations, but if divide-by-zero or missing prev month => “insufficient data” not 0
+* fill N/A if inputs exist
+  Log truth_decision_logs(action=AUTO_FIX_APPLIED) with patch.
+
+6. llm_assist (optional, gated):
+   Use existing LLM router but only for:
+
+* ambiguous scale/currency/timebase detection from ImportSession.raw_data or extraction_summary
+* phrasing user questions + option buttons
+  NEVER invent numbers. Output JSON only.
+
+7. create_validation_report(truth_dataset, issues, decisions)
+   Persist validation_reports + validation_issues.
+
+8. finalize_truth_dataset(upload):
+   Allowed only if no OPEN BLOCKED issues.
+
+* mark truth_dataset.finalized=true, is_latest swap for company
+* set companies.latest_truth_dataset_id
+* update ImportSession.status="truth_scan" then "saved" when finalized (keep flow explicit)
+* log truth_decision_logs(DATASET_FINALIZED)
+
+---
+
+# 4) New API endpoints (FastAPI)
+
+Add routes:
+
+1. POST /truth-scan/from-import-session
+   Body: {company_id:int, import_session_id:int}
+
+* Creates truth_scan_upload (source_kind=IMPORT_SESSION)
+* Builds truth dataset + report
+* Returns {upload_id, truth_dataset_id, report_id, status, issues_summary}
+
+2. POST /truth-scan/from-dataset
+   Body: {company_id:int, dataset_id:int}
+
+* same return
+
+3. POST /truth-scan/from-manual-baseline
+   Body: {company_id:int, baseline_payload:object}
+
+* same return
+
+4. GET /truth-scan/uploads/{upload_id}
+   Return:
+
+* assumptions + coverage + confidence summary
+* key metrics snapshot latest month
+* issues grouped: auto_fixed, needs_confirmation, blocked
+* questions[] (max 7) generated from unresolved issues
+
+5. POST /truth-scan/uploads/{upload_id}/resolve
+   Body: {answers:[{metric_key, value|choice, notes?}]}
+
+* Apply override patch to truth_dataset.assumptions/facts (do not mutate original metric_points)
+* Log USER_OVERRIDE_APPLIED
+* Re-run validate + safe_repair + update report/issues
+* Return updated truth scan
+
+6. POST /truth-scan/uploads/{upload_id}/finalize
+
+* Enforce no BLOCKED issues open
+* finalize dataset and set company.latest_truth_dataset_id
+
+7. GET /companies/{company_id}/truth/latest
+
+* Return latest finalized truth dataset for simulator + copilot
+
+---
+
+# 5) Hook into existing flows (minimal changes)
+
+A) /imports/pdf and /imports/excel:
+After user clicks “Verify/Save” (where ImportSession.status becomes verified/saved), trigger:
+POST /truth-scan/from-import-session
+Frontend should route to Truth Scan screen with upload_id.
+
+B) CSV dataset upload:
+After dataset saved, trigger:
+POST /truth-scan/from-dataset
+
+C) manual baseline:
+After baseline saved, trigger:
+POST /truth-scan/from-manual-baseline
+
+---
+
+# 6) Gate /simulation-jobs/run (hard requirement)
+
+Modify POST /simulation-jobs/run:
+
+* Determine company_id from scenario_id (join scenario->company) or include company_id in request if easier.
+* Fetch companies.latest_truth_dataset_id
+* Ensure exists AND truth_dataset.finalized == true AND report has no OPEN BLOCKED issues
+  If not: return HTTP 409
+  {code:"TRUTH_SCAN_REQUIRED", message:"Simulation locked until Truth Scan completed", upload_id?, truth_dataset_id?}
+
+Simulator must read data ONLY from latest truth dataset (facts + assumptions + derived). Do NOT read directly from FinancialRecord/MetricPoint for simulation runs after this change.
+
+---
+
+# 7) Frontend: Truth Scan Gate UI
+
+Add route: /companies/:companyId/truth-scan?uploadId=...
+Layout:
+Left: “What we found”
+
+* currency/scale/timebase
+* latest month: Revenue, Opex, Cash, Net burn/Profit, Runway
+* coverage + confidence
+
+Right: tabs:
+
+* Auto-fixed (green)
+* Needs confirmation (yellow): render button options; “Enter custom”
+* Blocked (red): must answer
+
+CTA:
+
+* “Finalize & Continue” disabled until no blocked issues.
+
+Developer mode (dev=1):
+
+* show metric points used (id, period, metric_key, value_raw/value, unit, confidence, row_index, source_label)
+
+Use TanStack Query hooks for:
+
+* get truth scan
+* resolve answers
+* finalize
+
+---
+
+# 8) Tests (pytest)
+
+* net burn formula correct
+* runway cash-generating when burn<=0
+* growth insufficient data when prev=0 or missing
+* simulation endpoint returns 409 without finalized truth dataset
+* finalize fails with blocked issues
+* conflict issue created when two sources disagree
+
+---
+
+# 9) Deliverables
+
+* migrations + models
+* truth_scan service module
+* API routes
+* frontend Truth Scan screen
+* simulation gating
+* tests
+  Ensure end-to-end:
+  upload -> verify -> truth scan -> resolve -> finalize -> simulation runs.
+
+Do not hand-wave. Implement within repo structure (server/models, server/routes, client/src).

@@ -1,8 +1,19 @@
 const API_BASE = '/api';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  status: number;
+  code?: string;
+  detail?: any;
+  upload_id?: string;
+  
+  constructor(status: number, message: string, detail?: any) {
     super(message);
+    this.status = status;
+    this.detail = detail;
+    if (detail && typeof detail === 'object') {
+      this.code = detail.code;
+      this.upload_id = detail.upload_id;
+    }
   }
 }
 
@@ -53,11 +64,21 @@ async function request<T>(
   
   if (!response.ok) {
     let errorMessage = 'Request failed';
+    let detail: any = null;
+    
     try {
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const error = await response.json();
-        errorMessage = error.detail || error.message || `Request failed (${response.status})`;
+        detail = error.detail || error;
+        if (typeof detail === 'object') {
+          errorMessage = detail.message || error.message || `Request failed (${response.status})`;
+        } else if (typeof detail === 'string') {
+          errorMessage = detail;
+          detail = null;
+        } else {
+          errorMessage = error.message || `Request failed (${response.status})`;
+        }
       } else {
         const text = await response.text();
         errorMessage = text || `Request failed (${response.status})`;
@@ -66,7 +87,7 @@ async function request<T>(
       errorMessage = `Request failed (${response.status})`;
     }
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
-    throw new ApiError(response.status, errorMessage);
+    throw new ApiError(response.status, errorMessage, detail);
   }
   
   return response.json();

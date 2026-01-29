@@ -61,7 +61,10 @@ class SourceType(str, enum.Enum):
 
 
 class ImportSession(Base):
-    """Tracks an import session from file upload through verification to save."""
+    """Tracks an import session from file upload through verification to save.
+    
+    Status flow: parsed -> verified -> truth_scan -> saved
+    """
     __tablename__ = "import_sessions"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -83,11 +86,15 @@ class ImportSession(Base):
     
     raw_data = Column(JSON, nullable=True)
     
+    truth_scan_upload_id = Column(String(36), nullable=True, index=True)
+    truth_dataset_id = Column(String(36), nullable=True, index=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     company = relationship("Company", back_populates="import_sessions")
     metric_points = relationship("FinancialMetricPoint", back_populates="import_session", cascade="all, delete-orphan")
+    truth_scan_upload = relationship("TruthScanUpload", back_populates="import_session", foreign_keys="TruthScanUpload.import_session_id")
 
 
 class FinancialMetricPoint(Base):
