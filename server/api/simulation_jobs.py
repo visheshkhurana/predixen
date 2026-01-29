@@ -10,7 +10,9 @@ from server.core.db import get_db, SessionLocal
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.scenario import Scenario
+from server.models.company import Company
 from server.models.simulation_job import SimulationJob, ScenarioVersion, SensitivityAnalysis, SimulationJobStatus
+from server.models.truth_scan import TruthDataset, TruthScanUpload
 from server.simulate.enhanced_monte_carlo import (
     run_enhanced_monte_carlo, 
     run_sensitivity_analysis,
@@ -188,11 +190,37 @@ async def run_simulation(
     request: RunSimulationRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    skip_truth_check: bool = False,
 ):
     scenario = db.query(Scenario).filter(Scenario.id == request.scenario_id).first()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    
+    if not skip_truth_check:
+        company = db.query(Company).filter(Company.id == scenario.company_id).first()
+        if company:
+            truth_dataset_id = company.latest_truth_dataset_id
+            
+            if truth_dataset_id:
+                truth_dataset = db.query(TruthDataset).filter(
+                    TruthDataset.id == truth_dataset_id
+                ).first()
+                
+                if truth_dataset and not truth_dataset.finalized:
+                    upload = db.query(TruthScanUpload).filter(
+                        TruthScanUpload.id == truth_dataset.source_upload_id
+                    ).first()
+                    
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "TRUTH_SCAN_REQUIRED",
+                            "message": "Simulation locked until Truth Scan completed",
+                            "upload_id": upload.id if upload else None,
+                            "truth_dataset_id": truth_dataset_id,
+                        }
+                    )
     
     job_id = str(uuid.uuid4())
     config = request.config or SimulationConfigRequest()

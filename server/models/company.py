@@ -13,8 +13,9 @@ class Company(Base):
     industry = Column(String, nullable=True)
     stage = Column(String, nullable=True)
     currency = Column(String, default="USD")
-    description = Column(String, nullable=True)  # Business summary
+    description = Column(String, nullable=True)
     metadata_json = Column(JSON, nullable=True, default=dict)
+    latest_truth_dataset_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="companies")
@@ -23,6 +24,9 @@ class Company(Base):
     transaction_records = relationship("TransactionRecord", back_populates="company")
     customer_records = relationship("CustomerRecord", back_populates="company")
     truth_scans = relationship("TruthScan", back_populates="company")
+    truth_scan_uploads = relationship("TruthScanUpload", back_populates="company")
+    truth_datasets = relationship("TruthDataset", back_populates="company")
+    validation_reports = relationship("ValidationReport", back_populates="company")
     scenarios = relationship("Scenario", back_populates="company")
     chat_sessions = relationship("ChatSession", back_populates="company")
     import_sessions = relationship("ImportSession", back_populates="company")

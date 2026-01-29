@@ -20,3 +20,4 @@ class Dataset(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     company = relationship("Company", back_populates="datasets")
+    truth_scan_upload = relationship("TruthScanUpload", back_populates="dataset", foreign_keys="TruthScanUpload.dataset_id")

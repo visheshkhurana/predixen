@@ -17,7 +17,21 @@ from server.models.financial import (
 from server.models.transaction import TransactionRecord
 from server.models.customer import CustomerRecord
 from server.models.benchmark import Benchmark
-from server.models.truth_scan import TruthScan
+from server.models.truth_scan import (
+    TruthScan,
+    TruthScanUpload,
+    TruthDataset,
+    ValidationReport,
+    ValidationIssue,
+    TruthDecisionLog,
+    SourceKind,
+    TruthScanStatus,
+    IssueSeverity,
+    IssueCategory,
+    IssueStatus,
+    DecisionAction,
+    DecisionActor,
+)
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
@@ -64,6 +78,18 @@ __all__ = [
     "CustomerRecord",
     "Benchmark",
     "TruthScan",
+    "TruthScanUpload",
+    "TruthDataset",
+    "ValidationReport",
+    "ValidationIssue",
+    "TruthDecisionLog",
+    "SourceKind",
+    "TruthScanStatus",
+    "IssueSeverity",
+    "IssueCategory",
+    "IssueStatus",
+    "DecisionAction",
+    "DecisionActor",
     "Scenario",
     "SimulationRun",
     "Decision",

@@ -463,6 +463,123 @@ def ensure_conversations_tables(engine: Engine) -> None:
             logger.debug(f"Conversations tables may already exist: {e}")
 
 
+def ensure_truth_scan_tables(engine: Engine) -> None:
+    """Create Truth Scan validation layer tables."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS truth_scan_uploads (
+                    id VARCHAR(36) PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    source_kind VARCHAR(20) NOT NULL,
+                    import_session_id INTEGER REFERENCES import_sessions(id),
+                    dataset_id INTEGER REFERENCES datasets(id),
+                    manual_baseline_payload JSONB,
+                    file_hash_sha256 VARCHAR(64),
+                    status VARCHAR(20) DEFAULT 'received' NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tsu_company ON truth_scan_uploads(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tsu_import_session ON truth_scan_uploads(import_session_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tsu_dataset ON truth_scan_uploads(dataset_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tsu_hash ON truth_scan_uploads(file_hash_sha256)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS truth_datasets (
+                    id VARCHAR(36) PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    source_upload_id VARCHAR(36) NOT NULL REFERENCES truth_scan_uploads(id),
+                    version INTEGER NOT NULL,
+                    finalized BOOLEAN DEFAULT FALSE,
+                    is_latest BOOLEAN DEFAULT FALSE,
+                    assumptions JSONB NOT NULL DEFAULT '{}',
+                    facts JSONB NOT NULL DEFAULT '{}',
+                    derived JSONB NOT NULL DEFAULT '{}',
+                    coverage JSONB NOT NULL DEFAULT '{}',
+                    confidence_summary JSONB NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_td_company ON truth_datasets(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_td_upload ON truth_datasets(source_upload_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_td_version ON truth_datasets(version)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_td_finalized ON truth_datasets(finalized)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_td_latest ON truth_datasets(is_latest)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS validation_reports (
+                    id VARCHAR(36) PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    source_upload_id VARCHAR(36) NOT NULL REFERENCES truth_scan_uploads(id),
+                    truth_dataset_id VARCHAR(36) NOT NULL REFERENCES truth_datasets(id),
+                    summary JSONB NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vr_company ON validation_reports(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vr_upload ON validation_reports(source_upload_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vr_dataset ON validation_reports(truth_dataset_id)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS validation_issues (
+                    id VARCHAR(36) PRIMARY KEY,
+                    report_id VARCHAR(36) NOT NULL REFERENCES validation_reports(id),
+                    severity VARCHAR(20) NOT NULL,
+                    category VARCHAR(20) NOT NULL,
+                    metric_key VARCHAR(50),
+                    message VARCHAR(500) NOT NULL,
+                    evidence JSONB NOT NULL DEFAULT '{}',
+                    suggestion JSONB,
+                    can_autofix BOOLEAN DEFAULT FALSE,
+                    autofix_patch JSONB,
+                    status VARCHAR(20) DEFAULT 'open' NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    resolved_at TIMESTAMP
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vi_report ON validation_issues(report_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vi_metric ON validation_issues(metric_key)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS truth_decision_logs (
+                    id VARCHAR(36) PRIMARY KEY,
+                    source_upload_id VARCHAR(36) NOT NULL REFERENCES truth_scan_uploads(id),
+                    issue_id VARCHAR(36) REFERENCES validation_issues(id),
+                    action VARCHAR(30) NOT NULL,
+                    patch JSONB NOT NULL DEFAULT '{}',
+                    rationale TEXT,
+                    actor VARCHAR(10) DEFAULT 'system',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_tdl_upload ON truth_decision_logs(source_upload_id)"))
+            
+            conn.commit()
+            logger.info("Truth Scan tables migration complete")
+        except Exception as e:
+            logger.debug(f"Truth Scan tables may already exist: {e}")
+
+
+def ensure_truth_scan_columns(engine: Engine) -> None:
+    """Add Truth Scan related columns to existing tables."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE import_sessions ADD COLUMN IF NOT EXISTS truth_scan_upload_id VARCHAR(36)"))
+            conn.execute(text("ALTER TABLE import_sessions ADD COLUMN IF NOT EXISTS truth_dataset_id VARCHAR(36)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_is_truth_upload ON import_sessions(truth_scan_upload_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_is_truth_dataset ON import_sessions(truth_dataset_id)"))
+            
+            conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS latest_truth_dataset_id VARCHAR(36)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_comp_truth ON companies(latest_truth_dataset_id)"))
+            
+            conn.commit()
+            logger.info("Truth Scan columns migration complete")
+        except Exception as e:
+            logger.debug(f"Truth Scan columns may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -480,4 +597,6 @@ def run_migrations(engine: Engine) -> None:
     ensure_eval_runs_table(engine)
     ensure_fundraising_tables(engine)
     ensure_conversations_tables(engine)
+    ensure_truth_scan_tables(engine)
+    ensure_truth_scan_columns(engine)
     logger.info("Database migrations completed successfully")

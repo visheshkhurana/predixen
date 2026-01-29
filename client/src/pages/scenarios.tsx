@@ -30,7 +30,8 @@ import { SimulationInsights } from '@/components/SimulationInsights';
 import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users } from 'lucide-react';
+import { TruthScanBlockedModal } from '@/components/TruthScanGate';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -164,6 +165,9 @@ export default function ScenariosPage() {
   // Custom events for scenario builder
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
   
+  // Truth Scan blocked modal state
+  const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
+  
   // Comments for collaboration
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -278,6 +282,19 @@ export default function ScenariosPage() {
       setActiveTab('results');
       toast({ title: 'Simulation complete!' });
     } catch (err: any) {
+      const isTruthScanRequired = 
+        err?.code === 'TRUTH_SCAN_REQUIRED' || 
+        err?.detail?.code === 'TRUTH_SCAN_REQUIRED' ||
+        err?.status === 409 ||
+        err?.message?.includes('TRUTH_SCAN_REQUIRED');
+      
+      if (isTruthScanRequired) {
+        const uploadId = err?.upload_id || err?.detail?.upload_id;
+        if (uploadId) {
+          setTruthScanModal({ open: true, uploadId });
+          return;
+        }
+      }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setIsCreating(false);
@@ -295,6 +312,19 @@ export default function ScenariosPage() {
       setActiveTab('results');
       toast({ title: 'Simulation complete!' });
     } catch (err: any) {
+      const isTruthScanRequired = 
+        err?.code === 'TRUTH_SCAN_REQUIRED' || 
+        err?.detail?.code === 'TRUTH_SCAN_REQUIRED' ||
+        err?.status === 409 ||
+        err?.message?.includes('TRUTH_SCAN_REQUIRED');
+      
+      if (isTruthScanRequired) {
+        const uploadId = err?.upload_id || err?.detail?.upload_id;
+        if (uploadId) {
+          setTruthScanModal({ open: true, uploadId });
+          return;
+        }
+      }
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setIsRunning(false);
@@ -1168,6 +1198,18 @@ export default function ScenariosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {currentCompany && truthScanModal.uploadId && (
+        <TruthScanBlockedModal
+          uploadId={truthScanModal.uploadId}
+          companyId={currentCompany.id}
+          open={truthScanModal.open}
+          onOpenChange={(open) => setTruthScanModal({ ...truthScanModal, open })}
+          onComplete={() => {
+            toast({ title: 'Data validated', description: 'You can now run simulations.' });
+          }}
+        />
+      )}
     </div>
   );
 }

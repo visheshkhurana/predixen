@@ -32,7 +32,15 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 
 ### Key Features and Technical Implementations
 1.  **Data Ingestion**: Supports CSV upload, manual baseline entry, and AI-powered extraction from Excel/PDFs using OpenAI, with a two-stage PDF extraction process including Vision fallback for scanned documents.
-2.  **Truth Scan**: Computes 24 financial metrics, benchmarks against industry data, and assigns confidence scores.
+2.  **Truth Scan**: A comprehensive validation layer that sits between data uploads and simulation runs:
+    - **Validation Pipeline**: Multi-stage process (receive → normalize → validate → repair → finalize) ensuring data quality before simulations
+    - **Database Tables**: `truth_scan_uploads`, `truth_datasets`, `validation_reports`, `validation_issues`, `truth_decision_logs` for full provenance tracking
+    - **Issue Categories**: Structural, arithmetic, accounting, plausibility, completeness, and conflict with severity levels (blocked, high, medium, low)
+    - **Auto-fix Capabilities**: Safe repairs for net burn, runway months, and growth rate calculations with full audit trail
+    - **Simulation Gating**: `/simulation-jobs/run` returns 409 if truth dataset not finalized, redirecting users to Truth Scan Gate UI
+    - **API Endpoints**: `/truth-scan/from-import-session`, `/truth-scan/from-dataset`, `/truth-scan/from-manual-baseline`, `/truth-scan/uploads/{id}`, `/truth-scan/resolve`, `/truth-scan/finalize`
+    - **Frontend Component**: `TruthScanGate.tsx` with tabs for auto-fixed issues, issues needing confirmation, and blocked issues
+    - **Core Formulas**: `net_burn = revenue - total_expenses`, `runway = cash_balance / |monthly_burn|`
 3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, supporting various probability distributions, configurable iterations, and asynchronous job execution. It includes regime-aware simulations (Base, Downturn, Breakout) and custom event modeling with conditional triggering.
 4.  **Sensitivity Analysis**: Generates data for tornado charts by performing One-At-a-Time (OAT) perturbation to identify key drivers impacting runway.
 5.  **Scenario Versioning**: Provides full version control for scenarios, including macro-economic modifiers (optimistic, neutral, pessimistic, stagflation, boom) and API endpoints for managing presets.
