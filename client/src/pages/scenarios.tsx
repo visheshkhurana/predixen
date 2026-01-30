@@ -11,6 +11,7 @@ import { ScenarioComparisonTable } from '@/components/ScenarioComparisonTable';
 import { SimulationSummaryBanner } from '@/components/SimulationSummaryBanner';
 import { SimulationLearnMoreModal } from '@/components/SimulationLearnMoreModal';
 import { ScenarioWizard } from '@/components/ScenarioWizard';
+import { StrategicScenarioBuilder } from '@/components/StrategicScenarioBuilder';
 import { type ScenarioEvent } from '@/components/CustomEventBuilder';
 import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
 import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
@@ -32,7 +33,7 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -550,7 +551,13 @@ export default function ScenariosPage() {
         setActiveTab(value);
       }}>
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="builder" data-testid="tab-builder">Scenario Builder</TabsTrigger>
+          <TabsTrigger value="builder" data-testid="tab-builder">
+            <Zap className="h-4 w-4 mr-2" />
+            Strategic Builder
+          </TabsTrigger>
+          <TabsTrigger value="classic" data-testid="tab-classic">
+            Classic Wizard
+          </TabsTrigger>
           <TabsTrigger 
             value="results" 
             data-testid="tab-results"
@@ -608,6 +615,20 @@ export default function ScenariosPage() {
         </TabsList>
         
         <TabsContent value="builder" className="mt-6">
+          <StrategicScenarioBuilder
+            baseMetrics={baseMetrics}
+            onRunSimulation={async (params) => {
+              await handleWizardComplete(params);
+            }}
+            onSaveScenario={async (params) => {
+              await handleWizardComplete(params);
+            }}
+            isRunning={isCreating || isRunning}
+            simulation={simulation}
+          />
+        </TabsContent>
+        
+        <TabsContent value="classic" className="mt-6">
           <ScenarioWizard
             templates={SCENARIO_TEMPLATES}
             onComplete={handleWizardComplete}
