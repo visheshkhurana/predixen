@@ -14,9 +14,9 @@ export interface StrategyTemplate {
     pricing_change_pct: number;
     growth_uplift_pct: number;
     burn_reduction_pct: number;
-    gross_margin_change_pct: number;
+    gross_margin_delta_pct: number;
     fundraise_amount: number;
-    churn_reduction_pct: number;
+    churn_change_pct: number;
   };
   projections: {
     runwayChange: number;
@@ -43,9 +43,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 0,
       growth_uplift_pct: 0,
       burn_reduction_pct: 15,
-      gross_margin_change_pct: 0,
+      gross_margin_delta_pct: 0,
       fundraise_amount: 0,
-      churn_reduction_pct: 0,
+      churn_change_pct: 0,
     },
     projections: {
       runwayChange: 3.5,
@@ -77,9 +77,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 0,
       growth_uplift_pct: -10,
       burn_reduction_pct: 30,
-      gross_margin_change_pct: 5,
+      gross_margin_delta_pct: 5,
       fundraise_amount: 0,
-      churn_reduction_pct: -5,
+      churn_change_pct: -5,
     },
     projections: {
       runwayChange: 7.2,
@@ -111,9 +111,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 12,
       growth_uplift_pct: -5,
       burn_reduction_pct: 0,
-      gross_margin_change_pct: 8,
+      gross_margin_delta_pct: 8,
       fundraise_amount: 0,
-      churn_reduction_pct: -3,
+      churn_change_pct: -3,
     },
     projections: {
       runwayChange: 4.1,
@@ -145,9 +145,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 0,
       growth_uplift_pct: 40,
       burn_reduction_pct: -25,
-      gross_margin_change_pct: -5,
+      gross_margin_delta_pct: -5,
       fundraise_amount: 0,
-      churn_reduction_pct: 0,
+      churn_change_pct: 0,
     },
     projections: {
       runwayChange: -4.5,
@@ -180,9 +180,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 5,
       growth_uplift_pct: 20,
       burn_reduction_pct: -10,
-      gross_margin_change_pct: 0,
+      gross_margin_delta_pct: 0,
       fundraise_amount: 0,
-      churn_reduction_pct: 5,
+      churn_change_pct: 5,
     },
     projections: {
       runwayChange: -1.8,
@@ -213,9 +213,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: -5,
       growth_uplift_pct: 15,
       burn_reduction_pct: 5,
-      gross_margin_change_pct: 10,
+      gross_margin_delta_pct: 10,
       fundraise_amount: 0,
-      churn_reduction_pct: 10,
+      churn_change_pct: 10,
     },
     projections: {
       runwayChange: 1.2,
@@ -247,9 +247,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 5,
       growth_uplift_pct: 10,
       burn_reduction_pct: 10,
-      gross_margin_change_pct: 5,
+      gross_margin_delta_pct: 5,
       fundraise_amount: 0,
-      churn_reduction_pct: 5,
+      churn_change_pct: 5,
     },
     projections: {
       runwayChange: 2.5,
@@ -281,9 +281,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 8,
       growth_uplift_pct: 0,
       burn_reduction_pct: 5,
-      gross_margin_change_pct: 10,
+      gross_margin_delta_pct: 10,
       fundraise_amount: 0,
-      churn_reduction_pct: 0,
+      churn_change_pct: 0,
     },
     projections: {
       runwayChange: 3.8,
@@ -314,9 +314,9 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
       pricing_change_pct: 0,
       growth_uplift_pct: 10,
       burn_reduction_pct: 0,
-      gross_margin_change_pct: 0,
+      gross_margin_delta_pct: 0,
       fundraise_amount: 500000,
-      churn_reduction_pct: 0,
+      churn_change_pct: 0,
     },
     projections: {
       runwayChange: 6.5,

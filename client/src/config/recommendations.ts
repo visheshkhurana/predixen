@@ -140,13 +140,13 @@ export function generateRecommendations(metrics: SimulationMetrics): Recommendat
   return recommendations;
 }
 
-export function getRecommendationIcon(category: Recommendation['category']): string {
+export function getRecommendationIconName(category: Recommendation['category']): 'dollar-sign' | 'trending-up' | 'landmark' | 'settings' | 'target' | 'lightbulb' {
   switch (category) {
-    case 'cost': return '💰';
-    case 'revenue': return '📈';
-    case 'fundraising': return '🏦';
-    case 'operations': return '⚙️';
-    case 'strategy': return '🎯';
-    default: return '💡';
+    case 'cost': return 'dollar-sign';
+    case 'revenue': return 'trending-up';
+    case 'fundraising': return 'landmark';
+    case 'operations': return 'settings';
+    case 'strategy': return 'target';
+    default: return 'lightbulb';
   }
 }
