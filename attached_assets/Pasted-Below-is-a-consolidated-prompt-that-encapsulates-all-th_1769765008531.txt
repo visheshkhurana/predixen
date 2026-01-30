@@ -1,0 +1,95 @@
+Below is a consolidated prompt that encapsulates all the UX and feature feedback discussed. You can paste this into Replit’s AI coding assistant to guide implementation of the revamped simulation section in RunwayAI. Adjust technical details (framework names, file structure) as needed to fit your codebase.
+
+---
+
+**Prompt for Replit AI (implementing new simulation UX and features):**
+
+> **Context**
+> You’re working on the RunwayAI web app built with React and TypeScript (Radix UI components and a design system are used). The existing simulation section of the Scenario Builder is perceived as complex and delivers limited actionable value. We want to redesign it into a Strategic Planning & Forecasting hub that is goal‑oriented, intuitive and delivers insights users are willing to pay for. This prompt consolidates all prior feedback into actionable development tasks.
+>
+> **High‑level objectives**
+>
+> 1. Simplify the simulation UI/UX by replacing abstract sliders with relatable choices and goal‑driven flows.
+> 2. Provide concrete, data‑driven insights (runway, survival probability, growth impact) tied to the user’s real financial data.
+> 3. Deliver instant feedback and storytelling summaries that illustrate the consequences of choices.
+> 4. Enhance comparison and decision‑making by presenting scenarios side‑by‑side and recommending the best option.
+> 5. Embed contextual help, industry benchmarks and smart defaults to guide less experienced users.
+>
+> ### 1. Goal‑oriented onboarding
+>
+> * Create an entry screen that shows the user’s current runway, burn rate and cash balance (imported from their existing financial data).
+> * Offer a simple call‑to‑action: “Extend runway”, “Accelerate growth” or “Balance growth and burn”. Each selection determines which scenario templates and assumptions to suggest.
+> * Build a component (`GoalSelector.tsx`) with three cards representing these goals, including icons, a short description and onClick handlers.
+>
+> ### 2. Scenario cards & narrative strategies
+>
+> * Define a set of strategy templates in a config file (`strategies.ts`) with human‑readable names, narrative descriptions and parameter presets. Examples:
+>
+>   * **Sustainable Growth:** modest marketing/hiring spend, focus on gross margin improvement.
+>   * **Extend Runway:** aggressive cost‑cutting, slower hiring, aim for ≥ 18 months runway.
+>   * **Scale Quickly:** significant investment in sales/marketing, lower initial runway but higher growth.
+> * Implement `StrategyCard` components that display these strategies using visuals (icons or small illustrations) and show key projected KPIs (runway, survival, ARR growth).
+> * When a user clicks “Simulate” on a card, load the associated presets into the simulation engine.
+>
+> ### 3. Conversational inputs instead of abstract sliders
+>
+> * Replace generic sliders (Pricing Change, Growth Uplift, Burn Reduction, Gross Margin Change) with question‑based inputs:
+>
+>   * “By what percentage do you plan to change prices over the next 12 months?” → numeric input or select box with suggested values (e.g., –10 %, 0 %, +5 %, +10 %).
+>   * “How many new hires do you plan to make this quarter?” → numeric input with min/max.
+>   * “How much can you reduce monthly operating expenses?” → percentage dropdown or slider with labeled stops (0 %, –10 %, –20 %, –30 %).
+> * Build a `QuestionInput` component to handle these questions, including validation and tooltips explaining the impact of each choice.
+>
+> ### 4. Dynamic impact bar & instant feedback
+>
+> * Implement a small bar or gauge component (`ImpactBar.tsx`) that updates live as the user adjusts inputs.
+>
+>   * Display the change in runway (in months) relative to the current baseline.
+>   * Use color cues: green for runway extension, red for reduction.
+> * Update the “What This Means” summary card in real time with narrative feedback, such as “Raising prices by 10 % extends your runway by 3.2 months.”
+> * Ensure that this real‑time calculation uses a lightweight approximation (not the full Monte Carlo simulation) for responsiveness.
+>
+> ### 5. Storytelling summaries and recommendations
+>
+> * After running the full simulation, present a narrative summary card that explains the results in plain language, including potential trade‑offs (e.g., “Extending runway reduces growth potential by X %”).
+> * Create a recommendation engine module (`recommendations.ts`) that, based on the simulation output, suggests next actions (e.g., “Consider renegotiating vendor contracts” or “Schedule a Series A raise in Q3”). For now, use simple heuristics; this can be expanded later.
+>
+> ### 6. Scenario comparison & recommendation
+>
+> * Allow users to save multiple scenarios and compare them. Implement a `ScenarioComparison` component that displays scenarios in cards or a comparison table:
+>
+>   * Show key metrics (Runway, Survival Probability, ARR Growth, Burn) side‑by‑side.
+>   * Provide a concise list of the assumption changes vs. baseline for each scenario (e.g., “+10 % price, –20 % expenses”).
+>   * Enable sorting/filtering by metrics.
+> * Implement a simple scoring algorithm that ranks scenarios based on the user’s chosen goal (e.g., weight runway more heavily for “Extend Runway”). Highlight the “Recommended” scenario.
+>
+> ### 7. Contextual help & benchmarks
+>
+> * Add info icons next to all technical terms (runway, burn multiple, ARR, churn). Use a `Tooltip` component to display definitions and link to a glossary.
+> * Display industry benchmark comparisons below the user’s metrics (e.g., “Your gross margin of 60 % is 10 pp below the SaaS median of 70 %”). Use a `BenchmarkBadge` component, pulling benchmark data from a static JSON or API.
+>
+> ### 8. Sticky action bar and navigation improvements
+>
+> * Create a `StickyActionBar` component that stays fixed at the bottom of the viewport. It should include actions such as “Run Simulation”, “Save Scenario”, “Reset Inputs”, and dynamic status messages (e.g., disabled until required inputs are valid).
+> * Provide a breadcrumb or progress indicator showing the user’s current location in the journey (e.g., “Baseline → Choose Strategy → Adjust Inputs → See Results”) with click‑back functionality.
+>
+> ### 9. Accessibility and responsiveness
+>
+> * Ensure all interactive components (cards, inputs, gauges) are keyboard accessible and use appropriate ARIA attributes.
+> * Use high‑contrast colors and larger hit targets for users with visual or motor impairments.
+> * Design layouts that gracefully adapt to tablet and mobile screens—use a single‑column stack of cards for narrow viewports.
+>
+> ### 10. Testing and integration
+>
+> * Write unit tests for new components (StrategyCard, QuestionInput, ImpactBar, StickyActionBar) to ensure they render and update correctly.
+> * Implement integration tests to verify that adjusting inputs updates the impact bar and narrative summary in real time.
+> * Validate that saved scenarios persist correctly and can be compared.
+> * Ensure that the recommendation engine triggers appropriate messages based on simulation outputs.
+>
+> ---
+>
+> Please implement these changes step by step, adhering to existing code quality and style standards. After coding, provide a summary of updated/created files and any APIs or utilities added. Make sure to avoid breaking existing functionality and ensure backward compatibility where necessary.
+
+---
+
+This prompt guides the AI through the full redesign: from goal‑driven onboarding and narrative strategy cards to conversational inputs, live feedback, recommendations, comparison features, contextual help and a sticky action bar. Pasting it into Replit’s AI assistant should yield code scaffolding and implementation help aligned with the desired improvements.
