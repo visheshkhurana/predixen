@@ -134,22 +134,33 @@ export default function ScenariosPage() {
 
   const baseMetrics = useMemo(() => {
     if (!currentCompany) return undefined;
-    const cashBalance = 500000;
+    const cashOnHand = 500000;
     const monthlyRevenue = 50000;
     const monthlyExpenses = 80000;
-    const netBurn = monthlyExpenses - monthlyRevenue;
-    const runwayMonths = netBurn > 0 ? cashBalance / netBurn : 999;
+    const monthlyBurn = monthlyExpenses - monthlyRevenue;
+    const currentRunway = monthlyBurn > 0 ? cashOnHand / monthlyBurn : 999;
     
     return {
-      cash_balance: cashBalance,
-      monthly_revenue: monthlyRevenue,
-      net_burn: netBurn,
-      runway_months: runwayMonths,
-      revenue_growth_mom: 10,
-      gross_margin: 60,
-      burn_multiple: netBurn > 0 ? netBurn / (monthlyRevenue * 0.1) : 0,
+      cashOnHand,
+      monthlyExpenses,
+      monthlyRevenue,
+      currentRunway,
+      growthRate: 10,
     };
   }, [currentCompany]);
+  
+  const dashboardMetrics = useMemo(() => {
+    if (!baseMetrics) return undefined;
+    return {
+      cash_balance: baseMetrics.cashOnHand,
+      monthly_revenue: baseMetrics.monthlyRevenue,
+      net_burn: baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue,
+      runway_months: baseMetrics.currentRunway,
+      revenue_growth_mom: baseMetrics.growthRate,
+      gross_margin: 60,
+      burn_multiple: (baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) / (baseMetrics.monthlyRevenue * 0.1),
+    };
+  }, [baseMetrics]);
 
   // These useMemo hooks must be before any early returns to follow Rules of Hooks
   const comparisonData = useMemo(() => {
@@ -916,7 +927,7 @@ export default function ScenariosPage() {
               
               <DashboardKPICards
                 simulation={simulation}
-                metrics={baseMetrics}
+                metrics={dashboardMetrics}
                 testId="dashboard-kpis-results"
               />
               
