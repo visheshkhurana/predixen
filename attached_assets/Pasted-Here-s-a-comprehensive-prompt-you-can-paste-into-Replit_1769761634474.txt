@@ -1,0 +1,98 @@
+Here’s a comprehensive prompt you can paste into Replit’s AI coding assistant to guide implementation of the changes outlined in the PRD. It is written for a senior engineer working on a modern React/TypeScript application using your existing codebase conventions (adjust tech terms if your stack differs).
+
+---
+
+**Prompt for Replit AI:**
+
+> **Context**
+> You are working on RunwayAI, a startup financial simulator built with React and TypeScript. The current Scenario Builder module needs to be enhanced for a new version. Below is a detailed description of the required features and improvements. Use this as a development plan to modify the existing codebase. Adhere to existing architectural patterns, component structure, and styling conventions (Radix UI components are used extensively). Write clean, modular code with comments where appropriate.
+>
+> ---
+>
+> ### 1. Data Input & Guidance
+>
+> 1. **Mandatory Fields Check:**
+>
+>    * Implement a validation layer that checks whether critical financial inputs (e.g., revenue, costs, gross margin, churn rate) are provided before running a simulation.
+>    * If any required fields are missing when the user clicks “Run Simulation,” display a dismissible banner at the top of the Scenario Builder page listing the missing fields.
+>    * Each listed field should link to the relevant section of the Data Input page; clicking it should navigate the user there (you can use a `react-router` link or similar).
+> 2. **Default Values & Templates:**
+>
+>    * Define default assumptions for each scenario template in a centralized configuration file (e.g., `templates.ts`). This file should export an object per template containing assumptions like revenue growth rate, cost reduction percentage, price increase percentage, etc.
+>    * Use these defaults to prefill missing values when users choose a template, allowing quick experimentation.
+>    * Provide a clear description of each template’s assumptions in the UI, perhaps through a popover or modal accessible via a “View assumptions” link.
+> 3. **Tooltips/Glossary:**
+>
+>    * Add an info icon next to each key metric (Runway, Burn Multiple, Gross Margin, etc.) in the Simulation Results and Compare All pages.
+>    * On hover or click, show a tooltip with a concise definition. Use an existing Tooltip component or implement a new one if necessary.
+>    * Each tooltip should include a “Learn more” link that opens the glossary modal (existing glossary feature) prefiltered to the relevant term.
+>
+> ### 2. Scenario Templates & Comparison
+>
+> 1. **Template Assumptions:**
+>
+>    * Update default templates to produce distinguishable outcomes. For example:
+>
+>      * *Baseline:* current state, no modifications.
+>      * *Conservative Cut:* reduce operating expenses by ~20 %, slower revenue growth.
+>      * *Moderate Growth:* modest revenue growth increases (e.g., +15 %) and improved efficiency (e.g., –10 % cost inefficiencies).
+>      * *Aggressive Growth:* large marketing/hiring spend (+30 % cost increase), faster revenue growth (+40 %).
+>      * *Cost Cutting:* deep cost reductions (–30 % expenses) with flat or minimal revenue growth.
+>      * *Price Increase:* increase product price by a configurable percentage (e.g., +10 %), improving gross margin.
+>    * Document these assumptions in the template descriptions shown in the Template selection step.
+> 2. **Comparison Table Enhancements:**
+>
+>    * In the Compare All page, ensure that after running simulations for all templates, the table shows differentiated results based on the above assumptions.
+>    * Add a new column titled “Assumptions diff vs Baseline” summarizing how each scenario’s assumptions differ from the baseline (e.g., “–20 % costs”, “+15 % revenue”).
+>    * Allow sorting the table by Runway, Survival Probability, or Composite Score. Use a stateful sort function and update the UI accordingly.
+> 3. **Delta Calculations:**
+>
+>    * Compute and display deltas (runway change in months, survival percentage difference) relative to the baseline.
+>    * Display positive deltas with an up arrow/icon and negative deltas with a down arrow/icon. Use accessible color coding (green for positive, red for negative).
+>
+> ### 3. Decision Ranking (Enhanced Analysis)
+>
+> 1. **Run Enhanced Analysis:**
+>
+>    * Hook up the “Run Enhanced Analysis” button to trigger a new Monte Carlo simulation that is regime-aware (market upturn/downturn). This may involve calling a different API endpoint or service method than the basic simulation.
+>    * Show a loading indicator (spinner/progress bar) with an estimated completion time.
+>    * If required inputs for the enhanced analysis (such as market-driver correlations) are missing, catch the error and display a user-friendly message indicating which data is needed. Provide a link to the appropriate input page or help article.
+> 2. **Display Results:**
+>
+>    * After completion, display a ranked list of scenarios based on a composite score incorporating runway, survival probability and financial efficiency.
+>    * For each scenario, show:
+>
+>      * Composite Score (0–100 scale)
+>      * Runway (months) with P10–P90 range
+>      * Survival Probability
+>      * A breakdown of score contributions (e.g., 40 % runway, 35 % survival, 25 % efficiency).
+>    * Use an accordion or expandable cards to reveal the breakdown details.
+> 3. **Error Handling:**
+>
+>    * Handle any simulation failures gracefully. Display a toast notification with the error message and suggest retrying later.
+>
+> ### 4. UI & UX Considerations
+>
+> * Maintain responsiveness across screen sizes. Ensure new columns in the comparison table wrap properly on narrower viewports.
+> * Keep consistent styling with the existing theme. Use Radix UI components where possible.
+> * Ensure all new text strings are prepared for localization (use i18n utilities if present).
+>
+> ### 5. Testing & Acceptance
+>
+> * Write unit tests for the new configuration file (template assumptions) to ensure correct values are used.
+> * Implement integration tests for the scenario-running functions to validate deltas and composite score computations.
+> * Conduct UI tests (e.g., using Playwright or Cypress) to ensure banners, tooltips and sorting work as expected.
+> * Confirm that running enhanced analysis with and without required inputs produces appropriate results or error messages.
+>
+> ### 6. Deployment Notes
+>
+> * This feature will ship as a minor version upgrade (e.g., v1.3 → v1.4) with a feature flag to allow staged rollout.
+> * Ensure backwards compatibility for existing users; default templates should not overwrite custom user data.
+>
+> ---
+>
+> Please implement the above changes across the relevant components, ensuring modularity and readability. After you finish, provide a summary of the modified files and any new files added.
+
+---
+
+You can paste the above prompt into Replit’s AI helper to get targeted code suggestions and scaffolding to implement the enhancements described in the PRD.

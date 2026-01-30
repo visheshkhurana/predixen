@@ -58,71 +58,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SCENARIO_TEMPLATES } from '@/config/templates';
 
-const SCENARIO_TEMPLATES = [
-  { 
-    name: 'Baseline (Status Quo)', 
-    description: 'No adjustments - serves as control',
-    tags: ['baseline'],
-    deltas: { pricing_change_pct: 0, growth_uplift_pct: 0, burn_reduction_pct: 0 } 
-  },
-  { 
-    name: 'Conservative Cut', 
-    description: 'Reduce burn while accepting slower growth',
-    tags: ['cost-cutting'],
-    deltas: { burn_reduction_pct: 20, growth_uplift_pct: -3 } 
-  },
-  { 
-    name: 'Moderate Growth Push', 
-    description: 'Balanced growth with efficiency gains',
-    tags: ['growth'],
-    deltas: { growth_uplift_pct: 5, burn_reduction_pct: -5 } 
-  },
-  { 
-    name: 'Aggressive Growth', 
-    description: 'Maximize growth with increased investment',
-    tags: ['growth'],
-    deltas: { growth_uplift_pct: 15, burn_reduction_pct: -10 } 
-  },
-  { 
-    name: 'Cost-Cut Scenario', 
-    description: 'Deep cost reduction to extend runway',
-    tags: ['cost-cutting'],
-    deltas: { burn_reduction_pct: 25, growth_uplift_pct: -5 } 
-  },
-  { 
-    name: 'Price Increase', 
-    description: 'Raise prices to improve unit economics',
-    tags: ['pricing'],
-    deltas: { pricing_change_pct: 10, growth_uplift_pct: -2 } 
-  },
-  { 
-    name: 'Bridge Round', 
-    description: 'Small funding round to extend runway',
-    tags: ['fundraising'],
-    deltas: { fundraise_month: 3, fundraise_amount: 500000 } 
-  },
-  { 
-    name: 'Fundraising Delay', 
-    description: 'Delay fundraising by 3 months',
-    tags: ['fundraising'],
-    deltas: { fundraise_month: 6, fundraise_amount: 1000000 } 
-  },
-  { 
-    name: 'Best Case', 
-    description: 'Optimistic scenario with multiple improvements',
-    tags: ['growth', 'pricing'],
-    deltas: { growth_uplift_pct: 20, pricing_change_pct: 5, burn_reduction_pct: 10 } 
-  },
-  { 
-    name: 'Worst Case', 
-    description: 'Pessimistic scenario for risk planning',
-    tags: ['risk'],
-    deltas: { growth_uplift_pct: -10, burn_reduction_pct: 0, fundraise_month: 9, fundraise_amount: 500000 } 
-  },
-];
-
-const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'risk'];
+const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'optimistic', 'pessimistic'];
 
 export default function ScenariosPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
@@ -196,18 +134,20 @@ export default function ScenariosPage() {
 
   const baseMetrics = useMemo(() => {
     if (!currentCompany) return undefined;
-    const cashOnHand = 500000;
+    const cashBalance = 500000;
     const monthlyRevenue = 50000;
     const monthlyExpenses = 80000;
-    const monthlyBurn = monthlyExpenses - monthlyRevenue;
-    const currentRunway = monthlyBurn > 0 ? cashOnHand / monthlyBurn : 999;
+    const netBurn = monthlyExpenses - monthlyRevenue;
+    const runwayMonths = netBurn > 0 ? cashBalance / netBurn : 999;
     
     return {
-      cashOnHand,
-      monthlyExpenses,
-      monthlyRevenue,
-      currentRunway,
-      growthRate: 10,
+      cash_balance: cashBalance,
+      monthly_revenue: monthlyRevenue,
+      net_burn: netBurn,
+      runway_months: runwayMonths,
+      revenue_growth_mom: 10,
+      gross_margin: 60,
+      burn_multiple: netBurn > 0 ? netBurn / (monthlyRevenue * 0.1) : 0,
     };
   }, [currentCompany]);
 
