@@ -226,16 +226,42 @@ def run_enhanced_monte_carlo(
                 runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
-            # Company survived the full horizon - extrapolate runway based on ending cash and burn
-            final_cash = cash_paths[sim, horizon - 1]
-            avg_burn = np.mean(burn_paths[sim, :])
-            if avg_burn > 0:
-                # Calculate additional months from remaining cash
-                additional_months = final_cash / avg_burn
-                runway_months[sim] = horizon + max(0, min(additional_months, 60))  # Cap at 60 extra months
+            # Company survived the full horizon - extend simulation dynamically
+            # Continue running month-by-month with same stochastic model until cash depletes
+            max_extension = 240  # Maximum 20 years of extension (enough for any realistic scenario)
+            extended_cash = cash_paths[sim, horizon - 1]
+            extended_revenue = revenue_paths[sim, horizon - 1]
+            extended_payroll = payroll  # Use final payroll from this sim
+            
+            for ext_month in range(max_extension):
+                # Continue applying the same stochastic model
+                growth_rate = np.random.normal(current_growth, inputs.growth_sigma) / 100
+                margin = np.clip(
+                    np.random.normal(current_margin, inputs.margin_sigma),
+                    10, 95
+                ) / 100
+                churn = np.clip(
+                    np.random.normal(current_churn, inputs.churn_sigma),
+                    0, 50
+                ) / 100
+                
+                # Update revenue with growth and churn
+                extended_revenue = extended_revenue * (1 + growth_rate) * (1 - churn)
+                
+                # Calculate cash flow
+                gross_profit = extended_revenue * margin
+                total_opex = inputs.opex * burn_reduction_mult
+                total_other = inputs.other_costs * burn_reduction_mult
+                net_cashflow = gross_profit - total_opex - extended_payroll - total_other
+                
+                extended_cash = extended_cash + net_cashflow
+                
+                if extended_cash <= 0:
+                    runway_months[sim] = horizon + ext_month + 1
+                    break
             else:
-                # Positive cash flow - effectively infinite runway, cap at 84 months (7 years)
-                runway_months[sim] = 84
+                # Survived entire extension - company is very healthy
+                runway_months[sim] = horizon + max_extension
         
         for event in inputs.events:
             if event.id in event_occurrences and event_occurrences[event.id] > 0:
