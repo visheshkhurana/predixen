@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,6 +84,9 @@ export function AISummaryCard({
   const [isExpanded, setIsExpanded] = useState(true);
   const [showDrivers, setShowDrivers] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(true);
+  
+  const lastFetchKey = useRef<string>('');
+  const fetchInProgress = useRef<boolean>(false);
 
   useEffect(() => {
     const fetchNarrative = async () => {
@@ -91,6 +94,19 @@ export function AISummaryCard({
         return;
       }
 
+      const fetchKey = JSON.stringify({
+        companyId,
+        runway: simulationResults.runway,
+        survival: simulationResults.survival,
+        scenarioName
+      });
+      
+      if (fetchKey === lastFetchKey.current || fetchInProgress.current) {
+        return;
+      }
+      
+      lastFetchKey.current = fetchKey;
+      fetchInProgress.current = true;
       setIsLoading(true);
       setError(null);
 
@@ -111,10 +127,12 @@ export function AISummaryCard({
         setError('Unable to generate AI summary');
       } finally {
         setIsLoading(false);
+        fetchInProgress.current = false;
       }
     };
 
-    fetchNarrative();
+    const timeoutId = setTimeout(fetchNarrative, 500);
+    return () => clearTimeout(timeoutId);
   }, [companyId, simulationResults, scenarioParams, scenarioName]);
 
   if (!simulationResults?.runway?.p50) {

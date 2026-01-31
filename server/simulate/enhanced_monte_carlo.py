@@ -226,7 +226,16 @@ def run_enhanced_monte_carlo(
                 runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
-            runway_months[sim] = horizon + 12
+            # Company survived the full horizon - extrapolate runway based on ending cash and burn
+            final_cash = cash_paths[sim, horizon - 1]
+            avg_burn = np.mean(burn_paths[sim, :])
+            if avg_burn > 0:
+                # Calculate additional months from remaining cash
+                additional_months = final_cash / avg_burn
+                runway_months[sim] = horizon + max(0, min(additional_months, 60))  # Cap at 60 extra months
+            else:
+                # Positive cash flow - effectively infinite runway, cap at 84 months (7 years)
+                runway_months[sim] = 84
         
         for event in inputs.events:
             if event.id in event_occurrences and event_occurrences[event.id] > 0:
