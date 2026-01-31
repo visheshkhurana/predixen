@@ -1,0 +1,363 @@
+Perfect. I’ll do this in execution mode, not theory.
+
+Below you’ll get two concrete artifacts:
+	1.	Engineering-ready PRD (something you can hand to a tech lead tomorrow)
+	2.	Figma wireframe spec (clear enough for a designer to build without back-and-forth)
+
+I’ll keep assumptions explicit and avoid fluff.
+
+⸻
+
+1️⃣ Product Requirements Document (PRD)
+
+Predixen Local Decision OS – Decision Room
+
+:::writing{id=“51486” variant=“standard”}
+
+1. Overview
+
+Product Name: Predixen Decision Room
+Type: Core Product Feature
+Platform: Desktop (Clawd.bot-powered) + Web UI
+Primary Users: Founders, CFOs, CXOs, Investors
+Problem Solved:
+High-stakes decisions are made without structured debate, traceability, or continuous simulation—often relying on spreadsheets and intuition.
+
+Goal:
+Enable structured, AI-assisted, defensible business decisions using real company data—securely and locally.
+
+⸻
+
+2. Key Principles
+	1.	Local-first – raw data stays on user machine
+	2.	Decision-centric – decisions are first-class objects
+	3.	Explainability > prediction
+	4.	Continuous reality sync
+	5.	Board-grade auditability
+
+⸻
+
+3. User Stories
+
+Founder
+
+“I want to debate whether to raise or delay fundraising using real data, not vibes.”
+
+CFO
+
+“I want to see risk, downside, and assumptions clearly before committing.”
+
+Investor
+
+“I want to understand how this decision affects IRR and runway under stress.”
+
+⸻
+
+4. Core Concepts & Data Models
+
+4.1 Decision (Primary Entity)
+
+Decision {
+  id
+  title
+  description
+  created_by
+  created_at
+  status: draft | committed | superseded
+  assumptions[]
+  data_sources[]
+  scenarios[]
+  agent_outputs[]
+  final_choice
+  confidence_score
+}
+
+
+⸻
+
+4.2 Assumption
+
+Assumption {
+  id
+  metric (e.g. revenue_growth)
+  value
+  source: manual | inferred
+  confidence
+}
+
+
+⸻
+
+4.3 Agent Output
+
+AgentOutput {
+  agent_type: CFO | Growth | Investor
+  recommendation
+  risks[]
+  upside
+  downside
+  cited_metrics[]
+}
+
+
+⸻
+
+4.4 Scenario
+
+Scenario {
+  id
+  name
+  metrics_snapshot {
+    runway
+    burn
+    cash
+    dilution
+    IRR
+    downside_probability
+  }
+}
+
+
+⸻
+
+5. Functional Requirements
+
+5.1 Decision Creation
+	•	User can create a new decision
+	•	Must specify:
+	•	Question
+	•	Time horizon
+	•	System auto-attaches:
+	•	Current financial snapshot
+	•	Relevant data sources
+
+⸻
+
+5.2 Local Data Ingestion (via Clawd.bot)
+	•	Read-only folder access
+	•	Supported formats:
+	•	Excel
+	•	CSV
+	•	PDF
+	•	File changes trigger:
+	•	Incremental recompute
+	•	Decision drift warnings
+
+⸻
+
+5.3 Multi-Agent Debate Engine
+	•	Agents run independently
+	•	Each agent:
+	•	Sees same data
+	•	Has role-specific prompt
+	•	Outputs must include:
+	•	Recommendation
+	•	Key risks
+	•	Metrics used
+
+⸻
+
+5.4 Scenario Comparison
+	•	Minimum 3 scenarios:
+	•	Option A
+	•	Option B
+	•	Status Quo
+	•	Metrics normalized and comparable
+	•	Live recomputation on assumption change
+
+⸻
+
+5.5 Decision Commit
+	•	Once committed:
+	•	Assumptions frozen
+	•	Data snapshot saved
+	•	Future drift tracked
+	•	Commit requires explicit confirmation
+
+⸻
+
+6. Non-Functional Requirements
+
+Security
+	•	No raw file upload by default
+	•	Local encryption for metadata
+	•	Explicit user consent per folder
+
+Performance
+	•	< 1s incremental recompute for small changes
+	•	Background daemon for simulations
+
+Reliability
+	•	Works offline
+	•	Graceful fallback if models unavailable
+
+⸻
+
+7. Out of Scope (Phase 1)
+	•	Collaborative multi-user editing
+	•	Automated execution (e.g. hiring, payments)
+	•	External API writes
+
+⸻
+
+8. Success Metrics
+	•	% of users creating ≥3 decisions/month
+	•	Time to decision reduced by 50%
+	•	Enterprise conversion rate
+	•	Retention after 90 days
+:::
+
+⸻
+
+2️⃣ Figma Wireframe Specification
+
+Decision Room UX
+
+This is written so a designer can directly convert it into Figma frames.
+
+⸻
+
+:::writing{id=“51487” variant=“standard”}
+
+Frame 1: Decision Room – Main Screen
+
+Layout
+
+Three-column layout (Desktop-first)
+
+⸻
+
+Top Bar
+	•	Breadcrumb: Decisions / Fundraising
+	•	Decision Title (editable)
+	•	Status badge: Draft / Committed
+	•	Confidence Score (0–100%)
+
+⸻
+
+Left Column: Reality Snapshot (Sticky)
+
+Width: 20%
+
+Cards:
+	•	Cash on Hand
+	•	Monthly Burn
+	•	Runway
+	•	Revenue Growth
+	•	Key Risk Flags (red/yellow)
+
+Always visible.
+Auto-updates from local files.
+
+⸻
+
+Center Column: Agent Debate
+
+Width: 45%
+
+Chat-style cards (NOT free chat):
+
+Each card:
+	•	Agent avatar + role
+	•	Recommendation headline
+	•	Expandable details:
+	•	Risks
+	•	Metrics cited
+	•	Uncertainty notes
+
+Agents shown sequentially:
+	1.	CFO Agent
+	2.	Growth Agent
+	3.	Investor Agent
+
+⸻
+
+Right Column: Scenario Comparison
+
+Width: 35%
+
+Tabbed cards:
+	•	Raise Now
+	•	Delay 6 Months
+	•	Bridge Round
+
+Each card shows:
+	•	Runway
+	•	Dilution
+	•	IRR
+	•	Downside %
+
+Visual:
+	•	Bar indicators
+	•	Color-coded risk bands
+
+⸻
+
+Bottom Action Bar
+
+Buttons:
+	•	Modify Assumptions
+	•	Request More Data
+	•	Commit Decision (Primary CTA)
+
+⸻
+
+Frame 2: Modify Assumptions Modal
+	•	Editable table:
+	•	Metric
+	•	Current Value
+	•	Confidence Slider
+	•	Inline simulation update
+	•	“Reset to inferred values” option
+
+⸻
+
+Frame 3: Decision Commit Confirmation
+
+Checklist:
+	•	Assumptions reviewed
+	•	Risks acknowledged
+	•	Data snapshot locked
+
+Final CTA:
+	•	“Commit Decision”
+
+Warning text:
+
+This decision will be logged and tracked against future outcomes.
+
+⸻
+
+Frame 4: Decision History Timeline
+
+Vertical timeline:
+	•	Decisions over time
+	•	Status + confidence
+	•	Outcome vs prediction (later)
+
+Click → opens Decision Room replay
+:::
+
+⸻
+
+Final Engineering + Design Guidance
+
+This must feel:
+	•	Calm
+	•	Serious
+	•	Board-grade
+	•	Not like a chat toy
+
+If it feels like ChatGPT → ❌
+If it feels like a Bloomberg terminal for decisions → ✅
+
+⸻
+
+Next (high-leverage) options:
+	1.	Agent prompt specs (CFO / Growth / Investor)
+	2.	Backend architecture diagram (local + cloud)
+	3.	Simulation math validation doc
+	4.	Pricing & SKU mapping
+	5.	Investor deck slides from this PRD
+
+Say which one — we’ll keep compounding fast 🚀
