@@ -1,0 +1,28 @@
+Feedback on Predixen Simulation Tests
+Overview
+I tested the Predixen Scenario Builder using sample data to evaluate how different simulation templates behave. The sample data had zero revenue, zero expenses and zero cash, so the simulations mainly show how template logic affects projected runway and risk classification.
+Test Scenarios
+Aggressive Growth
+Template: Aggressive Growth
+Projected Runway (P50): 36.0 months
+18 ‑Month Survival: 100%
+Gross Margin: 0% (Critical)
+Risk Assessment: Low Risk
+The Aggressive Growth template assumes increased spending and acceleration of growth. With the sample data (all zero financials), the simulator still projects a healthy 36 ‑month runway and full survival at 18 months. However, the gross margin remains critical at 0%, since no revenue or costs are defined.
+Baseline (Status Quo)
+Template: Baseline
+Projected Runway (P50): 36.0 months
+18 ‑Month Survival: 100%
+Gross Margin: 0% (Critical)
+Risk Assessment: Low Risk
+The Baseline scenario, which makes no adjustments, yields identical results to the Aggressive Growth template under sample data: 36 ‑month runway, full survival at 18 months and a critical gross margin due to zero revenue/costs.
+Observations
+The simulator defaults to a 36 ‑month runway and 100% survival for templates when the input financial data is zero.
+Gross margin remains flagged as critical (0%) because the sample data lacks revenue and cost figures.
+Running multiple templates with identical sample data yields identical outcomes, suggesting that the simulation engine depends heavily on the underlying financials rather than template-specific multipliers.
+Feedback & Suggestions
+Provide realistic sample data: To make testing meaningful, prepopulate the sample dataset with typical revenue, expenses and cash figures; otherwise, all scenarios produce the same outcome.
+Clarify template impacts: The UI could better illustrate how templates modify the baseline; currently, differences are not visible with zero data.
+Allow scenario comparison: A side ‑by ‑side comparison view would help highlight differences between templates.
+Overall, Predixen’s simulation workflow is smooth, but testing with zeroed sample data limits insights. Supplying realistic figures would allow users to see the distinct effects of each template.
+
