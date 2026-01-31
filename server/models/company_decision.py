@@ -61,13 +61,16 @@ class CompanyScenario(Base):
     base_scenario = relationship("CompanyScenario", remote_side=[id], backref="forks")
     
     def to_dict(self):
+        outputs = self.outputs_json or {}
+        has_simulation = bool(outputs and (outputs.get('runway') or outputs.get('survival') or outputs.get('summary')))
         return {
             "id": str(self.id),
             "company_id": self.company_id,
             "name": self.name,
             "base_scenario_id": str(self.base_scenario_id) if self.base_scenario_id else None,
             "assumptions": self.assumptions_json or {},
-            "outputs": self.outputs_json or {},
+            "outputs": outputs,
+            "latest_simulation": has_simulation,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
