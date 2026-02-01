@@ -64,7 +64,7 @@ import { SCENARIO_TEMPLATES } from '@/config/templates';
 const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'optimistic', 'pessimistic'];
 
 export default function ScenariosPage() {
-  const { currentCompany, setCurrentStep } = useFounderStore();
+  const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun } = useFounderStore();
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
@@ -182,6 +182,29 @@ export default function ScenariosPage() {
     const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
     return selected?.name || 'New Scenario';
   }, [selectedScenarioId, scenarios]);
+  
+  // Sync selected scenario to global store for Context Bar
+  useEffect(() => {
+    if (selectedScenarioId && scenarios) {
+      const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
+      if (selected) {
+        setCurrentScenario({ id: selected.id, name: selected.name });
+      }
+    } else {
+      setCurrentScenario(null);
+    }
+  }, [selectedScenarioId, scenarios, setCurrentScenario]);
+  
+  // Sync latest simulation run to global store
+  useEffect(() => {
+    if (simulation && selectedScenarioId) {
+      setLatestRun({
+        id: simulation.run_id || simulation.id?.toString() || `run-${Date.now()}`,
+        timestamp: simulation.created_at || new Date().toISOString(),
+        scenarioId: selectedScenarioId,
+      });
+    }
+  }, [simulation, selectedScenarioId, setLatestRun]);
   
   if (!currentCompany) {
     return (
