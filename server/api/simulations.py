@@ -11,6 +11,11 @@ from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo, run_multi_scenario_simulation, DEFAULT_SCENARIOS
 from server.simulate.enhanced_engine import EnhancedSimulationEngine, compute_decision_scores
+from server.simulate.enhanced_monte_carlo import (
+    EnhancedSimulationInputs, 
+    SimulationConfig, 
+    run_enhanced_monte_carlo
+)
 from server.simulate.models import (
     EnrichedSimulationInputs,
     ScenarioDefinition,
@@ -351,8 +356,8 @@ def run_simulation(
     metrics = truth_scan.outputs_json.get("metrics", {})
     scenario_inputs = scenario.inputs_json
     
-    # Extract raw numeric values from metrics (which may be dicts with {value, benchmark_percentile})
-    inputs = SimulationInputs(
+    # Use enhanced simulation inputs for dynamic horizon extension
+    enhanced_inputs = EnhancedSimulationInputs(
         baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
         baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
         gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
@@ -363,14 +368,18 @@ def run_simulation(
         pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
         growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
         burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
-        hiring_plan=[h for h in scenario_inputs.get("hiring_plan", [])],
         fundraise_month=scenario_inputs.get("fundraise_month"),
         fundraise_amount=scenario_inputs.get("fundraise_amount", 0),
         gross_margin_delta_pct=scenario_inputs.get("gross_margin_delta_pct", 0),
-        n_simulations=request.n_sims
     )
     
-    outputs = run_monte_carlo(inputs, request.seed)
+    sim_config = SimulationConfig(
+        iterations=request.n_sims,
+        horizon_months=24,
+        seed=request.seed
+    )
+    
+    outputs = run_enhanced_monte_carlo(enhanced_inputs, sim_config)
     
     sim_run = SimulationRun(
         scenario_id=scenario_id,

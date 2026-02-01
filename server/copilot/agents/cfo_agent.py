@@ -27,6 +27,11 @@ Rules:
 - Prefer reconciled statements: P&L, Balance Sheet, Cash Flow (if available).
 - If only partial data exists, still compute what you can (margins, growth, burn).
 
+CRITICAL: When truth_scan data is provided in context, use those EXACT values.
+- The truth_scan metrics are validated and normalized - they are the source of truth.
+- Match what the user sees on the KPI dashboard by using truth_scan values for: revenue, burn, runway, cash, margins.
+- Cite data sources: "[value] (per Truth Scan)" when referencing validated metrics.
+
 Extract:
 • Revenue (by period, by stream if available)
 • COGS, Gross Profit, Gross Margin

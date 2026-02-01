@@ -172,14 +172,14 @@ function UnknownStatusCard() {
           </p>
         </div>
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Link href="/data-input">
+          <Link href="/data">
             <Button data-testid="button-go-to-data-input">
               <Database className="h-4 w-4 mr-2" />
               Go to Data Input
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </Link>
-          <Link href="/truth-scan">
+          <Link href="/truth">
             <Button variant="outline" data-testid="button-go-to-truth-scan">
               Run Truth Scan
             </Button>
@@ -487,6 +487,7 @@ export default function AlertsPage() {
   };
 
   const isStatusUnknown = !healthData?.overall_status || healthData.overall_status === "unknown";
+  const isInsufficientData = healthData?.overall_status === "insufficient_data";
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -506,7 +507,30 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      {isStatusUnknown && (
+      {isInsufficientData && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium">More Data Needed</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  We need at least 2 months of financial data to analyze trends and generate alerts.
+                  Add more historical data to enable full monitoring capabilities.
+                </p>
+              </div>
+              <Link href="/data">
+                <Button size="sm" variant="outline" data-testid="button-banner-add-data">
+                  Add More Data
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isStatusUnknown && !isInsufficientData && (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
@@ -518,7 +542,7 @@ export default function AlertsPage() {
                   Upload your data or run a Truth Scan to get personalized insights and alerts.
                 </p>
               </div>
-              <Link href="/data-input">
+              <Link href="/data">
                 <Button size="sm" data-testid="button-banner-data-input">
                   Add Data
                   <ArrowRight className="h-4 w-4 ml-1" />
@@ -663,7 +687,7 @@ export default function AlertsPage() {
                     : "All metrics are within normal ranges"}
                 </p>
                 {isStatusUnknown && (
-                  <Link href="/data-input">
+                  <Link href="/data">
                     <Button className="mt-4" data-testid="button-empty-add-data">
                       <Database className="h-4 w-4 mr-2" />
                       Add Data
@@ -771,7 +795,7 @@ export default function AlertsPage() {
                       <p className="text-muted-foreground">
                         Add your financial data to receive personalized recommendations.
                       </p>
-                      <Link href="/data-input">
+                      <Link href="/data">
                         <Button variant="outline" data-testid="button-recommendations-add-data">
                           <Database className="h-4 w-4 mr-2" />
                           Add Data
