@@ -238,10 +238,10 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, testId
         <KPICard
           title="Net Burn"
           value={formatCurrency(Math.abs(netBurn))}
-          subtitle={netBurn > 0 ? 'Cash positive' : 'Monthly outflow'}
-          status="neutral"
+          subtitle={netBurn < 0 ? 'Cash positive' : 'Monthly outflow'}
+          status={netBurn < 0 ? 'healthy' : netBurn > 50000 ? 'critical' : 'warning'}
           icon={<TrendingDown className="h-4 w-4" />}
-          tooltip="Monthly cash outflow (expenses minus revenue)."
+          tooltip="Monthly cash outflow (expenses minus revenue). Negative means profitable."
           testId={`${testId}-burn`}
         />
         
