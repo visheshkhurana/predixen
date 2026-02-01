@@ -1,0 +1,103 @@
+To get this running quickly on Replit, you can set up a simple Python web server that listens for Resend webhooks and classifies opens as described earlier. Below is a “prompt” you can paste into Replit’s shell or follow step‑by‑step to create the project.
+
+---
+
+## 🛠️ Replit setup instructions
+
+1. **Create a new Replit project**
+
+   * Go to [replit.com](https://replit.com/) and create a new Repl using the **Python** template.
+
+2. **Add the Flask dependency**
+
+   * In the Replit workspace, open `pyproject.toml` or the **Packages** panel.
+   * Add `flask` as a dependency (Replit may auto‑install it if you import it).
+
+3. **Replace `main.py` with the following code**
+
+   ```python
+   # main.py
+   from flask import Flask, request, jsonify
+   from datetime import datetime, timedelta, timezone
+   import json
+
+   app = Flask(__name__)
+
+   # In-memory store: replace with a DB in production
+   events_by_email = {}
+
+   def classify_event(event):
+       event_type = event["type"]            # e.g. 'email.delivered'
+       data = event["data"]
+       email_id = data["email_id"]
+       timestamp = datetime.fromisoformat(data["timestamp"]).replace(tzinfo=timezone.utc)
+
+       record = events_by_email.setdefault(email_id, {
+           "delivered_at": None,
+           "opened_at": None,
+           "clicked_at": None,
+           "classification": None,
+       })
+
+       if event_type == "email.delivered":
+           record["delivered_at"] = timestamp
+
+       elif event_type == "email.clicked":
+           record["clicked_at"] = timestamp
+           record["classification"] = "human"
+
+       elif event_type == "email.opened":
+           record["opened_at"] = timestamp
+           if record["delivered_at"]:
+               delta = (timestamp - record["delivered_at"]).total_seconds()
+               # Tentative classification based on rapid open (<2s)
+               record["classification"] = "machine" if delta < 2 else "human"
+
+       # After 24h, if no click occurred, keep machine classification
+       if record["classification"] == "machine" and record["clicked_at"] is None:
+           if record["delivered_at"] and timestamp > record["delivered_at"] + timedelta(hours=24):
+               record["classification"] = "machine"
+
+       events_by_email[email_id] = record
+
+   @app.route("/resend-webhook", methods=["POST"])
+   def handle_webhook():
+       try:
+           event = request.get_json()
+           classify_event(event)
+           return jsonify({"status": "ok"}), 200
+       except Exception as e:
+           return jsonify({"error": str(e)}), 400
+
+   @app.route("/stats/<email_id>")
+   def get_stats(email_id):
+       """Retrieve stored info about a specific email_id."""
+       return jsonify(events_by_email.get(email_id, {}))
+
+   if __name__ == "__main__":
+       app.run(host="0.0.0.0", port=8000)
+   ```
+
+4. **Expose your webhook endpoint**
+
+   * In the Replit sidebar, click **Run**. This will start the Flask server on `https://<your‑repl‑name>.<your‑username>.repl.co`.
+   * Note the public URL (e.g., `https://my-open-classifier.user123.repl.co`).
+
+5. **Configure Resend webhook**
+
+   * In the Resend dashboard, create a webhook pointing to:
+
+     ```
+     https://<your‑repl‑name>.<your‑username>.repl.co/resend-webhook
+     ```
+   * Subscribe to `email.delivered`, `email.opened` and `email.clicked` events.
+
+6. **Test it out**
+
+   * Send a few emails through Resend.
+   * Access `https://<your‑repl‑name>.<your‑username>.repl.co/stats/<email_id>` to see how each email was classified.
+   * Emails opened < 2 seconds after delivery with no clicks within 24 hours will be marked as `machine`. If a click event is received, the classification switches to `human`.
+
+---
+
+This Replit setup gives you a working webhook receiver that stores events and classifies opens into “machine” or “human” based on timing and click behaviour. You can expand it to persist data in a database, add IP‑address heuristics, or integrate it with your analytics dashboard.
