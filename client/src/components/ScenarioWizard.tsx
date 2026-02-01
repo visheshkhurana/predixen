@@ -44,10 +44,12 @@ import {
 } from 'lucide-react';
 
 interface ScenarioTemplate {
+  id?: string;
   name: string;
   description: string;
   tags: string[];
   deltas: Partial<ScenarioParams>;
+  baselineDiff?: string;
 }
 
 interface ScenarioParams {
@@ -61,6 +63,8 @@ interface ScenarioParams {
   fundraise_month: number | null;
   fundraise_amount: number;
   tags: string[];
+  template_id?: string;
+  baseline_diff?: string;
 }
 
 interface ScenarioWizardProps {
@@ -400,6 +404,8 @@ export function ScenarioWizard({
       fundraise_month: template.deltas.fundraise_month ?? null,
       fundraise_amount: template.deltas.fundraise_amount ?? 0,
       tags: template.tags,
+      template_id: template.id,
+      baseline_diff: template.baselineDiff,
     });
     // Auto-advance to step 2 after template selection
     setTimeout(() => setCurrentStep(2), 150);

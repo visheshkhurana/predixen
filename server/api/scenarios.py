@@ -19,6 +19,8 @@ class CreateScenarioRequest(BaseModel):
     name: str
     base_scenario_id: Optional[str] = None
     assumptions: Dict[str, Any] = {}
+    baseline_diff: Optional[str] = None
+    template_id: Optional[str] = None
 
 
 class UpdateScenarioRequest(BaseModel):
@@ -116,6 +118,9 @@ def create_scenario(
         request.assumptions, 
         truth_scan.outputs_json if truth_scan else {}
     )
+    
+    outputs["baseline_diff"] = request.baseline_diff
+    outputs["template_id"] = request.template_id
     
     scenario = CompanyScenario(
         company_id=company_id,
@@ -227,10 +232,21 @@ def update_scenario(
         truth_scan = db.query(TruthScan).filter(
             TruthScan.company_id == company_id
         ).order_by(TruthScan.created_at.desc()).first()
-        scenario.outputs_json = compute_scenario_outputs(
+        
+        prior_baseline_diff = scenario.outputs_json.get("baseline_diff") if scenario.outputs_json else None
+        prior_template_id = scenario.outputs_json.get("template_id") if scenario.outputs_json else None
+        
+        new_outputs = compute_scenario_outputs(
             request.assumptions, 
             truth_scan.outputs_json if truth_scan else {}
         )
+        
+        if prior_baseline_diff:
+            new_outputs["baseline_diff"] = prior_baseline_diff
+        if prior_template_id:
+            new_outputs["template_id"] = prior_template_id
+        
+        scenario.outputs_json = new_outputs
     
     scenario.updated_at = datetime.utcnow()
     
