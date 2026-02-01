@@ -516,10 +516,6 @@ async def send_early_member_invite(
         base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
         timestamp = datetime.now().strftime("%B %d, %Y")
         
-        screenshot_dashboard = f"{base_url}/screenshots/dashboard.png"
-        screenshot_copilot = f"{base_url}/screenshots/copilot.png"
-        screenshot_simulation = f"{base_url}/screenshots/simulation.png"
-        
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -553,7 +549,10 @@ async def send_early_member_invite(
             <!-- Feature 1: Decision Advisor -->
             <div style="padding: 0 32px 32px 32px;">
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
-                    <img src="{screenshot_copilot}" alt="AI Decision Advisor" style="width: 100%; height: auto; display: block;" />
+                    <div style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); padding: 32px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 8px;">&#x1F9E0;</div>
+                        <div style="color: #ffffff; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">AI-Powered</div>
+                    </div>
                     <div style="padding: 20px;">
                         <div style="display: inline-block; background-color: #22c55e; padding: 4px 10px; border-radius: 4px; margin-bottom: 12px;">
                             <span style="color: #ffffff; font-size: 10px; font-weight: 600; text-transform: uppercase;">NEW</span>
@@ -569,7 +568,10 @@ async def send_early_member_invite(
             <!-- Feature 2: Scenario Simulator -->
             <div style="padding: 0 32px 32px 32px;">
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
-                    <img src="{screenshot_simulation}" alt="Scenario Simulator" style="width: 100%; height: auto; display: block;" />
+                    <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 32px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 8px;">&#x1F4CA;</div>
+                        <div style="color: #ffffff; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">10,000+ Simulations</div>
+                    </div>
                     <div style="padding: 20px;">
                         <h3 style="color: #ffffff; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Scenario Simulator</h3>
                         <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
@@ -582,7 +584,10 @@ async def send_early_member_invite(
             <!-- Feature 3: Multi-Agent Copilot -->
             <div style="padding: 0 32px 32px 32px;">
                 <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
-                    <img src="{screenshot_dashboard}" alt="Intelligence Dashboard" style="width: 100%; height: auto; display: block;" />
+                    <div style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); padding: 32px; text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 8px;">&#x1F916;</div>
+                        <div style="color: #ffffff; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">4 AI Agents</div>
+                    </div>
                     <div style="padding: 20px;">
                         <h3 style="color: #ffffff; margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">Multi-Agent AI Copilot</h3>
                         <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
