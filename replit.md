@@ -82,6 +82,12 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 
 ## Recent Changes (Feb 2026)
 
+### Trust & Simulation Sprint 1 (Feb 2026)
+- **Context Bar**: Added global context bar in app header showing Company • Scenario • Run ID • Timestamp • Data Freshness with tooltips for provenance details
+- **KPI Provenance Tooltips**: MetricCard component now supports provenance data showing definition, formula, source (Truth Scan/Simulation/Manual), timestamp, run ID, and confidence score
+- **Scenario/Run Tracking**: Added `currentScenario` and `latestRun` to global store for cross-module consistency
+- **Glossary Integration**: Created KPI_DEFINITIONS export with standardized metric definitions (Runway, Net Burn, Survival Probability, etc.)
+
 ### QA Bug Fixes Deployment
 - **PRED-001**: Overview page now syncs with Truth Scan data - fixed $0 cash display issue
 - **PRED-002**: Net Burn labeling corrected - negative values properly indicate cash burn

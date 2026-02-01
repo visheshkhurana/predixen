@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { MetricCard } from '@/components/MetricCard';
+import { MetricCard, type MetricProvenance } from '@/components/MetricCard';
 import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -1109,6 +1109,12 @@ export default function OverviewPage() {
           trendValue={`+${assumptions.growthRate}%`}
           testId="metric-mrr"
           onClick={() => setSelectedDrillDownMetric('mrr')}
+          provenance={{
+            definition: 'Monthly Recurring Revenue from your validated financial data.',
+            source: 'truth_scan',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
         <MetricCard
           title="ARR"
@@ -1117,6 +1123,13 @@ export default function OverviewPage() {
           trend="up"
           testId="metric-arr"
           onClick={() => setSelectedDrillDownMetric('arr')}
+          provenance={{
+            definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
+            formula: 'MRR × 12',
+            source: 'computed',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
         <MetricCard
           title="Cash on Hand"
@@ -1125,6 +1138,12 @@ export default function OverviewPage() {
           variant={projectedMetrics.runway < 6 ? 'danger' : projectedMetrics.runway < 12 ? 'warning' : 'success'}
           testId="metric-cash"
           onClick={() => setSelectedDrillDownMetric('cash')}
+          provenance={{
+            definition: 'Current available cash on hand from your validated financial data.',
+            source: 'truth_scan',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
         <MetricCard
           title="Burn Rate"
@@ -1132,6 +1151,13 @@ export default function OverviewPage() {
           subtitle="/month"
           onClick={() => setSelectedDrillDownMetric('burnRate')}
           testId="metric-burn-rate"
+          provenance={{
+            definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
+            formula: 'Revenue - Total Expenses',
+            source: 'truth_scan',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
         <MetricCard
           title="CAC"
@@ -1139,6 +1165,13 @@ export default function OverviewPage() {
           subtitle="Cost to Acquire"
           testId="metric-cac"
           onClick={() => setSelectedDrillDownMetric('cac')}
+          provenance={{
+            definition: 'Customer Acquisition Cost - total cost to acquire a new customer.',
+            formula: 'Sales & Marketing Spend / New Customers',
+            source: 'truth_scan',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
         <MetricCard
           title="LTV"
@@ -1147,6 +1180,13 @@ export default function OverviewPage() {
           variant={projectedMetrics.ltvCacRatio < 3 ? 'warning' : 'success'}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
+          provenance={{
+            definition: 'Customer Lifetime Value - expected revenue from a customer over their lifetime.',
+            formula: 'ARPU / Monthly Churn Rate',
+            source: 'computed',
+            timestamp: truthScan?.computed_at,
+            confidence: truthScan?.data_confidence_score,
+          }}
         />
       </div>
 

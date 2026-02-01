@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Stepper } from "@/components/Layout/Stepper";
 import { Badge } from "@/components/ui/badge";
+import { ContextBar } from "@/components/ContextBar";
 import { useFounderStore } from "@/store/founderStore";
 import { api } from "@/api/client";
 import AuthPage from "@/pages/auth";
@@ -199,7 +200,7 @@ function Router() {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const { token, currentCompany, truthScan, currentStep } = useFounderStore();
+  const { token, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
   const confidence = truthScan?.data_confidence_score || 0;
   
   const style = {
@@ -239,6 +240,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               {currentCompany && <Stepper currentStep={currentStep} />}
             </div>
             <div className="flex items-center gap-2">
+              <ContextBar 
+                scenarioName={currentScenario?.name}
+                scenarioId={currentScenario?.id}
+                runId={latestRun?.id}
+                runTimestamp={latestRun?.timestamp}
+              />
               {getConfidenceBadge()}
             </div>
           </header>

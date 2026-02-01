@@ -70,6 +70,17 @@ export interface ExtractionResult {
   uploadId?: number;
 }
 
+interface CurrentScenario {
+  id: number;
+  name: string;
+}
+
+interface LatestRun {
+  id: string;
+  timestamp: string;
+  scenarioId: number;
+}
+
 interface FounderState {
   token: string | null;
   user: User | null;
@@ -78,6 +89,9 @@ interface FounderState {
   truthScan: TruthScan | null;
   currentStep: 'truth' | 'simulation' | 'decision';
   investorModeEnabled: boolean;
+  
+  currentScenario: CurrentScenario | null;
+  latestRun: LatestRun | null;
   
   financialBaseline: FinancialBaseline | null;
   lastExtraction: ExtractionResult | null;
@@ -89,6 +103,8 @@ interface FounderState {
   setCompanies: (companies: Company[]) => void;
   setTruthScan: (scan: TruthScan | null) => void;
   setCurrentStep: (step: 'truth' | 'simulation' | 'decision') => void;
+  setCurrentScenario: (scenario: CurrentScenario | null) => void;
+  setLatestRun: (run: LatestRun | null) => void;
   logout: () => void;
   
   setFinancialBaseline: (baseline: FinancialBaseline) => void;
@@ -128,6 +144,9 @@ export const useFounderStore = create<FounderState>()(
       currentStep: 'truth',
       investorModeEnabled: false,
       
+      currentScenario: null,
+      latestRun: null,
+      
       financialBaseline: null,
       lastExtraction: null,
       extractionInProgress: false,
@@ -138,12 +157,16 @@ export const useFounderStore = create<FounderState>()(
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),
       setCurrentStep: (step) => set({ currentStep: step }),
+      setCurrentScenario: (scenario) => set({ currentScenario: scenario }),
+      setLatestRun: (run) => set({ latestRun: run }),
       logout: () => set({ 
         token: null, 
         user: null, 
         currentCompany: null, 
         companies: [], 
         truthScan: null,
+        currentScenario: null,
+        latestRun: null,
         financialBaseline: null,
         lastExtraction: null,
       }),

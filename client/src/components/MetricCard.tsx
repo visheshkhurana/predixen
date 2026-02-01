@@ -1,9 +1,28 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Info, Database, Calculator, Clock, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sparkline } from './Sparkline';
+import { formatDistanceToNow } from 'date-fns';
+
+export interface MetricProvenance {
+  definition: string;
+  formula?: string;
+  source: 'truth_scan' | 'simulation' | 'manual' | 'computed' | 'imported';
+  sourceLabel?: string;
+  timestamp?: string;
+  runId?: string;
+  confidence?: number;
+}
+
+const sourceConfig = {
+  truth_scan: { label: 'Truth Scan', color: 'text-emerald-400', bgColor: 'bg-emerald-500/10' },
+  simulation: { label: 'Simulation', color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
+  manual: { label: 'Manual Entry', color: 'text-amber-400', bgColor: 'bg-amber-500/10' },
+  computed: { label: 'Computed', color: 'text-purple-400', bgColor: 'bg-purple-500/10' },
+  imported: { label: 'Imported', color: 'text-cyan-400', bgColor: 'bg-cyan-500/10' },
+};
 
 interface MetricCardProps {
   title: string;
@@ -19,6 +38,7 @@ interface MetricCardProps {
   variant?: 'default' | 'warning' | 'danger' | 'success';
   testId?: string;
   tooltip?: string;
+  provenance?: MetricProvenance;
   onClick?: () => void;
 }
 
@@ -33,6 +53,7 @@ export function MetricCard({
   variant = 'default',
   testId = 'metric-card',
   tooltip,
+  provenance,
   onClick,
 }: MetricCardProps) {
   const getTrendIcon = () => {
@@ -123,7 +144,7 @@ export function MetricCard({
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-medium text-muted-foreground">{title}</span>
-            {tooltip && (
+            {(tooltip || provenance) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -135,8 +156,58 @@ export function MetricCard({
                     <Info className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent className="max-w-xs" side="top">
-                  <p className="text-sm">{tooltip}</p>
+                <TooltipContent className="max-w-xs p-3" side="top">
+                  {provenance ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm">{title}</span>
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            sourceConfig[provenance.source].bgColor,
+                            sourceConfig[provenance.source].color
+                          )}
+                        >
+                          {provenance.sourceLabel || sourceConfig[provenance.source].label}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{provenance.definition}</p>
+                      {provenance.formula && (
+                        <div className="flex items-start gap-1.5 text-xs">
+                          <Calculator className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+                          <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded break-all">
+                            {provenance.formula}
+                          </code>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                        <div className="flex items-center gap-1">
+                          <Database className={cn("h-3 w-3", sourceConfig[provenance.source].color)} />
+                          <span>{provenance.sourceLabel || sourceConfig[provenance.source].label}</span>
+                        </div>
+                        {provenance.timestamp && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <span>{formatDistanceToNow(new Date(provenance.timestamp), { addSuffix: true })}</span>
+                          </div>
+                        )}
+                        {provenance.runId && (
+                          <div className="flex items-center gap-1">
+                            <GitBranch className="h-3 w-3" />
+                            <span className="font-mono">{provenance.runId.slice(0, 8)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {provenance.confidence !== undefined && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Confidence: {provenance.confidence}%
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm">{tooltip}</p>
+                  )}
                 </TooltipContent>
               </Tooltip>
             )}
