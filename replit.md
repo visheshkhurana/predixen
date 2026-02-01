@@ -80,6 +80,28 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 -   **Platform Admin**: Application owner with access to the Admin dashboard.
 -   **Company Level Roles**: `owner`, `admin`, `analyst`, `viewer` with varying access levels to company data.
 
+## Recent Changes (Feb 2026)
+
+### QA Bug Fixes Deployment
+- **PRED-001**: Overview page now syncs with Truth Scan data - fixed $0 cash display issue
+- **PRED-002**: Net Burn labeling corrected - negative values properly indicate cash burn
+- **PRED-003**: AI Copilot aligns with Truth Scan metrics - agents now cite exact values with timestamps
+- **PRED-004**: Alerts page handles insufficient data gracefully - shows "More Data Needed" amber warning
+- **PRED-005**: Alert CTAs route to correct pages - /data and /truth routes work properly
+- **PRED-006**: Templates use selected company correctly - scenarios create properly
+- **PRED-007**: Cap Table and Fundraising API calls fixed - forms submit correctly with proper JSON parsing
+- **PRED-010/011**: Enhanced Monte Carlo engine with dynamic horizon extension (up to 264 months) - P10/P50/P90 now show realistic variance
+
+### Simulation Engine Upgrade
+- Upgraded from `run_monte_carlo` to `run_enhanced_monte_carlo` for all simulation runs
+- Dynamic horizon extension: Simulations extend beyond initial horizon when survival probability remains high
+- Removed deprecated `hiring_plan` parameter from enhanced simulation inputs
+
+### Copilot Alignment
+- Router and CFO agents now include explicit instructions to use Truth Scan validated values
+- Citation format: "[value] (per Truth Scan, [date])" for all financial metrics
+- Reduced KPI contradictions between chat responses and dashboard displays
+
 ## External Dependencies
 
 -   **OpenAI**: GPT-4o for financial analysis, metrics extraction, vision tasks (via Replit AI Integrations).
