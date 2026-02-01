@@ -1,0 +1,180 @@
+Predixen — Founder/CXO QA Bug Report (Demo)
+Predixen ‚Äî Founder/CXO QA Bug Report (Demo)
+Date: 2026-01-31
+Tester mindset: Founder/CXO using product to make real decisions; exploratory QA across core modules.
+
+=== Executive Summary ===
+Predixen has strong surface area (Truth Scan, Simulation visuals, Templates catalog), but currently fails the #1 requirement for a decision product: trust in numbers. Multiple modules disagree on cash/runway/survival and even labeling (net burn). Until cross-module consistency + provenance is fixed, a founder cannot safely use outputs to make $-impacting decisions.
+
+=== Environment / Setup ===
+- Site: https://predixen.app
+- Mode: Try Demo Simulation
+- Sample company created: TechFlow AI
+- Sample baseline used: Cash on Hand 500,000; Monthly Revenue 50,000; Total Monthly Expenses ~80,000; Growth 10% (values observed in UI)
+
+=== Key Findings (P0/P1) ===
+
+P0 ‚Äî Trust/Consistency Breakers
+1) Overview shows Cash on Hand = $0 and Runway = 0.0 mo while Truth Scan and Simulation show Cash = $500K
+   - Impact: destroys trust; dashboards become unusable for exec decision-making.
+
+2) Simulation Results: Net Burn is labeled ‚ÄúCash positive‚Äù when Net Burn is shown as a positive burn figure (e.g., $30K)
+   - Impact: CFO/finance users will consider model unreliable.
+
+3) Copilot contradicts displayed simulation KPIs
+   - UI sidebar shows Survival 18m: 100% (baseline), while Copilot response cited baseline survival (18m) as ~50%.
+   - Impact: ‚ÄúAI advisor‚Äù becomes a liability without citations and alignment to scenario artifacts.
+
+P1 ‚Äî Core Feature Breakage / Misleading States
+4) Alerts page says ‚ÄúData Required for Monitoring‚Äù even after data saved + Truth Scan run + Simulation run
+   - Also shows alert counts but ‚ÄúOverall Status: Unknown‚Äù.
+
+5) Alerts page CTAs link to incorrect routes
+   - Observed: /data-input and /truth-scan
+   - Expected: /data and /truth (or redirects).
+
+6) Templates: ‚ÄúApply Template‚Äù does not create a new saved scenario
+   - After applying Pricing Increase, Saved scenarios still only shows Baseline.
+   - Either create scenario automatically OR rename CTA to ‚ÄúOpen in Builder‚Äù and require explicit save.
+
+7) Fundraising: ‚ÄúCreate Cap Table‚Äù does not complete
+   - Dialog remains open; no success toast; no cap table appears.
+
+=== Full Bug List (Tracker Format) ===
+
+PRED-001 ‚Äî Overview cash/runway conflicts with Truth Scan + Simulation
+Severity: P0
+Area: Cross-module data consistency
+Steps:
+1) Try Demo Simulation
+2) Complete onboarding with sample values (Cash on Hand $500,000; Monthly Revenue $50,000)
+3) Data Input -> Financials confirm values and Save All Data
+4) Truth Scan: note Cash Balance/Runway
+5) Simulation -> Simulation Results: note Cash Balance/Runway
+6) Overview: note Cash on Hand/Runway
+Expected:
+- Cash/Runway consistent across Overview/Truth/Simulation for same company+scenario OR explicit selector ‚ÄúActuals vs Scenario‚Äù with explanation.
+Actual:
+- Truth+Simulation show ~$500K cash; Overview shows $0 + runway 0.0 mo + critical alerts.
+Notes:
+- Likely different data sources without visible selector.
+
+PRED-002 ‚Äî Simulation Results: Net Burn labeling/sign wrong (‚ÄúCash positive‚Äù)
+Severity: P0
+Area: Simulation Results
+Steps:
+1) Run baseline scenario
+2) Open Simulation Results
+3) Locate Net Burn card
+Expected:
+- If burn is positive, label indicates burning cash; if cash positive, show negative burn or use ‚ÄúNet Cash Flow‚Äù.
+Actual:
+- Net Burn (e.g., $30K) labeled ‚ÄúCash positive‚Äù.
+
+PRED-003 ‚Äî Copilot contradicts displayed simulation KPIs
+Severity: P0
+Area: Copilot + Simulation
+Steps:
+1) Run baseline simulation
+2) Open Copilot
+3) Ask ‚Äúextend runway by 6 months‚Äù
+4) Compare Copilot metrics vs ‚ÄúLatest Simulation‚Äù sidebar
+Expected:
+- Copilot cites scenario/run id and matches displayed KPIs.
+Actual:
+- Copilot references baseline survival like 50% -> 64% while UI shows Survival 18m: 100%.
+Fix suggestion:
+- Add citations: scenario id, run id, timestamp, assumptions.
+
+PRED-004 ‚Äî Alerts page claims data required despite saved data + truth scan
+Severity: P1
+Area: Alerts & Monitoring
+Steps:
+1) Ensure saved financials + Truth Scan run + Simulation run
+2) Navigate to Alerts
+Expected:
+- Alerts dashboard uses truth scan + metrics and shows status/threshold breaches.
+Actual:
+- ‚ÄúData Required for Monitoring‚Äù + ‚ÄúStatus Unknown‚Äù despite existing data.
+
+PRED-005 ‚Äî Alerts CTAs route to wrong URLs
+Severity: P1
+Area: Routing
+Steps:
+1) Open Alerts
+2) Click Add Data / Go to Data Input / Run Truth Scan
+Expected:
+- Valid routes or redirects.
+Actual:
+- Links point to /data-input and /truth-scan.
+
+PRED-006 ‚Äî Templates Apply Template does not create a new saved scenario
+Severity: P1
+Area: Templates -> Simulation
+Steps:
+1) Templates
+2) Pricing Increase
+3) Apply Template
+4) Simulation -> Saved
+Expected:
+- New scenario appears (Pricing Increase), runnable + comparable.
+Actual:
+- No new saved scenario; still only Baseline.
+
+PRED-007 ‚Äî Fundraising: Create Cap Table does not complete
+Severity: P1
+Area: Fundraising
+Steps:
+1) Fundraising -> Cap Table
+2) New Cap Table
+3) Name: ‚ÄúSeed Cap Table‚Äù
+4) Create
+Expected:
+- Dialog closes + cap table appears.
+Actual:
+- Dialog persists; no cap table created.
+
+PRED-008 ‚Äî Onboarding: Load Sample Company doesn‚Äôt fill required fields
+Severity: P2
+Area: Onboarding
+Expected:
+- Sample fills Company Name/Industry/Stage or explains remaining.
+Actual:
+- Still requires manual selection/entry.
+
+PRED-009 ‚Äî Decisions: deltas appear meaningless (0.2% survival, +0.0 mo runway)
+Severity: P2
+Area: Decisions
+Expected:
+- Meaningful deltas and/or more precision + confidence + downside risk.
+Actual:
+- Values appear non-actionable.
+
+=== Founder/CXO: What would make me pay $1,000/month ===
+(Strongest way to sell: Predixen becomes the ‚Äòdecision OS‚Äô that creates measurable outcomes, not dashboards.)
+
+1) Single Source of Truth + Auditability (non-negotiable)
+- Every number has definition + formula + data source + timestamp
+- Scenario versioning (run id) + reproducible results
+- Reconciliation layer so modules never disagree (or disagreements are explicit and explained)
+
+2) Decision-to-execution workflows
+- ‚ÄúAdopt Plan‚Äù turns a recommendation into tasks, milestones, alert thresholds, owners
+- Plays nicely with Linear/Jira/Asana + Slack/WhatsApp notifications
+
+3) Live integrations (reduce manual work)
+- QuickBooks/Xero + payroll + bank feeds + Stripe/CRM so Truth Scan runs on real data
+
+4) Board/Investor-grade outputs
+- Auto-generate investor update + board appendix: runway, burn multiple, risks, plan
+- Exports: slides + CSV + narrative with assumptions
+
+5) Scenario library that actually changes outcomes
+- Templates instantiate scenarios, show deltas vs baseline, and flow into Decisions + Monitoring
+
+=== Suggested Fix Priority ===
+1) Fix cross-module consistency + provenance
+2) Fix sign conventions/labeling + Copilot citations
+3) Make Alerts truly data-driven + fix routes
+4) Make Templates create scenarios + comparisons
+5) Fix Fundraising cap table creation + investor room dependencies

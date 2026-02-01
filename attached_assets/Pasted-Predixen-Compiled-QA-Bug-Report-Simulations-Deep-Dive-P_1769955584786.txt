@@ -1,0 +1,217 @@
+Predixen — Compiled QA Bug Report (Simulations Deep Dive)
+Predixen ‚Äî Compiled QA Bug Report (Founder/CXO)
+Updated: 2026-01-31
+Scope: Exploratory, end-to-end testing in Demo mode with emphasis on simulation correctness + cross-module data integrity.
+URL: https://predixen.app
+Test company (demo): TechFlow AI
+
+============================================================
+0) Executive Summary (what‚Äôs broken)
+============================================================
+Predixen‚Äôs biggest issue is decision-trust: the same company shows different core numbers (cash, runway, survival) across Overview vs Truth Scan vs Simulation, and the simulation engine appears to (a) ignore some parameter changes, (b) produce suspiciously zero variance distributions (P10=P50=P90), and (c) label key metrics incorrectly (Net Burn ‚Äúcash positive‚Äù).
+
+If this is meant to be used by founders/CXOs to make high-stakes decisions, fixing the consistency/provenance layer is P0.
+
+============================================================
+1) Simulation-Focused Findings (deep dive)
+============================================================
+
+1.1 Strategic Builder baseline values
+- Scenario Builder header shows:
+  - Cash on Hand: $500K
+  - Monthly Burn: $30K
+  - Current Runway: 16.7 months (500K / 30K)
+  - Growth Rate: +10%
+- These values are internally consistent.
+
+1.2 Extend Runway ‚Üí Conservative Cost Cutting (parameterization)
+- Strategy card preview (before choosing parameters) displayed:
+  - Burn Change: -15%
+  - Survival (18m): 78%
+  - ARR Growth: 0%
+- After selecting the strategy, the UI exposes controls:
+  - Pricing change (default: No change)
+  - Growth change (%)
+  - Expense reduction (dropdown)
+  - Fundraising amount
+
+1.3 Expense reduction selection (-20%) changes runway impact (local calculation)
+- After setting ‚ÄúHow much can you reduce expenses?‚Äù to -20%:
+  - Runway Impact shown: +19.0 months
+  - Current: 16.7 months
+  - Projected: 35.7 months
+- These are directionally plausible as a local UI calculation.
+
+1.4 Running the scenario results in suspicious outputs
+After running ‚ÄúConservative Cost Cutting‚Äù from Saved scenarios:
+- Simulation Results show:
+  - Runway (P50): 36.0 mo
+  - P10: 36.0 / P90: 36.0 (range spread 0.0 mo)
+  - Survival (18m): 100%
+  - Cash Balance: $500K
+  - Net Burn: $30K (still labeled ‚ÄúCash positive‚Äù)
+
+Why this is suspicious:
+- A Monte Carlo output with P10=P50=P90 for runway is extremely unlikely unless the model is effectively deterministic (or variance disabled/bugged).
+- Results (36.0 mo runway) match the earlier baseline-like results rather than the parameterized ‚ÄúProjected 35.7 months‚Äù.
+- Cash Balance remains $500K and Net Burn $30K, suggesting scenario parameters may not be applied to the underlying simulation engine.
+
+1.5 Running simulation sometimes yields ‚ÄúNo simulation results yet‚Äù despite Saved scenario count increasing
+- After clicking ‚ÄúRun Simulation‚Äù in the builder (after setting parameters), Simulation Results tab appeared selected/disabled and displayed:
+  - ‚ÄúNo simulation results yet. Create and run a scenario to see projections.‚Äù
+- At the same time, Saved scenarios count incremented (Saved (2)).
+- This indicates asynchronous job/state issues: scenario saved but run not completed, or results not associated with the scenario id.
+
+============================================================
+2) Cross-Module Data Integrity Findings
+============================================================
+
+2.1 Data Input changes don‚Äôt propagate into Truth Scan/Simulation
+- Attempted to change Cash on Hand 500,000 ‚Üí 300,000 and save.
+- Data Input recalculated runway correctly (300,000 / 30,000 = 10.0 months).
+- Truth Scan continued to show Cash Balance $500K and Runway P50 25.0 months.
+- Simulation continued to show Cash on Hand $500K and Runway 16.7 months.
+- Clear Cache reverted Financials back to 500,000.
+
+Interpretation:
+- Truth Scan + Simulation appear to read a different source (seed/demo dataset) and ignore Data Input overrides, OR persistence is broken.
+
+============================================================
+3) Detailed Bug List (Issue Tracker Format)
+============================================================
+
+PRED-001 ‚Äî Overview cash/runway conflicts with Truth Scan + Simulation
+Severity: P0
+Area: Cross-module data consistency
+Repro:
+1) Try Demo Simulation
+2) Complete onboarding with sample values (Cash on Hand $500,000; Monthly Revenue $50,000)
+3) Data Input -> Financials confirm values and Save All Data
+4) Truth Scan: note Cash Balance/Runway
+5) Simulation -> Simulation Results: note Cash Balance/Runway
+6) Overview: note Cash on Hand/Runway
+Expected:
+- Consistent cash/runway OR explicit ‚ÄúActuals vs Scenario‚Äù selector with explanation.
+Actual:
+- Truth+Simulation show ~$500K cash; Overview shows $0 + runway 0.0 mo + critical alerts.
+
+PRED-002 ‚Äî Simulation Results: Net Burn labeling/sign wrong (‚ÄúCash positive‚Äù)
+Severity: P0
+Area: Simulation Results
+Repro:
+1) Run a scenario
+2) Open Simulation Results
+3) Observe Net Burn card label
+Expected: Correct sign convention/label.
+Actual: Net Burn (e.g., $30K) labeled ‚ÄúCash positive‚Äù.
+
+PRED-003 ‚Äî Copilot contradicts displayed simulation KPIs
+Severity: P0
+Area: Copilot + Simulation
+Repro:
+1) Run baseline simulation
+2) Open Copilot
+3) Ask ‚Äúextend runway by 6 months‚Äù
+4) Compare Copilot metrics vs ‚ÄúLatest Simulation‚Äù sidebar
+Expected: Copilot matches scenario KPIs and cites scenario/run id.
+Actual: Copilot referenced baseline survival like ~50% while UI shows Survival 18m: 100%.
+
+PRED-004 ‚Äî Alerts page claims data required despite saved data + truth scan
+Severity: P1
+Area: Alerts & Monitoring
+Repro:
+1) Ensure saved financials + Truth Scan run + Simulation run
+2) Navigate to Alerts
+Expected: Alerts populated based on existing data.
+Actual: ‚ÄúData Required for Monitoring‚Äù + ‚ÄúStatus Unknown‚Äù.
+
+PRED-005 ‚Äî Alerts CTAs route to wrong URLs
+Severity: P1
+Area: Routing
+Repro:
+1) Open Alerts
+2) Click Add Data / Go to Data Input / Run Truth Scan
+Expected: Valid routes.
+Actual: /data-input and /truth-scan.
+
+PRED-006 ‚Äî Templates Apply Template does not create a new saved scenario
+Severity: P1
+Area: Templates ‚Üí Simulation
+Repro:
+1) Templates
+2) Pricing Increase ‚Üí Apply Template
+3) Simulation ‚Üí Saved
+Expected: New scenario appears.
+Actual: No new saved scenario (previously observed).
+
+PRED-007 ‚Äî Fundraising: Create Cap Table does not complete
+Severity: P1
+Area: Fundraising
+Repro:
+1) Fundraising ‚Üí Cap Table ‚Üí New Cap Table
+2) Name + Create
+Expected: Cap table created.
+Actual: Dialog persists; no cap table created.
+
+PRED-008 ‚Äî Onboarding: Load Sample Company doesn‚Äôt fill required fields
+Severity: P2
+Area: Onboarding
+Expected: Sample fills required fields or explains what‚Äôs left.
+Actual: Continue blocked until manual selection/entry.
+
+PRED-009 ‚Äî Decisions: deltas appear meaningless (e.g., +0.2% survival, +0.0 mo runway)
+Severity: P2
+Area: Decisions
+Expected: Meaningful deltas, more precision, confidence + downside.
+Actual: Feels non-actionable.
+
+PRED-010 ‚Äî Simulation variance appears broken (P10=P50=P90)
+Severity: P0
+Area: Simulation engine output
+Repro:
+1) Run ‚ÄúConservative Cost Cutting‚Äù scenario
+2) Observe Runway distribution
+Expected: Some spread unless explicitly deterministic.
+Actual: P10=P50=P90=36.0 mo; range spread 0.0 mo.
+Notes: Strong signal of variance disabled, parameter not applied, or distribution computation bug.
+
+PRED-011 ‚Äî Simulation parameters appear not applied to engine results
+Severity: P0
+Area: Simulation engine parameter binding
+Repro:
+1) In Extend Runway flow, set expense reduction to -20% (UI shows Projected runway 35.7 months)
+2) Run scenario
+3) Compare results
+Expected: Results reflect the parameter changes.
+Actual: Results show 36.0mo runway (baseline-like) and unchanged cash/burn.
+
+PRED-012 ‚Äî Simulation run state/results association is inconsistent
+Severity: P1
+Area: Simulation orchestration/state
+Repro:
+1) Click Run Simulation in builder
+2) Observe Simulation Results tab
+Expected: Results appear for the run.
+Actual: ‚ÄúNo simulation results yet‚Äù while Saved count increments.
+
+PRED-013 ‚Äî Data Input persistence/propagation unclear (Cash edit not reflected)
+Severity: P1
+Area: Data model + persistence
+Repro:
+1) Change Cash in Data Input to 300,000 and save
+2) Verify in Truth Scan/Simulation
+Expected: Cash change propagates or is explicitly ‚Äúdraft/unapplied‚Äù.
+Actual: Truth Scan/Simulation still show $500K.
+
+============================================================
+4) Recommendations (what to fix first)
+============================================================
+1) Establish a single, explicit ‚Äúdata contract‚Äù:
+   - What is the canonical data source for Simulation? (Truth Scan? Data Input? Scenario overrides?)
+   - Provide a visible selector + provenance if multiple exist.
+2) Fix simulation engine parameter binding + distribution:
+   - Ensure parameter changes (expense reduction, growth change, pricing) affect the underlying model.
+   - Ensure P10/P50/P90 are computed from actual distributions.
+3) Fix sign conventions/labels (Net Burn / cash positive/negative)
+4) Fix run orchestration (Saved scenario vs run result association)
+5) Fix cross-module numbers consistency to restore trust.
