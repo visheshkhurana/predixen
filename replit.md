@@ -82,6 +82,11 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 
 ## Recent Changes (Feb 2026)
 
+### Trust & Simulation Sprint 2 (Feb 2026)
+- **Copilot Citations**: Enhanced generate_citations to include scenario_id, run_id, truth_scan_id and truth_scan_at for full provenance tracking
+- **Templates → Scenarios**: ScenarioWizard now passes template_id and baseline_diff when creating scenarios from templates
+- **Scenario API Enhancement**: CreateScenarioRequest now accepts baseline_diff and template_id fields for tracking template provenance
+
 ### Trust & Simulation Sprint 1 (Feb 2026)
 - **Context Bar**: Added global context bar in app header showing Company • Scenario • Run ID • Timestamp • Data Freshness with tooltips for provenance details
 - **KPI Provenance Tooltips**: MetricCard component now supports provenance data showing definition, formula, source (Truth Scan/Simulation/Manual), timestamp, run ID, and confidence score

@@ -274,15 +274,18 @@ async def copilot_chat(
     ).order_by(TruthScan.created_at.desc()).first()
     
     scenario_assumptions = {}
+    request_scenario = None
+    request_scenario_id = None
     if request.scenario_id:
         try:
             scenario_uuid = uuid_lib.UUID(request.scenario_id)
-            scenario = db.query(CompanyScenario).filter(
+            request_scenario = db.query(CompanyScenario).filter(
                 CompanyScenario.id == scenario_uuid,
                 CompanyScenario.company_id == company_id
             ).first()
-            if scenario:
-                scenario_assumptions = scenario.assumptions_json or {}
+            if request_scenario:
+                scenario_assumptions = request_scenario.assumptions_json or {}
+                request_scenario_id = request_scenario.id
         except ValueError:
             pass
     
@@ -411,7 +414,25 @@ async def copilot_chat(
     from server.api.data_health import calculate_data_health
     data_health = calculate_data_health(truth_scan)
     
-    citations = generate_citations(truth_scan, output)
+    scenario_id_for_citation = None
+    run_id_for_citation = None
+    
+    if request_scenario_id:
+        scenario_id_for_citation = request_scenario_id
+        latest_run_for_scenario = db.query(SimulationRun).filter(
+            SimulationRun.scenario_id == request_scenario_id
+        ).order_by(SimulationRun.created_at.desc()).first()
+        if latest_run_for_scenario:
+            run_id_for_citation = latest_run_for_scenario.id
+    else:
+        latest_run = db.query(SimulationRun).join(Scenario).filter(
+            Scenario.company_id == company_id
+        ).order_by(SimulationRun.created_at.desc()).first()
+        if latest_run:
+            scenario_id_for_citation = latest_run.scenario_id
+            run_id_for_citation = latest_run.id
+    
+    citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
     highlighted_claims = generate_highlighted_claims(output, citations)
     
     return CopilotChatResponse(
@@ -551,10 +572,24 @@ def generate_investor_analysis(
     return analysis
 
 
-def generate_citations(truth_scan, output: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Generate citations from truth scan and output data."""
+def generate_citations(
+    truth_scan, 
+    output: Dict[str, Any], 
+    scenario_id: Optional[int] = None,
+    run_id: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """Generate citations from truth scan and output data with scenario/run provenance."""
     citations = []
     citation_index = 1
+    
+    provenance_meta = {}
+    if scenario_id:
+        provenance_meta["scenario_id"] = scenario_id
+    if run_id:
+        provenance_meta["run_id"] = run_id
+    if truth_scan:
+        provenance_meta["truth_scan_id"] = truth_scan.id
+        provenance_meta["truth_scan_at"] = truth_scan.computed_at.isoformat() if truth_scan.computed_at else None
     
     if truth_scan and truth_scan.outputs_json:
         metrics = truth_scan.outputs_json.get("metrics", {})
@@ -565,7 +600,8 @@ def generate_citations(truth_scan, output: Dict[str, Any]) -> List[Dict[str, Any
                 "source_id": f"truth_scan_{citation_index}",
                 "label": "Truth Scan - Financial Metrics",
                 "kind": "analysis",
-                "snippet": f"Revenue: ${monthly_revenue:,.0f}/mo"
+                "snippet": f"Revenue: ${monthly_revenue:,.0f}/mo",
+                **provenance_meta
             })
             citation_index += 1
         
@@ -575,7 +611,8 @@ def generate_citations(truth_scan, output: Dict[str, Any]) -> List[Dict[str, Any
                 "source_id": f"truth_scan_{citation_index}",
                 "label": "Truth Scan - Runway Analysis",
                 "kind": "analysis",
-                "snippet": f"Runway: {runway_months:.1f} months"
+                "snippet": f"Runway: {runway_months:.1f} months",
+                **provenance_meta
             })
             citation_index += 1
     
