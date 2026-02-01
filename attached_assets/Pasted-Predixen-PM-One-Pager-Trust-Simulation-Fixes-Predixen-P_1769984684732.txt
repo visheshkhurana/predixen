@@ -1,0 +1,112 @@
+Predixen — PM One‑Pager (Trust + Simulation Fixes)
+Predixen ‚Äî PM One‚ÄëPager (Paying Founder/CXO Lens)
+
+Context
+I used Predixen like a paying founder/CXO: trying to trust the product enough to make decisions (hiring/pricing/fundraise timing) and justify a $1,000/mo subscription. I also sanity-checked core calculations and cross-module consistency.
+
+1) Problem statement (what‚Äôs blocking conversion)
+Predixen currently fails the ‚Äúdecision trust‚Äù bar.
+Core metrics (cash, runway, survival, burn) are inconsistent across modules and/or are not clearly tied to a specific data source + scenario + run. Simulation outputs sometimes look deterministic or not affected by parameter changes. Copilot can contradict the app‚Äôs own simulation KPIs.
+
+If I can‚Äôt trust the numbers, I can‚Äôt justify $1k/mo‚Äîno matter how good the UI looks.
+
+2) Evidence (what I observed)
+A) Cross-module inconsistencies
+- Data Input updates (e.g., Cash on Hand edits) can recalc locally, but Truth Scan / Simulation may still show old values or a different dataset.
+- Overview/Truth/Simulation have shown different cash/runway for the same company context.
+
+B) Simulation credibility issues
+- Strategy Builder shows parameterized ‚ÄúProjected runway impact,‚Äù but Simulation Results may still look baseline-like.
+- Monte Carlo outputs have shown cases like P10 = P50 = P90 (0 spread), which is suspicious for a probabilistic model.
+
+C) Finance accuracy / labeling issues
+- Net burn labels/sign conventions (e.g., ‚Äúcash positive‚Äù while showing a burn number) can be wrong or confusing.
+
+D) Copilot grounding issues
+- Copilot can produce outputs that conflict with ‚ÄúLatest Simulation‚Äù KPIs unless it‚Äôs forced to use the same scenario/run context and cite it.
+
+3) Impact (why it matters for revenue + retention)
+- Conversion killer: founders need reliability to pay premium pricing.
+- Churn risk: CFO/FP&A will sanity-check signs/definitions and reject the tool if it doesn‚Äôt reconcile.
+- Brand risk: ‚ÄúAI CFO‚Äù that contradicts the product reads like hallucination.
+- Product-market fit risk: Without a trustworthy ‚Äúsingle truth,‚Äù Predixen becomes a dashboard demo, not an executive system.
+
+4) Recommendations (what to fix + what it unlocks)
+
+1) Create a ‚Äúsingle source of truth‚Äù contract (+ make context visible everywhere)
+Do
+- Define canonical financial state per company and an explicit distinction between:
+  - Actuals (latest saved/imported)
+  - Scenario overrides
+  - Demo seed datasets
+- Add a global Context Bar (Company ‚Ä¢ Scenario ‚Ä¢ Run ID ‚Ä¢ Timestamp ‚Ä¢ Data freshness).
+- Add a Provenance panel on every KPI view (definition + formula + source + timestamp + run id).
+Unlocks
+- Trust, executive adoption, and pricing power.
+
+2) Make simulation parameter binding + distribution quality non-negotiable
+Do
+- Ensure Strategic Builder parameters actually bind into engine inputs (not only UI previews).
+- Fix variance: ensure distributions are computed from simulation runs; avoid ‚ÄúP10=P50=P90‚Äù unless deterministic mode is intentional and labeled.
+- Add a hidden ‚ÄúModel Debug‚Äù drawer:
+  - N runs, horizon, applied parameters, randomness/seed policy.
+Unlocks
+- Credible decision-making; ‚Äúthis feels real‚Äù to sophisticated users.
+
+3) Standardize metric definitions and sign conventions
+Do
+- Single glossary + enforcement:
+  - Net burn vs net cash flow
+  - ‚Äúcash positive/negative‚Äù
+  - burn multiple formula
+- Tooltips on KPI cards should show formulas and inputs.
+Unlocks
+- CFO trust + reduced support burden.
+
+4) Ground Copilot to scenario/run artifacts
+Do
+- Copilot must cite: scenario id + run id + KPIs used.
+- If it lacks latest run, it must say so and prompt user to run/refresh.
+- Add an automated ‚ÄúConsistency Check‚Äù that blocks contradictory claims or flags them.
+Unlocks
+- Copilot becomes a premium feature, not a risk.
+
+5) Make templates ‚Üí scenarios ‚Üí decisions a tight workflow
+Do
+- ‚ÄúApply Template‚Äù must create a new scenario (or rename to ‚ÄúOpen in Builder‚Äù).
+- Every template should produce:
+  - saved scenario
+  - run
+  - delta vs baseline
+  - feed into Decisions
+Unlocks
+- Higher activation and repeat usage.
+
+6) Move from insight ‚Üí execution (why $1k/mo is plausible)
+Do
+- ‚ÄúAdopt Plan‚Äù should generate:
+  - tasks/milestones
+  - KPI targets
+  - alert thresholds tied to assumptions
+  - review checkpoints
+- Integrations: Slack/Calendar/Linear/Jira.
+Unlocks
+- Clear ROI: fewer bad decisions + saved time + accountability.
+
+5) Proposed priority plan (next 2 sprints)
+Sprint 1
+1) Context Bar + Provenance layer (every module)
+2) Fix simulation parameter binding + run state reliability
+3) Fix sign conventions/labels + KPI glossary
+
+Sprint 2
+4) Copilot citations + consistency checks
+5) Templates instantiate scenarios + delta views
+6) Alerts: correct routes + use real data + thresholds
+
+6) Success metrics (how we know it worked)
+- Consistency rate: % of key KPIs that match across Overview/Truth/Simulation for same company+run (target 99%).
+- Simulation realism: non-zero distribution spread where expected; parameter changes cause measurable deltas.
+- Copilot correctness: % responses with valid citations + no contradictions vs UI (target 95%+).
+- Activation: % users who create ‚â•2 scenarios and compare them within first session.
+- Conversion: trial ‚Üí paid lift after trust improvements.
