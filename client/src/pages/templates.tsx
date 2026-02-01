@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useFounderStore } from "@/store/founderStore";
 
 interface ScenarioTemplate {
   id: string;
@@ -135,7 +136,8 @@ export default function TemplatesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, navigate] = useLocation();
-  const [companyId] = useState(1);
+  const { currentCompany } = useFounderStore();
+  const companyId = currentCompany?.id;
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmTemplate, setConfirmTemplate] = useState<ScenarioTemplate | null>(null);

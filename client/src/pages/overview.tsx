@@ -506,12 +506,36 @@ export default function OverviewPage() {
     }
   }, [truthScan, setTruthScan]);
 
+  const baseData = useMemo(() => {
+    const m = truthScan?.metrics || {};
+    const getValue = (key: string, fallback: number) => {
+      const val = m[key];
+      if (val && typeof val === 'object' && 'value' in val) return val.value ?? fallback;
+      if (typeof val === 'number') return val;
+      return fallback;
+    };
+    
+    return {
+      mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
+      arr: getValue('arr', DUMMY_BASE_DATA.arr),
+      cash: getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash)),
+      burnRate: Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate))),
+      cac: getValue('cac', DUMMY_BASE_DATA.cac),
+      ltv: getValue('ltv', DUMMY_BASE_DATA.ltv),
+      grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
+      paybackPeriod: getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod),
+      totalCustomers: getValue('total_customers', DUMMY_BASE_DATA.totalCustomers),
+      churnRate: getValue('churn_rate', DUMMY_BASE_DATA.churnRate),
+      conversionRate: DUMMY_BASE_DATA.conversionRate,
+      profitabilityDate: DUMMY_BASE_DATA.profitabilityDate,
+    };
+  }, [truthScan?.metrics]);
+
   const projectedMetrics = useMemo(() => {
-    return computeProjectedMetrics(DUMMY_BASE_DATA, assumptions);
-  }, [assumptions]);
+    return computeProjectedMetrics(baseData, assumptions);
+  }, [baseData, assumptions]);
 
   const chartData = useMemo(() => {
-    const baseData = DUMMY_BASE_DATA;
     const projections = computeMonthlyProjections(baseData, assumptions, 12);
     
     const data = [];
@@ -533,10 +557,9 @@ export default function OverviewPage() {
       });
     }
     return data;
-  }, [assumptions]);
+  }, [baseData, assumptions]);
 
   const getDrillDownData = useCallback((metricKey: string) => {
-    const baseData = DUMMY_BASE_DATA;
     const metricTitles: Record<string, string> = {
       mrr: 'Monthly Recurring Revenue',
       arr: 'Annual Recurring Revenue',

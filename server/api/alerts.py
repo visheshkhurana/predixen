@@ -138,8 +138,11 @@ def analyze_company_health(
     
     if len(records) < 2:
         return {
+            "overall_status": "insufficient_data",
             "status": "insufficient_data",
             "message": "Need at least 2 months of data for analysis",
+            "drivers": {},
+            "recommendations": [],
         }
     
     # Build alert config

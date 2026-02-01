@@ -78,22 +78,27 @@ export default function FundraisingPage() {
 
   const { data: capTablesData, isLoading: capTablesLoading } = useQuery({
     queryKey: ['/api/companies', selectedCompany?.id, 'cap-tables'],
-    queryFn: () => apiRequest(`/companies/${selectedCompany?.id}/cap-tables`),
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/companies/${selectedCompany?.id}/cap-tables`);
+      return res.json();
+    },
     enabled: !!selectedCompany?.id,
   });
 
   const { data: roundsData, isLoading: roundsLoading } = useQuery({
     queryKey: ['/api/companies', selectedCompany?.id, 'fundraising/rounds'],
-    queryFn: () => apiRequest(`/companies/${selectedCompany?.id}/fundraising/rounds`),
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/companies/${selectedCompany?.id}/fundraising/rounds`);
+      return res.json();
+    },
     enabled: !!selectedCompany?.id,
   });
 
   const createCapTableMutation = useMutation({
-    mutationFn: (data: { name: string }) => 
-      apiRequest(`/companies/${selectedCompany?.id}/cap-tables`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+    mutationFn: async (data: { name: string }) => {
+      const res = await apiRequest('POST', `/api/companies/${selectedCompany?.id}/cap-tables`, data);
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/companies', selectedCompany?.id, 'cap-tables'] });
       toast({ title: 'Cap Table Created', description: 'Your cap table has been created.' });
@@ -106,11 +111,10 @@ export default function FundraisingPage() {
   });
 
   const createRoundMutation = useMutation({
-    mutationFn: (data: any) => 
-      apiRequest(`/companies/${selectedCompany?.id}/fundraising/rounds`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest('POST', `/api/companies/${selectedCompany?.id}/fundraising/rounds`, data);
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/companies', selectedCompany?.id, 'fundraising/rounds'] });
       toast({ title: 'Round Created', description: 'Your fundraising round has been created.' });
@@ -123,12 +127,11 @@ export default function FundraisingPage() {
   });
 
   const simulateMutation = useMutation({
-    mutationFn: (data: any) => 
-      apiRequest(`/companies/${selectedCompany?.id}/fundraising/simulate`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (data) => {
+    mutationFn: async (data: any) => {
+      const res = await apiRequest('POST', `/api/companies/${selectedCompany?.id}/fundraising/simulate`, data);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
       toast({ title: 'Simulation Complete', description: 'View your dilution analysis below.' });
       setSimulationResults(data);
     },
