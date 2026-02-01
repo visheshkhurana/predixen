@@ -1,0 +1,88 @@
+Below is a detailed set of instructions you can follow in Replit to implement the Resend webhook handler, test it, and isolate/fix delivery errors. You can copy these steps into a README or follow them directly in your Repl.
+
+---
+
+## 🛠️ 1. Set up the webhook endpoint on Replit
+
+1. **Create or open a Python Repl** (using Flask or FastAPI for convenience).
+
+2. Install Flask if you haven’t already (you can add it in the *Packages* tab).
+
+3. In `main.py`, define a route that matches exactly the URL you configured in Resend, e.g.:
+
+   ```python
+   from flask import Flask, request, jsonify
+   import logging
+
+   app = Flask(__name__)
+   logging.basicConfig(level=logging.INFO)
+
+   @app.route("/notifications/resend-webhook", methods=["POST"])
+   def resend_webhook():
+       # log the incoming event for debugging
+       event = request.get_json(silent=True)
+       app.logger.info("Received webhook event: %s", event)
+
+       # TODO: add your classification logic here
+
+       # return a 200 response so Resend knows delivery succeeded
+       return jsonify({"status": "ok"}), 200
+
+   if __name__ == "__main__":
+       app.run(host="0.0.0.0", port=8000)
+   ```
+
+4. Make sure the route path (`/notifications/resend-webhook`) matches the URL you configured in Resend. If you change the path here, update your webhook URL accordingly.
+
+5. Click **Run** to start the Flask server. Replit will provide you with a public URL, such as `https://workspace.vysheshk.repl.co`.
+
+## 🔁 2. Verify the endpoint manually
+
+Before relying on Resend, test the endpoint yourself:
+
+1. Open a terminal on your local machine or use a REST client like Postman/cURL.
+
+2. Send a simple POST request:
+
+   ```bash
+   curl -X POST -H "Content-Type: application/json" \
+     -d '{"type":"test","data":{}}' \
+     https://workspace.vysheshk.repl.co/notifications/resend-webhook
+   ```
+
+3. The endpoint should respond with `{"status":"ok"}` and an HTTP 200 status code.
+
+4. In the Replit **Console**, you should see the “Received webhook event” log. If you don’t, check that the route is correct and the server is running.
+
+## 📡 3. Configure Resend webhook
+
+1. Log in to the Resend dashboard → **Webhooks**.
+2. Click **Add Webhook**.
+3. Enter `https://workspace.vysheshk.repl.co/notifications/resend-webhook` as the endpoint URL.
+4. For **Events types**, search for and select:
+
+   * `email.delivered`
+   * `email.opened`
+   * `email.clicked`
+     Each event should appear as a small “chip” indicating it’s selected. (If you can’t select multiple events through automation, do this step manually.)
+5. Save the webhook.
+
+## 📦 4. Send a test email
+
+Resend only fires events when an email is sent. To test:
+
+1. Use your application or the Resend API to send a simple email to yourself. Include a link you can click.
+2. Wait a few seconds for delivery. Then open the email and click the link.
+3. In your Replit console, you should see the JSON payloads for `email.delivered`, `email.opened`, and `email.clicked`. If you see them, your webhook is working correctly.
+
+## 🧪 5. Isolate and fix errors
+
+If Resend shows “Attempting” or “Failed”:
+
+* **Check the Replit logs**. If you see nothing, the request never reached your server (the URL might be wrong or your Repl is offline).
+* **Check the route path**. A 404 means Resend is posting to a path your app doesn’t define. Update either the route or the webhook URL so they match.
+* **Ensure a 200 response**. If your handler throws an exception or returns a different status code, Resend will retry. Surround your processing logic with try/except and always return a 200 response.
+* **Keep your Repl awake**. Free Replit instances can sleep after inactivity. You may need to periodically ping your app or upgrade to a plan that keeps it alive.
+* **Use the “Replay” button** in Resend’s Webhook Events viewer to re‑send a failed event after fixing your server.
+
+By following these steps you can confidently deploy the webhook handler, verify that events are delivered, and diagnose any delivery failures.
