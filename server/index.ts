@@ -196,6 +196,24 @@ app.use(
   })
 );
 
+app.use(
+  "/notifications",
+  createProxyMiddleware({
+    target: FASTAPI_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/notifications${path}`,
+    on: {
+      error: (err: Error, req, res) => {
+        console.error("Notifications proxy error:", err.message);
+        if ('writeHead' in res && typeof res.writeHead === 'function') {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Notifications service unavailable", detail: err.message }));
+        }
+      },
+    },
+  })
+);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
