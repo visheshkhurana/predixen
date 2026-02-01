@@ -5,6 +5,7 @@ API endpoints for notification management.
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta, timezone
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
@@ -14,6 +15,8 @@ from server.services.notifications import (
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+email_events_store: Dict[str, Dict[str, Any]] = {}
 
 
 class FeatureNotificationRequest(BaseModel):
@@ -116,3 +119,99 @@ async def trigger_early_member_invite(request: EarlyMemberInviteRequest) -> Dict
         invited_by=request.invited_by
     )
     return result
+
+
+def classify_email_event(event: Dict[str, Any]) -> None:
+    """
+    Classify email opens as human or machine based on timing and click behavior.
+    - Opens < 2 seconds after delivery with no clicks = machine (bot/scanner)
+    - Opens with clicks = human
+    - Opens > 2 seconds after delivery = human (tentative)
+    """
+    event_type = event.get("type", "")
+    data = event.get("data", {})
+    email_id = data.get("email_id")
+    
+    if not email_id:
+        return
+    
+    timestamp_str = data.get("timestamp") or data.get("created_at")
+    if timestamp_str:
+        try:
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        except:
+            timestamp = datetime.now(timezone.utc)
+    else:
+        timestamp = datetime.now(timezone.utc)
+    
+    record = email_events_store.setdefault(email_id, {
+        "email_id": email_id,
+        "to": data.get("to"),
+        "subject": data.get("subject"),
+        "delivered_at": None,
+        "opened_at": None,
+        "clicked_at": None,
+        "classification": None,
+        "events": []
+    })
+    
+    record["events"].append({
+        "type": event_type,
+        "timestamp": timestamp.isoformat(),
+        "data": data
+    })
+    
+    if event_type == "email.delivered":
+        record["delivered_at"] = timestamp.isoformat()
+    
+    elif event_type == "email.clicked":
+        record["clicked_at"] = timestamp.isoformat()
+        record["classification"] = "human"
+    
+    elif event_type == "email.opened":
+        record["opened_at"] = timestamp.isoformat()
+        if record["delivered_at"]:
+            delivered_dt = datetime.fromisoformat(record["delivered_at"])
+            delta = (timestamp - delivered_dt).total_seconds()
+            if record["classification"] != "human":
+                record["classification"] = "machine" if delta < 2 else "human"
+    
+    email_events_store[email_id] = record
+
+
+@router.post("/resend-webhook")
+async def handle_resend_webhook(event: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Receive Resend webhook events and classify email opens.
+    Configure this endpoint in Resend dashboard:
+    - Subscribe to: email.delivered, email.opened, email.clicked
+    """
+    try:
+        classify_email_event(event)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/email-stats/{email_id}")
+async def get_email_stats(email_id: str) -> Dict[str, Any]:
+    """Get classification and event info for a specific email."""
+    record = email_events_store.get(email_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Email not found")
+    return record
+
+
+@router.get("/email-stats")
+async def get_all_email_stats() -> Dict[str, Any]:
+    """Get all tracked email events with classifications."""
+    total = len(email_events_store)
+    human_opens = sum(1 for r in email_events_store.values() if r.get("classification") == "human")
+    machine_opens = sum(1 for r in email_events_store.values() if r.get("classification") == "machine")
+    
+    return {
+        "total_emails": total,
+        "human_opens": human_opens,
+        "machine_opens": machine_opens,
+        "emails": list(email_events_store.values())
+    }
