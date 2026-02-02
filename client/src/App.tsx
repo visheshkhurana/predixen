@@ -41,6 +41,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
 import InvestorRoomPage from "@/pages/investor-room";
+import KPIBoardPage from "@/pages/kpi-board";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -122,6 +123,9 @@ function Router() {
       </Route>
       <Route path="/">
         {() => <AuthenticatedRoute component={OverviewPage} />}
+      </Route>
+      <Route path="/kpi-board">
+        {() => <AuthenticatedRoute component={KPIBoardPage} />}
       </Route>
       <Route path="/truth">
         {() => <AuthenticatedRoute component={TruthScanPage} />}
