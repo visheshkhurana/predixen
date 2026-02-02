@@ -333,6 +333,8 @@ def run_simulation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    from server.utils.websocket_broadcast import broadcast_metric_update_sync
+    
     scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     
     if not scenario:
@@ -356,7 +358,6 @@ def run_simulation(
     metrics = truth_scan.outputs_json.get("metrics", {})
     scenario_inputs = scenario.inputs_json
     
-    # Use enhanced simulation inputs for dynamic horizon extension
     enhanced_inputs = EnhancedSimulationInputs(
         baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
         baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
@@ -390,6 +391,20 @@ def run_simulation(
     db.add(sim_run)
     db.commit()
     db.refresh(sim_run)
+    
+    broadcast_metric_update_sync(
+        company_id=company.id,
+        metrics={
+            "runway_months": outputs.get("runway", {}).get("p50", 0),
+            "survival_12m": outputs.get("survival", {}).get("12m", 0),
+            "survival_18m": outputs.get("survival", {}).get("18m", 0),
+            "cash_balance": outputs.get("summary", {}).get("end_cash", 0),
+            "monthly_revenue": enhanced_inputs.baseline_revenue,
+            "gross_margin": enhanced_inputs.gross_margin,
+            "net_burn": enhanced_inputs.opex + enhanced_inputs.payroll + enhanced_inputs.other_costs - enhanced_inputs.baseline_revenue,
+        },
+        source="simulation"
+    )
     
     return {
         "id": sim_run.id,

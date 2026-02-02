@@ -35,7 +35,7 @@ import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
@@ -93,6 +93,7 @@ export default function ScenariosPage() {
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
+  const { data: truthScan, isLoading: truthScanLoading } = useTruthScan(currentCompany?.id || null);
   const createScenarioMutation = useCreateScenario();
   const runSimulationMutation = useRunSimulation();
   
@@ -160,9 +161,22 @@ export default function ScenariosPage() {
 
   const baseMetrics = useMemo(() => {
     if (!currentCompany) return undefined;
-    const cashOnHand = 500000;
-    const monthlyRevenue = 50000;
-    const monthlyExpenses = 80000;
+    
+    const metrics = truthScan?.metrics || {};
+    const extractValue = (m: any, fallback: number) => {
+      if (m === undefined || m === null) return fallback;
+      if (typeof m === 'object' && 'value' in m) return m.value;
+      if (typeof m === 'number') return m;
+      return fallback;
+    };
+    
+    const cashOnHand = extractValue(metrics.cash_balance, 500000);
+    const monthlyRevenue = extractValue(metrics.monthly_revenue, 50000);
+    const monthlyExpenses = extractValue(metrics.total_expenses, 80000);
+    const grossMargin = extractValue(metrics.gross_margin, 60);
+    const growthRate = extractValue(metrics.revenue_growth_mom, 10);
+    const churnRate = extractValue(metrics.churn_rate, 3);
+    
     const monthlyBurn = monthlyExpenses - monthlyRevenue;
     const currentRunway = monthlyBurn > 0 ? cashOnHand / monthlyBurn : 999;
     
@@ -171,20 +185,25 @@ export default function ScenariosPage() {
       monthlyExpenses,
       monthlyRevenue,
       currentRunway,
-      growthRate: 10,
+      growthRate,
+      grossMargin,
+      churnRate,
     };
-  }, [currentCompany]);
+  }, [currentCompany, truthScan]);
   
   const dashboardMetrics = useMemo(() => {
     if (!baseMetrics) return undefined;
+    const netBurn = baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue;
+    const netNewARR = baseMetrics.monthlyRevenue * (baseMetrics.growthRate / 100) * 12;
     return {
       cash_balance: baseMetrics.cashOnHand,
       monthly_revenue: baseMetrics.monthlyRevenue,
-      net_burn: baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue,
+      net_burn: netBurn,
       runway_months: baseMetrics.currentRunway,
       revenue_growth_mom: baseMetrics.growthRate,
-      gross_margin: 60,
-      burn_multiple: (baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) / (baseMetrics.monthlyRevenue * 0.1),
+      gross_margin: baseMetrics.grossMargin,
+      churn_rate: baseMetrics.churnRate,
+      burn_multiple: netNewARR > 0 ? netBurn / netNewARR : 0,
     };
   }, [baseMetrics]);
 
@@ -997,6 +1016,7 @@ export default function ScenariosPage() {
               <DashboardKPICards
                 simulation={simulation}
                 metrics={dashboardMetrics}
+                companyId={currentCompany?.id}
                 testId="dashboard-kpis-results"
               />
               
