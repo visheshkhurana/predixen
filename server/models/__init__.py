@@ -57,6 +57,7 @@ from server.models.fundraising import (
 from server.models.assumption_set import AssumptionSetModel, SimulationCache
 from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
 from server.models.simulation_job import SimulationJob, ScenarioVersion, SensitivityAnalysis, SimulationJobStatus
+from server.models.company_state import CompanyState, compute_snapshot_id, stable_stringify
 
 __all__ = [
     "User",
@@ -123,4 +124,7 @@ __all__ = [
     "ScenarioVersion",
     "SensitivityAnalysis",
     "SimulationJobStatus",
+    "CompanyState",
+    "compute_snapshot_id",
+    "stable_stringify",
 ]
