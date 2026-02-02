@@ -114,14 +114,14 @@ export function StrategyCard({
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Runway</div>
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold">{strategy.projectedRunway}mo</span>
+              <span className="text-lg font-semibold">{Number(strategy.projectedRunway).toFixed(1)}mo</span>
               <RunwayChange current={currentRunway} projected={strategy.projectedRunway} />
             </div>
           </div>
           
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Survival (18m)</div>
-            <div className="text-lg font-semibold">{strategy.survivalProbability}%</div>
+            <div className="text-lg font-semibold">{Number(strategy.survivalProbability).toFixed(1)}%</div>
           </div>
           
           <div className="space-y-1">
@@ -130,7 +130,7 @@ export function StrategyCard({
               "text-lg font-semibold",
               strategy.arrGrowth > 0 ? "text-emerald-500" : "text-muted-foreground"
             )}>
-              {strategy.arrGrowth > 0 ? '+' : ''}{strategy.arrGrowth}%
+              {strategy.arrGrowth > 0 ? '+' : ''}{Number(strategy.arrGrowth).toFixed(0)}%
             </div>
           </div>
           
@@ -140,7 +140,7 @@ export function StrategyCard({
               "text-lg font-semibold",
               strategy.burnChange < 0 ? "text-emerald-500" : strategy.burnChange > 0 ? "text-red-500" : "text-muted-foreground"
             )}>
-              {strategy.burnChange > 0 ? '+' : ''}{strategy.burnChange}%
+              {strategy.burnChange > 0 ? '+' : ''}{Number(strategy.burnChange).toFixed(0)}%
             </div>
           </div>
         </div>
