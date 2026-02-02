@@ -333,25 +333,45 @@ async def run_simulation(
     db.refresh(run)
     
     try:
-        from server.simulate.enhanced_monte_carlo import run_enhanced_monte_carlo
+        from server.simulate.enhanced_monte_carlo import (
+            run_enhanced_monte_carlo, 
+            EnhancedSimulationInputs, 
+            SimulationConfig
+        )
         
-        sim_input = {
-            "cash_balance": base_financials.cashBalance,
-            "monthly_burn": base_financials.monthlyBurn,
-            "revenue": base_financials.revenueMonthly,
-            "growth_rate": base_financials.revenueGrowthRate,
-            "expenses": base_financials.expensesMonthly,
-            "expense_multiplier": overrides.expenseMultiplier or 1.0,
-            "revenue_growth_delta": overrides.revenueGrowthDelta or 0.0,
-            "pricing_delta": overrides.pricingDelta or 0.0,
-        }
+        expense_mult = overrides.expenseMultiplier or 1.0
+        growth_delta = overrides.revenueGrowthDelta or 0.0
+        pricing_delta = overrides.pricingDelta or 0.0
         
-        result = run_enhanced_monte_carlo(
-            baseline=sim_input,
-            n_simulations=request.config.numPaths,
+        monthly_burn = base_financials.monthlyBurn or 0
+        expenses = base_financials.expensesMonthly or monthly_burn
+        revenue = base_financials.revenueMonthly or 0
+        
+        opex = expenses * 0.4 * expense_mult
+        payroll = expenses * 0.5 * expense_mult
+        other_costs = expenses * 0.1 * expense_mult
+        
+        base_growth = base_financials.revenueGrowthRate or 0.0
+        gross_margin = 70.0 if revenue > 0 else 50.0
+        
+        sim_inputs = EnhancedSimulationInputs(
+            baseline_revenue=float(revenue),
+            baseline_growth_rate=float(base_growth) + growth_delta,
+            gross_margin=gross_margin,
+            opex=float(opex),
+            payroll=float(payroll),
+            other_costs=float(other_costs),
+            cash_balance=float(base_financials.cashBalance or 0),
+            pricing_change_pct=pricing_delta,
+        )
+        
+        sim_config = SimulationConfig(
+            iterations=request.config.numPaths,
             horizon_months=request.config.horizonMonths,
             seed=request.config.seed,
         )
+        
+        result = run_enhanced_monte_carlo(sim_inputs, sim_config)
         
         outputs = result if isinstance(result, dict) else result
         
