@@ -822,7 +822,7 @@ def generate_citations(
         provenance_meta["run_id"] = run_id
     if truth_scan:
         provenance_meta["truth_scan_id"] = truth_scan.id
-        provenance_meta["truth_scan_at"] = truth_scan.computed_at.isoformat() if truth_scan.computed_at else None
+        provenance_meta["truth_scan_at"] = truth_scan.created_at.isoformat() if truth_scan.created_at else None
     
     if truth_scan and truth_scan.outputs_json:
         metrics = truth_scan.outputs_json.get("metrics", {})

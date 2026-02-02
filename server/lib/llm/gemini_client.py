@@ -94,15 +94,14 @@ class GeminiClient:
                 endpoint=endpoint,
                 model=model,
                 prompt_hash=compute_prompt_hash(original_input),
+                input_chars_original=len(original_input),
+                input_chars_redacted=len(redaction_result.redacted_text),
+                pii_findings_json={"count": len(redaction_result.findings), "status": status, "error": error_message},
                 redacted_prompt_preview=truncate_preview(redaction_result.redacted_text),
-                pii_entities_detected=redaction_result.entities_detected,
-                pii_entities_redacted=redaction_result.entities_redacted,
-                response_preview=truncate_preview(response_preview),
+                redacted_output_preview=truncate_preview(response_preview),
                 latency_ms=latency_ms,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
-                status=status,
-                error_message=error_message,
                 created_at=datetime.utcnow()
             )
             self.db.add(audit_log)
@@ -230,7 +229,7 @@ class GeminiClient:
                 "model": model,
                 "provider": "gemini",
                 "audit_log_id": audit_log_id,
-                "pii_findings": redaction_result.entities_detected
+                "pii_findings": len(redaction_result.findings)
             }
             
         except httpx.HTTPStatusError as e:
