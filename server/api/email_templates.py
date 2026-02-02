@@ -165,6 +165,7 @@ class PlatformUpdateRequest(BaseModel):
     emails: Optional[List[str]] = None
     subject: str = "Predixen Platform Update - February 2026"
     author: str = "Predixen Team"
+    from_email: str = "Predixen Updates <updates@predixen.app>"
 
 
 @router.post("/send-platform-update")
@@ -182,7 +183,8 @@ async def send_platform_update_emails(
     result = await send_platform_update(
         to_emails=req.emails,
         subject=req.subject,
-        author=req.author
+        author=req.author,
+        from_email=req.from_email
     )
     
     if not result["success"] and "error" in result:

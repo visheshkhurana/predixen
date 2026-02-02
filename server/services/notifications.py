@@ -926,7 +926,8 @@ async def check_and_send_publish_notification() -> None:
 async def send_platform_update(
     to_emails: Optional[List[str]] = None,
     subject: str = "Predixen Platform Update - February 2026",
-    author: str = "Predixen Team"
+    author: str = "Predixen Team",
+    from_email: str = "Predixen Updates <updates@predixen.app>"
 ) -> dict:
     """
     Send a multipart (HTML + text) platform update email to all specified recipients individually.
@@ -1097,7 +1098,7 @@ Visit: https://predixen.app
                             "Content-Type": "application/json"
                         },
                         json={
-                            "from": f"Predixen Updates <updates@predixen.app>",
+                            "from": from_email,
                             "to": [email],
                             "subject": subject,
                             "html": html_content,
