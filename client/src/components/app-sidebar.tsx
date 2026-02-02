@@ -34,6 +34,7 @@ import {
   Mail,
   DollarSign,
   Briefcase,
+  Activity,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,11 @@ const menuItems = [
     title: "Overview",
     url: "/",
     icon: LayoutDashboard,
+  },
+  {
+    title: "KPI Board",
+    url: "/kpi-board",
+    icon: Activity,
   },
   {
     title: "Data Input",
