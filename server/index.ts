@@ -4,9 +4,13 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { spawn, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import { setupWebSocketServer } from "./websocket";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Initialize WebSocket server for real-time updates
+const wss = setupWebSocketServer(httpServer);
 
 // Global state for graceful shutdown and supervision
 let fastapiProcess: ChildProcess | null = null;

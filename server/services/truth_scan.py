@@ -878,6 +878,39 @@ def run_truth_scan_pipeline(
     
     blocked_count = sum(1 for i in all_issues if i.get("severity") == IssueSeverity.BLOCKED.value)
     
+    try:
+        from server.utils.websocket_broadcast import broadcast_truth_scan_update_sync
+        kpi_metrics = {}
+        if derived:
+            kpi_metrics["runway_months"] = derived.get("runway_months", 0)
+            net_burn = derived.get("net_burn_monthly", {})
+            if isinstance(net_burn, dict) and net_burn:
+                sorted_periods = sorted(net_burn.keys(), reverse=True)
+                kpi_metrics["net_burn"] = net_burn.get(sorted_periods[0], 0)
+            growth_mom = derived.get("growth_mom", {})
+            if isinstance(growth_mom, dict) and growth_mom:
+                sorted_periods = sorted(growth_mom.keys(), reverse=True)
+                kpi_metrics["revenue_growth_mom"] = growth_mom.get(sorted_periods[0], 0)
+            gross_margin = derived.get("gross_margin", {})
+            if isinstance(gross_margin, dict) and gross_margin:
+                sorted_periods = sorted(gross_margin.keys(), reverse=True)
+                kpi_metrics["gross_margin"] = gross_margin.get(sorted_periods[0], 0)
+        if truth_dataset.facts:
+            facts = truth_dataset.facts
+            for metric, target_key in [("revenue", "monthly_revenue"), ("cash_balance", "cash_balance")]:
+                if metric in facts and facts[metric]:
+                    sorted_periods = sorted(facts[metric].keys(), reverse=True)
+                    if sorted_periods:
+                        kpi_metrics[target_key] = facts[metric][sorted_periods[0]]
+        broadcast_truth_scan_update_sync(
+            company_id=company_id,
+            metrics=kpi_metrics,
+            status="pipeline_complete"
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to broadcast truth scan update: {e}")
+    
     return {
         "upload_id": upload.id,
         "truth_dataset_id": truth_dataset.id,
