@@ -1056,9 +1056,9 @@ async def extract_onboarding_deck(
                 "runway_months": financials.get("runway_months"),
                 "burn_rate": financials.get("burn_rate")
             },
-            currency=result.get("currency", "USD"),
-            confidence=result.get("confidence", {"company_info": 0.5, "financials": 0.5}),
-            summary=result.get("summary", ""),
+            currency=result.get("currency") or "USD",
+            confidence=result.get("confidence") or {"company_info": 0.5, "financials": 0.5},
+            summary=result.get("summary") or "",
             extraction_method=extraction_method,
             raw_data_preview=raw_data_preview
         )
