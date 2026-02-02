@@ -47,6 +47,14 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
     -   Validation flags detecting runway/cash/burn mismatches, survival probability inconsistencies, zero-variance Monte Carlo outputs
     -   Strict grounding rules requiring all numeric values to come from verified simulations with provenance (companyId, scenarioId, runId, timestamp, dataSnapshotId)
     -   Never fabricates or estimates numbers; uses percentile ranges (P10/P50/P90) with citations
+18. **Natural Copilot Conversation**: Enhanced conversational AI for more natural founder interactions:
+    -   **Automatic Context Passing**: Session state tracking (active_scenario_id, active_run_id, baseline_run_id) passed invisibly
+    -   **Response Modes**: Auto-detection and formatting for EXPLAIN, COMPARE, PLAN, TEACH, JSON modes
+    -   **Enhanced Citations**: `ensure_citations()` with provenance blocks for all numeric claims
+    -   **Clarification Detection**: Identifies ambiguous queries and requests context
+    -   **Causal Explanations**: Top 3 driver extraction from sensitivity analysis
+    -   **Prompt Templates Library**: Metric Summary, Comparison, Why Explanation, Decision Advice
+    -   **Feedback Loop**: "Was this helpful?" endpoint with improvement capture
 
 ### User Roles
 -   **Platform Admin**: Application owner with access to the Admin dashboard.
