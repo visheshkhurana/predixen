@@ -82,6 +82,20 @@ The platform is built on a modern full-stack architecture with React/TypeScript 
 
 ## Recent Changes (Feb 2026)
 
+### Canonical Data Layer (Feb 2026)
+- **Company States Table**: New `company_states` table with `snapshot_id` for deterministic state tracking, `fundraising_rounds_json` for round data, FK to companies
+- **Simulation Runs Provenance**: `simulation_runs` enhanced with `data_snapshot_id` (NOT NULL), `inputs_json` containing frozen snapshot with inputHash, and `status` column with values (queued|running|completed|failed|cancelled)
+- **Scenarios Overrides**: `scenarios` table now supports `overrides_json` for parameter deltas (expenseMultiplier, revenueGrowthDelta, pricingDelta)
+- **Canonical API**: New `/canonical/` endpoints for single-source-of-truth access:
+  - `GET/PUT /canonical/companies/{id}/state` - Read/update company state with fundraising rounds
+  - `GET/POST /canonical/companies/{id}/scenarios` - List and create scenarios
+  - `PUT /canonical/scenarios/{id}` - Update scenario with version tracking
+  - `POST /canonical/companies/{id}/scenarios/{id}/run` - Run simulation with provenance
+  - `GET /canonical/scenarios/{id}/runs/latest` - Get latest run for scenario
+  - `GET /canonical/runs/{id}` - Get specific run by ID
+- **Pydantic Schemas**: `Financials`, `ScenarioOverrides`, `SimulationInput/Output` with `compute_hash` for deterministic snapshotting
+- **Acceptance Tests**: 12 tests in `server/tests/test_canonical_data_flow.py` covering hash determinism, schema validation, data flow consistency
+
 ### Trust & Simulation Sprint 2 (Feb 2026)
 - **Copilot Citations**: Enhanced generate_citations to include scenario_id, run_id, truth_scan_id and truth_scan_at for full provenance tracking; citations now scope to request.scenario_id when provided (fallback to company's latest run only when no specific scenario is given)
 - **Templates → Scenarios**: ScenarioWizard now passes template_id and baseline_diff when creating scenarios from templates

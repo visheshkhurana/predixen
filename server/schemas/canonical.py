@@ -148,5 +148,7 @@ class RunSimulationRequest(BaseModel):
 class RunSimulationResponse(BaseModel):
     """Response from running a simulation."""
     runId: int
-    status: str = Field(pattern="^(queued|running|completed|failed)$")
+    status: str = Field(pattern="^(queued|running|completed|failed|cancelled)$")
+    dataSnapshotId: Optional[str] = None
     output: Optional[SimulationOutput] = None
+    error: Optional[str] = None
