@@ -11,7 +11,7 @@ from server.core.security import get_current_user
 from server.models import User, UserRole
 from server.email.templates import TEMPLATE_CONFIGS, get_template_preview
 from server.email.service import is_email_configured, send_email
-from server.services.notifications import send_ai_copilot_feature_update, NOTIFICATION_RECIPIENTS
+from server.services.notifications import send_ai_copilot_feature_update, send_platform_update_text_only, NOTIFICATION_RECIPIENTS
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
@@ -159,6 +159,44 @@ async def send_test_email(
 class FeatureUpdateRequest(BaseModel):
     emails: Optional[List[str]] = None
     author: str = "Predixen Team"
+
+
+class PlatformUpdateRequest(BaseModel):
+    emails: Optional[List[str]] = None
+    subject: str = "Predixen Platform Update - February 2026"
+    author: str = "Predixen Team"
+
+
+@router.post("/send-platform-update")
+async def send_platform_update_emails(
+    request: Optional[PlatformUpdateRequest] = None,
+    current_user: User = Depends(require_admin)
+) -> dict:
+    """
+    Send text-only platform update emails to all users individually.
+    If no emails specified, sends to all active users in the database.
+    """
+    req = request if request else PlatformUpdateRequest()
+    
+    result = await send_platform_update_text_only(
+        to_emails=req.emails,
+        subject=req.subject,
+        author=req.author
+    )
+    
+    if not result["success"] and "error" in result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["error"]
+        )
+    
+    return {
+        "success": result["success"],
+        "sent_to": result["sent"],
+        "failed": result["failed"],
+        "total_recipients": result.get("total_recipients", len(result["sent"]) + len(result["failed"])),
+        "message": result["message"]
+    }
 
 
 @router.post("/send-ai-copilot-update")
