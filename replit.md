@@ -42,6 +42,11 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 14. **Payroll & ERP Connector Framework**: An extensible system for syncing financial data from Indian payroll and ERP providers.
 15. **Feature Notification System**: Automated email notifications for platform changes via Resend.
 16. **Multi-LLM Router**: Unified interface for intelligent task-based model selection across OpenAI, Anthropic, and Google Gemini, with task routing, graceful fallbacks, PII redaction, and audit logging.
+17. **Copilot Trust Module**: Ensures all AI-generated financial predictions are grounded in verified simulation data with full provenance tracking. Includes:
+    -   `fetchVerifiedRunResult()`: Deterministic run fetching with grounding status (VERIFIED/UNVERIFIED/NOT_AVAILABLE/UNVERIFIED_MISMATCH)
+    -   Validation flags detecting runway/cash/burn mismatches, survival probability inconsistencies, zero-variance Monte Carlo outputs
+    -   Strict grounding rules requiring all numeric values to come from verified simulations with provenance (companyId, scenarioId, runId, timestamp, dataSnapshotId)
+    -   Never fabricates or estimates numbers; uses percentile ranges (P10/P50/P90) with citations
 
 ### User Roles
 -   **Platform Admin**: Application owner with access to the Admin dashboard.
