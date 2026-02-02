@@ -198,4 +198,4 @@ class QuickBooksConnector(BaseConnector):
         }
 
 
-ConnectorRegistry.register_connector(QuickBooksConnector)
+ConnectorRegistry.register(QuickBooksConnector)
