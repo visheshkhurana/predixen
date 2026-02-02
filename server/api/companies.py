@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
+from server.lib.web_search import search_company_info
 from server.models.conversation import Conversation, ConversationMessage, ConversationRecommendation
 from server.models.scenario import Scenario
 from server.models.financial import FinancialRecord, FinancialMetricPoint, ImportSession
@@ -194,3 +195,36 @@ def delete_company(
     db.commit()
     
     return {"message": "Company deleted successfully"}
+
+
+@router.post("/{company_id}/web-search", response_model=Dict[str, Any])
+async def search_company_web_info(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Search the web for company information using AI."""
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    result = await search_company_info(company.name, company.website)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result.get("error", "Web search failed")
+        )
+    
+    return {
+        "description": result.get("description"),
+        "citations": result.get("citations", []),
+        "company_id": company_id
+    }

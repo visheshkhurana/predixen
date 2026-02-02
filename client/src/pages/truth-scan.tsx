@@ -13,7 +13,7 @@ import { BurnBreakdownChart } from '@/components/BurnBreakdownChart';
 import { ScenarioRunwayToggle } from '@/components/ScenarioRunwayToggle';
 import { CashFlowForecast } from '@/components/CashFlowForecast';
 import { HeadcountPanel } from '@/components/HeadcountPanel';
-import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check } from 'lucide-react';
+import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check, Globe, Loader2, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
@@ -249,6 +249,35 @@ export default function TruthScanPage() {
     },
     onError: () => {
       toast({ title: 'Failed to save', variant: 'destructive' });
+    }
+  });
+
+  // State for web search results
+  const [webSearchCitations, setWebSearchCitations] = useState<string[]>([]);
+  
+  // Mutation to search web for company info
+  const webSearchMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/companies/${currentCompany?.id}/web-search`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.description) {
+        setSummaryText(data.description);
+        setWebSearchCitations(data.citations || []);
+        setIsEditingSummary(true);
+        toast({ title: 'Company info found! Review and save the summary.' });
+      } else {
+        toast({ title: 'No information found', variant: 'destructive' });
+      }
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Web search failed';
+      if (message.includes('not configured')) {
+        toast({ title: 'Perplexity API key not configured', description: 'Please add PERPLEXITY_API_KEY to secrets', variant: 'destructive' });
+      } else {
+        toast({ title: 'Web search failed', description: message, variant: 'destructive' });
+      }
     }
   });
 
@@ -582,17 +611,42 @@ export default function TruthScanPage() {
               <Building2 className="h-5 w-5 text-primary" />
               Business Summary
             </div>
-            {!isEditingSummary && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setIsEditingSummary(true)}
-                data-testid="button-edit-summary"
-              >
-                <Pencil className="h-4 w-4 mr-1" />
-                Edit
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {!isEditingSummary && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => webSearchMutation.mutate()}
+                        disabled={webSearchMutation.isPending}
+                        data-testid="button-ai-web-search"
+                      >
+                        {webSearchMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <Globe className="h-4 w-4 mr-1" />
+                        )}
+                        AI Web Search
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-sm">Search the web for company information using AI</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsEditingSummary(true)}
+                    data-testid="button-edit-summary"
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                </>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -605,12 +659,35 @@ export default function TruthScanPage() {
                 className="min-h-[120px]"
                 data-testid="textarea-summary"
               />
+              {webSearchCitations.length > 0 && (
+                <div className="p-3 bg-secondary/30 rounded-lg">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                    <Globe className="h-3 w-3" />
+                    Sources from web search:
+                  </p>
+                  <div className="space-y-1">
+                    {webSearchCitations.slice(0, 5).map((url, i) => (
+                      <a 
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline flex items-center gap-1 truncate"
+                      >
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{url}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 justify-end">
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => {
                     setSummaryText(currentCompany?.description || '');
+                    setWebSearchCitations([]);
                     setIsEditingSummary(false);
                   }}
                   data-testid="button-cancel-summary"
@@ -620,7 +697,10 @@ export default function TruthScanPage() {
                 </Button>
                 <Button 
                   size="sm" 
-                  onClick={() => updateDescriptionMutation.mutate(summaryText)}
+                  onClick={() => {
+                    updateDescriptionMutation.mutate(summaryText);
+                    setWebSearchCitations([]);
+                  }}
                   disabled={updateDescriptionMutation.isPending}
                   data-testid="button-save-summary"
                 >
