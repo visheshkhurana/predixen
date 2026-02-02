@@ -1,0 +1,157 @@
+### PREDIXEN REAL-TIME DASHBOARD + DECISION INTELLIGENCE
+
+1. **Project Overview**
+Predixen is a decision intelligence platform that supports:
+- Real-time KPI dashboards
+- Data ingestion from multiple sources (APIs, CSV/Excel, databases)
+- WebSocket real-time updates
+- Predictive simulation engine
+- Actionable recommendations
+
+We will build this as a full-stack app:
+Frontend: React + TypeScript  
+Backend: Node.js + Express + Socket.IO  
+Database: PostgreSQL  
+Simulation Engine: Python microservice with REST API  
+Charts: Chart.js or Recharts
+
+2. **Folder Structure**
+Create a folder hierarchy:
+- /client — React frontend
+- /server — Express backend + WebSockets
+- /python_sim — Python simulation service
+- /db — database migration/seed scripts
+- /shared — shared TypeScript types
+Provide code for all files.
+
+3. **Database Design**
+Create SQL schema for:
+- users (id, email, hashed_password, created_at)
+- metrics (id, user_id, name, value, timestamp)
+- connectors (id, user_id, name, type, config JSON)
+- scenarios (id, user_id, name, inputs JSON, created_at)
+- simulation_results (id, scenario_id, results JSON)
+Include SQL for PostgreSQL.
+
+4. **User Authentication**
+Implement:
+- POST /auth/signup
+- POST /auth/login
+Use bcrypt for hashing and JWT for tokens.
+
+5. **API for Data Connectors**
+Create routes to:
+- Register connector (third-party API, database)
+- List connectors
+- Delete connectors
+Design a generic connector model with:
+- type (stripe, quickbooks, analytics, database, REST)
+- config (JSON credentials & endpoints)
+
+6. **Polling & Webhooks Intake**
+Implement:
+- A worker system in backend that can:
+  * Poll third-party APIs at scheduled intervals
+  * Accept webhook callbacks to ingest data
+- Store results in `metrics` table
+Provide code for both polling and webhook example endpoints.
+
+7. **WebSocket Setup**
+Add WebSocket server using Socket.IO:
+- Configure socket namespace for dashboards
+- On new metric insert, broadcast metric updates to subscribed dashboards
+Include:
+`io.on('connection', (socket) => { ... })`
+Ensure real-time push for client charts.  [oai_citation:0‡Level Up Coding](https://levelup.gitconnected.com/how-i-built-a-real-time-dashboard-mvp-in-2-days-with-websockets-react-c083c7b7d935?utm_source=chatgpt.com)
+
+8. **Frontend WebSocket Client**
+Create React service:
+- Connect to backend socket
+- On new metric event, update charts
+Use Recharts/Chart.js to bind streaming data.
+
+9. **Dashboard Components**
+Build React components:
+- KPI cards
+- Line/Bar charts updated via state
+- Filters (time range, metric type)
+Remember to handle reconnection logic and throttling to avoid UI flooding.  [oai_citation:1‡syncfusion.com](https://www.syncfusion.com/blogs/post/view-real-time-data-using-websocket?utm_source=chatgpt.com)
+
+10. **Simulations UI**
+Add page to:
+- Create scenario with inputs (pricing, spend, hiring, etc.)
+- Send to Python simulation microservice
+- Show results charts + confidence bands
+
+11. **Simulation Python Service**
+Create a FastAPI or Flask service at `/simulate` that:
+- Accepts scenario JSON
+- Runs a mocked Monte Carlo engine
+- Returns:
+  * forecast results
+  * confidence intervals
+  * raw distributions
+
+12. **Actionable Recommendations**
+On backend compute a rules engine that:
+- Checks results JSON
+- Generates recommendations like:
+  * “Increase price by X% to improve runway”
+  * “Reduce spend Y to hit goal Z”
+Design text generator logic and store with simulation results.
+
+13. **Connectors for External APIs**
+Implement connectors for:
+- Stripe
+- Google Analytics
+- QuickBooks
+- Salesforce
+Show example of:
+- Auth flow (OAuth2 or API keys)
+- Saving tokens securely
+- Periodic fetch to retrieve metrics
+
+14. **CSV & Manual Upload**
+Provide a file import UI:
+- User uploads CSV
+- Backend processes, maps fields to metrics
+- Save in `metrics` table
+
+15. **Scheduled Polling**
+Add scheduler (cron or background worker) to:
+- Poll connectors
+- Refresh metrics periodically
+
+16. **Secure Dashboard Data**
+Ensure:
+- Only authenticated users view their metrics
+- WebSocket auth with JWT
+- Permissions on connectors & metrics
+
+17. **Export & Sharing**
+Add:
+- Export dashboard state as PDF
+- Share link with token
+- Backend endpoints for exports
+
+18. **Testing**
+Write tests:
+- API tests (signup, login, connectors)
+- WebSocket events
+- Simulation correctness
+Use Jest for Node and PyTest for Python service.
+
+19. **Deployment**
+Configure:
+- Replit deployment for backend & frontend
+- Python microservice deploy (Replit or external host)
+- Environment variables for secrets
+Prepare a Procfile or deployment settings for multi-service app.
+
+### Additional Requirements
+- Provide full code for every file without omissions
+- Include inline comments explaining logic
+- Clarity on points requiring real logic replacements
+- Prioritize real-time connectors for data ingestion
+
+Answer in code only, file by file, organized logically, so we can review then refine and extend.
