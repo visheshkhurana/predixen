@@ -11,7 +11,7 @@ from server.core.security import get_current_user
 from server.models import User, UserRole
 from server.email.templates import TEMPLATE_CONFIGS, get_template_preview
 from server.email.service import is_email_configured, send_email
-from server.services.notifications import send_ai_copilot_feature_update, send_platform_update, NOTIFICATION_RECIPIENTS
+from server.services.notifications import send_ai_copilot_feature_update, send_platform_update, send_hybrid_feature_announcement, NOTIFICATION_RECIPIENTS
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
@@ -225,5 +225,38 @@ async def send_ai_copilot_update_emails(
         "success": result["success"],
         "sent_to": result["sent"],
         "failed": result["failed"],
+        "message": result["message"]
+    }
+
+
+class HybridFeatureRequest(BaseModel):
+    emails: Optional[List[str]] = None
+    author: str = "Predixen Team"
+
+
+@router.post("/send-hybrid-feature-announcement")
+async def send_hybrid_feature_emails(
+    request: Optional[HybridFeatureRequest] = None,
+    current_user: User = Depends(require_admin)
+) -> dict:
+    """Send Hybrid Feature announcement emails to all users individually."""
+    req = request if request else HybridFeatureRequest()
+    
+    result = await send_hybrid_feature_announcement(
+        to_emails=req.emails,
+        author=req.author
+    )
+    
+    if not result["success"] and "error" in result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["error"]
+        )
+    
+    return {
+        "success": result["success"],
+        "sent_to": result["sent"],
+        "failed": result["failed"],
+        "total_recipients": result.get("total_recipients", len(result["sent"])),
         "message": result["message"]
     }

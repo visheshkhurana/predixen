@@ -1133,3 +1133,152 @@ Visit: https://predixen.app
             "failed": to_emails or [],
             "error": str(e)
         }
+
+
+async def send_hybrid_feature_announcement(
+    to_emails: Optional[List[str]] = None,
+    author: str = "Predixen Team",
+    from_email: str = "Predixen Updates <updates@predixen.app>"
+) -> dict:
+    """
+    Send announcement email about the upcoming Hybrid Feature build.
+    Sends individually to each recipient.
+    """
+    import os
+    from server.core.db import SessionLocal
+    from server.models import User
+    
+    if to_emails is None:
+        try:
+            db = SessionLocal()
+            users = db.query(User).filter(User.is_active == True).all()
+            to_emails = [user.email for user in users if user.email]
+            db.close()
+        except Exception as e:
+            print(f"Error fetching users from database: {e}")
+            to_emails = NOTIFICATION_RECIPIENTS
+    
+    if not to_emails:
+        return {"success": False, "sent": [], "failed": [], "error": "No recipients"}
+    
+    try:
+        credentials = await get_resend_credentials()
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        
+        html_content = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; margin: 0; padding: 40px 20px;">
+<div style="max-width: 640px; margin: 0 auto;">
+<div style="text-align: center; margin-bottom: 24px;">
+<div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px; line-height: 48px; color: #fff; font-weight: 700; font-size: 24px;">P</div>
+</div>
+<div style="background-color: #1e293b; border-radius: 16px; border: 1px solid #334155;">
+<div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px; text-align: center;">
+<div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; margin-bottom: 16px;">
+<span style="color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Coming Soon</span>
+</div>
+<h1 style="color: #fff; margin: 0; font-size: 28px; font-weight: 700;">Predixen Hybrid Feature</h1>
+<p style="color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 14px;">Major Platform Upgrade Announcement</p>
+</div>
+<div style="padding: 32px;">
+<p style="color: #e2e8f0; font-size: 16px; line-height: 1.7; margin: 0 0 24px;">
+We're building a comprehensive <strong style="color: #fbbf24;">Hybrid Feature</strong> that combines real-time KPI tracking, predictive simulations, and actionable recommendations.
+</p>
+<div style="background-color: #0f172a; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+<h3 style="color: #22c55e; font-size: 14px; font-weight: 600; text-transform: uppercase; margin: 0 0 16px;">What's Coming</h3>
+<div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #6366f1;">
+<h4 style="color: #fff; font-size: 16px; margin: 0 0 6px;">Real-Time KPI Dashboard</h4>
+<p style="color: #94a3b8; font-size: 14px; margin: 0;">Live charts with WebSocket real-time updates.</p>
+</div>
+<div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #8b5cf6;">
+<h4 style="color: #fff; font-size: 16px; margin: 0 0 6px;">Enhanced Scenario Wizard</h4>
+<p style="color: #94a3b8; font-size: 14px; margin: 0;">Pricing, spend limits, hiring plans, growth rates.</p>
+</div>
+<div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #0ea5e9;">
+<h4 style="color: #fff; font-size: 16px; margin: 0 0 6px;">Monte Carlo Simulations</h4>
+<p style="color: #94a3b8; font-size: 14px; margin: 0;">Forecast with confidence intervals from 100+ runs.</p>
+</div>
+<div style="margin-bottom: 16px; padding-left: 24px; border-left: 3px solid #22c55e;">
+<h4 style="color: #fff; font-size: 16px; margin: 0 0 6px;">Actionable Recommendations</h4>
+<p style="color: #94a3b8; font-size: 14px; margin: 0;">Plain-language insights based on simulations.</p>
+</div>
+<div style="padding-left: 24px; border-left: 3px solid #f59e0b;">
+<h4 style="color: #fff; font-size: 16px; margin: 0 0 6px;">Data Integrations</h4>
+<p style="color: #94a3b8; font-size: 14px; margin: 0;">CSV upload, Stripe/QuickBooks connectors.</p>
+</div>
+</div>
+<div style="text-align: center; margin: 32px 0;">
+<a href="{base_url}" style="display: inline-block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Visit Predixen</a>
+</div>
+</div>
+<div style="padding: 20px 32px; border-top: 1px solid #334155; text-align: center;">
+<p style="color: #64748b; font-size: 12px; margin: 0;">Reply to this email with questions. — <span style="color: #6366f1;">{author}</span></p>
+</div>
+</div>
+<div style="text-align: center; margin-top: 24px;">
+<p style="color: #475569; font-size: 11px; margin: 0;">Predixen Intelligence OS • {timestamp}</p>
+</div>
+</div>
+</body></html>"""
+        
+        text_content = f"""PREDIXEN HYBRID FEATURE - COMING SOON
+{timestamp}
+
+We're building a comprehensive Hybrid Feature combining real-time KPI tracking, predictive simulations, and actionable recommendations.
+
+WHAT'S COMING:
+- Real-Time KPI Dashboard with WebSocket updates
+- Enhanced Scenario Wizard (pricing, spend, hiring, growth)
+- Monte Carlo Simulations with confidence intervals
+- Actionable Recommendations from simulations
+- Data Integrations (CSV, Stripe, QuickBooks)
+
+Visit: {base_url}
+
+— {author}
+Predixen Intelligence OS"""
+        
+        sent = []
+        failed = []
+        
+        async with httpx.AsyncClient() as client:
+            for i, email in enumerate(to_emails):
+                if i > 0:
+                    await asyncio.sleep(0.6)
+                try:
+                    response = await client.post(
+                        "https://api.resend.com/emails",
+                        headers={
+                            "Authorization": f"Bearer {credentials['api_key']}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "from": from_email,
+                            "to": [email],
+                            "subject": "[Predixen] Coming Soon: Major Hybrid Feature Update",
+                            "html": html_content,
+                            "text": text_content
+                        },
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code in (200, 201):
+                        sent.append(email)
+                        print(f"Hybrid feature announcement sent to: {email}")
+                    else:
+                        failed.append({"email": email, "error": response.text})
+                except Exception as e:
+                    failed.append({"email": email, "error": str(e)})
+        
+        return {
+            "success": len(failed) == 0,
+            "sent": sent,
+            "failed": failed,
+            "total_recipients": len(to_emails),
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+        }
+        
+    except Exception as e:
+        print(f"Error sending hybrid feature announcement: {e}")
+        return {"success": False, "sent": [], "failed": to_emails or [], "error": str(e)}
