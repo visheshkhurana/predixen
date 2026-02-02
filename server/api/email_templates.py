@@ -11,7 +11,7 @@ from server.core.security import get_current_user
 from server.models import User, UserRole
 from server.email.templates import TEMPLATE_CONFIGS, get_template_preview
 from server.email.service import is_email_configured, send_email
-from server.services.notifications import send_ai_copilot_feature_update, send_platform_update_text_only, NOTIFICATION_RECIPIENTS
+from server.services.notifications import send_ai_copilot_feature_update, send_platform_update, NOTIFICATION_RECIPIENTS
 
 router = APIRouter(prefix="/email-templates", tags=["email-templates"])
 
@@ -173,12 +173,13 @@ async def send_platform_update_emails(
     current_user: User = Depends(require_admin)
 ) -> dict:
     """
-    Send text-only platform update emails to all users individually.
+    Send multipart (HTML + text) platform update emails to all users individually.
+    Uses both HTML and text parts so Resend can track opens via tracking pixel.
     If no emails specified, sends to all active users in the database.
     """
     req = request if request else PlatformUpdateRequest()
     
-    result = await send_platform_update_text_only(
+    result = await send_platform_update(
         to_emails=req.emails,
         subject=req.subject,
         author=req.author

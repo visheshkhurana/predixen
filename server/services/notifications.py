@@ -923,13 +923,14 @@ async def check_and_send_publish_notification() -> None:
         print(f"Error in publish notification check: {e}")
 
 
-async def send_platform_update_text_only(
+async def send_platform_update(
     to_emails: Optional[List[str]] = None,
     subject: str = "Predixen Platform Update - February 2026",
     author: str = "Predixen Team"
 ) -> dict:
     """
-    Send a text-only platform update email to all specified recipients individually.
+    Send a multipart (HTML + text) platform update email to all specified recipients individually.
+    Uses both HTML and plain text parts so Resend can add open tracking pixel to the HTML.
     
     Args:
         to_emails: List of email addresses (defaults to all active users from database)
@@ -1020,6 +1021,65 @@ This is an automated notification from Predixen Intelligence OS.
 Visit: https://predixen.app
 """
         
+        html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Predixen Intelligence OS</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Platform Update - {timestamp}</p>
+        </div>
+        
+        <div style="padding: 32px;">
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">Hi there,</p>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">We've been busy shipping new features and improvements to help you make better financial decisions. Here's what's new:</p>
+            
+            <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
+                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">Canonical Data Layer (NEW)</h2>
+                <p style="color: #15803d; margin: 0; font-size: 14px;">Complete data foundation rebuild</p>
+            </div>
+            
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 16px 0;">We've completely rebuilt the data foundation of Predixen to ensure every number you see is trustworthy and traceable:</p>
+            
+            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;"><strong>Company States:</strong> Your financial state is now versioned with unique snapshot IDs. Every time you update your data, we create an immutable record.</li>
+                <li style="margin-bottom: 8px;"><strong>Simulation Provenance:</strong> Every simulation run now tracks exactly which data snapshot it used. When you see a runway projection, you can trace it back to the exact inputs.</li>
+                <li style="margin-bottom: 8px;"><strong>Deterministic Hashing:</strong> We use cryptographic hashes to detect when your data has changed. Simulations will tell you if they're based on stale data.</li>
+                <li style="margin-bottom: 8px;"><strong>Scenario Overrides:</strong> Scenarios now store their parameter changes in a structured format for easy comparison.</li>
+            </ul>
+            
+            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">What This Means For You</h3>
+            <ol style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;"><strong>Trust Your Numbers:</strong> Every KPI on your dashboard shows where it came from.</li>
+                <li style="margin-bottom: 8px;"><strong>Compare Apples to Apples:</strong> When comparing scenarios, you'll know they're all running against the same baseline data.</li>
+                <li style="margin-bottom: 8px;"><strong>Audit Trail:</strong> If investors ask "where did this runway number come from?", you can show them the exact data, date, and calculations.</li>
+            </ol>
+            
+            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Previous Improvements</h3>
+            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;">AI Copilot Citations: The AI now cites specific scenario IDs, run IDs, and Truth Scan timestamps.</li>
+                <li style="margin-bottom: 8px;">Real-Time AI Simulation Guidance: As you adjust scenario parameters, the AI explains the impact.</li>
+                <li style="margin-bottom: 8px;">Dynamic Horizon Extension: Monte Carlo simulations now automatically extend beyond 24 months.</li>
+            </ul>
+            
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 8px 0;">Questions or feedback? Reply directly to this email.</p>
+            <p style="color: #4b5563; line-height: 1.6; margin: 24px 0 0 0;">Best,<br><strong>{author}</strong><br>Predixen Intelligence OS</p>
+        </div>
+        
+        <div style="background-color: #f9fafb; padding: 20px 32px; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
+                This is an automated notification from Predixen Intelligence OS.<br>
+                <a href="https://predixen.app" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>"""
+        
         sent = []
         failed = []
         
@@ -1040,6 +1100,7 @@ Visit: https://predixen.app
                             "from": f"Predixen Updates <updates@predixen.app>",
                             "to": [email],
                             "subject": subject,
+                            "html": html_content,
                             "text": text_content
                         },
                         timeout=30.0
