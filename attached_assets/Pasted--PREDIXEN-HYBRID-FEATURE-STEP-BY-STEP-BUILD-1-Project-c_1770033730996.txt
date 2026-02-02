@@ -1,0 +1,122 @@
+### PREDIXEN HYBRID FEATURE — STEP BY STEP BUILD
+
+1) **Project context and tech stack**
+I am building **Predixen**, a web application that combines:
+- A **real-time KPI dashboard** (like Klipfolio)
+- A **predictive simulation/forecasting engine**
+- **Actionable recommendations** based on scenarios
+
+Please create the full project structure for a modern web application with:
+- Frontend: **React + TypeScript**
+- Backend: **Node.js + Express**
+- Database: **PostgreSQL**
+- Realtime support: **WebSocket or SSE**
+- Charting library: **Chart.js or Recharts**
+- Python microservice for simulations (if needed)
+- REST API between frontend and backend
+- Authentication with JWT
+
+2) **Core pages & layout**
+Generate:
+- Login/Signup pages
+- Main dashboard page with sidebar for:
+  * KPI Board
+  * Simulation Wizard
+  * Recommendations
+
+Include basic CSS using TailwindCSS (setup Tailwind if not already added).
+
+3) **Database schema**
+Create PostgreSQL tables:
+- users (id, name, email, hashed_password)
+- metrics (id, user_id, name, value, timestamp)
+- scenarios (id, user_id, name, created_at, inputs JSON)
+- simulation_results (id, scenario_id, results JSON)
+
+Show SQL for table creation.
+
+4) **User authentication**
+Implement:
+- Signup (POST /auth/signup)
+- Login (POST /auth/login)
+- JWT issuance
+- Route protection middleware
+
+5) **Real-time KPI dashboard**
+Build:
+- API to fetch metrics (GET /metrics)
+- Frontend dashboard view with:
+  * Line charts for trends
+  * KPI tiles (current revenue, churn, CAC)
+- Websocket/SSE setup to push new metric updates in real time
+Use Chart.js or Recharts for charts and show sample dummy data.
+
+6) **Data integrations**
+Create modules to support:
+- CSV upload of data
+- API connectors placeholders (Stripe, QuickBooks)
+- Mapping UI where users can match imported fields to metric names
+
+7) **Scenario wizard**
+Create UI for scenario creation with inputs:
+- Scenario name
+- Pricing assumptions
+- Spend limits
+- Hiring plan
+- Growth rates
+
+Store scenario inputs in DB.
+
+8) **Predictive engine**
+Implement a Python microservice endpoint (Flask/FastAPI) at:
+POST /simulate
+That accepts scenario inputs and returns:
+- Forecast results (ARR, runway, burn)
+- Confidence intervals (Monte Carlo)
+
+Use dummy logic initially, but simulate 100 runs for confidence bands.
+
+9) **Frontend simulation results**
+Create:
+- A results page component that:
+  * Displays forecast charts
+  * Shows confidence intervals
+  * Allows users to adjust inputs and rerun
+
+10) **Actionable recommendations**
+Based on simulation results, generate plain-language insights:
+Examples:
+- “Increasing pricing by 5% improves runway by X days”
+- “Delaying hires until month 3 improves cash flow by Y%”
+
+Provide simple rule logic for recommendations (e.g., thresholds).
+
+11) **Dashboard + simulation linkage**
+Add UI capabilities:
+- Pin simulation output widgets to KPI dashboard
+- Compare actual metrics vs simulated outcomes
+
+12) **Export & sharing**
+Create:
+- PDF export feature for dashboards and simulation reports
+- Shareable link generation for collaborators
+
+13) **Testing**
+Add basic tests:
+- API unit tests
+- Frontend component tests
+
+14) **Deployment**
+Configure:
+- Replit deployment settings
+- Postgres setup via Replit database config
+- Environment variables for JWT secrets & API keys
+
+### Additional instructions
+- Provide complete folder structure
+- Provide code for every file (JS/TS, Python, SQL)
+- Include comments in code
+- Where placeholder data exists, clearly indicate what needs real logic later
+- Do not generate rushed or partial code — generate complete components
+
+Answer with code only (no explanations). Generate in logical incremental chunks so we can review each part before moving forward.
