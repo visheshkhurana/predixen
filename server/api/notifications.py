@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
+from sqlalchemy.orm import Session
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
@@ -13,10 +14,10 @@ from server.services.notifications import (
     parse_changelog,
     NOTIFICATION_RECIPIENTS
 )
+from server.core.db import get_db
+from server.models.email_event import EmailEvent
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
-
-email_events_store: Dict[str, Dict[str, Any]] = {}
 
 
 class FeatureNotificationRequest(BaseModel):
@@ -121,12 +122,13 @@ async def trigger_early_member_invite(request: EarlyMemberInviteRequest) -> Dict
     return result
 
 
-def classify_email_event(event: Dict[str, Any]) -> None:
+def classify_email_event(event: Dict[str, Any], db: Session) -> None:
     """
     Classify email opens as human or machine based on timing and click behavior.
     - Opens < 2 seconds after delivery with no clicks = machine (bot/scanner)
     - Opens with clicks = human
     - Opens > 2 seconds after delivery = human (tentative)
+    Persists to database for durability.
     """
     event_type = event.get("type", "")
     data = event.get("data", {})
@@ -144,74 +146,105 @@ def classify_email_event(event: Dict[str, Any]) -> None:
     else:
         timestamp = datetime.now(timezone.utc)
     
-    record = email_events_store.setdefault(email_id, {
-        "email_id": email_id,
-        "to": data.get("to"),
-        "subject": data.get("subject"),
-        "delivered_at": None,
-        "opened_at": None,
-        "clicked_at": None,
-        "classification": None,
-        "events": []
-    })
+    record = db.query(EmailEvent).filter(EmailEvent.email_id == email_id).first()
     
-    record["events"].append({
+    if not record:
+        record = EmailEvent(
+            email_id=email_id,
+            to_email=data.get("to"),
+            subject=data.get("subject"),
+            events_json=[]
+        )
+        db.add(record)
+    
+    events = record.events_json or []
+    events.append({
         "type": event_type,
         "timestamp": timestamp.isoformat(),
         "data": data
     })
+    record.events_json = events
     
     if event_type == "email.delivered":
-        record["delivered_at"] = timestamp.isoformat()
+        record.delivered_at = timestamp
     
     elif event_type == "email.clicked":
-        record["clicked_at"] = timestamp.isoformat()
-        record["classification"] = "human"
+        record.clicked_at = timestamp
+        record.classification = "human"
     
     elif event_type == "email.opened":
-        record["opened_at"] = timestamp.isoformat()
-        if record["delivered_at"]:
-            delivered_dt = datetime.fromisoformat(record["delivered_at"])
-            delta = (timestamp - delivered_dt).total_seconds()
-            if record["classification"] != "human":
-                record["classification"] = "machine" if delta < 2 else "human"
+        record.opened_at = timestamp
+        if record.delivered_at:
+            delta = (timestamp - record.delivered_at.replace(tzinfo=timezone.utc)).total_seconds()
+            if record.classification != "human":
+                record.classification = "machine" if delta < 2 else "human"
     
-    email_events_store[email_id] = record
+    db.commit()
 
 
 @router.post("/resend-webhook")
-async def handle_resend_webhook(event: Dict[str, Any]) -> Dict[str, str]:
+async def handle_resend_webhook(event: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, str]:
     """
     Receive Resend webhook events and classify email opens.
     Configure this endpoint in Resend dashboard:
     - Subscribe to: email.delivered, email.opened, email.clicked
     """
     try:
-        classify_email_event(event)
+        classify_email_event(event, db)
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/email-stats/{email_id}")
-async def get_email_stats(email_id: str) -> Dict[str, Any]:
+async def get_email_stats(email_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get classification and event info for a specific email."""
-    record = email_events_store.get(email_id)
+    record = db.query(EmailEvent).filter(EmailEvent.email_id == email_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Email not found")
-    return record
+    return {
+        "email_id": record.email_id,
+        "to": record.to_email,
+        "subject": record.subject,
+        "delivered_at": record.delivered_at.isoformat() if record.delivered_at else None,
+        "opened_at": record.opened_at.isoformat() if record.opened_at else None,
+        "clicked_at": record.clicked_at.isoformat() if record.clicked_at else None,
+        "classification": record.classification,
+        "events": record.events_json or []
+    }
 
 
 @router.get("/email-stats")
-async def get_all_email_stats() -> Dict[str, Any]:
+async def get_all_email_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get all tracked email events with classifications."""
-    total = len(email_events_store)
-    human_opens = sum(1 for r in email_events_store.values() if r.get("classification") == "human")
-    machine_opens = sum(1 for r in email_events_store.values() if r.get("classification") == "machine")
+    records = db.query(EmailEvent).order_by(EmailEvent.created_at.desc()).limit(100).all()
+    
+    total = len(records)
+    delivered = sum(1 for r in records if r.delivered_at)
+    opened = sum(1 for r in records if r.opened_at)
+    clicked = sum(1 for r in records if r.clicked_at)
+    human_opens = sum(1 for r in records if r.classification == "human")
+    machine_opens = sum(1 for r in records if r.classification == "machine")
+    
+    emails = [{
+        "email_id": r.email_id,
+        "to": r.to_email,
+        "subject": r.subject,
+        "delivered_at": r.delivered_at.isoformat() if r.delivered_at else None,
+        "opened_at": r.opened_at.isoformat() if r.opened_at else None,
+        "clicked_at": r.clicked_at.isoformat() if r.clicked_at else None,
+        "classification": r.classification,
+        "created_at": r.created_at.isoformat() if r.created_at else None
+    } for r in records]
     
     return {
         "total_emails": total,
+        "delivered": delivered,
+        "opened": opened,
+        "clicked": clicked,
         "human_opens": human_opens,
         "machine_opens": machine_opens,
-        "emails": list(email_events_store.values())
+        "open_rate": round((opened / total * 100), 1) if total > 0 else 0,
+        "click_rate": round((clicked / total * 100), 1) if total > 0 else 0,
+        "emails": emails
     }
