@@ -158,4 +158,4 @@ class StripeConnector(BaseConnector):
         }
 
 
-ConnectorRegistry.register_connector(StripeConnector)
+ConnectorRegistry.register(StripeConnector)
