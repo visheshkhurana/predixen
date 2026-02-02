@@ -18,6 +18,20 @@ NOTIFICATION_RECIPIENTS = [
     "nikitafl2024@gmail.com"
 ]
 
+# Sender rotation counter (persisted in memory, resets on restart)
+_sender_counter = {"value": 0}
+
+
+def get_next_sender_email() -> str:
+    """Get the next sender email in rotation (new1@, new2@, new3@, etc.)."""
+    _sender_counter["value"] += 1
+    return f"Predixen <new{_sender_counter['value']}@predixen.app>"
+
+
+def get_current_sender_count() -> int:
+    """Get the current sender counter value."""
+    return _sender_counter["value"]
+
 
 async def get_resend_credentials() -> dict:
     """Get Resend API credentials from Replit connector."""
@@ -713,7 +727,7 @@ Predixen Intelligence OS • {timestamp}
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": "Predixen <hello@predixen.app>",
+                        "from": get_next_sender_email(),
                         "to": [email],
                         "subject": "You're One of the First - Early Access to Predixen",
                         "html": html_content,
@@ -721,9 +735,10 @@ Predixen Intelligence OS • {timestamp}
                     }
                 )
                 
+                sender_used = f"new{get_current_sender_count()}@predixen.app"
                 if response.status_code in (200, 201):
                     sent.append(email)
-                    print(f"Early member invite sent to: {email}")
+                    print(f"Early member invite sent to: {email} (from: {sender_used})")
                 else:
                     failed.append(email)
                     print(f"Failed to send to {email}: {response.status_code}")
