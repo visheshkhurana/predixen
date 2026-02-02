@@ -15,6 +15,7 @@ interface Company {
   industry?: string;
   stage?: string;
   currency: string;
+  description?: string;
 }
 
 interface TruthScan {
