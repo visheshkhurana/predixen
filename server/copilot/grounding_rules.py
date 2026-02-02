@@ -81,6 +81,69 @@ All financial data must flow through the canonical data architecture:
    - Flag misaligned data clearly
 """
 
+RESPONSE_MODE_RULES = """
+## RESPONSE MODE FORMATTING
+
+Adapt your response style based on the detected response mode:
+
+1. **EXPLAIN MODE** (default):
+   - Use natural language with numeric summaries
+   - Provide one-paragraph summary first
+   - List key values with provenance citations
+   - Explain what drives the metrics
+   - Keep tone conversational but precise
+
+2. **COMPARE MODE**:
+   - Present side-by-side comparison
+   - Highlight key differences between scenarios/runs
+   - Use structured format: Metric | Scenario A | Scenario B | Delta
+   - Explain which scenario performs better and why
+   - Cite both run IDs for each comparison point
+
+3. **PLAN MODE**:
+   - Focus on actionable recommendations
+   - List top 3-5 levers that would improve outcomes
+   - For each lever: expected impact direction and magnitude
+   - Prioritize by impact and feasibility
+   - Ground recommendations in simulation data
+
+4. **TEACH MODE**:
+   - Explain concepts with definitions and examples
+   - Use visual metaphors where helpful
+   - Relate concepts to user's specific context
+   - Include glossary-style explanations
+   - Make complex ideas accessible
+
+5. **JSON MODE**:
+   - Return structured, API-friendly output
+   - Use consistent field names
+   - Include all numeric values with full precision
+   - Include provenance metadata
+   - No narrative text, pure data
+"""
+
+CAUSAL_EXPLANATION_RULES = """
+## CAUSAL EXPLANATIONS
+
+When explaining metric changes:
+
+1. **STRUCTURE**:
+   - Summary sentence: "X changed from A to B"
+   - Top 3 drivers ranked by impact
+   - Short recommendation
+
+2. **LANGUAGE**:
+   - Use causal words: "because", "due to", "as a result of"
+   - Quantify impact when possible: "contributing ~40% of the change"
+   - Be specific about the mechanism
+
+3. **EXAMPLE**:
+   "Runway decreased from 16.0 → 15.0 months because:
+   1. Pricing impact was lower than expected (-0.5 months)
+   2. Net burn increased slightly due to hiring (+0.3 months) 
+   3. Revenue ramp was delayed (-0.2 months)"
+"""
+
 def get_grounding_prompt_addition() -> str:
     """Get the full grounding rules to append to agent system prompts."""
-    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}"
+    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}\n\n{RESPONSE_MODE_RULES}\n\n{CAUSAL_EXPLANATION_RULES}"

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List, Literal
+from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -180,12 +181,14 @@ class CopilotChatRequest(BaseModel):
     include_strategy: bool = True
     mode: str = "advisor"
     scenario_id: Optional[str] = None
+    run_id: Optional[int] = None
     create_decision: bool = False
     challenge_mode: bool = False
     investor_lens: Optional[str] = None
     show_sources: bool = False
     privacy: Optional[PrivacySettings] = None
     context: Optional[CopilotContextRequest] = None
+    response_mode: Optional[Literal["explain", "compare", "plan", "teach", "json"]] = None
 
 
 class Citation(BaseModel):
@@ -241,6 +244,19 @@ class CopilotChatResponse(BaseModel):
     decision_advisor: Optional[Dict[str, Any]] = None
     provenance: Optional[ProvenanceResponse] = None
     grounding_status: Optional[str] = None
+    response_mode: Optional[str] = None
+    session_context: Optional[Dict[str, Any]] = None
+    causal_drivers: Optional[List[Dict[str, Any]]] = None
+    feedback_prompt: Optional[str] = None
+    message_id: Optional[str] = None
+
+
+class CopilotFeedbackRequest(BaseModel):
+    """Request for copilot feedback."""
+    message_id: str
+    helpful: bool
+    feedback_text: Optional[str] = None
+    improvement_suggestion: Optional[str] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -272,6 +288,8 @@ async def copilot_chat(
     from server.copilot.ckb_storage import CKBStorage
     from server.models.company_decision import CompanyDecision, CompanyScenario
     from server.lib.llm.llm_router import get_llm_router
+    from server.copilot.conversation_state import conversation_store
+    from server.copilot.prompt_templates import detect_response_mode, detect_clarification_needed, get_mode_instructions
     import uuid as uuid_lib
     
     company = db.query(Company).filter(
@@ -281,6 +299,16 @@ async def copilot_chat(
     
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    conv_state = conversation_store.get(company_id, current_user.id)
+    session_context = conv_state.get_session_context()
+    
+    response_mode = request.response_mode or detect_response_mode(request.message)
+    if request.response_mode:
+        conv_state.set_response_mode(request.response_mode)
+    
+    if request.run_id:
+        conv_state.set_active_context(run_id=request.run_id)
     
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)
@@ -311,8 +339,25 @@ async def copilot_chat(
             if request_scenario:
                 scenario_assumptions = request_scenario.assumptions_json or {}
                 request_scenario_id = request_scenario.id
+                conv_state.set_active_context(scenario_id=request_scenario.id)
+                conv_state.set_last_simulation(scenario_name=request_scenario.name)
         except ValueError:
             pass
+    
+    clarification_needed = detect_clarification_needed(request.message, session_context)
+    if clarification_needed and not session_context.get("hasPendingClarification"):
+        conv_state.set_pending_clarification(clarification_needed)
+        return CopilotChatResponse(
+            executive_summary=[clarification_needed.get("question", "Could you clarify your question?")],
+            company_snapshot=[],
+            assumptions=[],
+            risks=[],
+            next_questions=clarification_needed.get("options", []),
+            confidence="Low",
+            clarifications=[clarification_needed],
+            response_mode=response_mode if isinstance(response_mode, str) else response_mode.value,
+            session_context=session_context
+        )
     
     pii_mode = "standard"
     if request.privacy and request.privacy.pii_mode:
@@ -395,8 +440,13 @@ async def copilot_chat(
                     clarifications=clarifications,
                     follow_up_actions=follow_up_actions,
                     provenance=sim_provenance_response,
-                    grounding_status=sim_grounding
+                    grounding_status=sim_grounding,
+                    response_mode=response_mode if isinstance(response_mode, str) else response_mode.value,
+                    session_context=session_context
                 )
+    
+    response_mode_str = response_mode if isinstance(response_mode, str) else response_mode.value
+    mode_instructions = get_mode_instructions(response_mode) if hasattr(response_mode, 'value') else ""
     
     context = {
         "has_document": False,
@@ -406,7 +456,10 @@ async def copilot_chat(
         "challenge_mode": request.challenge_mode,
         "investor_lens": request.investor_lens,
         "scenario_assumptions": scenario_assumptions,
-        "pii_mode": pii_mode
+        "pii_mode": pii_mode,
+        "response_mode": response_mode_str,
+        "response_mode_instructions": mode_instructions,
+        "session_context": session_context
     }
     
     llm_router = get_llm_router(
@@ -422,37 +475,6 @@ async def copilot_chat(
     ckb_storage.save_ckb(ckb)
     
     output = response.structured_output
-    
-    decision_created = None
-    if request.create_decision and output.get("recommendations"):
-        rec = output.get("recommendations", [{}])[0] if output.get("recommendations") else {}
-        decision = CompanyDecision(
-            company_id=company_id,
-            title=rec.get("action", request.message[:100]),
-            context=request.message,
-            options_json=[{"name": r.get("action", "Option"), "description": r.get("rationale", "")} 
-                         for r in output.get("recommendations", [])],
-            recommendation_json=rec,
-            status="proposed",
-            confidence=response.confidence.value,
-            sources_json=["copilot"]
-        )
-        db.add(decision)
-        db.commit()
-        db.refresh(decision)
-        decision_created = decision.to_dict()
-    
-    challenge_result = None
-    if request.challenge_mode and output.get("recommendations"):
-        challenge_result = generate_challenge(output.get("recommendations", []), context)
-    
-    investor_analysis = None
-    if request.investor_lens and output.get("recommendations"):
-        investor_analysis = generate_investor_analysis(
-            output.get("recommendations", []), 
-            request.investor_lens,
-            truth_scan.outputs_json if truth_scan else {}
-        )
     
     from server.api.data_health import calculate_data_health
     data_health = calculate_data_health(truth_scan)
@@ -474,9 +496,6 @@ async def copilot_chat(
         if latest_run:
             scenario_id_for_citation = latest_run.scenario_id
             run_id_for_citation = latest_run.id
-    
-    citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
-    highlighted_claims = generate_highlighted_claims(output, citations)
     
     provenance_response = None
     grounding_status_value = GroundingStatus.NOT_AVAILABLE.value
@@ -540,10 +559,65 @@ async def copilot_chat(
                 scenarioName=scenario_for_provenance.name if scenario_for_provenance else None,
                 runId=run_id_for_citation,
                 runTimestamp=latest_run_for_provenance.created_at.isoformat() if latest_run_for_provenance.created_at else None,
-                dataSnapshotId=getattr(latest_run_for_provenance, 'data_snapshot_id', None),
+                dataSnapshotId=None,
                 status=latest_run_for_provenance.status,
                 validationFlags=validation_flags if validation_flags else None
             )
+    
+    provenance_dict = provenance_response.model_dump() if provenance_response else None
+    
+    from server.copilot.response_formatter import format_response_by_mode, ensure_citations, extract_causal_drivers
+    
+    output = format_response_by_mode(
+        output,
+        mode=response_mode_str,
+        provenance=provenance_dict,
+        session_context=session_context
+    )
+    output = ensure_citations(output, provenance=provenance_dict)
+    causal_drivers = extract_causal_drivers(output, simulation_result=simulation_result)
+    if causal_drivers:
+        output["causal_drivers"] = causal_drivers
+    
+    conv_state.clear_pending_clarification()
+    conversation_store.save(conv_state)
+    
+    decision_created = None
+    if request.create_decision and output.get("recommendations"):
+        rec = output.get("recommendations", [{}])[0] if output.get("recommendations") else {}
+        decision = CompanyDecision(
+            company_id=company_id,
+            title=rec.get("action", request.message[:100]),
+            context=request.message,
+            options_json=[{"name": r.get("action", "Option"), "description": r.get("rationale", "")} 
+                         for r in output.get("recommendations", [])],
+            recommendation_json=rec,
+            status="proposed",
+            confidence=response.confidence.value,
+            sources_json=["copilot"]
+        )
+        db.add(decision)
+        db.commit()
+        db.refresh(decision)
+        decision_created = decision.to_dict()
+    
+    challenge_result = None
+    if request.challenge_mode and output.get("recommendations"):
+        challenge_result = generate_challenge(output.get("recommendations", []), context)
+    
+    investor_analysis = None
+    if request.investor_lens and output.get("recommendations"):
+        investor_analysis = generate_investor_analysis(
+            output.get("recommendations", []), 
+            request.investor_lens,
+            truth_scan.outputs_json if truth_scan else {}
+        )
+    
+    citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
+    highlighted_claims = generate_highlighted_claims(output, citations)
+    
+    conv_state.add_message("user", request.message)
+    conv_state.add_message("assistant", output.get("executive_summary", [""])[0] if output.get("executive_summary") else "")
     
     return CopilotChatResponse(
         executive_summary=output.get("executive_summary", []),
@@ -571,8 +645,55 @@ async def copilot_chat(
         follow_up_actions=follow_up_actions,
         decision_advisor=response.decision_advisor_output,
         provenance=provenance_response,
-        grounding_status=grounding_status_value
+        grounding_status=grounding_status_value,
+        response_mode=response_mode if isinstance(response_mode, str) else response_mode.value,
+        session_context=session_context,
+        causal_drivers=output.get("causal_drivers"),
+        feedback_prompt="Was this helpful?",
+        message_id=f"msg_{company_id}_{current_user.id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
     )
+
+
+@router.post("/companies/{company_id}/chat/feedback")
+async def submit_copilot_feedback(
+    company_id: int,
+    request: CopilotFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Submit feedback for a copilot response.
+    
+    Tracks whether responses were helpful and captures improvement suggestions.
+    """
+    from server.copilot.conversation_state import conversation_store
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    conv_state = conversation_store.get(company_id, current_user.id)
+    conv_state.add_message(
+        role="feedback",
+        content=f"Helpful: {request.helpful}",
+        metadata={
+            "message_id": request.message_id,
+            "helpful": request.helpful,
+            "feedback_text": request.feedback_text,
+            "improvement_suggestion": request.improvement_suggestion
+        }
+    )
+    conversation_store.save(conv_state)
+    
+    return {
+        "success": True,
+        "message": "Thank you for your feedback!",
+        "message_id": request.message_id
+    }
 
 
 def generate_challenge(recommendations: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:

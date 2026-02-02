@@ -1,0 +1,340 @@
+To make Copilot conversations more natural and genuinely useful while still being safe, grounded, and auditable, you need to improve both the prompt design and how the system is structured around human expectations.
+
+Below is a practical, founder-friendly guide — not just code or technical directives, but how users actually think, ask, and iterate in natural language.
+
+⸻
+
+✅ How to Make Copilot Conversations More Natural & More Useful
+
+Great Copilot interactions are not about more words. They’re about context, clarity, relevance, grounding, and feedback loops.
+
+⸻
+
+1) Define the Interaction Purpose Upfront
+
+Every Copilot session should start with a clear intention.
+
+Instead of:
+
+“What’s the runway?”
+
+Use:
+
+“Explain this scenario’s runway details and risks — grounded in the latest simulation run (runId: X). Provide high-level summary + key contributing factors.”
+
+Structure:
+
+Intent: Summarize key metrics + explain
+Context: companyId, scenarioId, runId
+Output format: bullets + bullets with numeric citations
+
+This makes the output:
+	•	natural (conversational)
+	•	structured (readable)
+	•	verifiable (grounded)
+
+Why this matters:
+Copilot should behave like a domain expert talking to a founder, not a generic chatbot.
+
+⸻
+
+2) Context Passing Must Be Automatic and Invisible
+
+Users shouldn’t think about:
+	•	scenarioId
+	•	runId
+	•	snapshotId
+
+Instead, use session context:
+
+Example user:
+
+“What changed in runway vs last run?”
+
+Copilot implicitly receives:
+
+companyId: NimbusHR
+activeScenarioId: pricing_increase
+activeRunId: run_abc
+lastRunId: run_xyz
+
+Copilot replies:
+
+“Runway decreased from 16.0 → 15.0 months because net burn was higher and pricing effects were muted…”
+
+Make UI pass context with every request.
+
+⸻
+
+3) Response Modes: Choose Per User Intent
+
+Not every question needs the same style. Provide mode options.
+
+Suggested modes:
+
+Mode	Behavior
+Explain	Natural language + numeric summaries
+Compare	Side-by-side comparison of two runs
+Plan	Actionable recommendations grounded in data
+Teach	Glossary + definitions + visual metaphors
+JSON	Structured, API-friendly output
+
+User can trigger:
+
+“Explain in bullets only”
+“Give it in JSON”
+“Compare baseline vs current scenario”
+
+By enforcing mode tags, Copilot is easier to predict and control.
+
+⸻
+
+4) Copilot Should Always Cite the Source of Every Number
+
+Poor design:
+
+“Your runway is 18 months.”
+
+Better:
+
+“Your runway P50 is 18.0 months (from runId: xyz at 2026-02-01T14:22Z). Cash balance used: $X, net burn: $Y.”
+
+This gives:
+	•	context
+	•	audit trail
+	•	trust
+
+Even if the user never asks about provenance explicitly.
+
+⸻
+
+5) Use Conversational Anchors + Follow-Up Prompts
+
+Make Copilot naturally ask clarifying questions.
+
+Good:
+
+User: “Why did my runway go up?”
+Copilot: “Are you asking relative to baseline or last run? Reply with BASELINE or LAST.”
+
+This keeps the dialog:
+	•	natural
+	•	goal-oriented
+	•	less ambiguous
+
+⸻
+
+6) Natural Language Should Leverage Data, Not Replace It
+
+Copilot should never approximate numbers. It should repeat them verbatim with context.
+
+Bad:
+
+“Runway is about a year and a half.”
+
+Good:
+
+“Runway P50 is 18.0 months.”
+
+Natural language without rounding unless user asks:
+
+“Give me a human description of runway.”
+
+⸻
+
+7) Explain Causality, Don’t Just Report Numbers
+
+Users care why, not just what.
+
+For example:
+
+“Runway fell from 19 → 15 months mainly due to a drop in pricing impact and a slight increase in burn from hiring acceleration.”
+
+Structure explanations:
+	•	Summary sentence
+	•	Top 3 drivers
+	•	A short recommendation
+
+This feels much more human.
+
+⸻
+
+8) Teach When Useful, Skip When Not
+
+If the user is familiar with terms:
+
+“Explain survival definition.”
+
+Copilot:
+
+Natural explanation + example + relationship to runway.
+
+If user is expert and just needs numbers:
+
+“Skip the teaching, just give me factors and numbers.”
+
+UI could provide a toggle: Teaching Mode ON / OFF
+
+⸻
+
+9) Enable Response Retry With Clarification
+
+Sometimes Copilot misunderstands. Allow the system to say:
+
+“I need more context — do you mean runway trend vs baseline or vs last run?”
+
+Instead of guessing and giving useless output.
+
+⸻
+
+10) Surface Known Limitations Upfront
+
+If run is invalid or inconsistent, Copilot should proactively say so:
+
+“This simulation run failed the cash/burn sanity check — I cannot provide reliable recommendations.”
+
+Users trust honesty — and a known limitation is better than a confident hallucination.
+
+⸻
+
+11) Provide Sidebars, Expandable Explanations
+
+Users want bite-sized + deeper context when needed.
+
+UI can show:
+	•	Copilot’s natural summary
+	•	Expandable “numbers with provenance”
+	•	Expandable “drill into assumptions”
+
+This keeps responses:
+	•	Natural
+	•	Useful
+	•	Not overwhelming
+
+⸻
+
+12) Build a Library of Prompt Templates
+
+For repeatable patterns:
+
+Name	Template
+Metric Summary	“Summarize metrics for scenario X from runId Y.”
+Comparison	“Compare baseline runId A vs current runId B.”
+Why Explanation	“Explain why runway changed between runId A and runId B.”
+Assumption Drilldown	“List assumptions impacting survival metric.”
+Decision Advice	“Recommend actions to improve runway > 18 months.”
+
+These templates make conversations more consistent and reliable.
+
+⸻
+
+13) Feedback Loop & Learning
+
+Ask the user:
+
+“Was this helpful? (YES / NO)”
+
+If NO:
+	•	Ask: “What did you want that I missed?”
+	•	Store feedback for improvement
+
+This turns Copilot into a learning system.
+
+⸻
+
+14) Keep Tone Human, Precise, & Helpful
+
+Natural language traits:
+	•	Short sentences
+	•	Definitions when needed
+	•	No speculation
+	•	“I cannot answer that because…” when appropriate
+
+⸻
+
+Practical Prompting Patterns You Can Bake In
+
+Pattern 1 — Summarize Latest Run
+
+Intent: Summarize Run Metrics
+Context: {companyId, scenarioId, runId}
+Mode: Explain
+Output:
+- one paragraph summary
+- key values with provenance
+- short explanation of what moves runway/survival
+
+Pattern 2 — Compare Two Scenarios
+
+Intent: Compare Baseline vs Growth Strategy
+Context: {companyId}
+Input: {runId1, runId2}
+Output mode: Side-by-Side
+
+Pattern 3 — Advise Improvement
+
+Intent: Recommend Actions
+Context: {companyId, scenarioId, runId}
+Output:
+- Top 3 levers that would improve survival/runway
+- Expected impact direction
+
+
+⸻
+
+Final Mantra (User-centric)
+
+Useful = Grounded + Clear + Relevant + Actionable
+
+If a response:
+	•	does not reference valid data → Cancel
+	•	does not cite source → low trust
+	•	cannot be defended in a meeting → worthless to founders
+
+⸻
+
+One Minute Test (Self-Check Before Returning Any Copilot Response)
+	1.	Does the answer reference a verified runId?
+Yes → proceed. No → error response.
+	2.	Are all numbers identical to the canonical run results?
+Yes → proceed. No → contradiction handling engaged.
+	3.	Does the response cite where the number came from?
+Yes → proceed.
+No → add provenance block.
+	4.	Is the language natural and aligned with founder intuition?
+Yes → final.
+No → rewrite.
+
+⸻
+
+Example of a Good Copilot Answer
+
+Summary:
+For Pricing Increase Strategy (runId: run_1234), runway P50 is 15.0 months (run at 2026-02-02T14:09Z; snapshot: abc123). Cash balance is $500K; net burn $30K.
+
+Drivers:
+	1.	Pricing impact was lower than expected, reducing revenue growth.
+	2.	Net burn remains unchanged.
+	3.	Increased expenses offset pricing gains.
+
+Recommendation:
+To increase runway above 18 months, consider reducing burn by X% or accelerating pricing impact beyond Y%.
+
+Provenance:
+• CompanyId: NimbusHR Labs
+• ScenarioId: pricing_increase
+• RunId: run_1234
+• Timestamp: 2026-02-02T14:09Z
+• DataSnapshotId: sha256:…
+
+This feels natural, useful, and defensible.
+
+⸻
+
+If you want, I can now generate:
+
+✅ A set of template prompts you can ship with Predixen UI
+✅ A dialog flow guide for Copilot UX
+✅ Automated QA interactions to test Copilot naturalness
+
+Just tell me which one to build next.
