@@ -27,6 +27,11 @@ class ConversationState:
     message_history: List[Dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
+    active_scenario_id: Optional[int] = None
+    active_run_id: Optional[int] = None
+    last_run_id: Optional[int] = None
+    baseline_run_id: Optional[int] = None
+    response_mode: str = "explain"
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
@@ -89,6 +94,44 @@ class ConversationState:
         """Clear pending clarification."""
         self.pending_clarification = None
         self.updated_at = datetime.utcnow()
+    
+    def set_active_context(
+        self,
+        scenario_id: Optional[int] = None,
+        run_id: Optional[int] = None,
+        baseline_run_id: Optional[int] = None
+    ):
+        """Set the active context for natural conversations."""
+        if scenario_id is not None:
+            self.active_scenario_id = scenario_id
+        if run_id is not None:
+            if self.active_run_id is not None:
+                self.last_run_id = self.active_run_id
+            self.active_run_id = run_id
+        if baseline_run_id is not None:
+            self.baseline_run_id = baseline_run_id
+        self.updated_at = datetime.utcnow()
+    
+    def set_response_mode(self, mode: str):
+        """Set the response mode: explain, compare, plan, teach, json."""
+        valid_modes = ["explain", "compare", "plan", "teach", "json"]
+        if mode.lower() in valid_modes:
+            self.response_mode = mode.lower()
+        self.updated_at = datetime.utcnow()
+    
+    def get_session_context(self) -> Dict[str, Any]:
+        """Get the full session context for copilot requests."""
+        return {
+            "companyId": self.company_id,
+            "userId": self.user_id,
+            "activeScenarioId": self.active_scenario_id or self.last_scenario_id,
+            "activeScenarioName": self.last_scenario_name,
+            "activeRunId": self.active_run_id or self.last_simulation_id,
+            "lastRunId": self.last_run_id,
+            "baselineRunId": self.baseline_run_id,
+            "responseMode": self.response_mode,
+            "hasPendingClarification": self.pending_clarification is not None
+        }
     
     def get_context_summary(self) -> str:
         """Get a summary of current context for LLM prompts."""
