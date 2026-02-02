@@ -1,0 +1,295 @@
+Here’s a single, detailed, implementation-directed Replit prompt for the Copilot + Simulation grounding + provenance + guardrails workstream—written “same way as above” with concrete schemas, endpoints, payloads, and acceptance tests so the agent can implement fast with minimal ambiguity.
+
+⸻
+
+🚀 REPLIT MASTER PROMPT — Predixen Copilot × Simulation Trust Refactor (Grounding + Provenance + Guardrails)
+
+You are a senior full-stack engineer + LLM systems architect. Implement a decision-trust Copilot that is strictly grounded in the same canonical simulation run results shown in the UI. Fix run provenance, strict output modes, contradiction handling, and remove silent fallbacks. This is P0 correctness work.
+
+Non-negotiable principle:
+Copilot must never invent numeric facts. All numbers must come from a canonical run payload identified by (companyId, scenarioId, runId).
+
+⸻
+
+0) Quick Audit (Do first, then implement)
+	1.	Identify how the app currently determines:
+	•	active companyId
+	•	active scenarioId (top bar selection)
+	•	latest runId for a scenario
+	2.	Find Copilot backend entrypoint(s) and any existing tools/functions that fetch:
+	•	truth scan metrics
+	•	simulation results
+	•	scenario lists
+	3.	Locate all places Copilot shows:
+	•	“Latest simulation” sidebar
+	•	“load scenario” behavior
+	•	run metrics in text
+
+Deliverable: add a short COPILOT_TRUST_AUDIT.md with discovered paths + endpoints.
+
+⸻
+
+1) Canonical Run Results Contract (Single Source of Truth)
+
+1.1 Create/confirm canonical endpoint:
+
+GET /api/runs/:runId
+
+Returns RunResult with provenance, metrics, status, and validation flags.
+
+Response shape (RunResult):
+
+type RunResult = {
+  companyId: string;
+  scenarioId: string;
+  scenarioName: string;
+  runId: string;
+  runTimestamp: string;        // ISO
+  dataSnapshotId: string;      // hash of company_state
+  status: "queued" | "running" | "completed" | "failed" | "invalid";
+  metrics?: {
+    runwayMonths: { p10: number; p50: number; p90: number };
+    survival18mo: number;      // 0..1
+    cashBalance: number;
+    netBurn: number;
+    cashEnd?: { p10: number; p50: number; p90: number };
+  };
+  validation?: {
+    runwayCashBurnMismatch?: boolean;
+    survivalRunwayMismatch?: boolean;
+    monteCarloZeroVariance?: boolean;
+    notes?: string[];
+  };
+};
+
+1.2 Endpoint to find latest run by scenario:
+
+GET /api/company/:companyId/scenarios/:scenarioId/runs/latest
+
+Returns:
+	•	latest completed run (preferred)
+	•	else latest failed/invalid with error (so UI can show failure)
+
+⸻
+
+2) “Active Context” Plumbing (Copilot must always know what’s active)
+
+2.1 UI must pass explicit context with EVERY Copilot message
+
+Whenever calling Copilot, include:
+
+type CopilotContext = {
+  companyId: string;
+  activeScenarioId?: string;
+  activeRunId?: string;      // if results page or selected run
+  topBarScenarioId?: string; // if exists
+  mode?: "LOCKED_TO_ACTIVE" | "FREE";
+  uiSurface?: "SIM_RESULTS" | "SIM_BUILDER" | "TRUTH_SCAN" | "OVERVIEW";
+};
+
+Rules:
+	•	If top bar selects scenario: topBarScenarioId must be set.
+	•	If user is on Simulation Results: also pass activeRunId.
+	•	Add a UI toggle “Lock to current scenario”:
+	•	when ON, Copilot must not ask “which scenario?” and must use topBar/active.
+
+2.2 Server validates context
+
+Copilot backend must reject missing companyId.
+If locked mode and missing scenarioId/runId, return a structured “NOT_AVAILABLE” response.
+
+⸻
+
+3) Copilot Backend: Tooling & Strict Grounding
+
+3.1 Create a deterministic “Run Metrics Fetcher”
+
+Implement a function not an LLM:
+
+async function fetchVerifiedRunResult(ctx: CopilotContext): Promise<RunResult | null> {
+  // 1) If ctx.activeRunId -> GET /api/runs/:runId
+  // 2) Else if ctx.activeScenarioId or topBarScenarioId -> GET latest run
+  // 3) Ensure returned companyId matches ctx.companyId
+  // 4) Ensure status is completed (or return invalid/failed explicitly)
+}
+
+3.2 Copilot must NEVER compute runway/survival
+
+All numeric facts come from RunResult.metrics.
+
+If no verified run is available:
+	•	Copilot must respond with:
+	•	UNVERIFIED_NO_RUN
+	•	and a short instruction: “Run a scenario first.”
+
+⸻
+
+4) Provenance in Every Answer (COP-002)
+
+4.1 Add provenance block to every Copilot response that includes numbers
+
+Embed at bottom (or behind “Details” toggle), but MUST be present:
+
+Provenance:
+- CompanyId: ...
+- Scenario: ... (scenarioId)
+- RunId: ...
+- Run time: ...
+- Data snapshot: ...
+- Status: completed | invalid | failed
+- Validation flags: ...
+
+4.2 If provenance missing, do NOT output numbers
+
+Return an UNVERIFIED response.
+
+⸻
+
+5) Strict Output Modes (COP-013)
+
+Implement schema-locked response envelopes.
+
+5.1 Unified response envelope from Copilot backend
+
+type CopilotEnvelope =
+  | { kind: "NARRATIVE"; text: string; provenance?: ProvenanceBlock }
+  | { kind: "JSON"; json: any; provenance?: ProvenanceBlock }
+  | { kind: "TOKEN"; token: "OK" | "NOT_AVAILABLE" | "UNVERIFIED_NO_RUN" | "UNVERIFIED_MISMATCH" | "MISSING_INPUTS" | "UNKNOWN_SURVIVAL_DEFINITION" };
+
+5.2 Request parsing
+
+If user prompt includes patterns:
+	•	“JSON only” / “respond in JSON” → kind=JSON
+	•	“one token only” → kind=TOKEN
+	•	If UI is performing automation checks → call deterministic backend, not LLM.
+
+5.3 Enforce at server
+	•	Validate shape before returning to UI
+	•	If invalid, auto-retry once with a stricter system prompt
+	•	If still invalid, return:
+
+{ kind: "TOKEN", token: "NOT_AVAILABLE" }
+
+
+
+⸻
+
+6) “Load Scenario” Must Be Real (COP-008)
+
+When user says “load scenario X”:
+	1.	Resolve scenarioId by searching scenarios for companyId.
+	2.	Fetch latest run result for that scenario.
+	3.	If none exists:
+	•	return TOKEN: NOT_AVAILABLE with message: “No run exists for this scenario. Run it first.”
+	4.	If exists:
+	•	Return metrics directly from the canonical run.
+	5.	Never fabricate zeros.
+
+⸻
+
+7) Contradiction Handling Policy (COP-009)
+
+Implement contradiction detection between:
+	•	Copilot response metrics
+	•	UI-visible run metrics (since both should be from same RunResult, contradictions should be impossible)
+
+But still implement guardrails:
+
+If Copilot is about to answer with runId A but UI indicates runId B (activeRunId mismatch):
+	•	Return TOKEN: UNVERIFIED_MISMATCH
+	•	Include both runIds
+	•	Ask user to confirm which run to use OR automatically switch to activeRunId in locked mode.
+
+⸻
+
+8) Sidebar “Latest Simulation” Binding Bug (P1)
+
+Sidebar must:
+	•	Use the same fetchVerifiedRunResult() logic
+	•	If loading, show spinner
+	•	If missing survival, show “—”
+	•	If invalid/failed, show status + error
+	•	Never show placeholders like “Survival: %”
+
+⸻
+
+9) Simulation Validations Block Copilot (ties to SIM-002/3/4)
+
+9.1 Add server-side validation flags to RunResult
+
+When simulation finishes, compute validations:
+	•	runwayCashBurnMismatch:
+	•	compare runway_p50 vs simple cash/burn runway (tolerance)
+	•	survivalRunwayMismatch:
+	•	if runway_p50 >> 18 and survival18 == 0 → flag
+	•	monteCarloZeroVariance:
+	•	if p10==p50==p90 and model expected stochastic
+
+If any critical flag is true:
+	•	Mark run status as invalid OR keep completed but include validation flags
+	•	Copilot must:
+	•	refuse recommendations
+	•	state “Run invalid due to metric inconsistency”
+	•	only explain the mismatch
+
+⸻
+
+10) Copilot Prompts / System Instructions (Minimal & Strict)
+
+10.1 System message (core)
+	•	You are a decision assistant.
+	•	You cannot invent numbers.
+	•	You must use the provided RunResult object.
+	•	If missing, you must say NOT_AVAILABLE/UNVERIFIED.
+
+10.2 Recommendation mode (only if run verified)
+	•	Provide 3–5 recommendations tied to:
+	•	runway
+	•	survival
+	•	burn efficiency
+	•	Each recommendation must cite a metric and be actionable.
+
+⸻
+
+11) Acceptance Criteria (Must Pass)
+
+Grounding tests
+	1.	Run Baseline (runId A, runway P50=16.0)
+	•	Copilot must report 16.0 (not 16.5)
+	2.	Run Conservative Cost Cutting (runId B, runway P50=19.0)
+	•	Copilot must report 19.0 when active scenario is cost cutting
+	3.	Run Price Increase (runId C, runway P50=15.0)
+	•	Copilot must report 15.0
+	4.	Run Aggressive Growth (runId D, runway P50=264.0)
+	•	Copilot must report 264.0 BUT if validation flags mark mismatch, Copilot must refuse recommendations and explain invalidity.
+
+Provenance tests
+	•	Ask: “Which run are you using?” → returns scenarioId/runId/timestamp/snapshotId.
+
+Strict output tests
+	•	Ask: “JSON only: return runway p50 and survival18” → returns valid JSON
+	•	Ask: “one token only OK/NOT_AVAILABLE” → returns one token exactly
+
+Load scenario test
+	•	“Load Price Increase Strategy” must pull canonical run metrics; must never show zeros unless run truly has zeros.
+
+Sidebar test
+	•	Survival shows “—” not “%”
+	•	Status shown when invalid/failed
+
+⸻
+
+12) Deliverables
+	•	Canonical run results fetcher used everywhere
+	•	Copilot backend envelope with strict modes
+	•	Provenance block in all numeric outputs
+	•	Contradiction handling policy
+	•	Sidebar binding fix
+	•	Simulation validation flags + Copilot refusal on invalid runs
+	•	Tests (unit or lightweight integration)
+
+Do not stop until all acceptance criteria pass.
+
+⸻
+
+If you want, I can also produce a mini PRD for this Copilot trust contract (engineer-facing) or an automated QA script list you can run after every deploy.
