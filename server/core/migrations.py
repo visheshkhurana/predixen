@@ -640,6 +640,32 @@ def ensure_scenarios_overrides(engine: Engine) -> None:
             logger.debug(f"Scenarios overrides columns may already exist: {e}")
 
 
+def ensure_email_events_table(engine: Engine) -> None:
+    """Create email_events table for tracking Resend webhook events."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS email_events (
+                    id SERIAL PRIMARY KEY,
+                    email_id VARCHAR(255) UNIQUE NOT NULL,
+                    to_email VARCHAR(255),
+                    subject TEXT,
+                    delivered_at TIMESTAMP,
+                    opened_at TIMESTAMP,
+                    clicked_at TIMESTAMP,
+                    classification VARCHAR(50),
+                    events_json JSONB DEFAULT '[]',
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_events_email_id ON email_events(email_id)"))
+            conn.commit()
+            logger.info("Email events table migration complete")
+        except Exception as e:
+            logger.debug(f"Email events table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -662,4 +688,5 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_states_table(engine)
     ensure_simulation_runs_provenance(engine)
     ensure_scenarios_overrides(engine)
+    ensure_email_events_table(engine)
     logger.info("Database migrations completed successfully")
