@@ -662,7 +662,13 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
         
         revenue_val, revenue_rows = aggregate_rows_by_keywords(
             df, latest_col, REVENUE_KEYWORDS,
-            exclude_keywords=['net revenues (', 'net revenue india', 'net revenue international', 'net revenue ecommerce']
+            exclude_keywords=[
+                'net revenues (', 'net revenue india', 'net revenue international', 
+                'net revenue ecommerce', 'net revenue other',
+                'sales and marketing', 'sales & marketing', 'marketing expense',
+                'operating income', 'operating profit', 'net income', 'other income',
+                'gross income', 'income tax', 'interest income'
+            ]
         )
         if revenue_val is None:
             all_rev, all_rev_rows = aggregate_rows_by_keywords(df, latest_col, ['revenue', 'sales', 'income'])
