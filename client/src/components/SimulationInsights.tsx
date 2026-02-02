@@ -31,6 +31,7 @@ interface SimulationData {
     end_cash?: number;
     monthly_burn?: number;
     monthly_burn_p50?: number;
+    monthly_revenue?: number;
   };
   month_data?: Array<{
     cash_p50?: number;
@@ -54,13 +55,32 @@ interface Recommendation {
   actionable: boolean;
 }
 
-function generateRecommendations(simulation: SimulationData): Recommendation[] {
+function generateRecommendations(simulation: SimulationData, isSustainable: boolean): Recommendation[] {
   const recommendations: Recommendation[] = [];
-  const runwayP50 = simulation.runway?.p50 || 0;
+  const runwayP50 = Math.min(simulation.runway?.p50 || 0, 60);
   const survival18m = simulation.survival?.['18m'] || 0;
   const survival12m = simulation.survival?.['12m'] || 0;
   const endCash = simulation.summary?.end_cash || 0;
-  const monthlyBurn = simulation.summary?.monthly_burn || simulation.summary?.monthly_burn_p50 || 0;
+  
+  if (isSustainable) {
+    recommendations.push({
+      id: 'sustainable-growth',
+      title: 'Focus on Sustainable Growth',
+      description: 'Your company is profitable. Consider strategic investments in growth while maintaining positive economics.',
+      impact: 'low',
+      category: 'strategic',
+      actionable: true,
+    });
+    recommendations.push({
+      id: 'build-reserves',
+      title: 'Build Cash Reserves',
+      description: 'Use profitability to build 6-12 months of operating reserves for future opportunities or market downturns.',
+      impact: 'medium',
+      category: 'strategic',
+      actionable: true,
+    });
+    return recommendations;
+  }
   
   if (runwayP50 <= 6) {
     recommendations.push({
@@ -168,12 +188,27 @@ function generateRecommendations(simulation: SimulationData): Recommendation[] {
   return recommendations.slice(0, 4);
 }
 
-function generateNarrativeSummary(simulation: SimulationData, scenarioName: string): string {
-  const runwayP50 = simulation.runway?.p50 || 0;
-  const runwayP10 = simulation.runway?.p10 || 0;
-  const runwayP90 = simulation.runway?.p90 || 0;
+function generateNarrativeSummary(simulation: SimulationData, scenarioName: string, isSustainable: boolean): string {
+  const rawRunwayP50 = simulation.runway?.p50 || 0;
+  const runwayP50 = Math.min(rawRunwayP50, 60);
+  const runwayP10 = Math.min(simulation.runway?.p10 || 0, 60);
+  const runwayP90 = Math.min(simulation.runway?.p90 || 0, 60);
   const survival18m = simulation.survival?.['18m'] || 0;
   const survival12m = simulation.survival?.['12m'] || 0;
+  
+  if (isSustainable) {
+    const monthlyRevenue = simulation.summary?.monthly_revenue || 0;
+    const monthlyBurn = simulation.summary?.monthly_burn || 0;
+    const netProfit = monthlyRevenue - monthlyBurn;
+    
+    let narrative = `Under the "${scenarioName}" scenario, your company is financially sustainable with positive cash flow. `;
+    if (netProfit > 0) {
+      narrative += `You're generating approximately $${(netProfit / 1000).toFixed(0)}K in monthly net profit. `;
+    }
+    narrative += `This healthy position allows you to focus on strategic growth initiatives rather than survival. `;
+    narrative += `Continue optimizing operations while exploring investment opportunities.`;
+    return narrative;
+  }
   
   let narrative = `Under the "${scenarioName}" scenario, your company has a median runway of ${runwayP50.toFixed(1)} months. `;
   
@@ -216,10 +251,16 @@ function getImpactColor(impact: Recommendation['impact']) {
 }
 
 export function SimulationInsights({ simulation, scenarioName, testId = 'simulation-insights' }: SimulationInsightsProps) {
-  const runwayP50 = simulation.runway?.p50 || 0;
+  const rawRunwayP50 = simulation.runway?.p50 || 0;
   const survival18m = simulation.survival?.['18m'] || 0;
+  const monthlyBurn = simulation.summary?.monthly_burn || simulation.summary?.monthly_burn_p50 || 0;
+  const monthlyRevenue = simulation.summary?.monthly_revenue || 0;
   
-  const hasValidData = runwayP50 > 0 || survival18m > 0;
+  const isSustainable = rawRunwayP50 >= 36 || (monthlyRevenue > monthlyBurn && monthlyBurn > 0);
+  const cappedRunwayP50 = Math.min(rawRunwayP50, 60);
+  const effectiveSurvival = isSustainable ? 100 : survival18m;
+  
+  const hasValidData = rawRunwayP50 > 0 || survival18m > 0;
   
   if (!hasValidData) {
     return (
@@ -236,10 +277,10 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
     );
   }
   
-  const recommendations = generateRecommendations(simulation);
-  const narrative = generateNarrativeSummary(simulation, scenarioName);
+  const recommendations = generateRecommendations(simulation, isSustainable);
+  const narrative = generateNarrativeSummary(simulation, scenarioName, isSustainable);
   
-  const overallHealth = survival18m >= 80 ? 'healthy' : survival18m >= 50 ? 'warning' : 'critical';
+  const overallHealth = isSustainable ? 'healthy' : (effectiveSurvival >= 80 ? 'healthy' : effectiveSurvival >= 50 ? 'warning' : 'critical');
   
   const healthColors = {
     healthy: 'border-emerald-500',
@@ -259,7 +300,7 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
               <CardTitle className="text-lg">Simulation Analysis</CardTitle>
             </div>
             <Badge variant={overallHealth === 'healthy' ? 'default' : overallHealth === 'warning' ? 'secondary' : 'destructive'}>
-              {overallHealth === 'healthy' ? 'Healthy Trajectory' : overallHealth === 'warning' ? 'Needs Attention' : 'Critical Risk'}
+              {isSustainable ? 'Sustainable' : (overallHealth === 'healthy' ? 'Healthy Trajectory' : overallHealth === 'warning' ? 'Needs Attention' : 'Critical Risk')}
             </Badge>
           </div>
           <CardDescription className="mt-2">
@@ -278,21 +319,24 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="p-3 bg-background rounded-lg border">
-              <p className="text-xs text-muted-foreground mb-1">Runway (P50)</p>
+              <p className="text-xs text-muted-foreground mb-1">{isSustainable ? 'Status' : 'Runway (P50)'}</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-insight-runway">
-                {runwayP50.toFixed(1)} mo
+                {isSustainable ? 'Sustainable' : `${cappedRunwayP50.toFixed(1)} mo`}
               </p>
             </div>
             <div className="p-3 bg-background rounded-lg border">
               <p className="text-xs text-muted-foreground mb-1">Survival (18m)</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-insight-survival">
-                {survival18m.toFixed(0)}%
+                {effectiveSurvival.toFixed(0)}%
               </p>
             </div>
             <div className="p-3 bg-background rounded-lg border">
-              <p className="text-xs text-muted-foreground mb-1">Range Spread</p>
+              <p className="text-xs text-muted-foreground mb-1">{isSustainable ? 'Net Profit/mo' : 'Range Spread'}</p>
               <p className="text-lg font-mono font-semibold" data-testid="text-insight-spread">
-                {((simulation.runway?.p90 || 0) - (simulation.runway?.p10 || 0)).toFixed(1)} mo
+                {isSustainable 
+                  ? `$${((monthlyRevenue - monthlyBurn) / 1000).toFixed(0)}K` 
+                  : `${(Math.min(simulation.runway?.p90 || 0, 60) - Math.min(simulation.runway?.p10 || 0, 60)).toFixed(1)} mo`
+                }
               </p>
             </div>
             <div className="p-3 bg-background rounded-lg border">
@@ -303,7 +347,7 @@ export function SimulationInsights({ simulation, scenarioName, testId = 'simulat
                 overallHealth === 'warning' && "text-amber-600 dark:text-amber-400",
                 overallHealth === 'critical' && "text-red-600 dark:text-red-400"
               )} data-testid="text-insight-risk">
-                {overallHealth}
+                {isSustainable ? 'Low' : overallHealth}
               </p>
             </div>
           </div>
