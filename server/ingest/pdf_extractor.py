@@ -95,9 +95,29 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
         '(rolling q)' in text_lower
     )
     
-    # FIRST: Try to extract direct monthly revenue for non-quarterly reports
-    # Pattern: "In March 2025, Revenue was $14.2M" or "Monthly Revenue: $14.2M"
-    if not has_quarterly_indicator:
+    # Check if this is a Full Benchmark Scan format (has detailed monthly breakouts)
+    is_full_benchmark = 'full benchmark scan' in text_lower or 'full scan' in text_lower
+    
+    # PRIORITY 1: Look for detailed section pattern "In [Month] [Year], Revenue was $X ($Y run rate)"
+    # This is the most authoritative source in Full Benchmark Scan format
+    detailed_rev_match = re.search(
+        r'In\s+(\w+\s+\d{4}),\s+Revenue\s+was\s*\n?\s*([₹$€£]?[\d.,]+[MKBmkb]?)\s*\(([₹$€£]?[\d.,]+[MKBmkb]?)\s*run\s*rate\)',
+        text, re.IGNORECASE
+    )
+    if detailed_rev_match:
+        period = detailed_rev_match.group(1)
+        monthly_val = parse_value_from_text(detailed_rev_match.group(2))
+        run_rate_val = parse_value_from_text(detailed_rev_match.group(3))
+        if monthly_val:
+            metrics['monthly_revenue'] = monthly_val
+            metrics['report_date'] = period
+            logger.info(f"Extracted detailed monthly revenue: {monthly_val} for {period}")
+        if run_rate_val:
+            metrics['run_rate_revenue'] = run_rate_val
+            metrics['arr'] = run_rate_val
+    
+    # PRIORITY 2: For non-quarterly reports without detailed match, try simpler patterns
+    if not metrics.get('monthly_revenue') and not has_quarterly_indicator:
         monthly_rev_match = re.search(r'(?:In\s+\w+\s+\d{4},\s+)?(?:Monthly\s+)?Revenue\s+(?:was\s+)?([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
         if monthly_rev_match:
             monthly_val = parse_value_from_text(monthly_rev_match.group(1))
@@ -105,21 +125,23 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
                 metrics['monthly_revenue'] = monthly_val
                 logger.info(f"Extracted monthly revenue directly: {monthly_val}")
     
-    # Annualized Revenue (Rolling Q) - extract ARR but ONLY derive monthly if explicitly quarterly
+    # Annualized Revenue (Rolling Q) - extract ARR but ONLY if not already set by detailed match
     # Pattern: "Annualized Revenue (Rolling Q) was $51.6M"
-    arr_rolling_match = re.search(r'Annualized\s+Revenue\s*\(?\s*Rolling\s*Q?\s*\)?\s*(?:was\s+)?([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
-    if arr_rolling_match:
-        arr_value = parse_value_from_text(arr_rolling_match.group(1))
-        if arr_value:
-            metrics['arr'] = arr_value
-            metrics['run_rate_revenue'] = arr_value
-            # Only derive monthly from ARR if this is explicitly a quarterly format
-            # DO NOT overwrite if monthly_revenue is already set
-            if has_quarterly_indicator and not metrics.get('monthly_revenue'):
-                metrics['monthly_revenue'] = arr_value / 12
-                logger.info(f"Extracted ARR (Rolling Q): {arr_value}, derived monthly: {arr_value/12}")
-            else:
-                logger.info(f"Extracted ARR: {arr_value}, not deriving monthly (no quarterly indicator or already set)")
+    # Note: The detailed match from "In [Month] [Year], Revenue was $X ($Y run rate)" takes priority
+    if not metrics.get('run_rate_revenue'):
+        arr_rolling_match = re.search(r'Annualized\s+Revenue\s*\(?\s*Rolling\s*Q?\s*\)?\s*(?:was\s+)?([₹$€£]?[\d.,]+[MKBmkb]?)', text, re.IGNORECASE)
+        if arr_rolling_match:
+            arr_value = parse_value_from_text(arr_rolling_match.group(1))
+            if arr_value:
+                metrics['arr'] = arr_value
+                metrics['run_rate_revenue'] = arr_value
+                # Only derive monthly from ARR if this is explicitly a quarterly format
+                # DO NOT overwrite if monthly_revenue is already set
+                if has_quarterly_indicator and not metrics.get('monthly_revenue'):
+                    metrics['monthly_revenue'] = arr_value / 12
+                    logger.info(f"Extracted ARR (Rolling Q): {arr_value}, derived monthly: {arr_value/12}")
+                else:
+                    logger.info(f"Extracted ARR: {arr_value}, not deriving monthly (no quarterly indicator or already set)")
     
     # Also look for plain run rate if ARR not found
     if not metrics.get('run_rate_revenue'):
@@ -235,10 +257,23 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
     elif '$' in pdf_text:
         metrics['currency'] = 'USD'
     
-    # Report date - look for month year patterns
-    date_match = re.search(r'(?:In\s+)?(\w+\s+\d{4})', text)
-    if date_match:
-        metrics['report_date'] = date_match.group(1)
+    # Report date - prefer explicit patterns over arbitrary month/year
+    # Priority 1: "Generated DD.MM.YYYY" pattern from Tribe Capital reports
+    if not metrics.get('report_date'):
+        generated_match = re.search(r'Generated\s+(\d{1,2})[./](\d{1,2})[./](\d{4})', text)
+        if generated_match:
+            day, month, year = generated_match.groups()
+            months = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
+                     'July', 'August', 'September', 'October', 'November', 'December']
+            metrics['report_date'] = f"{months[int(month)]} {year}"
+    
+    # Priority 2: "In [Month] [Year]" from detailed sections (already extracted above)
+    
+    # Priority 3: Explicit "as of [Month] [Year]" patterns
+    if not metrics.get('report_date'):
+        as_of_match = re.search(r'(?:as\s+of|data\s+through|through)\s+(\w+\s+\d{4})', text, re.IGNORECASE)
+        if as_of_match:
+            metrics['report_date'] = as_of_match.group(1)
     
     return metrics
 
