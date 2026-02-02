@@ -980,6 +980,8 @@ export default function ScenariosPage() {
                 survival18m={simulation.survival?.['18m'] || 0}
                 survival12m={simulation.survival?.['12m'] || 0}
                 endCash={simulation.summary?.end_cash}
+                monthlyBurn={simulation.summary?.monthly_burn}
+                monthlyRevenue={simulation.summary?.monthly_revenue}
                 scenarioName={currentScenarioName}
               />
               

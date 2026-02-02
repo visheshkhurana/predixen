@@ -165,7 +165,7 @@ function formatCurrency(value: number): string {
 }
 
 export function DashboardKPICards({ simulation, metrics, previousMetrics, testId = 'dashboard-kpis' }: DashboardKPICardsProps) {
-  const runwayP50 = simulation?.runway?.p50 || extractValue(metrics?.runway_months);
+  const rawRunwayP50 = simulation?.runway?.p50 || extractValue(metrics?.runway_months);
   const survival18m = simulation?.survival?.['18m'] || 0;
   const mrr = extractValue(metrics?.monthly_revenue);
   const burnMultiple = extractValue(metrics?.burn_multiple);
@@ -174,6 +174,10 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, testId
   const cashBalance = extractValue(metrics?.cash_balance);
   const growthRate = extractValue(metrics?.revenue_growth_mom);
   const churnRate = extractValue(metrics?.churn_rate);
+  
+  const isSustainable = rawRunwayP50 >= 36 || netBurn <= 0;
+  const runwayP50 = Math.min(rawRunwayP50, 60);
+  const effectiveSurvival = isSustainable ? 100 : survival18m;
   
   const prevMrr = previousMetrics ? extractValue(previousMetrics.monthly_revenue) : null;
   const mrrTrend = prevMrr && mrr ? (mrr > prevMrr ? 'up' : mrr < prevMrr ? 'down' : 'stable') : undefined;
@@ -184,9 +188,9 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, testId
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KPICard
           title="Runway (P50)"
-          value={`${runwayP50.toFixed(1)} mo`}
-          subtitle={simulation?.runway ? `P10: ${simulation.runway.p10?.toFixed(1)} / P90: ${simulation.runway.p90?.toFixed(1)}` : undefined}
-          status={getRunwayStatus(runwayP50)}
+          value={isSustainable ? 'Sustainable' : `${runwayP50.toFixed(1)} mo`}
+          subtitle={!isSustainable && simulation?.runway ? `P10: ${Math.min(simulation.runway.p10 || 0, 60).toFixed(1)} / P90: ${Math.min(simulation.runway.p90 || 0, 60).toFixed(1)}` : (isSustainable ? 'Positive cash flow' : undefined)}
+          status={isSustainable ? 'healthy' : getRunwayStatus(runwayP50)}
           icon={<Clock className="h-4 w-4" />}
           tooltip="Months of runway remaining at current burn rate. P50 is the median outcome from Monte Carlo simulations."
           testId={`${testId}-runway`}
@@ -194,10 +198,10 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, testId
         
         <KPICard
           title="18-Month Survival"
-          value={`${survival18m.toFixed(0)}%`}
-          subtitle={simulation?.survival?.['12m'] ? `12-mo: ${simulation.survival['12m'].toFixed(0)}%` : undefined}
-          status={getSurvivalStatus(survival18m)}
-          icon={survival18m >= 80 ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+          value={`${effectiveSurvival.toFixed(0)}%`}
+          subtitle={!isSustainable && simulation?.survival?.['12m'] ? `12-mo: ${simulation.survival['12m'].toFixed(0)}%` : (isSustainable ? 'Sustainable' : undefined)}
+          status={getSurvivalStatus(effectiveSurvival)}
+          icon={effectiveSurvival >= 80 ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           tooltip="Probability of having positive cash balance after 18 months based on simulations."
           testId={`${testId}-survival`}
         />
