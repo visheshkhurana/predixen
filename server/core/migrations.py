@@ -580,6 +580,66 @@ def ensure_truth_scan_columns(engine: Engine) -> None:
             logger.debug(f"Truth Scan columns may already exist: {e}")
 
 
+def ensure_company_states_table(engine: Engine) -> None:
+    """Ensure the company_states table exists for canonical state tracking."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS company_states (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id),
+                    environment VARCHAR(20) NOT NULL DEFAULT 'user',
+                    state_json TEXT NOT NULL,
+                    snapshot_id VARCHAR(64) NOT NULL,
+                    fundraising_rounds_json TEXT DEFAULT '[]',
+                    cash_balance INTEGER,
+                    monthly_burn INTEGER,
+                    revenue_monthly INTEGER,
+                    revenue_growth_rate VARCHAR(20),
+                    expenses_monthly INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_states_company ON company_states(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_states_snapshot ON company_states(snapshot_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_company_states_updated ON company_states(updated_at)"))
+            conn.execute(text("ALTER TABLE company_states ADD COLUMN IF NOT EXISTS fundraising_rounds_json TEXT DEFAULT '[]'"))
+            conn.commit()
+            logger.info("Company states table migration complete")
+        except Exception as e:
+            logger.debug(f"Company states table may already exist: {e}")
+
+
+def ensure_simulation_runs_provenance(engine: Engine) -> None:
+    """Add provenance columns to simulation_runs table for deterministic snapshotting."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS data_snapshot_id VARCHAR(64)"))
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS inputs_json JSONB"))
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'completed'"))
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS error_message TEXT"))
+            conn.execute(text("ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_simruns_snapshot ON simulation_runs(data_snapshot_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_simruns_status ON simulation_runs(status)"))
+            conn.commit()
+            logger.info("Simulation runs provenance columns migration complete")
+        except Exception as e:
+            logger.debug(f"Simulation runs provenance columns may already exist: {e}")
+
+
+def ensure_scenarios_overrides(engine: Engine) -> None:
+    """Add overrides_json column to scenarios table for deterministic scenario inputs."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS overrides_json JSONB DEFAULT '{}'"))
+            conn.execute(text("ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS outputs_json JSONB"))
+            conn.commit()
+            logger.info("Scenarios overrides columns migration complete")
+        except Exception as e:
+            logger.debug(f"Scenarios overrides columns may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -599,4 +659,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_conversations_tables(engine)
     ensure_truth_scan_tables(engine)
     ensure_truth_scan_columns(engine)
+    ensure_company_states_table(engine)
+    ensure_simulation_runs_provenance(engine)
+    ensure_scenarios_overrides(engine)
     logger.info("Database migrations completed successfully")
