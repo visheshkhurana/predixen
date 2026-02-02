@@ -17,6 +17,8 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 
+from server.copilot.grounding_rules import get_grounding_prompt_addition
+
 CFO_SYSTEM_PROMPT = """You are Fund Flow CFO Agent: a rigorous finance analyst + FP&A lead.
 Your job: extract financials from user documents, normalize currencies, validate consistency, compute key metrics, and produce a finance-grade summary for decision-making.
 
@@ -51,7 +53,7 @@ Validation checks:
 - Totals vs line items consistency
 - Repeated/duplicated extraction artifacts
 - Common OCR errors (commas/decimals, INR crore/lakh conversions)
-"""
+""" + get_grounding_prompt_addition()
 
 
 @dataclass 

@@ -1,7 +1,47 @@
 # Copilot Trust Audit
 
+**Last Updated**: 2026-02-02
+
 ## Overview
-This document captures the current architecture paths for the Copilot × Simulation Trust Refactor.
+This document captures the architecture paths for the Copilot × Simulation Trust Refactor.
+
+## Implementation Status
+
+| Issue | Status | Notes |
+|-------|--------|-------|
+| COP-002: Missing Provenance | **IMPLEMENTED** | Provenance block added to chat responses |
+| COP-008: Load Scenario Fabrication | **FIXED** | Returns NOT_AVAILABLE if no run exists |
+| COP-009: Contradiction Handling | **IMPLEMENTED** | UNVERIFIED_MISMATCH detection added |
+| COP-013: Strict Output Modes | **IMPLEMENTED** | Schema-locked response envelopes implemented |
+| SIM-002/3/4: Validation Flags | **IMPLEMENTED** | compute_run_validation_flags() added |
+| Grounding Rules | **IMPLEMENTED** | All agents updated with strict grounding rules |
+
+### Known Limitations (Phase 2)
+
+1. **Not All Paths Unified**: The copilot chat endpoint uses fetchVerifiedRunResult for main responses, but simulation_handler still uses direct SimulationRun queries. Full unification requires routing all simulation responses through the trust module.
+
+2. **Dual Validation Sources**: There are two validation flag computations - one in `canonical_state.py` and one in `trust.py`. These should be consolidated into a single canonical implementation.
+
+3. **Context-Aware UNVERIFIED_MISMATCH**: The simpler fetchVerifiedRunResult doesn't fully enforce UNVERIFIED_MISMATCH detection based on CopilotContext. For full enforcement, use `fetch_verified_run_result(ctx, db)` with a proper CopilotContext object.
+
+## New Components
+
+### 1. Trust Module (`server/copilot/trust.py`)
+- `fetchVerifiedRunResult()`: Deterministic run fetching with grounding status
+- `GroundingStatus` enum: VERIFIED, UNVERIFIED, NOT_AVAILABLE, UNVERIFIED_MISMATCH
+- `RunResult` dataclass: Canonical run result with provenance
+
+### 2. Grounding Rules (`server/copilot/grounding_rules.py`)
+- Strict grounding rules for all agents
+- Canonical data usage rules
+- Provenance requirements
+
+### 3. Validation Flags (`server/api/canonical_state.py`)
+- `compute_run_validation_flags()`: Post-simulation validation
+- Flags: runwayCashBurnMismatch, survivalRunwayMismatch, monteCarloZeroVariance
+
+### 4. Tests (`server/tests/test_copilot_trust.py`)
+- Acceptance tests for grounding, provenance, validation flags
 
 ## 1. Active Context Determination
 

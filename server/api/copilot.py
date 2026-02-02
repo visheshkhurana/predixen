@@ -10,6 +10,7 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.copilot.context_pack import build_context_pack
+from server.copilot.trust import fetchVerifiedRunResult, GroundingStatus
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 from server.lib.privacy.pii_redactor import redact_text, detect_pii
 from server.api.simulations import extract_metric_value
@@ -162,6 +163,15 @@ class PrivacySettings(BaseModel):
     pii_mode: str = "standard"
 
 
+class CopilotContextRequest(BaseModel):
+    """Active context for Copilot - ensures grounding in correct data."""
+    activeScenarioId: Optional[int] = None
+    activeRunId: Optional[int] = None
+    topBarScenarioId: Optional[int] = None
+    mode: str = "FREE"
+    uiSurface: Optional[str] = None
+
+
 class CopilotChatRequest(BaseModel):
     """Request for copilot chat."""
     message: str
@@ -175,6 +185,7 @@ class CopilotChatRequest(BaseModel):
     investor_lens: Optional[str] = None
     show_sources: bool = False
     privacy: Optional[PrivacySettings] = None
+    context: Optional[CopilotContextRequest] = None
 
 
 class Citation(BaseModel):
@@ -188,6 +199,18 @@ class HighlightedClaim(BaseModel):
     text: str
     source_ids: List[str]
     confidence: str
+
+
+class ProvenanceResponse(BaseModel):
+    """Provenance block for response verification."""
+    companyId: int
+    scenarioId: Optional[int] = None
+    scenarioName: Optional[str] = None
+    runId: Optional[int] = None
+    runTimestamp: Optional[str] = None
+    dataSnapshotId: Optional[str] = None
+    status: Optional[str] = None
+    validationFlags: Optional[List[str]] = None
 
 
 class CopilotChatResponse(BaseModel):
@@ -216,6 +239,8 @@ class CopilotChatResponse(BaseModel):
     clarifications: Optional[List[Dict[str, Any]]] = None
     follow_up_actions: Optional[List[Dict[str, Any]]] = None
     decision_advisor: Optional[Dict[str, Any]] = None
+    provenance: Optional[ProvenanceResponse] = None
+    grounding_status: Optional[str] = None
 
 
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
@@ -329,6 +354,22 @@ async def copilot_chat(
                 from server.api.data_health import calculate_data_health
                 data_health = calculate_data_health(truth_scan)
                 
+                sim_provenance = sim_response.get('provenance')
+                sim_grounding = sim_response.get('grounding_status', GroundingStatus.NOT_AVAILABLE.value)
+                
+                sim_provenance_response = None
+                if sim_provenance:
+                    sim_provenance_response = ProvenanceResponse(
+                        companyId=sim_provenance.get('companyId', company_id),
+                        scenarioId=sim_provenance.get('scenarioId'),
+                        scenarioName=sim_provenance.get('scenarioName'),
+                        runId=sim_provenance.get('runId'),
+                        runTimestamp=sim_provenance.get('runTimestamp'),
+                        dataSnapshotId=sim_provenance.get('dataSnapshotId'),
+                        status=sim_provenance.get('status'),
+                        validationFlags=None
+                    )
+                
                 return CopilotChatResponse(
                     executive_summary=[sim_response.get('summary', '')],
                     company_snapshot=[],
@@ -352,7 +393,9 @@ async def copilot_chat(
                     simulation_result=simulation_result,
                     intent_detected=intent_detected,
                     clarifications=clarifications,
-                    follow_up_actions=follow_up_actions
+                    follow_up_actions=follow_up_actions,
+                    provenance=sim_provenance_response,
+                    grounding_status=sim_grounding
                 )
     
     context = {
@@ -435,6 +478,73 @@ async def copilot_chat(
     citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
     highlighted_claims = generate_highlighted_claims(output, citations)
     
+    provenance_response = None
+    grounding_status_value = GroundingStatus.NOT_AVAILABLE.value
+    
+    if scenario_id_for_citation:
+        run_result = fetchVerifiedRunResult(
+            db=db,
+            company_id=company_id,
+            scenario_id=scenario_id_for_citation
+        )
+        
+        grounding_status_value = run_result.grounding_status.value
+        
+        if run_result.provenance:
+            scenario_for_provenance = db.query(Scenario).filter(
+                Scenario.id == scenario_id_for_citation
+            ).first()
+            
+            validation_flags = []
+            if run_result.grounding_status == GroundingStatus.UNVERIFIED:
+                validation_flags.append("INVALID_RUN")
+            
+            if run_result.outputs:
+                run_validation = run_result.outputs.get('validation', {})
+                if run_validation.get('runwayCashBurnMismatch'):
+                    validation_flags.append("RUNWAY_CASH_BURN_MISMATCH")
+                if run_validation.get('survivalRunwayMismatch'):
+                    validation_flags.append("SURVIVAL_RUNWAY_MISMATCH")
+                if run_validation.get('monteCarloZeroVariance'):
+                    validation_flags.append("MONTE_CARLO_ZERO_VARIANCE")
+            
+            provenance_response = ProvenanceResponse(
+                companyId=company_id,
+                scenarioId=scenario_id_for_citation,
+                scenarioName=scenario_for_provenance.name if scenario_for_provenance else None,
+                runId=run_result.run_id,
+                runTimestamp=run_result.provenance.run_timestamp.isoformat() if run_result.provenance.run_timestamp else None,
+                dataSnapshotId=run_result.provenance.data_snapshot_id,
+                status=run_result.provenance.status,
+                validationFlags=validation_flags if validation_flags else None
+            )
+    elif run_id_for_citation:
+        latest_run_for_provenance = db.query(SimulationRun).filter(
+            SimulationRun.id == run_id_for_citation
+        ).first()
+        
+        if latest_run_for_provenance:
+            grounding_status_value = GroundingStatus.VERIFIED.value if latest_run_for_provenance.status == "completed" else GroundingStatus.UNVERIFIED.value
+            
+            scenario_for_provenance = db.query(Scenario).filter(
+                Scenario.id == latest_run_for_provenance.scenario_id
+            ).first()
+            
+            validation_flags = []
+            if latest_run_for_provenance.status == "invalid":
+                validation_flags.append("INVALID_RUN")
+            
+            provenance_response = ProvenanceResponse(
+                companyId=company_id,
+                scenarioId=latest_run_for_provenance.scenario_id,
+                scenarioName=scenario_for_provenance.name if scenario_for_provenance else None,
+                runId=run_id_for_citation,
+                runTimestamp=latest_run_for_provenance.created_at.isoformat() if latest_run_for_provenance.created_at else None,
+                dataSnapshotId=getattr(latest_run_for_provenance, 'data_snapshot_id', None),
+                status=latest_run_for_provenance.status,
+                validationFlags=validation_flags if validation_flags else None
+            )
+    
     return CopilotChatResponse(
         executive_summary=output.get("executive_summary", []),
         company_snapshot=output.get("company_snapshot", []),
@@ -459,7 +569,9 @@ async def copilot_chat(
         intent_detected=intent_detected,
         clarifications=clarifications,
         follow_up_actions=follow_up_actions,
-        decision_advisor=response.decision_advisor_output
+        decision_advisor=response.decision_advisor_output,
+        provenance=provenance_response,
+        grounding_status=grounding_status_value
     )
 
 
