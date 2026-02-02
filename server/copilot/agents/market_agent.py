@@ -16,6 +16,8 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 
+from server.copilot.grounding_rules import get_grounding_prompt_addition
+
 MARKET_SYSTEM_PROMPT = """You are Fund Flow Market Agent: a market researcher + growth analyst.
 Your job: use web research tools to find competitors, benchmarks, pricing signals, customer segments, and top target customers.
 
@@ -33,7 +35,7 @@ Deliverables:
 5) Benchmarks (pricing/margins/growth if available)
 6) Assumptions & Risks
 7) Next Questions (≤3)
-"""
+""" + get_grounding_prompt_addition()
 
 
 @dataclass

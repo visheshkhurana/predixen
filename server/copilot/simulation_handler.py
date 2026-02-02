@@ -16,6 +16,7 @@ from server.copilot.conversation_state import ConversationState, conversation_st
 from server.copilot.recommendation_engine import (
     RecommendationEngine, UserGoals, Recommendation
 )
+from server.copilot.trust import fetchVerifiedRunResult, GroundingStatus
 
 logger = logging.getLogger(__name__)
 
@@ -418,42 +419,78 @@ The simulation ran {config.iterations} Monte Carlo iterations to account for unc
             }
         
         sim_run = self.db.query(SimulationRun).filter(
-            SimulationRun.scenario_id == scenario.id
+            SimulationRun.scenario_id == scenario.id,
+            SimulationRun.status == "completed"
         ).order_by(SimulationRun.created_at.desc()).first()
         
-        results = sim_run.outputs_json if sim_run else {}
+        if not sim_run:
+            return {
+                'success': False,
+                'grounding_status': 'NOT_AVAILABLE',
+                'error': 'No simulation run exists for this scenario',
+                'summary': f"Scenario **'{scenario.name}'** exists but has not been run yet. Please run the simulation first.",
+                'intent': parsed.intent.value,
+                'scenario_id': int(scenario.id),
+                'scenario_name': str(scenario.name)
+            }
+        
+        results = sim_run.outputs_json if sim_run.outputs_json else {}
+        
+        runway_data = results.get('runway_months', {})
+        survival_data = results.get('survival_probability', {})
+        
+        if isinstance(runway_data, dict):
+            runway_p10 = runway_data.get('p10', 0)
+            runway_p50 = runway_data.get('p50', 0)
+            runway_p90 = runway_data.get('p90', 0)
+        else:
+            runway_p50 = float(runway_data) if runway_data else 0
+            runway_p10 = runway_p90 = runway_p50
+        
+        if isinstance(survival_data, dict):
+            survival_18 = survival_data.get('18mo', survival_data.get('18', 0))
+        else:
+            survival_18 = float(survival_data) if survival_data else 0
         
         self.state.set_last_simulation(
             scenario_id=int(scenario.id),
             scenario_name=str(scenario.name),
-            simulation_id=int(sim_run.id) if sim_run else None,
+            simulation_id=int(sim_run.id),
             params=dict(scenario.inputs_json) if scenario.inputs_json else {},
-            results=dict(results) if results else {}
+            results=dict(results)
         )
-        
-        summary = results.get('summary', {}) if isinstance(results, dict) else {}
-        runway = summary.get('mean_runway_months', 0)
-        survival = summary.get('survival_rate', 0)
         
         scenario_name_str = str(scenario.name)
         
+        provenance = {
+            'companyId': self.company_id,
+            'scenarioId': int(scenario.id),
+            'scenarioName': scenario_name_str,
+            'runId': int(sim_run.id),
+            'runTimestamp': sim_run.created_at.isoformat() if sim_run.created_at else None,
+            'dataSnapshotId': getattr(sim_run, 'data_snapshot_id', None),
+            'status': sim_run.status
+        }
+        
         return {
             'success': True,
+            'grounding_status': 'VERIFIED',
             'intent': parsed.intent.value,
             'action': 'scenario_loaded',
             'summary': f"""Loaded scenario **'{scenario_name_str}'**
 
-**Results:**
-- Runway: {runway:.1f} months
-- Survival Rate: {survival*100:.0f}%
+**Canonical Results (Run #{sim_run.id}):**
+- Runway P50: {runway_p50:.1f} months (P10: {runway_p10:.1f}, P90: {runway_p90:.1f})
+- Survival (18mo): {survival_18*100:.0f}%
 
 You can now modify this scenario or compare it with others.""",
             'scenario_id': int(scenario.id),
             'scenario_name': scenario_name_str,
             'results': {
-                'runway_months': runway,
-                'survival_rate': survival,
-            }
+                'runway_months': {'p10': runway_p10, 'p50': runway_p50, 'p90': runway_p90},
+                'survival_18mo': survival_18,
+            },
+            'provenance': provenance
         }
     
     def compare_scenarios(self, parsed: ParsedIntent) -> Dict[str, Any]:

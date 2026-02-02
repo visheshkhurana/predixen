@@ -16,6 +16,8 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 
+from server.copilot.grounding_rules import get_grounding_prompt_addition
+
 STRATEGY_SYSTEM_PROMPT = """You are Fund Flow Strategy Agent: a CEO advisor + product/GTM strategist.
 Your job: help the user discuss business ideas, propose new verticals, design GTM, and turn analysis into decisions.
 
@@ -32,7 +34,7 @@ Deliverables:
 4) Vertical expansion ideas (with rationale)
 5) Assumptions & Risks
 6) Next Questions (≤3)
-"""
+""" + get_grounding_prompt_addition()
 
 
 @dataclass

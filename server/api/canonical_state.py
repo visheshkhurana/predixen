@@ -36,6 +36,77 @@ from server.schemas.canonical import (
 router = APIRouter(prefix="/canonical", tags=["Canonical State"])
 
 
+RUNWAY_TOLERANCE = 2.0
+
+
+def compute_run_validation_flags(
+    outputs: dict,
+    cash_balance: float,
+    net_burn: float,
+) -> dict:
+    """
+    Compute validation flags for a simulation run.
+    
+    These flags detect inconsistencies that should prevent Copilot from
+    making recommendations based on potentially incorrect data.
+    """
+    flags = {
+        'runwayCashBurnMismatch': False,
+        'survivalRunwayMismatch': False,
+        'monteCarloZeroVariance': False,
+        'notes': [],
+        'has_critical_issues': False,
+    }
+    
+    runway_data = outputs.get('runway_months', {})
+    survival_data = outputs.get('survival_probability', {})
+    
+    if isinstance(runway_data, dict):
+        runway_p10 = runway_data.get('p10', 0)
+        runway_p50 = runway_data.get('p50', 0)
+        runway_p90 = runway_data.get('p90', 0)
+    else:
+        runway_p50 = float(runway_data) if runway_data else 0
+        runway_p10 = runway_p90 = runway_p50
+    
+    if isinstance(survival_data, dict):
+        survival_18 = survival_data.get('18mo', survival_data.get('18', 1.0))
+    else:
+        survival_18 = float(survival_data) if survival_data else 0.5
+    
+    if net_burn > 0 and cash_balance > 0:
+        simple_runway = cash_balance / net_burn
+        if abs(runway_p50 - simple_runway) > RUNWAY_TOLERANCE:
+            flags['runwayCashBurnMismatch'] = True
+            flags['notes'].append(
+                f"Runway mismatch: P50={runway_p50:.1f}mo vs simple={simple_runway:.1f}mo"
+            )
+    
+    if runway_p50 > 24 and survival_18 < 0.5:
+        flags['survivalRunwayMismatch'] = True
+        flags['notes'].append(
+            f"Survival mismatch: runway_p50={runway_p50:.1f}mo > 24 but survival18={survival_18:.2%}"
+        )
+    elif runway_p50 < 12 and survival_18 > 0.95:
+        flags['survivalRunwayMismatch'] = True
+        flags['notes'].append(
+            f"Survival mismatch: runway_p50={runway_p50:.1f}mo < 12 but survival18={survival_18:.2%}"
+        )
+    
+    cash_end = outputs.get('cash_end', outputs.get('ending_cash', {}))
+    if isinstance(cash_end, dict):
+        cash_p10 = cash_end.get('p10', 0)
+        cash_p50 = cash_end.get('p50', 0)
+        cash_p90 = cash_end.get('p90', 0)
+        if cash_p10 == cash_p50 == cash_p90 and runway_p10 == runway_p50 == runway_p90:
+            flags['monteCarloZeroVariance'] = True
+            flags['notes'].append("Zero variance detected: P10=P50=P90 in Monte Carlo output")
+    
+    flags['has_critical_issues'] = flags['runwayCashBurnMismatch'] or flags['survivalRunwayMismatch']
+    
+    return flags
+
+
 def get_or_create_company_state(db: Session, company_id: int) -> CompanyState:
     """Get existing company state or create from Truth Scan data."""
     state = db.query(CompanyState).filter(CompanyState.company_id == company_id).first()
@@ -375,16 +446,30 @@ async def run_simulation(
         
         outputs = result if isinstance(result, dict) else result
         
+        validation_flags = compute_run_validation_flags(
+            outputs, 
+            float(base_financials.cashBalance or 0),
+            float(monthly_burn or 0)
+        )
+        
+        if validation_flags.get('has_critical_issues'):
+            outputs['validation'] = validation_flags
+            run.status = "invalid"
+        else:
+            if validation_flags.get('notes'):
+                outputs['validation'] = validation_flags
+            run.status = "completed"
+        
         run.outputs_json = outputs
-        run.status = "completed"
         run.completed_at = datetime.utcnow()
         db.commit()
         
         return {
             "runId": run.id,
-            "status": "completed",
+            "status": run.status,
             "dataSnapshotId": state.snapshot_id,
             "output": outputs,
+            "validation": validation_flags if validation_flags else None,
         }
         
     except Exception as e:
