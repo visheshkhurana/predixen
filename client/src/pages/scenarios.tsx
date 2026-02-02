@@ -1021,7 +1021,7 @@ export default function ScenariosPage() {
                       burn_p10: m.burn_p10,
                       burn_p50: m.burn_p50 ?? 0,
                       burn_p90: m.burn_p90,
-                      runway_p50: m.runway_p50 || (m.cash_p50 / Math.max(1, (m.burn_p50 ?? 1) - (m.revenue_p50 ?? 0))),
+                      runway_p50: Math.min(60, m.runway_p50 || (m.cash_p50 / Math.max(1, (m.burn_p50 ?? 1) - (m.revenue_p50 ?? 0)))),
                       survival_rate: m.survival_rate,
                     }))}
                     scenarioName={currentScenarioName}

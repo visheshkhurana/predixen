@@ -414,7 +414,7 @@ class EnhancedSimulationEngine:
                     break
             
             if not ran_out:
-                runway_months[sim] = horizon + 12
+                runway_months[sim] = min(horizon + 12, 60)
         
         total_regime_months = sum(regime_counts.values())
         regime_distribution = {k: v / total_regime_months for k, v in regime_counts.items()}
