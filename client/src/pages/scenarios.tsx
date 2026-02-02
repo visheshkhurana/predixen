@@ -63,6 +63,31 @@ import { SCENARIO_TEMPLATES } from '@/config/templates';
 
 const ALL_TAGS = ['baseline', 'growth', 'cost-cutting', 'pricing', 'fundraising', 'optimistic', 'pessimistic'];
 
+function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: number[] } {
+  if (simulation.bands?.cash) {
+    return simulation.bands.cash;
+  }
+  if (simulation.cash_bands) {
+    return simulation.cash_bands;
+  }
+  if (simulation.metrics?.cash && Array.isArray(simulation.metrics.cash)) {
+    const cashMetrics = simulation.metrics.cash;
+    return {
+      p10: cashMetrics.map((m: any) => m.p10 ?? 0),
+      p50: cashMetrics.map((m: any) => m.p50 ?? 0),
+      p90: cashMetrics.map((m: any) => m.p90 ?? 0),
+    };
+  }
+  if (simulation.month_data && Array.isArray(simulation.month_data)) {
+    return {
+      p10: simulation.month_data.map((m: any) => m.cash_p10 ?? 0),
+      p50: simulation.month_data.map((m: any) => m.cash_p50 ?? 0),
+      p90: simulation.month_data.map((m: any) => m.cash_p90 ?? 0),
+    };
+  }
+  return { p10: [], p50: [], p90: [] };
+}
+
 export default function ScenariosPage() {
   const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun } = useFounderStore();
   const { toast } = useToast();
@@ -1071,12 +1096,12 @@ export default function ScenariosPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <SurvivalCurveChart data={simulation.survival?.curve || simulation.survival_curve || []} />
+                    <SurvivalCurveChart data={simulation.survivalCurve || simulation.survival?.curve || simulation.survival_curve || []} />
                   </CardContent>
                 </Card>
                 
                 <BandsChart
-                  data={simulation.bands?.cash || simulation.cash_bands || { p10: [], p50: [], p90: [] }}
+                  data={getCashBands(simulation)}
                   title="Cash Projection Bands"
                   description="10th, 50th, and 90th percentile outcomes"
                 />
