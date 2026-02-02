@@ -71,7 +71,7 @@ const templateExpectedImpact: Record<string, { runway: string; burn: string; ris
   conservative_cut: { runway: "+3-6 months", burn: "-25%", risk: "low" },
   aggressive_growth: { runway: "-2-3 months", burn: "+30%", risk: "high" },
   fundraise: { runway: "+12-18 months", burn: "+20%", risk: "medium" },
-  downturn: { runway: "-4-6 months", burn: "0%", risk: "high" },
+  downturn: { runway: "-4-6 months", burn: "-15% (cuts)", risk: "high" },
   expansion_focus: { runway: "+1-2 months", burn: "-10%", risk: "low" },
   pricing_increase: { runway: "+2-4 months", burn: "0%", risk: "medium" },
 };
