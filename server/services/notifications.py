@@ -5,6 +5,7 @@ Uses Resend integration for email delivery.
 
 import os
 import re
+import asyncio
 import httpx
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -920,3 +921,153 @@ async def check_and_send_publish_notification() -> None:
             print(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
     except Exception as e:
         print(f"Error in publish notification check: {e}")
+
+
+async def send_platform_update_text_only(
+    to_emails: Optional[List[str]] = None,
+    subject: str = "Predixen Platform Update - February 2026",
+    author: str = "Predixen Team"
+) -> dict:
+    """
+    Send a text-only platform update email to all specified recipients individually.
+    
+    Args:
+        to_emails: List of email addresses (defaults to all active users from database)
+        subject: Email subject line
+        author: Name of the sender
+    
+    Returns:
+        Dict with success status and list of sent/failed emails
+    """
+    import os
+    from server.core.db import SessionLocal
+    from server.models import User
+    
+    # Get emails from database if not provided
+    if to_emails is None:
+        try:
+            db = SessionLocal()
+            users = db.query(User).filter(User.is_active == True).all()
+            to_emails = [user.email for user in users if user.email]
+            db.close()
+        except Exception as e:
+            print(f"Error fetching users from database: {e}")
+            to_emails = NOTIFICATION_RECIPIENTS
+    
+    if not to_emails:
+        return {
+            "success": False,
+            "sent": [],
+            "failed": [],
+            "error": "No recipients specified"
+        }
+    
+    try:
+        credentials = await get_resend_credentials()
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        
+        text_content = f"""PREDIXEN INTELLIGENCE OS - PLATFORM UPDATE
+{timestamp}
+
+Hi there,
+
+We've been busy shipping new features and improvements to help you make better financial decisions. Here's what's new:
+
+---
+
+CANONICAL DATA LAYER (NEW)
+
+We've completely rebuilt the data foundation of Predixen to ensure every number you see is trustworthy and traceable:
+
+- Company States: Your financial state is now versioned with unique snapshot IDs. Every time you update your data, we create an immutable record.
+
+- Simulation Provenance: Every simulation run now tracks exactly which data snapshot it used. When you see a runway projection, you can trace it back to the exact inputs.
+
+- Deterministic Hashing: We use cryptographic hashes to detect when your data has changed. Simulations will tell you if they're based on stale data.
+
+- Scenario Overrides: Scenarios now store their parameter changes (expense multipliers, revenue growth deltas, pricing changes) in a structured format for easy comparison.
+
+---
+
+WHAT THIS MEANS FOR YOU
+
+1. Trust Your Numbers: Every KPI on your dashboard shows where it came from - whether Truth Scan validated, simulation generated, or manually entered.
+
+2. Compare Apples to Apples: When comparing scenarios, you'll know they're all running against the same baseline data.
+
+3. Audit Trail: If investors ask "where did this runway number come from?", you can show them the exact data, date, and calculations.
+
+---
+
+PREVIOUS IMPROVEMENTS
+
+- AI Copilot Citations: The AI now cites specific scenario IDs, run IDs, and Truth Scan timestamps when giving advice.
+
+- Real-Time AI Simulation Guidance: As you adjust scenario parameters, the AI explains the impact on runway, survival probability, and cash position.
+
+- Dynamic Horizon Extension: Monte Carlo simulations now automatically extend beyond 24 months when survival probability remains high.
+
+---
+
+Questions or feedback? Reply directly to this email.
+
+Best,
+{author}
+Predixen Intelligence OS
+
+---
+This is an automated notification from Predixen Intelligence OS.
+Visit: https://predixen.app
+"""
+        
+        sent = []
+        failed = []
+        
+        async with httpx.AsyncClient() as client:
+            for i, email in enumerate(to_emails):
+                try:
+                    # Rate limit: 2 requests per second, so wait 600ms between emails
+                    if i > 0:
+                        await asyncio.sleep(0.6)
+                    
+                    response = await client.post(
+                        "https://api.resend.com/emails",
+                        headers={
+                            "Authorization": f"Bearer {credentials['api_key']}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "from": f"Predixen Updates <updates@predixen.app>",
+                            "to": [email],
+                            "subject": subject,
+                            "text": text_content
+                        },
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code in (200, 201):
+                        sent.append(email)
+                        print(f"Platform update sent to: {email}")
+                    else:
+                        failed.append({"email": email, "error": response.text})
+                        print(f"Failed to send to {email}: {response.status_code} - {response.text}")
+                except Exception as e:
+                    failed.append({"email": email, "error": str(e)})
+                    print(f"Error sending to {email}: {e}")
+        
+        return {
+            "success": len(failed) == 0,
+            "sent": sent,
+            "failed": failed,
+            "total_recipients": len(to_emails),
+            "message": f"Sent {len(sent)} email(s), {len(failed)} failed"
+        }
+        
+    except Exception as e:
+        print(f"Error sending platform update: {e}")
+        return {
+            "success": False,
+            "sent": [],
+            "failed": to_emails or [],
+            "error": str(e)
+        }
