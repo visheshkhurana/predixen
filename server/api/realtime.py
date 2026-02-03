@@ -167,6 +167,35 @@ async def stream_kpi_updates(
     )
 
 
+@router.get("/kpi/{company_id}/snapshot")
+def get_kpi_snapshot(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get a one-time snapshot of KPI metrics for a company.
+    Use this for polling when SSE is not available.
+    """
+    from datetime import datetime
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    metrics = get_company_kpi_metrics(company_id, db)
+    
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "company_id": company_id,
+        "metrics": metrics
+    }
+
+
 @router.post("/kpi/{company_id}/push")
 async def push_kpi_update(
     company_id: int,
