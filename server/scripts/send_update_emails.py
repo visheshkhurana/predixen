@@ -15,44 +15,44 @@ from sqlalchemy import text
 
 UPDATES_LAST_24_HOURS = [
     {
-        "title": "AI-Powered Company Lookup",
-        "description": "Enter any company website URL during onboarding and our AI will automatically fetch and fill in company details including name, industry, founding year, team size, and description. Powered by Perplexity AI for accurate, real-time data."
+        "title": "Connector Marketplace",
+        "description": "New integration marketplace with 20+ connectors including Stripe, QuickBooks, Xero, HubSpot, Salesforce, Google Analytics, and more. Browse, search, filter by category, and connect your data sources with guided setup wizards."
     },
     {
-        "title": "Real-Time KPI Dashboard",
-        "description": "Your financial KPIs now update automatically every 10 seconds with live data polling. View MRR, ARR, runway, burn rate, and 12+ other metrics in real-time without refreshing the page."
+        "title": "Enhanced KPI Dashboard with Time-Series Trends",
+        "description": "Financial Trends chart now shows MRR, Cash, Runway, and Churn projections over time with 3/6/12 month toggle buttons. Dual Y-axes display financial metrics alongside runway and churn percentages."
     },
     {
-        "title": "Enhanced File Upload System",
-        "description": "Upload financial documents (Excel, PDF, CSV) at any step of onboarding. We now support upload history tracking showing your last 5 uploaded files with timestamps."
+        "title": "New KPI Metrics: ARPU, NRR & Active Users",
+        "description": "Added Average Revenue Per User (ARPU), Net Revenue Retention (NRR), and Active Users cards with detailed tooltips explaining formulas, good ranges, and warning thresholds."
     },
     {
-        "title": "Intelligent Document Extraction",
-        "description": "AI-powered extraction now works with complex Excel files and PDFs. Automatically extracts revenue, expenses, cash balance, headcount, and other financial metrics with improved accuracy."
+        "title": "LTV:CAC Ratio Health Indicators",
+        "description": "Visual color-coded health status for LTV:CAC ratio - green for healthy (>3x), yellow for warning (2-3x), and red for critical (<2x). Shows exact LTV and CAC values with contextual badges."
     },
     {
-        "title": "Truth Scan Data Validation",
-        "description": "Enhanced Truth Scan module validates all extracted data before simulations. Detects anomalies, missing values, and inconsistencies with auto-fix suggestions and full audit trails."
+        "title": "Segment Analysis Feature",
+        "description": "Break down your metrics by acquisition channel (Organic, Paid Search, Content, Referral), customer tier (Enterprise, Pro, Starter), or region (North America, Europe, APAC). View CAC, LTV, LTV:CAC, and churn by segment."
     },
     {
-        "title": "Fixed KPI Dashboard Authentication",
-        "description": "Resolved authentication issues with the KPI dashboard. Real-time data now flows correctly with proper Bearer token authentication for secure, uninterrupted monitoring."
+        "title": "Industry Benchmark Comparisons",
+        "description": "Real-time benchmark data powered by Perplexity AI. Compare your metrics against industry standards for your stage (Seed, Series A/B/C) with automatic sourcing and citations."
     },
     {
-        "title": "Improved Onboarding Flow",
-        "description": "Onboarding now handles existing companies intelligently - updates instead of creating duplicates. Smoother transitions between steps with better error handling."
+        "title": "Connector Detail Drawer",
+        "description": "Click any connector to see detailed information including data collected, sync behavior, security permissions, metrics unlocked, and setup complexity before connecting."
     },
     {
-        "title": "Multi-LLM AI Router",
-        "description": "Smart task-based routing across OpenAI GPT-4o, Anthropic Claude, and Google Gemini. Each query is automatically directed to the best model for optimal results."
+        "title": "Data Source Setup Wizard",
+        "description": "Step-by-step wizard for connecting data sources with auth-type-specific flows (OAuth, API Key, Database Connection, Webhook, File Upload). Includes connection testing and entity selection."
     },
     {
-        "title": "Monte Carlo Decision Simulator",
-        "description": "Run probabilistic simulations with 24-month projections. Get P10/P50/P90 survival probabilities and ranked decision recommendations based on your financial data."
+        "title": "Enhanced Metric Tooltips",
+        "description": "Every KPI now has detailed tooltips showing the calculation formula, what makes a 'good' range, and warning thresholds. Helps founders understand exactly what each metric means."
     },
     {
-        "title": "Email Notification System",
-        "description": "Platform updates, invites, and alerts delivered via Resend with delivery tracking. You're receiving this email as part of our new notification system!"
+        "title": "Trust & Security Indicators",
+        "description": "All integrations clearly show read-only access badges, encryption status, and data handling policies. Connectors display native/beta badges and real-time/webhook support."
     }
 ]
 

@@ -35,6 +35,7 @@ import {
   DollarSign,
   Briefcase,
   Activity,
+  Store,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,11 @@ const menuItems = [
     title: "Integrations",
     url: "/integrations",
     icon: Link2,
+  },
+  {
+    title: "Marketplace",
+    url: "/marketplace",
+    icon: Store,
   },
 ];
 
