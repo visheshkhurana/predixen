@@ -81,7 +81,7 @@ Please provide actual benchmark data from recent reports (2024-2025) from source
 Format each metric with p25, p50, p75 values. Indicate whether higher or lower is better for each metric."""
 
     payload = {
-        "model": "llama-3.1-sonar-small-128k-online",
+        "model": "sonar",
         "messages": [
             {
                 "role": "system",
