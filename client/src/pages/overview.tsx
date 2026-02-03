@@ -523,6 +523,8 @@ export default function OverviewPage() {
     const burnRate = Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate)));
     const cashBalance = getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash));
     
+    const totalCustomers = getValue('total_customers', getValue('customers', DUMMY_BASE_DATA.totalCustomers));
+    
     // Improved LTV/CAC logic to handle small CAC values
     const effectiveCac = Math.max(cacValue, 1.0); // Floor at $1 to avoid division by zero or near-zero inflation
     const ltvCacRatio = ltvValue / effectiveCac;
@@ -538,7 +540,7 @@ export default function OverviewPage() {
       ltvCacRatio: ltvCacRatio,
       grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
       paybackPeriod: getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod),
-      totalCustomers: getValue('total_customers', DUMMY_BASE_DATA.totalCustomers),
+      totalCustomers,
       churnRate: getValue('churn_rate', DUMMY_BASE_DATA.churnRate),
       conversionRate: DUMMY_BASE_DATA.conversionRate,
       profitabilityDate: DUMMY_BASE_DATA.profitabilityDate,
