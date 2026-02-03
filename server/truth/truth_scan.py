@@ -310,39 +310,51 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["churn_rate_customer"] = 3.2  # 3.2% monthly churn
         metrics["churn_rate_revenue"] = 4.1  # 4.1% revenue churn
     
-    # CAC, LTV, LTV:CAC, Payback calculations
+    # CAC, LTV, LTV:CAC, Payback calculations with sensibility checks
     marketing_spend = metrics.get("payroll", 0) * 0.3 + (metrics.get("opex", 0) * 0.4)  # Estimate marketing
     new_customers_per_month = max(1, (metrics.get("customer_count", 150) or 150) * 0.08)  # ~8% new customers
     
     if marketing_spend > 0 and new_customers_per_month > 0:
         cac = marketing_spend / new_customers_per_month
+        # CAC floor: minimum $100 for SaaS, max $50k for enterprise
+        cac = max(100, min(cac, 50000))
         metrics["cac"] = round(cac, 2)
     else:
-        metrics["cac"] = 5000  # Mock CAC
-        cac = 5000
+        metrics["cac"] = 500  # Reasonable default CAC for SaaS
+        cac = 500
     
     # LTV = ARPU * Gross Margin * (1 / Churn Rate)
     arpu = metrics.get("arpu") or 0
     gm_pct = (metrics.get("gross_margin", 65) or 65) / 100
     monthly_churn = (metrics.get("churn_rate_customer", 3.2) or 3.2) / 100
+    # Cap customer lifetime at 60 months (5 years) to prevent extreme LTV values
+    monthly_churn = max(monthly_churn, 0.0167)  # Minimum 1.67% monthly = 60 month lifetime cap
     
     if arpu > 0 and monthly_churn > 0:
-        customer_lifetime_months = 1 / monthly_churn
+        customer_lifetime_months = min(1 / monthly_churn, 60)  # Cap at 60 months
         ltv = arpu * gm_pct * customer_lifetime_months
+        # LTV floor and ceiling for SaaS: $500 - $500k
+        ltv = max(500, min(ltv, 500000))
         metrics["ltv"] = round(ltv, 2)
     else:
-        metrics["ltv"] = 25000  # Mock LTV
-        ltv = 25000
+        metrics["ltv"] = 3000  # Reasonable default LTV
+        ltv = 3000
     
-    # LTV:CAC Ratio
+    # LTV:CAC Ratio with sensibility bounds
     if cac and cac > 0 and ltv:
-        metrics["ltv_cac_ratio"] = round(ltv / cac, 2)
+        ltv_cac = ltv / cac
+        # Cap LTV:CAC between 0.5x and 20x (realistic SaaS range)
+        ltv_cac = max(0.5, min(ltv_cac, 20.0))
+        metrics["ltv_cac_ratio"] = round(ltv_cac, 2)
     else:
         metrics["ltv_cac_ratio"] = 5.0
     
-    # Payback Period (months to recover CAC)
+    # Payback Period (months to recover CAC) with sensibility bounds
     if arpu > 0 and cac:
-        metrics["payback_months"] = round(cac / (arpu * gm_pct), 1)
+        payback = cac / (arpu * gm_pct)
+        # Cap payback between 3 and 36 months (realistic SaaS range)
+        payback = max(3, min(payback, 36))
+        metrics["payback_months"] = round(payback, 1)
     else:
         metrics["payback_months"] = 12
     

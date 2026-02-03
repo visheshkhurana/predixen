@@ -533,9 +533,16 @@ export default function OverviewPage() {
     
     const totalCustomers = getValue('total_customers', getValue('customers', DUMMY_BASE_DATA.totalCustomers));
     
-    // Improved LTV/CAC logic to handle small CAC values
-    const effectiveCac = Math.max(cacValue, 1.0); // Floor at $1 to avoid division by zero or near-zero inflation
-    const ltvCacRatio = ltvValue / effectiveCac;
+    // Improved LTV/CAC logic with sensibility bounds
+    // CAC floor at $100 for SaaS, cap at $50k
+    const effectiveCac = Math.max(100, Math.min(cacValue || 500, 50000));
+    // LTV floor at $500, cap at $500k
+    const effectiveLtv = Math.max(500, Math.min(ltvValue || 3000, 500000));
+    // LTV:CAC ratio bounded between 0.5x and 20x (realistic SaaS range)
+    const ltvCacRatio = Math.max(0.5, Math.min(effectiveLtv / effectiveCac, 20));
+    // Payback period bounded between 3 and 36 months
+    const rawPayback = getValue('payback_months', getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod));
+    const paybackPeriod = Math.max(3, Math.min(rawPayback || 12, 36));
 
     return {
       mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
@@ -543,11 +550,11 @@ export default function OverviewPage() {
       cash: cashBalance,
       burnRate,
       runway: runwayMonths > 0 ? runwayMonths : (burnRate > 0 ? cashBalance / burnRate : 0),
-      cac: cacValue,
-      ltv: ltvValue,
+      cac: effectiveCac,
+      ltv: effectiveLtv,
       ltvCacRatio: ltvCacRatio,
       grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
-      paybackPeriod: getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod),
+      paybackPeriod: paybackPeriod,
       totalCustomers,
       churnRate: getValue('churn_rate', DUMMY_BASE_DATA.churnRate),
       conversionRate: DUMMY_BASE_DATA.conversionRate,
