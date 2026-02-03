@@ -664,7 +664,7 @@ def parse_income_statement_canonical(file_path: str, fx_rate: Optional[float] = 
             df, latest_col, REVENUE_KEYWORDS,
             exclude_keywords=[
                 'net revenues (', 'net revenue india', 'net revenue international', 
-                'net revenue ecommerce', 'net revenue other',
+                'net revenue ecommerce', 'net revenue other', 'revenue (',
                 'sales and marketing', 'sales & marketing', 'marketing expense',
                 'operating income', 'operating profit', 'net income', 'other income',
                 'gross income', 'income tax', 'interest income'
