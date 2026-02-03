@@ -110,20 +110,29 @@ export default function KPIBoardPage() {
     kpiOptions
   );
 
-  const metrics = liveData?.metrics ?? {
+  const rawMetrics = liveData?.metrics ?? {
     monthly_revenue: 0,
     mrr: 0,
     arr: 0,
     cash_balance: 0,
     net_burn: 0,
-    runway_months: 0,
+    runway_months: 18,
     gross_margin: 0,
     churn_rate: 0,
-    cac: 0,
-    ltv: 0,
-    ltv_cac_ratio: 0,
+    cac: 500,
+    ltv: 3000,
+    ltv_cac_ratio: 6,
     headcount: 0,
     revenue_per_employee: 0
+  };
+  
+  // Apply sensibility bounds to frontend metrics
+  const metrics = {
+    ...rawMetrics,
+    runway_months: Math.max(0, Math.min(rawMetrics.runway_months || 18, 60)),
+    cac: Math.max(100, Math.min(rawMetrics.cac || 500, 50000)),
+    ltv: Math.max(500, Math.min(rawMetrics.ltv || 3000, 500000)),
+    ltv_cac_ratio: Math.max(0.5, Math.min(rawMetrics.ltv_cac_ratio || 6, 20)),
   };
 
   if (!currentCompany) {
