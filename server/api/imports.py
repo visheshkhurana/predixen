@@ -467,17 +467,37 @@ async def save_import(
     
     selected_period = request.selected_period
     
+    canonical = raw_data.get('canonical', {})
+    use_canonical = canonical.get('revenue') is not None and canonical.get('expenses') is not None
+    
     if request.revenue_override is not None:
         total_revenue = request.revenue_override
+    elif use_canonical:
+        total_revenue = canonical.get('revenue', 0)
+        logger.info(f"[SAVE] Using canonical revenue: ${total_revenue:,.0f}")
     else:
         total_revenue = calculate_total_revenue(rows, selected_period)
     
     if request.expense_override is not None:
         total_expenses = request.expense_override
+    elif use_canonical:
+        total_expenses = canonical.get('total_expenses', 0)
+        logger.info(f"[SAVE] Using canonical total_expenses: ${total_expenses:,.0f}")
     else:
         total_expenses = calculate_total_expenses(rows, selected_period)
     
-    expense_breakdown = aggregate_expense_breakdown(rows, selected_period)
+    if use_canonical:
+        canonical_expenses = canonical.get('expenses', {})
+        expense_breakdown = {
+            'cogs': canonical_expenses.get('cogs') or 0,
+            'marketing': canonical_expenses.get('marketing') or 0,
+            'payroll': canonical_expenses.get('payroll') or 0,
+            'operating': canonical_expenses.get('operating') or 0,
+            'other': canonical_expenses.get('other') or 0,
+        }
+        logger.info(f"[SAVE] Using canonical expense breakdown: COGS=${expense_breakdown['cogs']:,.0f}, Marketing=${expense_breakdown['marketing']:,.0f}")
+    else:
+        expense_breakdown = aggregate_expense_breakdown(rows, selected_period)
     
     # Calculate net burn to determine cash estimation
     net_burn = abs(total_expenses) - abs(total_revenue)
@@ -496,6 +516,11 @@ async def save_import(
     
     period_end = period_date.replace(day=28)
     
+    marketing_and_other = (
+        abs(expense_breakdown.get('marketing', 0)) + 
+        abs(expense_breakdown.get('other', 0))
+    )
+    
     record = FinancialRecord(
         company_id=session.company_id,
         period_start=period_date,
@@ -504,9 +529,10 @@ async def save_import(
         cogs=abs(expense_breakdown.get('cogs', 0)),
         opex=abs(expense_breakdown.get('operating', 0)),
         payroll=abs(expense_breakdown.get('payroll', 0)),
-        other_costs=abs(expense_breakdown.get('marketing', 0)),
+        other_costs=marketing_and_other,
         cash_balance=abs(cash_on_hand),
-        import_session_id=session.id
+        import_session_id=session.id,
+        marketing_expense=abs(expense_breakdown.get('marketing', 0))
     )
     
     db.add(record)
