@@ -46,7 +46,7 @@ interface ConnectorCardProps {
     setupComplexity: string;
     installStatus?: {
       status: string;
-      lastSync?: string;
+      lastSync?: string | null;
     } | null;
   };
   onConnect: (id: string) => void;
