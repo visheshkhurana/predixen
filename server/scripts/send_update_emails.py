@@ -76,8 +76,14 @@ async def send_update_to_all_users():
     
     app_url = os.getenv("APP_BASE_URL", "https://predixen.app")
     
-    emails = get_all_user_emails()
-    print(f"Found {len(emails)} users to notify")
+    # Specific list of emails requested by the user
+    emails = [
+        "nikita@predixen.ai",
+        "vysheshk@gmail.com",
+        "nikita.luther@gmail.com",
+        "nikitafl2024@gmail.com"
+    ]
+    print(f"Sending updates to {len(emails)} specified addresses")
     
     success_count = 0
     fail_count = 0
