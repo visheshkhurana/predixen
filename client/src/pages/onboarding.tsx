@@ -1026,10 +1026,64 @@ export default function OnboardingPage() {
               <CardDescription>
                 {isSampleMode 
                   ? 'Sample financials are pre-filled below. Click "Run First Truth Scan" to continue.'
-                  : 'Enter your current monthly financials. These values will be used to compute your first Truth Scan.'}
+                  : 'Upload an Excel/CSV with financials or enter values manually below.'}
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Financial File Upload Zone */}
+              <div className="mb-6">
+                <div
+                  className={`relative border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
+                    isDragging 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/20'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => !isExtracting && fileInputRef.current?.click()}
+                  data-testid="dropzone-financials-upload"
+                >
+                  {isExtracting ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                      <span className="text-sm">Extracting financial data...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-3 text-center">
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Upload Excel/CSV with financials</p>
+                        <p className="text-xs text-muted-foreground">
+                          Drag & drop or click to browse (.xlsx, .xls, .csv)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {extractedData?.financials && (
+                  <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded-md">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Check className="w-4 h-4 text-green-500" />
+                      <span className="text-sm font-medium text-green-500">Financial data extracted</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Values below have been pre-filled from your uploaded file. You can adjust them if needed.
+                    </p>
+                  </div>
+                )}
+                
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Or enter manually</span>
+                  </div>
+                </div>
+              </div>
+              
               {scanError && (
                 <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start gap-2">
                   <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
