@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info } from 'lucide-react';
+import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe } from 'lucide-react';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -105,6 +105,10 @@ export default function OnboardingPage() {
   const [showDataPreview, setShowDataPreview] = useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
+  
+  // AI company lookup state
+  const [isFetchingAI, setIsFetchingAI] = useState(false);
+  const [aiLookupSummary, setAiLookupSummary] = useState<string | null>(null);
   
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -254,6 +258,62 @@ export default function OnboardingPage() {
     setExtractionError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+  
+  const fetchCompanyDetailsAI = async () => {
+    const website = companyData.website?.trim();
+    if (!website) {
+      toast({ 
+        title: 'Website required', 
+        description: 'Please enter a company website to fetch details.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    setIsFetchingAI(true);
+    setAiLookupSummary(null);
+    
+    try {
+      const response = await fetch('/api/lookup/company-from-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ website }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.company) {
+        const company = data.company;
+        setCompanyData(prev => ({
+          ...prev,
+          name: company.name || prev.name,
+          industry: company.industry || prev.industry,
+          stage: company.stage || prev.stage,
+        }));
+        
+        setAiLookupSummary(data.summary || company.description);
+        
+        toast({ 
+          title: 'Company details fetched!', 
+          description: `Found information about ${company.name || 'the company'}` 
+        });
+      } else {
+        toast({ 
+          title: 'Could not fetch details', 
+          description: data.error || 'Unable to find company information. Please fill in manually.', 
+          variant: 'destructive' 
+        });
+      }
+    } catch (err) {
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to fetch company details. Please try again.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsFetchingAI(false);
     }
   };
   
@@ -753,14 +813,44 @@ export default function OnboardingPage() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="company-website">Website (optional)</Label>
-                  <Input
-                    id="company-website"
-                    value={companyData.website}
-                    onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
-                    placeholder="https://yourcompany.com"
-                    data-testid="input-company-website"
-                    className={extractedData?.company_info?.website ? 'border-green-500/50' : ''}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="company-website"
+                      value={companyData.website}
+                      onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
+                      placeholder="https://yourcompany.com"
+                      data-testid="input-company-website"
+                      className={extractedData?.company_info?.website ? 'border-green-500/50' : ''}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={fetchCompanyDetailsAI}
+                      disabled={isFetchingAI || !companyData.website?.trim()}
+                      data-testid="button-fetch-company-ai"
+                      className="shrink-0 gap-2"
+                    >
+                      {isFetchingAI ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Fetching...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          Fetch using AI
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {aiLookupSummary && (
+                    <div className="mt-2 p-3 bg-primary/5 border border-primary/20 rounded-md text-sm">
+                      <div className="flex items-start gap-2">
+                        <Globe className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                        <p className="text-muted-foreground">{aiLookupSummary}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
