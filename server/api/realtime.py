@@ -66,14 +66,20 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
         total_costs = cogs + opex + payroll + other_costs
         net_burn = total_costs - revenue
         gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
-        runway = (cash / net_burn) if net_burn > 0 else 24  # Default 24 months if profitable
+        # Runway calculation with sensible fallbacks
+        if net_burn > 0 and cash > 0:
+            runway = cash / net_burn
+        elif net_burn <= 0:
+            runway = 36  # If profitable, set to 36 months (3 years)
+        else:
+            runway = 12  # Default fallback
         
         metrics["monthly_revenue"] = revenue
         metrics["mrr"] = revenue
         metrics["arr"] = revenue * 12
         metrics["cash_balance"] = cash
-        metrics["net_burn"] = net_burn if net_burn > 0 else 0
-        metrics["runway_months"] = runway if runway > 0 else 0
+        metrics["net_burn"] = max(0, net_burn)
+        metrics["runway_months"] = max(0, min(runway, 60))  # Cap at 60 months
         metrics["gross_margin"] = gross_margin
         metrics["headcount"] = headcount
         metrics["revenue_per_employee"] = (revenue / headcount) if headcount > 0 else 0
@@ -90,6 +96,17 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
                 metrics[key] = val
             elif isinstance(val, dict) and "value" in val:
                 metrics[key] = val["value"]
+        
+        # Apply sensibility bounds to derived metrics
+        # CAC: minimum $100 (SaaS floor), max $50k
+        if metrics.get("cac", 0) > 0:
+            metrics["cac"] = max(100, min(metrics["cac"], 50000))
+        # LTV: minimum $500, max $500k
+        if metrics.get("ltv", 0) > 0:
+            metrics["ltv"] = max(500, min(metrics["ltv"], 500000))
+        # LTV/CAC ratio: bounded 0.5x - 20x (realistic SaaS range)
+        if metrics.get("ltv_cac_ratio", 0) > 0:
+            metrics["ltv_cac_ratio"] = max(0.5, min(metrics["ltv_cac_ratio"], 20))
     
     # Final fallback to metadata
     for key in metrics:
