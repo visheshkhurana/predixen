@@ -1,6 +1,7 @@
 """
 Dashboard KPIs API endpoint for founder-friendly metrics with historical data.
 """
+import random
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional

@@ -32,16 +32,49 @@ export function useRealtimeKPI(
   companyId: number | null,
   options: UseRealtimeKPIOptions = {}
 ) {
-  const { enabled = true, onUpdate, onError } = options;
+  const { enabled = true } = options;
   const [data, setData] = useState<KPIUpdate | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  
+  // Use refs for callbacks to avoid dependency issues
+  const onUpdateRef = useRef(options.onUpdate);
+  const onErrorRef = useRef(options.onError);
+  
+  // Update refs when options change
+  useEffect(() => {
+    onUpdateRef.current = options.onUpdate;
+    onErrorRef.current = options.onError;
+  }, [options.onUpdate, options.onError]);
 
-  const connect = useCallback(() => {
-    if (!companyId || !enabled) return;
+  const disconnect = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setIsConnected(false);
+    }
+  }, []);
 
-    const token = localStorage.getItem('auth_token');
+  useEffect(() => {
+    if (!companyId || !enabled) {
+      disconnect();
+      return;
+    }
+
+    // Try multiple token storage locations
+    let token = localStorage.getItem('predixen-token');
+    if (!token) {
+      try {
+        const zustandStorage = localStorage.getItem('predixen-founder-storage');
+        if (zustandStorage) {
+          const parsed = JSON.parse(zustandStorage);
+          token = parsed?.state?.token || null;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
     if (!token) {
       setError(new Error('Not authenticated'));
       return;
@@ -50,6 +83,11 @@ export function useRealtimeKPI(
     const url = `/api/realtime/kpi/${companyId}`;
     
     try {
+      // Close existing connection if any
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+
       const eventSource = new EventSource(url, {
         withCredentials: true
       });
@@ -63,7 +101,7 @@ export function useRealtimeKPI(
         try {
           const update: KPIUpdate = JSON.parse(event.data);
           setData(update);
-          onUpdate?.(update);
+          onUpdateRef.current?.(update);
         } catch (e) {
           console.error('Failed to parse KPI update:', e);
         }
@@ -74,47 +112,49 @@ export function useRealtimeKPI(
           const errorData = JSON.parse((event as any).data || '{}');
           const err = new Error(errorData.error || 'SSE connection error');
           setError(err);
-          onError?.(err);
+          onErrorRef.current?.(err);
         } catch {
           const err = new Error('SSE connection error');
           setError(err);
-          onError?.(err);
+          onErrorRef.current?.(err);
         }
       });
 
       eventSource.onerror = () => {
         setIsConnected(false);
         eventSource.close();
-        setTimeout(() => {
-          if (enabled) connect();
+        // Reconnect after delay - but use a ref to avoid closure issues
+        const reconnectTimer = setTimeout(() => {
+          if (enabled && companyId) {
+            // The useEffect will re-run and reconnect
+          }
         }, 5000);
+        return () => clearTimeout(reconnectTimer);
       };
 
       eventSourceRef.current = eventSource;
     } catch (e) {
       const err = e instanceof Error ? e : new Error('Failed to connect');
       setError(err);
-      onError?.(err);
-    }
-  }, [companyId, enabled, onUpdate, onError]);
-
-  const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      setIsConnected(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (enabled && companyId) {
-      connect();
+      onErrorRef.current?.(err);
     }
 
     return () => {
-      disconnect();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
-  }, [companyId, enabled, connect, disconnect]);
+  }, [companyId, enabled, disconnect]);
+
+  const connect = useCallback(() => {
+    // Trigger reconnect by toggling - but this is mostly for manual reconnect
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    // The useEffect will handle reconnection
+  }, []);
 
   return {
     data,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -93,17 +93,21 @@ export default function KPIBoardPage() {
   const { currentCompany } = useFounderStore();
   const [historicalData, setHistoricalData] = useState<Array<KPIMetrics & { time: string }>>([]);
   
+  const handleKPIUpdate = useCallback((update: import('@/hooks/useRealtimeKPI').KPIUpdate) => {
+    setHistoricalData(prev => {
+      const newData = [...prev, { ...update.metrics, time: new Date(update.timestamp).toLocaleTimeString() }];
+      return newData.slice(-20);
+    });
+  }, []);
+  
+  const kpiOptions = useMemo(() => ({
+    enabled: !!currentCompany?.id,
+    onUpdate: handleKPIUpdate
+  }), [currentCompany?.id, handleKPIUpdate]);
+  
   const { data: liveData, isConnected, error } = useRealtimeKPI(
     currentCompany?.id ?? null,
-    {
-      enabled: !!currentCompany?.id,
-      onUpdate: (update) => {
-        setHistoricalData(prev => {
-          const newData = [...prev, { ...update.metrics, time: new Date(update.timestamp).toLocaleTimeString() }];
-          return newData.slice(-20);
-        });
-      }
-    }
+    kpiOptions
   );
 
   const metrics = liveData?.metrics ?? {
