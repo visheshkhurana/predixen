@@ -1,0 +1,280 @@
+You are working inside an existing application called **Predixen**.
+
+Predixen already has (or is implementing):
+- A Data Source Integration backend
+- Connector adapters (Stripe, QuickBooks, GA4, REST API, DB, CSV, etc.)
+- Org-based multi-tenancy
+- Ingestion runs, raw_events, metric catalog
+
+Your task is to build a **Connector Marketplace UI** similar to Klipfolio’s integration gallery.
+
+GOALS:
+1. Help users DISCOVER available integrations easily
+2. Clearly show which connectors are:
+   - Native
+   - Generic
+   - Beta
+3. Make setup fast and guided (wizard-based)
+4. Show trust indicators (data freshness, reliability)
+5. Be scalable to 50–100+ connectors without redesign
+
+DESIGN PRINCIPLES:
+- Marketplace feel (cards, categories, search)
+- Zero ambiguity on what each connector does
+- Enterprise-safe (no accidental auth leaks)
+- Optimized for SMB onboarding speed
+
+---
+
+## 1️⃣ DATA MODEL — CONNECTOR REGISTRY (BACKEND)
+
+Create a static + extensible **Connector Registry**.
+
+Create file:
+server/modules/integrations/connectorRegistry.ts
+
+Structure:
+- id (string, stable)
+- name (Stripe, Google Analytics, PostgreSQL, REST API, etc.)
+- category (Finance, Marketing, CRM, Databases, Files, Custom)
+- logo_url (or local asset ref)
+- description (short)
+- long_description (markdown)
+- auth_type (oauth, api_key, webhook, db_connection, file_upload)
+- supports_webhooks (boolean)
+- supports_polling (boolean)
+- supports_incremental (boolean)
+- typical_refresh (e.g. "real-time", "hourly", "daily")
+- native (boolean)
+- beta (boolean)
+- popularity_rank (int)
+- setup_complexity (low | medium | high)
+- documentation_url
+- implemented (boolean)
+- adapter_key (maps to backend adapter)
+
+Expose API:
+GET /api/connectors/catalog
+
+This MUST be the single source of truth for the marketplace UI.
+
+---
+
+## 2️⃣ BACKEND — CONNECTOR MARKETPLACE API
+
+Create routes:
+GET /api/connectors/catalog
+GET /api/connectors/catalog/:id
+
+Response must include:
+- connector metadata
+- whether org already has this connector configured
+- current status if installed (active, error, paused)
+- last successful sync timestamp
+- error summary (if any)
+
+DO NOT expose secrets.
+
+---
+
+## 3️⃣ FRONTEND — MARKETPLACE PAGE (CORE)
+
+Create page:
+client/pages/ConnectorMarketplace.tsx
+
+Layout:
+- Header: "Connect Your Data"
+- Subtitle: "Connect Predixen to the tools you already use"
+
+Sections:
+- Search bar (by name)
+- Filter pills:
+  - Category
+  - Native / Generic
+  - Real-time supported
+  - Installed / Not Installed
+
+Grid:
+- Card-based layout (responsive)
+- Each card shows:
+  - Logo
+  - Name
+  - Short description
+  - Badges:
+    - Native
+    - Beta
+    - Real-time
+  - CTA:
+    - "Connect"
+    - or "Manage" if already installed
+
+Sort order:
+1. Installed connectors
+2. Popularity rank
+3. Native before generic
+
+---
+
+## 4️⃣ CONNECTOR CARD COMPONENT
+
+Create component:
+client/components/connectors/ConnectorCard.tsx
+
+Card must show:
+- Connector logo
+- Name
+- Description (1–2 lines)
+- Category tag
+- Trust indicators:
+  - "Supports real-time"
+  - "Webhook enabled"
+- CTA button:
+  - Connect → opens setup wizard
+  - Manage → goes to data source detail page
+
+Hover state:
+- Show long_description preview
+- Show typical refresh cadence
+- Show setup complexity
+
+---
+
+## 5️⃣ CONNECTOR DETAIL DRAWER / PAGE
+
+When user clicks a connector:
+
+Show:
+- Large logo + name
+- What data Predixen will pull
+- How often data updates
+- Required permissions
+- Example metrics unlocked (e.g. Revenue, MRR, CAC)
+
+Sections:
+- Overview
+- Data Collected
+- Refresh Behavior
+- Security & Permissions
+- Setup Requirements
+
+CTA:
+- "Connect {Connector Name}"
+
+---
+
+## 6️⃣ SETUP WIZARD INTEGRATION
+
+When user clicks "Connect":
+
+Route to:
+client/pages/AddDataSourceWizard.tsx
+
+Wizard behavior must depend on connector.auth_type:
+- oauth → redirect flow
+- api_key → secure input
+- db_connection → connection string form
+- webhook → show endpoint + secret
+- file_upload → upload UI
+
+Wizard steps:
+1. Auth
+2. Test connection
+3. Select entities/streams (if applicable)
+4. Choose sync mode (webhook/poll)
+5. Choose refresh frequency
+6. Confirm & activate
+
+On completion:
+- Create data_source record
+- Trigger first ingestion run
+- Redirect to DataSourceDetail page
+
+---
+
+## 7️⃣ INSTALLED CONNECTOR MANAGEMENT
+
+Create page:
+client/pages/DataSourceDetail.tsx
+
+Show:
+- Connector info
+- Status badge (Active / Error / Paused)
+- Last sync time
+- Next scheduled sync
+- Ingestion run history table
+- Buttons:
+  - Sync now
+  - Pause
+  - Replay from date
+  - View logs
+
+Include health indicators:
+- Data freshness
+- Error rate
+- Record counts
+
+---
+
+## 8️⃣ UX COPY & TRUST SIGNALS (IMPORTANT)
+
+Add microcopy:
+- "Your data is read-only"
+- "Secrets are encrypted at rest"
+- "Raw data is never modified"
+
+Add visual trust signals:
+- Lock icon for secure connectors
+- Checkmark for verified/native connectors
+
+---
+
+## 9️⃣ PERFORMANCE & SCALE CONSIDERATIONS
+
+- Connector catalog must be cached client-side
+- Images/logos lazy-loaded
+- Marketplace supports 100+ connectors without lag
+- Category + search filters must be client-side
+
+---
+
+## 🔟 FILE STRUCTURE (STRICT)
+
+client/
+  pages/
+    ConnectorMarketplace.tsx
+    AddDataSourceWizard.tsx
+    DataSourceDetail.tsx
+  components/
+    connectors/
+      ConnectorCard.tsx
+      ConnectorFilters.tsx
+      ConnectorBadge.tsx
+      ConnectorDetailDrawer.tsx
+  services/
+    connectors.api.ts
+
+server/
+  modules/
+    integrations/
+      connectorRegistry.ts
+      connectors.api.ts
+
+---
+
+## OUTPUT RULES
+
+- Generate code FILE BY FILE
+- Use TypeScript everywhere
+- No pseudo-code
+- Comment why things exist
+- Respect existing Predixen styles and routing
+- If conflicts exist, explain and adapt, do not overwrite blindly
+
+BEGIN WITH:
+1. Connector registry
+2. Catalog API
+3. Marketplace page
+4. Connector card
+5. Wizard integration
+
+DO NOT STOP EARLY.
