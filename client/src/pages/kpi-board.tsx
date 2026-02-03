@@ -158,20 +158,20 @@ export default function KPIBoardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPITile
-          title="Monthly Revenue"
-          value={formatCurrency(metrics.monthly_revenue)}
-          icon={<DollarSign className="h-4 w-4" />}
-          trend="up"
-          trendValue="+12%"
-          subtitle="vs last month"
-          isLive={isConnected}
-        />
-        <KPITile
           title="MRR"
           value={formatCurrency(metrics.mrr)}
           icon={<TrendingUp className="h-4 w-4" />}
           trend="up"
           trendValue="+8%"
+          subtitle="Monthly Recurring Revenue"
+          isLive={isConnected}
+        />
+        <KPITile
+          title="ARR"
+          value={formatCurrency(metrics.arr)}
+          icon={<DollarSign className="h-4 w-4" />}
+          trend="up"
+          subtitle="Annual Recurring Revenue"
           isLive={isConnected}
         />
         <KPITile
