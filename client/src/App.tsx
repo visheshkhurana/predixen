@@ -43,6 +43,7 @@ import FundraisingPage from "@/pages/fundraising";
 import InvestorRoomPage from "@/pages/investor-room";
 import KPIBoardPage from "@/pages/kpi-board";
 import ConnectorMarketplacePage from "@/pages/connector-marketplace";
+import AddDataSourcePage from "@/pages/add-data-source";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -154,6 +155,9 @@ function Router() {
       </Route>
       <Route path="/marketplace">
         {() => <AuthenticatedRoute component={ConnectorMarketplacePage} />}
+      </Route>
+      <Route path="/add-data-source">
+        {() => <AuthenticatedRoute component={AddDataSourcePage} />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}
