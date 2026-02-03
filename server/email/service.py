@@ -276,3 +276,33 @@ async def send_password_reset_email(
     subject = "Reset Your Predixen Password"
     
     return await send_email(to_email, subject, html_content)
+
+
+async def send_platform_update_email(
+    to_email: str,
+    updates: list,
+    app_url: str,
+    template_html: Optional[str] = None
+) -> dict:
+    """
+    Send a platform update email with recent changes.
+    
+    Args:
+        to_email: Recipient email address
+        updates: List of update items with title and description
+        app_url: URL to the application
+        template_html: Optional custom HTML template
+    
+    Returns:
+        dict with success status and message/error
+    """
+    from server.email.templates import render_platform_update_template
+    
+    html_content = template_html or render_platform_update_template(
+        updates=updates,
+        app_url=app_url
+    )
+    
+    subject = "Predixen Intelligence OS - New Features & Updates"
+    
+    return await send_email(to_email, subject, html_content)

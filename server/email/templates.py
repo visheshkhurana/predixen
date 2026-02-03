@@ -739,5 +739,80 @@ def get_template_preview(template_type: str) -> Optional[str]:
         return render_app_overview_template(**sample_data["app_overview"])
     elif template_type == "copilot_pitch":
         return render_copilot_pitch_template(**sample_data["copilot_pitch"])
+    elif template_type == "platform_update":
+        return render_platform_update_template(
+            updates=[
+                {"title": "Sample Feature", "description": "This is a sample update."}
+            ],
+            app_url="https://predixen.app"
+        )
     
     return None
+
+
+def render_platform_update_template(
+    updates: list,
+    app_url: str
+) -> str:
+    """
+    Render platform update email template.
+    
+    Args:
+        updates: List of dicts with 'title' and 'description' keys
+        app_url: URL to the application
+    
+    Returns:
+        Complete HTML email content
+    """
+    update_items_html = ""
+    for update in updates:
+        title = update.get("title", "")
+        description = update.get("description", "")
+        update_items_html += f"""
+        <tr>
+            <td style="padding: 16px 0; border-bottom: 1px solid {COLORS['gray_100']};">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td style="width: 24px; vertical-align: top; padding-right: 12px;">
+                            <div style="width: 24px; height: 24px; background-color: {COLORS['primary']}; border-radius: 50%; text-align: center; line-height: 24px; color: {COLORS['white']}; font-size: 14px; font-weight: 600;">&#10003;</div>
+                        </td>
+                        <td style="vertical-align: top;">
+                            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">{title}</p>
+                            <p style="margin: 0; font-size: 14px; color: {COLORS['gray_600']}; font-family: {FONT_STACK}; line-height: 1.5;">{description}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        """
+    
+    content = f"""
+    {get_header_html("Platform Updates")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: {COLORS['navy']}; font-family: {FONT_STACK};">New Features & Updates</h1>
+            <p style="margin: 0 0 24px 0; font-size: 16px; color: {COLORS['gray_600']}; line-height: 1.6; font-family: {FONT_STACK};">
+                We've been busy improving Predixen Intelligence OS! Here's what's new in the last 24 hours:
+            </p>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
+                {update_items_html}
+            </table>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                    <td align="center" style="padding: 16px 0;">
+                        {get_cta_button(app_url, "Try It Now")}
+                    </td>
+                </tr>
+            </table>
+            
+            <p style="margin: 24px 0 0 0; font-size: 14px; color: {COLORS['gray_500']}; text-align: center; font-family: {FONT_STACK};">
+                Click the button above to explore these new features in your dashboard.
+            </p>
+        </td>
+    </tr>
+    {get_footer_html()}
+    """
+    
+    return get_email_wrapper(content)
