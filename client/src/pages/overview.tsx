@@ -119,7 +119,7 @@ const DUMMY_BASE_DATA = {
 const INDUSTRY_BENCHMARKS = {
   revenueGrowth: { p25: 5, p50: 10, p75: 20, unit: '%', direction: 'higher' },
   grossMargin: { p25: 60, p50: 70, p75: 80, unit: '%', direction: 'higher' },
-  burnMultiple: { p25: 1.5, p50: 2.5, p75: 4, unit: 'x', direction: 'lower' },
+  burnMultiple: { p25: 4, p50: 2.5, p75: 1.5, unit: 'x', direction: 'lower' },
   runway: { p25: 12, p50: 18, p75: 24, unit: 'mo', direction: 'higher' },
   ltvCac: { p25: 2, p50: 3, p75: 5, unit: 'x', direction: 'higher' },
   churnRate: { p25: 8, p50: 5, p75: 3, unit: '%', direction: 'lower' },
