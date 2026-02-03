@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ApiError } from '@/api/client';
+import { apiRequest } from '@/lib/queryClient';
 import { useFounderStore } from '@/store/founderStore';
 import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe } from 'lucide-react';
+import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe, History } from 'lucide-react';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
@@ -110,6 +112,28 @@ export default function OnboardingPage() {
   const [isFetchingAI, setIsFetchingAI] = useState(false);
   const [aiLookupSummary, setAiLookupSummary] = useState<string | null>(null);
   
+  // Uploaded file history
+  const [uploadHistory, setUploadHistory] = useState<Array<{ name: string; uploadedAt: Date; type: string }>>([]);
+  
+  // Query existing companies for the user
+  const { data: existingCompanies } = useQuery<Array<{ id: number; name: string; industry?: string; stage?: string; website?: string }>>({
+    queryKey: ['/api/companies'],
+  });
+  
+  // If user has an existing company, pre-fill the form
+  useEffect(() => {
+    if (existingCompanies && existingCompanies.length > 0 && !companyData.name) {
+      const existing = existingCompanies[0];
+      setCompanyData(prev => ({
+        ...prev,
+        name: existing.name || prev.name,
+        industry: existing.industry || prev.industry,
+        stage: existing.stage || prev.stage,
+        website: existing.website || prev.website,
+      }));
+    }
+  }, [existingCompanies]);
+  
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -143,6 +167,12 @@ export default function OnboardingPage() {
     setIsExtracting(true);
     setExtractionError(null);
     setExtractedData(null);
+    
+    // Add to upload history
+    setUploadHistory(prev => [
+      { name: file.name, uploadedAt: new Date(), type: file.type || 'document' },
+      ...prev.slice(0, 4) // Keep last 5 files
+    ]);
     
     try {
       const formData = new FormData();
@@ -399,7 +429,17 @@ export default function OnboardingPage() {
     
     setIsSubmitting(true);
     try {
-      const company = await createCompanyMutation.mutateAsync(companyData);
+      let company;
+      
+      // If existing company, update it; otherwise create new
+      if (existingCompanies && existingCompanies.length > 0) {
+        const existingId = existingCompanies[0].id;
+        const updateResponse = await apiRequest('PATCH', `/api/companies/${existingId}`, companyData);
+        company = await updateResponse.json();
+      } else {
+        company = await createCompanyMutation.mutateAsync(companyData);
+      }
+      
       setCurrentCompany(company);
       setStep(2);
     } catch (err) {
@@ -784,6 +824,33 @@ export default function OnboardingPage() {
                     <p className="mt-3 text-xs text-muted-foreground">
                       Review the extracted values above. You can override any value in the form fields below.
                     </p>
+                  </div>
+                )}
+                
+                {/* Upload History */}
+                {uploadHistory.length > 0 && (
+                  <div className="mt-4 p-3 bg-muted/30 rounded-md">
+                    <div className="flex items-center gap-2 mb-2">
+                      <History className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Upload History</span>
+                    </div>
+                    <div className="space-y-1">
+                      {uploadHistory.map((file, idx) => (
+                        <div 
+                          key={`${file.name}-${idx}`} 
+                          className="flex items-center justify-between text-xs text-muted-foreground"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-3 h-3" />
+                            <span className="truncate max-w-[200px]">{file.name}</span>
+                            {idx === 0 && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Current</Badge>}
+                          </div>
+                          <span className="text-[10px]">
+                            {file.uploadedAt.toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 
