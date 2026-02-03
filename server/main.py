@@ -31,6 +31,7 @@ from server.api import realtime as realtime_api
 from server.api import export as export_api
 from server.api import company_lookup as company_lookup_api
 from server.api import benchmark_search as benchmark_search_api
+from server.api import connector_catalog as connector_catalog_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -158,6 +159,7 @@ app.include_router(realtime_api.router)
 app.include_router(export_api.router)
 app.include_router(company_lookup_api.router)
 app.include_router(benchmark_search_api.router)
+app.include_router(connector_catalog_api.router)
 
 @app.get("/")
 def root():
