@@ -36,33 +36,20 @@ export function useRealtimeKPI(
   const [data, setData] = useState<KPIUpdate | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
   
-  // Use refs for callbacks to avoid dependency issues
   const onUpdateRef = useRef(options.onUpdate);
   const onErrorRef = useRef(options.onError);
   
-  // Update refs when options change
   useEffect(() => {
     onUpdateRef.current = options.onUpdate;
     onErrorRef.current = options.onError;
   }, [options.onUpdate, options.onError]);
 
   const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      setIsConnected(false);
-    }
+    setIsConnected(false);
   }, []);
 
-  useEffect(() => {
-    if (!companyId || !enabled) {
-      disconnect();
-      return;
-    }
-
-    // Try multiple token storage locations
+  const getToken = useCallback(() => {
     let token = localStorage.getItem('predixen-token');
     if (!token) {
       try {
@@ -75,86 +62,63 @@ export function useRealtimeKPI(
         // Ignore parse errors
       }
     }
+    return token;
+  }, []);
+
+  const fetchKPIData = useCallback(async () => {
+    const token = getToken();
+    if (!token || !companyId) return;
+    
+    try {
+      const response = await fetch(`/api/realtime/kpi/${companyId}/snapshot`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const update: KPIUpdate = await response.json();
+      setData(update);
+      setIsConnected(true);
+      setError(null);
+      onUpdateRef.current?.(update);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error('Failed to fetch KPI data');
+      setError(err);
+      onErrorRef.current?.(err);
+    }
+  }, [companyId, getToken]);
+
+  useEffect(() => {
+    if (!companyId || !enabled) {
+      disconnect();
+      return;
+    }
+
+    const token = getToken();
     if (!token) {
       setError(new Error('Not authenticated'));
       return;
     }
 
-    const url = `/api/realtime/kpi/${companyId}`;
+    fetchKPIData();
     
-    try {
-      // Close existing connection if any
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
-      const eventSource = new EventSource(url, {
-        withCredentials: true
-      });
-
-      eventSource.onopen = () => {
-        setIsConnected(true);
-        setError(null);
-      };
-
-      eventSource.addEventListener('kpi_update', (event) => {
-        try {
-          const update: KPIUpdate = JSON.parse(event.data);
-          setData(update);
-          onUpdateRef.current?.(update);
-        } catch (e) {
-          console.error('Failed to parse KPI update:', e);
-        }
-      });
-
-      eventSource.addEventListener('error', (event) => {
-        try {
-          const errorData = JSON.parse((event as any).data || '{}');
-          const err = new Error(errorData.error || 'SSE connection error');
-          setError(err);
-          onErrorRef.current?.(err);
-        } catch {
-          const err = new Error('SSE connection error');
-          setError(err);
-          onErrorRef.current?.(err);
-        }
-      });
-
-      eventSource.onerror = () => {
-        setIsConnected(false);
-        eventSource.close();
-        // Reconnect after delay - but use a ref to avoid closure issues
-        const reconnectTimer = setTimeout(() => {
-          if (enabled && companyId) {
-            // The useEffect will re-run and reconnect
-          }
-        }, 5000);
-        return () => clearTimeout(reconnectTimer);
-      };
-
-      eventSourceRef.current = eventSource;
-    } catch (e) {
-      const err = e instanceof Error ? e : new Error('Failed to connect');
-      setError(err);
-      onErrorRef.current?.(err);
-    }
+    const intervalId = setInterval(fetchKPIData, 10000);
+    setIsConnected(true);
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      clearInterval(intervalId);
+      setIsConnected(false);
     };
-  }, [companyId, enabled, disconnect]);
+  }, [companyId, enabled, getToken, fetchKPIData, disconnect]);
 
   const connect = useCallback(() => {
-    // Trigger reconnect by toggling - but this is mostly for manual reconnect
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    // The useEffect will handle reconnection
-  }, []);
+    fetchKPIData();
+  }, [fetchKPIData]);
 
   return {
     data,
