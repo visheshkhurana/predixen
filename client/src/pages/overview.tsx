@@ -63,7 +63,7 @@ import {
   Cell,
 } from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
-import { useTruthScan, useDecisions, useRunTruthScan } from '@/api/hooks';
+import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
@@ -106,6 +106,7 @@ const DUMMY_BASE_DATA = {
   arr: 120000,
   cash: 500000,
   burnRate: 50000,
+  runway: 10,
   cac: 500,
   ltv: 3000,
   grossMargin: 70,
@@ -478,6 +479,11 @@ export default function OverviewPage() {
   const [newComment, setNewComment] = useState('');
   const [assumptionsPanelOpen, setAssumptionsPanelOpen] = useState(false);
   const [selectedDrillDownMetric, setSelectedDrillDownMetric] = useState<string | null>(null);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(currentCompany?.industry || 'saas');
+  const [selectedStage, setSelectedStage] = useState<string>(currentCompany?.stage || 'seed');
+  
+  const { data: dynamicBenchmarks, isLoading: benchmarksLoading, error: benchmarksError } = useBenchmarkSearch(selectedIndustry, selectedStage);
+  const { data: benchmarkOptions } = useBenchmarkIndustries();
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -819,70 +825,84 @@ export default function OverviewPage() {
   const riskAlerts = useMemo(() => getRiskAlerts(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
   const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
   
-  const getBenchmarkStatus = (value: number, benchmark: typeof INDUSTRY_BENCHMARKS.revenueGrowth) => {
-    if (benchmark.direction === 'higher') {
+  const getBenchmarkStatus = (value: number, benchmark: { p25: number; p50: number; p75: number; direction: string }) => {
+    if (benchmark.direction === 'higher' || benchmark.direction === 'higher_is_better') {
       return value >= benchmark.p50 ? 'above' : value >= benchmark.p25 ? 'median' : 'below';
     } else {
       return value <= benchmark.p50 ? 'above' : value <= benchmark.p25 ? 'median' : 'below';
     }
   };
   
-  const benchmarkComparison = useMemo(() => [
-    { 
-      metric: 'Growth Rate', 
-      value: assumptions.growthRate, 
-      p25: INDUSTRY_BENCHMARKS.revenueGrowth.p25, 
-      p50: INDUSTRY_BENCHMARKS.revenueGrowth.p50, 
-      p75: INDUSTRY_BENCHMARKS.revenueGrowth.p75,
-      unit: '%',
-      status: getBenchmarkStatus(assumptions.growthRate, INDUSTRY_BENCHMARKS.revenueGrowth),
-    },
-    { 
-      metric: 'Gross Margin', 
-      value: projectedMetrics.grossMargin, 
-      p25: INDUSTRY_BENCHMARKS.grossMargin.p25, 
-      p50: INDUSTRY_BENCHMARKS.grossMargin.p50, 
-      p75: INDUSTRY_BENCHMARKS.grossMargin.p75,
-      unit: '%',
-      status: getBenchmarkStatus(projectedMetrics.grossMargin, INDUSTRY_BENCHMARKS.grossMargin),
-    },
-    { 
-      metric: 'LTV:CAC', 
-      value: projectedMetrics.ltvCacRatio, 
-      p25: INDUSTRY_BENCHMARKS.ltvCac.p25, 
-      p50: INDUSTRY_BENCHMARKS.ltvCac.p50, 
-      p75: INDUSTRY_BENCHMARKS.ltvCac.p75,
-      unit: 'x',
-      status: getBenchmarkStatus(projectedMetrics.ltvCacRatio, INDUSTRY_BENCHMARKS.ltvCac),
-    },
-    { 
-      metric: 'Runway', 
-      value: projectedMetrics.runway, 
-      p25: INDUSTRY_BENCHMARKS.runway.p25, 
-      p50: INDUSTRY_BENCHMARKS.runway.p50, 
-      p75: INDUSTRY_BENCHMARKS.runway.p75,
-      unit: 'mo',
-      status: getBenchmarkStatus(projectedMetrics.runway, INDUSTRY_BENCHMARKS.runway),
-    },
-    { 
-      metric: 'Churn Rate', 
-      value: projectedMetrics.churnRate, 
-      p25: INDUSTRY_BENCHMARKS.churnRate.p25, 
-      p50: INDUSTRY_BENCHMARKS.churnRate.p50, 
-      p75: INDUSTRY_BENCHMARKS.churnRate.p75,
-      unit: '%',
-      status: getBenchmarkStatus(projectedMetrics.churnRate, INDUSTRY_BENCHMARKS.churnRate),
-    },
-    { 
-      metric: 'Burn Multiple', 
-      value: projectedMetrics.burnRate > 0 ? projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1) : 0, 
-      p25: INDUSTRY_BENCHMARKS.burnMultiple.p25, 
-      p50: INDUSTRY_BENCHMARKS.burnMultiple.p50, 
-      p75: INDUSTRY_BENCHMARKS.burnMultiple.p75,
-      unit: 'x',
-      status: getBenchmarkStatus(projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1), INDUSTRY_BENCHMARKS.burnMultiple),
-    },
-  ], [assumptions.growthRate, projectedMetrics]);
+  const getDynamicBenchmark = (metricName: string) => {
+    if (!dynamicBenchmarks?.benchmarks) return null;
+    return dynamicBenchmarks.benchmarks.find(b => b.metric_name === metricName);
+  };
+  
+  const benchmarkComparison = useMemo(() => {
+    const growthBenchmark = getDynamicBenchmark('revenue_growth_mom') || { p25: INDUSTRY_BENCHMARKS.revenueGrowth.p25, p50: INDUSTRY_BENCHMARKS.revenueGrowth.p50, p75: INDUSTRY_BENCHMARKS.revenueGrowth.p75, direction: 'higher_is_better' };
+    const grossMarginBenchmark = getDynamicBenchmark('gross_margin') || { p25: INDUSTRY_BENCHMARKS.grossMargin.p25, p50: INDUSTRY_BENCHMARKS.grossMargin.p50, p75: INDUSTRY_BENCHMARKS.grossMargin.p75, direction: 'higher_is_better' };
+    const ltvCacBenchmark = getDynamicBenchmark('ltv_cac_ratio') || { p25: INDUSTRY_BENCHMARKS.ltvCac.p25, p50: INDUSTRY_BENCHMARKS.ltvCac.p50, p75: INDUSTRY_BENCHMARKS.ltvCac.p75, direction: 'higher_is_better' };
+    const runwayBenchmark = getDynamicBenchmark('runway_months') || { p25: INDUSTRY_BENCHMARKS.runway.p25, p50: INDUSTRY_BENCHMARKS.runway.p50, p75: INDUSTRY_BENCHMARKS.runway.p75, direction: 'higher_is_better' };
+    const churnBenchmark = getDynamicBenchmark('churn_rate') || { p25: INDUSTRY_BENCHMARKS.churnRate.p25, p50: INDUSTRY_BENCHMARKS.churnRate.p50, p75: INDUSTRY_BENCHMARKS.churnRate.p75, direction: 'lower_is_better' };
+    const burnBenchmark = getDynamicBenchmark('burn_multiple') || { p25: INDUSTRY_BENCHMARKS.burnMultiple.p25, p50: INDUSTRY_BENCHMARKS.burnMultiple.p50, p75: INDUSTRY_BENCHMARKS.burnMultiple.p75, direction: 'lower_is_better' };
+    
+    return [
+      { 
+        metric: 'Growth Rate', 
+        value: assumptions.growthRate, 
+        p25: growthBenchmark.p25, 
+        p50: growthBenchmark.p50, 
+        p75: growthBenchmark.p75,
+        unit: '%',
+        status: getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
+      },
+      { 
+        metric: 'Gross Margin', 
+        value: projectedMetrics.grossMargin, 
+        p25: grossMarginBenchmark.p25, 
+        p50: grossMarginBenchmark.p50, 
+        p75: grossMarginBenchmark.p75,
+        unit: '%',
+        status: getBenchmarkStatus(projectedMetrics.grossMargin, grossMarginBenchmark),
+      },
+      { 
+        metric: 'LTV:CAC', 
+        value: projectedMetrics.ltvCacRatio, 
+        p25: ltvCacBenchmark.p25, 
+        p50: ltvCacBenchmark.p50, 
+        p75: ltvCacBenchmark.p75,
+        unit: 'x',
+        status: getBenchmarkStatus(projectedMetrics.ltvCacRatio, ltvCacBenchmark),
+      },
+      { 
+        metric: 'Runway', 
+        value: projectedMetrics.runway, 
+        p25: runwayBenchmark.p25, 
+        p50: runwayBenchmark.p50, 
+        p75: runwayBenchmark.p75,
+        unit: 'mo',
+        status: getBenchmarkStatus(projectedMetrics.runway, runwayBenchmark),
+      },
+      { 
+        metric: 'Churn Rate', 
+        value: projectedMetrics.churnRate, 
+        p25: churnBenchmark.p25, 
+        p50: churnBenchmark.p50, 
+        p75: churnBenchmark.p75,
+        unit: '%',
+        status: getBenchmarkStatus(projectedMetrics.churnRate, churnBenchmark),
+      },
+      { 
+        metric: 'Burn Multiple', 
+        value: projectedMetrics.burnRate > 0 ? projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1) : 0, 
+        p25: burnBenchmark.p25, 
+        p50: burnBenchmark.p50, 
+        p75: burnBenchmark.p75,
+        unit: 'x',
+        status: getBenchmarkStatus(projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1), burnBenchmark),
+      },
+    ];
+  }, [assumptions.growthRate, projectedMetrics, dynamicBenchmarks]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -1392,45 +1412,111 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="overflow-visible" data-testid="benchmarks-section">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Scale className="h-5 w-5 text-primary" />
-              Industry Benchmarks
-            </CardTitle>
-            <CardDescription>Compare your metrics against SaaS industry averages</CardDescription>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Scale className="h-5 w-5 text-primary" />
+                Industry Benchmarks
+                {benchmarksLoading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+              </CardTitle>
+              {dynamicBenchmarks?.is_cached && (
+                <Badge variant="outline" className="text-xs">Cached</Badge>
+              )}
+            </div>
+            <CardDescription>
+              Real-time benchmarks from industry reports
+            </CardDescription>
+            <div className="flex items-center gap-2 mt-2">
+              <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+                <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-industry">
+                  <SelectValue placeholder="Industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  {benchmarkOptions?.industries.map(ind => (
+                    <SelectItem key={ind.id} value={ind.id}>{ind.name}</SelectItem>
+                  )) || (
+                    <>
+                      <SelectItem value="saas">SaaS / Software</SelectItem>
+                      <SelectItem value="fintech">Fintech</SelectItem>
+                      <SelectItem value="ecommerce">E-commerce</SelectItem>
+                      <SelectItem value="marketplace">Marketplace</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              <Select value={selectedStage} onValueChange={setSelectedStage}>
+                <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="select-stage">
+                  <SelectValue placeholder="Stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {benchmarkOptions?.stages.map(st => (
+                    <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+                  )) || (
+                    <>
+                      <SelectItem value="seed">Seed</SelectItem>
+                      <SelectItem value="series_a">Series A</SelectItem>
+                      <SelectItem value="series_b">Series B</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {benchmarkComparison.map((item, index) => (
-                <div key={item.metric} className="space-y-1" data-testid={`benchmark-${index}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{item.metric}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-semibold">
-                        {safeToFixed(item.value)}{item.unit}
-                      </span>
-                      <Badge 
-                        variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
-                        data-testid={`benchmark-${index}-status`}
-                      >
-                        {item.status === 'above' ? (
-                          <TrendingUp className="h-3 w-3 mr-1 text-emerald-500" />
-                        ) : item.status === 'median' ? (
-                          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 mr-1" />
-                        )}
-                        {item.status === 'above' ? 'Above P50' : item.status === 'median' ? 'P25-P50' : 'Below P25'}
-                      </Badge>
+            {benchmarksError && (
+              <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-600 dark:text-amber-400">
+                Using default benchmarks (live search unavailable)
+              </div>
+            )}
+            {benchmarksLoading ? (
+              <div className="space-y-3">
+                {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {benchmarkComparison.map((item, index) => (
+                  <div key={item.metric} className="space-y-1" data-testid={`benchmark-${index}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{item.metric}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-semibold">
+                          {safeToFixed(item.value)}{item.unit}
+                        </span>
+                        <Badge 
+                          variant={item.status === 'above' ? 'secondary' : item.status === 'median' ? 'secondary' : 'destructive'}
+                          data-testid={`benchmark-${index}-status`}
+                        >
+                          {item.status === 'above' ? (
+                            <TrendingUp className="h-3 w-3 mr-1 text-emerald-500" />
+                          ) : item.status === 'median' ? (
+                            <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
+                          ) : (
+                            <TrendingDown className="h-3 w-3 mr-1" />
+                          )}
+                          {item.status === 'above' ? 'Above P50' : item.status === 'median' ? 'P25-P50' : 'Below P25'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>P25: {item.p25}{item.unit}</span>
+                      <span>P50: {item.p50}{item.unit}</span>
+                      <span>P75: {item.p75}{item.unit}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>P25: {item.p25}{item.unit}</span>
-                    <span>P50: {item.p50}{item.unit}</span>
-                    <span>P75: {item.p75}{item.unit}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+            {dynamicBenchmarks?.sources && dynamicBenchmarks.sources.length > 0 && (
+              <div className="mt-4 pt-3 border-t">
+                <p className="text-xs text-muted-foreground">
+                  Sources: {dynamicBenchmarks.sources.slice(0, 2).map((s, i) => (
+                    <a key={i} href={s} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
+                      [{i + 1}]
+                    </a>
+                  ))}
+                  {dynamicBenchmarks.sources.length > 2 && <span> +{dynamicBenchmarks.sources.length - 2} more</span>}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
