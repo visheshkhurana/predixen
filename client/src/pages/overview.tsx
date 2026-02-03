@@ -516,15 +516,26 @@ export default function OverviewPage() {
     };
     
     const runwayMonths = getValue('runway_months', getValue('runway_p50', DUMMY_BASE_DATA.runway));
+    const cacValue = getValue('cac', DUMMY_BASE_DATA.cac);
+    const ltvValue = getValue('ltv', DUMMY_BASE_DATA.ltv);
     
+    // Fallback calculation for runway if truth scan provides 0 but burn is known
+    const burnRate = Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate)));
+    const cashBalance = getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash));
+    
+    // Improved LTV/CAC logic to handle small CAC values
+    const effectiveCac = Math.max(cacValue, 1.0); // Floor at $1 to avoid division by zero or near-zero inflation
+    const ltvCacRatio = ltvValue / effectiveCac;
+
     return {
       mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
       arr: getValue('arr', DUMMY_BASE_DATA.arr),
-      cash: getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash)),
-      burnRate: Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate))),
-      runway: runwayMonths,
-      cac: getValue('cac', DUMMY_BASE_DATA.cac),
-      ltv: getValue('ltv', DUMMY_BASE_DATA.ltv),
+      cash: cashBalance,
+      burnRate,
+      runway: runwayMonths > 0 ? runwayMonths : (burnRate > 0 ? cashBalance / burnRate : 0),
+      cac: cacValue,
+      ltv: ltvValue,
+      ltvCacRatio: ltvCacRatio,
       grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
       paybackPeriod: getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod),
       totalCustomers: getValue('total_customers', DUMMY_BASE_DATA.totalCustomers),
