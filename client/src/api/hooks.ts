@@ -287,3 +287,32 @@ export function useTerminaExcelUpload() {
     },
   });
 }
+
+export function useBenchmarkSearch(industry: string | null, stage: string | null) {
+  return useQuery({
+    queryKey: ['benchmarks', industry, stage],
+    queryFn: () => api.benchmarks.search(industry!, stage!),
+    enabled: !!industry && !!stage,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 24,
+  });
+}
+
+export function useBenchmarkIndustries() {
+  return useQuery({
+    queryKey: ['benchmark-industries'],
+    queryFn: () => api.benchmarks.industries(),
+    staleTime: 1000 * 60 * 60 * 24,
+  });
+}
+
+export function useClearBenchmarkCache() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: () => api.benchmarks.clearCache(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
+    },
+  });
+}

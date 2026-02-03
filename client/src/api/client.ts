@@ -611,4 +611,36 @@ export const api = {
         }),
     },
   },
+  
+  benchmarks: {
+    search: (industry: string, stage: string) =>
+      request<{
+        industry: string;
+        stage: string;
+        benchmarks: Array<{
+          metric_name: string;
+          p25: number;
+          p50: number;
+          p75: number;
+          direction: string;
+          source: string | null;
+          confidence: string;
+        }>;
+        sources: string[];
+        last_updated: string;
+        is_cached: boolean;
+      }>('/benchmarks/search', {
+        method: 'POST',
+        body: JSON.stringify({ industry, stage }),
+      }),
+    industries: () =>
+      request<{
+        industries: Array<{ id: string; name: string }>;
+        stages: Array<{ id: string; name: string }>;
+      }>('/benchmarks/industries'),
+    clearCache: () =>
+      request<{ message: string; cleared_at: string }>('/benchmarks/cache', {
+        method: 'DELETE',
+      }),
+  },
 };
