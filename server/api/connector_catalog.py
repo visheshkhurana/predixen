@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
-from server.core.database import get_db
+from server.core.db import get_db
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 
