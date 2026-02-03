@@ -481,6 +481,8 @@ export default function OverviewPage() {
   const [selectedDrillDownMetric, setSelectedDrillDownMetric] = useState<string | null>(null);
   const [selectedIndustry, setSelectedIndustry] = useState<string>(currentCompany?.industry || 'saas');
   const [selectedStage, setSelectedStage] = useState<string>(currentCompany?.stage || 'seed');
+  const [timeframeMonths, setTimeframeMonths] = useState<3 | 6 | 12>(12);
+  const [selectedSegment, setSelectedSegment] = useState<'all' | 'channel' | 'tier' | 'region'>('all');
   
   const { data: dynamicBenchmarks, isLoading: benchmarksLoading, error: benchmarksError } = useBenchmarkSearch(selectedIndustry, selectedStage);
   const { data: benchmarkOptions } = useBenchmarkIndustries();
@@ -555,6 +557,14 @@ export default function OverviewPage() {
 
   const projectedMetrics = useMemo(() => {
     return computeProjectedMetrics(baseData, assumptions);
+  }, [baseData, assumptions]);
+
+  const monthlyProjections = useMemo(() => {
+    const projections = computeMonthlyProjections(baseData, assumptions, 12);
+    return projections.map((p, i) => ({
+      month: new Date(2026, i, 1).toLocaleDateString('en-US', { month: 'short' }),
+      ...p,
+    }));
   }, [baseData, assumptions]);
 
   const chartData = useMemo(() => {
@@ -938,13 +948,45 @@ export default function OverviewPage() {
     toast({ title: 'Export Complete', description: 'Metrics exported to CSV file.' });
   }, [projectedMetrics, currentCompany, toast]);
 
+  const segmentData = useMemo(() => {
+    const baseMetrics = {
+      cac: projectedMetrics.cac,
+      ltv: projectedMetrics.ltv,
+      ltvCac: projectedMetrics.ltvCacRatio,
+      churn: projectedMetrics.churnRate,
+      arpu: projectedMetrics.mrr / Math.max(projectedMetrics.totalCustomers, 1),
+    };
+    
+    const segments = {
+      channel: [
+        { name: 'Organic', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 1.2, ltvCac: (baseMetrics.ltv * 1.2) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 0.8, customers: Math.round(projectedMetrics.totalCustomers * 0.35) },
+        { name: 'Paid Search', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 0.9, ltvCac: (baseMetrics.ltv * 0.9) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 1.1, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
+        { name: 'Content', cac: baseMetrics.cac * 0.8, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 0.8), churn: baseMetrics.churn * 0.9, customers: Math.round(projectedMetrics.totalCustomers * 0.20) },
+        { name: 'Referral', cac: baseMetrics.cac * 0.4, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 0.4), churn: baseMetrics.churn * 0.7, customers: Math.round(projectedMetrics.totalCustomers * 0.15) },
+      ],
+      tier: [
+        { name: 'Enterprise', cac: baseMetrics.cac * 2.5, ltv: baseMetrics.ltv * 5, ltvCac: (baseMetrics.ltv * 5) / (baseMetrics.cac * 2.5), churn: baseMetrics.churn * 0.5, customers: Math.round(projectedMetrics.totalCustomers * 0.10) },
+        { name: 'Pro', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.5, ltvCac: (baseMetrics.ltv * 1.5) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 0.8, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
+        { name: 'Starter', cac: baseMetrics.cac * 0.5, ltv: baseMetrics.ltv * 0.6, ltvCac: (baseMetrics.ltv * 0.6) / (baseMetrics.cac * 0.5), churn: baseMetrics.churn * 1.5, customers: Math.round(projectedMetrics.totalCustomers * 0.60) },
+      ],
+      region: [
+        { name: 'North America', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 0.9, customers: Math.round(projectedMetrics.totalCustomers * 0.50) },
+        { name: 'Europe', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 1.0, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
+        { name: 'APAC', cac: baseMetrics.cac * 0.7, ltv: baseMetrics.ltv * 0.8, ltvCac: (baseMetrics.ltv * 0.8) / (baseMetrics.cac * 0.7), churn: baseMetrics.churn * 1.2, customers: Math.round(projectedMetrics.totalCustomers * 0.15) },
+        { name: 'Other', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 0.7, ltvCac: (baseMetrics.ltv * 0.7) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 1.3, customers: Math.round(projectedMetrics.totalCustomers * 0.05) },
+      ],
+    };
+    
+    return segments;
+  }, [projectedMetrics]);
+
   const kpiHealthData = [
-    { name: 'Runway', value: projectedMetrics.runway, metric: 'runway' },
-    { name: 'Gross Margin', value: projectedMetrics.grossMargin, metric: 'grossMargin' },
-    { name: 'Churn Rate', value: projectedMetrics.churnRate, metric: 'churnRate' },
-    { name: 'LTV/CAC', value: projectedMetrics.ltvCacRatio, metric: 'ltv_cac' },
-    { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate' },
-    { name: 'Payback', value: projectedMetrics.paybackPeriod, metric: 'paybackPeriod' },
+    { name: 'Runway', value: projectedMetrics.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
+    { name: 'Gross Margin', value: projectedMetrics.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
+    { name: 'Churn Rate', value: projectedMetrics.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
+    { name: 'LTV/CAC', value: projectedMetrics.ltvCacRatio, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
+    { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
+    { name: 'Payback', value: projectedMetrics.paybackPeriod, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
   return (
@@ -1272,6 +1314,354 @@ export default function OverviewPage() {
         </Button>
       </div>
 
+      {/* Time-Series Trends Section */}
+      <Card className="overflow-visible" data-testid="time-series-section">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+          <div className="space-y-1">
+            <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              Financial Trends
+            </CardTitle>
+            <CardDescription>Historical and projected metrics over time</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex border rounded-md overflow-hidden">
+              {([3, 6, 12] as const).map((months) => (
+                <Button
+                  key={months}
+                  variant={timeframeMonths === months ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setTimeframeMonths(months)}
+                  className="rounded-none px-3"
+                  data-testid={`button-timeframe-${months}`}
+                >
+                  {months}M
+                </Button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart 
+                data={monthlyProjections.slice(0, timeframeMonths)} 
+                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="mrrGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis 
+                  dataKey="month" 
+                  className="text-xs"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value, index) => index % (timeframeMonths > 6 ? 2 : 1) === 0 ? value : ''}
+                />
+                <YAxis 
+                  yAxisId="left"
+                  className="text-xs"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value) => {
+                    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+                    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+                    return `$${value}`;
+                  }}
+                />
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  className="text-xs"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value) => `${safeToFixed(value)}`}
+                  domain={[0, 'auto']}
+                  label={{ 
+                    value: 'months / %', 
+                    angle: 90, 
+                    position: 'insideRight',
+                    style: { fill: 'hsl(var(--muted-foreground))', fontSize: 10 }
+                  }}
+                />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: number, name: string) => {
+                    if (name === 'Runway') return [`${safeToFixed(value)} mo`, name];
+                    if (name === 'Churn') return [`${safeToFixed(value)}%`, name];
+                    return [formatCurrency(value), name];
+                  }}
+                />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="mrr"
+                  stroke="hsl(var(--primary))"
+                  fill="url(#mrrGradient)"
+                  name="MRR"
+                  yAxisId="left"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cash"
+                  stroke="hsl(var(--chart-2))"
+                  fill="url(#cashGradient)"
+                  name="Cash"
+                  yAxisId="left"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="runway"
+                  stroke="hsl(var(--chart-3))"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Runway"
+                  yAxisId="right"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="churnRate"
+                  stroke="hsl(var(--chart-4))"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="Churn"
+                  yAxisId="right"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Projected MRR ({timeframeMonths}mo)</p>
+              <p className="text-lg font-bold font-mono">{formatCurrency(monthlyProjections[timeframeMonths - 1]?.mrr)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Projected Cash</p>
+              <p className="text-lg font-bold font-mono">{formatCurrency(monthlyProjections[timeframeMonths - 1]?.cash)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Runway</p>
+              <p className="text-lg font-bold font-mono">{safeToFixed(monthlyProjections[timeframeMonths - 1]?.runway)} mo</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Churn Rate</p>
+              <p className="text-lg font-bold font-mono">{safeToFixed(monthlyProjections[timeframeMonths - 1]?.churnRate)}%</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Additional KPIs Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="overflow-visible">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">ARPU</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-arpu">
+                    <Info className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium">Average Revenue Per User</p>
+                  <p className="text-xs text-muted-foreground">MRR / Total Customers</p>
+                  <p className="text-xs mt-1">Good: &gt;$100 for SMB, &gt;$1K for Enterprise</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <p className="text-2xl font-bold font-mono" data-testid="metric-arpu">
+              {formatCurrency(projectedMetrics.mrr / Math.max(projectedMetrics.totalCustomers, 1))}
+            </p>
+            <p className="text-xs text-muted-foreground">/user/month</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="overflow-visible">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Active Users</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-users">
+                    <Info className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium">Total Active Customers</p>
+                  <p className="text-xs text-muted-foreground">Paying customers with active subscriptions</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <p className="text-2xl font-bold font-mono" data-testid="metric-active-users">
+              {projectedMetrics.totalCustomers.toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground">paying customers</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="overflow-visible">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">NRR</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-nrr">
+                    <Info className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium">Net Revenue Retention</p>
+                  <p className="text-xs text-muted-foreground">(Revenue + Expansion - Churn) / Previous Revenue</p>
+                  <p className="text-xs mt-1 text-emerald-500">&gt;100%: Growing from existing customers</p>
+                  <p className="text-xs text-amber-500">90-100%: Stable, needs improvement</p>
+                  <p className="text-xs text-red-500">&lt;90%: Leaky bucket problem</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <p className={`text-2xl font-bold font-mono ${
+              100 - projectedMetrics.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
+              100 - projectedMetrics.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
+            }`} data-testid="metric-nrr">
+              {safeToFixed(100 - projectedMetrics.churnRate + assumptions.growthRate / 2)}%
+            </p>
+            <p className="text-xs text-muted-foreground">net revenue retention</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="overflow-visible">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">LTV:CAC Ratio</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-ltvcac">
+                    <Info className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-medium">Lifetime Value to Acquisition Cost</p>
+                  <p className="text-xs text-muted-foreground">LTV / CAC - measures unit economics health</p>
+                  <p className="text-xs mt-1 text-emerald-500">&gt;3x: Excellent, sustainable growth</p>
+                  <p className="text-xs text-amber-500">2-3x: Acceptable, room for improvement</p>
+                  <p className="text-xs text-red-500">&lt;2x: Poor, fix before scaling</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <p className={`text-2xl font-bold font-mono ${
+                projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
+                projectedMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
+              }`} data-testid="metric-ltvcac-value">
+                {safeToFixed(projectedMetrics.ltvCacRatio)}x
+              </p>
+              <Badge 
+                variant={projectedMetrics.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
+                className="text-xs"
+              >
+                {projectedMetrics.ltvCacRatio >= 3 ? 'Healthy' : projectedMetrics.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              LTV: {formatCurrency(projectedMetrics.ltv)} / CAC: {formatCurrency(projectedMetrics.cac)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Segment Analysis Section */}
+      <Card className="overflow-visible" data-testid="segment-analysis-section">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Scale className="h-5 w-5 text-primary" />
+              Segment Analysis
+            </CardTitle>
+            <CardDescription>Break down metrics by acquisition channel, customer tier, or region</CardDescription>
+          </div>
+          <div className="flex border rounded-md overflow-hidden">
+            {(['all', 'channel', 'tier', 'region'] as const).map((seg) => (
+              <Button
+                key={seg}
+                variant={selectedSegment === seg ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSelectedSegment(seg)}
+                className="rounded-none px-3 capitalize"
+                data-testid={`button-segment-${seg}`}
+              >
+                {seg === 'all' ? 'Overview' : seg}
+              </Button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {selectedSegment === 'all' ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg border bg-card">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 1.3) / (projectedMetrics.cac * 0.4))}x)</p>
+                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 0.9) / (projectedMetrics.cac * 1.2))}x)</p>
+              </div>
+              <div className="p-4 rounded-lg border bg-card">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 5) / (projectedMetrics.cac * 2.5))}x)</p>
+                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(projectedMetrics.churnRate * 1.5)}%)</p>
+              </div>
+              <div className="p-4 rounded-lg border bg-card">
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Region</h4>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">North America</span> (50% of customers)</p>
+                <p className="text-xs text-muted-foreground">Growth opp: <span className="font-medium text-foreground">APAC</span> (lower CAC)</p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 font-medium">{selectedSegment === 'channel' ? 'Channel' : selectedSegment === 'tier' ? 'Tier' : 'Region'}</th>
+                    <th className="text-right py-2 px-3 font-medium">Customers</th>
+                    <th className="text-right py-2 px-3 font-medium">CAC</th>
+                    <th className="text-right py-2 px-3 font-medium">LTV</th>
+                    <th className="text-right py-2 px-3 font-medium">LTV:CAC</th>
+                    <th className="text-right py-2 px-3 font-medium">Churn</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segmentData[selectedSegment].map((seg, i) => (
+                    <tr key={seg.name} className="border-b last:border-0 hover-elevate" data-testid={`segment-row-${i}`}>
+                      <td className="py-2 px-3 font-medium">{seg.name}</td>
+                      <td className="text-right py-2 px-3 font-mono">{seg.customers}</td>
+                      <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.cac)}</td>
+                      <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.ltv)}</td>
+                      <td className="text-right py-2 px-3">
+                        <span className={`font-mono ${seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {safeToFixed(seg.ltvCac)}x
+                        </span>
+                      </td>
+                      <td className="text-right py-2 px-3">
+                        <span className={`font-mono ${seg.churn <= 3 ? 'text-emerald-500' : seg.churn <= 7 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {safeToFixed(seg.churn)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* KPI Health Status */}
         <Card className="lg:col-span-2">
@@ -1290,7 +1680,24 @@ export default function OverviewPage() {
               {kpiHealthData.map((item) => (
                 <div key={item.metric} className="flex flex-col space-y-2 p-4 rounded-lg border bg-card hover-elevate transition-all">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`info-${item.metric}`}>
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{item.tooltip.formula}</p>
+                          <div className="text-xs mt-1">
+                            <p className="text-emerald-500">Good: {item.tooltip.goodRange}</p>
+                            <p className="text-red-500">Warning: {item.tooltip.badRange}</p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     <KpiStatusIcon status={getKpiStatus(item.value, item.metric)} />
                   </div>
                   <div className="flex items-baseline space-x-2">

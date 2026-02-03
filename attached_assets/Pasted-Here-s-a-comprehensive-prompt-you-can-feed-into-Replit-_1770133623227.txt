@@ -1,0 +1,87 @@
+Here’s a comprehensive prompt you can feed into Replit’s AI (or your own development workflow) to implement the enhanced KPI dashboard features we discussed:
+
+---
+
+### 🛠️ Implementation Brief: Enhanced KPI Dashboard
+
+**Context:** You’re working on the **Fund Flow** project, which currently displays basic financial metrics like burn & runway, CAC & LTV, and margins & churn. The goal is to transform this into a richer, more actionable dashboard that tracks time-series trends, computes key ratios, segments data, and benchmarks against industry standards.
+
+---
+
+### ✅ Objectives
+
+1. **Time‑Series Visualisations**
+
+   * Replace static single‑value displays with charts that show historical trends.
+   * For each metric (Burn, Runway, CAC, LTV, Gross Margin, Churn Rate), plot at least the last 12 months, using the existing charting library (e.g., Chart.js, D3).
+   * Allow users to toggle between different timeframes (last 3/6/12 months).
+
+2. **Additional High‑Level KPIs**
+
+   * Introduce metrics such as:
+
+     * **MRR/ARR**: Monthly/Annual Recurring Revenue
+     * **Revenue Growth Rate**
+     * **Active Users**
+     * **Average Revenue per User (ARPU)**
+   * Display these on the dashboard with both current values and historical trend lines.
+
+3. **Derived Ratios**
+
+   * Compute and display **LTV/CAC** ratio. Include context for good ranges (e.g., > 3 is desirable).
+   * Add **Gross Margin / CAC** ratio or other efficiency metrics that help evaluate profitability.
+
+4. **Segment and Cohort Analysis**
+
+   * Introduce segmentation filters (e.g., acquisition channel, customer tier, region).
+   * Enable breakdown of CAC, LTV, churn, etc., by selected segment.
+   * Optional: implement cohort retention tables or charts.
+
+5. **Benchmark Integration**
+
+   * Create a data structure or API integration point to input industry benchmark values (e.g., average churn rate, benchmark LTV/CAC by sector).
+   * Display benchmarks alongside actual metrics, highlighting where you’re above or below industry norms.
+
+6. **Alert Thresholds**
+
+   * Define critical thresholds (e.g., churn > 5%, runway < 12 months).
+   * Use color coding or icons to flag metrics exceeding these thresholds.
+   * Optionally, generate notifications or highlight sections when thresholds are crossed.
+
+7. **Robust Data Pipeline**
+
+   * Review and validate existing data ingestion scripts to ensure all metrics are populated (CAC & LTV appear blank now—diagnose the cause).
+   * Add error handling and logging for missing or delayed data.
+
+8. **User Interface Enhancements**
+
+   * Organize the dashboard into clear sections (Financial Health, Growth & Efficiency, Retention & Margin).
+   * Use tooltips or info icons to explain each metric, including formulas and significance.
+   * Ensure responsiveness and dark/light theme compatibility.
+
+9. **Code Structure & Documentation**
+
+   * Modularize components—separate charts, KPI cards, and data-fetching logic into reusable components.
+   * Document new functions, especially calculations and benchmark logic.
+   * Write unit tests for key computations (e.g., LTV/CAC ratio) to catch regressions.
+
+---
+
+### 💡 Technical Notes
+
+* **Stack Assumptions:** The front‑end likely uses React. Continue using the existing styling framework; if Chart.js or similar is already integrated, extend it for the new charts.
+* **Data Sources:** If data comes from a backend or database, ensure endpoints return time‑series data. For benchmarks, either create a JSON file or configure a backend endpoint.
+* **State Management:** If you’re using Redux or Context, add a slice for metrics with actions for fetching time‑series data, benchmarks, and segment filters.
+
+---
+
+### 📌 Deliverables
+
+* Updated dashboard pages with new charts and metrics.
+* Integration of benchmark comparisons and alert thresholds.
+* Documentation (README updates) on how to add benchmarks and configure thresholds.
+* Tests verifying ratio calculations and data formatting.
+
+---
+
+Feel free to adjust this prompt according to your project’s architecture or specific requirements. It should guide Replit’s AI (or your team) to implement the features discussed and produce a more insightful and actionable KPI dashboard.
