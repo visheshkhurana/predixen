@@ -515,11 +515,14 @@ export default function OverviewPage() {
       return fallback;
     };
     
+    const runwayMonths = getValue('runway_months', getValue('runway_p50', DUMMY_BASE_DATA.runway));
+    
     return {
       mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
       arr: getValue('arr', DUMMY_BASE_DATA.arr),
       cash: getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash)),
       burnRate: Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate))),
+      runway: runwayMonths,
       cac: getValue('cac', DUMMY_BASE_DATA.cac),
       ltv: getValue('ltv', DUMMY_BASE_DATA.ltv),
       grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
