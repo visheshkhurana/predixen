@@ -29,6 +29,7 @@ from server.api import simulation_copilot as simulation_copilot_api
 from server.api import canonical_state as canonical_state_api
 from server.api import realtime as realtime_api
 from server.api import export as export_api
+from server.api import company_lookup as company_lookup_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -154,6 +155,7 @@ app.include_router(simulation_copilot_api.router)
 app.include_router(canonical_state_api.router)
 app.include_router(realtime_api.router)
 app.include_router(export_api.router)
+app.include_router(company_lookup_api.router)
 
 @app.get("/")
 def root():
