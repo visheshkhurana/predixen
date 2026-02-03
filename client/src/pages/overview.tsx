@@ -1236,122 +1236,47 @@ export default function OverviewPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 overflow-visible">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Revenue Projection</CardTitle>
-            <CardDescription>12-month forecast based on current assumptions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]" data-testid="chart-revenue-projection">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
-                    tick={{ fontSize: 12 }}
-                    className="text-muted-foreground"
-                  />
-                  <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="hsl(var(--primary))"
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                    strokeWidth={2}
-                    name="Projected Revenue"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="baseline"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeDasharray="5 5"
-                    dot={false}
-                    name="Baseline (5% growth)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* KPI Health Status */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-bold">KPI Health Status</CardTitle>
+              <CardDescription>Ground-truth financial health indicators</CardDescription>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-visible">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              KPI Health
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-kpi-health-info">
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-64" side="bottom">
-                  <div className="space-y-2">
-                    <h4 className="font-semibold">KPI Status Legend</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        <span>On Target</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-500" />
-                        <span>Needs Attention</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <XCircle className="h-4 w-4 text-red-500" />
-                        <span>Critical</span>
-                      </div>
-                    </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-            </CardTitle>
-            <CardDescription>Real-time status of key metrics</CardDescription>
+            <Badge variant="outline" className="h-6">
+              <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-500" />
+              Validated
+            </Badge>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3" data-testid="kpi-health-grid">
-              {kpiHealthData.map((kpi) => {
-                const status = getKpiStatus(kpi.value, kpi.metric);
-                return (
-                  <Card
-                    key={kpi.metric}
-                    className="overflow-visible"
-                    data-testid={`kpi-${kpi.metric}`}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-medium text-muted-foreground truncate">{kpi.name}</span>
-                        <Badge variant="secondary" data-testid={`kpi-${kpi.metric}-status`}>
-                          <KpiStatusIcon status={status} />
-                        </Badge>
-                      </div>
-                      <p className="text-sm font-semibold mt-1 font-mono" data-testid={`kpi-${kpi.metric}-value`}>
-                        {kpi.metric === 'runway' || kpi.metric === 'paybackPeriod'
-                          ? `${safeToFixed(kpi.value)} mo`
-                          : kpi.metric === 'ltv_cac'
-                          ? `${safeToFixed(kpi.value)}x`
-                          : `${safeToFixed(kpi.value)}%`}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+              {kpiHealthData.map((item) => (
+                <div key={item.metric} className="flex flex-col space-y-2 p-4 rounded-lg border bg-card hover-elevate transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
+                    <KpiStatusIcon status={getKpiStatus(item.value, item.metric)} />
+                  </div>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-2xl font-bold">
+                      {item.metric === 'runway' || item.metric === 'paybackPeriod'
+                        ? `${safeToFixed(item.value)} mo`
+                        : item.metric === 'ltv_cac' || item.metric === 'burnMultiple'
+                        ? `${safeToFixed(item.value)}x`
+                        : `${safeToFixed(item.value)}%`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all ${
+                        getKpiStatus(item.value, item.metric) === 'green' ? 'bg-emerald-500' :
+                        getKpiStatus(item.value, item.metric) === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(10, item.metric === 'churnRate' ? 100 - item.value * 5 : item.value * 1.5))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
