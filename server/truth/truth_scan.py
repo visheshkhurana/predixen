@@ -146,6 +146,7 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         
         net_burn = total_costs - latest.revenue
         metrics["net_burn"] = net_burn
+        metrics["total_expenses"] = total_costs
         metrics["is_profitable"] = net_burn < 0
         
         # Use user-entered growth rate if available, otherwise calculate from historical data
