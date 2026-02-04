@@ -126,6 +126,9 @@ function Router() {
       <Route path="/">
         {() => <AuthenticatedRoute component={OverviewPage} />}
       </Route>
+      <Route path="/overview">
+        {() => <AuthenticatedRoute component={OverviewPage} />}
+      </Route>
       <Route path="/kpi-board">
         {() => <AuthenticatedRoute component={KPIBoardPage} />}
       </Route>
