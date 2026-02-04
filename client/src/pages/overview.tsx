@@ -1801,51 +1801,6 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="overflow-visible" data-testid="sensitivity-section">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              Sensitivity Analysis
-            </CardTitle>
-            <CardDescription>Impact of assumptions on runway (months)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[200px]" data-testid="chart-sensitivity">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={sensitivityData}
-                  layout="vertical"
-                  margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    type="category"
-                    dataKey="variable"
-                    tick={{ fontSize: 11 }}
-                    width={70}
-                  />
-                  <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                    }}
-                    formatter={(value: number, name: string) => [
-                      `${value > 0 ? '+' : ''}${value} months`,
-                      name === 'positive' ? 'Improvement' : 'Degradation'
-                    ]}
-                  />
-                  <Bar dataKey="positive" fill="hsl(var(--primary))" name="Improvement" />
-                  <Bar dataKey="negative" fill="hsl(var(--destructive))" name="Degradation" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Shows runway impact when each variable improves (blue) or degrades (red)
-            </p>
-          </CardContent>
-        </Card>
       </div>
       
       <div className="space-y-4">
