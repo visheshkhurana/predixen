@@ -48,6 +48,13 @@ def create_company(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    existing = db.query(Company).filter(
+        Company.user_id == current_user.id,
+        Company.name == request.name
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A company with this name already exists")
+    
     company = Company(
         user_id=current_user.id,
         name=request.name,

@@ -150,6 +150,85 @@ async def list_providers(
     return providers
 
 
+@router.get("/catalog")
+async def list_catalog(
+    category: Optional[str] = None,
+    native_only: Optional[bool] = False,
+    implemented_only: Optional[bool] = False,
+    current_user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """
+    List connector catalog in format expected by marketplace UI.
+    """
+    providers = await list_providers(category, current_user)
+    
+    catalog = []
+    for p in providers:
+        is_implemented = not p.get("coming_soon", False)
+        
+        if implemented_only and not is_implemented:
+            continue
+        if native_only and not p.get("native", False):
+            continue
+        
+        catalog.append({
+            "id": p["id"],
+            "name": p["name"],
+            "category": p.get("category", "other"),
+            "logo_url": p.get("logo_url"),
+            "description": p.get("description", ""),
+            "long_description": p.get("long_description"),
+            "auth_type": p.get("auth_type", "api_key"),
+            "supports_webhooks": p.get("supports_webhooks", False),
+            "supports_polling": p.get("supports_polling", True),
+            "supports_incremental": p.get("supports_incremental", False),
+            "typical_refresh": p.get("typical_refresh", "daily"),
+            "native": p.get("native", False),
+            "beta": p.get("coming_soon", False),
+            "popularity_rank": p.get("popularity_rank", 99),
+            "setup_complexity": p.get("setup_complexity", "medium"),
+            "documentation_url": p.get("documentation_url"),
+            "implemented": is_implemented,
+            "adapter_key": p.get("adapter_key"),
+            "metrics_unlocked": p.get("metrics_unlocked", []),
+            "required_permissions": p.get("required_permissions", []),
+            "data_collected": p.get("data_collected", []),
+        })
+    
+    return catalog
+
+
+@router.get("/catalog/{connector_id}")
+async def get_catalog_connector(
+    connector_id: str,
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    Get single connector from catalog.
+    """
+    catalog = await list_catalog(None, False, False, current_user)
+    for c in catalog:
+        if c["id"] == connector_id:
+            return c
+    raise HTTPException(status_code=404, detail="Connector not found")
+
+
+@router.get("/categories")
+async def list_categories(
+    current_user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    """
+    List connector categories with counts.
+    """
+    catalog = await list_catalog(None, False, False, current_user)
+    category_counts: Dict[str, int] = {}
+    for c in catalog:
+        cat = c.get("category", "other")
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
+    return [{"name": name, "count": count} for name, count in category_counts.items()]
+
+
 @router.get("/companies/{company_id}/status")
 async def get_connector_status(
     company_id: int,
