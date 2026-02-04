@@ -50,7 +50,8 @@ import {
   PanelRightClose,
   PanelRight,
   Menu,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
@@ -349,6 +350,25 @@ interface ScenarioAssumptions {
   hiringRate: number;
   burnReduction: number;
 }
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const CONVERSATIONS_STORAGE_KEY = 'copilot_conversations_';
+
+const generateConversationTitle = (messages: Message[]): string => {
+  const firstUserMessage = messages.find(m => m.role === 'user');
+  if (firstUserMessage) {
+    const title = firstUserMessage.content.slice(0, 40);
+    return title.length < firstUserMessage.content.length ? `${title}...` : title;
+  }
+  return 'New Conversation';
+};
 
 function RunwayBandChart({ chartData }: { chartData: NonNullable<CopilotApiResponse['simulation_result']>['chart_data'] }) {
   if (!chartData?.runway?.metrics) return null;
@@ -1021,13 +1041,120 @@ export default function CopilotPage() {
   const latestScenario = scenarios?.[0];
   const { data: simulation } = useSimulation(latestScenario?.id || null);
   
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: "I'm your AI financial advisor powered by a multi-agent system. I can analyze your financials (CFO Agent), research your market (Market Agent), and develop strategy (Strategy Agent). What would you like to explore?",
-      timestamp: new Date(),
-    },
-  ]);
+  const createDefaultMessage = (): Message => ({
+    role: 'assistant',
+    content: "I'm your AI financial advisor powered by a multi-agent system. I can analyze your financials (CFO Agent), research your market (Market Agent), and develop strategy (Strategy Agent). What would you like to explore?",
+    timestamp: new Date(),
+  });
+  
+  const createNewConversation = (): Conversation => ({
+    id: crypto.randomUUID(),
+    title: 'New Conversation',
+    messages: [createDefaultMessage()],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  
+  const loadConversationsFromStorage = (companyId: number): Conversation[] => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(CONVERSATIONS_STORAGE_KEY + companyId);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          return parsed.map((c: any) => ({
+            ...c,
+            createdAt: new Date(c.createdAt),
+            updatedAt: new Date(c.updatedAt),
+            messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })),
+          }));
+        } catch (e) {
+          console.error('Failed to parse conversations', e);
+        }
+      }
+    }
+    return [];
+  };
+  
+  const [conversations, setConversations] = useState<Conversation[]>([createNewConversation()]);
+  const [activeConversationId, setActiveConversationId] = useState<string>(conversations[0]?.id || '');
+  const [showConversationSidebar, setShowConversationSidebar] = useState(true);
+  
+  useEffect(() => {
+    if (currentCompany?.id) {
+      const loaded = loadConversationsFromStorage(currentCompany.id);
+      if (loaded.length > 0) {
+        setConversations(loaded);
+        setActiveConversationId(loaded[0].id);
+      } else {
+        const newConv = createNewConversation();
+        setConversations([newConv]);
+        setActiveConversationId(newConv.id);
+      }
+    }
+  }, [currentCompany?.id]);
+  
+  const activeConversation = useMemo(() => {
+    const found = conversations.find(c => c.id === activeConversationId);
+    if (found) return found;
+    if (conversations.length > 0) {
+      setActiveConversationId(conversations[0].id);
+      return conversations[0];
+    }
+    return null;
+  }, [conversations, activeConversationId]);
+  
+  const messages = activeConversation?.messages || [createDefaultMessage()];
+  
+  const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
+    setConversations(prevConversations => {
+      const targetId = activeConversationId || prevConversations[0]?.id;
+      if (!targetId) return prevConversations;
+      
+      return prevConversations.map(conv => {
+        if (conv.id === targetId) {
+          const newMessages = typeof updater === 'function' ? updater(conv.messages) : updater;
+          return {
+            ...conv,
+            messages: newMessages,
+            title: generateConversationTitle(newMessages),
+            updatedAt: new Date(),
+          };
+        }
+        return conv;
+      });
+    });
+  };
+  
+  useEffect(() => {
+    if (currentCompany?.id && conversations.length > 0) {
+      localStorage.setItem(
+        CONVERSATIONS_STORAGE_KEY + currentCompany.id,
+        JSON.stringify(conversations)
+      );
+    }
+  }, [conversations, currentCompany?.id]);
+  
+  const handleNewConversation = () => {
+    const newConv = createNewConversation();
+    setConversations(prev => [newConv, ...prev]);
+    setActiveConversationId(newConv.id);
+  };
+  
+  const handleDeleteConversation = (id: string) => {
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      if (filtered.length === 0) {
+        const newConv = createNewConversation();
+        setActiveConversationId(newConv.id);
+        return [newConv];
+      }
+      if (id === activeConversationId) {
+        setActiveConversationId(filtered[0].id);
+      }
+      return filtered;
+    });
+  };
+  
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [useApiMode, setUseApiMode] = useState(true);
@@ -1367,11 +1494,76 @@ export default function CopilotPage() {
   
   return (
     <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
+      {/* Conversation History Sidebar */}
+      {showConversationSidebar && (
+        <div className="w-64 border-r border-border/50 flex flex-col bg-muted/30">
+          <div className="p-3 border-b border-border/50 flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">Conversations</span>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={handleNewConversation}
+              className="h-7 px-2 text-xs"
+              data-testid="button-new-conversation"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              New
+            </Button>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-2 space-y-1">
+              {conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  className={`group flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm hover-elevate ${
+                    conv.id === activeConversationId 
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setActiveConversationId(conv.id)}
+                  data-testid={`conversation-${conv.id}`}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  <div className="flex-1 truncate">
+                    <p className="truncate text-xs font-medium">{conv.title}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(conv.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {conversations.length > 1 && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConversation(conv.id);
+                      }}
+                      data-testid={`delete-conversation-${conv.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
+      
       {/* Main Chat Container - Centered */}
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${isPanelOpen ? 'lg:mr-80' : ''}`}>
         {/* Minimal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={() => setShowConversationSidebar(!showConversationSidebar)}
+              data-testid="button-toggle-sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="font-medium">Copilot</span>
             <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30" data-testid="model-indicator">
