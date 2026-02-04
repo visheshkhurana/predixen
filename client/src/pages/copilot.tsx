@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1034,12 +1035,21 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
 }
 
 export default function CopilotPage() {
+  const [, setLocation] = useLocation();
   const { currentCompany, token } = useFounderStore();
   const { toast } = useToast();
   const { data: truthScan, isLoading: truthLoading } = useTruthScan(currentCompany?.id || null);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const latestScenario = scenarios?.[0];
   const { data: simulation } = useSimulation(latestScenario?.id || null);
+  
+  const handleSuggestionAction = (action: string) => {
+    toast({
+      title: 'Opening Scenarios',
+      description: `Running ${action.replace(/_/g, ' ')} scenario...`,
+    });
+    setLocation('/scenarios');
+  };
   
   const createDefaultMessage = (): Message => ({
     role: 'assistant',
@@ -1661,6 +1671,7 @@ export default function CopilotPage() {
                       size="sm"
                       variant="outline"
                       className="mt-3"
+                      onClick={() => handleSuggestionAction(message.suggestion!.action)}
                       data-testid={`button-suggestion-${i}`}
                     >
                       <Play className="h-3 w-3 mr-1" />

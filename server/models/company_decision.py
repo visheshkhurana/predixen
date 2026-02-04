@@ -63,14 +63,23 @@ class CompanyScenario(Base):
     def to_dict(self):
         outputs = self.outputs_json or {}
         has_simulation = bool(outputs and (outputs.get('runway') or outputs.get('survival') or outputs.get('summary')))
+        latest_sim = None
+        if has_simulation:
+            latest_sim = {
+                "runway": outputs.get('runway'),
+                "survival": outputs.get('survival'),
+                "summary": outputs.get('summary'),
+            }
+        assumptions = self.assumptions_json or {}
         return {
             "id": str(self.id),
             "company_id": self.company_id,
             "name": self.name,
             "base_scenario_id": str(self.base_scenario_id) if self.base_scenario_id else None,
-            "assumptions": self.assumptions_json or {},
+            "assumptions": assumptions,
             "outputs": outputs,
-            "latest_simulation": has_simulation,
+            "latest_simulation": latest_sim,
+            "tags": assumptions.get('tags', []),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

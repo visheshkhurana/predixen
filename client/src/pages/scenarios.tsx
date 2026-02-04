@@ -774,7 +774,14 @@ export default function ScenariosPage() {
                         className="flex items-center justify-between gap-4 p-4 rounded-lg border hover-elevate"
                       >
                         <div className="flex-1 min-w-0">
-                          <span className="font-medium">{s.name}</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{s.name}</span>
+                            {s.created_at && (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(s.created_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
                           {s.tags && s.tags.length > 0 && (
                             <div className="flex gap-1 mt-1 flex-wrap">
                               {s.tags.map((tag: string) => (

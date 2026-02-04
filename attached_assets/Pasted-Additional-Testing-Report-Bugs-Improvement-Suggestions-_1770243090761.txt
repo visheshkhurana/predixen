@@ -1,0 +1,123 @@
+Additional Testing Report - Bugs & Improvement Suggestions
+🔴 New Critical Bugs Found
+1. Action Buttons Don't Work
+The "Run burn cut scenario" button from Copilot does nothing:
+
+No navigation
+No loading state
+No feedback
+User left wondering if it worked
+
+Fix: Connect action buttons to actual functionality, add loading states and success/error feedback.
+2. Scenario Comparison Shows All N/A
+The Scenario Comparison table shows "N/A" for every value:
+ScenarioRunwaySurvivalEnd CashMonthly BurnAll 6 scenariosN/AN/A%N/AN/A
+Fix: Populate comparison table with actual scenario data.
+3. Duplicate Companies in Switcher
+The company dropdown shows:
+
+"Test Company" appears 2x
+"TechFlow AI" appears 3x
+
+Fix: Add unique constraint on company names per user, or de-duplicate display.
+4. Duplicate Saved Scenarios
+"Growth Push" appears 3 times in saved scenarios with no way to differentiate them.
+Fix:
+
+Add timestamps
+Require unique names or auto-append numbers
+Allow editing/deleting from list view
+
+5. Baseline Values Change Randomly
+The simulation baseline changed between page visits:
+VisitBurnRunwayFirst$30K16.7 moSecond$20K25.0 mo
+Fix: Ensure baseline values are deterministic and sourced from a single location.
+6. Marketplace vs Integrations Mismatch
+
+Integrations page: Shows QuickBooks, Xero, Salesforce, HubSpot, etc.
+Marketplace page: Shows "0 Available Connectors"
+
+Fix: Sync marketplace with integrations data or clarify the difference.
+
+🟡 Medium Priority Bugs
+7. Docs Link Returns Error
+Help & Docs link (docs.predixen.com) shows an error page.
+Fix: Ensure documentation site is live and accessible.
+8. Saved Scenarios Missing Details
+The saved scenarios list only shows:
+
+Name
+"Run" button
+
+Missing:
+
+Created date
+Key metrics (runway, burn change)
+Edit/Delete options
+Description
+
+Fix: Add hover cards or expandable details.
+9. No Scenario Management
+Users cannot:
+
+Delete scenarios
+Rename scenarios
+Clone scenarios
+Archive scenarios
+
+Fix: Add scenario management dropdown/modal.
+
+✅ Features That Work Well
+1. Theme Toggle
+
+Light/dark mode switches seamlessly
+Both themes look polished
+
+2. Integration Connection Flow
+
+Clear data import list
+Permission transparency
+Security messaging ("read-only access")
+
+3. Goals & Assumptions Tab
+
+Target runway setting
+Growth scenario dropdown with descriptions
+Funding target and timeline
+
+4. Filter by Tag
+
+Useful categorization (baseline, growth, cost-cutting, pricing, fundraising, optimistic, pessimistic)
+
+5. Data Import Options
+
+PDF upload (10MB limit)
+Excel upload (20MB limit, .xlsx/.xls)
+Format guides available
+
+
+🚀 Improvement Suggestions
+UX Improvements
+AreaCurrentSuggestedSaved ScenariosName + Run button onlyAdd date, metrics preview, edit/deleteCompany SwitcherLong scrollable listAdd search, recent companies, "+" to createScenario NamesCan create duplicatesEnforce uniqueness or auto-numberNavigationNo breadcrumbsAdd breadcrumb trail for wizard stepsError StatesSilent failuresAdd toast notifications for all actions
+Data Management
+IssueFixNo bulk deleteAdd checkbox selection + bulk actionsNo exportAllow CSV/PDF export of scenariosNo version historyTrack scenario changes over timeNo undoAdd undo for accidental deletions
+Comparison Features
+NeedImplementationVisual comparisonSide-by-side runway chartsWhat-if analysis"If we did X instead of Y" toggleRisk highlightingColor-code risky assumptionsConfidence bandsShow P10/P50/P90 in comparison
+Collaboration
+FeatureValueScenario sharingShare link with view-only accessCommentsAdd notes to scenariosTeam activitySee who created/modified scenariosApproval workflowMark scenarios as "draft" or "approved"
+
+Summary of All Bugs Found
+#BugSeverityLocation1Data inconsistency across pagesCriticalAll pages2AI Assistant errors silentlyHighData Input3Action buttons non-functionalHighCopilot4Comparison table shows N/AHighSimulation5Duplicate companiesMediumCompany switcher6Duplicate scenarios allowedMediumSaved Scenarios7Baseline values change randomlyHighSimulation8Marketplace shows 0 connectorsMediumMarketplace9Input validation strips negativesMediumSimulation inputs10Month input concatenatesMediumSimulation inputs11"Generate Decisions" does nothingHighDecisions page12Docs link brokenLowHelp & Docs13No scenario managementMediumSaved Scenarios14Charts show "Waiting for data"MediumKPI Board
+
+Prioritized Fix Order
+
+Fix data consistency - Single source of truth for all metrics
+Connect action buttons - Make "Run scenario" actually run
+Fix comparison table - Show actual data
+Add scenario management - Edit/delete/clone
+Input validation - Handle negative numbers, prevent concatenation
+Error handling - Toast notifications for all actions
+Prevent duplicates - Companies and scenarios
+Fix external links - Docs site
+
+Bottom Line: The product has strong bones and excellent features (Copilot, Templates, Integrations), but the data consistency issues and non-functional buttons significantly undermine user trust. I'd recommend a "stabilization sprint" focused purely on fixing these core issues before adding new features.
