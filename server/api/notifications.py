@@ -292,8 +292,12 @@ async def send_digest(request: DigestRequest):
         )
 
 
+class TestDigestRequest(BaseModel):
+    email: EmailStr
+
+
 @router.post("/digest/test")
-async def send_test_digest(email: EmailStr):
+async def send_test_digest(request: TestDigestRequest):
     """
     Send a test digest email with sample data.
     Useful for previewing the digest format.
@@ -319,7 +323,7 @@ async def send_test_digest(email: EmailStr):
     ]
     
     success = await send_weekly_digest(
-        to_email=email,
+        to_email=request.email,
         company_name="Demo Company",
         metrics=test_metrics,
         alerts=test_alerts,
@@ -329,7 +333,7 @@ async def send_test_digest(email: EmailStr):
     if success:
         return {
             "success": True,
-            "message": f"Test digest sent to {email}"
+            "message": f"Test digest sent to {request.email}"
         }
     else:
         raise HTTPException(
