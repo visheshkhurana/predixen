@@ -1,0 +1,184 @@
+Comprehensive Product Feedback Report
+Predixen Financial Simulator - Paying User Perspective
+
+Executive Summary
+As a paying user, I tested all major features of the Predixen platform. While the product has impressive capabilities and vision, there are several critical issues that would frustrate paying customers and reduce trust in the platform.
+
+🔴 Critical Issues (Fix Immediately)
+1. Data Inconsistency Across Pages
+This is the #1 issue that would cause a paying customer to churn.
+PageMRRCashBurnRunwayData Input$82,500$764,800-$3,800 (profitable!)InfiniteOverview$11,000$0$52,0000.0 moKPI Board$0$0$018.0 moSimulation—$500,000$30,00016.7 moTruth ScanN/AN/AN/A0.0 mo (Critical)
+Impact: Users cannot trust ANY data they see. The Risk Alerts show "Cash Runway Critical" when the actual company data shows profitability.
+Recommendation:
+
+Create a single source of truth that propagates to all pages
+Show clear indicator of data freshness/source
+Add "Sync Data" button with last synced timestamp
+
+2. AI Assistant Errors
+The AI Assistant in the Data Input sidebar returned "Sorry, I couldn't process your request. Please try again." This fails silently with no retry or alternative.
+Recommendation:
+
+Show helpful error messages with specific next steps
+Provide fallback to pre-built queries
+Log errors for engineering review
+
+3. Empty States Without Guidance
+Multiple pages show "N/A" or "Waiting for live data..." without explaining what data is needed or how to fix it.
+Examples:
+
+Truth Scan: Most metrics show N/A
+KPI Board: "Waiting for live data..."
+Burn & Runway charts: Empty
+
+Recommendation:
+
+Add contextual help: "This metric requires X data. Go to Data Input → Financials to add it"
+Show sample/demo data with a banner "This is demo data - connect your financials"
+
+
+🟡 Medium Priority Issues
+4. Simulation Doesn't Use Real Data
+The simulator uses hardcoded demo values ($500K cash, $30K burn) instead of the actual company data ($764K cash, profitable).
+Recommendation:
+
+Default to actual company data when available
+Add toggle: "Use my data" vs "Use demo data"
+Show warning: "Running simulation with demo data. Connect financials for accurate results."
+
+5. Input Validation Problems
+
+Negative numbers get stripped ("-20" becomes "020")
+Month input concatenated instead of replaced ("6" became "16")
+
+Recommendation:
+
+Proper input masking
+Validate ranges (growth: -100% to +500%, months: 1-60)
+Clear field on focus, not append
+
+6. Generate Decisions Button Non-Functional
+Clicking "Generate Decisions" on the Decisions page does nothing visible - no loading state, no error, no feedback.
+Recommendation:
+
+Add loading spinner
+Show toast notification on success/failure
+If prerequisites not met, explain what's needed
+
+7. Confidence Score = 0
+The "Low Confidence (0)" indicator suggests unreliable data, but there's no clear explanation of how to improve it.
+Recommendation:
+
+Add tooltip explaining scoring methodology
+Create checklist: "Upload bank statements (+20), Connect accounting software (+30), etc."
+Gamify data completeness
+
+
+🟢 Positive Features (Keep & Enhance)
+1. Copilot is Excellent ⭐
+The multi-agent AI assistant provided contextual, actionable recommendations with:
+
+Specific numbers tied to my data
+Referenced metrics with source attribution
+One-click action buttons ("Run burn cut scenario")
+Feedback mechanism (thumbs up/down)
+
+Enhancement:
+
+Make Copilot more prominent (it's buried in nav)
+Add Copilot widget to other pages
+Enable voice input
+
+2. Strategic Scenario Templates
+10+ pre-built templates covering real startup scenarios:
+
+Baseline, Cost Cutting, Path to Profitability
+Aggressive Growth, Market Entry APAC
+Fundraise Scenario, PLG, Enterprise Focus
+
+Enhancement:
+
+Allow saving custom templates
+Share templates across team
+Show which templates other similar companies use
+
+3. Scenario Builder Wizard
+The 5-step wizard (Template → Parameters → Fundraising → Events → Review) is intuitive.
+Enhancement:
+
+Add progress save (currently loses work if navigating away)
+Allow skipping steps
+Add "Quick Simulate" for experienced users
+
+4. Risk Alerts System
+Automatic threshold-based alerts are valuable:
+
+Cash Runway Critical (< 6 months)
+High Burn Rate (> 3x MRR)
+Cash Balance Critical (< $100K)
+
+Enhancement:
+
+Allow customizing thresholds
+Add email/Slack notifications
+Severity-based sorting
+
+5. Multi-LLM Copilot Architecture
+CFO Agent, Market Agent, Strategy Agent approach is sophisticated and valuable.
+Enhancement:
+
+Show which agent is responding
+Allow selecting agent mode
+Add "Debate" mode where agents discuss trade-offs
+
+
+Feature Requests (Paying User Wishlist)
+1. Integration with Accounting Software
+
+QuickBooks, Xero, FreshBooks sync
+Automatic data refresh
+Historical trend import
+
+2. Scenario Comparison Dashboard
+
+Side-by-side comparison of 3+ scenarios
+Overlay runway charts
+Export comparison to PDF for board meetings
+
+3. Monte Carlo Visualization
+The system mentions "1,000 scenarios" but doesn't show:
+
+Distribution of outcomes
+P10/P50/P90 confidence intervals
+Sensitivity tornado charts
+
+4. Team Collaboration
+
+Shared scenarios with comments
+@mentions in Copilot
+Approval workflows for decisions
+
+5. Mobile App / Email Digest
+
+Weekly runway email summary
+Push notification when runway drops below threshold
+Mobile-friendly dashboard
+
+6. Investor Sharing
+
+Generate read-only investor view
+Automated monthly update emails
+Data room for due diligence
+
+
+Calculation Accuracy Summary
+Scenario TypeAccuracyNotesBasic Runway✅ ExcellentCash ÷ Burn exactBurn Reduction✅ GoodWithin 3% varianceGrowth Scenarios✅ GoodAppropriately conservativeFundraising Impact✅ GoodCorrectly extends runwayDynamic Revenue⚠️ UnclearPositive bias in long projections
+The core calculation engine is mathematically sound. Variances in complex scenarios reflect reasonable modeling of revenue growth over time.
+
+Prioritized Recommendations
+PriorityIssueEffortImpactP0Fix data inconsistency across pagesMediumCriticalP0Sync simulation with actual dataLowHighP1Fix input validation bugsLowMediumP1Add meaningful empty statesLowHighP1Make AI assistant reliableMediumHighP2Add Monte Carlo visualizationMediumMediumP2Improve confidence score UXLowMediumP3Accounting software integrationHighHighP3Team collaboration featuresHighMedium
+
+Bottom Line
+Would I continue paying for this product?
+Conditionally yes - if the data consistency issues are fixed. The Copilot alone provides tremendous value, and the scenario modeling is powerful. However, I cannot make real business decisions when different pages show contradictory financial data.
+Recommendation: Before adding new features, establish a unified data layer that all pages consume. This is foundational to user trust.

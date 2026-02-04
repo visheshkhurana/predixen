@@ -140,6 +140,22 @@ export const dashboardKPIsSchema = z.object({
     priority: z.enum(["high", "medium", "low"]),
     action: z.string().optional(),
   })),
+  missingData: z.array(z.object({
+    field: z.string(),
+    message: z.string(),
+  })).optional(),
+  dataSource: z.object({
+    last_updated: z.string().nullable(),
+    source: z.string(),
+  }).nullable().optional(),
+  metricDefinitions: z.record(z.object({
+    name: z.string(),
+    formula: z.string(),
+    description: z.string(),
+    unit: z.string(),
+    data_sources: z.array(z.string()),
+  })).optional(),
+  period: z.string().optional(),
 });
 
 export type DashboardKPIs = z.infer<typeof dashboardKPIsSchema>;

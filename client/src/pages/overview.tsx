@@ -853,7 +853,7 @@ export default function OverviewPage() {
     await runTruthScanMutation.mutateAsync(currentCompany.id);
   };
 
-  const riskAlerts = useMemo(() => getRiskAlerts(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
+  const riskAlerts = useMemo(() => getRiskAlerts(baseData, assumptions), [baseData, assumptions]);
   const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
   
   const getBenchmarkStatus = (value: number, benchmark: { p25: number; p50: number; p75: number; direction: string }) => {
@@ -1202,7 +1202,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <MetricCard
           title="MRR"
-          value={formatCurrency(projectedMetrics.mrr)}
+          value={formatCurrency(baseData.mrr)}
           subtitle="Monthly Recurring Revenue"
           trend="up"
           trendValue={`+${assumptions.growthRate}%`}
@@ -1217,7 +1217,7 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="ARR"
-          value={formatCurrency(projectedMetrics.arr)}
+          value={formatCurrency(baseData.arr)}
           subtitle="Annual Recurring Revenue"
           trend="up"
           testId="metric-arr"
@@ -1232,9 +1232,9 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="Cash on Hand"
-          value={formatCurrency(projectedMetrics.cash)}
-          subtitle={`Runway: ${safeToFixed(projectedMetrics.runway)} mo`}
-          variant={projectedMetrics.runway < 6 ? 'danger' : projectedMetrics.runway < 12 ? 'warning' : 'success'}
+          value={formatCurrency(baseData.cash)}
+          subtitle={`Runway: ${safeToFixed(baseData.runway)} mo`}
+          variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
           testId="metric-cash"
           onClick={() => setSelectedDrillDownMetric('cash')}
           provenance={{
@@ -1246,7 +1246,7 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="Burn Rate"
-          value={formatCurrency(projectedMetrics.burnRate)}
+          value={formatCurrency(baseData.burnRate)}
           subtitle="/month"
           onClick={() => setSelectedDrillDownMetric('burnRate')}
           testId="metric-burn-rate"
@@ -1260,7 +1260,7 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="CAC"
-          value={formatCurrency(projectedMetrics.cac)}
+          value={formatCurrency(baseData.cac)}
           subtitle="Cost to Acquire"
           testId="metric-cac"
           onClick={() => setSelectedDrillDownMetric('cac')}
@@ -1274,9 +1274,9 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="LTV"
-          value={formatCurrency(projectedMetrics.ltv)}
-          subtitle={`LTV:CAC = ${safeToFixed(projectedMetrics.ltvCacRatio)}x`}
-          variant={projectedMetrics.ltvCacRatio < 3 ? 'warning' : 'success'}
+          value={formatCurrency(baseData.ltv)}
+          subtitle={`LTV:CAC = ${safeToFixed(baseData.ltvCacRatio)}x`}
+          variant={baseData.ltvCacRatio < 3 ? 'warning' : 'success'}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
           provenance={{
