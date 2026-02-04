@@ -33,7 +33,7 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -159,35 +159,47 @@ export default function ScenariosPage() {
     );
   }, [scenarios, tagFilter]);
 
-  const baseMetrics = useMemo(() => {
-    if (!currentCompany) return undefined;
+  const { baseMetrics, isUsingDemoData } = useMemo(() => {
+    if (!currentCompany) return { baseMetrics: undefined, isUsingDemoData: false };
     
     const metrics = truthScan?.metrics || {};
-    const extractValue = (m: any, fallback: number) => {
+    const extractValue = (m: any, fallback: number | null) => {
       if (m === undefined || m === null) return fallback;
       if (typeof m === 'object' && 'value' in m) return m.value;
       if (typeof m === 'number') return m;
       return fallback;
     };
     
-    const cashOnHand = extractValue(metrics.cash_balance, 500000);
-    const monthlyRevenue = extractValue(metrics.monthly_revenue, 50000);
-    const monthlyExpenses = extractValue(metrics.total_expenses, 80000);
-    const grossMargin = extractValue(metrics.gross_margin, 60);
-    const growthRate = extractValue(metrics.revenue_growth_mom, 10);
-    const churnRate = extractValue(metrics.churn_rate, 3);
+    // Check if we have actual data from Truth Scan
+    const hasCashData = extractValue(metrics.cash_balance, null) !== null;
+    const hasRevenueData = extractValue(metrics.monthly_revenue, null) !== null;
+    const hasExpenseData = extractValue(metrics.total_expenses, null) !== null || extractValue(metrics.net_burn, null) !== null;
+    const hasRealData = hasCashData && (hasRevenueData || hasExpenseData);
+    
+    const cashOnHand = extractValue(metrics.cash_balance, 500000)!;
+    const monthlyRevenue = extractValue(metrics.monthly_revenue, 50000)!;
+    // Use total_expenses if available, otherwise calculate from net_burn + revenue
+    const netBurnValue = extractValue(metrics.net_burn, null);
+    const totalExpensesValue = extractValue(metrics.total_expenses, null);
+    const monthlyExpenses = totalExpensesValue ?? (netBurnValue !== null ? netBurnValue + monthlyRevenue : 80000);
+    const grossMargin = extractValue(metrics.gross_margin, 60)!;
+    const growthRate = extractValue(metrics.revenue_growth_mom, 10)!;
+    const churnRate = extractValue(metrics.churn_rate, 3)!;
     
     const monthlyBurn = monthlyExpenses - monthlyRevenue;
     const currentRunway = monthlyBurn > 0 ? cashOnHand / monthlyBurn : 999;
     
     return {
-      cashOnHand,
-      monthlyExpenses,
-      monthlyRevenue,
-      currentRunway,
-      growthRate,
-      grossMargin,
-      churnRate,
+      baseMetrics: {
+        cashOnHand,
+        monthlyExpenses,
+        monthlyRevenue,
+        currentRunway,
+        growthRate,
+        grossMargin,
+        churnRate,
+      },
+      isUsingDemoData: !hasRealData,
     };
   }, [currentCompany, truthScan]);
   
@@ -602,6 +614,34 @@ export default function ScenariosPage() {
         </Card>
       )}
       
+      {/* Demo Data Warning Banner */}
+      {isUsingDemoData && (
+        <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 mb-6" data-testid="demo-data-warning">
+          <CardContent className="flex items-start gap-3 p-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-amber-800 dark:text-amber-200">Simulation Using Demo Data</h4>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                The simulation is currently using placeholder values. For accurate projections based on your actual financial data, 
+                please enter your company's financials in the Data Input section.
+              </p>
+              <div className="flex gap-2 mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="border-amber-600 text-amber-700 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  onClick={() => window.location.href = '/data-input'}
+                  data-testid="button-connect-financials"
+                >
+                  <ExternalLink className="h-3 w-3 mr-1.5" />
+                  Connect Your Financials
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs value={activeTab} onValueChange={(value) => {
         // Prevent switching to disabled tabs
         const isTabDisabled = ['results', 'compare', 'enhanced', 'sensitivity'].includes(value) && !hasRunScenario && !hasSimulationResults;
