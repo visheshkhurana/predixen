@@ -1,0 +1,570 @@
+COMPREHENSIVE BUG REPORT & DISCREPANCIES FOR DEVELOPERS
+Executive Summary
+During comprehensive testing of the Predixen application with the CloudScale Analytics demo company, several discrepancies and bugs were identified between data entered in the Data Input module and values calculated/displayed in the Truth Scan module. This report documents all issues with reproduction steps and expected behavior.
+
+CRITICAL ISSUES
+ISSUE #1: Revenue Data Mismatch Between Modules
+Severity: 🔴 HIGH
+Category: Data Consistency / Calculation Error
+Status: OPEN
+Problem Description
+Data entered in the Data Input > Financials tab does not match the revenue displayed in the Truth Scan > Key Metrics section.
+Reproduction Steps
+
+Navigate to Data Input > Financials tab
+Enter Monthly Revenue: $82,500
+Click "Save All Data"
+Navigate to Truth Scan
+Observe "Monthly Revenue" in Key Metrics section
+
+Expected Behavior
+Truth Scan should display: $82,500/month
+Actual Behavior
+Truth Scan displays: $75,000/month
+Data Variance
+Entered Value:      $82,500
+Displayed Value:    $75,000
+Discrepancy:        $7,500 (9.1% difference)
+Root Cause Analysis Required
+
+Is the Truth Scan recalculating from historical data?
+Is there a different data source being used?
+Is there rounding/normalization happening?
+Is the API call returning different data than submitted?
+
+Affected Calculations
+This discrepancy cascades to:
+
+MRR (shows $75K instead of $82.5K)
+ARR (shows $900K instead of $990K)
+Net Burn calculations
+Runway projections
+Unit economics (ARPU, LTV, CAC ratios)
+
+Development Notes
+
+Check calculateMRR() function
+Review data synchronization between /data endpoint and /truth endpoint
+Verify calculation formula in Truth Scan module
+Check if historical average is being used instead of current month
+
+
+ISSUE #2: Total Monthly Expenses Mismatch
+Severity: 🔴 HIGH
+Category: Data Consistency / Missing Logic
+Status: OPEN
+Problem Description
+Total Monthly Expenses entered in Data Input form does not match the sum of expenses calculated and displayed in Truth Scan's "Monthly Burn Breakdown".
+Reproduction Steps
+
+Navigate to Data Input > Financials tab
+Enter in Expense Breakdown:
+
+Payroll: $41,000
+Marketing: $10,200
+Operating: $11,000
+COGS: $16,500
+Other: $0
+
+
+System auto-calculates Total Monthly Expenses: $78,700
+Click "Save All Data"
+Navigate to Truth Scan > Key Metrics
+Scroll to "Monthly Burn Breakdown"
+
+Expected Behavior
+Monthly Burn Breakdown should total: $78,700 matching the entered values
+Actual Behavior
+Monthly Burn Breakdown displays: $93,000 with additional line items:
+Payroll:      $45.0K (48%)
+G&A:          $15.5K (17%)     [NOT ENTERED]
+COGS:         $15.0K (16%)
+Marketing:    $10.0K (11%)     [Discrepancy: entered $10.2K]
+R&D:          $7.5K  (8%)      [NOT ENTERED]
+────────────────────────────
+Total:        $93.0K
+Data Variance Summary
+Entered Total:         $78,700
+Displayed Total:       $93,000
+Difference:            $14,300 (18.1% increase)
+
+New/Modified Categories in Truth Scan:
+├── G&A (added):       +$15,500
+├── R&D (added):       +$7,500
+├── Marketing (mod):    $10,200 → $10,000 (-$200)
+└── Payroll (mod):     $41,000 → $45,000 (+$4,000)
+Root Cause Analysis Required
+
+Where is the G&A expense of $15,500 derived from?
+Where is the R&D expense of $7,500 derived from?
+Is the system applying expense ratios based on industry benchmarks?
+Are these derived from revenue percentages?
+Is there automatic allocation logic that isn't documented?
+
+Impact
+
+Burn rate calculations are inflated by $14,300/month
+Runway projections are pessimistic
+Profitability assessment is skewed
+User sees different numbers than they entered
+
+Development Notes
+
+Search for expense allocation or benchmarking logic
+Check calculateBurnBreakdown() function
+Review if G&A and R&D are being automatically added
+Verify formula in expense category normalization
+Document any automatic expense category additions
+
+
+ISSUE #3: Monthly Revenue Growth Rate Not Used in Calculations
+Severity: 🔴 HIGH
+Category: Input Not Applied / Calculation Logic Error
+Status: OPEN
+Problem Description
+The "Monthly Growth Rate (%)" field in Data Input is entered but not reflected in the calculated growth metrics in Truth Scan.
+Reproduction Steps
+
+Navigate to Data Input > Financials tab
+Set Monthly Growth Rate: 6%
+Click "Save All Data"
+Navigate to Truth Scan > Key Metrics
+Find "Revenue Growth" metric
+
+Expected Behavior
+Revenue Growth should reflect: +6% MoM (Month-over-Month)
+Actual Behavior
+Revenue Growth displays: -9.1% MoM
+Data Discrepancy
+User Entered:         +6% MoM
+System Calculated:    -9.1% MoM
+Discrepancy:          15.1 percentage points
+Direction Mismatch:   User entered positive growth, system shows negative
+Root Cause Analysis Required
+
+Is the system calculating growth from historical data instead of using entered value?
+Is the system comparing current month to previous month?
+Is there a time-series calculation overriding manual entry?
+Is the growth rate field only for UI display and not used in calculations?
+
+Questions for Development Team
+
+Should the Monthly Growth Rate field be used in Truth Scan calculations?
+Is this field supposed to be a projection or an actual measured value?
+Where is the -9.1% figure coming from?
+Is this calculated from historical month-over-month comparison?
+Should user-entered growth rate override automatic calculations?
+
+Development Notes
+
+Check calculateRevenueGrowth() function
+Verify if monthlyGrowthRate parameter is being passed to calculation
+Look for historical averaging logic that might override manual input
+Consider adding logic to prioritize user input over automatic calculation
+
+
+MAJOR ISSUES
+ISSUE #4: Discrepancy in COGS Expense Amount
+Severity: 🟠 MEDIUM
+Category: Data Variance / Calculation Precision
+Status: OPEN
+Problem Description
+COGS (Cost of Goods Sold) value differs between entered data and displayed burn breakdown.
+Reproduction Steps
+
+Data Input > Financials tab
+Enter COGS: $16,500
+Save and navigate to Truth Scan
+View Monthly Burn Breakdown
+
+Expected Behavior
+COGS in Monthly Burn should show: $16,500
+Actual Behavior
+COGS in Monthly Burn shows: $15,000
+Data Discrepancy
+Entered:      $16,500
+Displayed:    $15,000
+Variance:     $1,500 (9.1% reduction)
+Root Cause Analysis Required
+
+Is COGS being recalculated as percentage of revenue?
+Is there rounding applied?
+Is this part of the larger expense allocation issue (Issue #2)?
+Is the value derived from gross margin calculation?
+
+Development Notes
+
+Check if COGS is being recalculated from Gross Margin × Revenue
+Verify calculateCOGS() function
+Look for percentage-based allocation logic
+
+
+ISSUE #5: Marketing Expense Variance
+Severity: 🟠 MEDIUM
+Category: Data Variance / Minor Calculation Error
+Status: OPEN
+Problem Description
+Marketing expense differs by $200 between entered value and displayed breakdown.
+Reproduction Steps
+
+Data Input > Financials
+Enter Marketing: $10,200
+Save and go to Truth Scan
+Check Monthly Burn Breakdown
+
+Expected Behavior
+Marketing expense: $10,200 (or $10.2K)
+Actual Behavior
+Marketing expense: $10,000 (shows as $10.0K)
+Data Discrepancy
+Entered:      $10,200
+Displayed:    $10,000
+Variance:     $200 (1.96% reduction)
+Root Cause Analysis Required
+
+Rounding rules being applied?
+Percentage normalization?
+Data type conversion issue?
+
+
+ISSUE #6: Payroll Expense Increase Without Explanation
+Severity: 🟠 MEDIUM
+Category: Data Modification / Undocumented Logic
+Status: OPEN
+Problem Description
+Payroll expense is increased in the True Scan without any explanation or user input to justify the change.
+Reproduction Steps
+
+Data Input > Financials
+Enter Payroll: $41,000
+Save and navigate to Truth Scan
+Check Monthly Burn Breakdown under Payroll
+
+Expected Behavior
+Payroll should remain: $41,000 (or $41.0K)
+Actual Behavior
+Payroll displays: $45,000 (shows as $45.0K)
+Data Discrepancy
+Entered:      $41,000
+Displayed:    $45,000
+Increase:     $4,000 (9.76% increase)
+Explanation:  [MISSING - NO DOCUMENTATION]
+Root Cause Analysis Required
+
+Is system applying headcount-based calculations?
+Is there automatic salary adjustment?
+Is this derived from industry benchmarks?
+Is it a percentage of revenue?
+
+Impact
+
+Payroll appears to be modified without user knowledge
+Trust in system accuracy is undermined
+User cannot understand where the $4K comes from
+
+
+ISSUE #7: Real-Time Financial Summary Display Bug (FIXED)
+Severity: 🔴 HIGH (Previously)
+Category: UI/Display Bug
+Status: ✅ FIXED
+Problem Description (Historical)
+When updating financial fields in Data Input, the "Real-Time Financial Summary" section displayed corrupted/invalid number format.
+What Was Shown
+Net Burn Rate: $4100010200011.0B/mo
+Current Runway: 0.0 months
+Root Cause
+Appears to be a string concatenation or number formatting error in the calculation display logic.
+Resolution
+After clicking "Save All Data", the values recalculated correctly:
+Net Burn Rate: +$3.8K/mo (Net positive)
+Current Runway: Profitable / Sustainable
+Notes
+
+This suggests the form uses lazy evaluation or on-change listeners
+Saving triggers proper recalculation
+Consider adding debounced calculations or real-time recalculation
+User experience issue: should show correct values without needing to save first
+
+
+MODERATE ISSUES
+ISSUE #8: File Upload Functionality Not Fully Testable
+Severity: 🟠 MEDIUM
+Category: Feature Testing / Implementation Gap
+Status: OPEN
+Problem Description
+The file upload feature (PDF and Excel tabs in Data Input) cannot be fully tested due to native file picker dialog not being accessible in automation/testing environment.
+Affected Features
+
+Excel tab: "Upload Excel Spreadsheet"
+
+File input exists and is accessible
+Browse Files button functional
+Drag-and-drop area visible
+CSV/Excel file parsing untested
+
+
+PDF tab: "Upload PDF Report"
+
+File input exists and is accessible
+Browse Files button functional
+Drag-and-drop area visible
+PDF parsing untested
+
+
+
+Expected Behavior
+
+User selects Excel/CSV file with financial data
+System parses file content
+System auto-populates financial fields
+User sees data extracted from file
+User can review and save
+
+Actual Behavior
+
+File picker dialog opens (native system dialog)
+Cannot interact with native dialog in automation
+File selection not testable through automation
+
+Required Testing
+
+Manual testing with actual Excel files
+Test CSV format compatibility
+Test PDF report parsing
+Test error handling for invalid files
+Test file size limits (max 20MB for Excel, 10MB for PDF)
+Test drag-and-drop functionality
+
+Development Notes
+
+Add error handling for unsupported file formats
+Document required Excel/CSV column format
+Add validation messages for file parsing errors
+Consider adding format examples/templates
+Test with edge cases: empty files, corrupted files, wrong formats
+
+
+ISSUE #9: Data Syncing Delay Between Modules
+Severity: 🟠 MEDIUM
+Category: Performance / Data Consistency
+Status: OPEN
+Problem Description
+Changes made in Data Input > Financials tab are not immediately reflected in the Overview dashboard or Truth Scan metrics.
+Reproduction Steps
+
+Navigate to Data Input > Financials
+Change Monthly Revenue from $50,000 to $82,500
+Click "Save All Data"
+Navigate to Overview dashboard
+Observe Cash on Hand and Runway metrics
+Return to Data Input - verify all fields saved correctly
+Navigate back to Overview
+Compare metrics
+
+Expected Behavior
+Updated metrics should appear immediately after navigation to Overview
+Actual Behavior
+Metrics may show cached or stale values
+Issues Observed
+
+Timestamp updates (showing new time "16:06")
+But numerical metrics not always updated
+May require page refresh or Refresh Scan button click
+Inconsistent behavior
+
+Root Cause Analysis Required
+
+Is there caching layer preventing updates?
+Are API responses being cached incorrectly?
+Is there race condition in data fetching?
+Is the data actually saved to backend before returning?
+
+Development Notes
+
+Review API response caching strategy
+Check if data needs explicit "publish" or "calculate" trigger
+Verify POST/PUT requests complete before UI updates
+Consider adding loading states to indicate processing
+
+
+ISSUE #10: Data Confidence Score Stuck at 60/100
+Severity: 🟡 LOW-MEDIUM
+Category: Logic / Feature Completeness
+Status: OPEN
+Problem Description
+The "Data Confidence Score" in Truth Scan remains at 60/100 and does not update after entering/updating financial data.
+Reproduction Steps
+
+After entering all financial data
+Navigate to Truth Scan
+Observe "Data Confidence Score" metric (shows 60/100)
+Update any financial data in Data Input
+Save and return to Truth Scan
+Check if score changed
+
+Expected Behavior
+Confidence score should improve as more data is entered:
+
+More historical data → Higher confidence
+More detailed breakdowns → Higher confidence
+Verified data → Higher confidence
+Score should show 80+ with complete month of data
+
+Actual Behavior
+Score remains at 60/100 regardless of data completeness
+Observation
+Status: "Good - could be improved"
+Root Cause Analysis Required
+
+Is confidence score calculation working?
+What are the weighting factors?
+Does it require multiple months of historical data?
+Does it update on schedule or on-demand?
+
+Notes
+
+This is a feedback mechanism to encourage data completeness
+Should guide users to improve data quality
+Currently not providing useful signal
+
+
+DOCUMENTATION & CLARITY ISSUES
+ISSUE #11: Automatic Expense Category Addition Not Documented
+Severity: 🟡 LOW-MEDIUM
+Category: Documentation / Transparency
+Status: OPEN
+Problem Description
+The system automatically adds expense categories (G&A, R&D) and modifies entered values without documenting how or why these calculations occur.
+Examples
+
+G&A of $15,500 appears with no explanation
+R&D of $7,500 appears with no explanation
+Payroll changes from $41K to $45K with no explanation
+
+Expected Behavior
+The system should:
+
+Document the methodology for expense allocation
+Show calculation formulas or logic
+Explain any assumptions or industry benchmarks used
+Allow users to override automatic calculations
+Provide transparency in how totals are derived
+
+Current State
+
+Users enter specific expense values
+System appears to apply undocumented logic
+Final numbers don't match inputs
+No clear explanation of discrepancies
+
+Recommended Solution
+
+Add documentation section explaining expense calculation methodology
+Show calculation details with breakdown of how each category is derived
+Add "Assumptions" section in Truth Scan showing:
+
+G&A allocation rate
+R&D allocation rate
+Any industry benchmarks applied
+
+
+Allow manual override for users who have more accurate data
+Add tooltips explaining each calculated field
+
+Development Notes
+
+Create expense calculation algorithm documentation
+Add calculation transparency in UI
+Consider adding "Expert Mode" for manual overrides
+
+
+ISSUE #12: Growth Rate Field Purpose Unclear
+Severity: 🟡 LOW-MEDIUM
+Category: UX / Documentation
+Status: OPEN
+Problem Description
+The "Monthly Growth Rate (%)" field in Data Input is confusing because:
+
+It accepts user input
+But the input appears to not be used in calculations
+Truth Scan shows a different growth rate (-9.1% vs entered 6%)
+No documentation explains the field's purpose
+
+Questions from Users
+
+Is this field a projection or measured value?
+Why is my entered value ignored?
+How is the -9.1% value calculated?
+Should I use this field or not?
+
+Expected Behavior
+Field should either:
+
+Be used in calculations and Truth Scan should show entered value, OR
+Be removed if it's only informational, OR
+Be clearly labeled as "informational only" with explanation
+
+Recommended Solution
+
+Clarify field purpose in label or tooltip
+Document how growth rate is used in calculations
+Explain what -9.1% represents (historical comparison? MoM trend?)
+Either use the field in calculations or remove it
+Add example of how growth rate affects projections
+
+
+SUMMARY TABLE OF ALL ISSUES
+#IssueSeverityCategoryStatusImpact1Revenue Mismatch ($82.5K → $75K)🔴 HIGHData ConsistencyOPENCascades to all metrics2Expense Total Variance ($78.7K → $93K)🔴 HIGHData ConsistencyOPENBurn rate wrong by 18%3Growth Rate Not Applied (6% → -9.1%)🔴 HIGHCalculation LogicOPENGrowth metrics wrong4COGS Variance ($16.5K → $15K)🟠 MEDIUMData VarianceOPENMinor impact5Marketing Variance ($10.2K → $10K)🟠 MEDIUMData VarianceOPEN$200 discrepancy6Payroll Unexplained Increase ($41K → $45K)🟠 MEDIUMLogicOPEN$4K unaccounted for7Display Bug - Fixed✅ FIXEDUI/DisplayFIXEDNo longer relevant8File Upload Not Testable🟠 MEDIUMTestingOPENFeature incomplete9Data Syncing Delay🟠 MEDIUMPerformanceOPENInconsistent experience10Confidence Score Static🟡 LOW-MEDIUMLogicOPENFeedback not working11Automatic Additions Not Documented🟡 LOW-MEDIUMDocumentationOPENTransparency issue12Growth Rate Field Unclear🟡 LOW-MEDIUMUX/DocsOPENConfusing to users
+
+TESTING DATA USED
+Company: CloudScale Analytics
+Stage: Seed
+Industry: SaaS / Software
+Entered Financial Data (July 2024):
+Monthly Revenue:        $82,500
+Gross Margin:           80%
+Cash on Hand:           $764,800
+Monthly Growth Rate:    6%
+
+Expense Breakdown:
+├── Payroll:           $41,000
+├── Marketing:         $10,200
+├── Operating:         $11,000
+├── COGS:              $16,500
+└── Other:             $0
+    Total:             $78,700
+
+RECOMMENDATIONS FOR DEVELOPMENT TEAM
+Immediate Actions (Critical Path):
+
+Investigate Revenue Calculation: Debug why $82.5K becomes $75K
+Document Expense Logic: Explain where G&A and R&D values come from
+Fix Growth Rate: Make sure entered growth rate is used in calculations
+Add Transparency: Show all calculation formulas and assumptions
+
+Short-term Actions (Next Sprint):
+
+Synchronize data between Data Input and Truth Scan modules
+Add detailed calculation explanations in UI
+Create documentation of all automatic calculations
+Improve field labels for clarity
+
+Long-term Actions (Product Roadmap):
+
+Implement expert mode with manual override for calculations
+Add audit trail showing how each number was calculated
+Improve confidence score to be dynamic based on data quality
+Complete and test file upload functionality
+Add benchmarking comparison explanations
+
+
+CONCLUSION
+The Predixen application demonstrates strong core functionality with accurate calculations in the Data Input form. However, there are significant data consistency issues between modules that must be resolved before launch. The three critical issues (Issues #1, #2, #3) affect financial accuracy and user trust in the system.
+Overall Assessment:
+
+✅ Data input mechanism works well
+❌ Data consistency between modules has gaps
+⚠️ Some automatic calculations are unexplained
+🔄 File upload feature needs completion
+
+Recommended: Schedule architecture review of data flow between modules and implement comprehensive testing for all calculation paths.
