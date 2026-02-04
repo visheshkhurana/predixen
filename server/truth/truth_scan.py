@@ -136,7 +136,9 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["other_costs"] = latest.other_costs
         metrics["cash_balance"] = latest.cash_balance
         
-        total_costs = latest.cogs + latest.opex + latest.payroll + latest.other_costs
+        # Include all expense components in total_costs, including marketing_expense
+        marketing_expense = getattr(latest, 'marketing_expense', None) or 0
+        total_costs = latest.cogs + latest.opex + latest.payroll + latest.other_costs + marketing_expense
         gross_profit = latest.revenue - latest.cogs
         
         metrics["gross_margin"] = (gross_profit / latest.revenue * 100) if latest.revenue > 0 else 0
@@ -146,21 +148,34 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["net_burn"] = net_burn
         metrics["is_profitable"] = net_burn < 0
         
-        if len(financials) >= 2:
+        # Use user-entered growth rate if available, otherwise calculate from historical data
+        user_entered_growth = getattr(latest, 'mom_growth', None)
+        
+        if user_entered_growth is not None and user_entered_growth != 0:
+            # Prefer user-entered growth rate
+            metrics["revenue_growth_mom"] = user_entered_growth
+        elif len(financials) >= 2:
             prev = financials[1]
             if prev.revenue > 0:
                 metrics["revenue_growth_mom"] = ((latest.revenue - prev.revenue) / prev.revenue) * 100
             else:
                 metrics["revenue_growth_mom"] = 0
-            
-            prev_burn = (prev.cogs + prev.opex + prev.payroll + prev.other_costs) - prev.revenue
+        else:
+            metrics["revenue_growth_mom"] = 0
+        
+        if len(financials) >= 2:
+            prev = financials[1]
+            prev_marketing = getattr(prev, 'marketing_expense', None) or 0
+            prev_burn = (prev.cogs + prev.opex + prev.payroll + prev.other_costs + prev_marketing) - prev.revenue
             burn_change = net_burn - prev_burn
             metrics["burn_change"] = burn_change
             
             net_new_arr = (latest.revenue - prev.revenue) * 12
             metrics["net_new_arr"] = net_new_arr
         else:
-            metrics["revenue_growth_mom"] = 0
+            # Only set growth to 0 if not already set from user input
+            if metrics.get("revenue_growth_mom") is None:
+                metrics["revenue_growth_mom"] = 0
             metrics["burn_change"] = 0
             metrics["net_new_arr"] = 0
         
@@ -363,15 +378,28 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["net_revenue_retention"] = 108  # Mock 108% NDR
     
     # Expense Breakdown for burn chart
+    # Use actual user-entered values instead of deriving/estimating
     if financials:
         latest = financials[0]
-        total_expenses = latest.cogs + latest.opex + latest.payroll + latest.other_costs
+        
+        # Get actual values from FinancialRecord
+        cogs_val = latest.cogs or 0
+        payroll_val = latest.payroll or 0
+        marketing_val = getattr(latest, 'marketing_expense', None) or 0
+        operating_val = latest.opex or 0  # User's "operating" expenses
+        other_val = latest.other_costs or 0
+        
+        # Calculate total from actual entered values
+        total_expenses = cogs_val + payroll_val + marketing_val + operating_val + other_val
+        
+        # Map to display categories - use actual values, don't estimate R&D/G&A
+        # since users enter: payroll, marketing, operating, cogs, other
         metrics["expense_breakdown"] = {
-            "cogs": latest.cogs,
-            "payroll": latest.payroll,
-            "marketing": latest.opex * 0.4,  # Estimate marketing from opex
-            "rd": latest.opex * 0.3,  # R&D estimate
-            "ga": latest.opex * 0.3 + latest.other_costs,  # G&A
+            "cogs": cogs_val,
+            "payroll": payroll_val,
+            "marketing": marketing_val,
+            "rd": 0,  # User doesn't enter R&D separately - show 0 unless explicitly entered
+            "ga": operating_val + other_val,  # Map "operating" + "other" to G&A for display
             "total": total_expenses
         }
     else:
@@ -399,11 +427,15 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         monthly_rev = metrics.get("monthly_revenue", 0)
         growth_rate = (metrics.get("revenue_growth_mom", 5) or 5) / 100
         
+        # Include marketing_expense in total monthly expenses
+        marketing_exp = getattr(latest, 'marketing_expense', None) or 0
+        base_expenses = latest.cogs + latest.opex + latest.payroll + latest.other_costs + marketing_exp
+        
         cash_flow_forecast = []
         current_cash = latest.cash_balance
         for month in range(1, 13):
             projected_revenue = monthly_rev * ((1 + growth_rate) ** month)
-            projected_expenses = (latest.cogs + latest.opex + latest.payroll + latest.other_costs) * 1.02 ** month
+            projected_expenses = base_expenses * 1.02 ** month
             net_flow = projected_revenue - projected_expenses
             current_cash += net_flow
             cash_flow_forecast.append({
@@ -452,17 +484,41 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     }
 
 def compute_data_confidence(metrics: Dict, has_financials: bool, has_transactions: bool, has_customers: bool) -> int:
+    """
+    Calculate data confidence score based on data completeness and quality.
+    Score ranges from 0-100 and updates dynamically based on available data.
+    """
     score = 0
     
     if has_financials:
-        score += 40
-        if metrics.get("revenue_growth_mom") is not None:
+        # Base score for having any financial data
+        score += 25
+        
+        # Additional points for having key metrics
+        if metrics.get("monthly_revenue", 0) > 0:
             score += 10
         if metrics.get("cash_balance", 0) > 0:
             score += 10
+        if metrics.get("revenue_growth_mom") is not None and metrics.get("revenue_growth_mom") != 0:
+            score += 5
+        
+        # Points for expense breakdown completeness
+        expense_breakdown = metrics.get("expense_breakdown", {})
+        if expense_breakdown:
+            expense_fields_filled = sum(1 for v in [
+                expense_breakdown.get("cogs", 0),
+                expense_breakdown.get("payroll", 0),
+                expense_breakdown.get("marketing", 0),
+                expense_breakdown.get("ga", 0),
+            ] if v > 0)
+            score += min(10, expense_fields_filled * 2.5)  # Up to 10 points
+        
+        # Points for having gross margin
+        if metrics.get("gross_margin") is not None:
+            score += 5
     
     if has_transactions:
-        score += 20
+        score += 15
         if metrics.get("concentration_top5") is not None:
             score += 5
     

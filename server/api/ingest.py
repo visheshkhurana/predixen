@@ -523,17 +523,28 @@ async def get_financial_baseline(
             'baseline': None,
         }
     
+    # Calculate total expenses from all components
+    total_expenses = sum([
+        float(latest_record.cogs or 0),
+        float(latest_record.payroll or 0),
+        float(latest_record.marketing_expense or 0),
+        float(latest_record.opex or 0),
+        float(latest_record.other_costs or 0),
+    ])
+    
     return {
         'hasBaseline': True,
         'baseline': {
             'cashOnHand': float(latest_record.cash_balance) if latest_record.cash_balance else 0,
             'monthlyRevenue': float(latest_record.revenue) if latest_record.revenue else 0,
-            'totalMonthlyExpenses': float(latest_record.opex) if latest_record.opex else 0,
+            'totalMonthlyExpenses': total_expenses,
             'monthlyGrowthRate': float(latest_record.mom_growth) if latest_record.mom_growth else 0,
             'expenseBreakdown': {
                 'payroll': float(latest_record.payroll) if latest_record.payroll else 0,
                 'marketing': float(latest_record.marketing_expense) if latest_record.marketing_expense else 0,
-                'operating': float(latest_record.other_costs) if latest_record.other_costs else 0,
+                'operating': float(latest_record.opex) if latest_record.opex else 0,  # opex = operating expenses
+                'cogs': float(latest_record.cogs) if latest_record.cogs else 0,
+                'otherOpex': float(latest_record.other_costs) if latest_record.other_costs else 0,
             },
             'currency': company.currency or 'USD',
             'asOfDate': latest_record.period_end.isoformat() if latest_record.period_end else None,
@@ -583,24 +594,35 @@ async def save_financial_baseline(
     today = date.today()
     first_of_month = today.replace(day=1)
     
+    # Extract expense breakdown values - use actual user-entered values
     payroll = baseline.expenseBreakdown.payroll if baseline.expenseBreakdown else 0
     marketing = baseline.expenseBreakdown.marketing if baseline.expenseBreakdown else 0
     operating = baseline.expenseBreakdown.operating if baseline.expenseBreakdown else 0
+    cogs_entered = getattr(baseline.expenseBreakdown, 'cogs', None) if baseline.expenseBreakdown else None
+    other_opex = getattr(baseline.expenseBreakdown, 'otherOpex', None) if baseline.expenseBreakdown else None
     
     total_expenses = baseline.totalMonthlyExpenses
     if total_expenses is None:
-        parts = [payroll, marketing, operating]
+        parts = [payroll, marketing, operating, cogs_entered, other_opex]
         total_expenses = sum(p for p in parts if p is not None) or 0
     
     revenue = baseline.monthlyRevenue or 0
     
-    estimated_gross_margin = 0.65
-    cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0
-    
-    if total_expenses > 0 and (payroll or 0) + (marketing or 0) + (operating or 0) > 0:
-        opex = (marketing or 0) + (operating or 0)
+    # Use user-entered COGS if available, otherwise estimate from gross margin
+    if cogs_entered is not None and cogs_entered > 0:
+        cogs = cogs_entered
     else:
-        opex = max(0, total_expenses - (payroll or 0) - cogs)
+        estimated_gross_margin = 0.65
+        cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0
+    
+    # Store opex as user's "operating" expenses (not combined with marketing)
+    opex = operating or 0
+    
+    # Store other costs
+    other_costs = other_opex or 0
+    
+    # Store growth rate
+    mom_growth = baseline.monthlyGrowthRate
     
     record = FinancialRecord(
         company_id=company_id,
@@ -610,8 +632,10 @@ async def save_financial_baseline(
         cogs=cogs,
         opex=opex,
         payroll=payroll or 0,
-        other_costs=0,
+        other_costs=other_costs,
         cash_balance=baseline.cashOnHand or 0,
+        marketing_expense=marketing or 0,  # Store marketing separately
+        mom_growth=mom_growth,  # Store user-entered growth rate
     )
     db.add(record)
     
@@ -625,7 +649,8 @@ async def save_financial_baseline(
     
     db.commit()
     
-    actual_total = cogs + opex + (payroll or 0)
+    # Calculate total expenses from all components
+    actual_total = cogs + opex + (payroll or 0) + (marketing or 0) + other_costs
     net_burn = max(0, actual_total - revenue)
     runway = (baseline.cashOnHand / net_burn) if net_burn > 0 and baseline.cashOnHand else None
     
