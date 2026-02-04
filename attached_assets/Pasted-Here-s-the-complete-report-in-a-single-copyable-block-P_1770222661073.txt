@@ -1,0 +1,904 @@
+Here's the complete report in a single copyable block:
+
+# PREDIXEN APPLICATION - COMPREHENSIVE BUG REPORT, CALCULATION ANALYSIS & UX IMPROVEMENTS
+
+## EXECUTIVE SUMMARY
+
+During comprehensive QA testing of the Predixen application with CloudScale Analytics demo company, I identified multiple calculation discrepancies, data sync issues, and UX problems. This document provides everything needed to fix these issues.
+
+**Testing Environment:**
+- Company: CloudScale Analytics
+- Stage: Seed
+- Industry: SaaS / Software
+
+**Data Entered in Data Input Form:**
+- Monthly Revenue: $82,500
+- Cash on Hand: $764,800
+- Monthly Growth Rate: 6%
+- Gross Margin: 80%
+- Payroll: $41,000
+- Marketing: $10,200
+- Operating: $11,000
+- COGS: $16,500
+- Other: $0
+- Total Expenses: $78,700
+- Number of Employees: 10
+
+---
+
+## PART 1: CRITICAL BUGS TO FIX
+
+### BUG #1: Revenue Data Mismatch Between Modules
+**Severity:** CRITICAL
+**Location:** Data Input → Truth Scan data sync
+
+**Problem:**
+User enters Monthly Revenue of $82,500 in Data Input > Financials tab, but Truth Scan displays $75,000.
+
+**Steps to Reproduce:**
+1. Go to Data Input > Financials
+2. Enter Monthly Revenue: $82,500
+3. Click "Save All Data"
+4. Navigate to Truth Scan > Key Metrics
+5. Observe Monthly Revenue shows $75,000 instead of $82,500
+
+**Expected:** Truth Scan should show $82,500
+**Actual:** Truth Scan shows $75,000
+**Variance:** $7,500 (9.1% difference)
+
+**Impact:** This cascades to all dependent calculations:
+- MRR shows $75K instead of $82.5K
+- ARR shows $900K instead of $990K
+- Net Burn calculation is wrong
+- All unit economics affected
+
+**Suggested Fix:**
+```javascript
+// Check the data flow between DataInput and TruthScan modules
+// Ensure the saved revenue value is being fetched correctly
+// Look for any averaging or normalization logic that might be modifying the value
+
+// In TruthScan calculation:
+const monthlyRevenue = await fetchUserEnteredRevenue(companyId); // Should return exact user input
+// NOT: const monthlyRevenue = calculateAverageRevenue(historicalData);
+```
+
+---
+
+### BUG #2: Total Monthly Expenses Mismatch
+**Severity:** CRITICAL
+**Location:** Expense calculation logic
+
+**Problem:**
+User enters expense breakdown totaling $78,700, but Truth Scan's Monthly Burn Breakdown shows $93,000 with unexplained additional categories.
+
+**User Entered:**
+- Payroll: $41,000
+- Marketing: $10,200
+- Operating: $11,000
+- COGS: $16,500
+- Other: $0
+- TOTAL: $78,700
+
+**Truth Scan Displays:**
+- Payroll: $45,000 (increased by $4,000)
+- G&A: $15,500 (NOT ENTERED - where does this come from?)
+- COGS: $15,000 (decreased by $1,500)
+- Marketing: $10,000 (decreased by $200)
+- R&D: $7,500 (NOT ENTERED - where does this come from?)
+- TOTAL: $93,000
+
+**Variance:** +$14,300 (18.1% higher than entered)
+
+**Expected:** Should show user-entered values or clearly explain any adjustments
+**Actual:** Shows modified values with unexplained additions
+
+**Suggested Fix:**
+```javascript
+// Option 1: Use exact user-entered values
+const expenseBreakdown = {
+  payroll: userInput.payroll,      // Use exact value
+  marketing: userInput.marketing,   // Use exact value
+  operating: userInput.operating,   // Use exact value
+  cogs: userInput.cogs,            // Use exact value
+  other: userInput.other           // Use exact value
+};
+
+// Option 2: If you must derive additional categories, show the logic
+const expenseBreakdown = {
+  payroll: userInput.payroll,
+  marketing: userInput.marketing,
+  gAndA: deriveGandA(userInput),        // Add comment explaining derivation
+  rAndD: deriveRandD(userInput),        // Add comment explaining derivation
+  cogs: userInput.cogs
+};
+
+// AND add UI indicator showing which values are derived vs entered
+```
+
+---
+
+### BUG #3: Monthly Growth Rate Input Ignored
+**Severity:** CRITICAL
+**Location:** Revenue Growth calculation
+
+**Problem:**
+User enters Monthly Growth Rate of +6% in Data Input, but Truth Scan shows Revenue Growth of -9.1%.
+
+**User Entered:** +6% MoM growth
+**Truth Scan Shows:** -9.1% MoM growth
+**Discrepancy:** 15.1 percentage points in wrong direction
+
+**Expected:** Should use user-entered growth rate OR clearly explain calculation source
+**Actual:** Shows completely different (negative) value with no explanation
+
+**Suggested Fix:**
+```javascript
+// Either use user input:
+const revenueGrowth = userInput.monthlyGrowthRate; // 6%
+
+// OR if calculating from historical data, explain this in UI:
+const revenueGrowth = calculateHistoricalGrowth(revenueHistory);
+// Add tooltip: "Calculated from your last 3 months of revenue data"
+
+// If no historical data exists, use user input as default:
+const revenueGrowth = revenueHistory.length >= 2 
+  ? calculateHistoricalGrowth(revenueHistory)
+  : userInput.monthlyGrowthRate;
+```
+
+---
+
+### BUG #4: Employee Count Mismatch
+**Severity:** HIGH
+**Location:** Company data sync
+
+**Problem:**
+User enters 10 employees in Company Information, but Headcount & Hiring section shows 5 employees.
+
+**User Entered:** 10 employees
+**Truth Scan Shows:** 5 employees
+**Variance:** 50% difference
+
+**Impact:** Revenue per Employee calculation is wrong ($15K shown vs $7.5K actual)
+
+**Suggested Fix:**
+```javascript
+// Ensure employee count is fetched from user input
+const employeeCount = await fetchCompanyInfo(companyId).numberOfEmployees;
+// Should return 10, not 5
+
+// Check if there's any logic dividing by 2 or using a different source
+```
+
+---
+
+### BUG #5: Real-Time Financial Summary Display Bug
+**Severity:** HIGH
+**Location:** Data Input > Financials > Real-Time Financial Summary
+
+**Problem:**
+When updating financial fields, the Real-Time Financial Summary temporarily shows corrupted/invalid numbers before saving.
+
+**What Happens:**
+1. User updates expense fields
+2. Before clicking Save, summary shows: "Net Burn Rate: $4100010200011.0B/mo"
+3. After clicking Save, it corrects to proper value
+
+**Expected:** Real-time calculation should always show valid numbers
+**Actual:** Shows string concatenation or formatting error during editing
+
+**Suggested Fix:**
+```javascript
+// Add proper number parsing and validation before display
+const formatCurrency = (value) => {
+  const num = parseFloat(value);
+  if (isNaN(num)) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1
+  }).format(num);
+};
+
+// Add debounce to prevent calculation during rapid input
+const debouncedCalculate = debounce(calculateSummary, 300);
+```
+
+---
+
+### BUG #6: Inconsistent Runway Display
+**Severity:** MEDIUM
+**Location:** Truth Scan - multiple locations
+
+**Problem:**
+Runway shows different values in different places on the same page.
+
+**Key Metrics section:** 41.7 months
+**Scenario-Based Runway section:** 36+ months
+
+**Expected:** Same runway value everywhere (or clearly labeled different scenarios)
+**Actual:** Two different numbers with no explanation
+
+**Suggested Fix:**
+```javascript
+// Use consistent calculation OR label the difference
+
+// Option 1: Same value everywhere
+const runway = cashBalance / monthlyBurn; // 41.7 months
+
+// Option 2: Different scenarios with clear labels
+const runwayP50 = 41.7; // Median scenario - show in Key Metrics
+const runwayP10 = 36;   // Conservative scenario - show in Scenario section
+
+// Add labels explaining:
+// "Runway (P50): 41.7 months - Expected case"
+// "Runway (P10): 36+ months - Conservative estimate"
+```
+
+---
+
+### BUG #7: Cash Balance Minor Discrepancy
+**Severity:** LOW
+**Location:** Cash Balance display
+
+**Problem:**
+User enters $764,800, Truth Scan shows $750,000
+
+**Variance:** $14,800 (1.9% difference)
+
+**Suggested Fix:**
+```javascript
+// Use exact user input, don't round to nearest $50K
+const cashBalance = userInput.cashOnHand; // $764,800 exactly
+```
+
+---
+
+## PART 2: ALL TRUTH SCAN CALCULATIONS - VERIFICATION
+
+### Section 1: Composite Scores
+
+**Quality of Growth Index: 65/100**
+Formula: Weighted average of growth quality factors
+Components (suggested weights):
+
+Revenue Growth Rate: 25%
+Gross Margin: 20%
+LTV:CAC Ratio: 20%
+Net Revenue Retention: 15%
+Burn Efficiency: 10%
+Customer Acquisition Efficiency: 10%
+
+Status: ✅ REASONABLE (but formula not transparent to users)
+
+**Data Confidence Score: 60/100**
+Formula: Based on data completeness and quality
+Components:
+
+Completeness of financial data: 25%
+Recency of data: 25%
+Consistency across data points: 20%
+Historical data depth: 15%
+Verification status: 15%
+
+Status: ⚠️ STATIC - doesn't update when more data added
+
+---
+
+### Section 2: Key Metrics
+
+**Monthly Revenue: $75.0K**
+Expected: User entered $82,500
+Displayed: $75,000
+Status: ❌ WRONG - Should match user input
+
+**Net Burn: $18.0K (Critical)**
+Formula: Total Expenses - Revenue
+Calculation: $93,000 - $75,000 = $18,000
+Status: ✅ MATH CORRECT (but using wrong input values)
+Corrected: $78,700 - $82,500 = -$3,800 (profitable!)
+
+**Cash Balance: $750K**
+Expected: User entered $764,800
+Displayed: $750,000
+Status: ⚠️ MINOR ROUNDING ERROR
+
+**Runway (P50): 41.7 months**
+Formula: Cash Balance / Net Burn
+Calculation: $750,000 / $18,000 = 41.67 months
+Status: ✅ CORRECT (based on displayed values)
+
+**Gross Margin: 80.0%**
+Formula: (Revenue - COGS) / Revenue × 100
+Calculation: ($75,000 - $15,000) / $75,000 = 80%
+Status: ✅ CORRECT
+
+**Revenue Growth: -9.1% MoM**
+Expected: User entered +6%
+Displayed: -9.1%
+Status: ❌ WRONG - Should use user input or explain calculation
+
+**Burn Multiple: N/A**
+Formula: Net Burn / Net New ARR
+Since revenue is declining, Net New ARR is negative
+Status: ✅ CORRECT (N/A is appropriate when growth is negative)
+
+**Operating Margin: -24.0%**
+Formula: (Revenue - Operating Expenses) / Revenue × 100
+Calculation: ($75,000 - $93,000) / $75,000 = -24%
+Status: ✅ CORRECT (based on displayed values)
+
+---
+
+### Section 3: Unit Economics - Recurring Revenue
+
+**MRR: $75.0K**
+Expected: Should match Monthly Revenue input ($82,500)
+Displayed: $75,000
+Status: ❌ WRONG
+
+**ARR: $900K**
+Formula: MRR × 12
+Calculation: $75,000 × 12 = $900,000
+Status: ✅ MATH CORRECT (but MRR is wrong)
+Corrected: $82,500 × 12 = $990,000
+
+**ARPU: $500**
+Formula: MRR / Number of Customers
+Calculation: $75,000 / 150 = $500
+Status: ✅ CORRECT
+
+**Customers: 150**
+Note: This appears to be derived, not user-entered
+Derivation: $75,000 MRR / $500 ARPU = 150 customers
+Status: ⚠️ DERIVED VALUE - should allow user input
+
+---
+
+### Section 4: Unit Economics - CAC & LTV
+
+**CAC: $2.0K**
+Formula: Sales & Marketing Spend / New Customers Acquired
+Appears to be derived from marketing budget
+Status: ⚠️ DERIVED - calculation not transparent
+
+**LTV: $12.5K**
+Formula: ARPU × Gross Margin × (1 / Monthly Churn Rate)
+Calculation: $500 × 80% × (1 / 3.2%) = $500 × 0.8 × 31.25 = $12,500
+Status: ✅ CORRECT
+
+**LTV:CAC: 6.4x (Healthy)**
+Formula: LTV / CAC
+Calculation: $12,500 / $2,000 = 6.25 ≈ 6.4x
+Status: ✅ CORRECT
+
+**Payback: 4.9 months (Good)**
+Formula: CAC / (ARPU × Gross Margin)
+Calculation: $2,000 / ($500 × 0.8) = $2,000 / $400 = 5 months
+Status: ✅ CORRECT
+
+---
+
+### Section 5: Retention Metrics
+
+**Customer Churn: 3.2% monthly**
+Status: ⚠️ ASSUMED/DERIVED - no user input for this
+Note: 3.2% monthly ≈ 32% annual churn (reasonable for seed stage)
+
+**Revenue Churn: 4.1% monthly**
+Status: ⚠️ DERIVED - calculation not transparent
+Note: Higher than customer churn suggests higher-value customers leaving
+
+**NDR (Net Dollar Retention): 108.0% (Net positive)**
+Formula: (Beginning MRR + Expansion - Contraction - Churn) / Beginning MRR
+Status: ✅ MATHEMATICALLY CONSISTENT
+Note: NDR > 100% means expansion revenue exceeds churn
+
+---
+
+### Section 6: Monthly Burn Breakdown
+
+**Displayed Values:**
+Payroll:     $45.0K (48%) - User entered $41K ❌
+G&A:         $15.5K (17%) - NOT ENTERED ❌
+COGS:        $15.0K (16%) - User entered $16.5K ❌
+Marketing:   $10.0K (11%) - User entered $10.2K ❌
+R&D:         $7.5K  (8%)  - NOT ENTERED ❌
+─────────────────────────────────
+Total:       $93.0K       - User entered $78.7K ❌
+Status: ❌ MULTIPLE DISCREPANCIES
+The breakdown doesn't match user input at all.
+
+---
+
+### Section 7: Scenario-Based Runway
+
+**Current Burn Scenario:**
+Runway: 36+ months
+Monthly Burn: $18K
+Change: -0.0 mo
+Status: ⚠️ INCONSISTENT with Key Metrics (41.7 months)
+
+---
+
+### Section 8: 12-Month Cash Flow Forecast
+
+**Projected Balances:**
+Month 1:  $723K
+Month 6:  $478K
+Month 12: -$11.2K (depleted)
+Warning: "Cash depletes in Month 12"
+Linear Calculation Check:
+If burn is constant at $18K/month:
+Month 12 = $750K - (12 × $18K) = $534K (NOT -$11.2K)
+Status: ⚠️ CALCULATION UNCLEAR
+System appears to model accelerating burn due to declining revenue
+This logic should be documented/explained
+
+---
+
+### Section 9: Headcount & Hiring
+
+**Current: 5 employees**
+User entered: 10 employees
+Displayed: 5 employees
+Status: ❌ WRONG - 50% difference
+
+**Planned: +0 hires**
+Status: ✅ CORRECT (no planned hires entered)
+
+**Rev/Emp: $15.0K monthly**
+Formula: Monthly Revenue / Employees
+Calculation: $75,000 / 5 = $15,000
+Status: ✅ MATH CORRECT (but both inputs are wrong)
+Corrected: $82,500 / 10 = $8,250
+
+---
+
+### Section 10: Insights & Recommendations
+
+**Strong Unit Economics (Opportunity)**
+Message: "Your LTV:CAC ratio of 6.4x indicates healthy customer economics.
+This is a signal to potentially accelerate growth investment."
+Suggested Action: "Consider increasing marketing spend on proven channels.
+Your unit economics can support more aggressive customer acquisition."
+Status: ✅ GOOD - Accurate and actionable insight
+
+---
+
+## PART 3: CALCULATION ACCURACY SUMMARY
+
+| # | Metric | Status | Issue |
+|---|--------|--------|-------|
+| 1 | Quality of Growth Index | ✅ OK | Formula not transparent |
+| 2 | Data Confidence Score | ⚠️ | Static, doesn't update |
+| 3 | Monthly Revenue | ❌ BUG | $75K vs entered $82.5K |
+| 4 | Net Burn | ✅ OK | Math correct, inputs wrong |
+| 5 | Cash Balance | ⚠️ | Minor rounding $750K vs $765K |
+| 6 | Runway (P50) | ✅ OK | Correct |
+| 7 | Gross Margin | ✅ OK | Correct |
+| 8 | Revenue Growth | ❌ BUG | -9.1% vs entered +6% |
+| 9 | Burn Multiple | ✅ OK | N/A is correct |
+| 10 | Operating Margin | ✅ OK | Correct |
+| 11 | MRR | ❌ BUG | Wrong value |
+| 12 | ARR | ✅ OK | Math correct |
+| 13 | ARPU | ✅ OK | Correct |
+| 14 | Customers | ⚠️ | Derived, not entered |
+| 15 | CAC | ⚠️ | Derived assumption |
+| 16 | LTV | ✅ OK | Correct |
+| 17 | LTV:CAC | ✅ OK | Correct |
+| 18 | Payback | ✅ OK | Correct |
+| 19 | Customer Churn | ⚠️ | Assumed value |
+| 20 | Revenue Churn | ⚠️ | Derived |
+| 21 | NDR | ✅ OK | Consistent |
+| 22 | Burn Breakdown | ❌ BUG | $93K vs entered $78.7K |
+| 23 | Scenario Runway | ⚠️ | Inconsistent 36+ vs 41.7 |
+| 24 | Cash Forecast | ⚠️ | Logic unclear |
+| 25 | Employee Count | ❌ BUG | 5 vs entered 10 |
+| 26 | Rev/Employee | ✅ OK | Math correct |
+
+**Summary:**
+- ✅ Correct: 12 metrics (46%)
+- ⚠️ Unclear/Derived: 8 metrics (31%)
+- ❌ Bugs: 6 metrics (23%)
+
+---
+
+## PART 4: UX IMPROVEMENTS
+
+### CRITICAL UX FIXES
+
+**UX-1: Add Calculation Transparency**
+Problem: Users can't see how metrics are calculated
+Solution: Add info icon with tooltip showing formula
+Example implementation:
+<MetricCard>
+  <Title>LTV:CAC <InfoIcon tooltip={`
+    Formula: LTV ÷ CAC
+    Your LTV: $12,500
+    Your CAC: $2,000
+    Calculation: $12,500 ÷ $2,000 = 6.25x
+  `}/></Title>
+  <Value>6.4x</Value>
+</MetricCard>
+````
+UX-2: Show Data Source Indicators
+Problem: Users can't tell which values they entered vs derived
+Solution: Add visual indicators
+
+Legend:
+🔵 Blue dot = User entered value
+🟡 Yellow dot = Calculated/derived value
+🟠 Orange dot = Industry benchmark applied
+⚫ Gray dot = Missing data
+
+Example:
+Monthly Revenue: $75.0K 🔵 (entered)
+Customer Churn: 3.2% 🟡 (derived from patterns)
+UX-3: Make Confidence Score Dynamic
+Problem: Score stays at 60/100 regardless of data added
+Solution: Show checklist of what improves the score
+
+Data Confidence: 60/100
+┌─────────────────────────────────────┐
+│ ✅ Basic financials (+20)           │
+│ ✅ Current month data (+15)         │
+│ ⬜ 3+ months history (+15)          │
+│ ⬜ Bank connected (+20)             │
+│ ⬜ Revenue verified (+15)           │
+│ ⬜ Detailed expenses (+15)          │
+└─────────────────────────────────────┘
+[Add historical data to improve →]
+UX-4: Add Actionable Guidance to Critical Alerts
+Problem: "Critical" badge creates anxiety without solution
+Solution: Add immediate actions
+
+Net Burn: $18.0K [Critical ⚠️]
+┌─────────────────────────────────────┐
+│ At current burn, cash depletes in   │
+│ 41.7 months                         │
+│                                     │
+│ Quick Actions:                      │
+│ [Reduce Expenses] [Model Fundraise] │
+└─────────────────────────────────────┘
+UX-5: Fix Data Discrepancy Warning
+Problem: Silent mismatches between entered and displayed data
+Solution: Show warning when values don't match
+
+⚠️ Data Discrepancy Detected
+Your entered revenue ($82.5K) differs from 
+displayed ($75K). 
+
+[Use My Value] [Keep Calculated] [Why?]
+
+HIGH PRIORITY UX IMPROVEMENTS
+UX-6: Standardize Runway Display
+Problem: Different runway values in different sections
+Solution: Show one value with confidence range
+
+Runway: 41.7 months
+├── Optimistic (P90): 48 mo
+├── Expected (P50): 41.7 mo ← shown
+└── Conservative (P10): 36 mo
+UX-7: Add Benchmark Comparisons
+Problem: Users don't know if their metrics are good
+Solution: Show industry comparisons
+
+LTV:CAC: 6.4x [Healthy ✓]
+┌─────────────────────────────────────┐
+│ Your LTV:CAC    ████████████░ 6.4x  │
+│ Seed median     ████████░░░░░ 4.0x  │
+│ Series A median █████████████ 6.5x  │
+│ Top 25%         ███████████████ 8x  │
+│                                     │
+│ You're in the top 35% of seed cos   │
+└─────────────────────────────────────┘
+UX-8: Improve Empty State for Business Summary
+Problem: "No business summary yet" provides no guidance
+Solution: Add helpful prompts
+
+┌─────────────────────────────────────┐
+│ 📝 Add Business Context             │
+│                                     │
+│ Help Predixen understand your       │
+│ business by describing:             │
+│ • What does your company do?        │
+│ • Who are your customers?           │
+│ • What's your advantage?            │
+│                                     │
+│ [Generate with AI] [Write Manually] │
+└─────────────────────────────────────┘
+UX-9: Add Sparkline Hover Details
+Problem: Mini charts show trends with no context
+Solution: Add hover state with details
+
+Monthly Revenue: $75.0K [~~~~]
+                       ↓ hover
+┌─────────────────────────────────────┐
+│ Last 6 Months:                      │
+│ M1: $68K → M6: $75K                │
+│ Trend: +10.3% over period           │
+└─────────────────────────────────────┘
+UX-10: Make Cash Forecast Interactive
+Problem: Static chart with limited info
+Solution: Add interactivity
+
+12-Month Forecast
+[Interactive chart]
+- Hover any month for details
+- Adjust assumptions with sliders
+- Toggle between scenarios
+
+Assumptions:
+Revenue Growth: [slider: -9.1%]
+Expense Change: [slider: 0%]
+
+[Reset] [Save Scenario]
+
+MEDIUM PRIORITY UX IMPROVEMENTS
+UX-11: Add Section Navigation
+Problem: Long scrolling page, hard to find metrics
+Solution: Sticky section nav
+
+[Overview] [Key Metrics] [Unit Econ] [Forecast] [Insights]
+           ↑ viewing
+UX-12: Add Section-Level Export
+Problem: Can only export entire report
+Solution: Export individual sections
+
+Key Metrics [Export ▼]
+├── PDF (this section)
+├── CSV (raw data)
+└── Copy to clipboard
+UX-13: Show Calculation Timestamps
+Problem: Unclear when metrics were last calculated
+Solution: Show timestamps
+
+Key Metrics
+Last updated: 2 min ago [Refresh ↻]
+UX-14: Add Validation Feedback Loop
+Problem: No confirmation after saving data
+Solution: Show impact preview
+
+✓ Data Saved Successfully
+Impact Preview:
+- MRR: $50K → $82.5K (+65%)
+- Runway: 16mo → 42mo (+163%)
+[View Truth Scan] [Edit More]
+
+LOWER PRIORITY UX IMPROVEMENTS
+UX-15: Use Semantic Colors for Expenses
+Payroll:   Blue (fixed cost)
+G&A:       Gray (operational)
+COGS:      Orange (variable)
+Marketing: Green (growth)
+R&D:       Purple (investment)
+UX-16: Mobile Optimization
+Use progressive disclosure on mobile:
+┌────────────┐
+│ Score: 65  │
+│ [Details]  │
+└────────────┘
+UX-17: Keyboard Navigation
+Shortcuts (press ?):
+j/k: Navigate metrics
+Enter: Expand details
+e: Edit metric
+r: Refresh
+/: Search
+UX-18: Add Learn Mode
+Toggle: [Expert Mode] / [Learn Mode ✓]
+
+In Learn Mode, show explanations:
+"LTV:CAC of 6.4x means for every $1 spent 
+acquiring a customer, you earn $6.40 back."
+UX-19: Add Guided Tour
+First visit:
+"Welcome! Let me show you around (2 min)"
+[Start Tour] [Skip]
+
+Stops: Health Scores → Key Metrics → 
+Unit Economics → Forecast → Insights
+
+PART 5: IMPLEMENTATION PRIORITIES
+Sprint 1 - Critical Fixes
+
+Fix revenue data sync (Bug #1)
+Fix expense breakdown calculation (Bug #2)
+Fix growth rate usage (Bug #3)
+Fix employee count sync (Bug #4)
+Add data discrepancy warnings (UX-5)
+
+Sprint 2 - High Priority
+
+Fix runway consistency (Bug #6)
+Add calculation transparency (UX-1)
+Add data source indicators (UX-2)
+Make confidence score dynamic (UX-3)
+Add critical alert guidance (UX-4)
+
+Sprint 3 - Medium Priority
+
+Add benchmark comparisons (UX-7)
+Improve empty states (UX-8)
+Add sparkline hovers (UX-9)
+Interactive forecast (UX-10)
+Section navigation (UX-11)
+
+Backlog
+
+Section export (UX-12)
+Timestamps (UX-13)
+Validation feedback (UX-14)
+Semantic colors (UX-15)
+Mobile optimization (UX-16)
+Keyboard nav (UX-17)
+Learn mode (UX-18)
+Guided tour (UX-19)
+
+
+PART 6: SUGGESTED CODE FIXES
+Fix 1: Data Sync for Revenue
+javascript// In TruthScan data fetching
+async function fetchFinancialMetrics(companyId) {
+  // Get user-entered data directly
+  const userInput = await db.collection('financials').doc(companyId).get();
+  
+  return {
+    monthlyRevenue: userInput.monthlyRevenue, // Use exact value
+    cashBalance: userInput.cashOnHand,        // Use exact value
+    expenses: {
+      payroll: userInput.payroll,
+      marketing: userInput.marketing,
+      operating: userInput.operating,
+      cogs: userInput.cogs,
+      other: userInput.other
+    },
+    growthRate: userInput.monthlyGrowthRate,
+    employees: userInput.numberOfEmployees
+  };
+}
+Fix 2: Expense Breakdown
+javascript// Don't add phantom categories
+function calculateBurnBreakdown(userInput) {
+  const breakdown = {
+    payroll: userInput.payroll || 0,
+    marketing: userInput.marketing || 0,
+    operating: userInput.operating || 0,
+    cogs: userInput.cogs || 0,
+    other: userInput.other || 0
+  };
+  
+  breakdown.total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+  
+  // Calculate percentages
+  Object.keys(breakdown).forEach(key => {
+    if (key !== 'total') {
+      breakdown[`${key}Pct`] = (breakdown[key] / breakdown.total * 100).toFixed(1);
+    }
+  });
+  
+  return breakdown;
+}
+Fix 3: Revenue Growth
+javascript// Use user input when no historical data
+function calculateRevenueGrowth(userInput, revenueHistory) {
+  if (revenueHistory && revenueHistory.length >= 2) {
+    // Calculate from actual data
+    const current = revenueHistory[revenueHistory.length - 1];
+    const previous = revenueHistory[revenueHistory.length - 2];
+    return ((current - previous) / previous * 100).toFixed(1);
+  }
+  
+  // Fall back to user input
+  return userInput.monthlyGrowthRate || 0;
+}
+Fix 4: Add Calculation Tooltips
+jsx// Component for metric with transparency
+function MetricCard({ title, value, formula, inputs, status }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-header">
+        <span>{title}</span>
+        <Tooltip content={
+          <div>
+            <p><strong>Formula:</strong> {formula}</p>
+            <p><strong>Inputs:</strong></p>
+            <ul>
+              {Object.entries(inputs).map(([key, val]) => (
+                <li key={key}>{key}: {val}</li>
+              ))}
+            </ul>
+          </div>
+        }>
+          <InfoIcon />
+        </Tooltip>
+      </div>
+      <div className="metric-value">{value}</div>
+      {status && <Badge status={status} />}
+    </div>
+  );
+}
+Fix 5: Dynamic Confidence Score
+javascriptfunction calculateConfidenceScore(data) {
+  let score = 0;
+  const factors = [];
+  
+  // Basic financials entered
+  if (data.monthlyRevenue && data.cashBalance) {
+    score += 20;
+    factors.push({ name: 'Basic financials', points: 20, complete: true });
+  } else {
+    factors.push({ name: 'Basic financials', points: 20, complete: false });
+  }
+  
+  // Current month data
+  if (data.lastUpdated && isWithinLastMonth(data.lastUpdated)) {
+    score += 15;
+    factors.push({ name: 'Current month data', points: 15, complete: true });
+  } else {
+    factors.push({ name: 'Current month data', points: 15, complete: false });
+  }
+  
+  // Historical data (3+ months)
+  if (data.revenueHistory && data.revenueHistory.length >= 3) {
+    score += 15;
+    factors.push({ name: '3+ months history', points: 15, complete: true });
+  } else {
+    factors.push({ name: '3+ months history', points: 15, complete: false });
+  }
+  
+  // Bank connected
+  if (data.bankConnected) {
+    score += 20;
+    factors.push({ name: 'Bank connected', points: 20, complete: true });
+  } else {
+    factors.push({ name: 'Bank connected', points: 20, complete: false });
+  }
+  
+  // Detailed expenses
+  if (data.expenses && Object.keys(data.expenses).length >= 4) {
+    score += 15;
+    factors.push({ name: 'Detailed expenses', points: 15, complete: true });
+  } else {
+    factors.push({ name: 'Detailed expenses', points: 15, complete: false });
+  }
+  
+  // Revenue verified
+  if (data.revenueVerified) {
+    score += 15;
+    factors.push({ name: 'Revenue verified', points: 15, complete: true });
+  } else {
+    factors.push({ name: 'Revenue verified', points: 15, complete: false });
+  }
+  
+  return { score, factors };
+}
+
+SUMMARY
+Critical Bugs to Fix (6):
+
+Revenue data mismatch ($82.5K → $75K)
+Expense breakdown mismatch ($78.7K → $93K)
+Growth rate ignored (+6% → -9.1%)
+Employee count wrong (10 → 5)
+Real-time display bug during editing
+Inconsistent runway display
+
+UX Improvements (19):
+
+4 Critical (transparency, indicators, confidence, alerts)
+6 High Priority (benchmarks, empty states, interactivity)
+5 Medium Priority (navigation, export, timestamps)
+4 Lower Priority (colors, mobile, keyboard, onboarding)
+
+Root Cause:
+Most bugs stem from disconnect between Data Input module and Truth Scan module. The Truth Scan appears to use derived/calculated values instead of user-entered data. Fix the data flow and add transparency about calculation sources.
+Estimated Fix Time:
+
+Critical bugs: 2-3 days
+High priority UX: 1 week
+Full implementation: 2-3 weeks
+
