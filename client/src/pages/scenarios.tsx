@@ -33,7 +33,7 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink, ChevronRight } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -721,7 +721,33 @@ export default function ScenariosPage() {
           )}
         </TabsList>
         
-        <TabsContent value="builder" className="mt-6">
+        <TabsContent value="builder" className="mt-6 space-y-4">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Try Pre-Built Scenario Templates</p>
+                    <p className="text-sm text-muted-foreground">
+                      Quick-start with proven scenarios: Burn Cut, Growth Acceleration, Pricing Change, and more
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setActiveTab('classic')}
+                  data-testid="button-view-templates"
+                >
+                  View Templates
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
           <StrategicScenarioBuilder
             baseMetrics={baseMetrics}
             onRunSimulation={async (params) => {

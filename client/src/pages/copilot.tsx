@@ -1877,11 +1877,16 @@ export default function CopilotPage() {
                   </CardContent>
                 </Card>
                 
-                <Card className="overflow-visible">
+                <Card className={`overflow-visible ${!latestScenario ? 'border-amber-500/50 bg-amber-500/5' : ''}`}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <Target className="h-4 w-4 text-purple-400" />
+                      <Target className={`h-4 w-4 ${latestScenario ? 'text-purple-400' : 'text-amber-500'}`} />
                       Current Scenario
+                      {!latestScenario && (
+                        <Badge variant="outline" className="text-xs border-amber-500 text-amber-600 dark:text-amber-400">
+                          Action Required
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
@@ -1892,7 +1897,20 @@ export default function CopilotPage() {
                         <p>Burn cut: {latestScenario.burn_reduction_pct}%</p>
                       </>
                     ) : (
-                      <p>No scenario selected</p>
+                      <div className="space-y-2">
+                        <p className="text-amber-600 dark:text-amber-400 font-medium">No scenario selected</p>
+                        <p className="text-xs">Run a simulation to see your runway projections and survival probability.</p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="w-full mt-2 border-amber-500/50 hover:bg-amber-500/10"
+                          onClick={() => setLocation('/scenarios')}
+                          data-testid="button-create-scenario-prompt"
+                        >
+                          <Target className="h-3 w-3 mr-2" />
+                          Create Scenario
+                        </Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

@@ -917,7 +917,11 @@ export default function DataInput() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="csv-upload" data-testid="tab-csv-upload">
+                <FileUp className="h-4 w-4 mr-2" />
+                CSV
+              </TabsTrigger>
               <TabsTrigger value="pdf-upload" data-testid="tab-pdf-upload">
                 <FileText className="h-4 w-4 mr-2" />
                 PDF
@@ -939,6 +943,161 @@ export default function DataInput() {
                 Goals
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="csv-upload" className="mt-6">
+              {currentCompany ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileUp className="h-5 w-5 text-primary" />
+                      Import CSV Data
+                    </CardTitle>
+                    <CardDescription>
+                      Upload a CSV file with your financial data. We'll automatically detect columns and validate the data.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-financial-input')?.click()}>
+                        <CardContent className="p-4 text-center">
+                          <DollarSign className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
+                          <p className="font-medium">Financial Data</p>
+                          <p className="text-xs text-muted-foreground mt-1">Revenue, expenses, P&L</p>
+                          <input
+                            id="csv-financial-input"
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file && currentCompany && token) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=financial`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${token}` },
+                                    body: formData
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    toast({ title: 'CSV imported successfully', description: `${data.row_count} records processed` });
+                                    queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
+                                  } else {
+                                    const err = await res.json();
+                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
+                                  }
+                                } catch {
+                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
+                                }
+                              }
+                            }}
+                            data-testid="input-csv-financial"
+                          />
+                        </CardContent>
+                      </Card>
+                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-transactions-input')?.click()}>
+                        <CardContent className="p-4 text-center">
+                          <TrendingUp className="h-8 w-8 mx-auto mb-2 text-blue-500" />
+                          <p className="font-medium">Transactions</p>
+                          <p className="text-xs text-muted-foreground mt-1">Customer payments, invoices</p>
+                          <input
+                            id="csv-transactions-input"
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file && currentCompany && token) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=transactions`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${token}` },
+                                    body: formData
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    toast({ title: 'Transactions imported', description: `${data.row_count} records processed` });
+                                  } else {
+                                    const err = await res.json();
+                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
+                                  }
+                                } catch {
+                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
+                                }
+                              }
+                            }}
+                            data-testid="input-csv-transactions"
+                          />
+                        </CardContent>
+                      </Card>
+                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-customers-input')?.click()}>
+                        <CardContent className="p-4 text-center">
+                          <Users className="h-8 w-8 mx-auto mb-2 text-purple-500" />
+                          <p className="font-medium">Customers</p>
+                          <p className="text-xs text-muted-foreground mt-1">Customer list, segments</p>
+                          <input
+                            id="csv-customers-input"
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file && currentCompany && token) {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                try {
+                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=customers`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${token}` },
+                                    body: formData
+                                  });
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    toast({ title: 'Customers imported', description: `${data.row_count} records processed` });
+                                  } else {
+                                    const err = await res.json();
+                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
+                                  }
+                                } catch {
+                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
+                                }
+                              }
+                            }}
+                            data-testid="input-csv-customers"
+                          />
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-4 mt-4">
+                      <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        CSV Format Requirements
+                      </h4>
+                      <ul className="text-xs text-muted-foreground space-y-1">
+                        <li><strong>Financial:</strong> period_start, period_end, revenue, cogs, opex, payroll, cash_balance</li>
+                        <li><strong>Transactions:</strong> date, customer_id, amount, description, type</li>
+                        <li><strong>Customers:</strong> customer_id, name, segment, start_date, mrr</li>
+                      </ul>
+                      <Button variant="ghost" size="sm" className="px-0 mt-2 text-xs h-auto" onClick={() => {
+                        toast({ title: 'Sample CSV templates', description: 'Download sample CSVs from the Help section' });
+                      }}>
+                        <Download className="h-3 w-3 mr-1" />
+                        Download sample templates
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Please select a company first to import CSV data
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
             <TabsContent value="pdf-upload" className="mt-6">
               {currentCompany ? renderFileUploadZone('pdf') : (
