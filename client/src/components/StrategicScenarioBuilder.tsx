@@ -462,6 +462,36 @@ export function StrategicScenarioBuilder({
                 </div>
               </div>
               
+              {/* Calculation Assumptions Panel */}
+              <div className="space-y-3 border-t pt-4">
+                <h3 className="font-medium flex items-center gap-2 text-sm">
+                  <Info className="w-4 h-4 text-muted-foreground" />
+                  Simulation Assumptions
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2 rounded bg-muted/30">
+                    <div className="text-muted-foreground">Base Cash</div>
+                    <div className="font-medium">${(baseMetrics.cashOnHand / 1000).toFixed(0)}K</div>
+                  </div>
+                  <div className="p-2 rounded bg-muted/30">
+                    <div className="text-muted-foreground">Monthly Revenue</div>
+                    <div className="font-medium">${(baseMetrics.monthlyRevenue / 1000).toFixed(0)}K</div>
+                  </div>
+                  <div className="p-2 rounded bg-muted/30">
+                    <div className="text-muted-foreground">Monthly Expenses</div>
+                    <div className="font-medium">${(baseMetrics.monthlyExpenses / 1000).toFixed(0)}K</div>
+                  </div>
+                  <div className="p-2 rounded bg-muted/30">
+                    <div className="text-muted-foreground">Base Growth Rate</div>
+                    <div className="font-medium">{baseMetrics.growthRate}% MoM</div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Runway is calculated using Monte Carlo simulation with 1,000 scenarios, accounting for revenue growth, 
+                  burn adjustments, and your scenario parameters. P10/P50/P90 represent confidence intervals.
+                </p>
+              </div>
+              
               {recommendations.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-medium flex items-center gap-2">
