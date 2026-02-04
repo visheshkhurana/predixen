@@ -8,8 +8,8 @@ interface ExpenseBreakdown {
   cogs: number;
   payroll: number;
   marketing: number;
-  rd: number;
-  ga: number;
+  operating: number;
+  other: number;
   total: number;
 }
 
@@ -22,16 +22,16 @@ const EXPENSE_COLORS = {
   cogs: '#ef4444',      // Red
   payroll: '#3b82f6',   // Blue
   marketing: '#22c55e', // Green
-  rd: '#a855f7',        // Purple
-  ga: '#f59e0b',        // Amber
+  operating: '#f59e0b', // Amber
+  other: '#a855f7',     // Purple
 };
 
 const EXPENSE_LABELS: Record<string, string> = {
   cogs: 'COGS',
   payroll: 'Payroll',
   marketing: 'Marketing',
-  rd: 'R&D',
-  ga: 'G&A',
+  operating: 'Operating',
+  other: 'Other',
 };
 
 const EXPENSE_IMPACTS: Record<string, { meaning: string; benchmark: string; guidance: string }> = {
@@ -50,15 +50,15 @@ const EXPENSE_IMPACTS: Record<string, { meaning: string; benchmark: string; guid
     benchmark: 'Efficient SaaS spends $1-2 on marketing for every $1 of new ARR.',
     guidance: 'High marketing spend is healthy if it generates efficient customer acquisition (CAC payback under 12 months).',
   },
-  rd: {
-    meaning: 'Research & Development - Product development, engineering, and innovation investments.',
-    benchmark: 'Growth-stage SaaS typically spends 20-30% of revenue on R&D.',
-    guidance: 'R&D investment builds competitive moats. Balance with near-term revenue generation.',
+  operating: {
+    meaning: 'Operating expenses - Day-to-day business costs including rent, utilities, software subscriptions, and office supplies.',
+    benchmark: 'Target operating costs under 15-20% of total expenses for efficient operations.',
+    guidance: 'Operating expenses should scale slower than revenue. Rising percentages signal operational inefficiency.',
   },
-  ga: {
-    meaning: 'General & Administrative - Legal, accounting, office, insurance, and administrative costs.',
-    benchmark: 'Target G&A under 15% of total expenses for efficient operations.',
-    guidance: 'G&A should scale slower than revenue. Rising G&A percentage signals operational inefficiency.',
+  other: {
+    meaning: 'Other costs - Miscellaneous expenses not categorized elsewhere including one-time costs, professional fees, and contingencies.',
+    benchmark: 'Other costs should typically be under 10% of total expenses.',
+    guidance: 'High "other" expenses may indicate need for better expense categorization or unexpected costs.',
   },
 };
 
@@ -88,8 +88,8 @@ export function BurnBreakdownChart({ breakdown, currency = 'USD' }: BurnBreakdow
       cogs: breakdown.cogs,
       payroll: breakdown.payroll,
       marketing: breakdown.marketing,
-      rd: breakdown.rd,
-      ga: breakdown.ga,
+      operating: breakdown.operating,
+      other: breakdown.other,
     }
   ];
 
@@ -98,8 +98,8 @@ export function BurnBreakdownChart({ breakdown, currency = 'USD' }: BurnBreakdow
     { key: 'cogs', label: 'COGS', value: breakdown.cogs, color: EXPENSE_COLORS.cogs },
     { key: 'payroll', label: 'Payroll', value: breakdown.payroll, color: EXPENSE_COLORS.payroll },
     { key: 'marketing', label: 'Marketing', value: breakdown.marketing, color: EXPENSE_COLORS.marketing },
-    { key: 'rd', label: 'R&D', value: breakdown.rd, color: EXPENSE_COLORS.rd },
-    { key: 'ga', label: 'G&A', value: breakdown.ga, color: EXPENSE_COLORS.ga },
+    { key: 'operating', label: 'Operating', value: breakdown.operating, color: EXPENSE_COLORS.operating },
+    { key: 'other', label: 'Other', value: breakdown.other, color: EXPENSE_COLORS.other },
   ].sort((a, b) => b.value - a.value);
 
   // Custom tooltip for bar chart with detailed explanations
@@ -164,8 +164,8 @@ export function BurnBreakdownChart({ breakdown, currency = 'USD' }: BurnBreakdow
                 <Bar dataKey="cogs" stackId="a" fill={EXPENSE_COLORS.cogs} name="COGS" />
                 <Bar dataKey="payroll" stackId="a" fill={EXPENSE_COLORS.payroll} name="Payroll" />
                 <Bar dataKey="marketing" stackId="a" fill={EXPENSE_COLORS.marketing} name="Marketing" />
-                <Bar dataKey="rd" stackId="a" fill={EXPENSE_COLORS.rd} name="R&D" />
-                <Bar dataKey="ga" stackId="a" fill={EXPENSE_COLORS.ga} name="G&A" />
+                <Bar dataKey="operating" stackId="a" fill={EXPENSE_COLORS.operating} name="Operating" />
+                <Bar dataKey="other" stackId="a" fill={EXPENSE_COLORS.other} name="Other" />
               </BarChart>
             </ResponsiveContainer>
           </div>

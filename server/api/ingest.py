@@ -42,6 +42,8 @@ class NormalizedFinancials(BaseModel):
     hasManualExpenseOverride: Optional[bool] = None
     currency: Optional[str] = None
     asOfDate: Optional[str] = None
+    numberOfEmployees: Optional[int] = None
+    grossMargin: Optional[float] = None
 
 class ExtractionResponse(BaseModel):
     extracted: Dict[str, Any]
@@ -621,23 +623,45 @@ async def save_financial_baseline(
     # Store other costs
     other_costs = other_opex or 0
     
-    # Store growth rate
+    # Store growth rate and headcount
     mom_growth = baseline.monthlyGrowthRate
+    headcount = baseline.numberOfEmployees
     
-    record = FinancialRecord(
-        company_id=company_id,
-        period_start=first_of_month,
-        period_end=today,
-        revenue=revenue,
-        cogs=cogs,
-        opex=opex,
-        payroll=payroll or 0,
-        other_costs=other_costs,
-        cash_balance=baseline.cashOnHand or 0,
-        marketing_expense=marketing or 0,  # Store marketing separately
-        mom_growth=mom_growth,  # Store user-entered growth rate
-    )
-    db.add(record)
+    # Check if a record already exists for this period - update instead of create duplicate
+    existing_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id,
+        FinancialRecord.period_start == first_of_month
+    ).first()
+    
+    if existing_record:
+        # Update existing record with new values
+        existing_record.period_end = today
+        existing_record.revenue = revenue
+        existing_record.cogs = cogs
+        existing_record.opex = opex
+        existing_record.payroll = payroll or 0
+        existing_record.other_costs = other_costs
+        existing_record.cash_balance = baseline.cashOnHand or 0
+        existing_record.marketing_expense = marketing or 0
+        existing_record.mom_growth = mom_growth
+        existing_record.headcount = headcount
+        record = existing_record
+    else:
+        record = FinancialRecord(
+            company_id=company_id,
+            period_start=first_of_month,
+            period_end=today,
+            revenue=revenue,
+            cogs=cogs,
+            opex=opex,
+            payroll=payroll or 0,
+            other_costs=other_costs,
+            cash_balance=baseline.cashOnHand or 0,
+            marketing_expense=marketing or 0,  # Store marketing separately
+            mom_growth=mom_growth,  # Store user-entered growth rate
+            headcount=headcount,  # Store employee count
+        )
+        db.add(record)
     
     dataset = Dataset(
         company_id=company_id,

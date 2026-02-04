@@ -378,7 +378,7 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["net_revenue_retention"] = 108  # Mock 108% NDR
     
     # Expense Breakdown for burn chart
-    # Use actual user-entered values instead of deriving/estimating
+    # Use actual user-entered values - show exactly what user entered
     if financials:
         latest = financials[0]
         
@@ -392,33 +392,40 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         # Calculate total from actual entered values
         total_expenses = cogs_val + payroll_val + marketing_val + operating_val + other_val
         
-        # Map to display categories - use actual values, don't estimate R&D/G&A
-        # since users enter: payroll, marketing, operating, cogs, other
+        # Show exact user-entered categories matching Data Input form:
+        # payroll, marketing, operating, cogs, other
         metrics["expense_breakdown"] = {
             "cogs": cogs_val,
             "payroll": payroll_val,
             "marketing": marketing_val,
-            "rd": 0,  # User doesn't enter R&D separately - show 0 unless explicitly entered
-            "ga": operating_val + other_val,  # Map "operating" + "other" to G&A for display
+            "operating": operating_val,  # User's actual "operating" value
+            "other": other_val,          # User's actual "other" value
             "total": total_expenses
         }
     else:
         metrics["expense_breakdown"] = None
     
-    # Headcount data (mock if not available)
+    # Headcount data - use actual stored value if available
     if financials:
-        # Estimate headcount from payroll (assume avg salary)
-        avg_salary = 8000  # Monthly
-        metrics["headcount"] = max(1, int(metrics.get("payroll", 0) / avg_salary))
-        metrics["planned_hires"] = max(0, int(metrics["headcount"] * 0.15))  # 15% growth
+        latest = financials[0]
+        # Use actual headcount from FinancialRecord if saved, otherwise estimate from payroll
+        stored_headcount = getattr(latest, 'headcount', None)
+        if stored_headcount and stored_headcount > 0:
+            metrics["headcount"] = stored_headcount
+        else:
+            # Fallback: estimate from payroll (assume avg salary)
+            avg_salary = 8000  # Monthly
+            metrics["headcount"] = max(1, int(metrics.get("payroll", 0) / avg_salary))
+        
+        metrics["planned_hires"] = 0  # Don't assume planned hires - user should enter this
         if metrics["headcount"] > 0 and mrr:
             metrics["revenue_per_employee"] = mrr / metrics["headcount"]
         else:
             metrics["revenue_per_employee"] = None
     else:
-        metrics["headcount"] = 25
-        metrics["planned_hires"] = 4
-        metrics["revenue_per_employee"] = mrr / 25 if mrr else None
+        metrics["headcount"] = None
+        metrics["planned_hires"] = 0
+        metrics["revenue_per_employee"] = None
     
     # Cash flow forecast (12 month projection)
     if financials and len(financials) > 0:
@@ -509,9 +516,10 @@ def compute_data_confidence(metrics: Dict, has_financials: bool, has_transaction
                 expense_breakdown.get("cogs", 0),
                 expense_breakdown.get("payroll", 0),
                 expense_breakdown.get("marketing", 0),
-                expense_breakdown.get("ga", 0),
+                expense_breakdown.get("operating", 0),
+                expense_breakdown.get("other", 0),
             ] if v > 0)
-            score += min(10, expense_fields_filled * 2.5)  # Up to 10 points
+            score += min(15, expense_fields_filled * 3)  # Up to 15 points for all 5 categories
         
         # Points for having gross margin
         if metrics.get("gross_margin") is not None:

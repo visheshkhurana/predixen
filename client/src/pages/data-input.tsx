@@ -199,20 +199,30 @@ export default function DataInput() {
 
   const watchedValues = form.watch();
   
-  const summedExpenses = (watchedValues.payrollExpenses || 0) + 
-                         (watchedValues.marketingExpenses || 0) + 
-                         (watchedValues.operatingExpenses || 0) +
-                         (watchedValues.cogsExpenses || 0) +
-                         (watchedValues.otherOpexExpenses || 0);
+  // Helper to safely parse numeric values (handles both number and string inputs)
+  const parseNum = (val: unknown): number => {
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    if (typeof val === 'string') {
+      const parsed = parseFloat(val.replace(/,/g, ''));
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+  
+  const summedExpenses = parseNum(watchedValues.payrollExpenses) + 
+                         parseNum(watchedValues.marketingExpenses) + 
+                         parseNum(watchedValues.operatingExpenses) +
+                         parseNum(watchedValues.cogsExpenses) +
+                         parseNum(watchedValues.otherOpexExpenses);
   
   const effectiveExpenses = hasManualExpenseOverride 
-    ? (watchedValues.monthlyExpenses || 0)
-    : (summedExpenses > 0 ? summedExpenses : (watchedValues.monthlyExpenses || 0));
+    ? parseNum(watchedValues.monthlyExpenses)
+    : (summedExpenses > 0 ? summedExpenses : parseNum(watchedValues.monthlyExpenses));
   
-  const calculatedBurn = effectiveExpenses - (watchedValues.monthlyRevenue || 0);
+  const calculatedBurn = effectiveExpenses - parseNum(watchedValues.monthlyRevenue);
   const isProfitable = calculatedBurn < 0;
   const isSustainable = calculatedBurn <= 0;
-  const calculatedRunway = calculatedBurn > 0 ? (watchedValues.cashOnHand || 0) / calculatedBurn : null;
+  const calculatedRunway = calculatedBurn > 0 ? parseNum(watchedValues.cashOnHand) / calculatedBurn : null;
 
   useEffect(() => {
     if (chatScrollRef.current) {
