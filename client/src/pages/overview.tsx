@@ -544,12 +544,26 @@ export default function OverviewPage() {
     const rawPayback = getValue('payback_months', getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod));
     const paybackPeriod = Math.max(3, Math.min(rawPayback || 12, 36));
 
+    // Calculate runway with sensible fallbacks
+    let effectiveRunway = runwayMonths;
+    if (runwayMonths <= 0) {
+      if (burnRate > 0 && cashBalance > 0) {
+        effectiveRunway = cashBalance / burnRate;
+      } else if (burnRate <= 0) {
+        effectiveRunway = 36; // Profitable company fallback
+      } else {
+        effectiveRunway = DUMMY_BASE_DATA.runway; // Default fallback
+      }
+    }
+    // Cap runway between 0 and 60 months
+    effectiveRunway = Math.max(0, Math.min(effectiveRunway, 60));
+
     return {
       mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
       arr: getValue('arr', DUMMY_BASE_DATA.arr),
       cash: cashBalance,
       burnRate,
-      runway: runwayMonths > 0 ? runwayMonths : (burnRate > 0 ? cashBalance / burnRate : 0),
+      runway: effectiveRunway,
       cac: effectiveCac,
       ltv: effectiveLtv,
       ltvCacRatio: ltvCacRatio,
