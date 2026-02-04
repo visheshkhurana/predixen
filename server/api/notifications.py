@@ -11,6 +11,7 @@ from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
     send_early_member_invite,
+    send_weekly_digest,
     parse_changelog,
     NOTIFICATION_RECIPIENTS
 )
@@ -248,3 +249,90 @@ async def get_all_email_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
         "click_rate": round((clicked / total * 100), 1) if total > 0 else 0,
         "emails": emails
     }
+
+
+class DigestRequest(BaseModel):
+    email: EmailStr
+    company_name: str
+    metrics: Dict[str, Any]
+    alerts: List[Dict[str, Any]] = []
+    recommendations: List[str] = []
+
+
+class DigestSubscriptionRequest(BaseModel):
+    email: EmailStr
+    company_id: int
+    frequency: str = "weekly"  # weekly, daily
+    enabled: bool = True
+
+
+@router.post("/digest/send")
+async def send_digest(request: DigestRequest):
+    """
+    Send a weekly KPI digest email to a user.
+    Contains key metrics summary, alerts, and recommendations.
+    """
+    success = await send_weekly_digest(
+        to_email=request.email,
+        company_name=request.company_name,
+        metrics=request.metrics,
+        alerts=request.alerts,
+        recommendations=request.recommendations
+    )
+    
+    if success:
+        return {
+            "success": True,
+            "message": f"Weekly digest sent to {request.email}"
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send digest email. Check Resend configuration."
+        )
+
+
+@router.post("/digest/test")
+async def send_test_digest(email: EmailStr):
+    """
+    Send a test digest email with sample data.
+    Useful for previewing the digest format.
+    """
+    test_metrics = {
+        "mrr": 45000,
+        "mrr_change_pct": 8.5,
+        "runway_months": 14.2,
+        "burn_rate": 32000,
+        "survival_probability": 0.72,
+        "cash_balance": 456000
+    }
+    
+    test_alerts = [
+        {"type": "runway", "message": "Runway is below 18-month target. Consider reducing burn or raising funds.", "severity": "warning"},
+        {"type": "churn", "message": "Customer churn increased 2% this month. Review retention strategies.", "severity": "info"}
+    ]
+    
+    test_recommendations = [
+        "Focus on reducing CAC by 15% through organic marketing channels",
+        "Consider extending runway to 18+ months before next fundraise",
+        "Implement customer success program to reduce churn below 3%"
+    ]
+    
+    success = await send_weekly_digest(
+        to_email=email,
+        company_name="Demo Company",
+        metrics=test_metrics,
+        alerts=test_alerts,
+        recommendations=test_recommendations
+    )
+    
+    if success:
+        return {
+            "success": True,
+            "message": f"Test digest sent to {email}"
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send test digest. Check Resend configuration."
+        )

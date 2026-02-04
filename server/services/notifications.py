@@ -1282,3 +1282,206 @@ Predixen Intelligence OS"""
     except Exception as e:
         print(f"Error sending hybrid feature announcement: {e}")
         return {"success": False, "sent": [], "failed": to_emails or [], "error": str(e)}
+
+
+async def send_weekly_digest(
+    to_email: str,
+    company_name: str,
+    metrics: Dict[str, Any],
+    alerts: List[Dict[str, Any]],
+    recommendations: List[str],
+    from_email: str = "Predixen <digest@predixen.app>"
+) -> bool:
+    """
+    Send weekly KPI digest email to a user.
+    
+    Args:
+        to_email: Recipient email address
+        company_name: Name of the company
+        metrics: Dictionary with key metrics (mrr, runway_months, burn_rate, survival_probability, etc.)
+        alerts: List of alert dicts with 'type', 'message', 'severity' keys
+        recommendations: List of actionable recommendations
+        from_email: Sender email address
+    
+    Returns:
+        True if email was sent successfully, False otherwise
+    """
+    try:
+        credentials = await get_resend_credentials()
+        
+        # Format metrics
+        mrr = metrics.get("mrr", 0)
+        mrr_change = metrics.get("mrr_change_pct", 0)
+        runway = metrics.get("runway_months", 0)
+        burn_rate = metrics.get("burn_rate", 0)
+        survival_prob = metrics.get("survival_probability", 0) * 100
+        cash_balance = metrics.get("cash_balance", 0)
+        
+        # Determine health status
+        if survival_prob >= 80 and runway >= 18:
+            health_status = "Healthy"
+            health_color = "#22c55e"
+            health_bg = "#052e16"
+        elif survival_prob >= 60 and runway >= 12:
+            health_status = "Moderate"
+            health_color = "#eab308"
+            health_bg = "#422006"
+        else:
+            health_status = "At Risk"
+            health_color = "#ef4444"
+            health_bg = "#450a0a"
+        
+        # Format alerts HTML
+        alerts_html = ""
+        for alert in alerts[:5]:  # Max 5 alerts
+            severity = alert.get("severity", "info")
+            if severity == "critical":
+                alert_color = "#ef4444"
+                alert_icon = "!!!"
+            elif severity == "warning":
+                alert_color = "#eab308"
+                alert_icon = "!!"
+            else:
+                alert_color = "#3b82f6"
+                alert_icon = "i"
+            alerts_html += f"""
+            <div style="display: flex; align-items: start; gap: 12px; margin-bottom: 12px; padding: 12px; background-color: #0f172a; border-radius: 8px; border-left: 3px solid {alert_color};">
+                <span style="color: {alert_color}; font-weight: 600; font-size: 12px;">{alert_icon}</span>
+                <div>
+                    <p style="color: #e2e8f0; font-size: 14px; margin: 0;">{alert.get('message', '')}</p>
+                </div>
+            </div>
+            """
+        
+        # Format recommendations HTML
+        recommendations_html = ""
+        for i, rec in enumerate(recommendations[:3], 1):  # Max 3 recommendations
+            recommendations_html += f"""
+            <div style="display: flex; align-items: start; gap: 12px; margin-bottom: 12px;">
+                <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background-color: #6366f1; color: #ffffff; border-radius: 50%; font-size: 12px; font-weight: 600;">{i}</span>
+                <p style="color: #e2e8f0; font-size: 14px; margin: 0; flex: 1;">{rec}</p>
+            </div>
+            """
+        
+        # Format change indicators
+        mrr_arrow = "^" if mrr_change > 0 else "v" if mrr_change < 0 else "-"
+        mrr_color = "#22c55e" if mrr_change > 0 else "#ef4444" if mrr_change < 0 else "#94a3b8"
+        
+        timestamp = datetime.now().strftime("%B %d, %Y")
+        
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 40px 20px;">
+    <div style="max-width: 640px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 12px; text-align: center; line-height: 48px; color: #ffffff; font-weight: 700; font-size: 24px;">P</div>
+        </div>
+        
+        <div style="background-color: #1e293b; border-radius: 16px; overflow: hidden; border: 1px solid #334155;">
+            <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
+                <p style="color: rgba(255,255,255,0.8); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0;">Weekly Digest</p>
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">{company_name}</h1>
+                <p style="color: rgba(255,255,255,0.7); margin: 8px 0 0 0; font-size: 14px;">Week of {timestamp}</p>
+            </div>
+            
+            <div style="padding: 24px 32px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; background-color: {health_bg}; border-radius: 12px; margin-bottom: 24px;">
+                    <span style="color: #94a3b8; font-size: 14px;">Financial Health Status</span>
+                    <span style="color: {health_color}; font-weight: 700; font-size: 18px;">{health_status}</span>
+                </div>
+                
+                <h3 style="color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">Key Metrics</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <div style="background-color: #0f172a; padding: 16px; border-radius: 12px;">
+                        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px 0;">Monthly Recurring Revenue</p>
+                        <p style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0;">${mrr:,.0f}</p>
+                        <p style="color: {mrr_color}; font-size: 12px; margin: 4px 0 0 0;">{mrr_arrow} {abs(mrr_change):.1f}% vs last week</p>
+                    </div>
+                    <div style="background-color: #0f172a; padding: 16px; border-radius: 12px;">
+                        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px 0;">Runway</p>
+                        <p style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0;">{runway:.1f} months</p>
+                    </div>
+                    <div style="background-color: #0f172a; padding: 16px; border-radius: 12px;">
+                        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px 0;">Monthly Burn Rate</p>
+                        <p style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0;">${burn_rate:,.0f}</p>
+                    </div>
+                    <div style="background-color: #0f172a; padding: 16px; border-radius: 12px;">
+                        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px 0;">Survival Probability</p>
+                        <p style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0;">{survival_prob:.0f}%</p>
+                    </div>
+                </div>
+                
+                {"<h3 style='color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;'>Alerts</h3>" + alerts_html if alerts else ""}
+                
+                {"<h3 style='color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 16px 0;'>Recommendations</h3>" + recommendations_html if recommendations else ""}
+                
+                <div style="text-align: center; margin: 32px 0 16px 0;">
+                    <a href="https://predixen.app/dashboard" style="display: inline-block; padding: 14px 32px; font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 10px;">View Full Dashboard</a>
+                </div>
+            </div>
+            
+            <div style="padding: 16px 32px; border-top: 1px solid #334155; text-align: center;">
+                <p style="color: #64748b; font-size: 12px; margin: 0;">
+                    You're receiving this because you're subscribed to weekly digests.<br>
+                    <a href="https://predixen.app/settings/notifications" style="color: #6366f1; text-decoration: none;">Manage preferences</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        
+        text_content = f"""
+{company_name} - Weekly Digest
+Week of {timestamp}
+
+Financial Health: {health_status}
+
+KEY METRICS
+-----------
+MRR: ${mrr:,.0f} ({mrr_change:+.1f}%)
+Runway: {runway:.1f} months
+Burn Rate: ${burn_rate:,.0f}/month
+Survival Probability: {survival_prob:.0f}%
+
+{"ALERTS" + chr(10) + chr(10).join([f"- {a.get('message', '')}" for a in alerts]) if alerts else ""}
+
+{"RECOMMENDATIONS" + chr(10) + chr(10).join([f"{i}. {r}" for i, r in enumerate(recommendations, 1)]) if recommendations else ""}
+
+View your full dashboard: https://predixen.app/dashboard
+"""
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {credentials['api_key']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "from": from_email,
+                    "to": [to_email],
+                    "subject": f"[Predixen] Weekly Digest - {company_name}",
+                    "html": html_content,
+                    "text": text_content
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code in (200, 201):
+                print(f"Weekly digest sent to: {to_email}")
+                return True
+            else:
+                print(f"Failed to send weekly digest: {response.text}")
+                return False
+                
+    except Exception as e:
+        print(f"Error sending weekly digest: {e}")
+        return False
