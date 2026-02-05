@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -141,6 +142,34 @@ const INDUSTRIES = [
 
 const CONFIDENCE_THRESHOLD = 0.60;
 
+interface FinancialBaselineResponse {
+  hasBaseline: boolean;
+  baseline: {
+    cashOnHand: number;
+    monthlyRevenue: number;
+    totalMonthlyExpenses: number;
+    monthlyGrowthRate: number;
+    expenseBreakdown: {
+      payroll: number;
+      marketing: number;
+      operating: number;
+      cogs: number;
+      otherOpex: number;
+    };
+    currency: string;
+    asOfDate: string | null;
+  } | null;
+  extendedMetrics?: {
+    headcount?: number;
+    customers?: number;
+    runwayMonths?: number;
+  };
+  company?: {
+    name: string;
+    industry: string;
+  };
+}
+
 export default function DataInput() {
   const { toast } = useToast();
   const { 
@@ -166,10 +195,25 @@ export default function DataInput() {
   const [uploadType, setUploadType] = useState<'pdf' | 'excel'>('pdf');
   const [useVerificationFlow, setUseVerificationFlow] = useState(true);
   const [hasManualExpenseOverride, setHasManualExpenseOverride] = useState(false);
+  const [hasLoadedFromBackend, setHasLoadedFromBackend] = useState(false);
+  const [lastLoadedCompanyId, setLastLoadedCompanyId] = useState<number | null>(null);
   const [, navigate] = useLocation();
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: backendBaseline, isLoading: isLoadingBaseline } = useQuery<FinancialBaselineResponse>({
+    queryKey: ['/api/ingest/companies', currentCompany?.id, 'financials/baseline'],
+    enabled: !!currentCompany?.id,
+  });
+
+  // Reset loaded state when company changes
+  useEffect(() => {
+    if (currentCompany?.id && currentCompany.id !== lastLoadedCompanyId) {
+      setHasLoadedFromBackend(false);
+      setLastLoadedCompanyId(currentCompany.id);
+    }
+  }, [currentCompany?.id, lastLoadedCompanyId]);
 
   const form = useForm<DataInputValues>({
     resolver: zodResolver(dataInputSchema),
@@ -177,19 +221,19 @@ export default function DataInput() {
       companyName: currentCompany?.name || "",
       description: "",
       foundingDate: "",
-      stage: "seed",
-      industry: "saas",
-      cashOnHand: 500000,
-      monthlyRevenue: 50000,
-      monthlyExpenses: 80000,
-      payrollExpenses: 50000,
-      marketingExpenses: 15000,
-      operatingExpenses: 15000,
+      stage: currentCompany?.stage || "seed",
+      industry: currentCompany?.industry || "saas",
+      cashOnHand: 0,
+      monthlyRevenue: 0,
+      monthlyExpenses: 0,
+      payrollExpenses: 0,
+      marketingExpenses: 0,
+      operatingExpenses: 0,
       cogsExpenses: 0,
       otherOpexExpenses: 0,
       growthRate: 10,
-      burnRate: 30000,
-      employees: 10,
+      burnRate: 0,
+      employees: 1,
       targetRunway: 18,
       growthScenario: "conservative",
       fundingTarget: 0,
@@ -230,8 +274,56 @@ export default function DataInput() {
     }
   }, [chatMessages]);
 
+  // Load financial data from backend when available (priority source of truth)
   useEffect(() => {
-    if (financialBaseline) {
+    if (backendBaseline?.hasBaseline && backendBaseline.baseline && !hasLoadedFromBackend) {
+      const b = backendBaseline.baseline;
+      form.setValue('cashOnHand', b.cashOnHand || 0);
+      form.setValue('monthlyRevenue', b.monthlyRevenue || 0);
+      form.setValue('monthlyExpenses', b.totalMonthlyExpenses || 0);
+      form.setValue('growthRate', b.monthlyGrowthRate || 10);
+      
+      if (b.expenseBreakdown) {
+        form.setValue('payrollExpenses', b.expenseBreakdown.payroll || 0);
+        form.setValue('marketingExpenses', b.expenseBreakdown.marketing || 0);
+        form.setValue('operatingExpenses', b.expenseBreakdown.operating || 0);
+        form.setValue('cogsExpenses', b.expenseBreakdown.cogs || 0);
+        form.setValue('otherOpexExpenses', b.expenseBreakdown.otherOpex || 0);
+      }
+      
+      // Load headcount from extended metrics if available
+      if (backendBaseline.extendedMetrics?.headcount) {
+        form.setValue('employees', backendBaseline.extendedMetrics.headcount);
+      }
+      
+      // Update company info if available
+      if (backendBaseline.company?.industry) {
+        form.setValue('industry', backendBaseline.company.industry);
+      }
+      
+      setHasLoadedFromBackend(true);
+      
+      // Also sync to local store for other components
+      setFinancialBaseline({
+        cashOnHand: b.cashOnHand || 0,
+        monthlyRevenue: b.monthlyRevenue || 0,
+        totalMonthlyExpenses: b.totalMonthlyExpenses || 0,
+        monthlyGrowthRate: b.monthlyGrowthRate || 0,
+        expenseBreakdown: b.expenseBreakdown || {
+          payroll: 0,
+          marketing: 0,
+          operating: 0,
+          cogs: 0,
+          otherOpex: 0,
+        },
+        hasManualExpenseOverride: false,
+      });
+    }
+  }, [backendBaseline, hasLoadedFromBackend, form, setFinancialBaseline]);
+
+  // Fallback: Load from local store if no backend data
+  useEffect(() => {
+    if (financialBaseline && !hasLoadedFromBackend && !backendBaseline?.hasBaseline) {
       if (financialBaseline.cashOnHand !== null) {
         form.setValue('cashOnHand', financialBaseline.cashOnHand);
       }
@@ -265,7 +357,7 @@ export default function DataInput() {
         setHasManualExpenseOverride(financialBaseline.hasManualExpenseOverride);
       }
     }
-  }, [financialBaseline, form]);
+  }, [financialBaseline, form, hasLoadedFromBackend, backendBaseline]);
 
   const handleFileUpload = async (file: File, type: 'pdf' | 'excel') => {
     if (!currentCompany || !token) {

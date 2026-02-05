@@ -160,13 +160,82 @@ def _perform_health_analysis(
         .all()
     )
     
-    if len(records) < 2:
+    if len(records) == 0:
         return {
-            "overall_status": "insufficient_data",
-            "status": "insufficient_data",
-            "message": "Need at least 2 months of data for analysis",
+            "overall_status": "unknown",
+            "status": "unknown",
+            "message": "No financial data available",
             "drivers": {},
-            "recommendations": [],
+            "recommendations": ["Add financial data through Data Input or connect a data source"],
+        }
+    
+    # Even with 1 record, we can provide basic health metrics
+    if len(records) == 1:
+        record = records[0]
+        cash = float(record.cash_balance or 0)
+        revenue = float(record.revenue or 0)
+        total_costs = float(record.opex or 0) + float(record.payroll or 0) + float(record.cogs or 0) + float(record.other_costs or 0)
+        net_burn = total_costs - revenue
+        runway = cash / max(net_burn, 1) if net_burn > 0 else None
+        gross_margin = (revenue - float(record.cogs or 0)) / max(revenue, 1) if revenue > 0 else 0
+        
+        # Determine status based on runway
+        if runway and runway < 6:
+            overall = "critical"
+        elif runway and runway < 12:
+            overall = "warning"
+        elif net_burn <= 0:
+            overall = "healthy"
+        else:
+            overall = "warning" if runway and runway < 18 else "healthy"
+        
+        drivers = {
+            "runway_months": {
+                "metric": "runway_months",
+                "status": "critical" if runway and runway < 6 else ("warning" if runway and runway < 12 else "healthy"),
+                "current_value": runway or 0,
+                "historical_mean": runway or 0,
+                "z_score": 0,
+                "trend_direction": "flat",
+                "alert_count": 1 if runway and runway < 12 else 0,
+                "history": [runway] if runway else [],
+            },
+            "net_burn": {
+                "metric": "net_burn",
+                "status": "healthy" if net_burn <= 0 else ("critical" if net_burn > cash * 0.2 else "warning"),
+                "current_value": net_burn,
+                "historical_mean": net_burn,
+                "z_score": 0,
+                "trend_direction": "flat",
+                "alert_count": 0,
+                "history": [net_burn],
+            },
+            "gross_margin": {
+                "metric": "gross_margin",
+                "status": "healthy" if gross_margin >= 0.5 else ("warning" if gross_margin >= 0.3 else "critical"),
+                "current_value": gross_margin,
+                "historical_mean": gross_margin,
+                "z_score": 0,
+                "trend_direction": "flat",
+                "alert_count": 0,
+                "history": [gross_margin],
+            },
+        }
+        
+        recommendations = []
+        if runway and runway < 12:
+            recommendations.append("Consider extending runway by reducing burn or raising capital")
+        if gross_margin < 0.5:
+            recommendations.append("Focus on improving gross margin through pricing or COGS reduction")
+        if not recommendations:
+            recommendations.append("Add more historical data to enable trend analysis and anomaly detection")
+        
+        return {
+            "overall_status": overall,
+            "status": overall,
+            "message": "Basic analysis available. Add more months of data for trend analysis.",
+            "drivers": drivers,
+            "recommendations": recommendations,
         }
     
     # Build alert config
