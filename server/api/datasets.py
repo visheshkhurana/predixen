@@ -25,6 +25,7 @@ class ManualBaseline(BaseModel):
     payroll: float
     other_costs: float
     cash_balance: float
+    headcount: Optional[int] = None
 
 class DatasetResponse(BaseModel):
     id: int
@@ -130,7 +131,8 @@ def manual_baseline(
         opex=baseline.opex,
         payroll=baseline.payroll,
         other_costs=baseline.other_costs,
-        cash_balance=baseline.cash_balance
+        cash_balance=baseline.cash_balance,
+        headcount=baseline.headcount
     )
     db.add(record)
     

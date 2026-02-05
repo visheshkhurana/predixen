@@ -90,6 +90,7 @@ export default function OnboardingPage() {
     payroll: 30000,
     other_costs: 5000,
     cash_balance: 500000,
+    headcount: 10,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSampleMode, setIsSampleMode] = useState(false);
@@ -466,6 +467,7 @@ export default function OnboardingPage() {
     if (baselineData.payroll < 0) return 'Payroll cannot be negative';
     if (baselineData.other_costs < 0) return 'Other costs cannot be negative';
     if (baselineData.cash_balance < 0) return 'Cash balance cannot be negative';
+    if (baselineData.headcount < 0) return 'Headcount cannot be negative';
     return null;
   };
   
@@ -1234,6 +1236,28 @@ export default function OnboardingPage() {
                     required
                     min={0}
                     data-testid="input-cash-balance"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="headcount">Number of Employees</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p>Total number of full-time employees (including founders and contractors counted as FTE).</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Input
+                    id="headcount"
+                    type="number"
+                    value={baselineData.headcount}
+                    onChange={(e) => setBaselineData({ ...baselineData, headcount: Number(e.target.value) })}
+                    min={0}
+                    data-testid="input-headcount"
                   />
                 </div>
                 
