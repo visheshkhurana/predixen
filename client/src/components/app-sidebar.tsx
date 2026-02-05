@@ -280,15 +280,15 @@ export function AppSidebar() {
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
-        <div
-          className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md opacity-50 cursor-not-allowed"
-          data-testid="link-help-docs"
-          title="Documentation coming soon"
-        >
-          <HelpCircle className="h-4 w-4" />
-          <span className="flex-1">Help & Docs</span>
-          <Badge variant="outline" className="text-[10px] px-1 py-0">Soon</Badge>
-        </div>
+        <Link href="/docs">
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
+            data-testid="link-help-docs"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span className="flex-1">Help & Docs</span>
+          </div>
+        </Link>
         <Button
           variant="ghost"
           size="sm"
