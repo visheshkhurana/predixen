@@ -63,6 +63,8 @@ from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
 from server.models.dashboard import Dashboard, DashboardWidget
 from server.models.email_event import EmailEvent
+from server.models.connector_capability import ConnectorCapability
+from server.models.metric_suggestion import MetricSuggestion, SuggestionEvent
 
 __all__ = [
     "User",
@@ -137,4 +139,7 @@ __all__ = [
     "MetricValue",
     "Dashboard",
     "DashboardWidget",
+    "ConnectorCapability",
+    "MetricSuggestion",
+    "SuggestionEvent",
 ]

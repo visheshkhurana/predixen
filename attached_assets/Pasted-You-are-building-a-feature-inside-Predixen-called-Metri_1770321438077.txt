@@ -1,0 +1,323 @@
+You are building a feature inside Predixen called **Metric Suggestion Engine**.
+
+Predixen already has (or is implementing):
+- Data source integration framework (data_sources, ingestion_runs, raw_events)
+- Metric Catalog (canonical_metrics) with a Metric DSL (YAML) + compiler + executor
+- Multi-tenant org_id isolation
+- Data accuracy is the #1 priority (traceability & freshness)
+
+GOAL:
+When a user connects a data source (Stripe, GA4, QuickBooks, HubSpot/Salesforce, Google Ads/Meta Ads, DB, Sheets),
+Predixen should automatically:
+1) Detect available entities/fields (capabilities)
+2) Propose a list of recommended metrics
+3) Allow user to “One-click create” these metrics in the Metric Catalog
+4) Optionally auto-compute them immediately
+5) Show confidence/trust indicators and freshness
+
+IMPORTANT PRINCIPLES:
+- Suggestions are deterministic rules first (no LLM required).
+- Suggestions must only be created when dependencies are satisfied.
+- Every suggested metric must compile via Metric DSL safely (no raw SQL unless enterprise mode).
+- Provide explainability: “why this metric suggested”, “what data used”, “what assumptions”.
+
+====================================================
+PHASE A — DATA MODEL CHANGES
+====================================================
+
+Add tables/migrations:
+
+1) connector_capabilities
+- id uuid pk
+- org_id uuid
+- data_source_id uuid
+- adapter_key text (stripe, ga4, quickbooks, hubspot, postgres, google_sheets, rest_api)
+- discovered_at timestamptz
+- capabilities jsonb
+  Example:
+  {
+    "entities": ["invoices","subscriptions","customers"],
+    "fields": {"invoice.amount":"present", "invoice.currency":"present"},
+    "time_field": "created",
+    "supports_webhooks": true,
+    "supports_incremental": true
+  }
+
+2) metric_suggestions
+- id uuid pk
+- org_id uuid
+- data_source_id uuid nullable (suggestions can be cross-source)
+- suggestion_key text (stable slug e.g. "stripe_revenue_paid")
+- title text
+- description text
+- category text (Finance, Growth, Product, Sales)
+- metric_dsl_yaml text (full YAML)
+- dependencies jsonb (data_source_types required)
+- confidence_score int (0-100)
+- reason jsonb (why suggested)
+- status text (new, accepted, dismissed)
+- created_at timestamptz
+- accepted_metric_id uuid nullable
+
+3) suggestion_events (audit & analytics)
+- id uuid pk
+- org_id uuid
+- suggestion_id uuid
+- actor_id uuid nullable
+- action text (generated, viewed, accepted, dismissed, auto_computed)
+- meta jsonb
+- created_at timestamptz
+
+====================================================
+PHASE B — CAPABILITY DISCOVERY PIPELINE
+====================================================
+
+Implement an adapter hook:
+- After data source setup (wizard completion) OR after first successful ingestion_run,
+run a “discoverCapabilities” step per connector adapter.
+
+Update connector SDK interface:
+- discoverCapabilities(ctx, config, secrets) -> capabilities json
+If a connector can’t fully discover, infer from:
+- raw_events payload samples (first N=200 events) + known schemas
+- ingestion metadata
+
+Store results in connector_capabilities.
+
+Required connectors to support capabilities discovery:
+- Stripe: detect invoices, subscriptions, customers, charges
+- GA4: detect which metrics/dimensions are accessible (sessions/users/conversions)
+- QuickBooks: detect accounts/transactions categories available
+- HubSpot/Salesforce: detect deals pipeline stages, opportunity fields
+- Ads (Google/Meta): detect campaigns/adsets/metrics available
+- DB connectors: detect tables, columns, primary time column (heuristic)
+- Sheets: detect column headers and timestamp column (heuristic)
+
+====================================================
+PHASE C — SUGGESTION RULE ENGINE (DETERMINISTIC)
+====================================================
+
+Create module:
+server/modules/metrics/suggestions/
+
+Implement:
+1) SuggestionRule interface:
+- id: string
+- applies(capabilities, orgContext) -> boolean
+- build(capabilities, orgContext) -> { title, description, metric_dsl_yaml, dependencies, confidence, reason }
+
+2) Rule engine runner:
+- Given org_id + data_source_id:
+  - load capabilities
+  - run all rules for that connector type
+  - upsert metric_suggestions (stable suggestion_key ensures idempotency)
+
+3) Cross-source rules:
+Some metrics require multiple sources:
+- CAC = Ads spend / new customers (needs Ads + CRM)
+- NRR = needs subscriptions + expansions/churn (Stripe + CRM optional)
+- LTV = needs ARPU + churn + gross margin (Stripe + QuickBooks + CRM)
+
+Rules should:
+- generate partial suggestions with status “blocked” if dependencies missing
+OR
+- generate “ready” suggestions only when dependencies present
+Store reason like:
+{ "blocked_by": ["google_ads"], "needs": ["ad_spend_metric"] }
+
+Include confidence scoring:
+- 90–100: perfect schema match + correct time field + correct amount field
+- 70–89: minor assumptions (currency field missing -> assume USD)
+- 40–69: heuristics (time field inferred, amount inferred)
+- <40: don’t suggest automatically; show as “advanced templates”
+
+====================================================
+PHASE D — DEFAULT RULE SET (MUST IMPLEMENT)
+====================================================
+
+Implement the following suggestion rules (minimum):
+
+Stripe rules:
+- Revenue (paid invoices sum(amount) daily/monthly)
+- MRR (active subscriptions normalized monthly)
+- ARR (MRR*12) as composed metric
+- New Customers (count distinct customer_id)
+- Refunds (sum refunds)
+
+GA4 rules:
+- Sessions (daily)
+- Users (daily)
+- Conversions (daily)
+- Conversion Rate (conversions/sessions) as composed metric
+
+QuickBooks rules:
+- Expenses (sum expense transactions)
+- COGS (sum cogs accounts if present else suggest mapping)
+- Gross Margin ((Revenue-COGS)/Revenue) composed (requires revenue)
+- Burn (monthly expenses) template
+
+CRM rules (HubSpot/Salesforce):
+- Pipeline Value (sum open deals)
+- Closed Won Revenue
+- Win Rate (closed won / total) composed
+- Sales Cycle (avg days between created and closed)
+
+Ads rules (Google Ads / Meta):
+- Ad Spend (daily)
+- Clicks, Impressions
+- CAC (Ad Spend / New Customers) composed (requires CRM or Stripe customers)
+- ROAS (Revenue / Ad Spend) composed (requires Revenue)
+
+DB rules:
+- If table contains “orders” with amount + created_at: Revenue
+- If table contains “subscriptions”: MRR template
+- If table contains “users”: New Users
+
+Sheets rules:
+- If columns match known names (revenue, spend, hires): suggest metrics accordingly
+- Provide mapping UI to confirm timestamp and value columns
+
+Generic REST API rules:
+- If payload has “amount” + timestamp: suggest “Total Amount”
+- If payload has “count” + timestamp: suggest “Count”
+
+Each rule must output a valid Metric DSL YAML definition.
+
+====================================================
+PHASE E — API ENDPOINTS
+====================================================
+
+Create endpoints:
+
+POST /api/metrics/suggestions/generate
+Body: { data_source_id }
+-> runs capabilities discovery if stale + generates suggestions
+
+GET /api/metrics/suggestions
+Query: status=new|accepted|dismissed|blocked, data_source_id optional
+
+POST /api/metrics/suggestions/:id/accept
+Body: { auto_compute: boolean }
+-> creates canonical_metrics row (draft or certified)
+-> links metric_suggestions.accepted_metric_id
+-> optionally enqueue compute
+
+POST /api/metrics/suggestions/:id/dismiss
+-> marks dismissed and logs event
+
+GET /api/metrics/suggestions/:id/explain
+-> returns reason JSON + dependencies + sample raw event fields used + compiled SQL preview (admin-only)
+
+====================================================
+PHASE F — FRONTEND UX (HIGH CLARITY, NOT POLISH)
+====================================================
+
+Build UI pages:
+
+1) “Suggested Metrics” dashboard
+- grouped by category (Finance, Growth, Sales, Product)
+- filters: Ready / Blocked / Accepted / Dismissed
+- shows confidence score badge + freshness badge
+- one-click “Accept & Compute”
+- “Accept” only
+- “Dismiss”
+- “Explain” opens drawer
+
+2) Suggestion detail drawer
+- title, description
+- what data sources required
+- why suggested (human readable)
+- show metric DSL YAML (read-only)
+- show “fields detected” summary
+
+3) After connecting a source:
+- redirect to Suggested Metrics page with toast:
+  “We found 8 metrics you can enable from Stripe.”
+
+====================================================
+PHASE G — AUTO-RUN TRIGGERS
+====================================================
+
+Automatic generation triggers:
+- On first successful ingestion_run for a data_source
+- On connector setup completion
+- On schema drift detected (capabilities changed)
+
+Implement:
+- A background job that runs suggestion generation when ingestion completes
+- But only once per day unless capabilities changed
+
+====================================================
+PHASE H — QUALITY BAR & TESTING
+====================================================
+
+Tests required:
+- Rule engine idempotency (no duplicate suggestions)
+- Stripe revenue suggestion produces valid DSL and compiles
+- GA4 sessions suggestion compiles
+- Cross-source CAC is blocked until ads+crm exist
+- Accept creates canonical_metrics and links suggestion
+- Auto compute enqueues job and writes metric_values
+
+Also implement:
+- Guardrails: do not suggest metrics if time field cannot be inferred confidently
+- Explainability: reason must include which capability fields triggered the rule
+
+====================================================
+FILE STRUCTURE (STRICT)
+====================================================
+
+server/
+  modules/
+    integrations/
+      capabilities/
+        capability.service.ts
+        capability.routes.ts
+    metrics/
+      suggestions/
+        rules/
+          stripe.rules.ts
+          ga4.rules.ts
+          quickbooks.rules.ts
+          crm.rules.ts
+          ads.rules.ts
+          db.rules.ts
+          sheets.rules.ts
+          rest.rules.ts
+        suggestion.engine.ts
+        suggestion.service.ts
+        suggestion.routes.ts
+        scoring.ts
+        explain.ts
+
+client/
+  pages/
+    SuggestedMetrics.tsx
+  components/
+    suggestions/
+      SuggestionCard.tsx
+      SuggestionDrawer.tsx
+      ConfidenceBadge.tsx
+      DependencyBadge.tsx
+  services/
+    suggestions.api.ts
+
+====================================================
+OUTPUT RULES
+====================================================
+
+- Generate code file-by-file with paths
+- TypeScript everywhere
+- Deterministic rules; no LLM required
+- Ensure all suggestions produce DSL that passes validator
+- Provide a manual test checklist at the end
+
+BEGIN NOW:
+1) Inspect repo quickly (short plan)
+2) Add migrations
+3) Implement capabilities discovery stubs for at least Stripe + GA4 + CSV
+4) Implement suggestion engine + rules for Stripe + GA4 + QuickBooks
+5) Implement suggestions API
+6) Implement frontend Suggested Metrics UI
+7) Add tests
+Do not stop early.

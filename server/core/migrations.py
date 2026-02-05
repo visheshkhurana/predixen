@@ -666,6 +666,66 @@ def ensure_email_events_table(engine: Engine) -> None:
             logger.debug(f"Email events table may already exist: {e}")
 
 
+def ensure_metric_suggestions_tables(engine: Engine) -> None:
+    """Create metric suggestions and related tables."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS connector_capabilities (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    data_source_id INTEGER,
+                    adapter_key VARCHAR(100) NOT NULL,
+                    discovered_at TIMESTAMP DEFAULT NOW(),
+                    capabilities JSONB DEFAULT '{}'
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_capability_company_adapter ON connector_capabilities(company_id, adapter_key)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_capability_data_source ON connector_capabilities(data_source_id)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS metric_suggestions (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    data_source_id INTEGER,
+                    suggestion_key VARCHAR(100) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    category VARCHAR(50) DEFAULT 'Finance',
+                    metric_dsl_yaml TEXT NOT NULL,
+                    dependencies JSONB,
+                    confidence_score INTEGER DEFAULT 80,
+                    reason JSONB,
+                    status VARCHAR(50) DEFAULT 'new',
+                    accepted_metric_id INTEGER REFERENCES metric_definitions(id),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_suggestion_company_key ON metric_suggestions(company_id, suggestion_key)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_suggestion_status ON metric_suggestions(status)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_suggestion_category ON metric_suggestions(category)"))
+            
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS suggestion_events (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    suggestion_id INTEGER NOT NULL REFERENCES metric_suggestions(id),
+                    actor_id INTEGER REFERENCES users(id),
+                    action VARCHAR(50) NOT NULL,
+                    meta JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sugg_event_suggestion ON suggestion_events(suggestion_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sugg_event_action ON suggestion_events(action)"))
+            
+            conn.commit()
+            logger.info("Metric suggestions tables migration complete")
+        except Exception as e:
+            logger.debug(f"Metric suggestions tables may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -689,4 +749,5 @@ def run_migrations(engine: Engine) -> None:
     ensure_simulation_runs_provenance(engine)
     ensure_scenarios_overrides(engine)
     ensure_email_events_table(engine)
+    ensure_metric_suggestions_tables(engine)
     logger.info("Database migrations completed successfully")

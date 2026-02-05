@@ -47,6 +47,7 @@ import AddDataSourcePage from "@/pages/add-data-source";
 import DashboardsPage from "@/pages/dashboards";
 import DashboardBuilderPage from "@/pages/dashboard-builder";
 import MetricCatalogPage from "@/pages/metric-catalog";
+import SuggestedMetricsPage from "@/pages/suggested-metrics";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -185,6 +186,9 @@ function Router() {
       </Route>
       <Route path="/metrics">
         {() => <AuthenticatedRoute component={MetricCatalogPage} />}
+      </Route>
+      <Route path="/suggested-metrics">
+        {() => <AuthenticatedRoute component={SuggestedMetricsPage} />}
       </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
