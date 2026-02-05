@@ -1133,6 +1133,7 @@ export default function OnboardingPage() {
                     <Input
                       id="gross-margin"
                       type="number"
+                      step="0.1"
                       value={baselineData.gross_margin_pct}
                       onChange={(e) => setBaselineData({ ...baselineData, gross_margin_pct: Number(e.target.value) })}
                       required
