@@ -1,0 +1,897 @@
+# PHASE 1: DATA INTEGRATION INFRASTRUCTURE & GOOGLE SHEETS CONNECTOR
+
+## OBJECTIVE
+Build the foundational integration infrastructure and implement Google Sheets as the first connector. This creates the architecture that all future integrations will use.
+
+## CURRENT STATE
+The app has an Integrations page at /integrations with existing connectors for:
+- Accounting: QuickBooks, Xero, Zoho Books, Tally ERP
+- Payroll: RazorpayX, GreytHR, Keka HR
+- CRM: Salesforce, HubSpot
+- Payments: Stripe
+
+The integrations are displayed in a tabbed interface with Connect buttons.
+
+## TASK 1: Create Integration Infrastructure
+
+### 1.1 Create Integration Types and Interfaces
+
+Create file: `lib/integrations/types.ts`
+```typescript
+// Core integration types
+export type IntegrationCategory = 
+  | 'accounting'
+  | 'payroll'
+  | 'erp'
+  | 'crm'
+  | 'payments'
+  | 'analytics'
+  | 'marketing'
+  | 'support'
+  | 'databases'
+  | 'spreadsheets'
+  | 'productivity';
+
+export type IntegrationStatus = 'connected' | 'disconnected' | 'error' | 'syncing';
+
+export type AuthType = 'oauth2' | 'api_key' | 'basic_auth' | 'service_account';
+
+export interface IntegrationConfig {
+  id: string;
+  name: string;
+  description: string;
+  icon: string; // URL or component name
+  category: IntegrationCategory;
+  authType: AuthType;
+  status: IntegrationStatus;
+  isComingSoon?: boolean;
+  
+  // OAuth config
+  oauthConfig?: {
+    authUrl: string;
+    tokenUrl: string;
+    scopes: string[];
+    clientId?: string;
+  };
+  
+  // API Key config
+  apiKeyConfig?: {
+    fields: ApiKeyField[];
+  };
+  
+  // Available data points
+  dataPoints: DataPoint[];
+  
+  // Sync settings
+  syncConfig: {
+    defaultInterval: SyncInterval;
+    availableIntervals: SyncInterval[];
+    supportsRealtime: boolean;
+  };
+}
+
+export interface ApiKeyField {
+  name: string;
+  label: string;
+  type: 'text' | 'password' | 'url';
+  required: boolean;
+  placeholder?: string;
+  helpText?: string;
+}
+
+export interface DataPoint {
+  id: string;
+  name: string;
+  description: string;
+  dataType: 'number' | 'currency' | 'percentage' | 'string' | 'date' | 'boolean';
+  category: string; // e.g., 'revenue', 'users', 'engagement'
+  refreshRate: 'realtime' | 'hourly' | 'daily' | 'weekly';
+}
+
+export type SyncInterval = '5min' | '15min' | '30min' | 'hourly' | 'daily' | 'weekly';
+
+export interface ConnectedIntegration {
+  id: string;
+  integrationId: string;
+  userId: string;
+  companyId: string;
+  status: IntegrationStatus;
+  connectedAt: Date;
+  lastSyncAt?: Date;
+  nextSyncAt?: Date;
+  syncInterval: SyncInterval;
+  credentials: EncryptedCredentials;
+  selectedDataPoints: string[];
+  error?: string;
+}
+
+export interface EncryptedCredentials {
+  accessToken?: string;
+  refreshToken?: string;
+  apiKey?: string;
+  additionalFields?: Record<string, string>;
+  expiresAt?: Date;
+}
+
+export interface SyncResult {
+  integrationId: string;
+  success: boolean;
+  syncedAt: Date;
+  recordsProcessed: number;
+  errors?: SyncError[];
+  dataPoints: SyncedDataPoint[];
+}
+
+export interface SyncError {
+  dataPoint: string;
+  error: string;
+  timestamp: Date;
+}
+
+export interface SyncedDataPoint {
+  dataPointId: string;
+  value: any;
+  previousValue?: any;
+  timestamp: Date;
+  metadata?: Record<string, any>;
+}
+```
+
+### 1.2 Create Integration Registry
+
+Create file: `lib/integrations/registry.ts`
+```typescript
+import { IntegrationConfig } from './types';
+
+// Google Sheets Integration
+export const googleSheetsIntegration: IntegrationConfig = {
+  id: 'google-sheets',
+  name: 'Google Sheets',
+  description: 'Import data from Google Sheets spreadsheets. Perfect for custom metrics, budgets, and manual data entry.',
+  icon: '/integrations/google-sheets.svg',
+  category: 'spreadsheets',
+  authType: 'oauth2',
+  status: 'disconnected',
+  
+  oauthConfig: {
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets.readonly',
+      'https://www.googleapis.com/auth/drive.readonly'
+    ],
+  },
+  
+  dataPoints: [
+    {
+      id: 'custom_metric',
+      name: 'Custom Metrics',
+      description: 'Import any numeric data from your spreadsheets',
+      dataType: 'number',
+      category: 'custom',
+      refreshRate: 'hourly',
+    },
+    {
+      id: 'budget_data',
+      name: 'Budget Data',
+      description: 'Import budget and forecast data',
+      dataType: 'currency',
+      category: 'finance',
+      refreshRate: 'daily',
+    },
+    {
+      id: 'manual_kpis',
+      name: 'Manual KPIs',
+      description: 'Track KPIs that you enter manually',
+      dataType: 'number',
+      category: 'kpi',
+      refreshRate: 'daily',
+    },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'hourly',
+    availableIntervals: ['15min', '30min', 'hourly', 'daily'],
+    supportsRealtime: false,
+  },
+};
+
+// Google Analytics 4 Integration
+export const googleAnalyticsIntegration: IntegrationConfig = {
+  id: 'google-analytics-4',
+  name: 'Google Analytics 4',
+  description: 'Track website traffic, user acquisition, and conversion funnels.',
+  icon: '/integrations/google-analytics.svg',
+  category: 'analytics',
+  authType: 'oauth2',
+  status: 'disconnected',
+  
+  oauthConfig: {
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scopes: [
+      'https://www.googleapis.com/auth/analytics.readonly',
+    ],
+  },
+  
+  dataPoints: [
+    { id: 'sessions', name: 'Sessions', description: 'Total website sessions', dataType: 'number', category: 'traffic', refreshRate: 'hourly' },
+    { id: 'users', name: 'Users', description: 'Unique users', dataType: 'number', category: 'traffic', refreshRate: 'hourly' },
+    { id: 'new_users', name: 'New Users', description: 'First-time visitors', dataType: 'number', category: 'traffic', refreshRate: 'hourly' },
+    { id: 'bounce_rate', name: 'Bounce Rate', description: 'Single-page session percentage', dataType: 'percentage', category: 'engagement', refreshRate: 'hourly' },
+    { id: 'avg_session_duration', name: 'Avg Session Duration', description: 'Average time on site', dataType: 'number', category: 'engagement', refreshRate: 'hourly' },
+    { id: 'page_views', name: 'Page Views', description: 'Total page views', dataType: 'number', category: 'traffic', refreshRate: 'hourly' },
+    { id: 'conversions', name: 'Conversions', description: 'Goal completions', dataType: 'number', category: 'conversion', refreshRate: 'hourly' },
+    { id: 'conversion_rate', name: 'Conversion Rate', description: 'Conversion percentage', dataType: 'percentage', category: 'conversion', refreshRate: 'hourly' },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'hourly',
+    availableIntervals: ['hourly', 'daily'],
+    supportsRealtime: false,
+  },
+};
+
+// Mixpanel Integration
+export const mixpanelIntegration: IntegrationConfig = {
+  id: 'mixpanel',
+  name: 'Mixpanel',
+  description: 'Product analytics for user behavior, retention, and feature engagement.',
+  icon: '/integrations/mixpanel.svg',
+  category: 'analytics',
+  authType: 'api_key',
+  status: 'disconnected',
+  
+  apiKeyConfig: {
+    fields: [
+      { name: 'project_id', label: 'Project ID', type: 'text', required: true, placeholder: 'Your Mixpanel Project ID' },
+      { name: 'api_secret', label: 'API Secret', type: 'password', required: true, placeholder: 'Your API Secret' },
+    ],
+  },
+  
+  dataPoints: [
+    { id: 'dau', name: 'Daily Active Users', description: 'Users active today', dataType: 'number', category: 'users', refreshRate: 'daily' },
+    { id: 'mau', name: 'Monthly Active Users', description: 'Users active this month', dataType: 'number', category: 'users', refreshRate: 'daily' },
+    { id: 'dau_mau_ratio', name: 'DAU/MAU Ratio', description: 'Stickiness metric', dataType: 'percentage', category: 'engagement', refreshRate: 'daily' },
+    { id: 'retention_d1', name: 'D1 Retention', description: 'Day 1 retention rate', dataType: 'percentage', category: 'retention', refreshRate: 'daily' },
+    { id: 'retention_d7', name: 'D7 Retention', description: 'Day 7 retention rate', dataType: 'percentage', category: 'retention', refreshRate: 'daily' },
+    { id: 'retention_d30', name: 'D30 Retention', description: 'Day 30 retention rate', dataType: 'percentage', category: 'retention', refreshRate: 'daily' },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'daily',
+    availableIntervals: ['hourly', 'daily'],
+    supportsRealtime: false,
+  },
+};
+
+// ChartMogul Integration
+export const chartMogulIntegration: IntegrationConfig = {
+  id: 'chartmogul',
+  name: 'ChartMogul',
+  description: 'Subscription analytics - MRR, ARR, churn, LTV from your billing data.',
+  icon: '/integrations/chartmogul.svg',
+  category: 'analytics',
+  authType: 'api_key',
+  status: 'disconnected',
+  
+  apiKeyConfig: {
+    fields: [
+      { name: 'api_key', label: 'API Key', type: 'password', required: true, placeholder: 'Your ChartMogul API Key' },
+    ],
+  },
+  
+  dataPoints: [
+    { id: 'mrr', name: 'MRR', description: 'Monthly Recurring Revenue', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
+    { id: 'arr', name: 'ARR', description: 'Annual Recurring Revenue', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
+    { id: 'mrr_growth_rate', name: 'MRR Growth Rate', description: 'Month-over-month MRR growth', dataType: 'percentage', category: 'revenue', refreshRate: 'daily' },
+    { id: 'net_mrr_churn', name: 'Net MRR Churn', description: 'Net revenue churn rate', dataType: 'percentage', category: 'churn', refreshRate: 'daily' },
+    { id: 'gross_mrr_churn', name: 'Gross MRR Churn', description: 'Gross revenue churn rate', dataType: 'percentage', category: 'churn', refreshRate: 'daily' },
+    { id: 'customer_churn', name: 'Customer Churn', description: 'Logo churn rate', dataType: 'percentage', category: 'churn', refreshRate: 'daily' },
+    { id: 'ltv', name: 'LTV', description: 'Customer Lifetime Value', dataType: 'currency', category: 'unit_economics', refreshRate: 'daily' },
+    { id: 'arpa', name: 'ARPA', description: 'Average Revenue Per Account', dataType: 'currency', category: 'unit_economics', refreshRate: 'daily' },
+    { id: 'customers', name: 'Total Customers', description: 'Active paying customers', dataType: 'number', category: 'customers', refreshRate: 'daily' },
+    { id: 'new_mrr', name: 'New MRR', description: 'MRR from new customers', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
+    { id: 'expansion_mrr', name: 'Expansion MRR', description: 'MRR from upgrades', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
+    { id: 'contraction_mrr', name: 'Contraction MRR', description: 'MRR lost to downgrades', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'daily',
+    availableIntervals: ['hourly', 'daily'],
+    supportsRealtime: false,
+  },
+};
+
+// Integration Registry - All available integrations
+export const integrationRegistry: IntegrationConfig[] = [
+  googleSheetsIntegration,
+  googleAnalyticsIntegration,
+  mixpanelIntegration,
+  chartMogulIntegration,
+  // Add more integrations here as we build them
+];
+
+// Helper functions
+export function getIntegrationById(id: string): IntegrationConfig | undefined {
+  return integrationRegistry.find(i => i.id === id);
+}
+
+export function getIntegrationsByCategory(category: IntegrationCategory): IntegrationConfig[] {
+  return integrationRegistry.filter(i => i.category === category);
+}
+```
+
+### 1.3 Create Integration Service
+
+Create file: `lib/integrations/integrationService.ts`
+```typescript
+import { 
+  IntegrationConfig, 
+  ConnectedIntegration, 
+  SyncResult, 
+  SyncedDataPoint,
+  EncryptedCredentials 
+} from './types';
+import { getIntegrationById } from './registry';
+
+class IntegrationService {
+  private connectedIntegrations: Map<string, ConnectedIntegration> = new Map();
+
+  // Connect an integration
+  async connect(
+    integrationId: string, 
+    userId: string, 
+    companyId: string,
+    credentials: EncryptedCredentials,
+    selectedDataPoints: string[]
+  ): Promise<ConnectedIntegration> {
+    const integration = getIntegrationById(integrationId);
+    if (!integration) {
+      throw new Error(`Integration ${integrationId} not found`);
+    }
+
+    const connected: ConnectedIntegration = {
+      id: `${companyId}-${integrationId}`,
+      integrationId,
+      userId,
+      companyId,
+      status: 'connected',
+      connectedAt: new Date(),
+      syncInterval: integration.syncConfig.defaultInterval,
+      credentials,
+      selectedDataPoints,
+    };
+
+    // Store in database (implement your storage logic)
+    this.connectedIntegrations.set(connected.id, connected);
+    
+    // Trigger initial sync
+    await this.sync(connected.id);
+
+    return connected;
+  }
+
+  // Disconnect an integration
+  async disconnect(connectionId: string): Promise<void> {
+    const connection = this.connectedIntegrations.get(connectionId);
+    if (!connection) {
+      throw new Error(`Connection ${connectionId} not found`);
+    }
+
+    // Revoke tokens if OAuth
+    // Delete stored credentials
+    // Remove from database
+    this.connectedIntegrations.delete(connectionId);
+  }
+
+  // Sync data from an integration
+  async sync(connectionId: string): Promise<SyncResult> {
+    const connection = this.connectedIntegrations.get(connectionId);
+    if (!connection) {
+      throw new Error(`Connection ${connectionId} not found`);
+    }
+
+    const integration = getIntegrationById(connection.integrationId);
+    if (!integration) {
+      throw new Error(`Integration ${connection.integrationId} not found`);
+    }
+
+    try {
+      // Update status
+      connection.status = 'syncing';
+
+      // Call the appropriate sync handler based on integration
+      const dataPoints = await this.fetchDataPoints(integration, connection);
+
+      // Update connection
+      connection.lastSyncAt = new Date();
+      connection.status = 'connected';
+      connection.nextSyncAt = this.calculateNextSync(connection.syncInterval);
+
+      return {
+        integrationId: connection.integrationId,
+        success: true,
+        syncedAt: new Date(),
+        recordsProcessed: dataPoints.length,
+        dataPoints,
+      };
+    } catch (error) {
+      connection.status = 'error';
+      connection.error = error instanceof Error ? error.message : 'Unknown error';
+      
+      return {
+        integrationId: connection.integrationId,
+        success: false,
+        syncedAt: new Date(),
+        recordsProcessed: 0,
+        errors: [{ dataPoint: 'all', error: connection.error, timestamp: new Date() }],
+        dataPoints: [],
+      };
+    }
+  }
+
+  private async fetchDataPoints(
+    integration: IntegrationConfig, 
+    connection: ConnectedIntegration
+  ): Promise<SyncedDataPoint[]> {
+    // Route to appropriate handler based on integration ID
+    switch (integration.id) {
+      case 'google-sheets':
+        return this.fetchGoogleSheetsData(connection);
+      case 'google-analytics-4':
+        return this.fetchGoogleAnalyticsData(connection);
+      case 'mixpanel':
+        return this.fetchMixpanelData(connection);
+      case 'chartmogul':
+        return this.fetchChartMogulData(connection);
+      default:
+        throw new Error(`No handler for integration ${integration.id}`);
+    }
+  }
+
+  // Google Sheets data fetcher
+  private async fetchGoogleSheetsData(connection: ConnectedIntegration): Promise<SyncedDataPoint[]> {
+    // Implementation will use Google Sheets API
+    // For now, return mock data
+    return [];
+  }
+
+  // Google Analytics data fetcher
+  private async fetchGoogleAnalyticsData(connection: ConnectedIntegration): Promise<SyncedDataPoint[]> {
+    // Implementation will use GA4 Data API
+    return [];
+  }
+
+  // Mixpanel data fetcher
+  private async fetchMixpanelData(connection: ConnectedIntegration): Promise<SyncedDataPoint[]> {
+    // Implementation will use Mixpanel Export API
+    return [];
+  }
+
+  // ChartMogul data fetcher
+  private async fetchChartMogulData(connection: ConnectedIntegration): Promise<SyncedDataPoint[]> {
+    // Implementation will use ChartMogul API
+    return [];
+  }
+
+  private calculateNextSync(interval: string): Date {
+    const now = new Date();
+    switch (interval) {
+      case '5min': return new Date(now.getTime() + 5 * 60 * 1000);
+      case '15min': return new Date(now.getTime() + 15 * 60 * 1000);
+      case '30min': return new Date(now.getTime() + 30 * 60 * 1000);
+      case 'hourly': return new Date(now.getTime() + 60 * 60 * 1000);
+      case 'daily': return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      case 'weekly': return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      default: return new Date(now.getTime() + 60 * 60 * 1000);
+    }
+  }
+
+  // Get all connections for a company
+  getConnectionsByCompany(companyId: string): ConnectedIntegration[] {
+    return Array.from(this.connectedIntegrations.values())
+      .filter(c => c.companyId === companyId);
+  }
+
+  // Get connection status
+  getConnectionStatus(connectionId: string): ConnectedIntegration | undefined {
+    return this.connectedIntegrations.get(connectionId);
+  }
+}
+
+export const integrationService = new IntegrationService();
+```
+
+## TASK 2: Create Integration UI Components
+
+### 2.1 Create New Integration Card Component
+
+Create file: `components/integrations/IntegrationCard.tsx`
+```typescript
+import React from 'react';
+import { IntegrationConfig, IntegrationStatus } from '@/lib/integrations/types';
+
+interface IntegrationCardProps {
+  integration: IntegrationConfig;
+  isConnected: boolean;
+  onConnect: (integration: IntegrationConfig) => void;
+  onDisconnect: (integrationId: string) => void;
+  onConfigure: (integrationId: string) => void;
+  lastSyncAt?: Date;
+  status?: IntegrationStatus;
+}
+
+const statusColors = {
+  connected: 'bg-green-500',
+  disconnected: 'bg-gray-500',
+  error: 'bg-red-500',
+  syncing: 'bg-blue-500 animate-pulse',
+};
+
+const IntegrationCard: React.FC<IntegrationCardProps> = ({
+  integration,
+  isConnected,
+  onConnect,
+  onDisconnect,
+  onConfigure,
+  lastSyncAt,
+  status = 'disconnected',
+}) => {
+  return (
+    <div className={`bg-gray-800 rounded-xl p-5 border ${isConnected ? 'border-green-500/30' : 'border-gray-700'} hover:border-gray-600 transition-all`}>
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
+            {/* Integration Icon */}
+            <img 
+              src={integration.icon} 
+              alt={integration.name}
+              className="w-6 h-6"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/integrations/default.svg';
+              }}
+            />
+          </div>
+          <div>
+            <h3 className="text-white font-medium flex items-center gap-2">
+              {integration.name}
+              {integration.isComingSoon && (
+                <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-400 rounded-full">
+                  Coming Soon
+                </span>
+              )}
+            </h3>
+            <p className="text-gray-400 text-xs">{integration.category}</p>
+          </div>
+        </div>
+        
+        {/* Status Indicator */}
+        {isConnected && (
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${statusColors[status]}`} />
+            <span className="text-xs text-gray-400 capitalize">{status}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+        {integration.description}
+      </p>
+
+      {/* Data Points Tags */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {integration.dataPoints.slice(0, 4).map((dp) => (
+          <span 
+            key={dp.id}
+            className="text-xs px-2 py-1 bg-gray-700 text-gray-300 rounded-full"
+          >
+            {dp.name}
+          </span>
+        ))}
+        {integration.dataPoints.length > 4 && (
+          <span className="text-xs px-2 py-1 bg-gray-700 text-gray-400 rounded-full">
+            +{integration.dataPoints.length - 4} more
+          </span>
+        )}
+      </div>
+
+      {/* Last Sync Info */}
+      {isConnected && lastSyncAt && (
+        <p className="text-xs text-gray-500 mb-3">
+          Last synced: {new Date(lastSyncAt).toLocaleString()}
+        </p>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        {integration.isComingSoon ? (
+          <button
+            disabled
+            className="flex-1 px-4 py-2 bg-gray-700 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed"
+          >
+            Coming Soon
+          </button>
+        ) : isConnected ? (
+          <>
+            <button
+              onClick={() => onConfigure(integration.id)}
+              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Configure
+            </button>
+            <button
+              onClick={() => onDisconnect(integration.id)}
+              className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm font-medium transition-colors"
+            >
+              Disconnect
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => onConnect(integration)}
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            Connect
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default IntegrationCard;
+```
+
+### 2.2 Create OAuth Connection Modal
+
+Create file: `components/integrations/OAuthConnectModal.tsx`
+```typescript
+import React, { useState } from 'react';
+import { IntegrationConfig } from '@/lib/integrations/types';
+
+interface OAuthConnectModalProps {
+  integration: IntegrationConfig;
+  isOpen: boolean;
+  onClose: () => void;
+  onConnect: (integrationId: string, selectedDataPoints: string[]) => void;
+}
+
+const OAuthConnectModal: React.FC<OAuthConnectModalProps> = ({
+  integration,
+  isOpen,
+  onClose,
+  onConnect,
+}) => {
+  const [selectedDataPoints, setSelectedDataPoints] = useState<string[]>(
+    integration.dataPoints.map(dp => dp.id)
+  );
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    
+    // For OAuth, redirect to auth URL
+    if (integration.authType === 'oauth2' && integration.oauthConfig) {
+      const params = new URLSearchParams({
+        client_id: integration.oauthConfig.clientId || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+        redirect_uri: `${window.location.origin}/api/integrations/oauth/callback`,
+        response_type: 'code',
+        scope: integration.oauthConfig.scopes.join(' '),
+        state: JSON.stringify({ 
+          integrationId: integration.id,
+          dataPoints: selectedDataPoints 
+        }),
+        access_type: 'offline',
+        prompt: 'consent',
+      });
+      
+      window.location.href = `${integration.oauthConfig.authUrl}?${params.toString()}`;
+    }
+  };
+
+  const toggleDataPoint = (dataPointId: string) => {
+    setSelectedDataPoints(prev => 
+      prev.includes(dataPointId)
+        ? prev.filter(id => id !== dataPointId)
+        : [...prev, dataPointId]
+    );
+  };
+
+  // Group data points by category
+  const groupedDataPoints = integration.dataPoints.reduce((acc, dp) => {
+    if (!acc[dp.category]) acc[dp.category] = [];
+    acc[dp.category].push(dp);
+    return acc;
+  }, {} as Record<string, typeof integration.dataPoints>);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center">
+                <img 
+                  src={integration.icon} 
+                  alt={integration.name}
+                  className="w-8 h-8"
+                />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-white">Connect {integration.name}</h2>
+                <p className="text-gray-400 text-sm">{integration.description}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[50vh]">
+          <h3 className="text-white font-medium mb-4">Select data points to sync:</h3>
+          
+          {Object.entries(groupedDataPoints).map(([category, dataPoints]) => (
+            <div key={category} className="mb-4">
+              <h4 className="text-gray-400 text-sm font-medium mb-2 capitalize">{category}</h4>
+              <div className="space-y-2">
+                {dataPoints.map((dp) => (
+                  <label
+                    key={dp.id}
+                    className="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDataPoints.includes(dp.id)}
+                      onChange={() => toggleDataPoint(dp.id)}
+                      className="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800"
+                    />
+                    <div className="flex-1">
+                      <div className="text-white text-sm">{dp.name}</div>
+                      <div className="text-gray-400 text-xs">{dp.description}</div>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-gray-600 text-gray-300 rounded-full">
+                      {dp.refreshRate}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-700 bg-gray-800/80">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-gray-400 text-sm">
+              {selectedDataPoints.length} data points selected
+            </span>
+            <span className="text-gray-400 text-sm">
+              Syncs {integration.syncConfig.defaultInterval}
+            </span>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConnect}
+              disabled={isConnecting || selectedDataPoints.length === 0}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              {isConnecting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Connect with {integration.name}
+                </>
+              )}
+            </button>
+          </div>
+          
+          <p className="text-gray-500 text-xs text-center mt-4">
+            You'll be redirected to {integration.name} to authorize access
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OAuthConnectModal;
+```
+
+### 2.3 Create API Key Connection Modal
+
+Create file: `components/integrations/ApiKeyConnectModal.tsx`
+```typescript
+import React, { useState } from 'react';
+import { IntegrationConfig, ApiKeyField } from '@/lib/integrations/types';
+
+interface ApiKeyConnectModalProps {
+  integration: IntegrationConfig;
+  isOpen: boolean;
+  onClose: () => void;
+  onConnect: (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => void;
+}
+
+const ApiKeyConnectModal: React.FC<ApiKeyConnectModalProps> = ({
+  integration,
+  isOpen,
+  onClose,
+  onConnect,
+}) => {
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [selectedDataPoints, setSelectedDataPoints] = useState<string[]>(
+    integration.dataPoints.map(dp => dp.id)
+  );
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen || !integration.apiKeyConfig) return null;
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    setError(null);
+
+    // Validate required fields
+    const missingFields = integration.apiKeyConfig!.fields
+      .filter(f => f.required && !credentials[f.name])
+      .map(f => f.label);
+
+    if (missingFields.length > 0) {
+      setError(`Please fill in: ${missingFields.join(', ')}`);
+      setIsConnecting(false);
+      return;
+    }
+
+    try {
+      await onConnect(integration.id, credentials, selectedDataPoints);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const toggleDataPoint = (dataPointId: string) => {
+    setSelectedDataPoints(prev => 
+      prev.includes(dataPointId)
+        ? prev.filter(id => id !== dataPointId)
+        : [...prev, dataPointId]
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}

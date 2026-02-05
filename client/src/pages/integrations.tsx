@@ -30,6 +30,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
+import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal } from "@/components/integrations";
+import { 
+  IntegrationConfig, 
+  integrationRegistry, 
+  getIntegrationsByCategory,
+  SheetMapping 
+} from "@/lib/integrations";
+
 interface IntegrationProvider {
   id: string;
   name: string;
@@ -376,6 +384,87 @@ export default function IntegrationsPage() {
   const queryClient = useQueryClient();
   const [companyId] = useState(1);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
+  
+  const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [sheetsConfigOpen, setSheetsConfigOpen] = useState(false);
+  const [connectedNewIntegrations, setConnectedNewIntegrations] = useState<Set<string>>(new Set());
+  const [sheetMappings, setSheetMappings] = useState<SheetMapping[]>([]);
+
+  const spreadsheetIntegrations = getIntegrationsByCategory('spreadsheets');
+  const analyticsIntegrations = getIntegrationsByCategory('analytics');
+
+  const handleConnectIntegration = (integration: IntegrationConfig) => {
+    setSelectedIntegration(integration);
+    if (integration.authType === 'oauth2') {
+      setOauthModalOpen(true);
+    } else if (integration.authType === 'api_key' || integration.authType === 'basic_auth' || integration.authType === 'service_account') {
+      setApiKeyModalOpen(true);
+    }
+  };
+
+  const handleModalClose = (modalType: 'oauth' | 'apikey' | 'sheets') => {
+    if (modalType === 'oauth') {
+      setOauthModalOpen(false);
+    } else if (modalType === 'apikey') {
+      setApiKeyModalOpen(false);
+    } else if (modalType === 'sheets') {
+      setSheetsConfigOpen(false);
+    }
+    setSelectedIntegration(null);
+  };
+
+  const handleOAuthConnect = (integrationId: string, selectedDataPoints: string[]) => {
+    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
+    toast({
+      title: "Integration Connected",
+      description: `Successfully connected ${selectedIntegration?.name}. Data will sync shortly.`,
+    });
+    setOauthModalOpen(false);
+    
+    if (integrationId === 'google-sheets') {
+      setSheetsConfigOpen(true);
+    } else {
+      setSelectedIntegration(null);
+    }
+  };
+
+  const handleApiKeyConnect = (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => {
+    setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
+    toast({
+      title: "Integration Connected",
+      description: `Successfully connected ${selectedIntegration?.name}. Initial sync started.`,
+    });
+    setApiKeyModalOpen(false);
+    setSelectedIntegration(null);
+  };
+
+  const handleDisconnectIntegration = (integrationId: string) => {
+    setConnectedNewIntegrations(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(integrationId);
+      return newSet;
+    });
+    toast({
+      title: "Integration Disconnected",
+      description: "The integration has been removed.",
+    });
+  };
+
+  const handleConfigureIntegration = (integrationId: string) => {
+    if (integrationId === 'google-sheets') {
+      setSheetsConfigOpen(true);
+    }
+  };
+
+  const handleSaveSheetMappings = (mappings: SheetMapping[]) => {
+    setSheetMappings(mappings);
+    toast({
+      title: "Configuration Saved",
+      description: `Configured ${mappings.length} sheet mapping(s). Data will sync on schedule.`,
+    });
+  };
 
   const { data: availableIntegrations } = useQuery<{
     accounting: IntegrationProvider[];
@@ -557,14 +646,60 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="accounting">
+      <Tabs defaultValue="spreadsheets">
         <TabsList data-testid="tabs-integration-type" className="flex-wrap gap-1">
+          <TabsTrigger value="spreadsheets" data-testid="tab-spreadsheets">Spreadsheets</TabsTrigger>
+          <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
           <TabsTrigger value="accounting" data-testid="tab-accounting">Accounting</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
           <TabsTrigger value="erp" data-testid="tab-erp">ERP</TabsTrigger>
           <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
           <TabsTrigger value="payments" data-testid="tab-payments">Payments</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="spreadsheets" className="space-y-4">
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+            <h3 className="font-medium mb-2">Spreadsheet Integrations</h3>
+            <p className="text-sm text-muted-foreground">
+              Import data from spreadsheets like Google Sheets. Perfect for custom metrics, budgets, and manual KPI tracking.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {spreadsheetIntegrations.map((integration) => (
+              <IntegrationCard
+                key={integration.id}
+                integration={integration}
+                isConnected={connectedNewIntegrations.has(integration.id)}
+                onConnect={handleConnectIntegration}
+                onDisconnect={handleDisconnectIntegration}
+                onConfigure={handleConfigureIntegration}
+                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
+              />
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+            <h3 className="font-medium mb-2">Analytics & Product Data</h3>
+            <p className="text-sm text-muted-foreground">
+              Connect analytics platforms to import user engagement, retention, and product metrics for your financial models.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {analyticsIntegrations.map((integration) => (
+              <IntegrationCard
+                key={integration.id}
+                integration={integration}
+                isConnected={connectedNewIntegrations.has(integration.id)}
+                onConnect={handleConnectIntegration}
+                onDisconnect={handleDisconnectIntegration}
+                onConfigure={handleConfigureIntegration}
+                status={connectedNewIntegrations.has(integration.id) ? 'connected' : 'disconnected'}
+              />
+            ))}
+          </div>
+        </TabsContent>
 
         <TabsContent value="accounting" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
@@ -713,6 +848,30 @@ export default function IntegrationsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {selectedIntegration && (
+        <>
+          <OAuthConnectModal
+            integration={selectedIntegration}
+            isOpen={oauthModalOpen}
+            onClose={() => handleModalClose('oauth')}
+            onConnect={handleOAuthConnect}
+          />
+          <ApiKeyConnectModal
+            integration={selectedIntegration}
+            isOpen={apiKeyModalOpen}
+            onClose={() => handleModalClose('apikey')}
+            onConnect={handleApiKeyConnect}
+          />
+        </>
+      )}
+
+      <GoogleSheetsConfigModal
+        isOpen={sheetsConfigOpen}
+        onClose={() => handleModalClose('sheets')}
+        onSave={handleSaveSheetMappings}
+        existingMappings={sheetMappings}
+      />
     </div>
   );
 }
