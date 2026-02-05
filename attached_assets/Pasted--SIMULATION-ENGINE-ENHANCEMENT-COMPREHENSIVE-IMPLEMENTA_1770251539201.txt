@@ -1,0 +1,795 @@
+# SIMULATION ENGINE ENHANCEMENT - COMPREHENSIVE IMPLEMENTATION GUIDE
+
+## PROJECT CONTEXT
+I'm building Predixen/RunwayAI - a startup financial simulator application. The app already has:
+- Basic Monte Carlo simulation with survival probability curves
+- Strategy templates (Conservative Cost Cutting, Deep Cost Restructuring, Price Increase)
+- Cash projection bands (P10/P50/P90)
+- Strategic Builder with goal-based strategy selection
+- Simulation results with runway distribution
+- Navigation: Overview, KPI Board, Data Input, Truth Scan, Simulation, Templates, Decisions, Copilot, Alerts, Fundraising, Investor Room
+- Dark theme UI (bg-gray-900, text-white, blue accents)
+
+The app uses React/Next.js frontend with TypeScript, Tailwind CSS for styling, and charts (likely Recharts). There's an existing Monte Carlo simulation engine that calculates runway, survival probability, and cash projections.
+
+## TASK: Implement 7 Advanced Simulation Features
+
+Implement these features one by one, testing each before moving to the next. Match the existing dark theme styling throughout.
+
+---
+
+## FEATURE 1: TORNADO CHART - SENSITIVITY ANALYSIS
+
+### Description
+Create a horizontal bar chart (tornado diagram) showing which input variables have the most impact on runway. Variables ranked by impact magnitude with bars extending left (negative) and right (positive) from a center baseline.
+
+### Create file: components/simulation/TornadoChart.tsx
+```typescript
+import React, { useMemo } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts';
+
+interface SensitivityVariable {
+  name: string;
+  displayName: string;
+  baseValue: number;
+  unit: string;
+  lowImpact: number;
+  highImpact: number;
+  currentValue: number;
+}
+
+interface TornadoChartProps {
+  baselineRunway: number;
+  variables: SensitivityVariable[];
+  onVariableClick?: (variable: string) => void;
+}
+
+const TornadoChart: React.FC<TornadoChartProps> = ({ baselineRunway, variables, onVariableClick }) => {
+  const sortedData = useMemo(() => {
+    return [...variables]
+      .map(v => ({
+        ...v,
+        totalSwing: Math.abs(v.lowImpact) + Math.abs(v.highImpact),
+        low: v.lowImpact,
+        high: v.highImpact,
+      }))
+      .sort((a, b) => b.totalSwing - a.totalSwing);
+  }, [variables]);
+
+  const maxSwing = Math.max(...sortedData.map(d => Math.max(Math.abs(d.low), Math.abs(d.high))));
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">📊</span>
+        <h3 className="text-lg font-semibold text-white">Sensitivity Analysis</h3>
+      </div>
+      <p className="text-gray-400 text-sm mb-6">Which variables have the biggest impact on your runway?</p>
+      
+      <div className="text-center text-sm text-gray-400 mb-4">
+        ◄── Baseline: {baselineRunway} months ──►
+      </div>
+
+      <ResponsiveContainer width="100%" height={sortedData.length * 60 + 40}>
+        <BarChart data={sortedData} layout="vertical" margin={{ left: 120, right: 60 }}>
+          <XAxis type="number" domain={[-maxSwing * 1.1, maxSwing * 1.1]} tickFormatter={(v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}mo`} stroke="#9CA3AF" />
+          <YAxis type="category" dataKey="displayName" stroke="#9CA3AF" tick={{ fill: '#E5E7EB', fontSize: 12 }} width={110} />
+          <Tooltip
+            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+            formatter={(value: number, name: string, props: any) => {
+              const item = props.payload;
+              return [`${value > 0 ? '+' : ''}${value.toFixed(1)} months`, name === 'low' ? 'If decreased 20%' : 'If increased 20%'];
+            }}
+            labelFormatter={(label) => label}
+          />
+          <ReferenceLine x={0} stroke="#6B7280" strokeWidth={2} />
+          <Bar dataKey="low" stackId="a" fill="#EF4444" radius={[4, 0, 0, 4]} onClick={(data) => onVariableClick?.(data.name)} cursor="pointer">
+            {sortedData.map((entry, index) => (
+              <Cell key={`low-${index}`} fill={entry.low < 0 ? '#EF4444' : '#10B981'} />
+            ))}
+          </Bar>
+          <Bar dataKey="high" stackId="a" fill="#10B981" radius={[0, 4, 4, 0]} onClick={(data) => onVariableClick?.(data.name)} cursor="pointer">
+            {sortedData.map((entry, index) => (
+              <Cell key={`high-${index}`} fill={entry.high > 0 ? '#10B981' : '#EF4444'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-red-500 rounded"></div>
+          <span className="text-gray-400">Decreases runway</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-green-500 rounded"></div>
+          <span className="text-gray-400">Increases runway</span>
+        </div>
+      </div>
+
+      <p className="text-gray-500 text-xs text-center mt-4">Click on any bar to drill into that variable</p>
+    </div>
+  );
+};
+
+export default TornadoChart;
+```
+
+### Create sensitivity calculation: lib/simulation/sensitivityAnalysis.ts
+```typescript
+interface FinancialState {
+  monthlyRevenue: number;
+  grossMargin: number;
+  opex: number;
+  payroll: number;
+  otherCosts: number;
+  cashBalance: number;
+  churnRate: number;
+  growthRate: number;
+  cac: number;
+  ltv: number;
+}
+
+interface SensitivityResult {
+  name: string;
+  displayName: string;
+  baseValue: number;
+  unit: string;
+  lowImpact: number;
+  highImpact: number;
+  currentValue: number;
+}
+
+export function calculateRunway(state: FinancialState): number {
+  const monthlyGrossProfit = state.monthlyRevenue * (state.grossMargin / 100);
+  const totalExpenses = state.opex + state.payroll + state.otherCosts;
+  const netBurn = totalExpenses - monthlyGrossProfit;
+  
+  if (netBurn <= 0) return 999; // Profitable
+  return state.cashBalance / netBurn;
+}
+
+export function calculateSensitivity(
+  baseState: FinancialState,
+  percentSwing: number = 20
+): SensitivityResult[] {
+  const baseRunway = calculateRunway(baseState);
+  
+  const variables = [
+    { name: 'churnRate', displayName: 'Churn Rate', key: 'churnRate', unit: '%', invert: true },
+    { name: 'cac', displayName: 'Customer Acquisition Cost', key: 'cac', unit: '$', invert: true },
+    { name: 'growthRate', displayName: 'Revenue Growth Rate', key: 'growthRate', unit: '%', invert: false },
+    { name: 'grossMargin', displayName: 'Gross Margin', key: 'grossMargin', unit: '%', invert: false },
+    { name: 'payroll', displayName: 'Payroll Costs', key: 'payroll', unit: '$', invert: true },
+    { name: 'opex', displayName: 'Operating Expenses', key: 'opex', unit: '$', invert: true },
+  ];
+
+  return variables.map(v => {
+    const baseValue = baseState[v.key as keyof FinancialState] as number;
+    
+    // Calculate impact when variable decreases by percentSwing%
+    const lowState = { ...baseState, [v.key]: baseValue * (1 - percentSwing / 100) };
+    const lowRunway = calculateRunway(lowState);
+    const lowImpact = lowRunway - baseRunway;
+    
+    // Calculate impact when variable increases by percentSwing%
+    const highState = { ...baseState, [v.key]: baseValue * (1 + percentSwing / 100) };
+    const highRunway = calculateRunway(highState);
+    const highImpact = highRunway - baseRunway;
+
+    return {
+      name: v.name,
+      displayName: v.displayName,
+      baseValue,
+      unit: v.unit,
+      lowImpact: v.invert ? highImpact : lowImpact,
+      highImpact: v.invert ? lowImpact : highImpact,
+      currentValue: baseValue,
+    };
+  });
+}
+```
+
+### Integration
+Add TornadoChart to the Simulation Results tab, below the survival probability chart. Import and use:
+```tsx
+import TornadoChart from '@/components/simulation/TornadoChart';
+import { calculateSensitivity } from '@/lib/simulation/sensitivityAnalysis';
+
+// In your simulation results component:
+const sensitivityData = calculateSensitivity(currentFinancialState);
+
+<TornadoChart 
+  baselineRunway={currentRunway} 
+  variables={sensitivityData}
+  onVariableClick={(variable) => console.log('Clicked:', variable)}
+/>
+```
+
+---
+
+## FEATURE 2: INTERACTIVE WHAT-IF SLIDERS
+
+### Description
+Real-time sliders that let users adjust key variables and instantly see the impact on runway, survival probability, and cash balance with animated visual feedback.
+
+### Create file: components/simulation/WhatIfExplorer.tsx
+```typescript
+import React, { useState, useEffect, useMemo } from 'react';
+import { debounce } from 'lodash';
+
+interface SliderConfig {
+  key: string;
+  label: string;
+  icon: string;
+  min: number;
+  max: number;
+  step: number;
+  defaultValue: number;
+  unit: string;
+  format?: (value: number) => string;
+}
+
+interface WhatIfResults {
+  runway: number;
+  runwayChange: number;
+  survival18m: number;
+  survivalChange: number;
+  cashAt18m: number;
+  cashChange: number;
+}
+
+interface WhatIfExplorerProps {
+  baselineState: any;
+  onRunFullSimulation: (adjustments: Record<string, number>) => void;
+  calculateQuickImpact: (adjustments: Record<string, number>) => WhatIfResults;
+}
+
+const sliderConfigs: SliderConfig[] = [
+  { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: '📈', min: -30, max: 60, step: 1, defaultValue: 10, unit: '%' },
+  { key: 'churnRate', label: 'Monthly Churn Rate', icon: '📉', min: 0, max: 20, step: 0.5, defaultValue: 5.5, unit: '%' },
+  { key: 'grossMargin', label: 'Gross Margin', icon: '💰', min: 30, max: 95, step: 1, defaultValue: 70, unit: '%' },
+  { key: 'burnChange', label: 'Burn Rate Change', icon: '🔥', min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
+  { key: 'fundraising', label: 'Fundraising Amount', icon: '💵', min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}K` },
+];
+
+const WhatIfExplorer: React.FC<WhatIfExplorerProps> = ({ baselineState, onRunFullSimulation, calculateQuickImpact }) => {
+  const [values, setValues] = useState<Record<string, number>>(() => 
+    Object.fromEntries(sliderConfigs.map(s => [s.key, s.defaultValue]))
+  );
+  const [results, setResults] = useState<WhatIfResults | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  const debouncedCalculate = useMemo(
+    () => debounce((vals: Record<string, number>) => {
+      setIsCalculating(true);
+      const newResults = calculateQuickImpact(vals);
+      setResults(newResults);
+      setIsCalculating(false);
+    }, 150),
+    [calculateQuickImpact]
+  );
+
+  useEffect(() => {
+    debouncedCalculate(values);
+    return () => debouncedCalculate.cancel();
+  }, [values, debouncedCalculate]);
+
+  const handleSliderChange = (key: string, value: number) => {
+    setValues(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleReset = () => {
+    setValues(Object.fromEntries(sliderConfigs.map(s => [s.key, s.defaultValue])));
+  };
+
+  const getChangeColor = (change: number, higherIsBetter: boolean = true) => {
+    if (change === 0) return 'text-gray-400';
+    const isPositive = higherIsBetter ? change > 0 : change < 0;
+    return isPositive ? 'text-green-400' : 'text-red-400';
+  };
+
+  const getChangeIcon = (change: number, higherIsBetter: boolean = true) => {
+    if (change === 0) return '─';
+    const isPositive = higherIsBetter ? change > 0 : change < 0;
+    return isPositive ? '↑' : '↓';
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">🎚️</span>
+        <h3 className="text-lg font-semibold text-white">What-If Explorer</h3>
+      </div>
+      <p className="text-gray-400 text-sm mb-6">Drag sliders to see instant impact on your metrics</p>
+
+      <div className="space-y-6 mb-8">
+        {sliderConfigs.map((config) => (
+          <div key={config.key} className="space-y-2">
+            <div className="flex justify-between items-center">
+              <label className="text-sm text-gray-300 flex items-center gap-2">
+                <span>{config.icon}</span>
+                {config.label}
+              </label>
+              <span className="text-sm font-medium text-white">
+                {config.format ? config.format(values[config.key]) : `${values[config.key]}${config.unit}`}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={config.min}
+              max={config.max}
+              step={config.step}
+              value={values[config.key]}
+              onChange={(e) => handleSliderChange(config.key, parseFloat(e.target.value))}
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+              style={{
+                background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((values[config.key] - config.min) / (config.max - config.min)) * 100}%, #374151 ${((values[config.key] - config.min) / (config.max - config.min)) * 100}%, #374151 100%)`
+              }}
+            />
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>{config.format ? config.format(config.min) : `${config.min}${config.unit}`}</span>
+              <span>{config.format ? config.format(config.max) : `${config.max}${config.unit}`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-gray-700 pt-6">
+        <h4 className="text-sm font-medium text-gray-400 mb-4 flex items-center gap-2">
+          📊 INSTANT IMPACT
+          {isCalculating && <span className="animate-pulse text-blue-400">calculating...</span>}
+        </h4>
+        
+        {results && (
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className={`bg-gray-900 rounded-lg p-4 border ${results.runwayChange > 0 ? 'border-green-500/30' : results.runwayChange < 0 ? 'border-red-500/30' : 'border-gray-700'} transition-all`}>
+              <div className="text-gray-400 text-xs mb-1">Runway</div>
+              <div className="text-xl font-bold text-white">{results.runway.toFixed(1)}mo</div>
+              <div className={`text-sm ${getChangeColor(results.runwayChange)}`}>
+                {getChangeIcon(results.runwayChange)} {results.runwayChange > 0 ? '+' : ''}{results.runwayChange.toFixed(1)} months
+              </div>
+            </div>
+            
+            <div className={`bg-gray-900 rounded-lg p-4 border ${results.survivalChange > 0 ? 'border-green-500/30' : results.survivalChange < 0 ? 'border-red-500/30' : 'border-gray-700'} transition-all`}>
+              <div className="text-gray-400 text-xs mb-1">Survival (18m)</div>
+              <div className="text-xl font-bold text-white">{results.survival18m.toFixed(0)}%</div>
+              <div className={`text-sm ${getChangeColor(results.survivalChange)}`}>
+                {getChangeIcon(results.survivalChange)} {results.survivalChange > 0 ? '+' : ''}{results.survivalChange.toFixed(0)}%
+              </div>
+            </div>
+            
+            <div className={`bg-gray-900 rounded-lg p-4 border ${results.cashChange > 0 ? 'border-green-500/30' : results.cashChange < 0 ? 'border-red-500/30' : 'border-gray-700'} transition-all`}>
+              <div className="text-gray-400 text-xs mb-1">Cash at 18mo</div>
+              <div className="text-xl font-bold text-white">${(results.cashAt18m / 1000).toFixed(0)}K</div>
+              <div className={`text-sm ${getChangeColor(results.cashChange)}`}>
+                {getChangeIcon(results.cashChange)} {results.cashChange > 0 ? '+' : ''}${(results.cashChange / 1000).toFixed(0)}K
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Reset to Baseline
+          </button>
+          <button
+            onClick={() => onRunFullSimulation(values)}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            Run Full Monte Carlo
+            <span>→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WhatIfExplorer;
+```
+
+### Add CSS for slider thumb (in globals.css or tailwind):
+```css
+.slider-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3B82F6;
+  cursor: pointer;
+  border: 2px solid #1E40AF;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.5);
+}
+
+.slider-thumb::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #3B82F6;
+  cursor: pointer;
+  border: 2px solid #1E40AF;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.5);
+}
+```
+
+---
+
+## FEATURE 3: STRESS TEST TEMPLATES
+
+### Description
+Pre-built recession and crisis scenarios users can apply with one click to test business resilience under adverse conditions.
+
+### Create file: lib/simulation/stressTestTemplates.ts
+```typescript
+export interface StressTestTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  severity: 'low' | 'moderate' | 'severe';
+  color: string;
+  adjustments: {
+    revenueGrowthMultiplier?: number;
+    churnRateMultiplier?: number;
+    cacMultiplier?: number;
+    burnMultiplier?: number;
+    immediateRevenueHit?: number;
+    fundraisingAvailable?: boolean;
+    newCustomerMultiplier?: number;
+  };
+  duration: number;
+  historicalProbability: number;
+}
+
+export const stressTestTemplates: StressTestTemplate[] = [
+  {
+    id: 'mild-recession',
+    name: 'Mild Recession',
+    description: 'Economic slowdown with reduced customer spending and longer sales cycles',
+    icon: '📉',
+    severity: 'moderate',
+    color: 'yellow',
+    adjustments: {
+      revenueGrowthMultiplier: 0.7,
+      churnRateMultiplier: 1.3,
+      cacMultiplier: 1.2,
+      newCustomerMultiplier: 0.8,
+    },
+    duration: 12,
+    historicalProbability: 0.25,
+  },
+  {
+    id: 'severe-downturn',
+    name: 'Severe Downturn',
+    description: '2008-style financial crisis with significant market contraction',
+    icon: '🔴',
+    severity: 'severe',
+    color: 'red',
+    adjustments: {
+      revenueGrowthMultiplier: 0.4,
+      churnRateMultiplier: 1.8,
+      cacMultiplier: 1.5,
+      newCustomerMultiplier: 0.4,
+      burnMultiplier: 1.1,
+    },
+    duration: 18,
+    historicalProbability: 0.08,
+  },
+  {
+    id: 'funding-winter',
+    name: 'Funding Winter',
+    description: 'VC market freeze with no external funding available for 24 months',
+    icon: '❄️',
+    severity: 'severe',
+    color: 'blue',
+    adjustments: {
+      fundraisingAvailable: false,
+      revenueGrowthMultiplier: 0.85,
+      churnRateMultiplier: 1.15,
+    },
+    duration: 24,
+    historicalProbability: 0.15,
+  },
+  {
+    id: 'key-customer-loss',
+    name: 'Key Customer Loss',
+    description: 'Top 3 customers churn simultaneously due to budget cuts or competition',
+    icon: '👥',
+    severity: 'severe',
+    color: 'orange',
+    adjustments: {
+      immediateRevenueHit: -0.30,
+      churnRateMultiplier: 1.2,
+      revenueGrowthMultiplier: 0.9,
+    },
+    duration: 6,
+    historicalProbability: 0.05,
+  },
+  {
+    id: 'competitive-disruption',
+    name: 'Competitive Disruption',
+    description: 'Well-funded competitor enters market with aggressive pricing',
+    icon: '⚔️',
+    severity: 'moderate',
+    color: 'purple',
+    adjustments: {
+      churnRateMultiplier: 1.6,
+      cacMultiplier: 1.35,
+      revenueGrowthMultiplier: 0.65,
+    },
+    duration: 12,
+    historicalProbability: 0.20,
+  },
+  {
+    id: 'hiring-freeze',
+    name: 'Hiring Freeze',
+    description: 'Pause all hiring for 6 months to preserve runway and reduce burn',
+    icon: '🧊',
+    severity: 'low',
+    color: 'gray',
+    adjustments: {
+      burnMultiplier: 0.85,
+      revenueGrowthMultiplier: 0.85,
+    },
+    duration: 6,
+    historicalProbability: 0.40,
+  },
+];
+
+export function applyStressTest(
+  baseState: any,
+  template: StressTestTemplate
+): any {
+  const stressedState = { ...baseState };
+  
+  if (template.adjustments.revenueGrowthMultiplier) {
+    stressedState.growthRate *= template.adjustments.revenueGrowthMultiplier;
+  }
+  if (template.adjustments.churnRateMultiplier) {
+    stressedState.churnRate *= template.adjustments.churnRateMultiplier;
+  }
+  if (template.adjustments.cacMultiplier) {
+    stressedState.cac *= template.adjustments.cacMultiplier;
+  }
+  if (template.adjustments.burnMultiplier) {
+    stressedState.monthlyBurn *= template.adjustments.burnMultiplier;
+  }
+  if (template.adjustments.immediateRevenueHit) {
+    stressedState.monthlyRevenue *= (1 + template.adjustments.immediateRevenueHit);
+  }
+  if (template.adjustments.fundraisingAvailable === false) {
+    stressedState.fundraisingAvailable = false;
+  }
+  
+  return stressedState;
+}
+```
+
+### Create file: components/simulation/StressTestPanel.tsx
+```typescript
+import React, { useState } from 'react';
+import { stressTestTemplates, StressTestTemplate, applyStressTest } from '@/lib/simulation/stressTestTemplates';
+
+interface StressTestPanelProps {
+  currentState: any;
+  currentRunway: number;
+  onApplyStressTest: (stressedState: any, template: StressTestTemplate) => void;
+}
+
+const severityColors = {
+  low: { bg: 'bg-gray-700', border: 'border-gray-600', text: 'text-gray-300' },
+  moderate: { bg: 'bg-yellow-900/30', border: 'border-yellow-600/50', text: 'text-yellow-400' },
+  severe: { bg: 'bg-red-900/30', border: 'border-red-600/50', text: 'text-red-400' },
+};
+
+const StressTestPanel: React.FC<StressTestPanelProps> = ({ currentState, currentRunway, onApplyStressTest }) => {
+  const [selectedTest, setSelectedTest] = useState<string | null>(null);
+  const [previewResults, setPreviewResults] = useState<Record<string, number>>({});
+
+  const calculatePreview = (template: StressTestTemplate): number => {
+    if (previewResults[template.id]) return previewResults[template.id];
+    
+    const stressedState = applyStressTest(currentState, template);
+    // Simplified runway calculation - replace with your actual calculation
+    const grossProfit = stressedState.monthlyRevenue * (stressedState.grossMargin / 100);
+    const netBurn = stressedState.monthlyBurn - grossProfit;
+    const newRunway = netBurn > 0 ? stressedState.cashBalance / netBurn : 999;
+    
+    setPreviewResults(prev => ({ ...prev, [template.id]: newRunway }));
+    return newRunway;
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">🧪</span>
+        <h3 className="text-lg font-semibold text-white">Stress Test Scenarios</h3>
+      </div>
+      <p className="text-gray-400 text-sm mb-6">Test your business resilience under adverse conditions</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {stressTestTemplates.map((template) => {
+          const previewRunway = calculatePreview(template);
+          const runwayChange = previewRunway - currentRunway;
+          const colors = severityColors[template.severity];
+          
+          return (
+            <div
+              key={template.id}
+              className={`${colors.bg} border ${colors.border} rounded-lg p-4 cursor-pointer transition-all hover:scale-[1.02] ${selectedTest === template.id ? 'ring-2 ring-blue-500' : ''}`}
+              onClick={() => setSelectedTest(template.id === selectedTest ? null : template.id)}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <span className="text-2xl">{template.icon}</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${colors.text} ${colors.bg} border ${colors.border}`}>
+                  {template.severity}
+                </span>
+              </div>
+              
+              <h4 className="text-white font-medium mb-1">{template.name}</h4>
+              <p className="text-gray-400 text-xs mb-3 line-clamp-2">{template.description}</p>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Runway Impact:</span>
+                <span className={runwayChange < 0 ? 'text-red-400' : 'text-green-400'}>
+                  {currentRunway.toFixed(0)}mo → {previewRunway.toFixed(0)}mo
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+                <span>Duration: {template.duration}mo</span>
+                <span>~{(template.historicalProbability * 100).toFixed(0)}% probability</span>
+              </div>
+              
+              {selectedTest === template.id && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const stressedState = applyStressTest(currentState, template);
+                    onApplyStressTest(stressedState, template);
+                  }}
+                  className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Apply Stress Test →
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default StressTestPanel;
+```
+
+---
+
+## FEATURE 4: REVERSE STRESS TESTING (BREAKING POINT ANALYSIS)
+
+### Create file: components/simulation/ReverseStressTest.tsx
+```typescript
+import React, { useState, useMemo } from 'react';
+
+interface BreakingPoint {
+  variable: string;
+  displayName: string;
+  currentValue: number;
+  breakingValue: number;
+  percentageChange: number;
+  unit: string;
+  likelihood: 'low' | 'moderate' | 'high';
+}
+
+interface ReverseStressTestProps {
+  currentState: any;
+  calculateRunway: (state: any) => number;
+}
+
+const ReverseStressTest: React.FC<ReverseStressTestProps> = ({ currentState, calculateRunway }) => {
+  const [targetMonths, setTargetMonths] = useState(12);
+
+  const breakingPoints = useMemo(() => {
+    const variables = [
+      { key: 'churnRate', displayName: 'Churn Rate', unit: '%', direction: 'increase' },
+      { key: 'growthRate', displayName: 'Revenue Growth', unit: '%', direction: 'decrease' },
+      { key: 'monthlyBurn', displayName: 'Monthly Burn', unit: '$', direction: 'increase' },
+      { key: 'grossMargin', displayName: 'Gross Margin', unit: '%', direction: 'decrease' },
+    ];
+
+    return variables.map(v => {
+      const currentValue = currentState[v.key];
+      let testValue = currentValue;
+      const step = v.direction === 'increase' ? currentValue * 0.1 : -currentValue * 0.1;
+      let iterations = 0;
+      const maxIterations = 100;
+
+      // Binary search for breaking point
+      while (iterations < maxIterations) {
+        const testState = { ...currentState, [v.key]: testValue };
+        const runway = calculateRunway(testState);
+        
+        if (runway <= targetMonths) break;
+        
+        testValue += step;
+        iterations++;
+      }
+
+      const percentChange = ((testValue - currentValue) / currentValue) * 100;
+      
+      let likelihood: 'low' | 'moderate' | 'high' = 'low';
+      if (Math.abs(percentChange) < 30) likelihood = 'high';
+      else if (Math.abs(percentChange) < 60) likelihood = 'moderate';
+
+      return {
+        variable: v.key,
+        displayName: v.displayName,
+        currentValue,
+        breakingValue: testValue,
+        percentageChange: percentChange,
+        unit: v.unit,
+        likelihood,
+      };
+    });
+  }, [currentState, targetMonths, calculateRunway]);
+
+  const likelihoodColors = {
+    low: 'text-green-400 bg-green-900/30 border-green-600/30',
+    moderate: 'text-yellow-400 bg-yellow-900/30 border-yellow-600/30',
+    high: 'text-red-400 bg-red-900/30 border-red-600/30',
+  };
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🎯</span>
+          <h3 className="text-lg font-semibold text-white">Breaking Point Analysis</h3>
+        </div>
+        <select
+          value={targetMonths}
+          onChange={(e) => setTargetMonths(parseInt(e.target.value))}
+          className="bg-gray-700 text-white text-sm rounded-lg px-3 py-1.5 border border-gray-600"
+        >
+          <option value={6}>6 months</option>
+          <option value={12}>12 months</option>
+          <option value={18}>18 months</option>
+          <option value={24}>24 months</option>
+        </select>
+      </div>
+      <p className="text-gray-400 text-sm mb-6">
+        What would have to go wrong to run out of cash in {targetMonths} months?
+      </p>
+
+      <div className="space-y-4">
+        {breakingPoints.map((bp) => (
+          <div key={bp.variable} className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white font-medium">{bp.displayName}</span>
+              <span className={`text-xs px-2 py-1 rounded-full border ${likelihoodColors[bp.likelihood]}`}>
+                {bp.likelihood === 'low' ? '✓ Unlikely' : bp.likelihood === 'moderate' ? '⚠ Possible' : '🔴 Risky'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-4 text-sm mb-2">
+              <span className="text-gray-400">
+                Current: <span className="text-white">{bp.unit === '$' ? `$${(bp.currentValue/1000).toFixed(0)}K` : `${bp.currentValue.toFixed(1)}${bp.unit}`}</span>
+              </span>
+              <span className="text-gray-500">→</span>
+              <span className="text-gray-400">
+                Breaking: <span className="text-red-400">{bp.unit === '$' ? `$${(bp.breakingValue/1000).toFixed(0)}K` : `${bp.breakingValue.toFixed(1)}${bp.unit}`}</span>
+              </span>
+              <span className={`${bp.percentageChange > 0 ? 'text-red-400' : 'text-red-400'}`}>
+                ({bp.percentageChange > 0 ? '+' : ''}{bp.percentageChange.toFixed(0)}%)
+              </span>
+            </div>
+            
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full ${bp.likelihood === 'high' ? 'bg-red-500' : bp.likelihoo

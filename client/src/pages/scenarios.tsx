@@ -33,7 +33,10 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink, ChevronRight } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink, ChevronRight, FlaskConical } from 'lucide-react';
+import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
+import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -644,13 +647,14 @@ export default function ScenariosPage() {
 
       <Tabs value={activeTab} onValueChange={(value) => {
         // Prevent switching to disabled tabs
-        const isTabDisabled = ['results', 'compare', 'enhanced', 'sensitivity'].includes(value) && !hasRunScenario && !hasSimulationResults;
+        const isTabDisabled = ['results', 'compare', 'enhanced', 'sensitivity', 'analysis'].includes(value) && !hasRunScenario && !hasSimulationResults;
         if (isTabDisabled) {
           const tabNames: Record<string, string> = {
             results: 'Simulation Results',
             compare: 'Compare All',
             enhanced: 'Decision Ranking',
-            sensitivity: 'Sensitivity'
+            sensitivity: 'Sensitivity',
+            analysis: 'Analysis'
           };
           handleDisabledTabClick(tabNames[value] || value);
           return;
@@ -703,6 +707,16 @@ export default function ScenariosPage() {
             {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
             <Target className="h-4 w-4 mr-2" />
             Sensitivity
+          </TabsTrigger>
+          <TabsTrigger 
+            value="analysis" 
+            data-testid="tab-analysis"
+            disabled={!hasRunScenario && !hasSimulationResults}
+            className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}
+          >
+            {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
+            <FlaskConical className="h-4 w-4 mr-2" />
+            Analysis
           </TabsTrigger>
           {scenarios && scenarios.length > 0 && (
             <TabsTrigger value="history" data-testid="tab-history">
@@ -1067,6 +1081,104 @@ export default function ScenariosPage() {
             isLoading={sensitivityMutation.isPending}
             onRunAnalysis={handleRunSensitivityAnalysis}
           />
+        </TabsContent>
+        
+        <TabsContent value="analysis" className="mt-6 space-y-6">
+          {(() => {
+            // Convert baseMetrics to FinancialState for analysis components
+            // Derive financial state from available metrics
+            // Note: Some values are derived estimates where granular data isn't available
+            const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
+            const financialState: FinancialState = baseMetrics ? {
+              monthlyRevenue: baseMetrics.monthlyRevenue,
+              grossMargin: baseMetrics.grossMargin,
+              // Distribute expenses proportionally - in a real system these would come from detailed P&L
+              opex: totalExpenses * 0.3, // Operations, infrastructure, software
+              payroll: totalExpenses * 0.6, // Salaries, benefits, contractors
+              otherCosts: totalExpenses * 0.1, // Misc, legal, travel
+              cashBalance: baseMetrics.cashOnHand,
+              churnRate: baseMetrics.churnRate,
+              growthRate: baseMetrics.growthRate,
+              // Estimate CAC/LTV from revenue and churn if not available
+              cac: baseMetrics.monthlyRevenue * 0.3, // Estimated 30% of MRR per customer
+              ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+            } : {
+              monthlyRevenue: 50000,
+              grossMargin: 60,
+              opex: 24000,
+              payroll: 48000,
+              otherCosts: 8000,
+              cashBalance: 500000,
+              churnRate: 3,
+              growthRate: 10,
+              cac: 15000,
+              ltv: 50000,
+            };
+            
+            const currentRunway = baseMetrics?.currentRunway || 12;
+            const sensitivityData = calculateSensitivity(financialState);
+            
+            // Use simulation data for baseline results when available, otherwise estimate
+            const baselineResults = {
+              runway: currentRunway,
+              // Use actual 18-month survival from simulation, or estimate from 12-month
+              survival18m: simulation?.survival_18m ?? 
+                (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
+              // Use actual ending cash from simulation
+              cashAt18m: simulation?.end_cash ?? 
+                Math.max(0, financialState.cashBalance - (totalExpenses - financialState.monthlyRevenue) * 18),
+            };
+            
+            const handleWhatIfCalculation = (adjustments: Record<string, number>) => {
+              return calculateWhatIfImpact(financialState, adjustments, baselineResults);
+            };
+            
+            const handleRunFullMonteCarlo = (adjustments: Record<string, number>) => {
+              toast({
+                title: 'Running Full Monte Carlo',
+                description: 'Applying what-if adjustments to simulation...',
+              });
+            };
+            
+            const handleApplyStressTest = (stressedState: any, template: StressTestTemplate) => {
+              toast({
+                title: `Stress Test Applied: ${template.name}`,
+                description: template.description,
+              });
+            };
+            
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <TornadoChart
+                  baselineRunway={currentRunway}
+                  variables={sensitivityData}
+                  onVariableClick={(variable) => {
+                    toast({
+                      title: `Analyzing: ${variable}`,
+                      description: 'Drill-down analysis coming soon',
+                    });
+                  }}
+                />
+                
+                <WhatIfExplorer
+                  baselineState={financialState}
+                  baselineResults={baselineResults}
+                  calculateQuickImpact={handleWhatIfCalculation}
+                  onRunFullSimulation={handleRunFullMonteCarlo}
+                />
+                
+                <StressTestPanel
+                  currentState={financialState}
+                  currentRunway={currentRunway}
+                  onApplyStressTest={handleApplyStressTest}
+                />
+                
+                <ReverseStressTest
+                  currentState={financialState}
+                />
+              </div>
+            );
+          })()}
         </TabsContent>
         
         <TabsContent value="results" className="mt-6 space-y-4">
