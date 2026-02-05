@@ -58,6 +58,10 @@ from server.models.assumption_set import AssumptionSetModel, SimulationCache
 from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
 from server.models.simulation_job import SimulationJob, ScenarioVersion, SensitivityAnalysis, SimulationJobStatus
 from server.models.company_state import CompanyState, compute_snapshot_id, stable_stringify
+from server.models.raw_data_event import RawDataEvent
+from server.models.metric_definition import MetricDefinition
+from server.models.metric_value import MetricValue
+from server.models.dashboard import Dashboard, DashboardWidget
 
 __all__ = [
     "User",
@@ -127,4 +131,9 @@ __all__ = [
     "CompanyState",
     "compute_snapshot_id",
     "stable_stringify",
+    "RawDataEvent",
+    "MetricDefinition",
+    "MetricValue",
+    "Dashboard",
+    "DashboardWidget",
 ]

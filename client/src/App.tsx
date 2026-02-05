@@ -44,6 +44,8 @@ import InvestorRoomPage from "@/pages/investor-room";
 import KPIBoardPage from "@/pages/kpi-board";
 import ConnectorMarketplacePage from "@/pages/connector-marketplace";
 import AddDataSourcePage from "@/pages/add-data-source";
+import DashboardsPage from "@/pages/dashboards";
+import DashboardBuilderPage from "@/pages/dashboard-builder";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -173,6 +175,12 @@ function Router() {
       </Route>
       <Route path="/investor-room">
         {() => <AuthenticatedRoute component={InvestorRoomPage} />}
+      </Route>
+      <Route path="/dashboards">
+        {() => <AuthenticatedRoute component={DashboardsPage} />}
+      </Route>
+      <Route path="/dashboard/:id">
+        {() => <AuthenticatedRoute component={DashboardBuilderPage} />}
       </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
