@@ -16,24 +16,24 @@ from sqlalchemy import text
 
 UPDATES_LATEST = [
     {
-        "title": "Data Integration Infrastructure",
-        "description": "New integration framework supporting OAuth2, API Key, and Service Account authentication with configurable data point selection and flexible sync intervals (5min to weekly)."
+        "title": "Redesigned Sidebar Navigation",
+        "description": "New collapsible sidebar groups organize features into logical sections: Analytics, Data & Setup, Planning, and Stakeholders. Click chevrons to expand/collapse sections and reduce visual clutter."
     },
     {
-        "title": "Google Sheets Connector",
-        "description": "Import financial data directly from Google Sheets with multi-step configuration: spreadsheet selection, sheet mapping, column data type assignment (currency, percentage, number, date), and automatic sync scheduling."
+        "title": "AI Copilot Prominent Placement",
+        "description": "The AI Copilot now sits at the top of the sidebar with enhanced styling for quick access. Your intelligent financial assistant is always one click away."
     },
     {
-        "title": "Analytics Integrations Tab",
-        "description": "New Analytics tab with connectors for Google Analytics 4 (sessions, users, conversions), Mixpanel (events, funnels, retention), and ChartMogul (MRR, ARR, churn metrics) to import product and revenue analytics."
+        "title": "Consistent Empty States",
+        "description": "All empty states now feature engaging designs with circular icons, clear headlines, helpful descriptions, and action buttons. No more confusing blank screens."
     },
     {
-        "title": "Spreadsheets Tab",
-        "description": "Dedicated Spreadsheets tab for importing data from Google Sheets, Excel Online, and Airtable. Perfect for custom metrics, budgets, and manual KPI tracking that isn't available in your other systems."
+        "title": "Design System Compliance",
+        "description": "Updated hover effects and visual interactions across the platform to follow our design system guidelines. Smoother, more consistent experience throughout."
     },
     {
-        "title": "Bug Fixes & Improvements",
-        "description": "Fixed modal state management to properly clear selection on close. Improved integration card status indicators. Enhanced connection flow with better error handling and retry logic."
+        "title": "Bug Fixes",
+        "description": "Fixed authentication flow edge cases and improved login history tracking. Enhanced error messages for failed login attempts."
     }
 ]
 
@@ -72,7 +72,7 @@ async def send_update_to_specified_users(
         app_url=app_url
     )
     
-    subject = "Predixen Intelligence OS - New Data Integrations & Analytics"
+    subject = "Predixen Intelligence OS - UX Improvements & Bug Fixes"
     
     for email in emails:
         print(f"Sending to {email}...")
@@ -133,7 +133,7 @@ async def main():
         "vysheshk@gmail.com"
     ]
     
-    from_email = "Predixen Updates <newchanges5@predixen.app>"
+    from_email = "Predixen Bug Fixes <bugfix@predixen.app>"
     
     return await send_update_to_specified_users(
         emails=emails,
