@@ -1,5 +1,11 @@
 """
 LLM Router API - Endpoints for multi-LLM chat with intelligent model selection.
+
+Features:
+- Classifier-based intelligent routing to optimal LLMs
+- Perplexity integration for web search with citations
+- Cost/latency tracking and routing statistics
+- Multi-provider support: OpenAI, Anthropic, Gemini, Perplexity
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -150,6 +156,167 @@ async def quick_chat(
             "response": response,
             "task_type": task_type_enum.value,
             "model": TASK_TO_MODEL.get(task_type_enum, "claude-sonnet-4-5")
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SmartChatRequest(BaseModel):
+    query: str = Field(..., description="User query for intelligent routing")
+    context: Optional[str] = Field(None, description="Optional conversation context")
+    system: Optional[str] = Field(None, description="Optional system prompt")
+    temperature: float = Field(0.7, ge=0, le=2, description="Sampling temperature")
+
+
+class SmartChatResponse(BaseModel):
+    content: str
+    model: str
+    provider: str
+    task_type: str
+    usage: Dict[str, int]
+    classification: Dict[str, Any]
+    citations: Optional[List[Dict[str, Any]]] = None
+    total_latency_ms: int
+
+
+@router.post("/smart-chat", response_model=SmartChatResponse)
+async def smart_chat(
+    request: SmartChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Intelligent chat with automatic intent classification and model routing.
+    
+    Uses Gemini Flash to classify user intent, then routes to the optimal model:
+    - OpenAI GPT-4o: Financial analysis, structured data, vision
+    - Anthropic Claude: Complex reasoning, coding, strategy
+    - Gemini: General chat, quick tasks, high-volume
+    - Perplexity: Web search, market research, real-time data
+    """
+    try:
+        llm_router = get_llm_router(
+            db_session=db,
+            user_id=current_user.id,
+            pii_mode="standard",
+            use_classifier=True
+        )
+        
+        result = llm_router.smart_chat(
+            query=request.query,
+            context=request.context,
+            system=request.system,
+            temperature=request.temperature
+        )
+        
+        return SmartChatResponse(
+            content=result.get("content", ""),
+            model=result.get("model", ""),
+            provider=result.get("provider", ""),
+            task_type=result.get("task_type", "general_chat"),
+            usage=result.get("usage", {}),
+            classification=result.get("classification", {}),
+            citations=result.get("citations"),
+            total_latency_ms=result.get("total_latency_ms", 0)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class WebSearchRequest(BaseModel):
+    query: str = Field(..., description="Search query")
+    model: str = Field("sonar-small", description="Perplexity model: sonar-small, sonar-large, sonar-huge")
+    system_prompt: Optional[str] = Field(None, description="Optional system instruction")
+    search_recency_filter: Optional[str] = Field(None, description="Recency filter: day, week, month, year")
+
+
+class WebSearchResponse(BaseModel):
+    content: str
+    citations: List[Dict[str, Any]]
+    model: str
+    provider: str
+    usage: Dict[str, int]
+
+
+@router.post("/web-search", response_model=WebSearchResponse)
+async def web_search(
+    request: WebSearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Perform a web search using Perplexity for real-time information.
+    
+    Returns structured content with inline citations from authoritative sources.
+    Ideal for:
+    - Market research and competitive analysis
+    - Current pricing, statistics, and data
+    - Recent news and industry developments
+    """
+    try:
+        llm_router = get_llm_router(
+            db_session=db,
+            user_id=current_user.id,
+            pii_mode="standard"
+        )
+        
+        if not llm_router.perplexity_available:
+            raise HTTPException(
+                status_code=503,
+                detail="Web search unavailable. Perplexity API key not configured."
+            )
+        
+        result = llm_router.web_search(
+            query=request.query,
+            model=request.model,
+            system_prompt=request.system_prompt,
+            search_recency_filter=request.search_recency_filter
+        )
+        
+        return WebSearchResponse(
+            content=result.get("content", ""),
+            citations=result.get("citations", []),
+            model=result.get("model", ""),
+            provider=result.get("provider", "perplexity"),
+            usage=result.get("usage", {})
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/routing-stats")
+async def get_routing_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get routing statistics for the current session.
+    
+    Returns aggregated metrics about model selection and performance.
+    Note: Statistics are per-router instance, useful for debugging and optimization.
+    """
+    try:
+        llm_router = get_llm_router(
+            db_session=db,
+            user_id=current_user.id,
+            pii_mode="standard"
+        )
+        
+        stats = llm_router.get_routing_stats()
+        
+        return {
+            "stats": stats,
+            "available_providers": {
+                "openai": llm_router.openai_available,
+                "anthropic": llm_router.anthropic_available,
+                "gemini": llm_router.gemini_available,
+                "perplexity": llm_router.perplexity_available
+            }
         }
         
     except Exception as e:

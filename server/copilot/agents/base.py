@@ -288,6 +288,84 @@ class BaseAgent(ABC):
             self.logger.error(f"LLM call failed for {self.agent_type.value}: {e}")
             return None
     
+    def _smart_call(
+        self,
+        query: str,
+        context: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.7
+    ) -> Dict[str, Any]:
+        """
+        Call the LLM router with automatic intent classification and routing.
+        
+        Uses classifier-based routing to automatically select the optimal model:
+        - Perplexity for web search, market research, real-time data
+        - GPT-4o for financial analysis, structured data
+        - Claude for complex reasoning, strategy
+        - Gemini Flash for simple tasks
+        
+        Args:
+            query: User query
+            context: Optional conversation context
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature
+        
+        Returns:
+            Dict with content, model, provider, citations (if web search), classification info
+        """
+        if not self.llm_router:
+            self.logger.warning(f"LLM router not available for {self.agent_type.value} agent")
+            return {"content": "", "error": "LLM router not available"}
+        
+        try:
+            result = self.llm_router.smart_chat(
+                query=query,
+                context=context,
+                system=system_prompt,
+                temperature=temperature
+            )
+            
+            return result
+        except Exception as e:
+            self.logger.error(f"Smart LLM call failed for {self.agent_type.value}: {e}")
+            return {"content": "", "error": str(e)}
+    
+    def _web_search(
+        self,
+        query: str,
+        model: str = "sonar-small",
+        system_prompt: Optional[str] = None,
+        search_recency_filter: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Perform a web search using Perplexity for real-time information.
+        
+        Args:
+            query: Search query
+            model: Perplexity model (sonar-small, sonar-large, sonar-huge)
+            system_prompt: Optional system instruction
+            search_recency_filter: Recency filter (day, week, month, year)
+        
+        Returns:
+            Dict with content, citations, model, provider
+        """
+        if not self.llm_router:
+            self.logger.warning(f"LLM router not available for {self.agent_type.value} agent")
+            return {"content": "", "citations": [], "error": "LLM router not available"}
+        
+        try:
+            result = self.llm_router.web_search(
+                query=query,
+                model=model,
+                system_prompt=system_prompt,
+                search_recency_filter=search_recency_filter
+            )
+            
+            return result
+        except Exception as e:
+            self.logger.error(f"Web search failed for {self.agent_type.value}: {e}")
+            return {"content": "", "citations": [], "error": str(e)}
+    
     def format_currency(self, value: float, currency: str = "USD") -> str:
         """Format currency in human-readable format (e.g., USD 14.5M)."""
         if value is None:

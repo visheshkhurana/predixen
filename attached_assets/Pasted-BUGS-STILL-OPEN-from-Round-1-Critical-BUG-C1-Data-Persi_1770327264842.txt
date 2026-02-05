@@ -1,0 +1,75 @@
+BUGS STILL OPEN (from Round 1)
+Critical
+BUG-C1: Data Persistence — Financials tab ignores onboarding values
+The /data Financials tab still shows default seed values ($500K cash, $50K revenue) instead of the values entered during onboarding ($1,426,680 cash, $95K revenue). This is the #1 data integrity issue.
+BUG-C2: Cross-page data inconsistency (multiple metrics)
+The same metric shows different values depending on which page you're on:
+MetricOverviewTruth ScanKPI BoardData InputARPU$467$633——Customers224150——LTV:CAC4.5x4.8x——Runway16.1 mo——3.7 mo (Industry Benchmarks)Headcount——510
+This breaks user trust immediately. Every page must pull from a single source of truth.
+BUG-C3: Alerts page permanently stuck on "Status Unknown"
+Despite having financial data, onboarding completed, and a simulation run, the Alerts & Monitoring page still shows "Status Unknown" with "Data Required for Monitoring." The "Add Data" CTA sends users to /data, but data already exists. The alert engine appears completely disconnected from the data layer.
+High
+BUG-H1: /data page title still says "RunwayAI - Startup Financial Simulator"
+The main pages were rebranded, but the /data route still has the old title in the browser tab. This is a simple metadata fix.
+BUG-H2: AI Copilot gives generic template responses, not data-driven answers
+When asked "What if we hire 5 engineers next quarter?" the copilot responds with the same canned template every time: "Reduce burn by 20%, Increase prices by 10%, Freeze hiring for 6 months, Delay fundraise by 3 months." It never uses the company's actual financials ($95K MRR, $1.43M cash, $89K burn) to give a specific answer like "Adding 5 engineers at ~$15K/mo each would increase burn to ~$164K/mo and reduce runway from 16.1 to ~8.7 months." This makes the copilot feel like a demo, not a real tool.
+BUG-H3: Revenue Growth shows 0.0% instead of N/A or a calculated value
+On multiple pages, Revenue Growth is displayed as "+0%" or "0.0%." If there's only one month of data, this should display "N/A" or "Insufficient data" rather than a misleading zero.
+BUG-H4: Headcount shows $0K/employee on Data Input
+The Data Input page shows Headcount: 10 with "$0K/emp" — the per-employee cost calculation is broken.
+Medium
+BUG-M1: Strategic Builder — strategy cards are not selectable
+On the /scenarios Strategic Builder, clicking any strategy card (Conservative Cost Cutting, Deep Cost Restructuring, Price Increase Strategy) does nothing. The footer says "Select a strategy to customize" but the cards have no click interaction. The "Run Simulation" button stays inactive. Users must use the Classic Wizard instead, which defeats the purpose of the Strategic Builder UX.
+BUG-M2: Monte Carlo simulation has near-zero variance
+The Baseline scenario's 1,000-run Monte Carlo simulation produced P10 = 13.0 mo, P50 = 14.0 mo, P90 = 14.0 mo — a range of only 1 month. Real Monte Carlo simulations should show meaningful variance (e.g., ±3–6 months). The random variance parameters may be too low, making the simulation feel deterministic.
+BUG-M3: Metric Catalog "Initialize System Metrics" appears non-functional
+Clicking the "Initialize System Metrics" button on /metrics doesn't produce visible feedback — no loading spinner, no success message, no metrics appear.
+
+SECTION 3: NEW FEATURES TESTED
+Fundraising (/fundraising)
+Cap Table, Rounds, and Simulate tabs. Clean empty state with "Create Cap Table" CTA. Tabs render correctly. Not yet testable without data entry — looks structurally solid.
+Investor Room (/investor-room)
+Form to generate investor materials. New feature for due diligence management. UI renders cleanly.
+Templates (/templates)
+8 pre-built scenario templates across 3 categories (Baseline, Conservative Cut, Path to Profitability, Aggressive Growth, Market Entry APAC, Fundraise Scenario, Expansion Revenue Focus, Pricing Increase). Well-organized and properly labeled.
+Decisions (/decisions)
+Decision Recommendations page with "Generate Decisions" button. Requires a simulation to be run first (correct gating behavior). Proper empty state.
+Metric Catalog (/metrics)
+Page to define, compute, and manage business metrics. Has "Initialize System Metrics" button (currently non-functional — see BUG-M3).
+Suggested Metrics (/suggested-metrics)
+AI-detected metrics from data sources. New page renders correctly.
+KPI Dashboards (/dashboards)
+Custom dashboard creation capability. New page renders correctly.
+Classic Wizard (5-step flow)
+The Scenario Builder's Classic Wizard is excellent: Template → Parameters → Fundraising → Events → Review. Includes a tutorial overlay, Live Summary sidebar, tags, and "Run Simulation (1,000 scenarios)" button. This is the best-built feature in the app.
+Data Confidence Score
+New "Medium Confidence (62)" badge on Overview and Truth Scan pages. Good trust indicator.
+Business Summary + AI Web Search
+Truth Scan now includes an AI-powered business summary section.
+Export CSV
+Export button now available on the Overview dashboard.
+
+SECTION 4: NEW BUGS FOUND IN NEW FEATURES
+BUG-N1: Simulation Runway inconsistency — 14.0 mo (simulation) vs 16.1 mo (Overview)
+The Baseline (Status Quo) simulation with 0% adjustments shows a P50 runway of 14.0 months, but the Overview dashboard shows 16.1 months. A baseline simulation with no changes should produce the same runway as the current state.
+BUG-N2: Strategic Builder → Classic Wizard disconnect
+The Strategic Builder (first tab) has a nice strategy selection UX but the cards don't work. The Classic Wizard (second tab) works perfectly. These two should be unified or the Strategic Builder should be fixed. Currently the default tab is broken, which is a bad first impression.
+BUG-N3: "No Scenario" and "No Data" badges persist in header after running simulation
+The top-right header shows "No Scenario • No Data" even after successfully running a Baseline simulation. It should update to reflect the active scenario.
+
+SECTION 5: LAUNCH READINESS SCORECARD
+AreaScoreNotesBranding & SEO9/10Almost perfect — just /data page title still says "RunwayAI"Data Integrity3/10Cross-page inconsistencies destroy credibility. Single source of truth needed.Core Simulation Engine7/10Classic Wizard works well. Monte Carlo runs. Charts render. Variance too low.AI Copilot3/10Generic templates only. Not using actual company data for answers.Alerts & Monitoring1/10Completely non-functional. Always shows "Status Unknown."New Features (Fundraising, Investor Room, etc.)6/10Clean shells ready for content. Structure is solid.Mobile Responsiveness7/10Major improvement — sidebar toggle works. Some text truncation at very narrow widths.Onboarding → Data Flow2/10Onboarding data doesn't flow into Financials tab. Breaks the whole pipeline.
+Overall Launch Readiness: 5/10 — Not ready for launch.
+
+SECTION 6: PRIORITY FIX ORDER FOR LAUNCH
+
+Fix data persistence pipeline — Onboarding values must flow to Financials tab and all dashboard pages. This is the foundation of everything.
+Unify all metrics to a single source — ARPU, Customers, LTV:CAC, Runway, and Headcount must show identical values everywhere they appear.
+Fix Alerts engine — Connect it to the existing data so it stops showing "Status Unknown."
+Make AI Copilot data-aware — It must reference actual company financials in its responses, not return templates.
+Fix Strategic Builder card selection — Or remove it and default to Classic Wizard.
+Fix /data page title — Change from "RunwayAI" to "Predixen."
+Increase Monte Carlo variance — So simulation results show meaningful ranges.
+Update header badges after simulation runs.
+
+Once items 1–4 are resolved, the app is launch-ready for an early-access/beta release. Items 5–8 can ship in the first update.
