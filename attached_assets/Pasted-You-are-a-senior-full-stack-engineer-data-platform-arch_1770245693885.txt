@@ -1,0 +1,225 @@
+You are a senior full-stack engineer + data platform architect.
+You are building a Klipfolio-like KPI dashboard system inside an existing SaaS application called Predixen.
+
+GOAL
+-----
+Implement a production-grade KPI Dashboard + Connector + Metric Engine system that mirrors Klipfolio’s core functionality, but is extensible for future simulations and AI Copilot use.
+
+TECH STACK ASSUMPTIONS
+----------------------
+- Backend: Node.js + TypeScript
+- API: Express
+- DB: Postgres (via Prisma)
+- Frontend: React + Tailwind
+- Auth already exists (use req.user.company_id)
+- Multi-tenant SaaS (company scoped)
+
+DO NOT BUILD MOCKS.
+Build real data pipelines, schemas, and APIs.
+
+====================================================
+1. DATABASE SCHEMA (PRISMA)
+====================================================
+
+Create the following models:
+
+model Connector {
+  id              String   @id @default(uuid())
+  companyId       String
+  name            String   // "Google Sheets", "Stripe", "Postgres"
+  type            String   // "google_sheets" | "excel" | "stripe" | "rest_api"
+  authType        String   // "oauth" | "api_key" | "none"
+  credentials     Json
+  refreshInterval Int      // minutes
+  lastSyncedAt    DateTime?
+  status          String   // "active" | "error" | "paused"
+  createdAt       DateTime @default(now())
+}
+
+model RawDataEvent {
+  id          String   @id @default(uuid())
+  companyId   String
+  connectorId String
+  source      String
+  payload     Json
+  occurredAt  DateTime
+  createdAt   DateTime @default(now())
+}
+
+model MetricDefinition {
+  id            String   @id @default(uuid())
+  companyId     String
+  key           String   // "mrr", "burn_rate"
+  name          String
+  description   String
+  formula       String   // DSL expression
+  source        String   // connector type
+  grain         String   // daily | monthly
+  createdAt     DateTime @default(now())
+}
+
+model MetricValue {
+  id          String   @id @default(uuid())
+  metricId    String
+  companyId   String
+  value       Float
+  periodStart DateTime
+  periodEnd   DateTime
+  computedAt  DateTime @default(now())
+}
+
+model Dashboard {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  layout    Json     // grid config
+  createdAt DateTime @default(now())
+}
+
+model DashboardWidget {
+  id          String   @id @default(uuid())
+  dashboardId String
+  type        String   // kpi | line | bar | table
+  metricKey   String
+  config      Json
+  position    Json
+}
+
+====================================================
+2. CONNECTOR FRAMEWORK
+====================================================
+
+Create a connector abstraction:
+
+interface DataConnector {
+  testConnection(): Promise<boolean>
+  fetchData(): Promise<RawDataEvent[]>
+}
+
+Implement Phase-1 connectors:
+
+A) Google Sheets
+- Auth: OAuth
+- Fetch rows
+- Normalize headers
+- Emit RawDataEvent per row
+
+B) Excel / CSV Upload
+- Parse file
+- Detect date column
+- Emit RawDataEvent per row
+
+C) Generic REST API
+- API key auth
+- Poll endpoint
+- Store full JSON payload
+
+Each connector must:
+- NEVER write directly to metrics
+- ONLY write to RawDataEvent
+- Log sync status + errors
+
+====================================================
+3. METRIC ENGINE (CORE LOGIC)
+====================================================
+
+Build a Metric Engine that:
+
+- Reads RawDataEvent
+- Applies MetricDefinition.formula
+- Outputs MetricValue records
+
+Formula DSL examples:
+- sum(field)
+- avg(field)
+- count()
+- sum(revenue) - sum(cost)
+- sum(amount) where status == "active"
+
+Implementation:
+- Parse formula safely
+- Support filters
+- Support time grouping (monthly)
+
+Expose API:
+POST /metrics/recompute
+- recompute all metrics for company
+- idempotent
+- safe to re-run
+
+====================================================
+4. DASHBOARD APIs
+====================================================
+
+Endpoints:
+
+POST /dashboards
+GET  /dashboards
+GET  /dashboards/:id
+
+POST /dashboards/:id/widgets
+GET  /dashboards/:id/widgets
+
+GET /metrics/:key/latest
+GET /metrics/:key/timeseries
+
+All responses must be company-scoped.
+
+====================================================
+5. FRONTEND (REACT)
+====================================================
+
+Build pages:
+
+/dashboards
+- List dashboards
+- Create new dashboard
+
+/dashboard/:id
+- Grid layout
+- Drag & resize widgets
+
+Widget types:
+- KPI Card (big number + delta)
+- Line chart (trend)
+- Table
+
+Each widget:
+- Fetches metric data via API
+- Shows "Last updated"
+- Shows data source
+
+====================================================
+6. DATA TRUST & OBSERVABILITY
+====================================================
+
+For each metric expose:
+- lastComputedAt
+- contributing connectors
+- number of raw events used
+
+Add a small “ℹ️ Data info” tooltip on each widget.
+
+====================================================
+7. ENGINEERING RULES
+====================================================
+
+- No hardcoded company IDs
+- No fake data
+- No frontend-only calculations
+- All math must live in backend
+- Clear error handling
+- Extensible for simulations later
+
+====================================================
+8. DELIVERABLES
+====================================================
+
+- Prisma schema
+- Connector services
+- Metric engine
+- REST APIs
+- React dashboard UI
+- Seed script with example Google Sheet metric
+
+Build this cleanly, modularly, and production-ready.

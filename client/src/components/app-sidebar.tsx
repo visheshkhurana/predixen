@@ -36,6 +36,7 @@ import {
   Briefcase,
   Activity,
   Store,
+  LayoutGrid,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,11 @@ const menuItems = [
     title: "Fundraising",
     url: "/fundraising",
     icon: DollarSign,
+  },
+  {
+    title: "KPI Dashboards",
+    url: "/dashboards",
+    icon: LayoutGrid,
   },
   {
     title: "Investor Room",
