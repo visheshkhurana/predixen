@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -696,6 +696,8 @@ export default function MetricCatalog() {
     enabled: !!companyId,
   });
   
+  const autoInitCompanyRef = useRef<number | null>(null);
+  
   const initializeMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/metrics/initialize?company_id=${companyId}`),
     onSuccess: (data: any) => {
@@ -707,6 +709,13 @@ export default function MetricCatalog() {
       toast({ title: "Initialization failed", description: err.message, variant: "destructive" });
     },
   });
+
+  useEffect(() => {
+    if (!isLoading && metrics && metrics.length === 0 && companyId && autoInitCompanyRef.current !== companyId && !initializeMutation.isPending) {
+      autoInitCompanyRef.current = companyId;
+      initializeMutation.mutate();
+    }
+  }, [isLoading, metrics, companyId]);
   
   const filteredMetrics = metrics?.filter(m => {
     const matchesSearch = !searchQuery || 
