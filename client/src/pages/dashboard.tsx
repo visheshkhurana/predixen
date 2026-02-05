@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EnhancedKPICard } from "@/components/enhanced-kpi-card";
 import { CashFlowChart } from "@/components/cash-flow-chart";
@@ -9,15 +9,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
 import { useFounderStore } from "@/store/founderStore";
+import { useRealtimeKPI, KPIMetrics } from "@/hooks/useRealtimeKPI";
 import {
   DollarSign,
   Flame,
   Calendar,
   TrendingUp,
+  TrendingDown,
   Plus,
   ArrowRight,
+  ArrowUpRight,
+  ArrowDownRight,
   Info,
   Percent,
   Target,
@@ -27,8 +32,83 @@ import {
   AlertTriangle,
   ExternalLink,
   Download,
+  Wifi,
+  WifiOff,
+  Clock,
+  Activity,
+  Users,
+  RefreshCw,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
 import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
+
+function formatCurrency(value: number): string {
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value.toFixed(0)}`;
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+interface KPITileProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ReactNode;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+  isLive?: boolean;
+}
+
+function KPITile({ title, value, subtitle, icon, trend, trendValue, isLive }: KPITileProps) {
+  return (
+    <Card className="relative overflow-visible">
+      {isLive && (
+        <div className="absolute top-2 right-2">
+          <span className="flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+        </div>
+      )}
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+          {icon}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold" data-testid={`kpi-value-${title.toLowerCase().replace(/\s/g, '-')}`}>
+          {value}
+        </div>
+        {(subtitle || trendValue) && (
+          <div className="flex items-center gap-2 mt-1">
+            {trend && trend !== 'neutral' && (
+              <span className={`flex items-center text-xs ${trend === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                {trend === 'up' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                {trendValue}
+              </span>
+            )}
+            {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 type TimePeriod = "last_month" | "this_quarter" | "last_quarter" | "this_year" | "last_12_months";
 
@@ -43,6 +123,49 @@ const periodLabels: Record<TimePeriod, string> = {
 export default function Dashboard() {
   const { currentCompany: selectedCompany } = useFounderStore();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("last_12_months");
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [historicalData, setHistoricalData] = useState<Array<KPIMetrics & { time: string }>>([]);
+  
+  const handleKPIUpdate = useCallback((update: import('@/hooks/useRealtimeKPI').KPIUpdate) => {
+    setHistoricalData(prev => {
+      const newData = [...prev, { ...update.metrics, time: new Date(update.timestamp).toLocaleTimeString() }];
+      return newData.slice(-20);
+    });
+  }, []);
+  
+  const kpiOptions = useMemo(() => ({
+    enabled: !!selectedCompany?.id && activeTab === 'realtime',
+    onUpdate: handleKPIUpdate
+  }), [selectedCompany?.id, activeTab, handleKPIUpdate]);
+  
+  const { data: liveData, isConnected } = useRealtimeKPI(
+    selectedCompany?.id ?? null,
+    kpiOptions
+  );
+
+  const rawMetrics = liveData?.metrics ?? {
+    monthly_revenue: 0,
+    mrr: 0,
+    arr: 0,
+    cash_balance: 0,
+    net_burn: 0,
+    runway_months: 18,
+    gross_margin: 0,
+    churn_rate: 0,
+    cac: 500,
+    ltv: 3000,
+    ltv_cac_ratio: 6,
+    headcount: 0,
+    revenue_per_employee: 0
+  };
+  
+  const liveMetrics = {
+    ...rawMetrics,
+    runway_months: Math.max(0, Math.min(rawMetrics.runway_months || 18, 60)),
+    cac: Math.max(100, Math.min(rawMetrics.cac || 500, 50000)),
+    ltv: Math.max(500, Math.min(rawMetrics.ltv || 3000, 500000)),
+    ltv_cac_ratio: Math.max(0.5, Math.min(rawMetrics.ltv_cac_ratio || 6, 20)),
+  };
   
   const { data: scenarios, isLoading: scenariosLoading } = useQuery<Scenario[]>({
     queryKey: ["/api/scenarios"],
@@ -85,21 +208,30 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Select
-            value={selectedPeriod}
-            onValueChange={(value) => setSelectedPeriod(value as TimePeriod)}
-          >
-            <SelectTrigger className="w-[160px]" data-testid="select-period">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(periodLabels).map(([value, label]) => (
-                <SelectItem key={value} value={value} data-testid={`select-period-${value}`}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {activeTab === 'overview' && (
+            <Select
+              value={selectedPeriod}
+              onValueChange={(value) => setSelectedPeriod(value as TimePeriod)}
+            >
+              <SelectTrigger className="w-[160px]" data-testid="select-period">
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(periodLabels).map(([value, label]) => (
+                  <SelectItem key={value} value={value} data-testid={`select-period-${value}`}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          
+          {activeTab === 'realtime' && (
+            <Badge variant={isConnected ? "default" : "secondary"} className="gap-1">
+              {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+              {isConnected ? 'Live' : 'Disconnected'}
+            </Badge>
+          )}
           
           {kpis && (
             <Tooltip>
@@ -185,7 +317,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {kpis?.missingData && kpis.missingData.length > 0 && (
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList data-testid="tabs-dashboard-view">
+          <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="realtime" data-testid="tab-realtime">Real-time</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {kpis?.missingData && kpis.missingData.length > 0 && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-missing-data">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800 dark:text-amber-400">Data Missing</AlertTitle>
@@ -480,6 +619,245 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="realtime" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPITile
+              title="MRR"
+              value={formatCurrency(liveMetrics.mrr)}
+              icon={<TrendingUp className="h-4 w-4" />}
+              trend="up"
+              trendValue="+8%"
+              subtitle="Monthly Recurring Revenue"
+              isLive={isConnected}
+            />
+            <KPITile
+              title="ARR"
+              value={formatCurrency(liveMetrics.arr)}
+              icon={<DollarSign className="h-4 w-4" />}
+              trend="up"
+              subtitle="Annual Recurring Revenue"
+              isLive={isConnected}
+            />
+            <KPITile
+              title="Cash Balance"
+              value={formatCurrency(liveMetrics.cash_balance)}
+              icon={<DollarSign className="h-4 w-4" />}
+              isLive={isConnected}
+            />
+            <KPITile
+              title="Runway"
+              value={`${liveMetrics.runway_months.toFixed(1)} mo`}
+              icon={<Clock className="h-4 w-4" />}
+              trend={liveMetrics.runway_months < 6 ? 'down' : 'neutral'}
+              subtitle={liveMetrics.runway_months < 6 ? 'Low runway' : ''}
+              isLive={isConnected}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPITile
+              title="Net Burn"
+              value={formatCurrency(liveMetrics.net_burn)}
+              icon={<TrendingDown className="h-4 w-4" />}
+              subtitle="per month"
+              isLive={isConnected}
+            />
+            <KPITile
+              title="Gross Margin"
+              value={formatPercent(liveMetrics.gross_margin)}
+              icon={<Percent className="h-4 w-4" />}
+              trend={liveMetrics.gross_margin >= 0.7 ? 'up' : 'neutral'}
+              isLive={isConnected}
+            />
+            <KPITile
+              title="Churn Rate"
+              value={formatPercent(liveMetrics.churn_rate)}
+              icon={<Activity className="h-4 w-4" />}
+              trend={liveMetrics.churn_rate <= 0.03 ? 'up' : 'down'}
+              isLive={isConnected}
+            />
+            <KPITile
+              title="Headcount"
+              value={liveMetrics.headcount}
+              icon={<Users className="h-4 w-4" />}
+              subtitle={`$${(liveMetrics.revenue_per_employee / 1000).toFixed(0)}K/emp`}
+              isLive={isConnected}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <KPITile
+              title="CAC"
+              value={formatCurrency(liveMetrics.cac)}
+              icon={<DollarSign className="h-4 w-4" />}
+              isLive={isConnected}
+            />
+            <KPITile
+              title="LTV"
+              value={formatCurrency(liveMetrics.ltv)}
+              icon={<DollarSign className="h-4 w-4" />}
+              isLive={isConnected}
+            />
+            <KPITile
+              title="LTV/CAC Ratio"
+              value={`${liveMetrics.ltv_cac_ratio.toFixed(1)}x`}
+              icon={<TrendingUp className="h-4 w-4" />}
+              trend={liveMetrics.ltv_cac_ratio >= 3 ? 'up' : liveMetrics.ltv_cac_ratio < 2 ? 'down' : 'neutral'}
+              subtitle={liveMetrics.ltv_cac_ratio >= 3 ? 'Healthy' : liveMetrics.ltv_cac_ratio < 2 ? 'Needs improvement' : ''}
+              isLive={isConnected}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Revenue Trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {historicalData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <AreaChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="time" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                      <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Area 
+                        type="monotone" 
+                        dataKey="monthly_revenue" 
+                        stroke="hsl(var(--primary))" 
+                        fill="hsl(var(--primary) / 0.2)" 
+                        name="Revenue"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                    <p>Waiting for live data...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Burn & Runway</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {historicalData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="left" tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}mo`} tick={{ fontSize: 12 }} />
+                      <RechartsTooltip />
+                      <Legend />
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="net_burn" 
+                        stroke="hsl(var(--destructive))" 
+                        name="Net Burn"
+                        dot={false}
+                      />
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="runway_months" 
+                        stroke="hsl(var(--chart-2))" 
+                        name="Runway (months)"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                    <p>Waiting for live data...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Unit Economics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {historicalData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="cac" 
+                        stroke="hsl(var(--chart-1))" 
+                        name="CAC"
+                        dot={false}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="ltv" 
+                        stroke="hsl(var(--chart-3))" 
+                        name="LTV"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                    <p>Waiting for live data...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Margins & Churn</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {historicalData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={historicalData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="time" tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => `${(v*100).toFixed(0)}%`} tick={{ fontSize: 12 }} />
+                      <RechartsTooltip formatter={(value: number) => formatPercent(value)} />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="gross_margin" 
+                        stroke="hsl(var(--chart-2))" 
+                        name="Gross Margin"
+                        dot={false}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="churn_rate" 
+                        stroke="hsl(var(--destructive))" 
+                        name="Churn Rate"
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                    <p>Waiting for live data...</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
