@@ -135,7 +135,7 @@ export function BandsChart({
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          Range: {formatValue(p90 - p10)} spread
+                          Range: {formatValue((p90 ?? 0) - (p10 ?? 0))} spread
                         </p>
                       </div>
                     );
