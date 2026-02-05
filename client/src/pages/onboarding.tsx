@@ -40,6 +40,7 @@ const SAMPLE_FINANCIALS = {
   payroll: 45000,
   other_costs: 8000,
   cash_balance: 750000,
+  headcount: 12,
 };
 
 interface ExtractedData {
@@ -236,6 +237,7 @@ export default function OnboardingPage() {
           payroll: data.financials.payroll ?? prev.payroll,
           other_costs: data.financials.other_costs ?? prev.other_costs,
           cash_balance: data.financials.cash_balance ?? prev.cash_balance,
+          headcount: data.financials.headcount ?? prev.headcount,
         }));
       }
       
@@ -1112,6 +1114,7 @@ export default function OnboardingPage() {
                     <Input
                       id="revenue"
                       type="number"
+                      step="any"
                       value={baselineData.monthly_revenue}
                       onChange={(e) => setBaselineData({ ...baselineData, monthly_revenue: Number(e.target.value) })}
                       required
@@ -1162,6 +1165,7 @@ export default function OnboardingPage() {
                     <Input
                       id="opex"
                       type="number"
+                      step="any"
                       value={baselineData.opex}
                       onChange={(e) => setBaselineData({ ...baselineData, opex: Number(e.target.value) })}
                       required
@@ -1185,6 +1189,7 @@ export default function OnboardingPage() {
                     <Input
                       id="payroll"
                       type="number"
+                      step="any"
                       value={baselineData.payroll}
                       onChange={(e) => setBaselineData({ ...baselineData, payroll: Number(e.target.value) })}
                       required
@@ -1208,6 +1213,7 @@ export default function OnboardingPage() {
                     <Input
                       id="other-costs"
                       type="number"
+                      step="any"
                       value={baselineData.other_costs}
                       onChange={(e) => setBaselineData({ ...baselineData, other_costs: Number(e.target.value) })}
                       min={0}
@@ -1231,6 +1237,7 @@ export default function OnboardingPage() {
                   <Input
                     id="cash"
                     type="number"
+                    step="any"
                     value={baselineData.cash_balance}
                     onChange={(e) => setBaselineData({ ...baselineData, cash_balance: Number(e.target.value) })}
                     required

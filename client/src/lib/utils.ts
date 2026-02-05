@@ -56,3 +56,93 @@ export function formatPercent(value: number | null | undefined): string {
   if (value == null || isNaN(value)) return 'N/A';
   return `${value.toFixed(1)}%`;
 }
+
+/**
+ * CANONICAL RUNWAY CALCULATION
+ * Use this single function everywhere runway is displayed.
+ * 
+ * @param cashBalance - Current cash on hand
+ * @param totalExpenses - Total monthly expenses (opex + payroll + other)
+ * @param revenue - Monthly revenue
+ * @returns Runway in months, or null if sustainable/infinite
+ */
+export function calculateRunway(
+  cashBalance: number | null | undefined,
+  totalExpenses: number | null | undefined,
+  revenue: number | null | undefined
+): number | null {
+  const cash = cashBalance ?? 0;
+  const expenses = totalExpenses ?? 0;
+  const rev = revenue ?? 0;
+  
+  const netBurn = expenses - rev;
+  
+  // If profitable or break-even, runway is infinite
+  if (netBurn <= 0) return null;
+  
+  // If no cash, runway is 0
+  if (cash <= 0) return 0;
+  
+  return cash / netBurn;
+}
+
+/**
+ * Format runway value for display
+ * @param runwayMonths - Runway in months (or null for infinite)
+ * @param maxDisplay - Maximum months to display before showing "60+"
+ */
+export function formatRunway(runwayMonths: number | null | undefined, maxDisplay = 60): string {
+  if (runwayMonths === null || runwayMonths === undefined) {
+    return 'Sustainable';
+  }
+  if (isNaN(runwayMonths)) {
+    return 'N/A';
+  }
+  if (runwayMonths > maxDisplay) {
+    return `${maxDisplay}+`;
+  }
+  return `${runwayMonths.toFixed(1)} mo`;
+}
+
+/**
+ * Safely convert a number for display, handling NaN and null
+ */
+export function safeNumber(value: number | null | undefined, fallback = 0): number {
+  if (value === null || value === undefined || isNaN(value)) {
+    return fallback;
+  }
+  return value;
+}
+
+/**
+ * Safe toFixed that handles NaN and null
+ */
+export function safeToFixed(value: number | null | undefined, decimals = 1, fallback = 'N/A'): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return fallback;
+  }
+  return value.toFixed(decimals);
+}
+
+/**
+ * Format chart tooltip value, safely handling NaN
+ */
+export function formatChartTooltip(
+  value: number | null | undefined, 
+  type: 'currency' | 'percent' | 'number' = 'currency'
+): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return 'N/A';
+  }
+  
+  switch (type) {
+    case 'currency':
+      return formatCurrencyAbbrev(value);
+    case 'percent':
+      return formatPercent(value);
+    case 'number':
+      return value.toLocaleString();
+    default:
+      return String(value);
+  }
+}

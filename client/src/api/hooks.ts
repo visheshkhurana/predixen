@@ -176,12 +176,33 @@ export function useQuickSimulate() {
 
 export function useManualBaseline() {
   const queryClient = useQueryClient();
+  const setFinancialBaseline = useFounderStore((s) => s.setFinancialBaseline);
   
   return useMutation({
     mutationFn: ({ companyId, data }: { companyId: number; data: any }) =>
       api.datasets.manualBaseline(companyId, data),
-    onSuccess: (_, { companyId }) => {
+    onSuccess: (_, { companyId, data }) => {
       queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      
+      // Sync onboarding data to store's financialBaseline format
+      const totalExpenses = (data.opex || 0) + (data.payroll || 0) + (data.other_costs || 0);
+      setFinancialBaseline({
+        cashOnHand: data.cash_balance || null,
+        monthlyRevenue: data.monthly_revenue || null,
+        totalMonthlyExpenses: totalExpenses || null,
+        monthlyGrowthRate: data.growth_rate || null,
+        expenseBreakdown: {
+          payroll: data.payroll || null,
+          marketing: null, // Not captured in onboarding
+          operating: data.opex || null,
+          cogs: null,
+          otherOpex: data.other_costs || null,
+        },
+        hasManualExpenseOverride: false,
+        currency: 'USD',
+        asOfDate: new Date().toISOString().split('T')[0],
+      });
     },
   });
 }

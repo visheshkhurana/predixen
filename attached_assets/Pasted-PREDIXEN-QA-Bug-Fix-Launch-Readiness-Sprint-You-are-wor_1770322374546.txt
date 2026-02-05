@@ -1,0 +1,295 @@
+PREDIXEN — QA Bug Fix & Launch Readiness Sprint
+You are working on Predixen, an AI-powered financial decision simulator for startup founders and CXOs. The app is built with a modern web stack and uses Supabase for auth/database. A full QA audit was just completed and found 25+ issues that need to be fixed before launch. Fix each one methodically, testing as you go. Do NOT skip any item. After each fix, briefly confirm what you changed.
+
+🔴 PHASE 1: CRITICAL FIXES (Do these first, in order)
+1. Fix Product Branding — "RunwayAI" → "Predixen"
+The browser tab title across the ENTIRE app says "RunwayAI - Startup Financial Simulator" instead of "Predixen".
+What to fix:
+
+Search the entire codebase for every occurrence of "RunwayAI" and replace with "Predixen"
+Update the <title> tag (likely in index.html or your layout component) to say "Predixen - AI Decision Simulator for Founders"
+Update the <meta name="description"> to reference Predixen specifically, not generic "financial simulation tool"
+Check all page-specific title overrides (each route may set its own title) — they should all say "Predixen | Page Name"
+Search for any other leftover placeholder names like "RunwayAI", "Runway AI", or "startup financial simulator" that don't match the Predixen brand
+
+2. Fix Onboarding Data Persistence
+When a user completes the onboarding flow (Step 1: Company Info → Step 2: Financial Baseline → Run First Truth Scan), the financial data they enter is NOT being saved to the same data store that the Data Input > Financials tab reads from.
+What's happening:
+
+User enters during onboarding: Revenue $95,000, Gross Margin 75%, Opex $32,000, Payroll $82,000, Other Costs $46,000, Cash Balance $1,426,680
+But Data Input > Financials tab shows completely different DEFAULT values: Revenue $50,000, Cash $500,000, Payroll $50,000, etc.
+The onboarding writes to one place, but the Financials tab reads from a different source
+
+What to fix:
+
+Trace the onboarding form submission handler (Step 2 Financial Baseline) — find where it saves data
+Trace the Data Input > Financials tab component — find where it reads data
+Make both read/write from the SAME source of truth (likely a Supabase table or a global state store)
+After onboarding completes, the Financials tab should immediately show the values the user just entered
+Also verify: after a user edits values in the Financials tab and clicks "Save All Data", those updated values should reflect everywhere (Overview, KPI Board, Truth Scan, Simulation)
+
+3. Fix Runway Calculation Inconsistency
+The "Runway" metric shows 3 different values across the app:
+
+Overview page: 16.1 months
+Industry Benchmarks section: 3.7 months
+Simulation Results: 14.0 months
+
+What to fix:
+
+Create ONE canonical runway calculation function, e.g. calculateRunway(cashBalance, netBurn) where netBurn = totalExpenses - revenue
+Use this single function everywhere runway is displayed
+The Overview, KPI Board, Truth Scan, Industry Benchmarks, and Simulation should all call this same function
+If the Simulation produces a different runway (because it runs Monte Carlo with randomness), label it clearly as "Simulated Runway (P50)" to differentiate from the deterministic "Current Runway"
+The Industry Benchmarks section appears to be using a completely wrong input — debug what values it's reading and fix the source
+
+4. Fix $NaN in Cash Projection Chart
+In Simulation Results → Cash Projection Bands chart, hovering over months where cash goes negative shows "P50 (Median): $NaNk".
+What to fix:
+
+Find the chart tooltip formatter for the Cash Projection Bands component
+The NaN likely happens because the median calculation returns NaN when all simulation paths have gone to zero/negative, or there's a division by zero
+Add a null/NaN check: if the value is NaN or null, display "$0" or "N/A" instead
+Also check if the chart data array itself contains NaN values and sanitize them before passing to the chart library
+Test by hovering over every month in the chart to ensure no NaN appears anywhere
+
+5. Fix Help & Docs Link
+The sidebar "Help & Docs" link points to https://docs.predixen.com/ which returns an error page (site not deployed).
+What to fix:
+
+Option A (quick): Change the link to point to a working docs page. If you have docs in Notion, GitBook, or ReadMe, point there. If no docs exist yet, create a simple /docs route within the app that shows a "Documentation coming soon" page with contact/support email.
+Option B (proper): Deploy a docs site at docs.predixen.com using GitBook, Mintlify, or Docusaurus with at minimum: Getting Started guide, Data Input format guide, Simulation explanation, FAQ.
+Either way, the link should never lead to a broken page.
+
+6. Fix Decimal Support in Number Inputs
+The Financial Baseline form (Step 2 of onboarding) and likely other number inputs reject decimal values. The Gross Margin field rejected 74.7 with a browser validation error saying "nearest valid values are 74 and 75."
+What to fix:
+
+Find ALL <input type="number"> elements across the app
+Add step="any" or step="0.01" attribute to allow decimal entry
+Specifically check: Gross Margin (%), Monthly Growth Rate (%), Churn Rate (%), any percentage field, and any currency field that might need cents
+Test by entering 74.7 in Gross Margin — it should be accepted without validation error
+
+
+🟠 PHASE 2: HIGH PRIORITY FIXES
+7. AI Copilot — Handle Natural Language Questions
+When asked "What happens if we hire 10 engineers next quarter? Show me the impact on burn rate and runway," the Copilot returns a generic template instead of actually running the simulation.
+What to fix:
+
+The Copilot currently seems to only respond to a fixed set of predefined commands/templates
+Add an intent parser (or improve the existing LLM prompt) that can extract simulation parameters from natural language:
+
+"hire 10 engineers" → extract: hiring_change = +10, role = engineering, avg_salary = [use default or ask]
+"next quarter" → extract: timeline = 3 months
+
+
+When the Copilot detects a simulation-type question, it should:
+
+Extract the parameters
+Run the simulation with those parameters
+Return a concrete answer like: "Hiring 10 engineers at ~$150K avg salary would increase monthly burn by $125K, reducing runway from 16 months to 8.5 months."
+
+
+If the question is ambiguous, the Copilot should ask a specific clarifying question, NOT fall back to the generic template
+
+8. Fix Headcount Display on KPI Board
+KPI Board shows Headcount: 0 and $0K/emp while the Company data tab has Number of Employees: 10.
+What to fix:
+
+The KPI Board Headcount card is reading from a different source than the Company tab
+Find where the KPI Board component fetches headcount and point it to the same source as Data Input > Company > Number of Employees
+Also compute Rev/Emp correctly: $95,000 MRR / 10 employees = $9,500/emp/month — which matches what the Truth Scan shows ($9.5K) but NOT what the KPI Board shows ($0K)
+
+9. Fix Churn Rate Stuck at 0.0%
+Churn Rate displays 0.0% on KPI Board and charts even though the company should have non-zero churn.
+What to fix:
+
+Check if there's a churn data field that never got populated because onboarding doesn't ask for it
+The onboarding should either:
+
+Ask for churn rate directly (add a field to Step 2 or create a Step 3), OR
+Derive it from NRR: if NRR = 99.5%, implied monthly churn ≈ 0.5% gross churn adjusted for expansion. Use the formula: monthly_churn ≈ 1 - (NRR / (1 + expansion_rate))
+
+
+If churn cannot be calculated, show "—" or "Not set" instead of 0.0% which is misleading
+The Industry Benchmarks section shows Churn Rate: 5.5% suggesting SOME source has churn data — find where that comes from and use it consistently
+
+10. Fix KPI Board Chart Time Axis
+All 4 charts on the KPI Board (Revenue Trend, Burn & Runway, Unit Economics, Margins & Churn) use real-time timestamps on the X-axis (e.g., "18:20:27", "18:20:37") instead of calendar months.
+What to fix:
+
+These charts appear to be real-time streaming charts that plot data as it arrives (every 10 seconds)
+For a financial dashboard, the X-axis should show months (Jan 2024, Feb 2024, etc.)
+If historical monthly data exists, plot it as monthly data points
+If only a single month of data exists, show that one point with proper month label, not a real-time stream
+The chart component likely uses a real-time data feed — switch it to use historical financial periods instead
+
+11. Connect Alerts System to Financial Data
+Alerts & Monitoring page shows "Status Unknown — We need financial data to assess your company's health" even after data is entered and Truth Scan has run.
+What to fix:
+
+The Alerts engine needs to read from the same data source as the Overview/Truth Scan
+After onboarding (or after a Truth Scan runs), the alerts system should automatically evaluate threshold rules
+At minimum, create these default alert rules:
+
+Critical: Runway < 6 months
+Warning: Burn rate increasing > 10% MoM
+Warning: Churn rate > 5%
+Info: Gross margin below industry P25
+
+
+After the financial data is available, the Health Dashboard should show a status (Healthy / At Risk / Critical) instead of "Unknown"
+
+12. Build the Decision Page (Step 3)
+Clicking "Decision" in the top nav (Step 3 of Truth → Simulation → Decision) does nothing.
+What to fix:
+
+Create a /decision route with a Decision page
+This page should show:
+
+Decision Summary: a side-by-side comparison of the top 2-3 simulated scenarios with their key metrics
+Recommended Action: Based on simulation results, show the AI's recommended strategic path
+Risk/Reward Matrix: Visual showing risk vs. potential upside for each scenario
+Next Steps Checklist: Actionable items based on the selected decision
+
+
+Wire the "Decision" link in the top navigation bar to navigate to this page
+If no simulations have been run yet, show an empty state: "Run a simulation first to generate decision recommendations" with a button to go to Simulation
+
+13. Fix Mobile Responsive Navigation
+On mobile viewport (375px), the entire sidebar disappears with no alternative navigation.
+What to fix:
+
+Add a hamburger menu icon (☰) to the top-left of the mobile header
+When tapped, it should open the sidebar as a slide-over drawer with a dark overlay
+The drawer should contain all the same navigation items as the desktop sidebar
+Tapping outside the drawer or tapping a nav item should close it
+Also fix the top navigation bar to be scrollable or collapsed on mobile — currently the company name and metadata are truncated
+
+
+🟡 PHASE 3: MEDIUM PRIORITY
+14. Fix ARPU and Customer Count Inconsistency
+Overview shows ARPU $467 with 224 customers. Truth Scan shows ARPU $633 with 150 customers.
+What to fix:
+
+Both should use the same calculation: ARPU = MRR / Total Customers
+Find where each page computes ARPU and customer count
+Create a single canonical function and use it in both places
+If different customer definitions are used (active vs. total vs. paying), label them clearly
+
+15. Fix LTV:CAC Ratio Inconsistency
+Overview: 4.5x. KPI Board: 4.8x. Truth Scan: 4.8x.
+What to fix:
+
+Same approach — single canonical calculation function used everywhere
+LTV = ARPU × Gross Margin / Monthly Churn Rate
+LTV:CAC = LTV / CAC
+If churn is 0 (because of Bug #9), LTV becomes infinite — this might explain the discrepancy. Fix the churn issue first, then verify LTV:CAC consistency.
+
+16. Revenue Growth — Show N/A Instead of 0.0%
+When there's only 1 month of data, Revenue Growth shows 0.0% with a note "Need 2+ months data".
+What to fix:
+
+If data points < 2, display "N/A" or "—" as the primary value, not 0.0%
+The small "Need 2+ months data" text is fine as a secondary note, but the big 0.0% is misleading
+Also remove the red/downward sparkline chart next to Revenue Growth when there's insufficient data — it creates a false negative impression
+
+17. Fix Expense Breakdown Categories
+Truth Scan shows Marketing: $0 (0%) in the expense pie chart, but the user entered $32K Opex which likely contains marketing spend.
+What to fix:
+
+The onboarding captures: Opex, Payroll, Other Costs — but doesn't break Opex into sub-categories
+Either: add Marketing as a separate input field during onboarding/Data Input
+Or: use a reasonable default allocation (e.g., Marketing = 40% of Opex for SaaS companies) until the user provides more detail
+At minimum, label the expense properly: if you can't determine the marketing budget, show the Opex category as "Operating Expenses" in the pie chart instead of showing Marketing: $0
+
+18. Improve Monte Carlo Simulation Variance
+P50 and P90 runway are both 14.0 months — the simulation has almost no variance.
+What to fix:
+
+Review the simulation parameters: growth rate volatility, expense variation, churn randomness
+Increase the standard deviation on key random variables:
+
+Revenue growth: ±3-5% monthly variation
+Expenses: ±2-3% monthly variation
+Churn: ±1-2% variation
+
+
+With only 1 month of data, the simulation should use wider confidence intervals (more uncertainty), not narrower
+Verify that the Monte Carlo is actually running multiple iterations (e.g., 1000) and not just 1
+
+19. Add Open Graph Meta Tags
+What to fix:
+Add these meta tags to the <head> in your layout/index.html:
+html<meta property="og:title" content="Predixen — AI Decision Simulator for Founders & CXOs">
+<meta property="og:description" content="Simulate strategic decisions before you execute them. Model hiring plans, pricing changes, and fundraising strategies with Monte Carlo simulations.">
+<meta property="og:image" content="https://predixen.app/og-image.png">
+<meta property="og:url" content="https://predixen.app">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Predixen — AI Decision Simulator for Founders & CXOs">
+<meta name="twitter:description" content="Simulate strategic decisions before you execute them.">
+<link rel="canonical" href="https://predixen.app">
+Create an og-image.png (1200x630px) with the Predixen logo, tagline, and a visual of the dashboard.
+
+🔵 PHASE 4: POLISH
+20. Fix Sidebar State Persistence
+The sidebar sections (Planning, Data & Setup) collapse/disappear after browser window resize.
+What to fix:
+
+Save sidebar section open/closed state in localStorage
+On mount, restore the previous state
+Ensure all sections are visible by default on first load
+
+21. Fix Accessibility Issues
+What to fix:
+
+Find the button without an accessible label (likely an icon-only button) — add aria-label="Button description"
+Find the input without a label — add either a <label for="..."> or aria-label
+Ensure only ONE <h1> per page. The second H1 is likely in the sidebar or a sub-section — change it to <h2>
+
+22. Marketplace Empty State
+What to fix:
+
+When there are 0 connectors, instead of showing a generic "No connectors found — Try adjusting your search or filters" message:
+Show: "Marketplace coming soon! We're building connectors for Stripe, QuickBooks, Xero, HubSpot, and more. Want early access? [Join waitlist]"
+This turns an empty page into a lead generation opportunity
+
+23. Auth Page — Create Account Flow
+What to fix:
+
+Test and ensure the "Create Account" tab works with:
+
+Password strength validation (minimum 8 chars, mixed case, number)
+Email format validation
+Duplicate account error handling (clear error message)
+Email confirmation flow (if applicable)
+
+
+Test "Forgot password?" button — ensure it shows a reset form and sends a reset email
+Test Google and GitHub OAuth buttons — ensure they redirect to proper OAuth flows and handle errors gracefully
+
+
+🎯 VALIDATION CHECKLIST
+After all fixes, verify this end-to-end flow works perfectly:
+
+☐ Visit predixen.app — tab title says "Predixen"
+☐ Create account via email — works with validation
+☐ Onboarding Step 1: Enter company info, select industry/stage → Continue works
+☐ Onboarding Step 2: Enter financials with DECIMAL gross margin (74.7%) → Accepted
+☐ Click "Run First Truth Scan" → Navigates to dashboard
+☐ Dashboard shows the EXACT values entered during onboarding
+☐ Navigate to Data Input > Financials → Shows SAME values as dashboard
+☐ KPI Board → Headcount is NOT 0, Churn Rate is NOT 0.0%, charts show months on X-axis
+☐ Truth Scan → ARPU and Customer count match Overview page
+☐ Alerts → Shows actual health status, not "Unknown"
+☐ Simulation → Run baseline → Runway matches Overview (or is labeled as "Simulated")
+☐ Simulation → Cash chart tooltip → No $NaN anywhere
+☐ Click Decision (Step 3) → A real page loads
+☐ AI Copilot → Ask "What if we hire 5 engineers?" → Gets a concrete numerical answer
+☐ Mobile (375px) → Hamburger menu appears, sidebar opens as drawer
+☐ Help & Docs → Opens a working page
+☐ View page source → og:title says "Predixen", no "RunwayAI" anywhere
+
+
+Work through these in order (Phase 1 → 2 → 3 → 4). After each phase, pause and confirm what was fixed. Do NOT move to the next phase until the current one is fully done and tested.
