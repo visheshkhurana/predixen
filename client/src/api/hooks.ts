@@ -111,6 +111,8 @@ export function useRunSimulation() {
       api.simulations.run(scenarioId, nSims),
     onSuccess: (_, { scenarioId }) => {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
+      queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
     },
   });
 }
