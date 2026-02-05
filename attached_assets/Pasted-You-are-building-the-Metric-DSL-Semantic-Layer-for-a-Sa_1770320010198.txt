@@ -1,0 +1,299 @@
+You are building the **Metric DSL + Semantic Layer** for a SaaS product called **Predixen**.
+
+Predixen requirements:
+- Multi-tenant (org_id)
+- Raw data is immutable in raw_events (append-only)
+- Metrics must be defined once, versioned, and computed into metric_values
+- Dashboards and simulations MUST read only from metric_values, not from raw_events directly
+- Data accuracy and traceability are non-negotiable
+
+You must implement:
+1) A human-readable Metric DSL (YAML/JSON)
+2) A compiler that converts DSL → safe SQL (Postgres)
+3) A metric executor that runs SQL, writes to metric_values, and stores lineage
+4) A UI/API to create, validate, version, and recompute metrics
+5) Default built-in metric templates: Revenue, MRR, ARR, Burn, Runway, CAC, LTV, Churn, Gross Margin, NRR
+
+Assume stack:
+- Backend: Node + TypeScript + Express (or Fastify)
+- DB: PostgreSQL
+- Queue: BullMQ + Redis for scheduled compute
+- Frontend: React + TypeScript (basic UI for catalog)
+Adapt to existing repo if different; do not rewrite working modules.
+
+========================================================
+PART A — METRIC DSL SPEC (MUST IMPLEMENT)
+========================================================
+
+Design a Metric DSL that is:
+- readable by humans
+- safe to execute (no arbitrary SQL injection)
+- expressive enough for common business metrics
+- AI-friendly (structured + semantic metadata)
+
+Format: YAML stored in canonical_metrics.definition as text (and parsed to JSON internally)
+
+Each metric definition MUST include:
+
+meta:
+  id: string (stable slug, e.g. "mrr")
+  name: string
+  description: string
+  unit: string ("USD", "%", "count")
+  grain: "daily" | "weekly" | "monthly"
+  owners: [string]
+  tags: [string]
+  version: int
+  status: "draft" | "certified" | "deprecated"
+
+dependencies:
+  - data_source_type: string (e.g. "stripe", "quickbooks", "ga4")
+    event_type: optional string filter (e.g. "invoice.paid")
+    required: boolean
+
+inputs:
+  time_range:
+    lookback_days: int (default 365)
+  currency:
+    base: "USD"
+    fx_source: optional
+  filters:
+    - field: string (mapped canonical field)
+      op: "=" | "!=" | "in" | "not_in" | "gt" | "gte" | "lt" | "lte" | "contains"
+
+mapping:
+  # Mapping defines how to extract fields from raw_events.payload for this metric
+  # Must support JSONPath-like selectors but compiled safely using Postgres jsonb operators.
+  fields:
+    occurred_at: "$.occurred_at" OR "$.created" OR fallback to raw_events.occurred_at
+    amount: "$.amount"
+    currency: "$.currency"
+    customer_id: "$.customer"
+    subscription_id: "$.subscription"
+    status: "$.status"
+    # etc.
+
+logic:
+  # Main computation block, must be declarative.
+  type: "aggregate"
+  source: "raw_events"
+  measures:
+    - name: "value"
+      agg: "sum" | "count" | "avg" | "max" | "min"
+      field: "amount" | "*" | any mapped field
+      where:
+        - field: "status"
+          op: "="
+          value: "paid"
+
+  dimensions:
+    - name: "time_bucket"
+      expr: "time_bucket(grain, occurred_at)"  # macro
+
+postprocess:
+  - op: "scale"
+    factor: 0.01   # e.g. cents → dollars
+  - op: "currency_convert"
+    to: "USD"
+  - op: "clamp"
+    min: 0
+
+output:
+  primary_value: "value"
+  time_bucket: "time_bucket"
+
+ALLOWED MACROS:
+- time_bucket(grain, timestamp)
+- coalesce(a, b)
+- to_number(json_field)
+- lower(text)
+- date_trunc(grain, ts)
+
+DO NOT allow raw SQL strings except in a gated "sql_advanced" mode reserved for enterprise.
+For MVP, implement only safe DSL compilation.
+
+========================================================
+PART B — COMPILER (DSL → SQL)
+========================================================
+
+Implement a compiler that:
+- Parses YAML into an AST
+- Validates fields, operators, grain, macros
+- Resolves mapping.fields into safe jsonb extraction expressions
+- Produces parameterized SQL for Postgres
+
+Key compiler behaviors:
+1) Scope everything by org_id
+2) Filter raw_events by:
+   - org_id
+   - dependency data_source_type (join to data_sources via data_source_id)
+   - event_type if provided
+   - time_range lookback_days
+3) Build occurred_at safely:
+   - use raw_events.occurred_at if present
+   - else parse from payload field mapping if present
+4) Create time_bucket using date_trunc based on grain
+5) Aggregate measures into (time_bucket, value)
+6) Apply postprocess operations (scale, clamp, etc.)
+
+Compiler output should include:
+- sql: string
+- params: array
+- lineage:
+  - data_source_types used
+  - event_types used
+  - extracted fields
+
+========================================================
+PART C — METRIC EXECUTOR + LINEAGE
+========================================================
+
+Implement executor that:
+- Takes canonical_metrics.id + version
+- Calls compiler → SQL
+- Executes SQL
+- Writes results into metric_values:
+  - org_id, metric_id, time_bucket, value, computed_at
+  - source_versions jsonb including:
+    - data_source_id list
+    - ingestion_run ids or last_success_at timestamps
+    - metric_version
+
+Traceability rules:
+- Every metric_value row must have lineage metadata
+- Must be possible to answer: "which raw events contributed to this?"
+  Provide a method to fetch contributing raw_events for a given time_bucket using the same filters.
+
+Recompute:
+- Allow recompute for a time range (from/to)
+- On recompute, delete metric_values for that metric/time_range and reinsert (transactionally)
+- Store audit_logs entry
+
+Scheduling:
+- On successful ingestion run, enqueue dependent metrics for recompute
+- Use BullMQ "metric_compute" queue
+
+========================================================
+PART D — API (METRIC CATALOG)
+========================================================
+
+Implement endpoints:
+
+GET  /api/metrics
+POST /api/metrics                (create draft metric)
+GET  /api/metrics/:id
+POST /api/metrics/:id/validate   (parse + validate DSL; return errors)
+POST /api/metrics/:id/publish    (increment version, mark certified)
+POST /api/metrics/:id/compute    (manual compute, optional date range)
+GET  /api/metrics/:id/values?from&to&grain
+
+Additionally:
+GET /api/metrics/:id/lineage?time_bucket=YYYY-MM-DD
+Return:
+- metric definition version
+- compiled SQL (for admin only)
+- dependencies
+- ingestion freshness for each dependency
+- counts of raw_events used
+
+Permissions:
+- Admin can create/publish
+- Viewer can read values
+- No one can view secrets
+
+========================================================
+PART E — FRONTEND (BASIC, NOT POLISH)
+========================================================
+
+Create pages:
+- MetricCatalog (list, search, status, last computed)
+- MetricDetail (definition viewer, validate button, compute button, values chart)
+- MetricCreate (YAML editor with schema hints)
+
+Must show:
+- freshness badges (based on dependency ingestion health)
+- metric version
+- status (draft/certified)
+
+========================================================
+PART F — BUILT-IN METRIC TEMPLATES
+========================================================
+
+Ship YAML templates:
+
+1) Revenue (Stripe invoice.paid sum(amount))
+2) MRR (sum active subscriptions monthly)
+3) ARR (MRR * 12)
+4) Burn (QuickBooks expenses sum)
+5) Runway (cash / burn)  — if cash metric not available, keep as template placeholder with validation warning
+6) CAC (ad spend / new customers) — depends on Ads + CRM
+7) LTV (ARPU * gross margin / churn) — computed metric referencing other metrics (see below)
+8) Churn (lost customers / total)
+9) Gross Margin ((revenue - cogs) / revenue)
+10) NRR ((starting ARR + expansions - contractions - churn) / starting ARR)
+
+IMPORTANT: Support "computed metrics" that reference other metrics:
+- allow logic.type = "compose"
+- inputs.metrics = [ "mrr", "churn", ... ]
+- expression = a formula referencing those metrics
+- compiler converts to SQL joining metric_values by time_bucket
+
+========================================================
+PART G — FILE STRUCTURE (STRICT)
+========================================================
+
+server/
+  modules/
+    metrics/
+      dsl/
+        schema.ts
+        parser.ts
+        validator.ts
+        compiler.ts
+        macros.ts
+      executor.ts
+      scheduler.ts
+      metrics.routes.ts
+      metrics.service.ts
+      templates/
+        revenue.yaml
+        mrr.yaml
+        ...
+  db/migrations/...
+
+client/
+  pages/
+    MetricCatalog.tsx
+    MetricDetail.tsx
+    MetricCreate.tsx
+  components/
+    YamlEditor.tsx
+    MetricHealthBadge.tsx
+  services/
+    metrics.api.ts
+
+========================================================
+OUTPUT RULES
+========================================================
+
+- Generate code FILE-BY-FILE with paths
+- TypeScript everywhere
+- Use safe parameterized queries
+- Add comments explaining why decisions were made
+- Provide a short manual test checklist at the end:
+  - create metric
+  - validate
+  - compute
+  - view values
+  - recompute with replay
+  - verify lineage output
+
+BEGIN NOW:
+1) inspect existing repo (brief plan)
+2) add migrations
+3) implement DSL parser/validator/compiler
+4) implement executor + routes
+5) add templates
+6) add frontend pages
+
+Do not stop early. Do not output pseudo-code.

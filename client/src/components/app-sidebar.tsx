@@ -45,6 +45,7 @@ import {
   Store,
   LayoutGrid,
   ChevronDown,
+  FileCode,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Overview", url: "/", icon: LayoutDashboard },
       { title: "KPI Board", url: "/kpi-board", icon: Activity },
+      { title: "Metric Catalog", url: "/metrics", icon: FileCode },
       { title: "Truth Scan", url: "/truth", icon: Search },
       { title: "Alerts", url: "/alerts", icon: Bell },
     ],
