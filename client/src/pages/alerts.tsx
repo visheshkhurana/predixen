@@ -476,6 +476,13 @@ export default function AlertsPage() {
             Critical Issues
           </Badge>
         );
+      case "insufficient_data":
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Info className="h-3 w-3" />
+            Needs More Data
+          </Badge>
+        );
       default:
         return (
           <Badge variant="secondary" className="gap-1">

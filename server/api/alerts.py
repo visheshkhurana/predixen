@@ -112,6 +112,18 @@ def get_company_alerts(
     }
 
 
+@router.get("/companies/{company_id}/analyze")
+def get_company_health(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get health analysis for a company (simple GET endpoint).
+    """
+    return _perform_health_analysis(company_id, None, db, current_user)
+
+
 @router.post("/companies/{company_id}/analyze")
 def analyze_company_health(
     company_id: int,
@@ -120,7 +132,19 @@ def analyze_company_health(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Comprehensive health analysis for a company.
+    Comprehensive health analysis for a company with custom config.
+    """
+    return _perform_health_analysis(company_id, config, db, current_user)
+
+
+def _perform_health_analysis(
+    company_id: int,
+    config: Optional[AlertConfigRequest],
+    db: Session,
+    current_user: User,
+):
+    """
+    Shared implementation for health analysis.
     """
     company = db.query(Company).filter(
         Company.id == company_id,
