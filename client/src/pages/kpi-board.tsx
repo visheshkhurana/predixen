@@ -89,14 +89,22 @@ function KPITile({ title, value, subtitle, icon, trend, trendValue, isLive }: KP
   );
 }
 
+const getMonthLabel = (index: number) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const monthIndex = (now.getMonth() - 11 + index) % 12;
+  return months[monthIndex < 0 ? monthIndex + 12 : monthIndex];
+};
+
 export default function KPIBoardPage() {
   const { currentCompany } = useFounderStore();
   const [historicalData, setHistoricalData] = useState<Array<KPIMetrics & { time: string }>>([]);
   
   const handleKPIUpdate = useCallback((update: import('@/hooks/useRealtimeKPI').KPIUpdate) => {
     setHistoricalData(prev => {
-      const newData = [...prev, { ...update.metrics, time: new Date(update.timestamp).toLocaleTimeString() }];
-      return newData.slice(-20);
+      const dataPointIndex = prev.length + 1;
+      const newData = [...prev, { ...update.metrics, time: getMonthLabel(dataPointIndex) }];
+      return newData.slice(-12);
     });
   }, []);
   

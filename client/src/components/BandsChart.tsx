@@ -29,7 +29,10 @@ export function BandsChart({
   data,
   title,
   yAxisLabel = 'Value',
-  formatValue = (v) => `$${(v / 1000).toFixed(0)}k`,
+  formatValue = (v) => {
+    if (v == null || isNaN(v) || !isFinite(v)) return 'N/A';
+    return `$${(v / 1000).toFixed(0)}k`;
+  },
   testId = 'bands-chart',
   description = 'Shows P10, P50 (median), and P90 projections from Monte Carlo simulation. P10 is the pessimistic case, P90 is optimistic.',
 }: BandsChartProps) {
@@ -48,12 +51,17 @@ export function BandsChart({
     );
   }
 
-  const chartData = data.p50.map((_, index) => ({
-    month: index + 1,
-    p10: data.p10?.[index] ?? 0,
-    p50: data.p50[index],
-    p90: data.p90?.[index] ?? 0,
-  }));
+  const chartData = data.p50.map((_, index) => {
+    const p10 = data.p10?.[index];
+    const p50 = data.p50[index];
+    const p90 = data.p90?.[index];
+    return {
+      month: index + 1,
+      p10: (p10 == null || isNaN(p10)) ? 0 : p10,
+      p50: (p50 == null || isNaN(p50)) ? 0 : p50,
+      p90: (p90 == null || isNaN(p90)) ? 0 : p90,
+    };
+  });
   
   return (
     <Card className="overflow-visible" data-testid={testId}>

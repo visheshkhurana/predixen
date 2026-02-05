@@ -1,0 +1,65 @@
+Predixen QA Report — Full Feature Audit
+I've thoroughly tested your application across all pages and features. Here's the complete findings report organized by severity.
+
+🔴 CRITICAL BUGS (Must fix before launch)
+1. Branding Mismatch — Page Title says "RunwayAI" instead of "Predixen"
+The browser tab title reads "RunwayAI - Startup Financial Simulator" across the entire app. Your product is branded "Predixen" everywhere else. This is a major identity problem — investors, users, and search engines will all see the wrong name.
+2. Onboarding Data Not Persisted to Data Input
+I entered specific financial data during onboarding (Revenue: $95K, Cash: $1.43M, Payroll: $82K), but the Data Input > Financials tab shows completely different default values ($50K revenue, $500K cash, $50K payroll). The onboarding flow is disconnected from the main data store. Users who complete onboarding will be confused to find different numbers in Data Input.
+3. Runway Values Inconsistent Across Pages
+The same "Runway" metric shows three different values depending on where you look: 16.1 months (Overview & KPI Board), 3.7 months (Industry Benchmarks section), and 14.0 months (Simulation Results). Users will lose trust immediately.
+4. $NaN Display Bug in Cash Projection Chart
+In the Simulation Results, the Cash Projection Bands chart shows "P50 (Median): $NaNk" for months where cash goes negative. This is a raw JavaScript NaN value leaking into the UI.
+5. Help & Docs Site (docs.predixen.com) is Down
+Clicking "Help & Docs" in the sidebar opens docs.predixen.com which returns an error page. A product needs documentation before launch.
+
+🟠 HIGH PRIORITY BUGS (Should fix before launch)
+6. Gross Margin Field Rejects Decimals
+The Financial Baseline form uses <input type="number"> without a step attribute, so it rejects decimal values like 74.7%. Gross margins are almost always decimals. Add step="0.1" or step="any".
+7. AI Copilot Doesn't Answer Direct Questions
+When asked "What happens if we hire 10 engineers next quarter?", the Copilot returned a generic template asking what I'd like to simulate, offering unrelated presets like "Reduce burn by 20%." It should parse natural-language hiring questions and run the simulation directly — this is the core value proposition.
+8. Headcount Shows 0 on KPI Board but 10 Elsewhere
+KPI Board displays Headcount: 0 and $0K/emp, while the Data Input Company tab shows 10 employees, and Truth Scan shows 10 employees. The KPI Board isn't reading the headcount data.
+9. Churn Rate Stuck at 0.0%
+Churn Rate displays 0.0% on both KPI Board and Margins & Churn chart. The system seems unable to derive churn from the financial inputs provided. If churn data isn't explicitly entered, it should either prompt for it or estimate it from NRR.
+10. KPI Board Charts Use Real-Time Timestamps Instead of Months
+The X-axis on all KPI Board charts shows timestamps like "18:20:27, 18:20:37" (seconds in real-time) instead of calendar months. For a financial dashboard, this makes the charts meaningless.
+11. Alerts Page Says "Status Unknown" Despite Data Being Present
+The Alerts & Monitoring page shows "We need financial data to assess your company's health" even though the company has fully completed onboarding and Truth Scan ran successfully with data.
+12. Decision Step (Step 3) Has No Page
+Clicking "Decision" in the top workflow navigation does nothing — it doesn't navigate anywhere. This is a core step in the Truth → Simulation → Decision workflow that's entirely missing.
+13. No Mobile Navigation
+On mobile (375px viewport), the sidebar disappears entirely with no hamburger menu or alternative navigation method. Users are trapped on whatever page they're viewing.
+
+🟡 MEDIUM PRIORITY ISSUES
+14. ARPU Inconsistency: Shows $467/month on Overview but $633 on Truth Scan. Customer count shows 224 on Overview but 150 on Truth Scan.
+15. LTV:CAC Ratio Inconsistency: 4.5x on Overview vs 4.8x on KPI Board and Truth Scan.
+16. Revenue Growth Shows "0.0%" Instead of N/A: When there's only one month of data, it shows "0.0%" with a note "Need 2+ months data" — should show "N/A" or "—" as the primary display.
+17. Marketing Expenses Show $0 in Cost Breakdown: The Truth Scan expense breakdown shows Marketing: $0 (0%) even though the user entered operating expenses that include marketing spend. The breakdown doesn't properly categorize Opex.
+18. Monte Carlo Simulation Has Very Low Variance: P50 and P90 runway are both 14.0 months (only P10 differs at 13.0). This suggests the simulation isn't introducing meaningful randomness, making the probability bands less useful.
+19. Missing Open Graph Meta Tags: No og:title, og:description, og:image — social sharing previews will be blank.
+20. Missing Canonical URL: No <link rel="canonical"> tag — could cause SEO issues with duplicate content.
+
+🔵 LOW PRIORITY / POLISH
+21. Sidebar Sections Collapse After Window Resize: The Planning section (with Simulation) and some Data & Setup items disappear from the sidebar after resizing the browser window, requiring manual re-expansion.
+22. Accessibility Issues: 1 button without accessible label, 1 input without label, 2 H1 headings on the same page (should be 1).
+23. Meta Description References Generic "Financial Simulation Tool": Should specifically mention "Predixen" brand.
+24. "Create Account" Tab on Auth Page: Visible as a tab but wasn't tested for password strength validation, email confirmation flow, or error handling for duplicate accounts.
+25. Marketplace Has 0 Connectors: Marketplace page shows "No connectors found" — fine for MVP, but the page should clearly say "Coming soon" rather than looking broken.
+
+✅ WHAT'S WORKING WELL
+
+Visual Design: The dark theme is polished, professional, and consistent. Light mode also works.
+Auth Page: Email validation works correctly with clear error messages.
+Onboarding Flow: Step 1 → Step 2 → Dashboard flow is smooth (aside from data persistence bug).
+Simulation Engine: Monte Carlo simulation runs, produces survival curves, cash projection bands, and actionable recommendations.
+Scenario Assumptions Panel: Sliders for growth rate, pricing, hiring, churn, CAC are intuitive.
+Scenario Builder: Strategic Builder, templates, and objective-based workflows are well-designed.
+Industry Benchmarks: Showing percentile rankings (P25, P50, P75) vs. industry is a strong feature.
+Theme Toggle: Dark/light mode works seamlessly.
+AI Assistant: Present throughout the app with contextual suggested questions.
+
+
+📋 LAUNCH READINESS CHECKLIST
+AreaStatusFix branding (RunwayAI → Predixen)❌ BlockingData persistence (onboarding → Data Input)❌ BlockingRunway calculation consistency❌ BlockingFix $NaN in charts❌ BlockingDeploy docs site❌ BlockingDecimal support in form fields❌ BlockingAI Copilot handles natural language🟡 HighMobile responsive navigation🟡 HighAlerts connected to data🟡 HighDecision page/step implemented🟡 HighKPI chart time axis🟡 HighData consistency across pages🟡 HighSEO meta tags🟡 MediumMarketplace "coming soon" messaging🔵 LowAccessibility fixes🔵 Low
+Bottom line: The core product concept and design are strong, but there are about 6 blocking bugs that need immediate attention before any launch. The most critical is the data flow — onboarding data not persisting and metrics being inconsistent across pages will destroy user trust instantly.
