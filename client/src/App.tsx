@@ -257,18 +257,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              {currentCompany && <Stepper currentStep={currentStep} />}
+          <header className="flex items-center justify-between gap-2 p-3 border-b bg-background sticky top-0 z-50">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+              <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
+              {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
             </div>
-            <div className="flex items-center gap-2">
-              <ContextBar 
-                scenarioName={currentScenario?.name}
-                scenarioId={currentScenario?.id}
-                runId={latestRun?.id}
-                runTimestamp={latestRun?.timestamp}
-              />
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="hidden md:block">
+                <ContextBar 
+                  scenarioName={currentScenario?.name}
+                  scenarioId={currentScenario?.id}
+                  runId={latestRun?.id}
+                  runTimestamp={latestRun?.timestamp}
+                />
+              </div>
               {getConfidenceBadge()}
             </div>
           </header>
