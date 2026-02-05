@@ -145,6 +145,7 @@ export const api = {
       payroll: number;
       other_costs: number;
       cash_balance: number;
+      headcount?: number;
     }) =>
       request<any>(`/companies/${companyId}/datasets/manual_baseline`, {
         method: 'POST',
