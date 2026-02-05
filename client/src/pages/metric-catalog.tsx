@@ -169,31 +169,24 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
   const [activeTab, setActiveTab] = useState("overview");
   
   const { data: values, isLoading: valuesLoading } = useQuery<{ data: MetricValue[] }>({
-    queryKey: ["/api/metrics", metric.key, "values", companyId],
-    queryFn: async () => {
-      const res = await fetch(`/api/metrics/${metric.key}/values?company_id=${companyId}`);
-      if (!res.ok) throw new Error("Failed to fetch values");
-      return res.json();
-    },
+    queryKey: [`/api/metrics/${metric.key}/values?company_id=${companyId}`],
   });
   
   const { data: lineage } = useQuery<any>({
-    queryKey: ["/api/metrics", metric.key, "lineage", companyId],
-    queryFn: async () => {
-      const res = await fetch(`/api/metrics/${metric.key}/lineage?company_id=${companyId}`);
-      if (!res.ok) throw new Error("Failed to fetch lineage");
-      return res.json();
-    },
+    queryKey: [`/api/metrics/${metric.key}/lineage?company_id=${companyId}`],
     enabled: activeTab === "lineage",
   });
   
   const computeMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/metrics/${metric.key}/compute?company_id=${companyId}`),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/metrics/${metric.key}/compute?company_id=${companyId}`);
+      return res.json();
+    },
     onSuccess: () => {
       toast({ title: "Metric computed successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics", metric.key, "values", companyId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics", metric.key, "lineage", companyId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics?company_id=${companyId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics/${metric.key}/values?company_id=${companyId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics/${metric.key}/lineage?company_id=${companyId}`] });
     },
     onError: (err: any) => {
       toast({ title: "Compute failed", description: err.message, variant: "destructive" });
@@ -201,10 +194,13 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
   });
   
   const publishMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/metrics/${metric.key}/publish?company_id=${companyId}`),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/metrics/${metric.key}/publish?company_id=${companyId}`);
+      return res.json();
+    },
     onSuccess: () => {
       toast({ title: "Metric published successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics?company_id=${companyId}`] });
       onClose();
     },
     onError: (err: any) => {
@@ -213,7 +209,10 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
   });
   
   const validateMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/metrics/${metric.key}/validate?company_id=${companyId}`),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/metrics/${metric.key}/validate?company_id=${companyId}`);
+      return res.json();
+    },
     onSuccess: (data: any) => {
       if (data.is_valid) {
         toast({ title: "Definition is valid" });
@@ -442,12 +441,15 @@ function CreateMetricDialog({ companyId, onCreated }: { companyId: number; onCre
   });
   
   const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", `/api/metrics?company_id=${companyId}`, data),
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", `/api/metrics?company_id=${companyId}`, data);
+      return res.json();
+    },
     onSuccess: () => {
       toast({ title: "Metric created successfully" });
       setOpen(false);
       form.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics?company_id=${companyId}`] });
       onCreated();
     },
     onError: (err: any) => {
@@ -687,22 +689,20 @@ export default function MetricCatalog() {
   const companyId = currentCompany?.id;
   
   const { data: metrics, isLoading, refetch } = useQuery<MetricDefinition[]>({
-    queryKey: ["/api/metrics", companyId],
-    queryFn: async () => {
-      const res = await fetch(`/api/metrics?company_id=${companyId}`);
-      if (!res.ok) throw new Error("Failed to fetch metrics");
-      return res.json();
-    },
+    queryKey: [`/api/metrics?company_id=${companyId}`],
     enabled: !!companyId,
   });
   
   const autoInitCompanyRef = useRef<number | null>(null);
   
   const initializeMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/metrics/initialize?company_id=${companyId}`),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/metrics/initialize?company_id=${companyId}`);
+      return res.json();
+    },
     onSuccess: (data: any) => {
-      toast({ title: `Initialized ${data.created_count} system metrics` });
-      queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
+      toast({ title: `Initialized ${data.created_count ?? 0} system metrics` });
+      queryClient.invalidateQueries({ queryKey: [`/api/metrics?company_id=${companyId}`] });
       refetch();
     },
     onError: (err: any) => {

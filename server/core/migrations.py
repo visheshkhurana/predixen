@@ -726,6 +726,44 @@ def ensure_metric_suggestions_tables(engine: Engine) -> None:
             logger.debug(f"Metric suggestions tables may already exist: {e}")
 
 
+def ensure_metric_definitions_columns(engine: Engine) -> None:
+    """Add missing columns to metric_definitions table and fix constraints."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                ALTER TABLE metric_definitions
+                    ADD COLUMN IF NOT EXISTS definition TEXT,
+                    ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1,
+                    ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft',
+                    ADD COLUMN IF NOT EXISTS dependencies JSON,
+                    ADD COLUMN IF NOT EXISTS tags JSON,
+                    ADD COLUMN IF NOT EXISTS owners JSON,
+                    ADD COLUMN IF NOT EXISTS published_at TIMESTAMP
+            """))
+            conn.execute(text("ALTER TABLE metric_definitions ALTER COLUMN formula DROP NOT NULL"))
+            conn.execute(text("ALTER TABLE metric_definitions ALTER COLUMN source_connector DROP NOT NULL"))
+            conn.commit()
+            logger.info("Metric definitions columns migration complete")
+        except Exception as e:
+            logger.debug(f"Metric definitions columns may already exist: {e}")
+
+
+def ensure_metric_values_columns(engine: Engine) -> None:
+    """Add missing columns to metric_values table."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                ALTER TABLE metric_values
+                    ADD COLUMN IF NOT EXISTS metric_version INTEGER DEFAULT 1,
+                    ADD COLUMN IF NOT EXISTS source_versions JSON,
+                    ADD COLUMN IF NOT EXISTS compiled_sql VARCHAR(2000)
+            """))
+            conn.commit()
+            logger.info("Metric values columns migration complete")
+        except Exception as e:
+            logger.debug(f"Metric values columns may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -750,4 +788,6 @@ def run_migrations(engine: Engine) -> None:
     ensure_scenarios_overrides(engine)
     ensure_email_events_table(engine)
     ensure_metric_suggestions_tables(engine)
+    ensure_metric_definitions_columns(engine)
+    ensure_metric_values_columns(engine)
     logger.info("Database migrations completed successfully")
