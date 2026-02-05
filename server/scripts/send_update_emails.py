@@ -8,51 +8,36 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from server.email.service import send_platform_update_email, is_email_configured
+from server.email.service import send_email, is_email_configured
+from server.email.templates import render_platform_update_template
 from server.core.db import SessionLocal
 from sqlalchemy import text
 
 
-UPDATES_LAST_24_HOURS = [
+UPDATES_LATEST = [
     {
-        "title": "Connector Marketplace",
-        "description": "New integration marketplace with 20+ connectors including Stripe, QuickBooks, Xero, HubSpot, Salesforce, Google Analytics, and more. Browse, search, filter by category, and connect your data sources with guided setup wizards."
+        "title": "Advanced Simulation Analysis Tab",
+        "description": "New 'Analysis' tab in Scenarios with 4 powerful simulation tools: Tornado Chart for sensitivity analysis, What-If Explorer for real-time scenario modeling, Stress Test Panel with 6 pre-built crisis scenarios, and Reverse Stress Test for breaking point analysis."
     },
     {
-        "title": "Enhanced KPI Dashboard with Time-Series Trends",
-        "description": "Financial Trends chart now shows MRR, Cash, Runway, and Churn projections over time with 3/6/12 month toggle buttons. Dual Y-axes display financial metrics alongside runway and churn percentages."
+        "title": "Tornado Chart - Sensitivity Analysis",
+        "description": "Visual bar chart showing which variables have the biggest impact on your runway. Instantly see how changes to revenue growth, churn, gross margin, and expenses affect your financial trajectory."
     },
     {
-        "title": "New KPI Metrics: ARPU, NRR & Active Users",
-        "description": "Added Average Revenue Per User (ARPU), Net Revenue Retention (NRR), and Active Users cards with detailed tooltips explaining formulas, good ranges, and warning thresholds."
+        "title": "What-If Explorer",
+        "description": "Interactive sliders let you adjust revenue growth, churn rate, gross margin, burn rate, and fundraising amount in real-time. See immediate impact on runway, 18-month survival probability, and projected cash position."
     },
     {
-        "title": "LTV:CAC Ratio Health Indicators",
-        "description": "Visual color-coded health status for LTV:CAC ratio - green for healthy (>3x), yellow for warning (2-3x), and red for critical (<2x). Shows exact LTV and CAC values with contextual badges."
+        "title": "Stress Test Panel",
+        "description": "6 pre-built crisis scenarios: Mild Recession, Severe Downturn, Funding Winter, Key Customer Loss, Competitive Disruption, and Hiring Freeze. Each applies realistic adjustments to your financial model to simulate worst-case scenarios."
     },
     {
-        "title": "Segment Analysis Feature",
-        "description": "Break down your metrics by acquisition channel (Organic, Paid Search, Content, Referral), customer tier (Enterprise, Pro, Starter), or region (North America, Europe, APAC). View CAC, LTV, LTV:CAC, and churn by segment."
+        "title": "Reverse Stress Test - Breaking Point Analysis",
+        "description": "Discover exactly what would need to go wrong to deplete your runway. Shows the percentage increase in churn, decrease in growth, or expense increase that would push your company to critical status."
     },
     {
-        "title": "Industry Benchmark Comparisons",
-        "description": "Real-time benchmark data powered by Perplexity AI. Compare your metrics against industry standards for your stage (Seed, Series A/B/C) with automatic sourcing and citations."
-    },
-    {
-        "title": "Connector Detail Drawer",
-        "description": "Click any connector to see detailed information including data collected, sync behavior, security permissions, metrics unlocked, and setup complexity before connecting."
-    },
-    {
-        "title": "Data Source Setup Wizard",
-        "description": "Step-by-step wizard for connecting data sources with auth-type-specific flows (OAuth, API Key, Database Connection, Webhook, File Upload). Includes connection testing and entity selection."
-    },
-    {
-        "title": "Enhanced Metric Tooltips",
-        "description": "Every KPI now has detailed tooltips showing the calculation formula, what makes a 'good' range, and warning thresholds. Helps founders understand exactly what each metric means."
-    },
-    {
-        "title": "Trust & Security Indicators",
-        "description": "All integrations clearly show read-only access badges, encryption status, and data handling policies. Connectors display native/beta badges and real-time/webhook support."
+        "title": "Bug Fixes & Improvements",
+        "description": "Fixed stress test template application to properly handle all adjustments including expense components. Improved financial state calculations with better data sourcing from simulation results. Enhanced baseline results alignment with actual Monte Carlo outputs."
     }
 ]
 
@@ -68,43 +53,48 @@ def get_all_user_emails():
         db.close()
 
 
-async def send_update_to_all_users():
-    """Send platform update email to all users."""
+async def send_update_to_specified_users(
+    emails: list,
+    updates: list,
+    from_email: str = "Predixen Updates <newchanges5@predixen.app>"
+):
+    """Send platform update email to specified users."""
     if not is_email_configured():
         print("Email service not configured. Please set up Resend integration.")
-        return
+        return {"success": 0, "failed": len(emails)}
     
     app_url = os.getenv("APP_BASE_URL", "https://predixen.app")
     
-    # Specific list of emails requested by the user
-    emails = [
-        "nikita@predixen.ai",
-        "vysheshk@gmail.com",
-        "nikita.luther@gmail.com",
-        "nikitafl2024@gmail.com"
-    ]
-    print(f"Sending updates to {len(emails)} specified addresses")
+    print(f"Sending updates to {len(emails)} specified addresses using sender: {from_email}")
     
     success_count = 0
     fail_count = 0
     failed_emails = []
     
+    html_content = render_platform_update_template(
+        updates=updates,
+        app_url=app_url
+    )
+    
+    subject = "Predixen Intelligence OS - New Advanced Simulation Features"
+    
     for email in emails:
         print(f"Sending to {email}...")
         try:
-            result = await send_platform_update_email(
-                to_email=email,
-                updates=UPDATES_LAST_24_HOURS,
-                app_url=app_url
+            result = await send_email(
+                to=email,
+                subject=subject,
+                html_content=html_content,
+                from_email=from_email
             )
             if result.get("success"):
-                print(f"  ✓ Sent successfully to {email}")
+                print(f"  Sent successfully to {email}")
                 success_count += 1
             else:
-                print(f"  ✗ Failed: {result.get('error', 'Unknown error')}")
+                print(f"  Failed: {result.get('error', 'Unknown error')}")
                 failed_emails.append(email)
         except Exception as e:
-            print(f"  ✗ Error: {str(e)}")
+            print(f"  Error: {str(e)}")
             failed_emails.append(email)
         
         await asyncio.sleep(0.6)
@@ -116,19 +106,20 @@ async def send_update_to_all_users():
         for email in failed_emails:
             print(f"Retry: {email}...")
             try:
-                result = await send_platform_update_email(
-                    to_email=email,
-                    updates=UPDATES_LAST_24_HOURS,
-                    app_url=app_url
+                result = await send_email(
+                    to=email,
+                    subject=subject,
+                    html_content=html_content,
+                    from_email=from_email
                 )
                 if result.get("success"):
-                    print(f"  ✓ Sent successfully to {email}")
+                    print(f"  Sent successfully to {email}")
                     success_count += 1
                 else:
-                    print(f"  ✗ Failed: {result.get('error', 'Unknown error')}")
+                    print(f"  Failed: {result.get('error', 'Unknown error')}")
                     fail_count += 1
             except Exception as e:
-                print(f"  ✗ Error: {str(e)}")
+                print(f"  Error: {str(e)}")
                 fail_count += 1
             
             await asyncio.sleep(0.6)
@@ -137,5 +128,23 @@ async def send_update_to_all_users():
     return {"success": success_count, "failed": fail_count}
 
 
+async def main():
+    """Main entry point for sending update emails."""
+    emails = [
+        "nikita.luther@gmail.com",
+        "nikitafl2024@gmail.com",
+        "nikita@predixen.ai",
+        "vysheshk@gmail.com"
+    ]
+    
+    from_email = "Predixen Updates <newchanges5@predixen.app>"
+    
+    return await send_update_to_specified_users(
+        emails=emails,
+        updates=UPDATES_LATEST,
+        from_email=from_email
+    )
+
+
 if __name__ == "__main__":
-    asyncio.run(send_update_to_all_users())
+    asyncio.run(main())
