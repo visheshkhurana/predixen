@@ -16,28 +16,24 @@ from sqlalchemy import text
 
 UPDATES_LATEST = [
     {
-        "title": "Advanced Simulation Analysis Tab",
-        "description": "New 'Analysis' tab in Scenarios with 4 powerful simulation tools: Tornado Chart for sensitivity analysis, What-If Explorer for real-time scenario modeling, Stress Test Panel with 6 pre-built crisis scenarios, and Reverse Stress Test for breaking point analysis."
+        "title": "Data Integration Infrastructure",
+        "description": "New integration framework supporting OAuth2, API Key, and Service Account authentication with configurable data point selection and flexible sync intervals (5min to weekly)."
     },
     {
-        "title": "Tornado Chart - Sensitivity Analysis",
-        "description": "Visual bar chart showing which variables have the biggest impact on your runway. Instantly see how changes to revenue growth, churn, gross margin, and expenses affect your financial trajectory."
+        "title": "Google Sheets Connector",
+        "description": "Import financial data directly from Google Sheets with multi-step configuration: spreadsheet selection, sheet mapping, column data type assignment (currency, percentage, number, date), and automatic sync scheduling."
     },
     {
-        "title": "What-If Explorer",
-        "description": "Interactive sliders let you adjust revenue growth, churn rate, gross margin, burn rate, and fundraising amount in real-time. See immediate impact on runway, 18-month survival probability, and projected cash position."
+        "title": "Analytics Integrations Tab",
+        "description": "New Analytics tab with connectors for Google Analytics 4 (sessions, users, conversions), Mixpanel (events, funnels, retention), and ChartMogul (MRR, ARR, churn metrics) to import product and revenue analytics."
     },
     {
-        "title": "Stress Test Panel",
-        "description": "6 pre-built crisis scenarios: Mild Recession, Severe Downturn, Funding Winter, Key Customer Loss, Competitive Disruption, and Hiring Freeze. Each applies realistic adjustments to your financial model to simulate worst-case scenarios."
-    },
-    {
-        "title": "Reverse Stress Test - Breaking Point Analysis",
-        "description": "Discover exactly what would need to go wrong to deplete your runway. Shows the percentage increase in churn, decrease in growth, or expense increase that would push your company to critical status."
+        "title": "Spreadsheets Tab",
+        "description": "Dedicated Spreadsheets tab for importing data from Google Sheets, Excel Online, and Airtable. Perfect for custom metrics, budgets, and manual KPI tracking that isn't available in your other systems."
     },
     {
         "title": "Bug Fixes & Improvements",
-        "description": "Fixed stress test template application to properly handle all adjustments including expense components. Improved financial state calculations with better data sourcing from simulation results. Enhanced baseline results alignment with actual Monte Carlo outputs."
+        "description": "Fixed modal state management to properly clear selection on close. Improved integration card status indicators. Enhanced connection flow with better error handling and retry logic."
     }
 ]
 
@@ -76,7 +72,7 @@ async def send_update_to_specified_users(
         app_url=app_url
     )
     
-    subject = "Predixen Intelligence OS - New Advanced Simulation Features"
+    subject = "Predixen Intelligence OS - New Data Integrations & Analytics"
     
     for email in emails:
         print(f"Sending to {email}...")
