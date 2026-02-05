@@ -18,24 +18,24 @@ from datetime import datetime
 
 UPDATES_LATEST = [
     {
-        "title": "Redesigned Sidebar Navigation",
-        "description": "New collapsible sidebar groups organize features into logical sections: Analytics, Data & Setup, Planning, and Stakeholders. Click chevrons to expand/collapse sections and reduce visual clutter."
+        "title": "Enhanced KPI Dashboard",
+        "description": "The KPI Board now intelligently merges real-time data with your baseline financials. No more zero values when data is loading - your dashboard always shows meaningful metrics."
     },
     {
-        "title": "AI Copilot Prominent Placement",
-        "description": "The AI Copilot now sits at the top of the sidebar with enhanced styling for quick access. Your intelligent financial assistant is always one click away."
+        "title": "Improved Data Accuracy",
+        "description": "Fixed decimal input support across all financial forms. You can now enter precise values like $1,234.56 without any issues."
     },
     {
-        "title": "Consistent Empty States",
-        "description": "All empty states now feature engaging designs with circular icons, clear headlines, helpful descriptions, and action buttons. No more confusing blank screens."
+        "title": "Better Runway Calculations",
+        "description": "All runway calculations now use a unified formula across the platform, ensuring consistent projections in charts, dashboards, and reports."
     },
     {
-        "title": "Design System Compliance",
-        "description": "Updated hover effects and visual interactions across the platform to follow our design system guidelines. Smoother, more consistent experience throughout."
+        "title": "New Help & Documentation",
+        "description": "Added a dedicated Help & Docs section to the sidebar. Access guides, tutorials, and support resources directly from the platform."
     },
     {
-        "title": "Bug Fixes",
-        "description": "Fixed authentication flow edge cases and improved login history tracking. Enhanced error messages for failed login attempts."
+        "title": "Chart & Visualization Fixes",
+        "description": "Fixed NaN display issues in cash projection charts. Tooltips now show clean, formatted values even when data is incomplete."
     }
 ]
 
@@ -175,7 +175,7 @@ async def main():
         "vysheshk@gmail.com"
     ]
     
-    from_email = "Predixen Bug Fixes <bugfix@predixen.app>"
+    from_email = "Predixen Updates <new@predixen.in>"
     
     return await send_update_to_specified_users(
         emails=emails,
