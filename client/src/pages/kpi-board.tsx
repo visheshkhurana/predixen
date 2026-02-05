@@ -132,20 +132,22 @@ export default function KPIBoardPage() {
     ? (baselineRevenue - (financialBaseline?.expenseBreakdown?.cogs ?? 0)) / baselineRevenue 
     : 0;
   
-  const rawMetrics = liveData?.metrics ?? {
-    monthly_revenue: baselineRevenue,
-    mrr: baselineRevenue,
-    arr: baselineRevenue * 12,
-    cash_balance: baselineCash,
-    net_burn: Math.max(0, baselineNetBurn),
-    runway_months: baselineRunway,
-    gross_margin: baselineGrossMargin,
-    churn_rate: 0.02, // Default 2% churn rate if not set
-    cac: 500,
-    ltv: 3000,
-    ltv_cac_ratio: 6,
-    headcount: 0, // Will be populated from API or onboarding
-    revenue_per_employee: 0
+  // Merge live data with baseline fallbacks for any zero/null values
+  const live = liveData?.metrics;
+  const rawMetrics = {
+    monthly_revenue: (live?.monthly_revenue ?? 0) > 0 ? (live?.monthly_revenue ?? baselineRevenue) : baselineRevenue,
+    mrr: (live?.mrr ?? 0) > 0 ? (live?.mrr ?? baselineRevenue) : baselineRevenue,
+    arr: (live?.arr ?? 0) > 0 ? (live?.arr ?? baselineRevenue * 12) : baselineRevenue * 12,
+    cash_balance: (live?.cash_balance ?? 0) > 0 ? (live?.cash_balance ?? baselineCash) : baselineCash,
+    net_burn: live?.net_burn ?? Math.max(0, baselineNetBurn),
+    runway_months: (live?.runway_months ?? 0) > 0 ? (live?.runway_months ?? baselineRunway) : baselineRunway,
+    gross_margin: (live?.gross_margin ?? 0) > 0 ? (live?.gross_margin ?? baselineGrossMargin) : baselineGrossMargin,
+    churn_rate: (live?.churn_rate ?? 0) > 0 ? (live?.churn_rate ?? 0.02) : 0.02,
+    cac: (live?.cac ?? 0) > 0 ? (live?.cac ?? 500) : 500,
+    ltv: (live?.ltv ?? 0) > 0 ? (live?.ltv ?? 3000) : 3000,
+    ltv_cac_ratio: (live?.ltv_cac_ratio ?? 0) > 0 ? (live?.ltv_cac_ratio ?? 6) : 6,
+    headcount: (live?.headcount ?? 0) > 0 ? (live?.headcount ?? 5) : 5,
+    revenue_per_employee: (live?.revenue_per_employee ?? 0) > 0 ? (live?.revenue_per_employee ?? (baselineRevenue / 5)) : (baselineRevenue / 5)
   };
   
   // Apply sensibility bounds to frontend metrics
