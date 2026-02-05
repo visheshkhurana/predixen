@@ -74,6 +74,7 @@ const navGroups: NavGroup[] = [
       { title: "Overview", url: "/", icon: LayoutDashboard },
       { title: "KPI Board", url: "/kpi-board", icon: Activity },
       { title: "Metric Catalog", url: "/metrics", icon: FileCode },
+      { title: "Suggested Metrics", url: "/suggested-metrics", icon: Sparkles },
       { title: "Truth Scan", url: "/truth", icon: Search },
       { title: "Alerts", url: "/alerts", icon: Bell },
     ],
