@@ -1,12 +1,13 @@
 """
-Metric Engine - computes metrics from raw data events.
+Metric Engine - computes metrics from raw data events using DSL or formula.
 """
 
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import text
 import logging
+import yaml
 
 from server.models.raw_data_event import RawDataEvent
 from server.models.metric_definition import MetricDefinition
@@ -20,8 +21,9 @@ class MetricEngine:
     """
     Engine for computing metrics from raw data events.
     
-    Reads RawDataEvents, applies MetricDefinition formulas,
-    and writes computed values to MetricValue records.
+    Supports two computation modes:
+    1. DSL mode: Uses YAML definition with DSL compiler for SQL execution
+    2. Formula mode: Uses simple formula parser for in-memory evaluation
     """
     
     def __init__(self, db: Session):
@@ -30,12 +32,6 @@ class MetricEngine:
     def recompute_all_metrics(self, company_id: int) -> Dict[str, Any]:
         """
         Recompute all metrics for a company.
-        
-        Args:
-            company_id: The company to compute metrics for
-            
-        Returns:
-            Summary of computation results
         """
         metrics = self.db.query(MetricDefinition).filter(
             MetricDefinition.company_id == company_id
@@ -72,15 +68,84 @@ class MetricEngine:
     ) -> MetricValue:
         """
         Compute a single metric for a given period.
-        
-        Args:
-            metric: The metric definition to compute
-            period_start: Start of the computation period (default: current month start)
-            period_end: End of the computation period (default: current month end)
-            
-        Returns:
-            The computed MetricValue record
+        Uses DSL mode if definition exists, otherwise falls back to formula mode.
         """
+        if metric.definition:
+            return self._compute_with_dsl(metric, period_start, period_end)
+        else:
+            return self._compute_with_formula(metric, period_start, period_end)
+    
+    def _compute_with_dsl(
+        self,
+        metric: MetricDefinition,
+        period_start: Optional[datetime] = None,
+        period_end: Optional[datetime] = None,
+    ) -> MetricValue:
+        """Compute metric using DSL compiler."""
+        from server.metrics.dsl.parser import DSLParser
+        from server.metrics.dsl.compiler import DSLCompiler
+        
+        parser = DSLParser(metric.definition)
+        schema = parser.parse()
+        
+        compiler = DSLCompiler(schema, metric.company_id)
+        compiled = compiler.compile()
+        
+        now = datetime.utcnow()
+        if period_start is None:
+            period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if period_end is None:
+            if period_start.month == 12:
+                period_end = period_start.replace(year=period_start.year + 1, month=1)
+            else:
+                period_end = period_start.replace(month=period_start.month + 1)
+        
+        try:
+            result = self.db.execute(
+                text(compiled.sql),
+                {f"param_{i+1}": p for i, p in enumerate(compiled.params)}
+            )
+            row = result.fetchone()
+            value = float(row[1]) if row and row[1] is not None else 0.0
+        except Exception as e:
+            logger.error(f"SQL execution error for metric {metric.key}: {e}")
+            value = 0.0
+        
+        existing = self.db.query(MetricValue).filter(
+            MetricValue.metric_id == metric.id,
+            MetricValue.period_start == period_start,
+        ).first()
+        
+        if existing:
+            existing.value = value
+            existing.computed_at = now
+            existing.metric_version = metric.version
+            existing.source_versions = compiled.lineage
+            existing.compiled_sql = compiled.sql[:2000]
+            metric_value = existing
+        else:
+            metric_value = MetricValue(
+                metric_id=metric.id,
+                company_id=metric.company_id,
+                value=value,
+                period_start=period_start,
+                period_end=period_end,
+                metric_version=metric.version,
+                source_versions=compiled.lineage,
+                compiled_sql=compiled.sql[:2000],
+            )
+            self.db.add(metric_value)
+        
+        self.db.commit()
+        return metric_value
+    
+    def _compute_with_formula(
+        self,
+        metric: MetricDefinition,
+        period_start: Optional[datetime] = None,
+        period_end: Optional[datetime] = None,
+    ) -> MetricValue:
+        """Compute metric using legacy formula parser."""
         now = datetime.utcnow()
         if period_start is None:
             period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -102,11 +167,10 @@ class MetricEngine:
         events = query.all()
         
         data = [e.payload for e in events if e.payload]
-        
         contributing_connectors = list(set(e.connector_id for e in events))
         
         try:
-            parser = FormulaParser(metric.formula)
+            parser = FormulaParser(metric.formula or "count()")
             value = parser.evaluate(data)
         except FormulaError as e:
             logger.error(f"Formula error for metric {metric.key}: {e}")
@@ -146,19 +210,7 @@ class MetricEngine:
         end_date: Optional[datetime] = None,
         limit: int = 12,
     ) -> List[Dict[str, Any]]:
-        """
-        Get historical values for a metric.
-        
-        Args:
-            company_id: The company ID
-            metric_key: The metric key to retrieve
-            start_date: Start of the date range
-            end_date: End of the date range
-            limit: Maximum number of periods to return
-            
-        Returns:
-            List of metric values with periods
-        """
+        """Get historical values for a metric."""
         metric = self.db.query(MetricDefinition).filter(
             MetricDefinition.company_id == company_id,
             MetricDefinition.key == metric_key,
@@ -192,16 +244,7 @@ class MetricEngine:
         company_id: int,
         metric_key: str,
     ) -> Optional[Dict[str, Any]]:
-        """
-        Get the latest value for a metric.
-        
-        Args:
-            company_id: The company ID
-            metric_key: The metric key to retrieve
-            
-        Returns:
-            Latest metric value or None
-        """
+        """Get the latest value for a metric."""
         metric = self.db.query(MetricDefinition).filter(
             MetricDefinition.company_id == company_id,
             MetricDefinition.key == metric_key,
@@ -230,78 +273,97 @@ class MetricEngine:
             "contributing_connectors": value.contributing_connectors,
         }
     
-    def create_system_metrics(self, company_id: int) -> List[MetricDefinition]:
-        """
-        Create default system metrics for a company.
+    def get_metric_lineage(
+        self,
+        company_id: int,
+        metric_key: str,
+        time_bucket: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Get lineage information for a metric value."""
+        metric = self.db.query(MetricDefinition).filter(
+            MetricDefinition.company_id == company_id,
+            MetricDefinition.key == metric_key,
+        ).first()
         
-        Args:
-            company_id: The company ID
-            
-        Returns:
-            List of created metrics
-        """
-        system_metrics = [
-            {
-                "key": "mrr",
-                "name": "Monthly Recurring Revenue",
-                "description": "Total monthly recurring revenue from all sources",
-                "formula": "sum(amount) where type == \"recurring\"",
-                "unit": "USD",
-                "format_type": "currency",
-            },
-            {
-                "key": "total_revenue",
-                "name": "Total Revenue",
-                "description": "Total revenue including one-time and recurring",
-                "formula": "sum(amount)",
-                "unit": "USD",
-                "format_type": "currency",
-            },
-            {
-                "key": "customer_count",
-                "name": "Customer Count",
-                "description": "Total number of customers",
-                "formula": "count()",
-                "format_type": "number",
-            },
-            {
-                "key": "avg_transaction",
-                "name": "Average Transaction Value",
-                "description": "Average value per transaction",
-                "formula": "avg(amount)",
-                "unit": "USD",
-                "format_type": "currency",
-            },
-            {
-                "key": "burn_rate",
-                "name": "Burn Rate",
-                "description": "Monthly burn rate (expenses minus revenue)",
-                "formula": "sum(expense) - sum(revenue)",
-                "unit": "USD",
-                "format_type": "currency",
-            },
-        ]
+        if not metric:
+            return None
+        
+        query = self.db.query(MetricValue).filter(MetricValue.metric_id == metric.id)
+        
+        if time_bucket:
+            bucket_date = datetime.fromisoformat(time_bucket)
+            query = query.filter(MetricValue.period_start == bucket_date)
+        
+        value = query.order_by(MetricValue.period_start.desc()).first()
+        
+        if not value:
+            return None
+        
+        return {
+            "metric_key": metric_key,
+            "metric_version": value.metric_version,
+            "compiled_sql": value.compiled_sql if metric.definition else None,
+            "dependencies": metric.dependencies,
+            "source_versions": value.source_versions,
+            "raw_event_count": value.raw_event_count,
+            "contributing_connectors": value.contributing_connectors,
+            "period_start": value.period_start.isoformat(),
+            "computed_at": value.computed_at.isoformat() if value.computed_at else None,
+        }
+    
+    def create_system_metrics(self, company_id: int) -> List[MetricDefinition]:
+        """Create default system metrics for a company."""
+        from server.metrics.templates import SYSTEM_METRIC_TEMPLATES
         
         created = []
-        for m in system_metrics:
+        for template in SYSTEM_METRIC_TEMPLATES:
             existing = self.db.query(MetricDefinition).filter(
                 MetricDefinition.company_id == company_id,
-                MetricDefinition.key == m["key"],
+                MetricDefinition.key == template["key"],
             ).first()
             
             if not existing:
                 metric = MetricDefinition(
                     company_id=company_id,
-                    key=m["key"],
-                    name=m["name"],
-                    description=m["description"],
-                    formula=m["formula"],
-                    unit=m.get("unit"),
-                    format_type=m.get("format_type", "number"),
+                    key=template["key"],
+                    name=template["name"],
+                    description=template.get("description"),
+                    formula=template.get("formula"),
+                    definition=template.get("definition"),
+                    unit=template.get("unit"),
+                    format_type=template.get("format_type", "number"),
+                    grain=template.get("grain", "monthly"),
                     is_system=True,
+                    dependencies=template.get("dependencies"),
+                    tags=template.get("tags"),
                 )
                 self.db.add(metric)
                 created.append(metric)
         
         self.db.commit()
         return created
+    
+    def validate_definition(self, definition_yaml: str) -> Dict[str, Any]:
+        """Validate a metric definition without saving."""
+        from server.metrics.dsl.parser import DSLParser, DSLParseError
+        from server.metrics.dsl.validator import DSLValidator
+        
+        try:
+            parser = DSLParser(definition_yaml)
+            schema = parser.parse()
+        except DSLParseError as e:
+            return {
+                "is_valid": False,
+                "parse_error": e.to_dict(),
+                "validation_result": None,
+            }
+        
+        validator = DSLValidator(schema)
+        result = validator.validate()
+        
+        return {
+            "is_valid": result.is_valid,
+            "parse_error": None,
+            "validation_result": result.to_dict(),
+            "parsed_meta": schema.meta.model_dump() if result.is_valid else None,
+        }
