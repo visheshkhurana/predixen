@@ -62,6 +62,7 @@ from server.models.raw_data_event import RawDataEvent
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
 from server.models.dashboard import Dashboard, DashboardWidget
+from server.models.email_event import EmailEvent
 
 __all__ = [
     "User",

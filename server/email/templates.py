@@ -816,3 +816,59 @@ def render_platform_update_template(
     """
     
     return get_email_wrapper(content)
+
+
+def render_text_only_update_template(
+    updates: list,
+    app_url: str,
+    tracking_id: str = None
+) -> str:
+    """
+    Render a text-only platform update email with tracking pixel.
+    
+    Args:
+        updates: List of dicts with 'title' and 'description' keys
+        app_url: URL to the application
+        tracking_id: Unique ID for tracking opens (used in pixel URL)
+    
+    Returns:
+        Minimal HTML email with text content and tracking pixel
+    """
+    update_lines = ""
+    for i, update in enumerate(updates, 1):
+        title = update.get("title", "")
+        description = update.get("description", "")
+        update_lines += f"""
+        <p style="margin: 0 0 16px 0; font-family: {FONT_STACK}; font-size: 15px; color: {COLORS['gray_700']}; line-height: 1.6;">
+            <strong style="color: {COLORS['navy']};">{i}. {title}</strong><br/>
+            {description}
+        </p>
+        """
+    
+    tracking_pixel = ""
+    if tracking_id:
+        tracking_pixel = f'<img src="{app_url}/api/email/track/{tracking_id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />'
+    
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 32px; background-color: {COLORS['white']}; font-family: {FONT_STACK};">
+    <p style="margin: 0 0 24px 0; font-size: 16px; color: {COLORS['navy']}; font-weight: 600;">
+        Predixen Intelligence OS - Latest Updates
+    </p>
+    
+    {update_lines}
+    
+    <p style="margin: 24px 0 0 0; font-size: 14px; color: {COLORS['gray_500']};">
+        <a href="{app_url}" style="color: {COLORS['primary']}; text-decoration: none;">Open Predixen</a> to try these features.
+    </p>
+    
+    <p style="margin: 32px 0 0 0; font-size: 13px; color: {COLORS['gray_400']};">
+        - The Predixen Team
+    </p>
+    {tracking_pixel}
+</body>
+</html>"""
