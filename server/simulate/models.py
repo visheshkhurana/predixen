@@ -41,12 +41,12 @@ DEFAULT_REGIMES: Dict[str, RegimeConfig] = {
         name="Base Case",
         description="Normal market conditions with moderate uncertainty",
         driver_adjustments={
-            "growth_rate": DriverConfig(mean=0, sigma=3.0, min_val=-20, max_val=50),
-            "churn_rate": DriverConfig(mean=0, sigma=0.5, min_val=0, max_val=15),
-            "gross_margin": DriverConfig(mean=0, sigma=2.0, min_val=10, max_val=95),
-            "cac": DriverConfig(mean=0, sigma=5.0, min_val=0, max_val=None),
-            "dso": DriverConfig(mean=0, sigma=5.0, min_val=15, max_val=120),
-            "conversion_rate": DriverConfig(mean=0, sigma=2.0, min_val=0, max_val=100),
+            "growth_rate": DriverConfig(mean=0, sigma=5.0, min_val=-25, max_val=60),
+            "churn_rate": DriverConfig(mean=0, sigma=0.8, min_val=0, max_val=15),
+            "gross_margin": DriverConfig(mean=0, sigma=3.5, min_val=10, max_val=95),
+            "cac": DriverConfig(mean=0, sigma=8.0, min_val=0, max_val=None),
+            "dso": DriverConfig(mean=0, sigma=7.0, min_val=15, max_val=120),
+            "conversion_rate": DriverConfig(mean=0, sigma=3.0, min_val=0, max_val=100),
         },
         fundraising_success_prob=0.6,
         transition_probs={"base": 0.85, "downturn": 0.10, "breakout": 0.05}
@@ -55,12 +55,12 @@ DEFAULT_REGIMES: Dict[str, RegimeConfig] = {
         name="Downturn",
         description="Challenging market with reduced growth and higher churn",
         driver_adjustments={
-            "growth_rate": DriverConfig(mean=-5, sigma=5.0, min_val=-30, max_val=20),
-            "churn_rate": DriverConfig(mean=2, sigma=1.0, min_val=0, max_val=25),
-            "gross_margin": DriverConfig(mean=-3, sigma=3.0, min_val=5, max_val=90),
-            "cac": DriverConfig(mean=15, sigma=8.0, min_val=0, max_val=None),
-            "dso": DriverConfig(mean=15, sigma=10.0, min_val=20, max_val=150),
-            "conversion_rate": DriverConfig(mean=-5, sigma=3.0, min_val=0, max_val=100),
+            "growth_rate": DriverConfig(mean=-5, sigma=7.0, min_val=-35, max_val=20),
+            "churn_rate": DriverConfig(mean=2, sigma=1.5, min_val=0, max_val=25),
+            "gross_margin": DriverConfig(mean=-3, sigma=4.0, min_val=5, max_val=90),
+            "cac": DriverConfig(mean=15, sigma=12.0, min_val=0, max_val=None),
+            "dso": DriverConfig(mean=15, sigma=12.0, min_val=20, max_val=150),
+            "conversion_rate": DriverConfig(mean=-5, sigma=4.0, min_val=0, max_val=100),
         },
         fundraising_success_prob=0.25,
         transition_probs={"base": 0.20, "downturn": 0.75, "breakout": 0.05}
@@ -69,12 +69,12 @@ DEFAULT_REGIMES: Dict[str, RegimeConfig] = {
         name="Breakout",
         description="Strong tailwinds with accelerated growth",
         driver_adjustments={
-            "growth_rate": DriverConfig(mean=8, sigma=4.0, min_val=0, max_val=80),
-            "churn_rate": DriverConfig(mean=-1, sigma=0.3, min_val=0, max_val=10),
-            "gross_margin": DriverConfig(mean=5, sigma=2.0, min_val=20, max_val=98),
-            "cac": DriverConfig(mean=-10, sigma=5.0, min_val=0, max_val=None),
-            "dso": DriverConfig(mean=-5, sigma=3.0, min_val=10, max_val=90),
-            "conversion_rate": DriverConfig(mean=5, sigma=2.0, min_val=0, max_val=100),
+            "growth_rate": DriverConfig(mean=8, sigma=6.0, min_val=0, max_val=80),
+            "churn_rate": DriverConfig(mean=-1, sigma=0.5, min_val=0, max_val=10),
+            "gross_margin": DriverConfig(mean=5, sigma=3.0, min_val=20, max_val=98),
+            "cac": DriverConfig(mean=-10, sigma=7.0, min_val=0, max_val=None),
+            "dso": DriverConfig(mean=-5, sigma=5.0, min_val=10, max_val=90),
+            "conversion_rate": DriverConfig(mean=5, sigma=3.0, min_val=0, max_val=100),
         },
         fundraising_success_prob=0.85,
         transition_probs={"base": 0.25, "downturn": 0.02, "breakout": 0.73}
@@ -216,12 +216,12 @@ class EnrichedSimulationInputs:
     horizon_months: int = 24
     n_simulations: int = 1000
     
-    growth_sigma: float = 3.0
-    margin_sigma: float = 2.0
-    churn_sigma: float = 0.5
-    cac_sigma: float = 5.0
-    dso_sigma: float = 5.0
-    conversion_sigma: float = 2.0
+    growth_sigma: float = 5.0
+    margin_sigma: float = 3.5
+    churn_sigma: float = 0.8
+    cac_sigma: float = 8.0
+    dso_sigma: float = 7.0
+    conversion_sigma: float = 3.0
 
 
 @dataclass

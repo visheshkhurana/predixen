@@ -809,9 +809,11 @@ def simulate_scenarios_enhanced(
     
     decision_scores = compute_decision_scores(all_results)
     
+    score_map = {s.scenario_key: s for s in decision_scores}
+    
     scenarios_output = {}
-    for i, result in enumerate(all_results):
-        result.decision_score = decision_scores[i] if i < len(decision_scores) else None
+    for result in all_results:
+        result.decision_score = score_map.get(result.scenario_key)
         scenarios_output[result.scenario_key] = {
             "name": result.scenario_name,
             "runway": result.runway,

@@ -70,8 +70,8 @@ class SimulationInputs:
     
     horizon_months: int = 24
     n_simulations: int = 1000
-    growth_sigma: float = 3.0
-    margin_sigma: float = 2.0
+    growth_sigma: float = 5.0
+    margin_sigma: float = 3.5
 
 def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dict[str, Any]:
     if seed is not None:
@@ -85,6 +85,7 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
     
     burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
     adjusted_opex = inputs.opex * burn_reduction_mult
+    adjusted_payroll = inputs.payroll * burn_reduction_mult
     adjusted_other = inputs.other_costs * burn_reduction_mult
     
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
@@ -97,7 +98,7 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
     for sim in range(n):
         revenue = adjusted_revenue
         cash = inputs.cash_balance
-        payroll = inputs.payroll
+        payroll = adjusted_payroll
         
         for month in range(horizon):
             growth_rate = np.random.normal(adjusted_growth, inputs.growth_sigma) / 100
@@ -117,7 +118,6 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                 cash += inputs.fundraise_amount
             
             gross_profit = revenue * margin
-            total_costs = (inputs.opex * burn_reduction_mult) + payroll + (inputs.other_costs * burn_reduction_mult) + (revenue * (1 - margin))
             net_cashflow = gross_profit - adjusted_opex - payroll - adjusted_other
             
             cash = cash + net_cashflow
@@ -223,7 +223,7 @@ def run_multi_scenario_simulation(
     
     results = {}
     
-    for scenario_key, scenario_params in scenarios.items():
+    for idx, (scenario_key, scenario_params) in enumerate(scenarios.items()):
         scenario_inputs = SimulationInputs(
             baseline_revenue=base_inputs.baseline_revenue,
             baseline_growth_rate=base_inputs.baseline_growth_rate,
@@ -241,7 +241,8 @@ def run_multi_scenario_simulation(
             horizon_months=base_inputs.horizon_months
         )
         
-        sim_result = run_monte_carlo(scenario_inputs, seed)
+        scenario_seed = (seed + idx + 1) if seed is not None else None
+        sim_result = run_monte_carlo(scenario_inputs, scenario_seed)
         
         month_data = []
         horizon = base_inputs.horizon_months

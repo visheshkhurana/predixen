@@ -1,0 +1,91 @@
+PREDIXEN — Simulation Stress Test Report
+Date: June 2, 2026
+Scope: Input parameter edge cases, output accuracy, engine reliability, multi-scenario comparison
+
+TESTS PERFORMED
+TEST 1: Ultra Optimistic (All sliders maxed favorable)
+Inputs: Pricing +28%, Growth +19%, Burn Reduction +38%, Gross Margin +19%, Churn -5%, CAC -30%
+Outputs:
+
+Projected Runway: Profitable (pre-simulation estimate)
+Monthly Revenue: $131K (+$36K), Monthly Expenses: $114K (-$70K), Net Burn: Net Positive
+Simulation: 100% survival at 18 months, Sustainable rating
+Survival Curve: Flat 100% for 24 months
+Cash Projection: Exponential growth to ~$20M by month 24
+
+Verdict: Engine handles extreme positive inputs correctly. Charts render, no $NaN. AI analysis is contextually appropriate ("focus on strategic growth").
+
+TEST 2: Doomsday (All sliders maxed unfavorable)
+Inputs: Pricing -20%, Growth -10%, Burn Reduction -20%, Gross Margin -10%, Churn +4.5%, CAC +18%
+Outputs:
+
+Projected Runway: 9.6 months (-6.5 mo from baseline)
+Monthly Revenue: $71K (-$24K), Monthly Expenses: $221K (+$37K), Net Burn: $149K/mo
+Simulation: P50 Runway 10.0 mo, 0% survival at 18 months, Critical risk
+Survival Curve: Drops to 0% at month ~10
+Cash Projection: Hits -$2,600K by month 24
+
+Verdict: Engine handles extreme negative inputs correctly. Recommendations are appropriate ("Begin Fundraising Preparation"). No crashes.
+
+TEST 3: Compare All (5 scenarios simultaneously)
+Outputs:
+
+Moderate Growth: 36.0 mo, 100% survival
+Aggressive Growth: 36.0 mo, 100% survival
+Baseline: 17.0 mo, 4% survival
+Conservative Cut: 16.0 mo, 1% survival
+Cost Cutting: (partially visible, 0% survival)
+
+Verdict: Comparison runs but produces illogical results (see bugs below).
+
+TEST 4: Sensitivity Analysis
+Inputs: Target 18mo, 70% confidence
+Outputs: Current probability 32%, gap -38.0%, key drivers identified with DSO (39%), Conversion Rate (36%), CAC (13%), Gross Margin (5%), Growth Rate (4%), Churn (2%)
+Verdict: Well-built feature with useful output. One data bug in driver cards.
+
+TEST 5: Decision Ranking (Enhanced Analysis)
+Result: Complete app crash — blank screen. Required manual navigation to recover.
+
+BUGS FOUND DURING STRESS TESTING
+Critical
+S-BUG-1: Decision Ranking "Run Enhanced Analysis" crashes the app
+Clicking "Run Enhanced Analysis" on the Decision Ranking tab renders the entire page blank/black. The app becomes completely unresponsive and requires navigating away to recover. Console shows repeated "Failed to fetch AI guidance: SyntaxError: Unexpected token '<'" errors — the API endpoint is returning an HTML 404 page instead of JSON. This needs an error boundary and proper API endpoint.
+S-BUG-2: Compare All — Conservative Cut performs WORSE than Baseline
+In the comparison table, Conservative Cut shows 16.0 mo runway and 1% survival, while Baseline shows 17.0 mo and 4% survival. Cutting costs should extend runway, not shorten it. The simulation engine's cost-cutting template appears to have inverted logic or incorrect parameter mappings.
+S-BUG-3: Compare All — Moderate Growth and Aggressive Growth produce identical results
+Both show exactly 36.0 mo runway, 100% survival, +111.8% vs baseline, and +2281.0% survival improvement. Two different strategy templates should produce different outputs. This suggests the growth template parameters aren't differentiated or both resolve to the same underlying computation.
+High
+S-BUG-4: Monte Carlo variance is effectively zero
+Across all simulations, the P10-P90 range spread is 0.0–1.0 months. A 1,000-run Monte Carlo simulation should show meaningful variance (typically ±3–6 months). The random perturbation factor appears to be negligibly small. The "1,000 scenarios" claim is misleading when all 1,000 produce the same result.
+S-BUG-5: Baseline runway inconsistency — 14.0 mo (individual run) vs 17.0 mo (Compare All)
+When the Baseline scenario was run individually through the Classic Wizard, it produced P50 = 14.0 months. When run through Compare All, the same Baseline shows 17.0 months. The same inputs produce different outputs depending on entry point.
+S-BUG-6: Simulation results don't update summary cards
+The Ultra Optimistic scenario shows "Net Positive" in the Live Summary and "Sustainable" in the analysis, but the summary cards at the top still show "Net Burn $89K — Critical" which is the baseline value. The summary cards should reflect the simulated scenario, not baseline.
+Medium
+S-BUG-7: Sensitivity Analysis — DSO target equals current value
+The #1 Impact driver (Days Sales Outstanding) shows Current: 45 days and Target: 45 days, marked as "Achieved" with 100% progress. Then the recommendation says "Reduce DSO from 45 to 45 days" which is a no-op. The target should auto-set to the industry median (35 days) rather than the current value.
+S-BUG-8: Duplicate scenario names in Saved list
+The Saved Scenarios tab shows two "Baseline (Status Quo)" entries despite clicking "Overwrite" when prompted. The overwrite action appears to create a new copy instead of replacing the existing one.
+S-BUG-9: Saved scenario dates are wrong
+All scenarios show 05/02/2026 as the date, but the stress tests were run on 06/02/2026. The timestamp appears to be captured at creation time of the first baseline run, not the actual simulation time.
+S-BUG-10: Strategic Builder strategy cards still not selectable
+The Strategic Builder (default tab) still has non-functional strategy card selection. Clicking any card does nothing, forcing users to the Classic Wizard. The "Run Simulation" button remains greyed out. This is the first thing users see on the Simulation page.
+Low
+S-BUG-11: API returning HTML instead of JSON for AI guidance endpoints
+Console shows "Failed to fetch AI guidance: SyntaxError: Unexpected token '<'" errors repeatedly, indicating the AI guidance endpoint returns HTML (404 pages) instead of JSON. Needs proper error handling and API route configuration.
+S-BUG-12: Pointer capture errors on slider interactions
+Console shows "NotFoundError: Failed to execute 'setPointerCapture'" when dragging sliders. While it doesn't prevent usage, it indicates the custom slider component has event handling issues.
+
+WHAT WORKS WELL
+The Classic Wizard's 5-step flow is genuinely excellent — Template → Parameters → Fundraising → Events → Review, with a live sidebar summary, real-time "What This Means" explanations, tags, and Quick Start Presets. The Sensitivity Analysis is a strong differentiating feature with the probability gap breakdown. Chart rendering is clean and handles edge cases (profitability, deep negatives) without crashing or showing $NaN.
+
+PRIORITY FIX ORDER FOR SIMULATION ENGINE
+
+Fix Decision Ranking crash — add error boundary + fix API endpoint returning HTML
+Fix Compare All calculation logic — Conservative Cut should extend runway, not shorten it; Moderate vs Aggressive should differ
+Increase Monte Carlo variance — P10/P90 range should be ±3-6 months, not ±0-1
+Unify Baseline runway calculation — 14.0 vs 17.0 depending on entry point
+Update summary cards to reflect simulated scenario, not just baseline
+Fix Strategic Builder card selection or hide it behind the Classic Wizard
+Fix DSO target in Sensitivity Analysis to use industry median, not current value
+Fix Overwrite logic for saved scenarios + correct timestamps

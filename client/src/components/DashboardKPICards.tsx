@@ -315,9 +315,9 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, compan
       <KPICard
         key="churn_rate"
         title="Churn Rate"
-        value={churnRate ? `${(churnRate * 100).toFixed(1)}%` : 'N/A'}
-        subtitle={churnRate ? (churnRate <= 0.03 ? 'Low churn' : churnRate <= 0.05 ? 'Moderate' : 'High churn') : undefined}
-        status={churnRate ? (churnRate <= 0.03 ? 'healthy' : churnRate <= 0.05 ? 'warning' : 'critical') : 'neutral'}
+        value={churnRate ? `${churnRate.toFixed(1)}%` : 'N/A'}
+        subtitle={churnRate ? (churnRate <= 3 ? 'Low churn' : churnRate <= 5 ? 'Moderate' : 'High churn') : undefined}
+        status={churnRate ? (churnRate <= 3 ? 'healthy' : churnRate <= 5 ? 'warning' : 'critical') : 'neutral'}
         icon={<Users className="h-4 w-4" />}
         tooltip="Monthly customer or revenue churn rate."
         testId={`${testId}-churn`}
