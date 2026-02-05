@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -276,17 +277,15 @@ export function AppSidebar() {
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
-        <a
-          href="https://docs.predixen.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-md hover-elevate"
+        <div
+          className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md opacity-50 cursor-not-allowed"
           data-testid="link-help-docs"
+          title="Documentation coming soon"
         >
           <HelpCircle className="h-4 w-4" />
           <span className="flex-1">Help & Docs</span>
-          <ExternalLink className="h-3 w-3" />
-        </a>
+          <Badge variant="outline" className="text-[10px] px-1 py-0">Soon</Badge>
+        </div>
         <Button
           variant="ghost"
           size="sm"
