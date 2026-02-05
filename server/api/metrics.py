@@ -100,6 +100,9 @@ async def list_metrics(
     if tag:
         metrics = [m for m in metrics if m.tags and tag in m.tags]
     
+    engine = MetricEngine(db)
+    snapshot_cache = None
+    
     result = []
     for m in metrics:
         last_computed = db.query(MetricValue).filter(
@@ -107,8 +110,13 @@ async def list_metrics(
         ).order_by(MetricValue.computed_at.desc()).first()
         
         metric_dict = m.to_dict()
-        metric_dict["last_computed_at"] = last_computed.computed_at.isoformat() if last_computed else None
-        metric_dict["latest_value"] = last_computed.value if last_computed else None
+        if last_computed:
+            metric_dict["last_computed_at"] = last_computed.computed_at.isoformat()
+            metric_dict["latest_value"] = last_computed.value
+        else:
+            snapshot_val = engine._get_snapshot_value(company_id, m.key)
+            metric_dict["latest_value"] = snapshot_val
+            metric_dict["last_computed_at"] = None
         result.append(metric_dict)
     
     return result

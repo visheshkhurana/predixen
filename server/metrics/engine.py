@@ -239,12 +239,43 @@ class MetricEngine:
             "contributing_connectors": v.contributing_connectors,
         } for v in reversed(values)]
     
+    SNAPSHOT_KEY_MAP = {
+        "mrr": "mrr",
+        "arr": "arr",
+        "revenue": "monthly_revenue",
+        "total_revenue": "monthly_revenue",
+        "burn_rate": "net_burn",
+        "runway": "runway_months",
+        "gross_margin": "gross_margin",
+        "churn_rate": "churn_rate",
+        "customer_count": "headcount",
+        "cash_balance": "cash_balance",
+        "cac": "cac",
+        "ltv": "ltv",
+        "ltv_cac_ratio": "ltv_cac_ratio",
+        "headcount": "headcount",
+        "net_burn": "net_burn",
+    }
+
+    def _get_snapshot_value(self, company_id: int, metric_key: str) -> Optional[float]:
+        """Fall back to real-time KPI snapshot for a metric value."""
+        from server.api.realtime import get_company_kpi_metrics
+        snapshot_key = self.SNAPSHOT_KEY_MAP.get(metric_key)
+        if not snapshot_key:
+            return None
+        try:
+            snapshot = get_company_kpi_metrics(company_id, self.db)
+            val = snapshot.get(snapshot_key)
+            return float(val) if val is not None else None
+        except Exception:
+            return None
+
     def get_metric_latest(
         self,
         company_id: int,
         metric_key: str,
     ) -> Optional[Dict[str, Any]]:
-        """Get the latest value for a metric."""
+        """Get the latest value for a metric, falling back to real-time snapshot."""
         metric = self.db.query(MetricDefinition).filter(
             MetricDefinition.company_id == company_id,
             MetricDefinition.key == metric_key,
@@ -257,21 +288,38 @@ class MetricEngine:
             MetricValue.metric_id == metric.id,
         ).order_by(MetricValue.period_start.desc()).first()
         
-        if not value:
-            return None
-        
-        return {
-            "metric_key": metric_key,
-            "metric_name": metric.name,
-            "value": value.value,
-            "unit": metric.unit,
-            "format_type": metric.format_type,
-            "period_start": value.period_start.isoformat(),
-            "period_end": value.period_end.isoformat(),
-            "computed_at": value.computed_at.isoformat() if value.computed_at else None,
-            "raw_event_count": value.raw_event_count,
-            "contributing_connectors": value.contributing_connectors,
-        }
+        if value:
+            return {
+                "metric_key": metric_key,
+                "metric_name": metric.name,
+                "value": value.value,
+                "unit": metric.unit,
+                "format_type": metric.format_type,
+                "period_start": value.period_start.isoformat(),
+                "period_end": value.period_end.isoformat(),
+                "computed_at": value.computed_at.isoformat() if value.computed_at else None,
+                "raw_event_count": value.raw_event_count,
+                "contributing_connectors": value.contributing_connectors,
+            }
+
+        snapshot_val = self._get_snapshot_value(company_id, metric_key)
+        if snapshot_val is not None:
+            now = datetime.utcnow()
+            period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            return {
+                "metric_key": metric_key,
+                "metric_name": metric.name,
+                "value": snapshot_val,
+                "unit": metric.unit,
+                "format_type": metric.format_type,
+                "period_start": period_start.isoformat(),
+                "period_end": now.isoformat(),
+                "computed_at": now.isoformat(),
+                "raw_event_count": 0,
+                "contributing_connectors": ["financial_records"],
+            }
+
+        return None
     
     def get_metric_lineage(
         self,
