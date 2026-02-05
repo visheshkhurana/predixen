@@ -1,0 +1,34 @@
+KPI Board Test Results & Real-Time Data Integration Recommendations
+KPI Board Assessment
+I thoroughly tested the Predixen KPI Board for NovaSpark AI. Here's what I found:
+What's Working:
+
+The board displays 11 KPI cards covering core SaaS metrics: MRR ($95K), ARR ($1.1M), Cash Balance ($1.4M), Runway (16.1 mo), Net Burn ($89K/mo), Gross Margin (75%), Churn Rate (2.0%), Headcount (5), CAC ($3K), LTV ($15K), and LTV/CAC Ratio (4.8x with "Healthy" label).
+Four trend charts exist: Revenue Trend, Burn & Runway, Unit Economics, and Margins & Churn.
+The "Live" badge and last-update timestamp (23:00:35) indicate a real-time refresh mechanism.
+
+Issues Found:
+
+Data Flickering / Persistence Bug — When I navigated away and returned to the KPI Board, all values briefly reset to $0 (MRR, ARR, Cash Balance all showed $0, Net Burn $0, Gross Margin 0.0%, Runway jumped to 36.0 mo). It recovered after a click/refresh, but this is a serious UX and reliability issue. It suggests the board is re-fetching data on mount without caching or optimistic rendering.
+Data Mismatch with Financials Form — The Data Input > Financials tab shows Cash on Hand as $500K, Monthly Revenue as $50K, and Expenses as $80K, yet the KPI Board shows MRR at $95K and Cash Balance at $1.4M. This means the KPI board is pulling from a different data source (likely the uploaded spreadsheet) rather than the manually-entered financials — which is confusing and could create conflicting views.
+Mismatch with Google Sheets Model — The spreadsheet shows Dec-24 MRR at $95K (matches), but the Key Metrics section lists CAC as $850 and LTV as $12,500, while the KPI Board shows CAC at $3K and LTV at $15K. The Headcount shows 5 on the board but the spreadsheet shows 22 for Dec-24. These discrepancies indicate the board is not synced with the most current spreadsheet data.
+Sparse Chart Data — The trend charts show only 1-2 data points each (essentially dots, not lines), making them uninformative. This suggests only one month of data has been loaded into the system, despite the spreadsheet having 12 months of history.
+Empty Supporting Systems — The Metric Catalog has no metrics initialized, Suggested Metrics shows nothing, Alerts & Monitoring shows "Status Unknown" with no data, and the Marketplace has zero connectors. These all need to be set up to make the KPI Board truly functional.
+
+
+Best Integration Strategy for Real-Time Data
+Given your NovaSpark AI setup (SaaS B2B Analytics, Seed stage, Indian payroll providers available), here's the recommended integration priority:
+Tier 1 — Connect Immediately (Highest Impact)
+Stripe (Payments tab) — This is your single most impactful integration. It auto-feeds MRR, ARR, churn analytics, payment history, and revenue recognition directly. Since NovaSpark is a SaaS product, Stripe is likely already your billing system, and connecting it would make MRR, ARR, Churn Rate, LTV, and CAC update in true real-time from actual transaction data rather than spreadsheet estimates.
+Google Sheets (Spreadsheets tab) — Your financial model is already in Google Sheets. Connecting it would sync all 12 months of historical data into Predixen, which would immediately fix the sparse chart problem and give the trend lines real depth. This also serves as a bridge until native integrations replace it.
+Tier 2 — Connect Within 2 Weeks
+ChartMogul (Analytics tab) — Purpose-built for subscription analytics. It would provide MRR, ARR, MRR Growth Rate, Net MRR Churn, and 8+ additional subscription-specific metrics with true real-time precision, layered on top of your Stripe data.
+QuickBooks Online or Zoho Books (Accounting tab) — For automated expense tracking, P&L syncing, cash flow data, and AR/AP. This eliminates the need to manually update the expense breakdown in Data Input and ensures Cash Balance and Burn Rate are always accurate.
+HubSpot or Salesforce (CRM tab) — Connects your sales pipeline, deals, contacts, and forecasts. This would make CAC calculable from actual marketing spend ÷ closed deals, rather than a static estimate.
+Tier 3 — Connect for Full Automation
+RazorpayX Payroll or GreytHR (Payroll tab) — Since these Indian-specific payroll providers are available and NovaSpark appears to be India-based, connecting payroll automates headcount tracking, salary costs, and statutory contributions (PF, ESI, TDS) flowing into your expense model.
+Mixpanel or Google Analytics 4 (Analytics tab) — For product usage data (DAU, MAU, retention, sessions). These metrics feed into engagement-based health scoring and churn prediction.
+
+Architecture Recommendation
+The ideal real-time data flow would be: Stripe → ChartMogul → Predixen for all revenue/subscription metrics, QuickBooks/Zoho → Predixen for all expense and cash metrics, and HubSpot → Predixen for pipeline and customer acquisition metrics. Google Sheets should serve as a manual override layer for budgets and projections rather than as a primary data source. This way, actuals flow automatically from source systems while forecasts stay in the spreadsheet.
+Before connecting any integrations, I'd recommend clicking "Initialize System Metrics" in the Metric Catalog first — this will set up the metric definitions that the integrations will populate, and should also fix the data persistence issue on the KPI Board.

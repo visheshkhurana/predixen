@@ -60,6 +60,13 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Platform Admin**: Application owner with access to the Admin dashboard.
 -   **Company Level Roles**: `owner`, `admin`, `analyst`, `viewer` with varying access levels.
 
+## Recent Changes (Feb 2026)
+-   **KPI Board**: Fixed data flickering/persistence bug by switching from WebSocket-only to React Query-cached historical data endpoint. Trend charts now load from financial records (up to 12 months) instead of only WebSocket updates.
+-   **KPI Board Data Source**: Uses cascade: live snapshot → historical records → financial baseline. Data is cached with `staleTime: 60s` to prevent $0 flash on navigation.
+-   **Metric Catalog**: Auto-initializes system metrics on first visit per company (uses company-scoped ref guard).
+-   **Simulation Fixes**: Decision ranking uses scenario key mapping; query invalidation for timeseries/scenarios after simulation runs; churn rate KPI displays correctly as percentage.
+-   **API**: Added `GET /api/realtime/kpi/{company_id}/history` endpoint for historical KPI data from financial records.
+
 ## External Dependencies
 
 -   **OpenAI**: GPT-4o for financial analysis, metrics extraction, vision tasks.

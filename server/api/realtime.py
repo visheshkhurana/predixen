@@ -213,6 +213,102 @@ def get_kpi_snapshot(
     }
 
 
+@router.get("/kpi/{company_id}/history")
+def get_kpi_history(
+    company_id: int,
+    months: int = 12,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get historical KPI data from financial records for trend charts.
+    Returns up to `months` periods of data, ordered oldest to newest.
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    financials = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(FinancialRecord.period_end.desc())
+        .limit(months)
+        .all()
+    )
+
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company_id
+    ).order_by(TruthScan.created_at.desc()).first()
+
+    ts_metrics = {}
+    if truth_scan and truth_scan.outputs_json:
+        ts_metrics = truth_scan.outputs_json.get("metrics", {})
+
+    history = []
+    for record in reversed(financials):
+        revenue = record.revenue or 0
+        cogs = record.cogs or 0
+        opex = record.opex or 0
+        payroll = record.payroll or 0
+        other_costs = record.other_costs or 0
+        cash = record.cash_balance or 0
+        headcount = record.headcount or 0
+
+        total_costs = cogs + opex + payroll + other_costs
+        net_burn = max(0, total_costs - revenue)
+        gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
+        runway = (cash / net_burn) if net_burn > 0 and cash > 0 else (36 if net_burn <= 0 else 12)
+
+        period_label = record.period_end.strftime("%b %y") if record.period_end else ""
+
+        churn_val = ts_metrics.get("churn_rate")
+        if isinstance(churn_val, dict):
+            churn_val = churn_val.get("value", 0)
+        churn_rate = churn_val if isinstance(churn_val, (int, float)) else 0.02
+
+        cac_val = ts_metrics.get("cac")
+        if isinstance(cac_val, dict):
+            cac_val = cac_val.get("value", 0)
+        cac = cac_val if isinstance(cac_val, (int, float)) else 0
+
+        ltv_val = ts_metrics.get("ltv")
+        if isinstance(ltv_val, dict):
+            ltv_val = ltv_val.get("value", 0)
+        ltv = ltv_val if isinstance(ltv_val, (int, float)) else 0
+
+        ltv_cac_val = ts_metrics.get("ltv_cac_ratio")
+        if isinstance(ltv_cac_val, dict):
+            ltv_cac_val = ltv_cac_val.get("value", 0)
+        ltv_cac_ratio = ltv_cac_val if isinstance(ltv_cac_val, (int, float)) else 0
+
+        history.append({
+            "time": period_label,
+            "monthly_revenue": revenue,
+            "mrr": revenue,
+            "arr": revenue * 12,
+            "cash_balance": cash,
+            "net_burn": net_burn,
+            "runway_months": min(runway, 60),
+            "gross_margin": gross_margin,
+            "churn_rate": churn_rate,
+            "cac": cac,
+            "ltv": ltv,
+            "ltv_cac_ratio": ltv_cac_ratio,
+            "headcount": headcount,
+            "revenue_per_employee": (revenue / headcount) if headcount > 0 else 0,
+        })
+
+    return {
+        "company_id": company_id,
+        "months": len(history),
+        "data": history
+    }
+
+
 @router.post("/kpi/{company_id}/push")
 async def push_kpi_update(
     company_id: int,
