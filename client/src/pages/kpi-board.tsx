@@ -97,7 +97,7 @@ const getMonthLabel = (index: number) => {
 };
 
 export default function KPIBoardPage() {
-  const { currentCompany } = useFounderStore();
+  const { currentCompany, financialBaseline } = useFounderStore();
   const [historicalData, setHistoricalData] = useState<Array<KPIMetrics & { time: string }>>([]);
   
   const handleKPIUpdate = useCallback((update: import('@/hooks/useRealtimeKPI').KPIUpdate) => {
@@ -118,19 +118,33 @@ export default function KPIBoardPage() {
     kpiOptions
   );
 
+  // Use baseline data as fallback for any missing metrics
+  const baselineRevenue = financialBaseline?.monthlyRevenue ?? 0;
+  const baselineCash = financialBaseline?.cashOnHand ?? 0;
+  const baselineTotalExpenses = financialBaseline?.totalMonthlyExpenses ?? 0;
+  const baselinePayroll = financialBaseline?.expenseBreakdown?.payroll ?? 0;
+  const baselineOpex = financialBaseline?.expenseBreakdown?.operating ?? 0;
+  const baselineNetBurn = baselineTotalExpenses - baselineRevenue;
+  const baselineRunway = baselineNetBurn > 0 && baselineCash > 0 
+    ? baselineCash / baselineNetBurn 
+    : baselineNetBurn <= 0 ? 36 : 12;
+  const baselineGrossMargin = baselineRevenue > 0 
+    ? (baselineRevenue - (financialBaseline?.expenseBreakdown?.cogs ?? 0)) / baselineRevenue 
+    : 0;
+  
   const rawMetrics = liveData?.metrics ?? {
-    monthly_revenue: 0,
-    mrr: 0,
-    arr: 0,
-    cash_balance: 0,
-    net_burn: 0,
-    runway_months: 18,
-    gross_margin: 0,
-    churn_rate: 0,
+    monthly_revenue: baselineRevenue,
+    mrr: baselineRevenue,
+    arr: baselineRevenue * 12,
+    cash_balance: baselineCash,
+    net_burn: Math.max(0, baselineNetBurn),
+    runway_months: baselineRunway,
+    gross_margin: baselineGrossMargin,
+    churn_rate: 0.02, // Default 2% churn rate if not set
     cac: 500,
     ltv: 3000,
     ltv_cac_ratio: 6,
-    headcount: 0,
+    headcount: 0, // Will be populated from API or onboarding
     revenue_per_employee: 0
   };
   
