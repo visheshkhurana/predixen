@@ -29,6 +29,7 @@ import {
 import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { EmptyStateCard } from '@/components/ui/empty-state';
 import {
   Plus,
   GripVertical,
@@ -463,17 +464,16 @@ export default function DashboardBuilderPage() {
       </div>
 
       {(!dashboard?.widgets || dashboard.widgets.length === 0) ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
-            <LayoutGrid className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-semibold text-lg mb-2">No widgets yet</h3>
-            <p className="text-muted-foreground mb-4">Add your first widget to start building your dashboard</p>
-            <Button onClick={() => setAddWidgetOpen(true)} data-testid="button-add-first-widget">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Widget
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyStateCard
+          icon={LayoutGrid}
+          title="Start Building Your Dashboard"
+          description="Add widgets to display KPIs, charts, and tables. Drag and resize to customize your layout."
+          action={{
+            label: "Add Widget",
+            onClick: () => setAddWidgetOpen(true),
+            icon: Plus,
+          }}
+        />
       ) : (
         <div className="grid grid-cols-12 gap-4 auto-rows-[80px]">
           {dashboard.widgets.map(widget => (

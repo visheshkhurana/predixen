@@ -33,7 +33,8 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
-import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink, ChevronRight, FlaskConical } from 'lucide-react';
+import { Play, Filter, BarChart3, History, GitCompare, Loader2, Target, Trophy, BookOpen, Sparkles, Lock, MessageSquare, Users, Shield, Zap, AlertTriangle, ExternalLink, ChevronRight, FlaskConical, TrendingUp } from 'lucide-react';
+import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
 import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
@@ -802,9 +803,12 @@ export default function ScenariosPage() {
                   <Skeleton className="h-16 w-full" />
                 </div>
               ) : filteredScenarios.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  No saved scenarios yet. Create one using the builder.
-                </p>
+                <EmptyState
+                  icon={TrendingUp}
+                  title="No Saved Scenarios"
+                  description="Build your first scenario using the Strategic or Classic builder above."
+                  compact
+                />
               ) : (
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-2">
@@ -1347,20 +1351,15 @@ export default function ScenariosPage() {
               </Card>
             </>
           ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">
-                  No simulation results yet. Create and run a scenario to see projections.
-                </p>
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => setActiveTab('builder')}
-                >
-                  Go to Builder
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyStateCard
+              icon={BarChart3}
+              title="No Simulation Results"
+              description="Run a Monte Carlo simulation to see probabilistic projections for runway, cash flow, and key metrics."
+              action={{
+                label: "Create Scenario",
+                onClick: () => setActiveTab('builder'),
+              }}
+            />
           )}
         </TabsContent>
         

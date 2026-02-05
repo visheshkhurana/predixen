@@ -18,6 +18,7 @@ import {
   Plus, DollarSign, Users, TrendingUp, PieChart, 
   Calculator, Play, FileText, Building2, Percent
 } from 'lucide-react';
+import { EmptyStateCard } from '@/components/ui/empty-state';
 
 interface CapTable {
   id: string;
@@ -232,12 +233,16 @@ export default function FundraisingPage() {
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
             </div>
           ) : capTables.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <PieChart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">No cap tables yet. Create one to get started.</p>
-              </CardContent>
-            </Card>
+            <EmptyStateCard
+              icon={PieChart}
+              title="No Cap Tables Yet"
+              description="Create your first cap table to track ownership, manage equity, and simulate dilution scenarios."
+              action={{
+                label: "Create Cap Table",
+                onClick: () => setShowCapTableDialog(true),
+                icon: Plus,
+              }}
+            />
           ) : (
             <div className="space-y-4">
               {capTables.map((ct: CapTable) => (
@@ -312,12 +317,16 @@ export default function FundraisingPage() {
               {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
             </div>
           ) : rounds.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center">
-                <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">No rounds yet. Create one to start fundraising.</p>
-              </CardContent>
-            </Card>
+            <EmptyStateCard
+              icon={TrendingUp}
+              title="No Fundraising Rounds"
+              description="Plan your next fundraising round, model different scenarios, and understand dilution impact."
+              action={{
+                label: "Create Round",
+                onClick: () => setShowRoundDialog(true),
+                icon: Plus,
+              }}
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {rounds.map((round: FundraisingRound) => (
