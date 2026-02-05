@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useFounderStore } from "@/store/founderStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -425,11 +426,13 @@ function ThresholdConfigModal({ thresholds, onSave }: { thresholds: AlertThresho
 }
 
 export default function AlertsPage() {
-  const [companyId] = useState(1);
+  const { currentCompany } = useFounderStore();
+  const companyId = currentCompany?.id;
   const [thresholds, setThresholds] = useState<AlertThreshold[]>(DEFAULT_THRESHOLDS);
 
   const { data: alertsData, isLoading, refetch } = useQuery<AlertsResponse>({
     queryKey: ["/api/alerts/companies", companyId, "alerts"],
+    enabled: !!companyId,
   });
 
   const { data: healthData } = useQuery<{
@@ -438,6 +441,7 @@ export default function AlertsPage() {
     recommendations: string[];
   }>({
     queryKey: ["/api/alerts/companies", companyId, "analyze"],
+    enabled: !!companyId,
   });
 
   const formatValue = (value: number, metric: string) => {

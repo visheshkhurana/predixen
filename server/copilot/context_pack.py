@@ -5,6 +5,7 @@ from server.models.truth_scan import TruthScan
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
+from server.models.financial import FinancialRecord
 
 def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
     truth_scan = db.query(TruthScan).filter(
@@ -35,6 +36,13 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
                 if latest_decision is None or decision.created_at > latest_decision.created_at:
                     latest_decision = decision
     
+    # Fallback: Get latest financial record if no truth scan
+    latest_financial = None
+    if not truth_scan:
+        latest_financial = db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == company.id
+        ).order_by(FinancialRecord.period_end.desc()).first()
+    
     context = {
         "company": {
             "id": company.id,
@@ -44,6 +52,7 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
             "currency": company.currency
         },
         "truth_scan": None,
+        "financial_baseline": None,
         "latest_simulation": None,
         "latest_decision": None,
         "scenarios": []
@@ -59,6 +68,36 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
             "data_confidence_score": ts_data.get("data_confidence_score", 0),
             "quality_of_growth_index": ts_data.get("quality_of_growth_index", 0),
             "benchmark_comparisons": ts_data.get("benchmark_comparisons", [])
+        }
+    elif latest_financial:
+        # Provide financial baseline as a fallback for AI context
+        cash = float(latest_financial.cash_balance or 0)
+        revenue = float(latest_financial.revenue or 0)
+        total_costs = (
+            float(latest_financial.opex or 0) + 
+            float(latest_financial.payroll or 0) + 
+            float(latest_financial.cogs or 0) + 
+            float(latest_financial.other_costs or 0)
+        )
+        net_burn = total_costs - revenue
+        runway = cash / max(net_burn, 1) if net_burn > 0 else None
+        gross_margin = (revenue - float(latest_financial.cogs or 0)) / max(revenue, 1) if revenue > 0 else None
+        
+        context["financial_baseline"] = {
+            "as_of_date": latest_financial.period_end.isoformat() if latest_financial.period_end else None,
+            "metrics": {
+                "monthly_revenue": revenue,
+                "cash_balance": cash,
+                "total_expenses": total_costs,
+                "net_burn": net_burn,
+                "runway_months": runway,
+                "gross_margin": gross_margin,
+                "payroll": float(latest_financial.payroll or 0),
+                "opex": float(latest_financial.opex or 0),
+                "headcount": int(latest_financial.headcount or 0) if latest_financial.headcount else None,
+            },
+            "data_source": "financial_records",
+            "data_confidence_note": "Based on manually entered or imported financial data. Run a Truth Scan for more comprehensive analysis."
         }
     
     if latest_sim:
