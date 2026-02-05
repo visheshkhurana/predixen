@@ -2,11 +2,12 @@
 API endpoints for notification management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
+import base64
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
@@ -19,6 +20,10 @@ from server.core.db import get_db
 from server.models.email_event import EmailEvent
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+TRANSPARENT_GIF = base64.b64decode(
+    "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+)
 
 
 class FeatureNotificationRequest(BaseModel):
@@ -340,3 +345,29 @@ async def send_test_digest(request: TestDigestRequest):
             status_code=500,
             detail="Failed to send test digest. Check Resend configuration."
         )
+
+
+@router.get("/track/{tracking_id}")
+async def track_email_open(tracking_id: str, db: Session = Depends(get_db)):
+    """
+    Track email opens via pixel. Returns a 1x1 transparent GIF.
+    Updates the EmailEvent record with opened_at timestamp.
+    """
+    try:
+        event = db.query(EmailEvent).filter(EmailEvent.email_id == tracking_id).first()
+        if event and not event.opened_at:
+            event.opened_at = datetime.utcnow()
+            event.classification = "pixel_tracked"
+            db.commit()
+    except Exception:
+        pass
+    
+    return Response(
+        content=TRANSPARENT_GIF,
+        media_type="image/gif",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
