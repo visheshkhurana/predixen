@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Mail, MessageCircle, ExternalLink } from 'lucide-react';
+import { BookOpen, Mail, MessageCircle } from 'lucide-react';
 
 export default function DocsPage() {
   return (
@@ -19,7 +19,7 @@ export default function DocsPage() {
           <Card data-testid="card-getting-started">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" />
+                <BookOpen className="h-5 w-5 text-muted-foreground" />
                 Getting Started
               </CardTitle>
               <CardDescription>
@@ -40,7 +40,7 @@ export default function DocsPage() {
           <Card data-testid="card-simulation-guide">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-primary" />
+                <MessageCircle className="h-5 w-5 text-muted-foreground" />
                 Simulation Engine
               </CardTitle>
               <CardDescription>
