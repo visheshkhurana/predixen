@@ -78,6 +78,21 @@ interface GovernanceState {
 
 const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
+function getRationaleItems(rationale: any): string[] {
+  if (!rationale) return [];
+  if (Array.isArray(rationale)) return rationale.filter((r): r is string => typeof r === 'string');
+  if (typeof rationale === 'object') {
+    const items: string[] = [];
+    Object.entries(rationale).forEach(([key, val]) => {
+      if (typeof val === 'string') items.push(`${key}: ${val}`);
+      else if (val != null) items.push(`${key}: ${String(val)}`);
+    });
+    return items;
+  }
+  if (typeof rationale === 'string') return [rationale];
+  return [];
+}
+
 const AGENT_COLORS: Record<string, string> = {
   CEO: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   CFO: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
@@ -510,11 +525,11 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 </div>
               </div>
 
-              {decision.rationale && Array.isArray(decision.rationale) && (
+              {decision.rationale && getRationaleItems(decision.rationale).length > 0 && (
                 <div className="mb-3">
                   <p className="text-xs font-medium text-muted-foreground mb-1">Rationale</p>
                   <ul className="text-xs text-muted-foreground space-y-0.5">
-                    {(decision.rationale as string[]).slice(0, 3).map((r, i) => (
+                    {getRationaleItems(decision.rationale).slice(0, 3).map((r, i) => (
                       <li key={i} className="flex items-start gap-1">
                         <ChevronRight className="h-3 w-3 mt-0.5 shrink-0" />{r}
                       </li>
@@ -900,18 +915,19 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
 // ============ MEMORY VIEW ============
 function MemoryView({ data }: { data: GovernanceState }) {
   const intelligence = useMemo(() => {
-    const decided = data.decisions.filter(d => d.status === 'approved' || d.status === 'rejected');
-    const approvedCount = data.decisions.filter(d => d.status === 'approved').length;
+    const decisions = Array.isArray(data.decisions) ? data.decisions : [];
+    const decided = decisions.filter(d => d.status === 'approved' || d.status === 'rejected');
+    const approvedCount = decisions.filter(d => d.status === 'approved').length;
     const approvalRate = decided.length > 0 ? Math.round((approvedCount / decided.length) * 100) : null;
 
-    const confidences = data.decisions.filter(d => d.confidence != null).map(d => d.confidence);
+    const confidences = decisions.filter(d => d.confidence != null).map(d => d.confidence);
     const avgConfidence = confidences.length > 0 ? Math.round((confidences.reduce((a, b) => a + b, 0) / confidences.length) * 100) : null;
 
-    const pendingCount = data.decisions.filter(d => d.requiresApproval && d.status !== 'approved' && d.status !== 'rejected').length;
+    const pendingCount = decisions.filter(d => d.requiresApproval && d.status !== 'approved' && d.status !== 'rejected').length;
 
     let mostCautious: string | null = null;
     const agentConfMap: Record<string, number[]> = {};
-    data.decisions.forEach(d => {
+    decisions.forEach(d => {
       if (d.agentPositions) {
         Object.entries(d.agentPositions).forEach(([agent, pos]) => {
           const sentiment = typeof pos === 'string' ? pos : (pos as any)?.sentiment || '';
@@ -995,7 +1011,7 @@ function MemoryView({ data }: { data: GovernanceState }) {
               <p className="text-xs text-muted-foreground">Pending Decisions</p>
             </div>
             <div className="text-center p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
-              <p className="text-2xl font-bold text-red-400">{intelligence.mostCautious || '—'}</p>
+              <p className="text-2xl font-bold text-red-400">{intelligence.mostCautious || 'None'}</p>
               <p className="text-xs text-muted-foreground">Most Cautious Agent</p>
             </div>
           </div>
