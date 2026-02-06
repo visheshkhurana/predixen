@@ -282,6 +282,44 @@ export function registerAiGovernanceRoutes(app: Express) {
   });
 
   // POST /admin/ai-governance/callback - FROM n8n only
+
+  // ============ EXECUTE DECISION ===============
+  app.post("/admin/ai-governance/execute", async (req: Request, res: Response) => {
+    try {
+      const { requestId, decisionId, decision, agentPositions } = req.body;
+      if (!requestId || !decisionId) {
+        return res.status(400).json({ error: "requestId and decisionId are required" });
+      }
+
+      // Log execution event
+      await db.insert(aiEvents).values({
+        requestId,
+        eventType: "execution_started",
+        agent: "SYSTEM",
+        data: { decisionId, decision, agentPositions, startedAt: new Date().toISOString() },
+        status: "executing",
+        source: "founder",
+      });
+
+      // Forward execution request to n8n
+      const n8nPayload = {
+        request_id: requestId,
+        decision_id: decisionId,
+        decision: decision || "",
+        agent_positions: agentPositions || {},
+        action: "execute_decision",
+        timestamp: new Date().toISOString(),
+        callback_url: `${process.env.REPLIT_DEV_DOMAIN ? "https://" + process.env.REPLIT_DEV_DOMAIN : "https://fund-flow--vysheshk.replit.app"}/admin/ai-governance/callback`,
+      };
+      await forwardToN8n("execute-decision", n8nPayload);
+
+      res.json({ success: true, message: "Execution dispatched to agents" });
+    } catch (error) {
+      console.error("[AI-GOV] Error in execute:", error);
+      res.status(500).json({ error: "Failed to execute decision" });
+    }
+  });
+
   app.post("/admin/ai-governance/callback", async (req: Request, res: Response) => {
     try {
       // Verify n8n signature
@@ -347,7 +385,19 @@ export function registerAiGovernanceRoutes(app: Express) {
           await db.update(aiRequests).set({ status: "decision_ready" }).where(eq(aiRequests.requestId, request_id));
           break;
         }
-        case "code_change": {
+        case "execution_result": {
+            const { agent: execAgent, task_type, deliverable, status: execStatus, summary: execSummary } = req.body;
+            await db.insert(aiEvents).values({
+              requestId: request_id,
+              eventType: "execution_result",
+              agent: execAgent || "UNKNOWN",
+              data: { task_type, deliverable, status: execStatus, summary: execSummary },
+              status: execStatus || "completed",
+              source: "agent",
+            });
+            break;
+          }
+          case "code_change": {
           const { branch, files_changed, tests_passed, risk_level, summary } = req.body;
           await db.insert(aiCodeChanges).values({
             requestId: request_id,

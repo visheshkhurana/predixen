@@ -9,7 +9,7 @@ import {
   Brain, Users, Activity, Code2, AlertTriangle, Database, Shield,
   CheckCircle, XCircle, RefreshCw, Pause, Play, Lock, Unlock, Send,
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
-  Clock, ChevronRight, Loader2
+  Clock, ChevronRight, Loader2, Rocket, FileText, Terminal
 } from 'lucide-react';
 
 // Types
@@ -278,6 +278,19 @@ function DecisionsView({ data }: { data: GovernanceState }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
   });
 
+  const executeMutation = useMutation({
+    mutationFn: async ({ requestId, decisionId, decision, agentPositions }: { requestId: string; decisionId: number; decision: string; agentPositions: Record<string, string> }) => {
+      const res = await fetch('/admin/ai-governance/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, decisionId, decision, agentPositions }),
+      });
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
+  });
+
+
   if (data.decisions.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -340,6 +353,14 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 >
                   <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
                 </Button>
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700"
+                      onClick={() => executeMutation.mutate({ requestId: decision.requestId, decisionId: decision.id, decision: decision.label, agentPositions: decision.agentPositions })}
+                      disabled={executeMutation.isPending}
+                    >
+                      <Rocket className="h-3.5 w-3.5 mr-1" /> Execute
+                    </Button>
                 <Button
                   size="sm"
                   variant="destructive"
@@ -351,6 +372,102 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 <Button size="sm" variant="outline">
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rerun
                 </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+
+// ============= EXECUTIONS VIEW ==============
+function ExecutionsView({ data }: { data: GovernanceState }) {
+  const executionEvents = data.events.filter((e: any) => 
+    e.eventType === 'execution_started' || e.eventType === 'execution_result'
+  );
+  
+  const executions = executionEvents.reduce((acc: any[], event: any) => {
+    if (event.eventType === 'execution_started') {
+      acc.push({
+        requestId: event.requestId,
+        startedAt: event.data?.startedAt || event.createdAt,
+        decision: event.data?.decision || 'Unknown',
+        results: [],
+      });
+    } else if (event.eventType === 'execution_result') {
+      const exec = acc.find((e: any) => e.requestId === event.requestId);
+      if (exec) {
+        exec.results.push({
+          agent: event.agent,
+          taskType: event.data?.task_type || 'task',
+          deliverable: event.data?.deliverable || '',
+          summary: event.data?.summary || '',
+          status: event.status || 'completed',
+        });
+      }
+    }
+    return acc;
+  }, []);
+
+  if (executions.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Rocket className="h-12 w-12 mx-auto mb-3 opacity-30" />
+        <p>No executions yet.</p>
+        <p className="text-sm mt-1">Approve a decision and click Execute to dispatch tasks to agents.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {executions.reverse().map((exec: any, i: number) => (
+        <Card key={i} className="bg-card/50 border-border/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Rocket className="h-4 w-4 text-blue-400" />
+                {exec.decision}
+              </CardTitle>
+              <Badge variant={exec.results.length > 0 ? 'default' : 'outline'}>
+                {exec.results.length > 0 ? `${exec.results.length} deliverables` : 'Executing...'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">Started: {new Date(exec.startedAt).toLocaleString()}</p>
+          </CardHeader>
+          <CardContent>
+            {exec.results.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Agents are working on tasks...
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {exec.results.map((result: any, j: number) => (
+                  <div key={j} className="border border-border/50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={AGENT_COLORS[result.agent] || 'bg-gray-500/20 text-gray-400'}>
+                          {result.agent}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Terminal className="h-3 w-3" />{result.taskType}
+                        </span>
+                      </div>
+                      <Badge variant={result.status === 'completed' ? 'default' : result.status === 'failed' ? 'destructive' : 'outline'}>
+                        {result.status}
+                      </Badge>
+                    </div>
+                    {result.summary && <p className="text-sm mb-2">{result.summary}</p>}
+                    {result.deliverable && (
+                      <div className="bg-background/50 rounded p-2 text-xs font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
+                        {typeof result.deliverable === 'string' ? result.deliverable : JSON.stringify(result.deliverable, null, 2)}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
@@ -774,7 +891,8 @@ export default function AiGovernancePage() {
             <TabsTrigger value="decisions" className="gap-1.5"><Activity className="h-3.5 w-3.5" />Decisions</TabsTrigger>
             <TabsTrigger value="health" className="gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Health</TabsTrigger>
             <TabsTrigger value="tasks" className="gap-1.5"><Zap className="h-3.5 w-3.5" />Tasks</TabsTrigger>
-            <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
+            <TabsTrigger value="executions" className="gap-1.5"><Rocket className="h-3.5 w-3.5" />Executions</TabsTrigger>
+              <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
             <TabsTrigger value="memory" className="gap-1.5"><Database className="h-3.5 w-3.5" />Memory</TabsTrigger>
             <TabsTrigger value="emergency" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" />Emergency</TabsTrigger>
           </TabsList>
@@ -782,7 +900,8 @@ export default function AiGovernancePage() {
           <TabsContent value="decisions"><DecisionsView data={data} /></TabsContent>
           <TabsContent value="health"><CompanyHealthView data={data} /></TabsContent>
           <TabsContent value="tasks"><AiTasksView data={data} /></TabsContent>
-          <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
+          <TabsContent value="executions"><ExecutionsView data={data} /></TabsContent>
+            <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
           <TabsContent value="memory"><MemoryView data={data} /></TabsContent>
           <TabsContent value="emergency"><EmergencyView data={data} /></TabsContent>
         </Tabs>
