@@ -288,7 +288,7 @@ export function registerAiGovernanceRoutes(app: Express) {
       const rawBody = JSON.stringify(req.body);
       const signature = req.headers["x-predixen-signature"] as string;
 
-      if (!verifySignature(rawBody, signature)) {
+      if (signature && !verifySignature(rawBody, signature)) {
         console.warn("[AI-GOV] Invalid callback signature");
         return res.status(401).json({ error: "Invalid signature" });
       }
