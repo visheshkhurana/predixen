@@ -198,7 +198,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {Object.entries(decision.agentPositions as Record<string, string>).map(([agent, position]) => (
                         <Badge key={agent} variant="outline" className="text-xs">
-                          {agent}: {position}
+                          {agent}: {typeof position === "string" ? position : (position as any)?.sentiment || "N/A"}
                         </Badge>
                       ))}
                     </div>
@@ -320,7 +320,7 @@ function DecisionsView({ data }: { data: GovernanceState }) {
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {Object.entries(decision.agentPositions as Record<string, string>).map(([agent, position]) => (
                   <Badge key={agent} variant="outline" className="text-xs">
-                    {agent}: {position}
+                    {agent}: {typeof position === "string" ? position : (position as any)?.sentiment || "N/A"}
                   </Badge>
                 ))}
               </div>
