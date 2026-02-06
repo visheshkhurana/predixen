@@ -639,6 +639,86 @@ function AiTasksView({ data }: { data: GovernanceState }) {
   );
 }
 
+// ============ EXECUTIONS VIEW ============
+function ExecutionsView({ data }: { data: GovernanceState }) {
+  const executions = useMemo(() => {
+    const starts = data.events.filter((e: any) => e.eventType === 'execution_started');
+    const results = data.events.filter((e: any) => e.eventType === 'execution_result');
+    const resultMap = new Map<string, any>();
+    results.forEach((r: any) => {
+      const rid = r.requestId || r.metadata?.requestId;
+      if (rid) resultMap.set(rid, r);
+    });
+
+    return starts.map((s: any) => {
+      const rid = s.requestId || s.metadata?.requestId || s.id;
+      const result = resultMap.get(rid);
+      const elapsed = Date.now() - new Date(s.createdAt).getTime();
+      let status: 'completed' | 'executing' | 'failed' = 'executing';
+      if (result) {
+        status = result.metadata?.success === false ? 'failed' : 'completed';
+      } else if (elapsed > 60_000) {
+        status = 'completed';
+      }
+      return {
+        id: s.id,
+        requestId: rid,
+        agentId: s.agentId || 'system',
+        summary: s.metadata?.summary || s.metadata?.question || s.eventType,
+        status,
+        createdAt: s.createdAt,
+        elapsed,
+        resultSummary: result?.metadata?.summary || result?.metadata?.result || null,
+      };
+    }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [data.events]);
+
+  return (
+    <div className="space-y-4">
+      {executions.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Play className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">No executions recorded yet.</p>
+        </div>
+      ) : (
+        executions.map((exec) => (
+          <Card key={exec.id} data-testid={`card-execution-${exec.id}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{exec.summary}</p>
+                  <div className="flex items-center flex-wrap gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs">{exec.agentId}</Badge>
+                    <Badge
+                      variant={exec.status === 'completed' ? 'default' : exec.status === 'failed' ? 'destructive' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {exec.status === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                      {exec.status === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
+                      {exec.status === 'failed' && <XCircle className="h-3 w-3 mr-1" />}
+                      {exec.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {getTimeAgo(exec.createdAt)}
+                    </span>
+                  </div>
+                  {exec.resultSummary && (
+                    <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{exec.resultSummary}</p>
+                  )}
+                </div>
+                <code className="text-xs text-muted-foreground font-mono shrink-0">
+                  {String(exec.requestId).slice(0, 12)}...
+                </code>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
+  );
+}
+
 // ============ MEMORY VIEW ============
 function MemoryView({ data }: { data: GovernanceState }) {
   return (
@@ -859,6 +939,7 @@ export default function AiGovernancePage() {
             <TabsTrigger value="decisions" className="gap-1.5"><Activity className="h-3.5 w-3.5" />Decisions</TabsTrigger>
             <TabsTrigger value="health" className="gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Health</TabsTrigger>
             <TabsTrigger value="tasks" className="gap-1.5"><Zap className="h-3.5 w-3.5" />Tasks</TabsTrigger>
+            <TabsTrigger value="executions" className="gap-1.5"><Play className="h-3.5 w-3.5" />Executions</TabsTrigger>
             <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
             <TabsTrigger value="memory" className="gap-1.5"><Database className="h-3.5 w-3.5" />Memory</TabsTrigger>
             <TabsTrigger value="emergency" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" />Emergency</TabsTrigger>
@@ -867,6 +948,7 @@ export default function AiGovernancePage() {
           <TabsContent value="decisions"><DecisionsView data={data} /></TabsContent>
           <TabsContent value="health"><CompanyHealthView data={data} /></TabsContent>
           <TabsContent value="tasks"><AiTasksView data={data} /></TabsContent>
+          <TabsContent value="executions"><ExecutionsView data={data} /></TabsContent>
           <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
           <TabsContent value="memory"><MemoryView data={data} /></TabsContent>
           <TabsContent value="emergency"><EmergencyView data={data} /></TabsContent>
