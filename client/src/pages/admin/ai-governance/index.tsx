@@ -780,9 +780,11 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
 }
 
 // ============ AI TASKS VIEW ============
-function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' } {
+function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline'; className?: string } {
   if (req.status === 'approved') return { label: 'approved', variant: 'default' };
   if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' };
+  if (req.status === 'decision_ready') return { label: 'decision_ready', variant: 'default', className: 'bg-blue-600 text-white' };
+  if (req.status === 'pending') return { label: 'pending', variant: 'default', className: 'bg-amber-500 text-white' };
   if (req.status === 'in_progress' || req.status === 'executing') {
     const elapsed = Date.now() - new Date(req.createdAt).getTime();
     if (elapsed > 60_000) return { label: 'completed', variant: 'default' };
@@ -810,7 +812,7 @@ function AiTasksView({ data }: { data: GovernanceState }) {
                     <p className="font-medium text-sm">{req.question}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
                       <Badge variant="outline" className="text-xs">{req.type}</Badge>
-                      <Badge variant={resolved.variant} className="text-xs">
+                      <Badge variant={resolved.variant} className={`text-xs ${resolved.className || ''}`}>
                         {resolved.label === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                         {resolved.label === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
                         {resolved.label}
