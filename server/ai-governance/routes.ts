@@ -11,7 +11,7 @@ import {
   aiSystemState,
 } from "../../shared/models/aiGovernance";
 
-const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_BASE || "https://n8n.predixen.app/webhook";
+const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_BASE || "https://vysheshk.app.n8n.cloud/webhook";
 const SHARED_SECRET = process.env.AI_GOVERNANCE_SECRET || "predixen-ai-governance-secret-change-me";
 const CALLBACK_TOLERANCE_MS = 5 * 60 * 1000; // 5 min replay protection
 
@@ -45,9 +45,10 @@ async function getOrCreateSystemState() {
 
 async function forwardToN8n(endpoint: string, payload: any): Promise<boolean> {
   try {
-    const body = JSON.stringify(payload);
+    const enrichedPayload = { ...payload, action: endpoint };
+    const body = JSON.stringify(enrichedPayload);
     const signature = signPayload(body);
-    const response = await fetch(`${N8N_WEBHOOK_BASE}/${endpoint}`, {
+    const response = await fetch(`${N8N_WEBHOOK_BASE}/founder-panel`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
