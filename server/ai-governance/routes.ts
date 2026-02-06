@@ -75,7 +75,7 @@ export function registerAiGovernanceRoutes(app: Express) {
       const recentApprovals = await db.select().from(aiApprovals).orderBy(desc(aiApprovals.createdAt)).limit(20);
 
       // Build agent statuses from most recent events
-      const agents = ["CEO", "CFO", "CRO", "CPO", "CTO", "RISK", "CHIEF_OF_STAFF"];
+      const agents = ["CEO", "CFO", "CRO", "CPO", "CTO", "RISK", "CHIEF_OF_STAFF", "DEV", "QA", "REPORTING", "AUTOMATION"];
       const agentStatuses: Record<string, { status: string; summary: string | null; confidence: number | null; lastUpdate: string | null }> = {};
       for (const agent of agents) {
         const latestEvent = recentEvents.find((e) => e.agent === agent);
