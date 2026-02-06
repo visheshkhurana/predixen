@@ -2,12 +2,14 @@ import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
+import { registerAiGovernanceRoutes } from "./ai-governance/routes";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   registerChatRoutes(app);
+    registerAiGovernanceRoutes(app);
 
   app.post("/internal/broadcast/metrics", (req: Request, res: Response) => {
     const { companyId, metrics, source } = req.body;

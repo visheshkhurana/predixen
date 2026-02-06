@@ -37,6 +37,7 @@ import AdminEmailTemplates from "@/pages/admin/email-templates";
 import AdminLoginPage from "@/pages/admin/login";
 import AdminLLMAudit from "@/pages/admin/llm-audit";
 import AdminEvals from "@/pages/admin/evals";
+import AiGovernancePage from "@/pages/admin/ai-governance";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
@@ -228,6 +229,9 @@ function Router() {
       <Route path="/admin/evals">
         {() => <AdminRoute component={AdminEvals} />}
       </Route>
+                <Route path="/admin/ai-governance">
+                    {() => <AdminRoute component={AiGovernancePage} />}
+                </Route>
       <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />
     </Switch>
