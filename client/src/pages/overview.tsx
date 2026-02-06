@@ -852,51 +852,51 @@ export default function OverviewPage() {
       },
       { 
         metric: 'Gross Margin', 
-        value: projectedMetrics.grossMargin, 
+        value: baseData.grossMargin, 
         p25: grossMarginBenchmark.p25, 
         p50: grossMarginBenchmark.p50, 
         p75: grossMarginBenchmark.p75,
         unit: '%',
-        status: getBenchmarkStatus(projectedMetrics.grossMargin, grossMarginBenchmark),
+        status: getBenchmarkStatus(baseData.grossMargin, grossMarginBenchmark),
       },
       { 
         metric: 'LTV:CAC', 
-        value: projectedMetrics.ltvCacRatio, 
+        value: baseData.ltvCacRatio, 
         p25: ltvCacBenchmark.p25, 
         p50: ltvCacBenchmark.p50, 
         p75: ltvCacBenchmark.p75,
         unit: 'x',
-        status: getBenchmarkStatus(projectedMetrics.ltvCacRatio, ltvCacBenchmark),
+        status: getBenchmarkStatus(baseData.ltvCacRatio, ltvCacBenchmark),
       },
       { 
         metric: 'Runway', 
-        value: projectedMetrics.runway, 
+        value: baseData.runway, 
         p25: runwayBenchmark.p25, 
         p50: runwayBenchmark.p50, 
         p75: runwayBenchmark.p75,
         unit: 'mo',
-        status: getBenchmarkStatus(projectedMetrics.runway, runwayBenchmark),
+        status: getBenchmarkStatus(baseData.runway, runwayBenchmark),
       },
       { 
         metric: 'Churn Rate', 
-        value: projectedMetrics.churnRate, 
+        value: baseData.churnRate, 
         p25: churnBenchmark.p25, 
         p50: churnBenchmark.p50, 
         p75: churnBenchmark.p75,
         unit: '%',
-        status: getBenchmarkStatus(projectedMetrics.churnRate, churnBenchmark),
+        status: getBenchmarkStatus(baseData.churnRate, churnBenchmark),
       },
       { 
         metric: 'Burn Multiple', 
-        value: projectedMetrics.burnRate > 0 ? projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1) : 0, 
+        value: baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, 
         p25: burnBenchmark.p25, 
         p50: burnBenchmark.p50, 
         p75: burnBenchmark.p75,
         unit: 'x',
-        status: getBenchmarkStatus(projectedMetrics.burnRate / Math.max(projectedMetrics.mrr, 1), burnBenchmark),
+        status: getBenchmarkStatus(baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, burnBenchmark),
       },
     ];
-  }, [assumptions.growthRate, projectedMetrics, dynamicBenchmarks]);
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -965,12 +965,12 @@ export default function OverviewPage() {
   }, [projectedMetrics]);
 
   const kpiHealthData = [
-    { name: 'Runway', value: projectedMetrics.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
-    { name: 'Gross Margin', value: projectedMetrics.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
-    { name: 'Churn Rate', value: projectedMetrics.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
-    { name: 'LTV/CAC', value: projectedMetrics.ltvCacRatio, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
+    { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
+    { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
+    { name: 'Churn Rate', value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
+    { name: 'LTV/CAC', value: baseData.ltvCacRatio, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
-    { name: 'Payback', value: projectedMetrics.paybackPeriod, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
+    { name: 'Payback', value: baseData.paybackPeriod, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
   return (

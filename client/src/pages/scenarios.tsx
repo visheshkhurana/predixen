@@ -39,6 +39,7 @@ import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from
 import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
@@ -93,7 +94,7 @@ function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: num
 }
 
 export default function ScenariosPage() {
-  const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun } = useFounderStore();
+  const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun, financialBaseline } = useFounderStore();
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
@@ -163,35 +164,21 @@ export default function ScenariosPage() {
     );
   }, [scenarios, tagFilter]);
 
+  const { metrics: sharedMetrics } = useFinancialMetrics();
+
   const { baseMetrics, isUsingDemoData } = useMemo(() => {
     if (!currentCompany) return { baseMetrics: undefined, isUsingDemoData: false };
     
-    const metrics = truthScan?.metrics || {};
-    const extractValue = (m: any, fallback: number | null) => {
-      if (m === undefined || m === null) return fallback;
-      if (typeof m === 'object' && 'value' in m) return m.value;
-      if (typeof m === 'number') return m;
-      return fallback;
-    };
+    const hasRealData = sharedMetrics.mrr > 0 || sharedMetrics.cashOnHand > 0 || sharedMetrics.netBurn > 0;
     
-    // Check if we have actual data from Truth Scan
-    const hasCashData = extractValue(metrics.cash_balance, null) !== null;
-    const hasRevenueData = extractValue(metrics.monthly_revenue, null) !== null;
-    const hasExpenseData = extractValue(metrics.total_expenses, null) !== null || extractValue(metrics.net_burn, null) !== null;
-    const hasRealData = hasCashData && (hasRevenueData || hasExpenseData);
+    const cashOnHand = sharedMetrics.cashOnHand;
+    const monthlyRevenue = sharedMetrics.mrr;
+    const monthlyExpenses = sharedMetrics.netBurn + monthlyRevenue;
+    const grossMargin = sharedMetrics.grossMarginPct;
+    const growthRate = financialBaseline?.monthlyGrowthRate ?? 0;
+    const churnRate = sharedMetrics.churnRatePct;
     
-    const cashOnHand = extractValue(metrics.cash_balance, 500000)!;
-    const monthlyRevenue = extractValue(metrics.monthly_revenue, 50000)!;
-    // Use total_expenses if available, otherwise calculate from net_burn + revenue
-    const netBurnValue = extractValue(metrics.net_burn, null);
-    const totalExpensesValue = extractValue(metrics.total_expenses, null);
-    const monthlyExpenses = totalExpensesValue ?? (netBurnValue !== null ? netBurnValue + monthlyRevenue : 80000);
-    const grossMargin = extractValue(metrics.gross_margin, 60)!;
-    const growthRate = extractValue(metrics.revenue_growth_mom, 10)!;
-    const churnRate = extractValue(metrics.churn_rate, 3)!;
-    
-    const monthlyBurn = monthlyExpenses - monthlyRevenue;
-    const currentRunway = monthlyBurn > 0 ? cashOnHand / monthlyBurn : 999;
+    const currentRunway = sharedMetrics.runway === Infinity ? 999 : sharedMetrics.runway;
     
     return {
       baseMetrics: {
@@ -205,7 +192,7 @@ export default function ScenariosPage() {
       },
       isUsingDemoData: !hasRealData,
     };
-  }, [currentCompany, truthScan]);
+  }, [currentCompany, sharedMetrics]);
   
   const dashboardMetrics = useMemo(() => {
     if (!baseMetrics) return undefined;
@@ -1107,19 +1094,19 @@ export default function ScenariosPage() {
               cac: baseMetrics.monthlyRevenue * 0.3, // Estimated 30% of MRR per customer
               ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
             } : {
-              monthlyRevenue: 50000,
-              grossMargin: 60,
-              opex: 24000,
-              payroll: 48000,
-              otherCosts: 8000,
-              cashBalance: 500000,
-              churnRate: 3,
-              growthRate: 10,
-              cac: 15000,
-              ltv: 50000,
+              monthlyRevenue: 0,
+              grossMargin: 0,
+              opex: 0,
+              payroll: 0,
+              otherCosts: 0,
+              cashBalance: 0,
+              churnRate: 0,
+              growthRate: 0,
+              cac: 0,
+              ltv: 0,
             };
             
-            const currentRunway = baseMetrics?.currentRunway || 12;
+            const currentRunway = baseMetrics?.currentRunway || 0;
             const sensitivityData = calculateSensitivity(financialState);
             
             // Use simulation data for baseline results when available, otherwise estimate

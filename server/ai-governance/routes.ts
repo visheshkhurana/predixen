@@ -392,8 +392,20 @@ export function registerAiGovernanceRoutes(app: Express) {
         }
         case "execution_result": {
             const { agent: execAgent, task_type, deliverable, status: execStatus, summary: execSummary } = req.body;
+                
+                // Resolve request_id: if from n8n auto-callback, match to most recent executing request
+                let resolvedRequestId = request_id;
+                if (request_id.startsWith("n8n-auto-")) {
+                  const [latestExec] = await db.select().from(aiAgentEvents)
+                    .where(eq(aiAgentEvents.eventType, "execution_started"))
+                    .orderBy(desc(aiAgentEvents.createdAt))
+                    .limit(1);
+                  if (latestExec) {
+                    resolvedRequestId = latestExec.requestId;
+                  }
+                }
             await db.insert(aiAgentEvents).values({
-              requestId: request_id,
+              requestId: resolvedRequestId,
               eventType: "execution_result",
               agent: execAgent || "UNKNOWN",
               rawPayload: { task_type, deliverable, status: execStatus, summary: execSummary },
