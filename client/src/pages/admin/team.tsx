@@ -88,7 +88,7 @@ async function fetchTeam(params?: Record<string, string>) {
       if (v) url.searchParams.set(k, v);
     });
   }
-  const token = localStorage.getItem('admin_token') || localStorage.getItem('token');
+  const token = localStorage.getItem('predixen-token');
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -97,7 +97,7 @@ async function fetchTeam(params?: Record<string, string>) {
 }
 
 async function saveTeamMember(data: any, id?: number) {
-  const token = localStorage.getItem('admin_token') || localStorage.getItem('token');
+  const token = localStorage.getItem('predixen-token');
   const url = id ? `/api/admin/team/${id}` : '/api/admin/team';
   const method = id ? 'PUT' : 'POST';
   const res = await fetch(url, {
@@ -113,7 +113,7 @@ async function saveTeamMember(data: any, id?: number) {
 }
 
 async function deleteTeamMember(id: number) {
-  const token = localStorage.getItem('admin_token') || localStorage.getItem('token');
+  const token = localStorage.getItem('predixen-token');
   const res = await fetch(`/api/admin/team/${id}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
