@@ -319,12 +319,9 @@ function BoardroomView({ data }: { data: GovernanceState }) {
             <Brain className="h-4 w-4" />
             Boardroom Floor
           </CardTitle>
-          {data.activeRequest && (
-            <CardDescription>
-              Active: {data.activeRequest.question}
-              <Badge variant="outline" className="ml-2">{data.activeRequest.status}</Badge>
-            </CardDescription>
-          )}
+          <CardDescription>
+            <p className="text-base text-muted-foreground">Decisions awaiting your approval</p>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {!data.activeRequest && data.decisions.length === 0 ? (
@@ -811,7 +808,7 @@ function AiTasksView({ data }: { data: GovernanceState }) {
                   <div className="flex-1">
                     <p className="font-medium text-sm">{req.question}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
-                      <Badge variant="outline" className="text-xs">{req.type}</Badge>
+                      <Badge variant="outline" className="text-xs bg-muted">{req.type}</Badge>
                       <Badge variant={resolved.variant} className={`text-xs ${resolved.className || ''}`}>
                         {resolved.label === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                         {resolved.label === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
