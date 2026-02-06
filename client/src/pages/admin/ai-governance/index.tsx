@@ -374,6 +374,16 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 </Button>
               </div>
             )}
+              <div className="flex gap-2 pt-2 border-t border-border/30 mt-2">
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => executeMutation.mutate({ requestId: decision.requestId, decisionId: decision.id, decision: decision.label, agentPositions: decision.agentPositions })}
+                  disabled={executeMutation.isPending}
+                >
+                  <Rocket className="h-3.5 w-3.5 mr-1" /> Execute Tasks
+                </Button>
+              </div>
           </CardContent>
         </Card>
       ))}
