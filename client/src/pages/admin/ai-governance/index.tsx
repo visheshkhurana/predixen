@@ -74,7 +74,7 @@ interface GovernanceState {
   approvals: any[];
 }
 
-const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF'] as const;
+const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF', 'DEV', 'QA', 'REPORTING', 'AUTOMATION'] as const;
 
 const AGENT_COLORS: Record<string, string> = {
   CEO: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -84,6 +84,10 @@ const AGENT_COLORS: Record<string, string> = {
   CTO: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   RISK: 'bg-red-500/20 text-red-400 border-red-500/30',
   CHIEF_OF_STAFF: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  DEV: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  QA: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  REPORTING: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  AUTOMATION: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
 };
 
 const STATUS_ICONS: Record<string, any> = {
