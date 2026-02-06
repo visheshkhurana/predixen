@@ -38,6 +38,7 @@ import AdminLoginPage from "@/pages/admin/login";
 import AdminLLMAudit from "@/pages/admin/llm-audit";
 import AdminEvals from "@/pages/admin/evals";
 import AiGovernancePage from "@/pages/admin/ai-governance";
+import AdminTeam from "@/pages/admin/team";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
@@ -232,6 +233,9 @@ function Router() {
                 <Route path="/admin/ai-governance">
                     {() => <AdminRoute component={AiGovernancePage} />}
                 </Route>
+      <Route path="/admin/team">
+        {() => <AdminRoute component={AdminTeam} />}
+      </Route>
       <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />
     </Switch>

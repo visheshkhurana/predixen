@@ -11,6 +11,7 @@ from server.models.truth_scan import TruthScan
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
+from server.models.team_member import TeamMember
 from server.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ def seed_demo_data(db: Session):
             existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
             if existing_scenario:
                 logger.info("Demo data already exists, skipping seed")
+                seed_team_members(db)
                 return demo_user
             demo_company = company
         else:
@@ -295,5 +297,48 @@ def seed_demo_data(db: Session):
     db.add(decision)
     db.commit()
     
+    seed_team_members(db)
+
     logger.info("Demo data seeding completed successfully")
     return demo_user
+
+
+def seed_team_members(db: Session):
+    existing_team = db.query(TeamMember).first()
+    if existing_team:
+        return
+    team_members = [
+        TeamMember(
+            name="Sarah Chen", email="sarah.chen@predixen.ai", role="Senior Frontend Engineer",
+            type="full_time", department="Engineering", status="active", start_date="2024-03-15",
+            skills=["React", "TypeScript", "Next.js", "Tailwind CSS", "GraphQL"],
+            github_url="https://github.com/sarahchen", linkedin_url="https://linkedin.com/in/sarahchen"
+        ),
+        TeamMember(
+            name="Marcus Johnson", email="marcus.j@predixen.ai", role="Backend Developer",
+            type="full_time", department="Engineering", status="active", start_date="2024-01-10",
+            skills=["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"],
+            github_url="https://github.com/marcusj", linkedin_url="https://linkedin.com/in/marcusjohnson"
+        ),
+        TeamMember(
+            name="Priya Patel", email="priya.p@predixen.ai", role="DevOps Engineer",
+            type="contractor", department="Engineering", status="active", start_date="2024-06-01",
+            skills=["AWS", "Terraform", "Kubernetes", "CI/CD", "Monitoring"],
+            github_url="https://github.com/priyap"
+        ),
+        TeamMember(
+            name="Alex Rivera", email="alex.r@predixen.ai", role="QA Engineer",
+            type="full_time", department="QA", status="active", start_date="2024-04-20",
+            skills=["Playwright", "Cypress", "Test Automation", "API Testing", "Performance Testing"],
+            linkedin_url="https://linkedin.com/in/alexrivera"
+        ),
+        TeamMember(
+            name="Jordan Kim", email="jordan.k@predixen.ai", role="UI/UX Designer",
+            type="contractor", department="Design", status="interviewing",
+            skills=["Figma", "User Research", "Prototyping", "Design Systems", "Accessibility"],
+            linkedin_url="https://linkedin.com/in/jordankim"
+        ),
+    ]
+    db.add_all(team_members)
+    db.commit()
+    logger.info("Seeded 5 team members")

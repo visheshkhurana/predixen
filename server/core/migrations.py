@@ -764,6 +764,36 @@ def ensure_metric_values_columns(engine: Engine) -> None:
             logger.debug(f"Metric values columns may already exist: {e}")
 
 
+def ensure_team_members_table(engine: Engine) -> None:
+    """Create team_members table if it doesn't exist."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS team_members (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    role VARCHAR(255) NOT NULL,
+                    type VARCHAR(50) NOT NULL DEFAULT 'full_time',
+                    department VARCHAR(100) NOT NULL DEFAULT 'Engineering',
+                    status VARCHAR(50) NOT NULL DEFAULT 'active',
+                    start_date VARCHAR(50),
+                    end_date VARCHAR(50),
+                    salary_range TEXT,
+                    skills JSON,
+                    github_url VARCHAR(500),
+                    linkedin_url VARCHAR(500),
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+            logger.info("Team members table migration complete")
+        except Exception as e:
+            logger.debug(f"Team members table may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -790,4 +820,5 @@ def run_migrations(engine: Engine) -> None:
     ensure_metric_suggestions_tables(engine)
     ensure_metric_definitions_columns(engine)
     ensure_metric_values_columns(engine)
+    ensure_team_members_table(engine)
     logger.info("Database migrations completed successfully")
