@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import {
   Brain, Users, Activity, Code2, AlertTriangle, Database, Shield,
   CheckCircle, XCircle, RefreshCw, Pause, Play, Lock, Unlock, Send,
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
-  Clock, ChevronRight, Loader2, Rocket, FileText, Terminal
+  Clock, ChevronRight, Loader2
 } from 'lucide-react';
 
 // Types
@@ -74,7 +74,7 @@ interface GovernanceState {
   approvals: any[];
 }
 
-const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF', 'DEV', 'QA', 'REPORTING', 'AUTOMATION'] as const;
+const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
 const AGENT_COLORS: Record<string, string> = {
   CEO: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -84,10 +84,6 @@ const AGENT_COLORS: Record<string, string> = {
   CTO: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   RISK: 'bg-red-500/20 text-red-400 border-red-500/30',
   CHIEF_OF_STAFF: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-  DEV: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  QA: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  REPORTING: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  AUTOMATION: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
 };
 
 const STATUS_ICONS: Record<string, any> = {
@@ -125,6 +121,11 @@ function ConfidenceBar({ value }: { value: number | null }) {
 function BoardroomView({ data }: { data: GovernanceState }) {
   const queryClient = useQueryClient();
   const [question, setQuestion] = useState('');
+  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
+
+  const toggleAgent = (agent: string) => {
+    setExpandedAgents(prev => ({ ...prev, [agent]: !prev[agent] }));
+  };
 
   const askMutation = useMutation({
     mutationFn: async (q: string) => {
@@ -148,17 +149,26 @@ function BoardroomView({ data }: { data: GovernanceState }) {
         {AGENTS.map((agent) => {
           const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null };
           const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
+          const isExpanded = expandedAgents[agent] || false;
           return (
-            <Card key={agent} className={`border ${AGENT_COLORS[agent]} bg-card/50`}>
+            <Card
+              key={agent}
+              className={`border ${AGENT_COLORS[agent]} bg-card/50 ${agentData.summary ? 'cursor-pointer hover-elevate' : ''}`}
+              onClick={() => agentData.summary && toggleAgent(agent)}
+              data-testid={`card-agent-${agent}`}
+            >
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold tracking-wide">{agent.replace('_', ' ')}</span>
                   <StatusIcon className={`h-3.5 w-3.5 ${getStatusColor(agentData.status)}`} />
                 </div>
                 {agentData.summary && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-1">{agentData.summary}</p>
+                  <p className={`text-xs text-muted-foreground mb-1 ${isExpanded ? '' : 'line-clamp-2'}`}>{agentData.summary}</p>
                 )}
                 <ConfidenceBar value={agentData.confidence} />
+                {agentData.summary && (
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">{isExpanded ? 'click to collapse' : 'click to expand'}</p>
+                )}
               </CardContent>
             </Card>
           );
@@ -278,19 +288,6 @@ function DecisionsView({ data }: { data: GovernanceState }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
   });
 
-  const executeMutation = useMutation({
-    mutationFn: async ({ requestId, decisionId, decision, agentPositions }: { requestId: string; decisionId: number; decision: string; agentPositions: Record<string, string> }) => {
-      const res = await fetch('/admin/ai-governance/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, decisionId, decision, agentPositions }),
-      });
-      return res.json();
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
-  });
-
-
   if (data.decisions.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -353,14 +350,6 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 >
                   <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
                 </Button>
-                    <Button
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700"
-                      onClick={() => executeMutation.mutate({ requestId: decision.requestId, decisionId: decision.id, decision: decision.label, agentPositions: decision.agentPositions })}
-                      disabled={executeMutation.isPending}
-                    >
-                      <Rocket className="h-3.5 w-3.5 mr-1" /> Execute
-                    </Button>
                 <Button
                   size="sm"
                   variant="destructive"
@@ -372,112 +361,6 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                 <Button size="sm" variant="outline">
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rerun
                 </Button>
-              </div>
-            )}
-              <div className="flex gap-2 pt-2 border-t border-border/30 mt-2">
-                <Button
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => executeMutation.mutate({ requestId: decision.requestId, decisionId: decision.id, decision: decision.label, agentPositions: decision.agentPositions })}
-                  disabled={executeMutation.isPending}
-                >
-                  <Rocket className="h-3.5 w-3.5 mr-1" /> Execute Tasks
-                </Button>
-              </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-
-// ============= EXECUTIONS VIEW ==============
-function ExecutionsView({ data }: { data: GovernanceState }) {
-  const executionEvents = data.events.filter((e: any) => 
-    e.eventType === 'execution_started' || e.eventType === 'execution_result'
-  );
-  
-  const executions = executionEvents.reduce((acc: any[], event: any) => {
-    if (event.eventType === 'execution_started') {
-      acc.push({
-        requestId: event.requestId,
-        startedAt: event.rawPayload?.startedAt || event.createdAt,
-        decision: event.rawPayload?.decision || 'Unknown',
-        results: [],
-      });
-    } else if (event.eventType === 'execution_result') {
-      const exec = acc.find((e: any) => e.requestId === event.requestId);
-      if (exec) {
-        exec.results.push({
-          agent: event.agent,
-          taskType: event.rawPayload?.task_type || 'task',
-          deliverable: event.rawPayload?.deliverable || '',
-          summary: event.rawPayload?.summary || '',
-          status: event.status || 'completed',
-        });
-      }
-    }
-    return acc;
-  }, []);
-
-  if (executions.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Rocket className="h-12 w-12 mx-auto mb-3 opacity-30" />
-        <p>No executions yet.</p>
-        <p className="text-sm mt-1">Approve a decision and click Execute to dispatch tasks to agents.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {executions.reverse().map((exec: any, i: number) => (
-        <Card key={i} className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Rocket className="h-4 w-4 text-blue-400" />
-                {exec.decision}
-              </CardTitle>
-              <Badge variant={exec.results.length > 0 ? 'default' : 'outline'}>
-                {exec.results.length > 0 ? `${exec.results.length} deliverables` : 'Executing...'}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">Started: {new Date(exec.startedAt).toLocaleString()}</p>
-          </CardHeader>
-          <CardContent>
-            {exec.results.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Agents are working on tasks...
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {exec.results.map((result: any, j: number) => (
-                  <div key={j} className="border border-border/50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={AGENT_COLORS[result.agent] || 'bg-gray-500/20 text-gray-400'}>
-                          {result.agent}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Terminal className="h-3 w-3" />{result.taskType}
-                        </span>
-                      </div>
-                      <Badge variant={result.status === 'completed' ? 'default' : result.status === 'failed' ? 'destructive' : 'outline'}>
-                        {result.status}
-                      </Badge>
-                    </div>
-                    {result.summary && <p className="text-sm mb-2">{result.summary}</p>}
-                    {result.deliverable && (
-                      <div className="bg-background/50 rounded p-2 text-xs font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
-                        {typeof result.deliverable === 'string' ? result.deliverable : JSON.stringify(result.deliverable, null, 2)}
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             )}
           </CardContent>
@@ -577,10 +460,32 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
 }
 
 // ============ COMPANY HEALTH VIEW ============
+function extractBurnRate(summary: string | null | undefined): string {
+  if (!summary) return '';
+  const dollarMatch = summary.match(/\$\s*([\d,]+(?:\.\d+)?)\s*[Kk]/);
+  if (dollarMatch) return `$${dollarMatch[1]}K/mo`;
+  const fullDollarMatch = summary.match(/\$\s*([\d,]+(?:\.\d+)?)/);
+  if (fullDollarMatch) {
+    const num = parseFloat(fullDollarMatch[1].replace(/,/g, ''));
+    if (num >= 1000) return `$${Math.round(num / 1000)}K/mo`;
+    return `$${fullDollarMatch[1]}/mo`;
+  }
+  const numKMatch = summary.match(/([\d,]+(?:\.\d+)?)\s*[Kk]\s*(?:\/\s*mo|per\s*month|monthly|burn)/i);
+  if (numKMatch) return `$${numKMatch[1]}K/mo`;
+  const burnMatch = summary.match(/burn\s*(?:rate)?\s*(?:of|is|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
+  if (burnMatch) {
+    const num = parseFloat(burnMatch[1].replace(/,/g, ''));
+    if (num >= 1000) return `$${Math.round(num / 1000)}K/mo`;
+    return `$${burnMatch[1]}/mo`;
+  }
+  return '';
+}
+
 function CompanyHealthView({ data }: { data: GovernanceState }) {
-  // Derive health metrics from agent events and decisions
   const cfoEvent = data.events.find(e => e.agent === 'CFO');
   const riskEvent = data.events.find(e => e.agent === 'RISK');
+
+  const burnTrendValue = useMemo(() => extractBurnRate(cfoEvent?.summary), [cfoEvent?.summary]);
 
   const metrics = [
     {
@@ -591,7 +496,7 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
     },
     {
       label: 'Burn Trend',
-      value: '',
+      value: burnTrendValue,
       icon: TrendingDown,
       color: 'text-amber-400',
     },
@@ -652,6 +557,32 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
 }
 
 // ============ AI TASKS VIEW ============
+function getTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const created = new Date(dateStr).getTime();
+  const diffMs = now - created;
+  if (diffMs < 0) return 'just now';
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' } {
+  if (req.status === 'approved') return { label: 'approved', variant: 'default' };
+  if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' };
+  if (req.status === 'in_progress' || req.status === 'executing') {
+    const elapsed = Date.now() - new Date(req.createdAt).getTime();
+    if (elapsed > 60_000) return { label: 'completed', variant: 'default' };
+    return { label: 'executing', variant: 'secondary' };
+  }
+  return { label: req.status, variant: 'outline' };
+}
+
 function AiTasksView({ data }: { data: GovernanceState }) {
   return (
     <div className="space-y-4">
@@ -661,34 +592,33 @@ function AiTasksView({ data }: { data: GovernanceState }) {
           <p className="text-sm">No AI tasks in the queue.</p>
         </div>
       ) : (
-        data.requests.map((req) => (
-          <Card key={req.id}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium text-sm">{req.question}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs">{req.type}</Badge>
-                    <Badge
-                      variant={
-                        req.status === 'approved' ? 'default' :
-                        req.status === 'rejected' ? 'destructive' :
-                        req.status === 'in_progress' ? 'secondary' : 'outline'
-                      }
-                      className="text-xs"
-                    >
-                      {req.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(req.createdAt).toLocaleString()}
-                    </span>
+        data.requests.map((req) => {
+          const resolved = resolveExecutionStatus(req);
+          return (
+            <Card key={req.id} data-testid={`card-task-${req.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{req.question}</p>
+                    <div className="flex items-center flex-wrap gap-2 mt-1">
+                      <Badge variant="outline" className="text-xs">{req.type}</Badge>
+                      <Badge variant={resolved.variant} className="text-xs">
+                        {resolved.label === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                        {resolved.label === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
+                        {resolved.label}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {getTimeAgo(req.createdAt)}
+                      </span>
+                    </div>
                   </div>
+                  <code className="text-xs text-muted-foreground font-mono">{req.requestId.slice(0, 12)}...</code>
                 </div>
-                <code className="text-xs text-muted-foreground font-mono">{req.requestId.slice(0, 12)}...</code>
-              </div>
-            </CardContent>
-          </Card>
-        ))
+              </CardContent>
+            </Card>
+          );
+        })
       )}
     </div>
   );
@@ -901,8 +831,7 @@ export default function AiGovernancePage() {
             <TabsTrigger value="decisions" className="gap-1.5"><Activity className="h-3.5 w-3.5" />Decisions</TabsTrigger>
             <TabsTrigger value="health" className="gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Health</TabsTrigger>
             <TabsTrigger value="tasks" className="gap-1.5"><Zap className="h-3.5 w-3.5" />Tasks</TabsTrigger>
-            <TabsTrigger value="executions" className="gap-1.5"><Rocket className="h-3.5 w-3.5" />Executions</TabsTrigger>
-              <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
+            <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
             <TabsTrigger value="memory" className="gap-1.5"><Database className="h-3.5 w-3.5" />Memory</TabsTrigger>
             <TabsTrigger value="emergency" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" />Emergency</TabsTrigger>
           </TabsList>
@@ -910,8 +839,7 @@ export default function AiGovernancePage() {
           <TabsContent value="decisions"><DecisionsView data={data} /></TabsContent>
           <TabsContent value="health"><CompanyHealthView data={data} /></TabsContent>
           <TabsContent value="tasks"><AiTasksView data={data} /></TabsContent>
-          <TabsContent value="executions"><ExecutionsView data={data} /></TabsContent>
-            <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
+          <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
           <TabsContent value="memory"><MemoryView data={data} /></TabsContent>
           <TabsContent value="emergency"><EmergencyView data={data} /></TabsContent>
         </Tabs>
