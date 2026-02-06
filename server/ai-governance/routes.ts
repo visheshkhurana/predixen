@@ -303,7 +303,8 @@ export function registerAiGovernanceRoutes(app: Express) {
         }
       }
 
-      const { event_type, request_id } = req.body;
+      const { event_type: rawEventType, type, request_id } = req.body;
+        const event_type = rawEventType || type;
       if (!event_type || !request_id) {
         return res.status(400).json({ error: "event_type and request_id required" });
       }
@@ -332,11 +333,11 @@ export function registerAiGovernanceRoutes(app: Express) {
           if (decision) {
             await db.insert(aiDecisions).values({
               requestId: request_id,
-              label: decision.label || "Untitled Decision",
+              label: decision.label || decision.title || "Untitled Decision",
               confidence: decision.confidence,
-              rationale: decision.rationale,
-              actions: decision.actions,
-              requiresApproval: decision.requires_approval ?? true,
+              rationale: decision.rationale || decision.summary,
+              actions: decision.actions || decision.recommended_action,
+              requiresApproval: decision.requires_approval ?? decision.requires_founder_approval ?? true,
               agentPositions: agent_positions,
               status: "pending",
               source: "agent",
