@@ -319,6 +319,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
             <Brain className="h-4 w-4" />
             Pending Decisions
           </CardTitle>
+          <CardDescription>Decisions awaiting your approval</CardDescription>
         </CardHeader>
         <CardContent>
           {!data.activeRequest && data.decisions.length === 0 ? (
