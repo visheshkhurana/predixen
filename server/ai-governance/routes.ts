@@ -293,9 +293,9 @@ export function registerAiGovernanceRoutes(app: Express) {
         return res.status(401).json({ error: "Invalid signature" });
       }
 
-      // Timestamp replay protection
+      // Timestamp replay protection (only enforce when signature is present)
       const { timestamp } = req.body;
-      if (timestamp) {
+      if (signature && timestamp) {
         const eventTime = new Date(timestamp).getTime();
         const now = Date.now();
         if (Math.abs(now - eventTime) > CALLBACK_TOLERANCE_MS) {
