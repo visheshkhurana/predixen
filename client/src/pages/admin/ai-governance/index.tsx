@@ -317,11 +317,8 @@ function BoardroomView({ data }: { data: GovernanceState }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Boardroom Floor
+            Pending Decisions
           </CardTitle>
-          <CardDescription>
-            <p className="text-base text-muted-foreground">Decisions awaiting your approval</p>
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {!data.activeRequest && data.decisions.length === 0 ? (
