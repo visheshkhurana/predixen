@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFounderStore } from '@/store/founderStore';
 import { useRealtimeKPI } from '@/hooks/useRealtimeKPI';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -134,8 +135,9 @@ function computeTrend(history: HistoryRecord[], key: keyof HistoryRecord): { tre
 }
 
 export default function KPIBoardPage() {
-  const { currentCompany, financialBaseline } = useFounderStore();
+  const { currentCompany } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
+  const { metrics: sharedMetrics, isLoading: sharedLoading } = useFinancialMetrics();
 
   const handleKPIUpdate = useCallback(() => {}, []);
 
@@ -157,44 +159,33 @@ export default function KPIBoardPage() {
   const latestSnapshot = liveData?.metrics;
   const latestHistory = historicalData.length > 0 ? historicalData[historicalData.length - 1] : null;
 
-  const baselineRevenue = financialBaseline?.monthlyRevenue ?? 0;
-  const baselineCash = financialBaseline?.cashOnHand ?? 0;
-  const baselineTotalExpenses = financialBaseline?.totalMonthlyExpenses ?? 0;
-  const baselineNetBurn = Math.max(0, baselineTotalExpenses - baselineRevenue);
-  const baselineRunway = baselineNetBurn > 0 && baselineCash > 0
-    ? baselineCash / baselineNetBurn
-    : baselineNetBurn <= 0 ? 36 : 12;
-  const baselineGrossMargin = baselineRevenue > 0
-    ? (baselineRevenue - (financialBaseline?.expenseBreakdown?.cogs ?? 0)) / baselineRevenue
-    : 0;
-
   const metrics = useMemo(() => {
-    const source = latestSnapshot || latestHistory;
-
     const pick = (liveVal: number | undefined, histVal: number | undefined, fallback: number) => {
       if (liveVal && liveVal > 0) return liveVal;
       if (histVal && histVal > 0) return histVal;
       return fallback;
     };
 
-    return {
-      monthly_revenue: pick(latestSnapshot?.monthly_revenue, latestHistory?.monthly_revenue, baselineRevenue),
-      mrr: pick(latestSnapshot?.mrr, latestHistory?.mrr, baselineRevenue),
-      arr: pick(latestSnapshot?.arr, latestHistory?.arr, baselineRevenue * 12),
-      cash_balance: pick(latestSnapshot?.cash_balance, latestHistory?.cash_balance, baselineCash),
-      net_burn: latestSnapshot?.net_burn ?? latestHistory?.net_burn ?? baselineNetBurn,
-      runway_months: Math.max(0, Math.min(pick(latestSnapshot?.runway_months, latestHistory?.runway_months, baselineRunway), 60)),
-      gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, baselineGrossMargin),
-      churn_rate: pick(latestSnapshot?.churn_rate, latestHistory?.churn_rate, 0.02),
-      cac: pick(latestSnapshot?.cac, latestHistory?.cac, 0),
-      ltv: pick(latestSnapshot?.ltv, latestHistory?.ltv, 0),
-      ltv_cac_ratio: pick(latestSnapshot?.ltv_cac_ratio, latestHistory?.ltv_cac_ratio, 0),
-      headcount: pick(latestSnapshot?.headcount, latestHistory?.headcount, 5),
-      revenue_per_employee: pick(latestSnapshot?.revenue_per_employee, latestHistory?.revenue_per_employee, baselineRevenue > 0 ? baselineRevenue / 5 : 0),
-    };
-  }, [latestSnapshot, latestHistory, baselineRevenue, baselineCash, baselineNetBurn, baselineRunway, baselineGrossMargin]);
+    const runwayFallback = sharedMetrics.runway === Infinity ? 60 : sharedMetrics.runway;
 
-  const isLoading = historyLoading && !latestSnapshot;
+    return {
+      monthly_revenue: pick(latestSnapshot?.monthly_revenue, latestHistory?.monthly_revenue, sharedMetrics.mrr),
+      mrr: pick(latestSnapshot?.mrr, latestHistory?.mrr, sharedMetrics.mrr),
+      arr: pick(latestSnapshot?.arr, latestHistory?.arr, sharedMetrics.arr),
+      cash_balance: pick(latestSnapshot?.cash_balance, latestHistory?.cash_balance, sharedMetrics.cashOnHand),
+      net_burn: latestSnapshot?.net_burn ?? latestHistory?.net_burn ?? sharedMetrics.netBurn,
+      runway_months: Math.max(0, Math.min(pick(latestSnapshot?.runway_months, latestHistory?.runway_months, runwayFallback), 120)),
+      gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, sharedMetrics.grossMargin),
+      churn_rate: pick(latestSnapshot?.churn_rate, latestHistory?.churn_rate, sharedMetrics.churnRate),
+      cac: pick(latestSnapshot?.cac, latestHistory?.cac, sharedMetrics.cac),
+      ltv: pick(latestSnapshot?.ltv, latestHistory?.ltv, sharedMetrics.ltv),
+      ltv_cac_ratio: pick(latestSnapshot?.ltv_cac_ratio, latestHistory?.ltv_cac_ratio, sharedMetrics.ltvCacRatio),
+      headcount: pick(latestSnapshot?.headcount, latestHistory?.headcount, sharedMetrics.headcount),
+      revenue_per_employee: pick(latestSnapshot?.revenue_per_employee, latestHistory?.revenue_per_employee, sharedMetrics.revenuePerEmployee),
+    };
+  }, [latestSnapshot, latestHistory, sharedMetrics]);
+
+  const isLoading = (historyLoading || sharedLoading) && !latestSnapshot;
 
   const mrrTrend = computeTrend(historicalData, 'mrr');
   const arrTrend = computeTrend(historicalData, 'arr');
@@ -260,10 +251,10 @@ export default function KPIBoardPage() {
         />
         <KPITile
           title="Runway"
-          value={isLoading ? '—' : `${metrics.runway_months.toFixed(1)} mo`}
+          value={isLoading ? '—' : metrics.runway_months >= 120 ? '\u221E' : `${metrics.runway_months.toFixed(1)} mo`}
           icon={<Clock className="h-4 w-4" />}
           trend={metrics.runway_months < 6 ? 'down' : 'neutral'}
-          subtitle={metrics.runway_months < 6 ? 'Low runway' : ''}
+          subtitle={metrics.runway_months >= 120 ? 'Profitable' : metrics.runway_months < 6 ? 'Low runway' : ''}
           isLive={isConnected}
           isLoading={isLoading}
         />

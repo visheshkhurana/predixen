@@ -65,6 +65,7 @@ import {
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useToast } from '@/hooks/use-toast';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
@@ -258,6 +259,8 @@ const computeMonthlyProjections = (baseData: typeof DUMMY_BASE_DATA, assumptions
     const churn = baseData.churnRate + monthlyChurnEffect * month;
     const pricingMultiplier = 1 + monthlyPricingEffect * month;
     const ltv = baseData.ltv * pricingMultiplier * (1 - churn / 100);
+    const grossMargin = baseData.grossMargin + (assumptions.pricingChange * 0.5) * (month / 12);
+    const arpu = customers > 0 ? mrr / customers : 0;
     
     results.push({
       mrr,
@@ -267,11 +270,13 @@ const computeMonthlyProjections = (baseData: typeof DUMMY_BASE_DATA, assumptions
       runway: cash > 0 ? cash / burn : 0,
       cac,
       ltv,
-      ltvCacRatio: ltv / cac,
-      paybackPeriod: cac / (mrr / customers),
+      ltvCacRatio: cac > 0 ? ltv / cac : 0,
+      paybackPeriod: arpu > 0 && grossMargin > 0
+        ? cac / (arpu * (grossMargin / 100))
+        : arpu > 0 ? cac / arpu : 0,
       totalCustomers: customers,
       churnRate: churn,
-      grossMargin: baseData.grossMargin + (assumptions.pricingChange * 0.5) * (month / 12),
+      grossMargin,
     });
   }
   
@@ -283,7 +288,7 @@ const computeProjectedMetrics = (baseData: typeof DUMMY_BASE_DATA, assumptions: 
   return projections[11];
 };
 
-const getSensitivityData = (baseMetrics: ProjectedMetrics, assumptions: ScenarioAssumptions) => {
+const getSensitivityData = (baseMetrics: ProjectedMetrics, assumptions: ScenarioAssumptions, currentBaseData: typeof DUMMY_BASE_DATA) => {
   const baseRunway = baseMetrics.runway;
   
   const perturbations: { name: string; plusAssumptions: ScenarioAssumptions; minusAssumptions: ScenarioAssumptions }[] = [
@@ -317,8 +322,8 @@ const getSensitivityData = (baseMetrics: ProjectedMetrics, assumptions: Scenario
   return perturbations
     .map(p => ({
       variable: p.name,
-      positive: Math.round(computeProjectedMetrics(DUMMY_BASE_DATA, p.plusAssumptions).runway - baseRunway),
-      negative: Math.round(computeProjectedMetrics(DUMMY_BASE_DATA, p.minusAssumptions).runway - baseRunway),
+      positive: Math.round(computeProjectedMetrics(currentBaseData, p.plusAssumptions).runway - baseRunway),
+      negative: Math.round(computeProjectedMetrics(currentBaseData, p.minusAssumptions).runway - baseRunway),
     }))
     .sort((a, b) => 
       Math.max(Math.abs(b.positive), Math.abs(b.negative)) - 
@@ -468,6 +473,7 @@ export default function OverviewPage() {
   const { currentCompany, setTruthScan, setCurrentStep } = useFounderStore();
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
+  const { metrics: sharedMetrics } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
@@ -515,66 +521,23 @@ export default function OverviewPage() {
   }, [truthScan, setTruthScan]);
 
   const baseData = useMemo(() => {
-    const m = truthScan?.metrics || {};
-    const getValue = (key: string, fallback: number) => {
-      const val = m[key];
-      if (val && typeof val === 'object' && 'value' in val) return val.value ?? fallback;
-      if (typeof val === 'number') return val;
-      return fallback;
-    };
-    
-    const runwayMonths = getValue('runway_months', getValue('runway_p50', DUMMY_BASE_DATA.runway));
-    const cacValue = getValue('cac', DUMMY_BASE_DATA.cac);
-    const ltvValue = getValue('ltv', DUMMY_BASE_DATA.ltv);
-    
-    // Fallback calculation for runway if truth scan provides 0 but burn is known
-    const burnRate = Math.abs(getValue('net_burn', getValue('monthly_burn', DUMMY_BASE_DATA.burnRate)));
-    const cashBalance = getValue('cash_balance', getValue('cash', DUMMY_BASE_DATA.cash));
-    
-    const totalCustomers = getValue('total_customers', getValue('customers', DUMMY_BASE_DATA.totalCustomers));
-    
-    // Improved LTV/CAC logic with sensibility bounds
-    // CAC floor at $100 for SaaS, cap at $50k
-    const effectiveCac = Math.max(100, Math.min(cacValue || 500, 50000));
-    // LTV floor at $500, cap at $500k
-    const effectiveLtv = Math.max(500, Math.min(ltvValue || 3000, 500000));
-    // LTV:CAC ratio bounded between 0.5x and 20x (realistic SaaS range)
-    const ltvCacRatio = Math.max(0.5, Math.min(effectiveLtv / effectiveCac, 20));
-    // Payback period bounded between 3 and 36 months
-    const rawPayback = getValue('payback_months', getValue('payback_period', DUMMY_BASE_DATA.paybackPeriod));
-    const paybackPeriod = Math.max(3, Math.min(rawPayback || 12, 36));
-
-    // Calculate runway with sensible fallbacks
-    let effectiveRunway = runwayMonths;
-    if (runwayMonths <= 0) {
-      if (burnRate > 0 && cashBalance > 0) {
-        effectiveRunway = cashBalance / burnRate;
-      } else if (burnRate <= 0) {
-        effectiveRunway = 36; // Profitable company fallback
-      } else {
-        effectiveRunway = DUMMY_BASE_DATA.runway; // Default fallback
-      }
-    }
-    // Cap runway between 0 and 60 months
-    effectiveRunway = Math.max(0, Math.min(effectiveRunway, 60));
-
     return {
-      mrr: getValue('mrr', DUMMY_BASE_DATA.mrr),
-      arr: getValue('arr', DUMMY_BASE_DATA.arr),
-      cash: cashBalance,
-      burnRate,
-      runway: effectiveRunway,
-      cac: effectiveCac,
-      ltv: effectiveLtv,
-      ltvCacRatio: ltvCacRatio,
-      grossMargin: getValue('gross_margin', DUMMY_BASE_DATA.grossMargin),
-      paybackPeriod: paybackPeriod,
-      totalCustomers,
-      churnRate: getValue('churn_rate', DUMMY_BASE_DATA.churnRate),
-      conversionRate: DUMMY_BASE_DATA.conversionRate,
-      profitabilityDate: DUMMY_BASE_DATA.profitabilityDate,
+      mrr: sharedMetrics.mrr,
+      arr: sharedMetrics.arr,
+      cash: sharedMetrics.cashOnHand,
+      burnRate: sharedMetrics.netBurn,
+      runway: sharedMetrics.runway === Infinity ? 60 : sharedMetrics.runway,
+      cac: sharedMetrics.cac,
+      ltv: sharedMetrics.ltv,
+      ltvCacRatio: sharedMetrics.ltvCacRatio,
+      grossMargin: sharedMetrics.grossMarginPct,
+      paybackPeriod: sharedMetrics.paybackPeriod,
+      totalCustomers: sharedMetrics.totalCustomers,
+      churnRate: sharedMetrics.churnRatePct,
+      conversionRate: 3.5,
+      profitabilityDate: sharedMetrics.isProfitable ? 'Now' : 'TBD',
     };
-  }, [truthScan?.metrics]);
+  }, [sharedMetrics]);
 
   const projectedMetrics = useMemo(() => {
     return computeProjectedMetrics(baseData, assumptions);
@@ -854,7 +817,7 @@ export default function OverviewPage() {
   };
 
   const riskAlerts = useMemo(() => getRiskAlerts(baseData, assumptions), [baseData, assumptions]);
-  const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions), [projectedMetrics, assumptions]);
+  const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions, baseData), [projectedMetrics, assumptions, baseData]);
   
   const getBenchmarkStatus = (value: number, benchmark: { p25: number; p50: number; p75: number; direction: string }) => {
     if (benchmark.direction === 'higher' || benchmark.direction === 'higher_is_better') {
@@ -1447,7 +1410,7 @@ export default function OverviewPage() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              LTV: {formatCurrency(projectedMetrics.ltv)} / CAC: {formatCurrency(projectedMetrics.cac)}
+              LTV: {formatCurrency(baseData.ltv)} / CAC: {formatCurrency(baseData.cac)}
             </p>
           </CardContent>
         </Card>
@@ -1663,7 +1626,7 @@ export default function OverviewPage() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Projected Profitability</span>
               </div>
-              <Badge variant="secondary">{DUMMY_BASE_DATA.profitabilityDate}</Badge>
+              <Badge variant="secondary">{baseData.profitabilityDate}</Badge>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1677,7 +1640,7 @@ export default function OverviewPage() {
                 <Percent className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Conversion Rate</span>
               </div>
-              <span className="font-mono font-medium">{DUMMY_BASE_DATA.conversionRate}%</span>
+              <span className="font-mono font-medium">{baseData.conversionRate}%</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
