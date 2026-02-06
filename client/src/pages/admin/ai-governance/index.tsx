@@ -775,16 +775,16 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
 
 // ============ AI TASKS VIEW ============
 function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline'; className?: string } {
-  if (req.status === 'approved') return { label: 'approved', variant: 'default' };
-  if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' };
+  if (req.status === 'approved') return { label: 'approved', variant: 'default' as const };
+  if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' as const };
   if (req.status === 'decision_ready') return { label: 'decision_ready', variant: 'default' as const, className: 'bg-blue-600 text-white' };
   if (req.status === 'pending') return { label: 'pending', variant: 'default' as const, className: 'bg-amber-500 text-white' };
   if (req.status === 'in_progress' || req.status === 'executing') {
     const elapsed = Date.now() - new Date(req.createdAt).getTime();
-    if (elapsed > 60_000) return { label: 'completed', variant: 'default' };
-    return { label: 'executing', variant: 'secondary' };
+    if (elapsed > 60_000) return { label: 'completed', variant: 'default' as const };
+    return { label: 'executing', variant: 'secondary' as const };
   }
-  return { label: req.status, variant: 'outline' };
+  return { label: req.status, variant: 'outline' as const };
 }
 
 function AiTasksView({ data }: { data: GovernanceState }) {
@@ -806,21 +806,11 @@ function AiTasksView({ data }: { data: GovernanceState }) {
                     <p className="font-medium text-sm">{req.question}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
                       <Badge variant="outline" className="text-xs bg-muted">{req.type}</Badge>
-                      {resolved.label === 'decision_ready' ? (
-                        <Badge variant="default" className="text-xs bg-blue-600 text-white">{resolved.label}</Badge>
-                      ) : resolved.label === 'pending' ? (
-                        <Badge variant="default" className="text-xs bg-amber-500 text-white">{resolved.label}</Badge>
-                      ) : resolved.label === 'approved' ? (
-                        <Badge variant="default" className="text-xs">{resolved.label}</Badge>
-                      ) : resolved.label === 'rejected' ? (
-                        <Badge variant="destructive" className="text-xs">{resolved.label}</Badge>
-                      ) : resolved.label === 'executing' ? (
-                        <Badge variant="secondary" className="text-xs"><Loader2 className="h-3 w-3 animate-spin mr-1" />{resolved.label}</Badge>
-                      ) : resolved.label === 'completed' ? (
-                        <Badge variant="default" className="text-xs"><CheckCircle className="h-3 w-3 mr-1" />{resolved.label}</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">{resolved.label}</Badge>
-                      )}
+                      <Badge variant={resolved.variant} className={`text-xs ${resolved.className || ''}`}>
+                        {resolved.label === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+                        {resolved.label === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
+                        {resolved.label}
+                      </Badge>
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {getTimeAgo(req.createdAt)}
