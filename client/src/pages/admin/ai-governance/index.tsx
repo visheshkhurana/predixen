@@ -777,8 +777,8 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
 function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline'; className?: string } {
   if (req.status === 'approved') return { label: 'approved', variant: 'default' };
   if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' };
-  if (req.status === 'decision_ready') return { label: 'decision_ready', variant: 'default', className: 'bg-blue-600 text-white' };
-  if (req.status === 'pending') return { label: 'pending', variant: 'default', className: 'bg-amber-500 text-white' };
+  if (req.status === 'decision_ready') return { label: 'decision_ready', variant: 'default' as const, className: 'bg-blue-600 text-white' };
+  if (req.status === 'pending') return { label: 'pending', variant: 'default' as const, className: 'bg-amber-500 text-white' };
   if (req.status === 'in_progress' || req.status === 'executing') {
     const elapsed = Date.now() - new Date(req.createdAt).getTime();
     if (elapsed > 60_000) return { label: 'completed', variant: 'default' };
