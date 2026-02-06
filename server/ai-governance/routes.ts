@@ -292,7 +292,7 @@ export function registerAiGovernanceRoutes(app: Express) {
       }
 
       // Log execution event
-      await db.insert(aiEvents).values({
+      await db.insert(aiAgentEvents).values({
         requestId,
         eventType: "execution_started",
         agent: "SYSTEM",
@@ -392,7 +392,7 @@ export function registerAiGovernanceRoutes(app: Express) {
         }
         case "execution_result": {
             const { agent: execAgent, task_type, deliverable, status: execStatus, summary: execSummary } = req.body;
-            await db.insert(aiEvents).values({
+            await db.insert(aiAgentEvents).values({
               requestId: request_id,
               eventType: "execution_result",
               agent: execAgent || "UNKNOWN",
