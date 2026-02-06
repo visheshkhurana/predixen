@@ -1,0 +1,302 @@
+You are acting as an AUTONOMOUS STAFF-LEVEL FULL-STACK ENGINEER
+operating directly inside my EXISTING Predixen Replit codebase.
+
+This is NOT a greenfield build.
+This is an EXTENSION of the current admin panel at /admin.
+
+Company: Predixen.app
+Founder: Vishesh Khurana
+Existing route: /admin
+Goal: Integrate a Virtual AI Boardroom + Founder Control Panel
+that communicates LIVE with n8n workflows via signed webhooks.
+
+====================================================
+ABSOLUTE RULES
+====================================================
+- Do NOT create a new frontend
+- Do NOT create a new auth flow
+- Do NOT create a second login
+- Do NOT redesign the whole admin UI
+- EXTEND the existing /admin only
+- Assume reasonable defaults if something is unknown and continue
+
+====================================================
+HIGH-LEVEL OBJECTIVE
+====================================================
+Inside the existing /admin panel, build:
+
+/admin/ai-governance
+
+This section must:
+- Visualize AI agents (Virtual Boardroom)
+- Show live agent updates from n8n
+- Show AI decisions and require founder approval
+- Show AI-proposed code changes and require approval
+- Provide emergency stop controls
+- Communicate with n8n via signed webhooks ONLY
+
+All AI reasoning runs in n8n.
+Replit admin UI only VISUALIZES, GOVERNS, and APPROVES.
+
+====================================================
+PHASE 1 — DISCOVER & ALIGN WITH EXISTING ADMIN
+====================================================
+
+1. Inspect current /admin structure:
+   - Layout
+   - Sidebar / navigation
+   - Role checks
+   - API conventions
+   - Styling system
+
+2. Reuse:
+   - Existing admin layout
+   - Existing auth (assume founder/admin role)
+   - Existing UI patterns
+
+====================================================
+PHASE 2 — ROUTING & NAVIGATION
+====================================================
+
+Add ONE new admin navigation item:
+
+🧠 AI Governance
+
+Route:
+- /admin/ai-governance
+
+Inside it, implement TAB navigation:
+
+- Boardroom
+- Decisions
+- Company Health
+- AI Tasks
+- Code Changes
+- Memory
+- Emergency
+
+====================================================
+PHASE 3 — FRONTEND UI (VIRTUAL BOARDROOM)
+====================================================
+
+Create views/components inside the existing frontend stack:
+
+1) BoardroomView
+   - LEFT: Agent Ring
+     Agents:
+       CEO, CFO, CRO, CPO, CTO, RISK, CHIEF_OF_STAFF
+     Status:
+       idle | thinking | responded | flagged
+
+   - CENTER: Boardroom Floor
+     Shows:
+       Current decision topic
+       Each agent’s summarized position
+       Conflicts highlighted
+       Agent confidence
+
+   - BOTTOM: Founder Console
+     Actions:
+       Ask
+       Constrain
+       Approve
+       Override
+
+2) DecisionsView
+   - Decision cards
+   - Confidence score
+   - Requires-approval badge
+   - Approve / Reject / Rerun buttons
+
+3) CodeChangesView
+   - AI-proposed branches
+   - Files changed
+   - Tests passed
+   - Risk level
+   - Approve merge / Reject
+
+4) CompanyHealthView
+   - Runway P50
+   - Burn trend
+   - Risk index
+   - Decision accuracy
+
+5) EmergencyView
+   - Pause all AI
+   - Freeze code changes
+   - Manual-only mode
+
+UI RULES:
+- No chat bubbles
+- No free text streams
+- No prompt exposure
+- Calm, boardroom-style UX
+
+====================================================
+PHASE 4 — BACKEND APIs (REPLIT SERVER)
+====================================================
+
+Extend the admin backend with ONLY these endpoints:
+
+GET  /admin/ai-governance/state
+POST /admin/ai-governance/ask
+POST /admin/ai-governance/approve
+POST /admin/ai-governance/reject
+POST /admin/ai-governance/emergency
+POST /admin/ai-governance/callback   (FROM n8n)
+
+Rules:
+- Enforce founder/admin role
+- Persist everything in DB
+- Forward requests to n8n via webhook
+- Accept callbacks ONLY from n8n
+- NO AI logic in backend
+
+====================================================
+PHASE 5 — DATABASE MODELS
+====================================================
+
+Define or extend tables:
+
+- ai_requests
+- ai_agent_events
+- ai_decisions
+- ai_code_changes
+- ai_approvals
+- ai_system_state
+
+All records MUST include:
+- request_id
+- created_at
+- source (founder / agent)
+- status
+
+====================================================
+PHASE 6 — N8N ↔ REPLIT COMMUNICATION CONTRACT (CRITICAL)
+====================================================
+
+Implement EXACTLY these 3 communication pipes.
+
+----------------------------------
+PIPE 1 — REPLIT → n8n (REQUEST)
+----------------------------------
+
+Replit sends to n8n webhook:
+
+POST https://n8n.YOUR_DOMAIN/webhook/ceo-decision
+
+Payload:
+{
+  "request_id": "req_<uuid>",
+  "company_id": "predixen",
+  "initiator": "founder",
+  "type": "decision",
+  "question": "<founder_question>",
+  "constraints": { ... },
+  "context_snapshot_id": "<snapshot_id>"
+}
+
+Headers:
+- X-PREDIXEN-SIGNATURE: HMAC_SHA256(body, SHARED_SECRET)
+
+----------------------------------
+PIPE 2 — n8n → REPLIT (EVENTS)
+----------------------------------
+
+n8n MUST push updates to:
+
+POST /admin/ai-governance/callback
+
+Event: Agent update
+{
+  "request_id": "req_<uuid>",
+  "event_type": "agent_update",
+  "agent": "CFO",
+  "status": "responded",
+  "summary": "Runway P50 = 14.2 months",
+  "confidence": 0.77,
+  "severity": "normal",
+  "timestamp": "<iso>"
+}
+
+Event: Decision ready
+{
+  "request_id": "req_<uuid>",
+  "event_type": "decision_ready",
+  "decision": {
+    "label": "Delay fundraise",
+    "confidence": 0.82,
+    "rationale": [ ... ],
+    "actions": [ ... ],
+    "requires_approval": true
+  },
+  "agent_positions": {
+    "CFO": "support",
+    "CRO": "neutral",
+    "RISK": "caution"
+  }
+}
+
+----------------------------------
+PIPE 3 — REPLIT → n8n (APPROVAL)
+----------------------------------
+
+POST https://n8n.YOUR_DOMAIN/webhook/decision-approval
+
+Payload:
+{
+  "request_id": "req_<uuid>",
+  "approved": true,
+  "approved_by": "founder",
+  "timestamp": "<iso>"
+}
+
+====================================================
+PHASE 7 — REAL-TIME BOARDROOM UPDATES
+====================================================
+
+Implement one of:
+- Polling (every 2–3 seconds)
+- OR WebSockets / SSE if stack allows
+
+Frontend must update when:
+- Agent responds
+- Decision progresses
+- Approval required
+
+====================================================
+PHASE 8 — SECURITY & GOVERNANCE
+====================================================
+
+Enforce:
+- Founder-only visibility
+- Signed webhook verification
+- Timestamp replay protection
+- No frontend → n8n direct calls
+- Emergency stop halts ALL workflows
+
+====================================================
+PHASE 9 — DELIVERABLES
+====================================================
+
+Output:
+1) Updated admin routes
+2) Frontend components with real code
+3) Backend API handlers
+4) DB schema changes
+5) n8n webhook payload schemas
+6) Instructions to paste n8n webhook URLs
+
+====================================================
+FINAL EXECUTION RULE
+====================================================
+
+Proceed step by step.
+Generate REAL code (not pseudocode).
+Assume everything will be copy-pasted into Replit.
+
+Do NOT ask questions.
+Do NOT summarize.
+Do NOT stop early.
+
+BEGIN NOW.
