@@ -402,8 +402,8 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
     if (event.eventType === 'execution_started') {
       acc.push({
         requestId: event.requestId,
-        startedAt: event.data?.startedAt || event.createdAt,
-        decision: event.data?.decision || 'Unknown',
+        startedAt: event.rawPayload?.startedAt || event.createdAt,
+        decision: event.rawPayload?.decision || 'Unknown',
         results: [],
       });
     } else if (event.eventType === 'execution_result') {
@@ -411,9 +411,9 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
       if (exec) {
         exec.results.push({
           agent: event.agent,
-          taskType: event.data?.task_type || 'task',
-          deliverable: event.data?.deliverable || '',
-          summary: event.data?.summary || '',
+          taskType: event.rawPayload?.task_type || 'task',
+          deliverable: event.rawPayload?.deliverable || '',
+          summary: event.rawPayload?.summary || '',
           status: event.status || 'completed',
         });
       }
