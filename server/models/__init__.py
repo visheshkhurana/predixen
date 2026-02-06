@@ -65,6 +65,7 @@ from server.models.dashboard import Dashboard, DashboardWidget
 from server.models.email_event import EmailEvent
 from server.models.connector_capability import ConnectorCapability
 from server.models.metric_suggestion import MetricSuggestion, SuggestionEvent
+from server.models.team_member import TeamMember, TeamMemberType, TeamMemberStatus
 
 __all__ = [
     "User",
@@ -142,4 +143,7 @@ __all__ = [
     "ConnectorCapability",
     "MetricSuggestion",
     "SuggestionEvent",
+    "TeamMember",
+    "TeamMemberType",
+    "TeamMemberStatus",
 ]

@@ -46,6 +46,7 @@ import {
   LayoutGrid,
   ChevronDown,
   FileCode,
+  UsersRound,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,7 @@ const adminMenuItems: NavItem[] = [
   { title: "Login History", url: "/admin/login-history", icon: History },
   { title: "Activity Logs", url: "/admin/activity", icon: FileText },
   { title: "Companies", url: "/admin/companies", icon: Building2 },
+  { title: "Team", url: "/admin/team", icon: UsersRound },
   { title: "Billing", url: "/admin/billing", icon: CreditCard },
   { title: "Metrics", url: "/admin/metrics", icon: BarChart3 },
 ];

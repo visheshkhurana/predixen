@@ -9,7 +9,7 @@ import json
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.config import settings
-from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun
+from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun, TeamMember
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -1066,3 +1066,171 @@ def get_available_eval_suites(
             }
         ]
     }
+
+
+class TeamMemberCreate(BaseModel):
+    name: str
+    email: str
+    role: str
+    type: str = "full_time"
+    department: str = "Engineering"
+    status: str = "active"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    salary_range: Optional[str] = None
+    skills: Optional[List[str]] = []
+    github_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TeamMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    type: Optional[str] = None
+    department: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    salary_range: Optional[str] = None
+    skills: Optional[List[str]] = None
+    github_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/team")
+def list_team_members(
+    type: Optional[str] = None,
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    query = db.query(TeamMember)
+    if type:
+        query = query.filter(TeamMember.type == type)
+    if department:
+        query = query.filter(TeamMember.department == department)
+    if status:
+        query = query.filter(TeamMember.status == status)
+    else:
+        query = query.filter(TeamMember.status != "offboarded")
+    members = query.order_by(TeamMember.created_at.desc()).all()
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "email": m.email,
+            "role": m.role,
+            "type": m.type,
+            "department": m.department,
+            "status": m.status,
+            "start_date": m.start_date,
+            "end_date": m.end_date,
+            "salary_range": m.salary_range,
+            "skills": m.skills or [],
+            "github_url": m.github_url,
+            "linkedin_url": m.linkedin_url,
+            "notes": m.notes,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+        }
+        for m in members
+    ]
+
+
+@router.post("/team")
+def create_team_member(
+    data: TeamMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    member = TeamMember(
+        name=data.name,
+        email=data.email,
+        role=data.role,
+        type=data.type,
+        department=data.department,
+        status=data.status,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        salary_range=data.salary_range,
+        skills=data.skills or [],
+        github_url=data.github_url,
+        linkedin_url=data.linkedin_url,
+        notes=data.notes,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return {
+        "id": member.id,
+        "name": member.name,
+        "email": member.email,
+        "role": member.role,
+        "type": member.type,
+        "department": member.department,
+        "status": member.status,
+        "start_date": member.start_date,
+        "end_date": member.end_date,
+        "salary_range": member.salary_range,
+        "skills": member.skills or [],
+        "github_url": member.github_url,
+        "linkedin_url": member.linkedin_url,
+        "notes": member.notes,
+        "created_at": member.created_at.isoformat() if member.created_at else None,
+        "updated_at": member.updated_at.isoformat() if member.updated_at else None,
+    }
+
+
+@router.put("/team/{member_id}")
+def update_team_member(
+    member_id: int,
+    data: TeamMemberUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    member = db.query(TeamMember).filter(TeamMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    update_data = data.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(member, key, value)
+    member.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(member)
+    return {
+        "id": member.id,
+        "name": member.name,
+        "email": member.email,
+        "role": member.role,
+        "type": member.type,
+        "department": member.department,
+        "status": member.status,
+        "start_date": member.start_date,
+        "end_date": member.end_date,
+        "salary_range": member.salary_range,
+        "skills": member.skills or [],
+        "github_url": member.github_url,
+        "linkedin_url": member.linkedin_url,
+        "notes": member.notes,
+        "created_at": member.created_at.isoformat() if member.created_at else None,
+        "updated_at": member.updated_at.isoformat() if member.updated_at else None,
+    }
+
+
+@router.delete("/team/{member_id}")
+def delete_team_member(
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    member = db.query(TeamMember).filter(TeamMember.id == member_id).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    member.status = "offboarded"
+    member.updated_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Team member offboarded"}
