@@ -321,7 +321,7 @@ export function registerAiGovernanceRoutes(app: Express) {
       res.json({ success: true, message: "Execution dispatched to agents" });
     } catch (error) {
       console.error("[AI-GOV] Error in execute:", error);
-      res.status(500).json({ error: "Failed to execute decision", details: String(error), stack: (error as any)?.stack?.slice(0, 500) });
+      res.status(500).json({ error: "Failed to execute decision" });
     }
   });
 
