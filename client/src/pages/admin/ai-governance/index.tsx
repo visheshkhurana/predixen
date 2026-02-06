@@ -809,11 +809,21 @@ function AiTasksView({ data }: { data: GovernanceState }) {
                     <p className="font-medium text-sm">{req.question}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1">
                       <Badge variant="outline" className="text-xs bg-muted">{req.type}</Badge>
-                      <Badge variant={resolved.variant} className={`text-xs ${resolved.className || ''}`}>
-                        {resolved.label === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                        {resolved.label === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
-                        {resolved.label}
-                      </Badge>
+                      {resolved.label === 'decision_ready' ? (
+                        <Badge variant="default" className="text-xs bg-blue-600 text-white">{resolved.label}</Badge>
+                      ) : resolved.label === 'pending' ? (
+                        <Badge variant="default" className="text-xs bg-amber-500 text-white">{resolved.label}</Badge>
+                      ) : resolved.label === 'approved' ? (
+                        <Badge variant="default" className="text-xs">{resolved.label}</Badge>
+                      ) : resolved.label === 'rejected' ? (
+                        <Badge variant="destructive" className="text-xs">{resolved.label}</Badge>
+                      ) : resolved.label === 'executing' ? (
+                        <Badge variant="secondary" className="text-xs"><Loader2 className="h-3 w-3 animate-spin mr-1" />{resolved.label}</Badge>
+                      ) : resolved.label === 'completed' ? (
+                        <Badge variant="default" className="text-xs"><CheckCircle className="h-3 w-3 mr-1" />{resolved.label}</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">{resolved.label}</Badge>
+                      )}
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {getTimeAgo(req.createdAt)}
