@@ -523,7 +523,7 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
     },
     {
       label: 'Decision Accuracy',
-      value: data.approvals.length > 0
+      value: Array.isArray(data.approvals) && data.approvals.length > 0
         ? `${Math.round((data.approvals.filter((a: any) => a.approved).length / data.approvals.length) * 100)}%`
         : '',
       icon: Activity,
@@ -790,7 +790,7 @@ function EmergencyView({ data }: { data: GovernanceState }) {
 export default function AiGovernancePage() {
   const [activeTab, setActiveTab] = useState('boardroom');
 
-  const { data, isLoading, error } = useQuery<GovernanceState>({
+  const { data: rawData, isLoading, error } = useQuery<GovernanceState>({
     queryKey: ['ai-governance-state'],
     queryFn: async () => {
       const res = await fetch('/admin/ai-governance/state');
@@ -799,6 +799,19 @@ export default function AiGovernancePage() {
     },
     refetchInterval: 3000,
   });
+
+  const data = useMemo(() => {
+    if (!rawData) return rawData;
+    return {
+      ...rawData,
+      events: Array.isArray(rawData.events) ? rawData.events : [],
+      requests: Array.isArray(rawData.requests) ? rawData.requests : [],
+      decisions: Array.isArray(rawData.decisions) ? rawData.decisions : [],
+      codeChanges: Array.isArray(rawData.codeChanges) ? rawData.codeChanges : [],
+      approvals: Array.isArray(rawData.approvals) ? rawData.approvals : [],
+      agents: rawData.agents || {},
+    };
+  }, [rawData]);
 
   if (isLoading) {
     return (
