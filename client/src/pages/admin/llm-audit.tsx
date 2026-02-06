@@ -9,10 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   RefreshCw, Shield, Eye, Clock, 
-  AlertTriangle, ChevronLeft, ChevronRight, Hash, Zap
+  AlertTriangle, ChevronLeft, ChevronRight, Hash, Zap, FileSearch
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { api } from '@/api/client';
 
 interface LLMAuditLog {
   id: string;
@@ -38,6 +37,23 @@ interface LLMAuditLog {
   created_at: string;
 }
 
+interface AuditStats {
+  period_days: number;
+  total_requests: number;
+  total_tokens_in: number;
+  total_tokens_out: number;
+  avg_latency_ms: number;
+  pii_mode_breakdown: Record<string, number>;
+  requests_with_pii_detected: number;
+}
+
+interface AuditLogsResponse {
+  logs: LLMAuditLog[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 const PII_MODE_COLORS: Record<string, string> = {
   off: 'bg-red-500/20 text-red-600 border-red-500/30',
   standard: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
@@ -50,14 +66,26 @@ export default function LLMAuditPage() {
   const [selectedLog, setSelectedLog] = useState<LLMAuditLog | null>(null);
   const perPage = 20;
 
-  const { data: logsResponse, isLoading, refetch, isFetching } = useQuery({
+  const { data: logsResponse, isLoading, refetch, isFetching, isError: logsError } = useQuery<AuditLogsResponse>({
     queryKey: ['/admin/llm-audit', page, piiModeFilter],
-    queryFn: () => api.admin.llmAudit.list(page, perPage, piiModeFilter !== 'all' ? piiModeFilter : undefined),
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+      if (piiModeFilter && piiModeFilter !== 'all') params.append('pii_mode', piiModeFilter);
+      const res = await fetch(`/admin/llm-audit?${params}`);
+      if (!res.ok) return { logs: [], total: 0, page: 1, per_page: perPage };
+      return res.json();
+    },
+    retry: false,
   });
 
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<AuditStats>({
     queryKey: ['/admin/llm-audit/stats/summary'],
-    queryFn: () => api.admin.llmAudit.stats(),
+    queryFn: async () => {
+      const res = await fetch('/admin/llm-audit/stats/summary');
+      if (!res.ok) return null as any;
+      return res.json();
+    },
+    retry: false,
   });
 
   const logs = logsResponse?.logs || [];
@@ -71,14 +99,14 @@ export default function LLMAuditPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Shield className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-llm-audit-title">LLM Audit Logs</h1>
-            <p className="text-muted-foreground text-sm">Track all OpenAI API calls with privacy metrics</p>
+            <h1 className="text-2xl font-bold" data-testid="text-llm-audit-title">LLM Audit</h1>
+            <p className="text-muted-foreground text-sm">Track all LLM API calls with privacy metrics</p>
           </div>
         </div>
         <Button 
@@ -93,7 +121,7 @@ export default function LLMAuditPage() {
         </Button>
       </div>
 
-      {stats && (
+      {stats && stats.total_requests > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -136,7 +164,7 @@ export default function LLMAuditPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <CardTitle>Audit Log Entries</CardTitle>
               <CardDescription>{total} total entries</CardDescription>
@@ -162,8 +190,12 @@ export default function LLMAuditPage() {
               ))}
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No audit logs found
+            <div className="text-center py-12 text-muted-foreground">
+              <FileSearch className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="text-base font-medium mb-1">No audit logs yet</p>
+              <p className="text-sm max-w-md mx-auto">
+                LLM interactions will be tracked here once AI agents process requests. All API calls, token usage, and privacy metrics will appear automatically.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
