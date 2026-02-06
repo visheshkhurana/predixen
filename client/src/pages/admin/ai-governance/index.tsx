@@ -482,15 +482,16 @@ function extractBurnRate(summary: string | null | undefined): string {
 }
 
 function CompanyHealthView({ data }: { data: GovernanceState }) {
-  const cfoEvent = data.events.find(e => e.agent === 'CFO');
-  const riskEvent = data.events.find(e => e.agent === 'RISK');
+  const cfoEvent = data.events.find((e: any) => e.agent === 'CFO');
+  const riskEvent = data.events.find((e: any) => e.agent === 'RISK');
+  const cfoSummary = cfoEvent?.summary || data.agents?.CFO?.summary || null;
 
-  const burnTrendValue = useMemo(() => extractBurnRate(cfoEvent?.summary), [cfoEvent?.summary]);
+  const burnTrendValue = useMemo(() => extractBurnRate(cfoSummary), [cfoSummary]);
 
   const metrics = [
     {
       label: 'Runway P50',
-      value: cfoEvent?.summary?.match(/(\d+\.?\d*)\s*months/)?.[1] ? `${cfoEvent.summary.match(/(\d+\.?\d*)\s*months/)[1]} mo` : '',
+      value: cfoSummary?.match(/(\d+\.?\d*)\s*months/)?.[1] ? `${cfoSummary.match(/(\d+\.?\d*)\s*months/)[1]} mo` : '',
       icon: TrendingUp,
       color: 'text-emerald-400',
     },
@@ -526,7 +527,7 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
                 <metric.icon className={`h-4 w-4 ${metric.color}`} />
                 <span className="text-xs text-muted-foreground">{metric.label}</span>
               </div>
-              <p className="text-2xl font-bold">{metric.value}</p>
+              <p className="text-2xl font-bold">{metric.value || <span className="text-muted-foreground">—</span>}</p>
             </CardContent>
           </Card>
         ))}
