@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -144,7 +144,7 @@ function KPIWidget({ widget, companyId }: { widget: Widget; companyId: number })
     );
   }
 
-  if (!metricData || !metricData.value) {
+  if (!metricData || metricData.value == null) {
     return (
       <Card className="h-full">
         <CardContent className="p-4 flex items-center justify-center h-full text-muted-foreground">
@@ -162,7 +162,7 @@ function KPIWidget({ widget, companyId }: { widget: Widget; companyId: number })
         </CardTitle>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-5 w-5" data-testid={`widget-info-${widget.id}`}>
+            <Button variant="ghost" size="icon" data-testid={`widget-info-${widget.id}`}>
               <Info className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
@@ -365,10 +365,22 @@ export default function DashboardBuilderPage() {
     enabled: !!dashboardId && !!token,
   });
 
-  const { data: metrics = [] } = useQuery<MetricDefinition[]>({
+  const { data: metrics = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[]>({
     queryKey: [`/api/metrics?company_id=${currentCompany?.id}`],
     enabled: !!currentCompany && !!token,
   });
+
+  const initRef = useRef(false);
+  useEffect(() => {
+    if (metricsLoaded && metrics.length === 0 && currentCompany && !initRef.current) {
+      initRef.current = true;
+      apiRequest('POST', `/api/metrics/initialize?company_id=${currentCompany.id}`)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: [`/api/metrics?company_id=${currentCompany.id}`] });
+        })
+        .catch(() => {});
+    }
+  }, [metricsLoaded, metrics.length, currentCompany, queryClient]);
 
   const addWidgetMutation = useMutation({
     mutationFn: async (widget: { widget_type: string; metric_key: string; title: string; position: object }) => {
@@ -486,11 +498,10 @@ export default function DashboardBuilderPage() {
               }}
               data-testid={`widget-${widget.id}`}
             >
-              <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+              <div className="absolute top-2 right-2 z-10 invisible group-hover:visible flex gap-1">
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-6 w-6"
                   onClick={() => deleteWidgetMutation.mutate(widget.id)}
                   data-testid={`button-delete-widget-${widget.id}`}
                 >

@@ -210,7 +210,7 @@ class MetricEngine:
         end_date: Optional[datetime] = None,
         limit: int = 12,
     ) -> List[Dict[str, Any]]:
-        """Get historical values for a metric."""
+        """Get historical values for a metric, falling back to financial records."""
         metric = self.db.query(MetricDefinition).filter(
             MetricDefinition.company_id == company_id,
             MetricDefinition.key == metric_key,
@@ -230,14 +230,93 @@ class MetricEngine:
         
         values = query.order_by(MetricValue.period_start.desc()).limit(limit).all()
         
-        return [{
-            "period_start": v.period_start.isoformat(),
-            "period_end": v.period_end.isoformat(),
-            "value": v.value,
-            "computed_at": v.computed_at.isoformat() if v.computed_at else None,
-            "raw_event_count": v.raw_event_count,
-            "contributing_connectors": v.contributing_connectors,
-        } for v in reversed(values)]
+        if values:
+            return [{
+                "period_start": v.period_start.isoformat(),
+                "period_end": v.period_end.isoformat(),
+                "value": v.value,
+                "computed_at": v.computed_at.isoformat() if v.computed_at else None,
+                "raw_event_count": v.raw_event_count,
+                "contributing_connectors": v.contributing_connectors,
+            } for v in reversed(values)]
+
+        snapshot_key = self.SNAPSHOT_KEY_MAP.get(metric_key)
+        if not snapshot_key:
+            return []
+        
+        try:
+            from server.models.financial import FinancialRecord
+            from server.models.truth_scan import TruthScan
+            
+            financials = (
+                self.db.query(FinancialRecord)
+                .filter(FinancialRecord.company_id == company_id)
+                .order_by(FinancialRecord.period_end.desc())
+                .limit(limit)
+                .all()
+            )
+            
+            if not financials:
+                return []
+            
+            truth_scan = self.db.query(TruthScan).filter(
+                TruthScan.company_id == company_id
+            ).order_by(TruthScan.created_at.desc()).first()
+            ts_metrics = {}
+            if truth_scan and truth_scan.outputs_json:
+                ts_metrics = truth_scan.outputs_json.get("metrics", {})
+            
+            result = []
+            for record in reversed(financials):
+                revenue = record.revenue or 0
+                cogs = record.cogs or 0
+                opex = record.opex or 0
+                payroll = record.payroll or 0
+                other_costs = record.other_costs or 0
+                cash = record.cash_balance or 0
+                headcount = record.headcount or 0
+                total_costs = cogs + opex + payroll + other_costs
+                net_burn = max(0, total_costs - revenue)
+                gross_margin = ((revenue - cogs) / revenue) if revenue > 0 else 0
+                runway = (cash / net_burn) if net_burn > 0 and cash > 0 else (36 if net_burn <= 0 else 12)
+                
+                snapshot_row = {
+                    "mrr": revenue,
+                    "arr": revenue * 12,
+                    "monthly_revenue": revenue,
+                    "cash_balance": cash,
+                    "net_burn": net_burn,
+                    "runway_months": min(runway, 60),
+                    "gross_margin": gross_margin,
+                    "headcount": headcount,
+                    "churn_rate": self._ts_metric_val(ts_metrics, "churn_rate", 0.02),
+                    "cac": self._ts_metric_val(ts_metrics, "cac", 0),
+                    "ltv": self._ts_metric_val(ts_metrics, "ltv", 0),
+                    "ltv_cac_ratio": self._ts_metric_val(ts_metrics, "ltv_cac_ratio", 0),
+                }
+                
+                val = snapshot_row.get(snapshot_key)
+                if val is not None:
+                    p_start = record.period_start or record.period_end
+                    p_end = record.period_end or record.period_start
+                    result.append({
+                        "period_start": p_start.isoformat() if p_start else "",
+                        "period_end": p_end.isoformat() if p_end else "",
+                        "value": float(val),
+                        "computed_at": None,
+                        "raw_event_count": 0,
+                        "contributing_connectors": ["financial_records"],
+                    })
+            return result
+        except Exception:
+            return []
+    
+    @staticmethod
+    def _ts_metric_val(ts_metrics: dict, key: str, default=0):
+        val = ts_metrics.get(key)
+        if isinstance(val, dict):
+            val = val.get("value", default)
+        return val if isinstance(val, (int, float)) else default
     
     SNAPSHOT_KEY_MAP = {
         "mrr": "mrr",
