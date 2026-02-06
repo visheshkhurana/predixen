@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -481,17 +482,30 @@ function extractBurnRate(summary: string | null | undefined): string {
   return '';
 }
 
+function formatDollarShort(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M/mo`;
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K/mo`;
+  return `$${Math.round(value)}/mo`;
+}
+
 function CompanyHealthView({ data }: { data: GovernanceState }) {
+  const { metrics: financialMetrics } = useFinancialMetrics();
   const cfoEvent = data.events.find((e: any) => e.agent === 'CFO');
   const riskEvent = data.events.find((e: any) => e.agent === 'RISK');
   const cfoSummary = cfoEvent?.summary || data.agents?.CFO?.summary || null;
 
-  const burnTrendValue = useMemo(() => extractBurnRate(cfoSummary), [cfoSummary]);
+  const burnFromSummary = useMemo(() => extractBurnRate(cfoSummary), [cfoSummary]);
+  const burnTrendValue = burnFromSummary || (financialMetrics.burnRate > 0 ? formatDollarShort(financialMetrics.burnRate) : '');
+
+  const runwayFromSummary = cfoSummary?.match(/(\d+\.?\d*)\s*months/)?.[1];
+  const runwayValue = runwayFromSummary
+    ? `${runwayFromSummary} mo`
+    : (financialMetrics.runway > 0 && financialMetrics.runway < 999 ? `${financialMetrics.runway.toFixed(1)} mo` : '');
 
   const metrics = [
     {
       label: 'Runway P50',
-      value: cfoSummary?.match(/(\d+\.?\d*)\s*months/)?.[1] ? `${cfoSummary.match(/(\d+\.?\d*)\s*months/)[1]} mo` : '',
+      value: runwayValue,
       icon: TrendingUp,
       color: 'text-emerald-400',
     },
