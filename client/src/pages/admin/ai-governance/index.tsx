@@ -6,14 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
   Brain, Users, Activity, Code2, AlertTriangle, Database, Shield,
   CheckCircle, XCircle, RefreshCw, Pause, Play, Lock, Unlock, Send,
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
-  Clock, ChevronRight, Loader2
+  Clock, ChevronRight, Loader2, ThumbsUp, ThumbsDown, Filter, Search,
+  BarChart3, Timer, AlertCircle
 } from 'lucide-react';
 
-// Types
 interface AgentStatus {
   status: 'idle' | 'thinking' | 'responded' | 'flagged';
   summary: string | null;
@@ -104,6 +105,21 @@ function getStatusColor(status: string) {
   }
 }
 
+function getTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const created = new Date(dateStr).getTime();
+  const diffMs = now - created;
+  if (diffMs < 0) return 'just now';
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 function ConfidenceBar({ value }: { value: number | null }) {
   if (value === null) return null;
   const pct = Math.round(value * 100);
@@ -123,6 +139,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
   const queryClient = useQueryClient();
   const [question, setQuestion] = useState('');
   const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({});
+  const [confirmApproval, setConfirmApproval] = useState<{id: number; requestId: string; label: string; action: 'approve' | 'reject'} | null>(null);
 
   const toggleAgent = (agent: string) => {
     setExpandedAgents(prev => ({ ...prev, [agent]: !prev[agent] }));
@@ -143,12 +160,65 @@ function BoardroomView({ data }: { data: GovernanceState }) {
     },
   });
 
+  const boardroomApproveMutation = useMutation({
+    mutationFn: async ({ requestId, decisionId }: { requestId: string; decisionId: number }) => {
+      const res = await fetch('/admin/ai-governance/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, decisionId }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setConfirmApproval(null);
+      queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] });
+    },
+  });
+
+  const boardroomRejectMutation = useMutation({
+    mutationFn: async ({ requestId, decisionId }: { requestId: string; decisionId: number }) => {
+      const res = await fetch('/admin/ai-governance/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, decisionId }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setConfirmApproval(null);
+      queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] });
+    },
+  });
+
+  const pendingDecisions = data.decisions.filter(d => d.requiresApproval && d.status !== 'approved' && d.status !== 'rejected');
+
   return (
     <div className="space-y-6">
+      {/* Pending Approvals Banner */}
+      {pendingDecisions.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-md bg-amber-500/10 border border-amber-500/30">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
+            <p className="text-sm text-amber-300 font-medium">
+              {pendingDecisions.length} decision{pendingDecisions.length > 1 ? 's' : ''} pending your approval
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-500/40 text-amber-300 shrink-0"
+            onClick={() => document.getElementById('boardroom-floor')?.scrollIntoView({ behavior: 'smooth' })}
+            data-testid="button-review-now"
+          >
+            Review Now
+          </Button>
+        </div>
+      )}
+
       {/* Agent Ring */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         {AGENTS.map((agent) => {
-          const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null };
+          const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
           const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
           const isExpanded = expandedAgents[agent] || false;
           return (
@@ -167,6 +237,12 @@ function BoardroomView({ data }: { data: GovernanceState }) {
                   <p className={`text-xs text-muted-foreground mb-1 ${isExpanded ? '' : 'line-clamp-2'}`}>{agentData.summary}</p>
                 )}
                 <ConfidenceBar value={agentData.confidence} />
+                {agentData.lastUpdate && (
+                  <p className="text-[10px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5">
+                    <Timer className="h-2.5 w-2.5" />
+                    {getTimeAgo(agentData.lastUpdate)}
+                  </p>
+                )}
                 {agentData.summary && (
                   <p className="text-[10px] text-muted-foreground/60 mt-1">{isExpanded ? 'click to collapse' : 'click to expand'}</p>
                 )}
@@ -176,8 +252,53 @@ function BoardroomView({ data }: { data: GovernanceState }) {
         })}
       </div>
 
+      {/* Confirmation Modal Overlay */}
+      {confirmApproval && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmApproval(null)}>
+          <Card className="w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                {confirmApproval.action === 'approve' ? (
+                  <ThumbsUp className="h-5 w-5 text-emerald-400" />
+                ) : (
+                  <ThumbsDown className="h-5 w-5 text-red-400" />
+                )}
+                <h3 className="font-semibold text-base">
+                  {confirmApproval.action === 'approve' ? 'Approve' : 'Reject'} Decision?
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-6">
+                {confirmApproval.action === 'approve'
+                  ? `Are you sure you want to approve "${confirmApproval.label}"?`
+                  : `Are you sure you want to reject "${confirmApproval.label}"? This cannot be undone.`}
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" onClick={() => setConfirmApproval(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant={confirmApproval.action === 'approve' ? 'default' : 'destructive'}
+                  className={confirmApproval.action === 'approve' ? 'bg-emerald-600' : ''}
+                  onClick={() => {
+                    const mut = confirmApproval.action === 'approve' ? boardroomApproveMutation : boardroomRejectMutation;
+                    mut.mutate({ requestId: confirmApproval.requestId, decisionId: confirmApproval.id });
+                  }}
+                  disabled={boardroomApproveMutation.isPending || boardroomRejectMutation.isPending}
+                >
+                  {(boardroomApproveMutation.isPending || boardroomRejectMutation.isPending) && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  )}
+                  Confirm {confirmApproval.action === 'approve' ? 'Approval' : 'Rejection'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Boardroom Floor */}
-      <Card>
+      <Card id="boardroom-floor">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Brain className="h-4 w-4" />
@@ -200,14 +321,39 @@ function BoardroomView({ data }: { data: GovernanceState }) {
             <div className="space-y-3">
               {data.decisions.filter(d => d.status === 'pending').slice(0, 3).map((decision) => (
                 <div key={decision.id} className="border rounded-lg p-4 bg-muted/20">
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-2 gap-2">
                     <div>
                       <h4 className="font-medium text-sm">{decision.label}</h4>
                       <ConfidenceBar value={decision.confidence} />
                     </div>
-                    {decision.requiresApproval && (
-                      <Badge variant="destructive" className="text-xs">Requires Approval</Badge>
-                    )}
+                    {decision.requiresApproval ? (
+                      decision.status === 'approved' ? (
+                        <Badge variant="default" className="text-xs shrink-0">Approved</Badge>
+                      ) : decision.status === 'rejected' ? (
+                        <Badge variant="destructive" className="text-xs shrink-0">Rejected</Badge>
+                      ) : (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-emerald-400"
+                            onClick={(e) => { e.stopPropagation(); setConfirmApproval({ id: decision.id, requestId: decision.requestId, label: decision.label, action: 'approve' }); }}
+                            data-testid={`button-approve-${decision.id}`}
+                          >
+                            <ThumbsUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-red-400"
+                            onClick={(e) => { e.stopPropagation(); setConfirmApproval({ id: decision.id, requestId: decision.requestId, label: decision.label, action: 'reject' }); }}
+                            data-testid={`button-reject-${decision.id}`}
+                          >
+                            <ThumbsDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    ) : null}
                   </div>
                   {decision.agentPositions && (
                     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -264,6 +410,8 @@ function BoardroomView({ data }: { data: GovernanceState }) {
 // ============ DECISIONS VIEW ============
 function DecisionsView({ data }: { data: GovernanceState }) {
   const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const approveMutation = useMutation({
     mutationFn: async ({ requestId, decisionId }: { requestId: string; decisionId: number }) => {
@@ -289,6 +437,17 @@ function DecisionsView({ data }: { data: GovernanceState }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
   });
 
+  const filteredDecisions = useMemo(() => {
+    return data.decisions.filter(d => {
+      if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return d.label.toLowerCase().includes(q) || d.requestId.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [data.decisions, statusFilter, searchQuery]);
+
   if (data.decisions.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -300,73 +459,107 @@ function DecisionsView({ data }: { data: GovernanceState }) {
 
   return (
     <div className="space-y-4">
-      {data.decisions.map((decision) => (
-        <Card key={decision.id}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="font-medium">{decision.label}</h4>
-                  <Badge variant={decision.status === 'approved' ? 'default' : decision.status === 'rejected' ? 'destructive' : 'outline'}>
-                    {decision.status}
-                  </Badge>
-                  {decision.requiresApproval && decision.status === 'pending' && (
-                    <Badge variant="destructive" className="text-xs">Needs Approval</Badge>
-                  )}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search decisions..."
+            className="pl-8 text-sm"
+            data-testid="input-search-decisions"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          {(['all', 'pending', 'approved', 'rejected'] as const).map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={statusFilter === s ? 'default' : 'outline'}
+              onClick={() => setStatusFilter(s)}
+              data-testid={`button-filter-${s}`}
+            >
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {filteredDecisions.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Filter className="h-8 w-8 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">No decisions match your filters.</p>
+        </div>
+      ) : (
+        filteredDecisions.map((decision) => (
+          <Card key={decision.id}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center flex-wrap gap-2 mb-1">
+                    <h4 className="font-medium">{decision.label}</h4>
+                    <Badge variant={decision.status === 'approved' ? 'default' : decision.status === 'rejected' ? 'destructive' : 'outline'}>
+                      {decision.status}
+                    </Badge>
+                    {decision.requiresApproval && decision.status === 'pending' && (
+                      <Badge variant="destructive" className="text-xs">Needs Approval</Badge>
+                    )}
+                  </div>
+                  <ConfidenceBar value={decision.confidence} />
                 </div>
-                <ConfidenceBar value={decision.confidence} />
               </div>
-            </div>
 
-            {decision.rationale && Array.isArray(decision.rationale) && (
-              <div className="mb-3">
-                <p className="text-xs font-medium text-muted-foreground mb-1">Rationale</p>
-                <ul className="text-xs text-muted-foreground space-y-0.5">
-                  {(decision.rationale as string[]).slice(0, 3).map((r, i) => (
-                    <li key={i} className="flex items-start gap-1">
-                      <ChevronRight className="h-3 w-3 mt-0.5 shrink-0" />{r}
-                    </li>
+              {decision.rationale && Array.isArray(decision.rationale) && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Rationale</p>
+                  <ul className="text-xs text-muted-foreground space-y-0.5">
+                    {(decision.rationale as string[]).slice(0, 3).map((r, i) => (
+                      <li key={i} className="flex items-start gap-1">
+                        <ChevronRight className="h-3 w-3 mt-0.5 shrink-0" />{r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {decision.agentPositions && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {Object.entries(decision.agentPositions as Record<string, string>).map(([agent, position]) => (
+                    <Badge key={agent} variant="outline" className="text-xs">
+                      {agent}: {typeof position === "string" ? position : (position as any)?.sentiment || "N/A"}
+                    </Badge>
                   ))}
-                </ul>
-              </div>
-            )}
+                </div>
+              )}
 
-            {decision.agentPositions && (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {Object.entries(decision.agentPositions as Record<string, string>).map(([agent, position]) => (
-                  <Badge key={agent} variant="outline" className="text-xs">
-                    {agent}: {typeof position === "string" ? position : (position as any)?.sentiment || "N/A"}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {decision.status === 'pending' && (
-              <div className="flex gap-2 pt-2 border-t">
-                <Button
-                  size="sm"
-                  onClick={() => approveMutation.mutate({ requestId: decision.requestId, decisionId: decision.id })}
-                  disabled={approveMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => rejectMutation.mutate({ requestId: decision.requestId, decisionId: decision.id })}
-                  disabled={rejectMutation.isPending}
-                >
-                  <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
-                </Button>
-                <Button size="sm" variant="outline">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rerun
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+              {decision.status === 'pending' && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  <Button
+                    size="sm"
+                    onClick={() => approveMutation.mutate({ requestId: decision.requestId, decisionId: decision.id })}
+                    disabled={approveMutation.isPending}
+                    className="bg-emerald-600"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => rejectMutation.mutate({ requestId: decision.requestId, decisionId: decision.id })}
+                    disabled={rejectMutation.isPending}
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                  </Button>
+                  <Button size="sm" variant="outline">
+                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Rerun
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 }
@@ -403,7 +596,7 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center flex-wrap gap-2 mb-1">
                   <GitBranch className="h-4 w-4 text-muted-foreground" />
                   <span className="font-mono text-sm">{change.branch || 'unknown-branch'}</span>
                   <Badge variant={change.status === 'approved' ? 'default' : change.status === 'rejected' ? 'destructive' : 'outline'}>
@@ -424,7 +617,7 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
               </Badge>
             </div>
 
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
+            <div className="flex items-center flex-wrap gap-4 text-xs text-muted-foreground mb-3">
               <span className="flex items-center gap-1">
                 <FileCode className="h-3.5 w-3.5" />
                 {Array.isArray(change.filesChanged) ? change.filesChanged.length : 0} files
@@ -439,10 +632,10 @@ function CodeChangesView({ data }: { data: GovernanceState }) {
             </div>
 
             {change.status === 'pending' && (
-              <div className="flex gap-2 pt-2 border-t">
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700"
+                  className="bg-emerald-600"
                   onClick={() => approveMergeMutation.mutate({ requestId: change.requestId })}
                   disabled={approveMergeMutation.isPending || data.systemState.codeChangesFrozen}
                 >
@@ -572,21 +765,6 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
 }
 
 // ============ AI TASKS VIEW ============
-function getTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const created = new Date(dateStr).getTime();
-  const diffMs = now - created;
-  if (diffMs < 0) return 'just now';
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 function resolveExecutionStatus(req: AiRequest): { label: string; variant: 'default' | 'destructive' | 'secondary' | 'outline' } {
   if (req.status === 'approved') return { label: 'approved', variant: 'default' };
   if (req.status === 'rejected') return { label: 'rejected', variant: 'destructive' };
@@ -721,6 +899,40 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
 
 // ============ MEMORY VIEW ============
 function MemoryView({ data }: { data: GovernanceState }) {
+  const intelligence = useMemo(() => {
+    const decided = data.decisions.filter(d => d.status === 'approved' || d.status === 'rejected');
+    const approvedCount = data.decisions.filter(d => d.status === 'approved').length;
+    const approvalRate = decided.length > 0 ? Math.round((approvedCount / decided.length) * 100) : null;
+
+    const confidences = data.decisions.filter(d => d.confidence != null).map(d => d.confidence);
+    const avgConfidence = confidences.length > 0 ? Math.round((confidences.reduce((a, b) => a + b, 0) / confidences.length) * 100) : null;
+
+    const pendingCount = data.decisions.filter(d => d.requiresApproval && d.status !== 'approved' && d.status !== 'rejected').length;
+
+    let mostCautious: string | null = null;
+    const agentConfMap: Record<string, number[]> = {};
+    data.decisions.forEach(d => {
+      if (d.agentPositions) {
+        Object.entries(d.agentPositions).forEach(([agent, pos]) => {
+          const sentiment = typeof pos === 'string' ? pos : (pos as any)?.sentiment || '';
+          if (/caution|concern|risk|oppose|reject|against/i.test(sentiment)) {
+            if (!agentConfMap[agent]) agentConfMap[agent] = [];
+            agentConfMap[agent].push(1);
+          }
+        });
+      }
+    });
+    let maxCautions = 0;
+    Object.entries(agentConfMap).forEach(([agent, arr]) => {
+      if (arr.length > maxCautions) {
+        maxCautions = arr.length;
+        mostCautious = agent;
+      }
+    });
+
+    return { approvalRate, avgConfidence, pendingCount, mostCautious };
+  }, [data.decisions]);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -759,6 +971,36 @@ function MemoryView({ data }: { data: GovernanceState }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Governance Intelligence */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Governance Intelligence
+          </CardTitle>
+          <CardDescription>Derived metrics from decision history</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-emerald-400">{intelligence.approvalRate !== null ? `${intelligence.approvalRate}%` : '—'}</p>
+              <p className="text-xs text-muted-foreground">Approval Rate</p>
+            </div>
+            <div className="text-center p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-blue-400">{intelligence.avgConfidence !== null ? `${intelligence.avgConfidence}%` : '—'}</p>
+              <p className="text-xs text-muted-foreground">Avg Confidence</p>
+            </div>
+            <div className="text-center p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-amber-400">{intelligence.pendingCount}</p>
+              <p className="text-xs text-muted-foreground">Pending Decisions</p>
+            </div>
+            <div className="text-center p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+              <p className="text-2xl font-bold text-red-400">{intelligence.mostCautious || '—'}</p>
+              <p className="text-xs text-muted-foreground">Most Cautious Agent</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -766,6 +1008,7 @@ function MemoryView({ data }: { data: GovernanceState }) {
 // ============ EMERGENCY VIEW ============
 function EmergencyView({ data }: { data: GovernanceState }) {
   const queryClient = useQueryClient();
+  const [confirmAction, setConfirmAction] = useState<string | null>(null);
 
   const emergencyMutation = useMutation({
     mutationFn: async (action: string) => {
@@ -776,7 +1019,10 @@ function EmergencyView({ data }: { data: GovernanceState }) {
       });
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] }),
+    onSuccess: () => {
+      setConfirmAction(null);
+      queryClient.invalidateQueries({ queryKey: ['ai-governance-state'] });
+    },
   });
 
   const controls = [
@@ -787,6 +1033,7 @@ function EmergencyView({ data }: { data: GovernanceState }) {
       icon: Pause,
       variant: 'destructive' as const,
       active: data.systemState.aiPaused,
+      activeLabel: 'AI Paused',
     },
     {
       action: 'freeze_code',
@@ -795,6 +1042,7 @@ function EmergencyView({ data }: { data: GovernanceState }) {
       icon: Lock,
       variant: 'destructive' as const,
       active: data.systemState.codeChangesFrozen,
+      activeLabel: 'Code Frozen',
     },
     {
       action: 'manual_only',
@@ -803,6 +1051,7 @@ function EmergencyView({ data }: { data: GovernanceState }) {
       icon: Eye,
       variant: 'destructive' as const,
       active: data.systemState.manualOnly,
+      activeLabel: 'Manual Only Active',
     },
     {
       action: 'resume_all',
@@ -811,6 +1060,7 @@ function EmergencyView({ data }: { data: GovernanceState }) {
       icon: Play,
       variant: 'default' as const,
       active: false,
+      activeLabel: '',
     },
   ];
 
@@ -845,17 +1095,43 @@ function EmergencyView({ data }: { data: GovernanceState }) {
               <div className="flex items-start gap-3">
                 <control.icon className={`h-5 w-5 mt-0.5 ${control.active ? 'text-red-400' : 'text-muted-foreground'}`} />
                 <div className="flex-1">
-                  <h4 className="font-medium text-sm">{control.label}</h4>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h4 className="font-medium text-sm">{control.label}</h4>
+                    {control.active && (
+                      <Badge variant="destructive" className="text-xs">{control.activeLabel}</Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mb-3">{control.description}</p>
-                  <Button
-                    size="sm"
-                    variant={control.variant}
-                    onClick={() => emergencyMutation.mutate(control.action)}
-                    disabled={emergencyMutation.isPending || control.active}
-                  >
-                    {emergencyMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                    {control.active ? 'Active' : control.label}
-                  </Button>
+                  {confirmAction === control.action ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-amber-400 font-medium">Are you sure?</span>
+                      <Button
+                        size="sm"
+                        variant={control.variant}
+                        onClick={() => emergencyMutation.mutate(control.action)}
+                        disabled={emergencyMutation.isPending}
+                      >
+                        {emergencyMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                        Confirm
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirmAction(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant={control.variant}
+                      onClick={() => setConfirmAction(control.action)}
+                      disabled={control.active}
+                    >
+                      {control.active ? control.activeLabel : control.label}
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
