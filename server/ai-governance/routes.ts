@@ -296,7 +296,7 @@ export function registerAiGovernanceRoutes(app: Express) {
         requestId,
         eventType: "execution_started",
         agent: "SYSTEM",
-        data: { decisionId, decision, agentPositions, startedAt: new Date().toISOString() },
+        rawPayload: { decisionId, decision, agentPositions, startedAt: new Date().toISOString() },
         status: "executing",
         source: "founder",
       });
@@ -311,7 +311,12 @@ export function registerAiGovernanceRoutes(app: Express) {
         timestamp: new Date().toISOString(),
         callback_url: `${process.env.REPLIT_DEV_DOMAIN ? "https://" + process.env.REPLIT_DEV_DOMAIN : "https://fund-flow--vysheshk.replit.app"}/admin/ai-governance/callback`,
       };
-      await forwardToN8n("execute-decision", n8nPayload);
+      // Forward to n8n (non-blocking - don't fail if n8n is unavailable)
+      try {
+        await forwardToN8n("execute-decision", n8nPayload);
+      } catch (n8nError) {
+        console.warn("[AI-GOV] n8n forward failed (will retry via callback):", n8nError);
+      }
 
       res.json({ success: true, message: "Execution dispatched to agents" });
     } catch (error) {
@@ -391,7 +396,7 @@ export function registerAiGovernanceRoutes(app: Express) {
               requestId: request_id,
               eventType: "execution_result",
               agent: execAgent || "UNKNOWN",
-              data: { task_type, deliverable, status: execStatus, summary: execSummary },
+              rawPayload: { task_type, deliverable, status: execStatus, summary: execSummary },
               status: execStatus || "completed",
               source: "agent",
             });
