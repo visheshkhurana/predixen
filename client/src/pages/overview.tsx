@@ -910,16 +910,16 @@ export default function OverviewPage() {
     
     const data = [
       ['Metric', 'Value', 'Unit'],
-      ['MRR', projectedMetrics.mrr.toFixed(0), 'USD'],
-      ['ARR', projectedMetrics.arr.toFixed(0), 'USD'],
-      ['Cash on Hand', projectedMetrics.cash.toFixed(0), 'USD'],
-      ['Burn Rate', projectedMetrics.burnRate.toFixed(0), 'USD/month'],
-      ['Runway', projectedMetrics.runway.toFixed(1), 'months'],
-      ['CAC', projectedMetrics.cac.toFixed(0), 'USD'],
-      ['LTV', projectedMetrics.ltv.toFixed(0), 'USD'],
-      ['LTV:CAC Ratio', projectedMetrics.ltvCacRatio.toFixed(2), 'x'],
-      ['Gross Margin', projectedMetrics.grossMargin.toFixed(1), '%'],
-      ['Churn Rate', projectedMetrics.churnRate.toFixed(1), '%'],
+      ['MRR', baseData.mrr.toFixed(0), 'USD'],
+      ['ARR', baseData.arr.toFixed(0), 'USD'],
+      ['Cash on Hand', baseData.cash.toFixed(0), 'USD'],
+      ['Burn Rate', baseData.burnRate.toFixed(0), 'USD/month'],
+      ['Runway', baseData.runway.toFixed(1), 'months'],
+      ['CAC', baseData.cac.toFixed(0), 'USD'],
+      ['LTV', baseData.ltv.toFixed(0), 'USD'],
+      ['LTV:CAC Ratio', baseData.ltvCacRatio.toFixed(2), 'x'],
+      ['Gross Margin', baseData.grossMargin.toFixed(1), '%'],
+      ['Churn Rate', baseData.churnRate.toFixed(1), '%'],
     ];
     
     const csvContent = [...header, ...data.map(row => row.join(','))].join('\n');
@@ -930,39 +930,39 @@ export default function OverviewPage() {
     link.click();
     
     toast({ title: 'Export Complete', description: 'Metrics exported to CSV file.' });
-  }, [projectedMetrics, currentCompany, toast]);
+  }, [baseData, currentCompany, toast]);
 
   const segmentData = useMemo(() => {
     const baseMetrics = {
-      cac: projectedMetrics.cac,
-      ltv: projectedMetrics.ltv,
-      ltvCac: projectedMetrics.ltvCacRatio,
-      churn: projectedMetrics.churnRate,
-      arpu: projectedMetrics.mrr / Math.max(projectedMetrics.totalCustomers, 1),
+      cac: baseData.cac,
+      ltv: baseData.ltv,
+      ltvCac: baseData.ltvCacRatio,
+      churn: baseData.churnRate,
+      arpu: baseData.mrr / Math.max(baseData.totalCustomers, 1),
     };
     
     const segments = {
       channel: [
-        { name: 'Organic', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 1.2, ltvCac: (baseMetrics.ltv * 1.2) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 0.8, customers: Math.round(projectedMetrics.totalCustomers * 0.35) },
-        { name: 'Paid Search', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 0.9, ltvCac: (baseMetrics.ltv * 0.9) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 1.1, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
-        { name: 'Content', cac: baseMetrics.cac * 0.8, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 0.8), churn: baseMetrics.churn * 0.9, customers: Math.round(projectedMetrics.totalCustomers * 0.20) },
-        { name: 'Referral', cac: baseMetrics.cac * 0.4, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 0.4), churn: baseMetrics.churn * 0.7, customers: Math.round(projectedMetrics.totalCustomers * 0.15) },
+        { name: 'Organic', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 1.2, ltvCac: (baseMetrics.ltv * 1.2) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 0.8, customers: Math.round(baseData.totalCustomers * 0.35) },
+        { name: 'Paid Search', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 0.9, ltvCac: (baseMetrics.ltv * 0.9) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 1.1, customers: Math.round(baseData.totalCustomers * 0.30) },
+        { name: 'Content', cac: baseMetrics.cac * 0.8, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 0.8), churn: baseMetrics.churn * 0.9, customers: Math.round(baseData.totalCustomers * 0.20) },
+        { name: 'Referral', cac: baseMetrics.cac * 0.4, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 0.4), churn: baseMetrics.churn * 0.7, customers: Math.round(baseData.totalCustomers * 0.15) },
       ],
       tier: [
-        { name: 'Enterprise', cac: baseMetrics.cac * 2.5, ltv: baseMetrics.ltv * 5, ltvCac: (baseMetrics.ltv * 5) / (baseMetrics.cac * 2.5), churn: baseMetrics.churn * 0.5, customers: Math.round(projectedMetrics.totalCustomers * 0.10) },
-        { name: 'Pro', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.5, ltvCac: (baseMetrics.ltv * 1.5) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 0.8, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
-        { name: 'Starter', cac: baseMetrics.cac * 0.5, ltv: baseMetrics.ltv * 0.6, ltvCac: (baseMetrics.ltv * 0.6) / (baseMetrics.cac * 0.5), churn: baseMetrics.churn * 1.5, customers: Math.round(projectedMetrics.totalCustomers * 0.60) },
+        { name: 'Enterprise', cac: baseMetrics.cac * 2.5, ltv: baseMetrics.ltv * 5, ltvCac: (baseMetrics.ltv * 5) / (baseMetrics.cac * 2.5), churn: baseMetrics.churn * 0.5, customers: Math.round(baseData.totalCustomers * 0.10) },
+        { name: 'Pro', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.5, ltvCac: (baseMetrics.ltv * 1.5) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 0.8, customers: Math.round(baseData.totalCustomers * 0.30) },
+        { name: 'Starter', cac: baseMetrics.cac * 0.5, ltv: baseMetrics.ltv * 0.6, ltvCac: (baseMetrics.ltv * 0.6) / (baseMetrics.cac * 0.5), churn: baseMetrics.churn * 1.5, customers: Math.round(baseData.totalCustomers * 0.60) },
       ],
       region: [
-        { name: 'North America', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 0.9, customers: Math.round(projectedMetrics.totalCustomers * 0.50) },
-        { name: 'Europe', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 1.0, customers: Math.round(projectedMetrics.totalCustomers * 0.30) },
-        { name: 'APAC', cac: baseMetrics.cac * 0.7, ltv: baseMetrics.ltv * 0.8, ltvCac: (baseMetrics.ltv * 0.8) / (baseMetrics.cac * 0.7), churn: baseMetrics.churn * 1.2, customers: Math.round(projectedMetrics.totalCustomers * 0.15) },
-        { name: 'Other', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 0.7, ltvCac: (baseMetrics.ltv * 0.7) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 1.3, customers: Math.round(projectedMetrics.totalCustomers * 0.05) },
+        { name: 'North America', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 0.9, customers: Math.round(baseData.totalCustomers * 0.50) },
+        { name: 'Europe', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 1.0, customers: Math.round(baseData.totalCustomers * 0.30) },
+        { name: 'APAC', cac: baseMetrics.cac * 0.7, ltv: baseMetrics.ltv * 0.8, ltvCac: (baseMetrics.ltv * 0.8) / (baseMetrics.cac * 0.7), churn: baseMetrics.churn * 1.2, customers: Math.round(baseData.totalCustomers * 0.15) },
+        { name: 'Other', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 0.7, ltvCac: (baseMetrics.ltv * 0.7) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 1.3, customers: Math.round(baseData.totalCustomers * 0.05) },
       ],
     };
     
     return segments;
-  }, [projectedMetrics]);
+  }, [baseData]);
 
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
@@ -1367,10 +1367,10 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <p className={`text-2xl font-bold font-mono ${
-              100 - projectedMetrics.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
-              100 - projectedMetrics.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
+              100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
+              100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
             }`} data-testid="metric-nrr">
-              {safeToFixed(100 - projectedMetrics.churnRate + assumptions.growthRate / 2)}%
+              {safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2)}%
             </p>
             <p className="text-xs text-muted-foreground">net revenue retention</p>
           </CardContent>
@@ -1446,13 +1446,13 @@ export default function OverviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 1.3) / (projectedMetrics.cac * 0.4))}x)</p>
-                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 0.9) / (projectedMetrics.cac * 1.2))}x)</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4))}x)</p>
+                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2))}x)</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((projectedMetrics.ltv * 5) / (projectedMetrics.cac * 2.5))}x)</p>
-                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(projectedMetrics.churnRate * 1.5)}%)</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5))}x)</p>
+                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5)}%)</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Region</h4>
