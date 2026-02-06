@@ -135,8 +135,8 @@ function getTimeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function ConfidenceBar({ value }: { value: number | null }) {
-  if (value === null) return null;
+function ConfidenceBar({ value }: { value: number | null | undefined }) {
+  if (value == null) return null;
   const pct = Math.round(value * 100);
   const color = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
   return (
@@ -749,7 +749,7 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
                 <metric.icon className={`h-4 w-4 ${metric.color}`} />
                 <span className="text-xs text-muted-foreground">{metric.label}</span>
               </div>
-              <p className="text-2xl font-bold">{metric.value || <span className="text-muted-foreground">—</span>}</p>
+              <p className="text-2xl font-bold">{metric.value || <span className="text-sm text-muted-foreground">No data</span>}</p>
             </CardContent>
           </Card>
         ))}
@@ -1169,7 +1169,8 @@ export default function AiGovernancePage() {
       if (!res.ok) throw new Error('Failed to fetch state');
       return res.json();
     },
-    refetchInterval: 3000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const data = useMemo(() => {

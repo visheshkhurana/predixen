@@ -880,48 +880,62 @@ def get_llm_audit_stats(
     current_user: User = Depends(require_platform_admin)
 ):
     """Get LLM audit statistics summary."""
-    from sqlalchemy import func
-    
-    start_date = datetime.utcnow() - timedelta(days=days)
-    
-    total_requests = db.query(func.count(LLMAuditLog.id)).filter(
-        LLMAuditLog.created_at >= start_date
-    ).scalar()
-    
-    total_tokens_in = db.query(func.sum(LLMAuditLog.tokens_in)).filter(
-        LLMAuditLog.created_at >= start_date
-    ).scalar() or 0
-    
-    total_tokens_out = db.query(func.sum(LLMAuditLog.tokens_out)).filter(
-        LLMAuditLog.created_at >= start_date
-    ).scalar() or 0
-    
-    avg_latency = db.query(func.avg(LLMAuditLog.latency_ms)).filter(
-        LLMAuditLog.created_at >= start_date
-    ).scalar() or 0
-    
-    pii_mode_breakdown = db.query(
-        LLMAuditLog.pii_mode,
-        func.count(LLMAuditLog.id)
-    ).filter(
-        LLMAuditLog.created_at >= start_date
-    ).group_by(LLMAuditLog.pii_mode).all()
-    
-    requests_with_pii = db.query(func.count(LLMAuditLog.id)).filter(
-        LLMAuditLog.created_at >= start_date,
-        LLMAuditLog.pii_findings_json != None,
-        func.jsonb_array_length(LLMAuditLog.pii_findings_json) > 0
-    ).scalar() or 0
-    
-    return {
-        "period_days": days,
-        "total_requests": total_requests,
-        "total_tokens_in": total_tokens_in,
-        "total_tokens_out": total_tokens_out,
-        "avg_latency_ms": round(float(avg_latency), 2),
-        "pii_mode_breakdown": {mode: count for mode, count in pii_mode_breakdown},
-        "requests_with_pii_detected": requests_with_pii
-    }
+    try:
+        from sqlalchemy import func
+        
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        total_requests = db.query(func.count(LLMAuditLog.id)).filter(
+            LLMAuditLog.created_at >= start_date
+        ).scalar()
+        
+        total_tokens_in = db.query(func.sum(LLMAuditLog.tokens_in)).filter(
+            LLMAuditLog.created_at >= start_date
+        ).scalar() or 0
+        
+        total_tokens_out = db.query(func.sum(LLMAuditLog.tokens_out)).filter(
+            LLMAuditLog.created_at >= start_date
+        ).scalar() or 0
+        
+        avg_latency = db.query(func.avg(LLMAuditLog.latency_ms)).filter(
+            LLMAuditLog.created_at >= start_date
+        ).scalar() or 0
+        
+        pii_mode_breakdown = db.query(
+            LLMAuditLog.pii_mode,
+            func.count(LLMAuditLog.id)
+        ).filter(
+            LLMAuditLog.created_at >= start_date
+        ).group_by(LLMAuditLog.pii_mode).all()
+        
+        try:
+            requests_with_pii = db.query(func.count(LLMAuditLog.id)).filter(
+                LLMAuditLog.created_at >= start_date,
+                LLMAuditLog.pii_findings_json != None,
+                func.jsonb_array_length(LLMAuditLog.pii_findings_json) > 0
+            ).scalar() or 0
+        except Exception:
+            requests_with_pii = 0
+        
+        return {
+            "period_days": days,
+            "total_requests": total_requests,
+            "total_tokens_in": total_tokens_in,
+            "total_tokens_out": total_tokens_out,
+            "avg_latency_ms": round(float(avg_latency), 2),
+            "pii_mode_breakdown": {mode: count for mode, count in pii_mode_breakdown},
+            "requests_with_pii_detected": requests_with_pii
+        }
+    except Exception:
+        return {
+            "period_days": days,
+            "total_requests": 0,
+            "total_tokens_in": 0,
+            "total_tokens_out": 0,
+            "avg_latency_ms": 0,
+            "pii_mode_breakdown": {},
+            "requests_with_pii_detected": 0
+        }
 
 
 class EvalRunRequest(BaseModel):
