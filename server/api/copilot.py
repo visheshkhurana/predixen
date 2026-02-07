@@ -173,6 +173,12 @@ class CopilotContextRequest(BaseModel):
     uiSurface: Optional[str] = None
 
 
+class ConversationMessage(BaseModel):
+    """A message in conversation history."""
+    role: str
+    content: str
+
+
 class CopilotChatRequest(BaseModel):
     """Request for copilot chat."""
     message: str
@@ -189,6 +195,7 @@ class CopilotChatRequest(BaseModel):
     privacy: Optional[PrivacySettings] = None
     context: Optional[CopilotContextRequest] = None
     response_mode: Optional[Literal["explain", "compare", "plan", "teach", "json"]] = None
+    conversation_history: Optional[List[ConversationMessage]] = None
 
 
 class Citation(BaseModel):
@@ -448,6 +455,11 @@ async def copilot_chat(
     response_mode_str = response_mode if isinstance(response_mode, str) else response_mode.value
     mode_instructions = get_mode_instructions(response_mode) if hasattr(response_mode, 'value') else ""
     
+    conversation_context = []
+    if request.conversation_history:
+        for msg in request.conversation_history[-10:]:
+            conversation_context.append({"role": msg.role, "content": msg.content})
+    
     context = {
         "has_document": False,
         "extracted_financials": None,
@@ -459,7 +471,8 @@ async def copilot_chat(
         "pii_mode": pii_mode,
         "response_mode": response_mode_str,
         "response_mode_instructions": mode_instructions,
-        "session_context": session_context
+        "session_context": session_context,
+        "conversation_history": conversation_context
     }
     
     llm_router = get_llm_router(

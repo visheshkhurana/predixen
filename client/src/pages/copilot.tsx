@@ -54,6 +54,7 @@ import {
   ChevronRight,
   MessageSquare
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
 import { apiRequest } from '@/lib/queryClient';
@@ -1044,11 +1045,15 @@ export default function CopilotPage() {
   const { data: simulation } = useSimulation(latestScenario?.id || null);
   
   const handleSuggestionAction = (action: string) => {
-    toast({
-      title: 'Opening Scenarios',
-      description: `Running ${action.replace(/_/g, ' ')} scenario...`,
-    });
-    setLocation('/scenarios');
+    const actionPrompts: Record<string, string> = {
+      burn_cut_15: 'Run a simulation cutting burn by 15%',
+      bridge_round: 'Run a simulation with a $500K bridge round',
+      burn_cut_20: 'Run a simulation cutting burn by 20%',
+      hiring_freeze: 'Run a simulation with a 6-month hiring freeze',
+      price_increase: 'Run a simulation with a 10% price increase',
+    };
+    const prompt = actionPrompts[action] || `Run a ${action.replace(/_/g, ' ')} scenario`;
+    sendMessage(prompt);
   };
   
   const createDefaultMessage = (): Message => ({
@@ -1273,39 +1278,49 @@ export default function CopilotPage() {
   
   const handleSlashCommand = (command: string) => {
     if (command === '/help') {
-      setInput('');
       setShowSlashCommands(false);
+      const userMsg: Message = { role: 'user', content: '/help', timestamp: new Date() };
       const helpMessage: Message = {
         role: 'assistant',
-        content: 'Available commands:\n\n• **/run-scenario** - Run a scenario with your current assumptions\n• **/fetch-metric {name}** - Get a specific metric (mrr, arr, runway, cac, ltv)\n• **/compare** - Compare current scenario vs baseline\n• **/extend-runway** - Get strategies to extend runway\n• **/metrics** - View your key metrics\n• **/notes** - View your pinned notes\n• **/help** - Show this help message',
+        content: 'Available commands:\n\n- **/run-scenario** - Run a scenario with your current assumptions\n- **/fetch-metric {name}** - Get a specific metric (mrr, arr, runway, cac, ltv)\n- **/compare** - Compare current scenario vs baseline\n- **/extend-runway** - Get strategies to extend runway\n- **/metrics** - View your key metrics\n- **/notes** - View your pinned notes\n- **/help** - Show this help message',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, helpMessage]);
-    } else if (command === '/run-scenario') {
+      setMessages(prev => [...prev, userMsg, helpMessage]);
       setInput('');
+    } else if (command === '/run-scenario') {
       setShowSlashCommands(false);
+      const userMsg: Message = { role: 'user', content: '/run-scenario', timestamp: new Date() };
+      const assistantMsg: Message = { role: 'assistant', content: 'Opening the Scenario Runner panel. Adjust your assumptions and click **Run Scenario** to see projections.', timestamp: new Date() };
+      setMessages(prev => [...prev, userMsg, assistantMsg]);
+      setInput('');
       setActivePanelTab('scenario');
       setIsPanelOpen(true);
     } else if (command === '/metrics') {
-      setInput('');
       setShowSlashCommands(false);
+      const userMsg: Message = { role: 'user', content: '/metrics', timestamp: new Date() };
+      const assistantMsg: Message = { role: 'assistant', content: 'Opening the Metrics panel with your current data.', timestamp: new Date() };
+      setMessages(prev => [...prev, userMsg, assistantMsg]);
+      setInput('');
       setActivePanelTab('metrics');
       setIsPanelOpen(true);
     } else if (command === '/notes') {
-      setInput('');
       setShowSlashCommands(false);
+      const userMsg: Message = { role: 'user', content: '/notes', timestamp: new Date() };
+      const assistantMsg: Message = { role: 'assistant', content: 'Opening your pinned notes.', timestamp: new Date() };
+      setMessages(prev => [...prev, userMsg, assistantMsg]);
+      setInput('');
       setActivePanelTab('notes');
       setIsPanelOpen(true);
     } else if (command.startsWith('/fetch-metric')) {
       setInput('/fetch-metric ');
       setShowSlashCommands(false);
     } else if (command === '/compare') {
-      setInput('');
       setShowSlashCommands(false);
+      setInput('');
       sendMessage('Compare current scenario vs baseline');
     } else if (command === '/extend-runway') {
-      setInput('');
       setShowSlashCommands(false);
+      setInput('');
       sendMessage('How can I extend my runway by 6 months?');
     }
   };
@@ -1329,6 +1344,48 @@ export default function CopilotPage() {
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isTyping || !currentCompany) return;
     
+    if (messageText.trim().toLowerCase().startsWith('/fetch-metric ')) {
+      const metricName = messageText.trim().slice('/fetch-metric '.length).trim().toLowerCase();
+      const userMsg: Message = { role: 'user', content: messageText.trim(), timestamp: new Date() };
+      
+      const FETCH_METRIC_MAP: Record<string, { key: string; label: string; format: (v: any) => string }> = {
+        'mrr': { key: 'mrr', label: 'Monthly Recurring Revenue', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'arr': { key: 'mrr', label: 'Annual Recurring Revenue', format: (v) => `$${((v || 0) * 12).toLocaleString()}` },
+        'runway': { key: 'runway_months', label: 'Runway', format: (v) => `${v?.toFixed(1) || 'N/A'} months` },
+        'burn': { key: 'net_burn', label: 'Net Burn Rate', format: (v) => `$${(v || 0).toLocaleString()}/month` },
+        'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'margin': { key: 'gross_margin', label: 'Gross Margin', format: (v) => `${v || 0}%` },
+        'churn': { key: 'churn_rate', label: 'Churn Rate', format: (v) => `${v || 0}%` },
+        'growth': { key: 'revenue_growth_mom', label: 'Revenue Growth (MoM)', format: (v) => `${v || 0}%` },
+        'cash': { key: 'cash_balance', label: 'Cash Balance', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'revenue': { key: 'mrr', label: 'Monthly Revenue', format: (v) => `$${(v || 0).toLocaleString()}` },
+      };
+      
+      const metricConfig = FETCH_METRIC_MAP[metricName];
+      let responseMsg: Message;
+      if (metricConfig) {
+        const value = metrics[metricConfig.key]?.value;
+        responseMsg = {
+          role: 'assistant',
+          content: `**${metricConfig.label}**: ${metricConfig.format(value)}`,
+          metrics: [metricConfig.key],
+          dataSources: ['truth_scan'],
+          timestamp: new Date(),
+        };
+      } else {
+        const availableMetrics = Object.keys(FETCH_METRIC_MAP).join(', ');
+        responseMsg = {
+          role: 'assistant',
+          content: `Metric "${metricName}" not found. Available metrics: ${availableMetrics}`,
+          timestamp: new Date(),
+        };
+      }
+      setMessages(prev => [...prev, userMsg, responseMsg]);
+      setInput('');
+      return;
+    }
+    
     const userMessage: Message = { 
       role: 'user', 
       content: messageText,
@@ -1340,6 +1397,11 @@ export default function CopilotPage() {
     
     if (useApiMode && token) {
       try {
+        const recentHistory = messages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .slice(-10)
+          .map(m => ({ role: m.role, content: m.content }));
+        
         const res = await apiRequest(
           'POST',
           `/api/companies/${currentCompany.id}/chat`,
@@ -1350,7 +1412,8 @@ export default function CopilotPage() {
             investor_lens: investorLens,
             create_decision: createDecision,
             show_sources: showSources,
-            privacy: { pii_mode: piiMode }
+            privacy: { pii_mode: piiMode },
+            conversation_history: recentHistory
           }
         );
         
@@ -1398,26 +1461,24 @@ export default function CopilotPage() {
         }
       } catch (error: any) {
         console.error('Copilot API error:', error);
-        // Provide more specific error message based on error type
-        let errorMessage = 'Failed to get response from Copilot.';
+        let errorMessage = 'Something went wrong. Please try again.';
         if (error.message) {
           if (error.message.includes('500')) {
-            errorMessage = 'Server error occurred. Please try again.';
+            errorMessage = 'A server error occurred. Please try again in a moment.';
           } else if (error.message.includes('401') || error.message.includes('403')) {
-            errorMessage = 'Authentication error. Please try logging in again.';
+            errorMessage = 'Your session may have expired. Please try logging in again.';
           } else if (error.message.includes('404')) {
-            errorMessage = 'Service temporarily unavailable. Using fallback mode.';
+            errorMessage = 'Could not reach the AI service. Make sure you have a company selected and data uploaded.';
           } else if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Network error. Please check your connection.';
+            errorMessage = 'Network error. Please check your connection and try again.';
           }
         }
-        toast({
-          title: 'Warning',
-          description: errorMessage + ' Using intelligent fallback.',
-          variant: 'default',
-        });
-        const fallbackResponse = generateResponse(messageText, metrics, confidence);
-        setMessages((prev) => [...prev, fallbackResponse]);
+        const errorMsg: Message = {
+          role: 'assistant',
+          content: errorMessage,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMsg]);
       }
     } else {
       setTimeout(() => {
@@ -1433,12 +1494,81 @@ export default function CopilotPage() {
   };
   
   const generateResponse = (query: string, metrics: any, confidence: number): Message => {
-    const lowerQuery = query.toLowerCase();
+    const lowerQuery = query.toLowerCase().trim();
+    
+    const GREETING_PATTERNS = /^(hi|hello|hey|howdy|greetings|good morning|good afternoon|good evening|what's up|sup|yo)\b/;
+    const GIBBERISH_PATTERN = /^[^a-zA-Z]*$|^(.)\1{4,}$|^[a-z]{1,2}$/;
+    const FOLLOW_UP_PATTERNS = /^(explain|tell me more|what do you mean|elaborate|go on|continue|expand|point \d|item \d|number \d|#\d|can you clarify)/;
+    
+    if (GREETING_PATTERNS.test(lowerQuery)) {
+      return {
+        role: 'assistant',
+        content: "Hello! I'm your AI financial advisor. I can help you with:\n\n- **Runway & burn analysis** - understand your cash position\n- **Simulations** - model different scenarios\n- **Fundraising guidance** - dilution, valuation, timing\n- **Competitive analysis** - market positioning\n\nWhat would you like to explore?",
+        timestamp: new Date(),
+      };
+    }
+    
+    if (GIBBERISH_PATTERN.test(lowerQuery) || lowerQuery.length < 3) {
+      return {
+        role: 'assistant',
+        content: "I didn't quite understand that. Try asking about something specific, like:\n\n- \"What is our current burn rate?\"\n- \"How can I extend runway by 6 months?\"\n- \"Run a simulation cutting burn by 20%\"\n- \"What's our MRR trend?\"\n\nYou can also type `/help` to see available commands.",
+        timestamp: new Date(),
+      };
+    }
+    
+    if (FOLLOW_UP_PATTERNS.test(lowerQuery)) {
+      const recentAssistantMessages = messages.filter(m => m.role === 'assistant').slice(-2);
+      if (recentAssistantMessages.length > 0) {
+        const lastResponse = recentAssistantMessages[recentAssistantMessages.length - 1];
+        return {
+          role: 'assistant',
+          content: `I'd be happy to elaborate on my previous response, but I'm currently in offline mode so I can't generate new analysis. Please try again when the AI service is available, or ask a specific question about your metrics.\n\nMy last response covered: ${lastResponse.content.slice(0, 100)}...`,
+          timestamp: new Date(),
+        };
+      }
+      return {
+        role: 'assistant',
+        content: "I don't have a previous response to reference. Could you ask your question in full? For example, \"What is our burn rate?\" or \"How can I extend runway?\"",
+        timestamp: new Date(),
+      };
+    }
+    
+    const METRIC_MAP: Record<string, { key: string; format: (v: any) => string; label: string }> = {
+      'burn rate': { key: 'net_burn', format: (v) => `$${(v || 15000).toLocaleString()}/month`, label: 'Net Burn Rate' },
+      'burn': { key: 'net_burn', format: (v) => `$${(v || 15000).toLocaleString()}/month`, label: 'Net Burn Rate' },
+      'mrr': { key: 'mrr', format: (v) => `$${(v || 45000).toLocaleString()}`, label: 'Monthly Recurring Revenue' },
+      'revenue': { key: 'mrr', format: (v) => `$${(v || 45000).toLocaleString()}`, label: 'Monthly Revenue' },
+      'arr': { key: 'mrr', format: (v) => `$${((v || 45000) * 12).toLocaleString()}`, label: 'Annual Recurring Revenue' },
+      'margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
+      'gross margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
+      'runway': { key: 'runway_months', format: (v) => `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
+      'cash': { key: 'cash_balance', format: (v) => `$${(v || 500000).toLocaleString()}`, label: 'Cash Balance' },
+      'cac': { key: 'cac', format: (v) => `$${(v || 250).toLocaleString()}`, label: 'Customer Acquisition Cost' },
+      'ltv': { key: 'ltv', format: (v) => `$${(v || 5000).toLocaleString()}`, label: 'Lifetime Value' },
+      'churn': { key: 'churn_rate', format: (v) => `${v || 3}%`, label: 'Churn Rate' },
+      'growth': { key: 'revenue_growth_mom', format: (v) => `${v || 5}% MoM`, label: 'Revenue Growth' },
+    };
+    
+    const SPECIFIC_METRIC_PATTERN = /what('?s| is| are)?\s+(our|my|the|current)?\s*/i;
+    if (SPECIFIC_METRIC_PATTERN.test(lowerQuery)) {
+      for (const [keyword, config] of Object.entries(METRIC_MAP)) {
+        if (lowerQuery.includes(keyword)) {
+          const value = metrics[config.key]?.value;
+          return {
+            role: 'assistant',
+            content: `Your current **${config.label}** is **${config.format(value)}**.\n\nWould you like me to analyze trends or run a simulation around this metric?`,
+            metrics: [config.key],
+            dataSources: ['truth_scan'],
+            timestamp: new Date(),
+          };
+        }
+      }
+    }
     
     if (lowerQuery.includes('runway') || lowerQuery.includes('extend')) {
       return {
         role: 'assistant',
-        content: `Based on your current metrics, your runway is ${metrics.runway_months?.value?.toFixed(1) || 16.5} months (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
+        content: `Based on your current metrics, your runway is **${metrics.runway_months?.value?.toFixed(1) || 16.5} months** (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
         metrics: ['runway_months', 'net_burn', 'net_revenue_retention'],
         dataSources: ['truth_scan', 'simulation'],
         suggestion: { label: 'Run burn cut scenario', action: 'burn_cut_15' },
@@ -1456,10 +1586,10 @@ export default function CopilotPage() {
       };
     }
     
-    if (lowerQuery.includes('fundraise') || lowerQuery.includes('slip')) {
+    if (lowerQuery.includes('fundraise') || lowerQuery.includes('slip') || lowerQuery.includes('raise') || lowerQuery.includes('dilution') || lowerQuery.includes('valuation')) {
       return {
         role: 'assistant',
-        content: `If your fundraise slips 3 months:\n\n• Current runway: ${metrics.runway_months?.value?.toFixed(1) || 16.5} months\n• Survival probability at 18m: ${simulation?.survival?.['18m'] || 65}%\n• Post-slip survival: ~52%\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
+        content: `If your fundraise slips 3 months:\n\n- Current runway: **${metrics.runway_months?.value?.toFixed(1) || 16.5} months**\n- Survival probability at 18m: **${simulation?.survival?.['18m'] || 65}%**\n- Post-slip survival: **~52%**\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
         metrics: ['runway_months', 'survival_18m', 'cash_balance'],
         dataSources: ['truth_scan', 'simulation', 'scenario'],
         suggestion: { label: 'Run bridge scenario', action: 'bridge_round' },
@@ -1467,21 +1597,40 @@ export default function CopilotPage() {
       };
     }
     
-    if (lowerQuery.includes('competitor') || lowerQuery.includes('differentiate') || lowerQuery.includes('compete')) {
+    if (lowerQuery.includes('competitor') || lowerQuery.includes('differentiate') || lowerQuery.includes('compete') || lowerQuery.includes('market')) {
       return {
         role: 'assistant',
-        content: `**Competitive Positioning Analysis**\n\nBased on your SaaS profile, here's how to differentiate:\n\n**Key Differentiators:**\n1. **Superior UX** - Focus on intuitive interface and faster time-to-value\n2. **Integration Ecosystem** - Build stronger API and partner integrations\n3. **Customer Success** - Invest in proactive support and onboarding\n\n**Competitive Advantages Framework:**\n• Technology: What technical capabilities set you apart?\n• Team: What unique expertise does your team bring?\n• Timing: Why is now the right time for your solution?\n\n**Recommended Actions:**\n1. Document your unique value proposition clearly\n2. Identify 3-5 direct competitors and their positioning\n3. Survey customers on why they chose you over alternatives\n\nWould you like me to help create a detailed competitive analysis?`,
+        content: `**Competitive Positioning Analysis**\n\nBased on your SaaS profile, here's how to differentiate:\n\n**Key Differentiators:**\n1. **Superior UX** - Focus on intuitive interface and faster time-to-value\n2. **Integration Ecosystem** - Build stronger API and partner integrations\n3. **Customer Success** - Invest in proactive support and onboarding\n\nWould you like me to help create a detailed competitive analysis?`,
         metrics: ['market_position', 'competitive_advantage'],
         dataSources: ['market_agent', 'strategy_agent'],
         timestamp: new Date(),
       };
     }
     
+    if (lowerQuery.includes('simulat') || lowerQuery.includes('what if') || lowerQuery.includes('what happens') || lowerQuery.includes('model') || lowerQuery.includes('scenario')) {
+      return {
+        role: 'assistant',
+        content: "I'd like to run that simulation for you, but I'm currently in offline mode. Please try again when the AI service is available.\n\nIn the meantime, you can use the **Scenario Runner** panel (click the sliders icon on the right) to adjust parameters and run quick projections.",
+        timestamp: new Date(),
+      };
+    }
+    
+    for (const [keyword, config] of Object.entries(METRIC_MAP)) {
+      if (lowerQuery.includes(keyword)) {
+        const value = metrics[config.key]?.value;
+        return {
+          role: 'assistant',
+          content: `Your current **${config.label}** is **${config.format(value)}**.\n\nWould you like me to analyze this further or run a scenario around it?`,
+          metrics: [config.key],
+          dataSources: ['truth_scan'],
+          timestamp: new Date(),
+        };
+      }
+    }
+    
     return {
       role: 'assistant',
-      content: `Based on your current data (confidence: ${confidence}/100):\n\n• Monthly Revenue: $${(metrics.mrr?.value || 45000).toLocaleString()}\n• Gross Margin: ${metrics.gross_margin?.value || 75}%\n• Net Burn: $${(metrics.net_burn?.value || 15000).toLocaleString()}/month\n• Runway: ${metrics.runway_months?.value?.toFixed(1) || 16.5} months\n\nWhat specific aspect would you like to explore? I can run simulations, compare scenarios, or explain any metric.`,
-      metrics: ['mrr', 'gross_margin', 'net_burn', 'runway_months'],
-      dataSources: ['truth_scan'],
+      content: "I'm not sure how to help with that specific question in offline mode. Here are some things I can help with:\n\n- **\"What is our burn rate?\"** - Get specific metric values\n- **\"How can I extend runway?\"** - Strategic recommendations\n- **\"What if we cut burn by 20%?\"** - Run simulations\n- **\"Who are our competitors?\"** - Market analysis\n\nOr type `/help` to see all available commands.",
       timestamp: new Date(),
     };
   };
@@ -1571,6 +1720,7 @@ export default function CopilotPage() {
               variant="ghost" 
               onClick={() => setShowConversationSidebar(!showConversationSidebar)}
               data-testid="button-toggle-sidebar"
+              aria-label="Toggle conversation history"
             >
               <Menu className="h-4 w-4" />
             </Button>
@@ -1586,6 +1736,7 @@ export default function CopilotPage() {
               variant="ghost" 
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               data-testid="button-toggle-panel"
+              aria-label="Toggle data panel"
             >
               {isPanelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
             </Button>
@@ -1613,7 +1764,13 @@ export default function CopilotPage() {
                   }`}
                   data-testid={`message-${message.role}-${i}`}
                 >
-                  <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                  {message.role === 'assistant' ? (
+                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                  )}
                   
                   {message.dataSources && message.dataSources.length > 0 && (
                     <div className="mt-3 pt-2 border-t border-border/30">
@@ -1790,7 +1947,7 @@ export default function CopilotPage() {
                   disabled={isTyping}
                   data-testid="input-copilot"
                 />
-                <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send">
+                <Button onClick={handleSend} disabled={!input.trim() || isTyping} data-testid="button-send" aria-label="Send message">
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
@@ -1808,6 +1965,7 @@ export default function CopilotPage() {
               variant={activePanelTab === 'metrics' ? 'secondary' : 'ghost'}
               onClick={() => setActivePanelTab('metrics')}
               data-testid="button-tab-metrics"
+              aria-label="Metrics tab"
             >
               <BarChart3 className="h-4 w-4" />
             </Button>
@@ -1816,6 +1974,7 @@ export default function CopilotPage() {
               variant={activePanelTab === 'scenario' ? 'secondary' : 'ghost'}
               onClick={() => setActivePanelTab('scenario')}
               data-testid="button-tab-scenario"
+              aria-label="Scenario tab"
             >
               <Sliders className="h-4 w-4" />
             </Button>
@@ -1824,11 +1983,12 @@ export default function CopilotPage() {
               variant={activePanelTab === 'notes' ? 'secondary' : 'ghost'}
               onClick={() => setActivePanelTab('notes')}
               data-testid="button-tab-notes"
+              aria-label="Notes tab"
             >
               <StickyNote className="h-4 w-4" />
             </Button>
           </div>
-          <Button size="icon" variant="ghost" onClick={() => setIsPanelOpen(false)} data-testid="button-close-panel">
+          <Button size="icon" variant="ghost" onClick={() => setIsPanelOpen(false)} data-testid="button-close-panel" aria-label="Close panel">
             <X className="h-4 w-4" />
           </Button>
         </div>
