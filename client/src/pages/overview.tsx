@@ -753,69 +753,6 @@ export default function OverviewPage() {
     });
   };
   
-  if (!currentCompany) {
-    return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <h2 className="text-xl font-semibold mb-2">No Company Selected</h2>
-            <p className="text-muted-foreground mb-4">Create a company to get started</p>
-            <Button onClick={() => setLocation('/onboarding')} data-testid="button-create-company">
-              Get Started
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-  
-  const metrics = truthScan?.metrics || {};
-  const flags = truthScan?.flags || [];
-  const confidence = truthScan?.data_confidence_score || 0;
-  const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
-  
-  const formatCurrency = (value: number | null | undefined) => {
-    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
-  };
-  
-  const formatPercent = (value: number | null | undefined) => {
-    return formatPct(value);
-  };
-  
-  const safeToFixed = (value: any, digits: number = 1): string => {
-    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
-    return value.toFixed(digits);
-  };
-  
-  const getConfidenceBadge = () => {
-    if (confidence < 60) {
-      return (
-        <Badge variant="destructive" data-testid="badge-confidence">
-          <XCircle className="h-3 w-3 mr-1" />
-          Low Confidence ({confidence})
-        </Badge>
-      );
-    } else if (confidence < 80) {
-      return (
-        <Badge variant="secondary" data-testid="badge-confidence">
-          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
-          Medium Confidence ({confidence})
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="secondary" data-testid="badge-confidence">
-        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
-        High Confidence ({confidence})
-      </Badge>
-    );
-  };
-  
-  const handleRefreshScan = async () => {
-    if (!currentCompany) return;
-    await runTruthScanMutation.mutateAsync(currentCompany.id);
-  };
-
   const riskAlerts = useMemo(() => getRiskAlerts(baseData, assumptions), [baseData, assumptions]);
   const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions, baseData), [projectedMetrics, assumptions, baseData]);
   
@@ -963,6 +900,69 @@ export default function OverviewPage() {
     
     return segments;
   }, [baseData]);
+
+  if (!currentCompany) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <h2 className="text-xl font-semibold mb-2">No Company Selected</h2>
+            <p className="text-muted-foreground mb-4">Create a company to get started</p>
+            <Button onClick={() => setLocation('/onboarding')} data-testid="button-create-company">
+              Get Started
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const metrics = truthScan?.metrics || {};
+  const flags = truthScan?.flags || [];
+  const confidence = truthScan?.data_confidence_score || 0;
+  const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
+  
+  const formatCurrency = (value: number | null | undefined) => {
+    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
+  };
+  
+  const formatPercent = (value: number | null | undefined) => {
+    return formatPct(value);
+  };
+  
+  const safeToFixed = (value: any, digits: number = 1): string => {
+    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
+    return value.toFixed(digits);
+  };
+  
+  const getConfidenceBadge = () => {
+    if (confidence < 60) {
+      return (
+        <Badge variant="destructive" data-testid="badge-confidence">
+          <XCircle className="h-3 w-3 mr-1" />
+          Low Confidence ({confidence})
+        </Badge>
+      );
+    } else if (confidence < 80) {
+      return (
+        <Badge variant="secondary" data-testid="badge-confidence">
+          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
+          Medium Confidence ({confidence})
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="secondary" data-testid="badge-confidence">
+        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
+        High Confidence ({confidence})
+      </Badge>
+    );
+  };
+  
+  const handleRefreshScan = async () => {
+    if (!currentCompany) return;
+    await runTruthScanMutation.mutateAsync(currentCompany.id);
+  };
 
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
