@@ -481,11 +481,11 @@ export default function AuthPage() {
               >
                 <span className="flex items-center justify-center gap-2">
                   <Sparkles className="h-4 w-4" />
-                  {isDemoLoading ? 'Loading simulation...' : 'Try Demo Simulation'}
+                  {isDemoLoading ? 'Loading demo...' : 'See Demo'}
                 </span>
                 {!isDemoLoading && (
                   <span className="block text-xs opacity-70 mt-1">
-                    Explore with a pre-loaded startup with realistic data and scenarios
+                    Explore the full platform with a pre-loaded demo company
                   </span>
                 )}
               </button>
