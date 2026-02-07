@@ -18,24 +18,24 @@ from datetime import datetime
 
 UPDATES_LATEST = [
     {
-        "title": "Enhanced KPI Dashboard",
-        "description": "The KPI Board now intelligently merges real-time data with your baseline financials. No more zero values when data is loading - your dashboard always shows meaningful metrics."
+        "title": "Smarter AI Copilot Responses",
+        "description": "The AI Copilot now understands conversational context. It remembers your last 10 messages, gives intelligent replies to greetings and follow-ups, and renders responses with proper formatting including bold text, bullet points, and tables."
     },
     {
-        "title": "Improved Data Accuracy",
-        "description": "Fixed decimal input support across all financial forms. You can now enter precise values like $1,234.56 without any issues."
+        "title": "Instant Metric Lookups",
+        "description": "Use /fetch-metric followed by a metric name (mrr, runway, burn, cac, ltv, etc.) to instantly pull your latest data. The copilot now filters to exactly the metric you ask for."
     },
     {
-        "title": "Better Runway Calculations",
-        "description": "All runway calculations now use a unified formula across the platform, ensuring consistent projections in charts, dashboards, and reports."
+        "title": "Inline Scenario Simulations",
+        "description": "Suggestion buttons like 'Run burn cut scenario' now run directly in your chat conversation instead of navigating you away. Get simulation insights without leaving the copilot."
     },
     {
-        "title": "New Help & Documentation",
-        "description": "Added a dedicated Help & Docs section to the sidebar. Access guides, tutorials, and support resources directly from the platform."
+        "title": "Better Error Handling",
+        "description": "When something goes wrong, the copilot now shows a clear, friendly error message right in the chat instead of failing silently. No more wondering if your question was received."
     },
     {
-        "title": "Chart & Visualization Fixes",
-        "description": "Fixed NaN display issues in cash projection charts. Tooltips now show clean, formatted values even when data is incomplete."
+        "title": "Feedback with Comments",
+        "description": "The thumbs down button now lets you tell us what went wrong. An optional text field appears so you can share specific feedback to help us improve."
     }
 ]
 
@@ -71,7 +71,7 @@ async def send_update_to_specified_users(
     fail_count = 0
     failed_emails = []
     
-    subject = "Predixen Intelligence OS - UX Improvements & Bug Fixes"
+    subject = "Predixen Intelligence OS - AI Copilot Upgrades & New Features"
     db = SessionLocal()
     
     try:
@@ -465,19 +465,22 @@ async def send_pitch_emails(
 
 async def main():
     """Main entry point for sending update emails."""
-    emails = [
-        "nikita.luther@gmail.com",
-        "nikitafl2024@gmail.com",
-        "nikita@predixen.ai",
-        "vysheshk@gmail.com"
-    ]
+    emails = get_all_user_emails()
+    if not emails:
+        emails = [
+            "nikita.luther@gmail.com",
+            "nikitafl2024@gmail.com",
+            "nikita@predixen.ai",
+            "vysheshk@gmail.com"
+        ]
     
-    from_email = "Predixen Updates <new@predixen.in>"
+    from_email = "Predixen Updates <newchanges23@predixen.app>"
     
-    # Send pitch email instead of update email
-    return await send_pitch_emails(
+    return await send_update_to_specified_users(
         emails=emails,
-        from_email=from_email
+        updates=UPDATES_LATEST,
+        from_email=from_email,
+        use_text_only=False
     )
 
 
