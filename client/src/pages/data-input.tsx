@@ -203,7 +203,7 @@ export default function DataInput() {
   const excelInputRef = useRef<HTMLInputElement>(null);
 
   const { data: backendBaseline, isLoading: isLoadingBaseline } = useQuery<FinancialBaselineResponse>({
-    queryKey: ['/api/ingest/companies', currentCompany?.id, 'financials/baseline'],
+    queryKey: ['/api/companies', currentCompany?.id, 'financials/baseline'],
     enabled: !!currentCompany?.id,
   });
 

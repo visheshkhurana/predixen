@@ -112,20 +112,33 @@ def list_scenarios(
         Scenario.is_archived == 0
     ).all()
     
-    return [
-        {
-            "id": s.id, 
-            "name": s.name, 
+    result = []
+    for s in scenarios:
+        latest_run = s.get_latest_run()
+        latest_sim = None
+        summary = None
+        if latest_run and latest_run.outputs_json:
+            out = latest_run.outputs_json
+            latest_sim = {
+                "runway": out.get("runway"),
+                "survival": out.get("survival"),
+                "summary": out.get("summary"),
+            }
+            summary = out.get("summary")
+        result.append({
+            "id": s.id,
+            "name": s.name,
             "description": s.description,
-            "inputs": s.inputs_json, 
+            "inputs": s.inputs_json,
             "created_at": s.created_at.isoformat(),
             "updated_at": s.updated_at.isoformat() if s.updated_at else None,
             "version": s.version,
             "parent_id": s.parent_id,
-            "tags": s.tags or []
-        }
-        for s in scenarios
-    ]
+            "tags": s.tags or [],
+            "latest_simulation": latest_sim,
+            "summary": summary,
+        })
+    return result
 
 
 INPUT_GUARDRAILS = {
