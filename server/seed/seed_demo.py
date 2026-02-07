@@ -17,8 +17,9 @@ from server.models.company_source import CompanyAlert
 from server.models.conversation import Conversation, ConversationMessage
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
-from server.models.company_decision import CompanyScenario
+from server.models.company_decision import CompanyScenario, CompanyDecision
 from server.models.dashboard import Dashboard, DashboardWidget
+from server.models.fundraising import Investor, InvestorPipeline
 from server.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,11 @@ def seed_demo_data(db: Session):
             demo_company = company
             cap_table_exists = db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company.id).first()
             if cap_table_exists:
-                logger.info("Demo data v2 already exists, ensuring v3 data")
+                logger.info("Demo data v2 already exists, ensuring v3+ data")
                 _seed_company_scenarios(db, demo_company)
                 _seed_dashboard_widgets(db, demo_company)
+                _seed_investors_pipeline(db, demo_company)
+                _seed_company_decisions(db, demo_company)
                 _ensure_connector_metadata(db, demo_company)
                 seed_team_members(db)
                 return demo_user
@@ -387,6 +390,8 @@ def _seed_extended_demo_data(db: Session, demo_company, demo_user):
     _seed_metric_definitions(db, demo_company)
     _seed_company_scenarios(db, demo_company)
     _seed_dashboard_widgets(db, demo_company)
+    _seed_investors_pipeline(db, demo_company)
+    _seed_company_decisions(db, demo_company)
     logger.info("Extended demo data seeded successfully")
 
 
@@ -1377,6 +1382,255 @@ def _seed_dashboard_widgets(db: Session, demo_company):
     db.add_all(widgets)
     db.commit()
     logger.info(f"Seeded {len(widgets)} dashboard widgets for dashboard {dashboard.id}")
+
+
+def _seed_investors_pipeline(db: Session, demo_company):
+    existing = db.query(Investor).filter(Investor.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    series_a_round = db.query(FundraisingRound).filter(
+        FundraisingRound.company_id == demo_company.id,
+        FundraisingRound.name.ilike("%Series A%")
+    ).first()
+    if not series_a_round:
+        return
+
+    investors_data = [
+        {
+            "name": "Elevation Capital",
+            "type": "vc",
+            "geography": "India / Southeast Asia",
+            "stage_focus": "Seed to Series B",
+            "thesis_tags": ["SaaS", "Fintech", "AI/ML"],
+            "contact": {"partner": "Ravi Adusumalli", "email": "ravi@elevationcap.com"},
+            "stage": "dd",
+            "probability": 0.65,
+            "notes": "Strong interest after product demo. Requested detailed financial model and customer references."
+        },
+        {
+            "name": "Sequoia Capital India",
+            "type": "vc",
+            "geography": "India",
+            "stage_focus": "Seed to Growth",
+            "thesis_tags": ["Enterprise SaaS", "Developer Tools", "AI"],
+            "contact": {"partner": "Shailendra Singh", "email": "ss@sequoiacap.com"},
+            "stage": "meeting",
+            "probability": 0.40,
+            "notes": "Initial meeting went well. Follow-up scheduled to discuss market sizing and competitive landscape."
+        },
+        {
+            "name": "Blume Ventures",
+            "type": "vc",
+            "geography": "India",
+            "stage_focus": "Pre-Seed to Series A",
+            "thesis_tags": ["Fintech", "SaaS", "Deep Tech"],
+            "contact": {"partner": "Karthik Reddy", "email": "karthik@blume.vc"},
+            "stage": "term_sheet",
+            "probability": 0.80,
+            "notes": "Term sheet received. $2M at $18M pre-money. Negotiating board seat and pro-rata rights."
+        },
+        {
+            "name": "Accel Partners",
+            "type": "vc",
+            "geography": "Global",
+            "stage_focus": "Series A to Growth",
+            "thesis_tags": ["SaaS", "Infrastructure", "AI"],
+            "contact": {"partner": "Prashanth Prakash", "email": "prashanth@accel.com"},
+            "stage": "contacted",
+            "probability": 0.20,
+            "notes": "Warm intro via existing portfolio founder. Sent deck and executive summary."
+        },
+        {
+            "name": "Nexus Venture Partners",
+            "type": "vc",
+            "geography": "India / US",
+            "stage_focus": "Seed to Series B",
+            "thesis_tags": ["Enterprise", "Data Analytics", "Fintech"],
+            "contact": {"partner": "Sameer Brij Verma", "email": "sameer@nexusvp.com"},
+            "stage": "meeting",
+            "probability": 0.35,
+            "notes": "Second meeting completed. Interested in unit economics and path to profitability."
+        },
+        {
+            "name": "Better Capital",
+            "type": "angel",
+            "geography": "India",
+            "stage_focus": "Pre-Seed to Seed",
+            "thesis_tags": ["Fintech", "SaaS", "Creator Economy"],
+            "contact": {"partner": "Vaibhav Domkundwar", "email": "vaibhav@bettercapital.in"},
+            "stage": "committed",
+            "probability": 0.95,
+            "notes": "Committed $250K. Will participate in the round alongside lead investor."
+        },
+        {
+            "name": "Matrix Partners India",
+            "type": "vc",
+            "geography": "India",
+            "stage_focus": "Series A to B",
+            "thesis_tags": ["SaaS", "Consumer Tech", "Fintech"],
+            "contact": {"partner": "Vikram Vaidyanathan", "email": "vikram@matrixpartners.in"},
+            "stage": "sourced",
+            "probability": 0.10,
+            "notes": "Identified as potential investor. Planning warm intro through mutual connection."
+        },
+        {
+            "name": "Lightspeed India",
+            "type": "vc",
+            "geography": "India / Southeast Asia",
+            "stage_focus": "Seed to Growth",
+            "thesis_tags": ["Enterprise SaaS", "Consumer", "Fintech"],
+            "contact": {"partner": "Dev Khare", "email": "dev@lsvp.com"},
+            "stage": "passed",
+            "probability": 0.0,
+            "notes": "Passed due to portfolio conflict with existing investment in financial analytics space."
+        },
+    ]
+
+    now = datetime.utcnow()
+    for i, inv_data in enumerate(investors_data):
+        investor = Investor(
+            company_id=demo_company.id,
+            name=inv_data["name"],
+            type=inv_data["type"],
+            geography=inv_data["geography"],
+            stage_focus=inv_data["stage_focus"],
+            thesis_tags=inv_data["thesis_tags"],
+            contact_json=inv_data["contact"],
+        )
+        db.add(investor)
+        db.flush()
+
+        pipeline = InvestorPipeline(
+            round_id=series_a_round.id,
+            investor_id=investor.id,
+            stage=inv_data["stage"],
+            probability=inv_data["probability"],
+            last_contacted_at=now - timedelta(days=i * 3 + 1),
+            notes=inv_data["notes"],
+        )
+        db.add(pipeline)
+
+    db.commit()
+    logger.info("Seeded 8 investors with pipeline entries")
+
+
+def _seed_company_decisions(db: Session, demo_company):
+    existing = db.query(CompanyDecision).filter(CompanyDecision.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    decisions_data = [
+        {
+            "title": "Hire 3 Senior Engineers for AI Team",
+            "context": "Current team is stretched thin across multiple projects. AI copilot features require dedicated ML engineers. Monthly burn will increase by ~$45K but expected to accelerate product development by 3x.",
+            "options": [
+                {"label": "Hire all 3 now", "impact": "Fastest product velocity, highest burn increase"},
+                {"label": "Hire 2 now, 1 in Q2", "impact": "Balanced approach, moderate burn increase"},
+                {"label": "Hire 1 senior + 2 mid-level", "impact": "Lower cost, but slower ramp-up"}
+            ],
+            "recommendation": {
+                "choice": "Hire 2 now, 1 in Q2",
+                "reasoning": "Simulation shows this option extends runway to 18+ months while achieving 80% of the velocity gain. The staged approach reduces risk if fundraising timeline slips.",
+                "simulation_impact": {"runway_delta": -2.5, "survival_18m_delta": -5, "revenue_impact": "+15% ARR growth"}
+            },
+            "status": "in_progress",
+            "owner": "CTO",
+            "tags": ["hiring", "engineering", "burn-rate"],
+            "confidence": "high",
+        },
+        {
+            "title": "Expand to US Market in Q2",
+            "context": "Strong product-market fit in India. US expansion could 3x TAM but requires $200K+ investment in GTM, compliance, and local team. Several enterprise prospects have shown interest.",
+            "options": [
+                {"label": "Full US launch Q2", "impact": "High investment, fastest market entry"},
+                {"label": "Soft launch with 3 pilot customers", "impact": "Lower risk, validated approach"},
+                {"label": "Defer to Q3 post-fundraise", "impact": "Wait for more runway, but lose momentum"}
+            ],
+            "recommendation": {
+                "choice": "Soft launch with 3 pilot customers",
+                "reasoning": "Monte Carlo shows that a pilot approach preserves 22+ months of runway while validating US demand. Full launch pre-fundraise carries 35% risk of runway crunch.",
+                "simulation_impact": {"runway_delta": -1.5, "survival_18m_delta": -3, "revenue_impact": "+$50K MRR in 6 months"}
+            },
+            "status": "proposed",
+            "owner": "CEO",
+            "tags": ["expansion", "go-to-market", "international"],
+            "confidence": "medium",
+        },
+        {
+            "title": "Switch from Monthly to Annual Billing Default",
+            "context": "Currently 70% of customers on monthly plans. Annual billing would improve cash flow predictability and reduce churn. Risk of lower conversion rate on landing page.",
+            "options": [
+                {"label": "Default annual with monthly option", "impact": "Improved cash flow, potential conversion drop"},
+                {"label": "Offer 20% annual discount", "impact": "Incentivize annual without forcing"},
+                {"label": "Keep monthly default", "impact": "No change, continue current trajectory"}
+            ],
+            "recommendation": {
+                "choice": "Offer 20% annual discount",
+                "reasoning": "Analysis of similar SaaS companies shows 20% discount drives 40-50% annual adoption without hurting conversion. Expected to improve net cash position by $80K over 12 months.",
+                "simulation_impact": {"runway_delta": 1.8, "survival_18m_delta": 4, "revenue_impact": "Neutral ARR, +$80K cash"}
+            },
+            "status": "decided",
+            "owner": "Head of Product",
+            "tags": ["pricing", "cash-flow", "retention"],
+            "confidence": "high",
+        },
+        {
+            "title": "Reduce Cloud Infrastructure Costs by 30%",
+            "context": "Monthly cloud spend is $12K and growing. Analysis shows 40% of compute is over-provisioned. Migration to reserved instances and right-sizing could save $3.6K/month.",
+            "options": [
+                {"label": "Full optimization sprint (2 weeks)", "impact": "30% savings, engineering time trade-off"},
+                {"label": "Quick wins only (3 days)", "impact": "15% savings, minimal disruption"},
+                {"label": "Defer until post-fundraise", "impact": "No savings, no disruption"}
+            ],
+            "recommendation": {
+                "choice": "Full optimization sprint (2 weeks)",
+                "reasoning": "The $43K annual savings extends runway by 1.5 months. Engineering capacity is available in the next sprint. ROI payback period is under 2 weeks.",
+                "simulation_impact": {"runway_delta": 1.5, "survival_18m_delta": 3, "revenue_impact": "None - pure cost savings"}
+            },
+            "status": "completed",
+            "owner": "DevOps Lead",
+            "tags": ["cost-optimization", "infrastructure", "runway"],
+            "confidence": "high",
+        },
+        {
+            "title": "Launch Enterprise Tier at $2,500/month",
+            "context": "Three enterprise prospects requesting features like SSO, audit logs, and dedicated support. Current highest plan is $499/month. Enterprise tier would require 4-6 weeks of engineering.",
+            "options": [
+                {"label": "Launch enterprise tier immediately", "impact": "Revenue upside, engineering focus shift"},
+                {"label": "Custom pricing for 3 prospects first", "impact": "Validate willingness to pay before building"},
+                {"label": "Wait for Series A resources", "impact": "Lose prospects, but preserve engineering focus"}
+            ],
+            "recommendation": {
+                "choice": "Custom pricing for 3 prospects first",
+                "reasoning": "Validating with 3 committed customers de-risks the investment. If 2+ convert at $2K+/month, the enterprise tier ROI is confirmed. Simulation shows this adds $5K-7.5K MRR with 90% confidence.",
+                "simulation_impact": {"runway_delta": 2.0, "survival_18m_delta": 6, "revenue_impact": "+$5K-7.5K MRR"}
+            },
+            "status": "in_progress",
+            "owner": "Head of Sales",
+            "tags": ["pricing", "enterprise", "revenue"],
+            "confidence": "medium",
+        },
+    ]
+
+    now = datetime.utcnow()
+    for i, d in enumerate(decisions_data):
+        decision = CompanyDecision(
+            company_id=demo_company.id,
+            title=d["title"],
+            context=d["context"],
+            options_json=d["options"],
+            recommendation_json=d["recommendation"],
+            status=d["status"],
+            owner=d["owner"],
+            tags=d["tags"],
+            confidence=d["confidence"],
+            created_at=now - timedelta(days=(len(decisions_data) - i) * 5),
+        )
+        db.add(decision)
+
+    db.commit()
+    logger.info("Seeded 5 company decisions")
 
 
 def seed_team_members(db: Session):
