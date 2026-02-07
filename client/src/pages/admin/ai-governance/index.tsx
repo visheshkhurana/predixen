@@ -13,7 +13,8 @@ import {
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
   Clock, ChevronRight, Loader2, ThumbsUp, ThumbsDown, Filter, Search,
   BarChart3, Timer, AlertCircle,
-  Settings, LineChart, FileText, Sliders, ToggleLeft
+  Settings, LineChart, FileText, Sliders, ToggleLeft,
+  Layout, Server, TestTube2, Cloud
 } from 'lucide-react';
 
 interface AgentStatus {
@@ -77,7 +78,7 @@ interface GovernanceState {
   approvals: any[];
 }
 
-const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'RISK', 'CHIEF_OF_STAFF'] as const;
+const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'FRONTEND_ARCHITECT', 'BACKEND_ARCHITECT', 'QA_STRATEGIST', 'SECURITY_ENGINEER', 'DEVOPS_RELIABILITY', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
 function getRationaleItems(rationale: any): string[] {
   if (!rationale) return [];
@@ -102,6 +103,11 @@ const AGENT_COLORS: Record<string, string> = {
   CTO: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   RISK: 'bg-red-500/20 text-red-400 border-red-500/30',
   TECH_LEAD: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  FRONTEND_ARCHITECT: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+  BACKEND_ARCHITECT: 'bg-green-500/20 text-green-400 border-green-500/30',
+  QA_STRATEGIST: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  SECURITY_ENGINEER: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+  DEVOPS_RELIABILITY: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
   CHIEF_OF_STAFF: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
 };
 
@@ -246,7 +252,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
       )}
 
       {/* Agent Ring */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3">
         {AGENTS.map((agent) => {
           const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
           const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
@@ -260,7 +266,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
             >
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold tracking-wide">{agent.replace('_', ' ')}</span>
+                  <span className="text-xs font-bold tracking-wide">{agent.replace(/_/g, ' ')}</span>
                   <StatusIcon className={`h-3.5 w-3.5 ${getStatusColor(agentData.status)}`} />
                 </div>
                 {agentData.summary && (
