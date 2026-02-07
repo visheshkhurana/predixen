@@ -78,7 +78,7 @@ interface GovernanceState {
   approvals: any[];
 }
 
-const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'FRONTEND_ARCHITECT', 'BACKEND_ARCHITECT', 'QA_STRATEGIST', 'SECURITY_ENGINEER', 'DEVOPS_RELIABILITY', 'RISK', 'CHIEF_OF_STAFF'] as const;
+const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'FRONTEND_ARCHITECT', 'BACKEND_ARCHITECT', 'QA_STRATEGIST', 'SECURITY_ENGINEER', 'DEVOPS_RELIABILITY', 'DATA_ENGINEER', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
 function getRationaleItems(rationale: any): string[] {
   if (!rationale) return [];
@@ -108,6 +108,7 @@ const AGENT_COLORS: Record<string, string> = {
   QA_STRATEGIST: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   SECURITY_ENGINEER: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
   DEVOPS_RELIABILITY: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
+  DATA_ENGINEER: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   CHIEF_OF_STAFF: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
 };
 
