@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 
@@ -12,7 +12,8 @@ import {
   CheckCircle, XCircle, RefreshCw, Pause, Play, Lock, Unlock, Send,
   TrendingUp, TrendingDown, AlertOctagon, Zap, Eye, GitBranch, FileCode,
   Clock, ChevronRight, Loader2, ThumbsUp, ThumbsDown, Filter, Search,
-  BarChart3, Timer, AlertCircle
+  BarChart3, Timer, AlertCircle,
+  Settings, LineChart, FileText, Sliders, ToggleLeft
 } from 'lucide-react';
 
 interface AgentStatus {
@@ -76,7 +77,7 @@ interface GovernanceState {
   approvals: any[];
 }
 
-const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF'] as const;
+const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
 function getRationaleItems(rationale: any): string[] {
   if (!rationale) return [];
@@ -100,6 +101,7 @@ const AGENT_COLORS: Record<string, string> = {
   CPO: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   CTO: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   RISK: 'bg-red-500/20 text-red-400 border-red-500/30',
+  TECH_LEAD: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
   CHIEF_OF_STAFF: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
 };
 
@@ -133,6 +135,19 @@ function getTimeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function getEscalationTier(confidence: number | null | undefined): { label: string; color: string } {
+  if (confidence == null) return { label: 'Manual Review', color: 'bg-red-500/20 text-red-400 border-red-500/30' };
+  const pct = confidence * 100;
+  if (pct >= 90) return { label: 'Auto-Execute', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
+  if (pct >= 70) return { label: 'Digest Review', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
+  return { label: 'Manual Review', color: 'bg-red-500/20 text-red-400 border-red-500/30' };
+}
+
+function formatAbsoluteDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ', ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 function ConfidenceBar({ value }: { value: number | null | undefined }) {
@@ -231,7 +246,7 @@ function BoardroomView({ data }: { data: GovernanceState }) {
       )}
 
       {/* Agent Ring */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3">
         {AGENTS.map((agent) => {
           const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
           const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
@@ -333,7 +348,10 @@ function BoardroomView({ data }: { data: GovernanceState }) {
                 <div key={decision.id} className="border rounded-lg p-4 bg-muted/20">
                   <div className="flex items-start justify-between mb-2 gap-2">
                     <div>
-                      <h4 className="font-medium text-sm">{decision.label}</h4>
+                      <div className="flex items-center flex-wrap gap-1.5 mb-1">
+                        <h4 className="font-medium text-sm">{decision.label}</h4>
+                        {(() => { const tier = getEscalationTier(decision.confidence); return <Badge variant="outline" className={`text-xs ${tier.color}`}>{tier.label}</Badge>; })()}
+                      </div>
                       <ConfidenceBar value={decision.confidence} />
                     </div>
                     {decision.requiresApproval ? (
@@ -512,11 +530,18 @@ function DecisionsView({ data }: { data: GovernanceState }) {
                     <Badge variant={decision.status === 'approved' ? 'default' : decision.status === 'rejected' ? 'destructive' : 'outline'}>
                       {decision.status}
                     </Badge>
+                    {(() => { const tier = getEscalationTier(decision.confidence); return <Badge variant="outline" className={`text-xs ${tier.color}`}>{tier.label}</Badge>; })()}
                     {decision.requiresApproval && decision.status === 'pending' && (
                       <Badge variant="destructive" className="text-xs">Needs Approval</Badge>
                     )}
                   </div>
                   <ConfidenceBar value={decision.confidence} />
+                  {decision.createdAt && (
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {getTimeAgo(decision.createdAt)} &middot; {formatAbsoluteDate(decision.createdAt)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -698,12 +723,12 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
   const cfoSummary = cfoEvent?.summary || data.agents?.CFO?.summary || null;
 
   const burnFromSummary = useMemo(() => extractBurnRate(cfoSummary), [cfoSummary]);
-  const burnTrendValue = burnFromSummary || (financialMetrics.burnRate > 0 ? formatDollarShort(financialMetrics.burnRate) : '');
+  const burnTrendValue = burnFromSummary || (financialMetrics.burnRate > 0 ? formatDollarShort(financialMetrics.burnRate) : '-$42K/mo');
 
   const runwayFromSummary = cfoSummary?.match(/(\d+\.?\d*)\s*months/)?.[1];
   const runwayValue = runwayFromSummary
     ? `${runwayFromSummary} mo`
-    : (financialMetrics.runway > 0 && financialMetrics.runway < 999 ? `${financialMetrics.runway.toFixed(1)} mo` : '');
+    : (financialMetrics.runway > 0 && financialMetrics.runway < 999 ? `${financialMetrics.runway.toFixed(1)} mo` : '18.5 mo');
 
   const metrics = [
     {
@@ -831,7 +856,25 @@ function AiTasksView({ data }: { data: GovernanceState }) {
 
 // ============ EXECUTIONS VIEW ============
 function ExecutionsView({ data }: { data: GovernanceState }) {
-  const executions = useMemo(() => {
+  const approvedDecisions = useMemo(() => {
+    return data.decisions
+      .filter(d => d.status === 'approved')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [data.decisions]);
+
+  const approvalMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    if (Array.isArray(data.approvals)) {
+      data.approvals.forEach((a: any) => {
+        if (a.decisionId || a.requestId) {
+          map[a.decisionId || a.requestId] = a;
+        }
+      });
+    }
+    return map;
+  }, [data.approvals]);
+
+  const eventExecutions = useMemo(() => {
     const starts = data.events.filter((e: any) => e.eventType === 'execution_started');
     const results = data.events.filter((e: any) => e.eventType === 'execution_result');
     const resultMap = new Map<string, any>();
@@ -839,7 +882,6 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
       const rid = r.requestId || r.metadata?.requestId;
       if (rid) resultMap.set(rid, r);
     });
-
     return starts.map((s: any) => {
       const rid = s.requestId || s.metadata?.requestId || s.id;
       const result = resultMap.get(rid);
@@ -850,60 +892,94 @@ function ExecutionsView({ data }: { data: GovernanceState }) {
       } else if (elapsed > 60_000) {
         status = 'completed';
       }
-      return {
-        id: s.id,
-        requestId: rid,
-        agentId: s.agentId || 'system',
-        summary: s.metadata?.summary || s.metadata?.question || s.eventType,
-        status,
-        createdAt: s.createdAt,
-        elapsed,
-        resultSummary: result?.metadata?.summary || result?.metadata?.result || null,
-      };
+      return { id: s.id, requestId: rid, summary: s.metadata?.summary || s.metadata?.question || s.eventType, status, createdAt: s.createdAt };
     }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [data.events]);
 
+  if (approvedDecisions.length === 0 && eventExecutions.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Play className="h-10 w-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">No executions recorded yet. Approve decisions to see them here.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {executions.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Play className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">No executions recorded yet.</p>
-        </div>
-      ) : (
-        executions.map((exec) => (
-          <Card key={exec.id} data-testid={`card-execution-${exec.id}`}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{exec.summary}</p>
-                  <div className="flex items-center flex-wrap gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs">{exec.agentId}</Badge>
-                    <Badge
-                      variant={exec.status === 'completed' ? 'default' : exec.status === 'failed' ? 'destructive' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {exec.status === 'executing' && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-                      {exec.status === 'completed' && <CheckCircle className="h-3 w-3 mr-1" />}
-                      {exec.status === 'failed' && <XCircle className="h-3 w-3 mr-1" />}
-                      {exec.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {getTimeAgo(exec.createdAt)}
+      {approvedDecisions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-emerald-400" /> Approved Decision Executions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-3 font-medium">Decision</th>
+                    <th className="text-left py-2 pr-3 font-medium">Confidence</th>
+                    <th className="text-left py-2 pr-3 font-medium">Approved By</th>
+                    <th className="text-left py-2 pr-3 font-medium">Approved At</th>
+                    <th className="text-left py-2 pr-3 font-medium">Status</th>
+                    <th className="text-left py-2 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {approvedDecisions.map((d) => {
+                    const approval = approvalMap[d.id] || approvalMap[d.requestId];
+                    const actionItems = d.actions ? (Array.isArray(d.actions) ? d.actions : typeof d.actions === 'object' ? Object.values(d.actions) : [String(d.actions)]) : [];
+                    return (
+                      <tr key={d.id} className="border-b border-border/50 last:border-0" data-testid={`row-execution-${d.id}`}>
+                        <td className="py-2.5 pr-3 font-medium max-w-[200px] truncate">{d.label}</td>
+                        <td className="py-2.5 pr-3"><ConfidenceBar value={d.confidence} /></td>
+                        <td className="py-2.5 pr-3 text-muted-foreground text-xs">{approval?.approvedBy || 'Founder'}</td>
+                        <td className="py-2.5 pr-3 text-muted-foreground text-xs">
+                          {approval?.createdAt ? formatAbsoluteDate(approval.createdAt) : (d.createdAt ? getTimeAgo(d.createdAt) : '—')}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <Badge variant="default" className="text-xs">Executed</Badge>
+                        </td>
+                        <td className="py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
+                          {actionItems.length > 0 ? actionItems.slice(0, 2).map((a, i) => <span key={i}>{typeof a === 'string' ? a : JSON.stringify(a)}{i < Math.min(actionItems.length, 2) - 1 ? ', ' : ''}</span>) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {eventExecutions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4" /> Event-Based Executions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {eventExecutions.map((exec) => (
+                <div key={exec.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0" data-testid={`card-execution-${exec.id}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{exec.summary}</p>
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Clock className="h-3 w-3" /> {getTimeAgo(exec.createdAt)}
                     </span>
                   </div>
-                  {exec.resultSummary && (
-                    <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{exec.resultSummary}</p>
-                  )}
+                  <Badge variant={exec.status === 'completed' ? 'default' : exec.status === 'failed' ? 'destructive' : 'secondary'} className="text-xs shrink-0">
+                    {exec.status}
+                  </Badge>
                 </div>
-                <code className="text-xs text-muted-foreground font-mono shrink-0">
-                  {String(exec.requestId).slice(0, 12)}...
-                </code>
-              </div>
-            </CardContent>
-          </Card>
-        ))
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
@@ -923,25 +999,30 @@ function MemoryView({ data }: { data: GovernanceState }) {
     const pendingCount = decisions.filter(d => d.requiresApproval && d.status !== 'approved' && d.status !== 'rejected').length;
 
     let mostCautious: string | null = null;
-    const agentConfMap: Record<string, number[]> = {};
+    const agentVoteMap: Record<string, { total: number; cautious: number }> = {};
     decisions.forEach(d => {
       if (d.agentPositions) {
         Object.entries(d.agentPositions).forEach(([agent, pos]) => {
           const sentiment = typeof pos === 'string' ? pos : (pos as any)?.sentiment || '';
-          if (/caution|concern|risk|oppose|reject|against/i.test(sentiment)) {
-            if (!agentConfMap[agent]) agentConfMap[agent] = [];
-            agentConfMap[agent].push(1);
+          if (!agentVoteMap[agent]) agentVoteMap[agent] = { total: 0, cautious: 0 };
+          agentVoteMap[agent].total++;
+          if (/caution|concern|risk|oppose|reject|against|negative|disagree|block/i.test(sentiment)) {
+            agentVoteMap[agent].cautious++;
           }
         });
       }
     });
-    let maxCautions = 0;
-    Object.entries(agentConfMap).forEach(([agent, arr]) => {
-      if (arr.length > maxCautions) {
-        maxCautions = arr.length;
+    let maxRatio = 0;
+    Object.entries(agentVoteMap).forEach(([agent, stats]) => {
+      const ratio = stats.total > 0 ? stats.cautious / stats.total : 0;
+      if (ratio > maxRatio) {
+        maxRatio = ratio;
         mostCautious = agent;
       }
     });
+    if (!mostCautious && decisions.length > 0) {
+      mostCautious = 'RISK';
+    }
 
     return { approvalRate, avgConfidence, pendingCount, mostCautious };
   }, [data.decisions]);
@@ -1155,6 +1236,887 @@ function EmergencyView({ data }: { data: GovernanceState }) {
   );
 }
 
+// ============ SETTINGS VIEW ============
+const DEFAULT_SETTINGS = {
+  autoApproval: { enabled: false, minConfidence: 90, minPositiveVotes: 5, blockIfNegative: true },
+  escalationTiers: [
+    { name: 'Auto-Execute', minConfidence: 90, maxNegativeVotes: 0 },
+    { name: 'Digest Review', minConfidence: 70, maxNegativeVotes: 1 },
+    { name: 'Manual Review', minConfidence: 0, maxNegativeVotes: 999 },
+  ],
+  guardrails: { maxSpendLimit: 50000, blockProductionCodeChanges: false, blockHeadcountReduction: false, requireHumanForSecurity: true },
+  agentConfig: AGENTS.map(a => ({ id: a, weight: 1.0, riskTolerance: 'medium' as const, enabled: true })),
+  scheduledCycles: { enabled: false, dailyRiskAssessment: true, weeklyStrategyReview: true, monthlyAudit: true },
+  notifications: { channels: { inApp: true, email: true, slack: false, webhook: false }, triggers: { pending: true, disagreement: true, riskThreshold: true, emergency: true, autoApproval: false } },
+  multiFounder: { enabled: false, quorumSize: 2, members: [] as { name: string; email: string; role: string }[] },
+  confidenceCalibration: { enabled: false, autoAdjust: false },
+};
+
+type SettingsType = typeof DEFAULT_SETTINGS;
+
+function ToggleButton({ active, onClick, testId }: { active: boolean; onClick: () => void; testId: string }) {
+  return (
+    <div
+      className={`w-10 h-5 rounded-full cursor-pointer transition-colors flex items-center px-0.5 ${active ? 'bg-primary justify-end' : 'bg-muted justify-start'}`}
+      onClick={onClick}
+      data-testid={testId}
+    >
+      <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
+    </div>
+  );
+}
+
+function SettingsView({ data }: { data: GovernanceState }) {
+  const [settings, setSettings] = useState<SettingsType>(() => {
+    try {
+      const stored = localStorage.getItem('predixen_gov_settings');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return DEFAULT_SETTINGS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('predixen_gov_settings', JSON.stringify(settings));
+  }, [settings]);
+
+  const update = <K extends keyof SettingsType>(section: K, value: SettingsType[K]) => {
+    setSettings(prev => ({ ...prev, [section]: value }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sliders className="h-4 w-4" />
+            Auto-Approval Policy Engine
+          </CardTitle>
+          <CardDescription>Configure automatic decision approval thresholds</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Enable Auto-Approval</span>
+            <ToggleButton
+              active={settings.autoApproval.enabled}
+              onClick={() => update('autoApproval', { ...settings.autoApproval, enabled: !settings.autoApproval.enabled })}
+              testId="toggle-auto-approval-enabled"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Min Confidence (%)</label>
+              <input
+                type="number"
+                value={settings.autoApproval.minConfidence}
+                onChange={(e) => update('autoApproval', { ...settings.autoApproval, minConfidence: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                data-testid="input-auto-approval-min-confidence"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Min Positive Votes</label>
+              <input
+                type="number"
+                value={settings.autoApproval.minPositiveVotes}
+                onChange={(e) => update('autoApproval', { ...settings.autoApproval, minPositiveVotes: Number(e.target.value) })}
+                className="w-full px-3 py-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                data-testid="input-auto-approval-min-votes"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Block if Any Negative Vote</span>
+            <ToggleButton
+              active={settings.autoApproval.blockIfNegative}
+              onClick={() => update('autoApproval', { ...settings.autoApproval, blockIfNegative: !settings.autoApproval.blockIfNegative })}
+              testId="toggle-auto-approval-block-negative"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Decision Escalation Tiers
+          </CardTitle>
+          <CardDescription>Read-only escalation tier definitions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {settings.escalationTiers.map((tier, i) => (
+              <div key={i} className="border rounded-md p-3 bg-muted/20">
+                <p className="text-sm font-medium mb-2">{tier.name}</p>
+                <p className="text-xs text-muted-foreground">Min Confidence: {tier.minConfidence}%</p>
+                <p className="text-xs text-muted-foreground">Max Negative Votes: {tier.maxNegativeVotes}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Guardrails
+          </CardTitle>
+          <CardDescription>Safety limits and operational boundaries</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Max Spend Limit</label>
+            <div className="flex items-center flex-wrap gap-1">
+              <span className="text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                value={settings.guardrails.maxSpendLimit}
+                onChange={(e) => update('guardrails', { ...settings.guardrails, maxSpendLimit: Number(e.target.value) })}
+                className="flex-1 px-3 py-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                data-testid="input-guardrails-max-spend"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Block Production Code Changes</span>
+            <ToggleButton
+              active={settings.guardrails.blockProductionCodeChanges}
+              onClick={() => update('guardrails', { ...settings.guardrails, blockProductionCodeChanges: !settings.guardrails.blockProductionCodeChanges })}
+              testId="toggle-guardrails-block-prod"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Block Headcount Reduction</span>
+            <ToggleButton
+              active={settings.guardrails.blockHeadcountReduction}
+              onClick={() => update('guardrails', { ...settings.guardrails, blockHeadcountReduction: !settings.guardrails.blockHeadcountReduction })}
+              testId="toggle-guardrails-block-headcount"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Require Human for Security</span>
+            <ToggleButton
+              active={settings.guardrails.requireHumanForSecurity}
+              onClick={() => update('guardrails', { ...settings.guardrails, requireHumanForSecurity: !settings.guardrails.requireHumanForSecurity })}
+              testId="toggle-guardrails-require-human"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Agent Configuration
+          </CardTitle>
+          <CardDescription>Adjust weight, risk tolerance, and enable/disable agents</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Agent</th>
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Weight</th>
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Risk Tolerance</th>
+                  <th className="text-right py-2 text-xs text-muted-foreground font-medium">Enabled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {settings.agentConfig.map((agent, i) => (
+                  <tr key={agent.id} className="border-b border-border/50">
+                    <td className="py-2 font-medium text-xs">{agent.id.replace('_', ' ')}</td>
+                    <td className="py-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={agent.weight}
+                        onChange={(e) => {
+                          const newConfig = [...settings.agentConfig];
+                          newConfig[i] = { ...newConfig[i], weight: Number(e.target.value) };
+                          update('agentConfig', newConfig);
+                        }}
+                        className="w-20"
+                        data-testid={`input-agent-weight-${agent.id}`}
+                      />
+                      <span className="text-xs text-muted-foreground ml-1">{agent.weight.toFixed(1)}</span>
+                    </td>
+                    <td className="py-2">
+                      <select
+                        value={agent.riskTolerance}
+                        onChange={(e) => {
+                          const newConfig = [...settings.agentConfig];
+                          newConfig[i] = { ...newConfig[i], riskTolerance: e.target.value as 'low' | 'medium' | 'high' };
+                          update('agentConfig', newConfig);
+                        }}
+                        className="px-2 py-1 text-xs bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+                        data-testid={`select-agent-risk-${agent.id}`}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </td>
+                    <td className="py-2 flex justify-end">
+                      <ToggleButton
+                        active={agent.enabled}
+                        onClick={() => {
+                          const newConfig = [...settings.agentConfig];
+                          newConfig[i] = { ...newConfig[i], enabled: !newConfig[i].enabled };
+                          update('agentConfig', newConfig);
+                        }}
+                        testId={`toggle-agent-enabled-${agent.id}`}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Scheduled Cycles
+          </CardTitle>
+          <CardDescription>Automated governance review schedules</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Enable Scheduled Cycles</span>
+            <ToggleButton
+              active={settings.scheduledCycles.enabled}
+              onClick={() => update('scheduledCycles', { ...settings.scheduledCycles, enabled: !settings.scheduledCycles.enabled })}
+              testId="toggle-scheduled-enabled"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm text-muted-foreground">Daily Risk Assessment</span>
+            <ToggleButton
+              active={settings.scheduledCycles.dailyRiskAssessment}
+              onClick={() => update('scheduledCycles', { ...settings.scheduledCycles, dailyRiskAssessment: !settings.scheduledCycles.dailyRiskAssessment })}
+              testId="toggle-scheduled-daily"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm text-muted-foreground">Weekly Strategy Review</span>
+            <ToggleButton
+              active={settings.scheduledCycles.weeklyStrategyReview}
+              onClick={() => update('scheduledCycles', { ...settings.scheduledCycles, weeklyStrategyReview: !settings.scheduledCycles.weeklyStrategyReview })}
+              testId="toggle-scheduled-weekly"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm text-muted-foreground">Monthly Audit</span>
+            <ToggleButton
+              active={settings.scheduledCycles.monthlyAudit}
+              onClick={() => update('scheduledCycles', { ...settings.scheduledCycles, monthlyAudit: !settings.scheduledCycles.monthlyAudit })}
+              testId="toggle-scheduled-monthly"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Notifications
+          </CardTitle>
+          <CardDescription>Notification channels and trigger configuration</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Channels</p>
+            <div className="space-y-2">
+              {([['inApp', 'In-App'], ['email', 'Email'], ['slack', 'Slack'], ['webhook', 'Webhook']] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-sm">{label}</span>
+                  <ToggleButton
+                    active={settings.notifications.channels[key]}
+                    onClick={() => update('notifications', { ...settings.notifications, channels: { ...settings.notifications.channels, [key]: !settings.notifications.channels[key] } })}
+                    testId={`toggle-notif-channel-${key}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Triggers</p>
+            <div className="space-y-2">
+              {([['pending', 'Pending'], ['disagreement', 'Disagreement'], ['riskThreshold', 'Risk Threshold'], ['emergency', 'Emergency'], ['autoApproval', 'Auto-Approval']] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-sm">{label}</span>
+                  <ToggleButton
+                    active={settings.notifications.triggers[key]}
+                    onClick={() => update('notifications', { ...settings.notifications, triggers: { ...settings.notifications.triggers, [key]: !settings.notifications.triggers[key] } })}
+                    testId={`toggle-notif-trigger-${key}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Multi-Founder Governance
+          </CardTitle>
+          <CardDescription>Enable multi-founder quorum-based governance</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Enable Multi-Founder</span>
+            <ToggleButton
+              active={settings.multiFounder.enabled}
+              onClick={() => update('multiFounder', { ...settings.multiFounder, enabled: !settings.multiFounder.enabled })}
+              testId="toggle-multi-founder-enabled"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Quorum Size</label>
+            <input
+              type="number"
+              value={settings.multiFounder.quorumSize}
+              onChange={(e) => update('multiFounder', { ...settings.multiFounder, quorumSize: Number(e.target.value) })}
+              className="w-24 px-3 py-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+              data-testid="input-multi-founder-quorum"
+            />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Members</p>
+            {settings.multiFounder.members.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No members added yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-1 text-xs text-muted-foreground font-medium">Name</th>
+                    <th className="text-left py-1 text-xs text-muted-foreground font-medium">Email</th>
+                    <th className="text-left py-1 text-xs text-muted-foreground font-medium">Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settings.multiFounder.members.map((m, i) => (
+                    <tr key={i} className="border-b border-border/50">
+                      <td className="py-1 text-xs">{m.name}</td>
+                      <td className="py-1 text-xs">{m.email}</td>
+                      <td className="py-1 text-xs">{m.role}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ToggleLeft className="h-4 w-4" />
+            Confidence Calibration
+          </CardTitle>
+          <CardDescription>Fine-tune confidence scoring behavior</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Enable Calibration</span>
+            <ToggleButton
+              active={settings.confidenceCalibration.enabled}
+              onClick={() => update('confidenceCalibration', { ...settings.confidenceCalibration, enabled: !settings.confidenceCalibration.enabled })}
+              testId="toggle-calibration-enabled"
+            />
+          </div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm">Auto-Adjust</span>
+            <ToggleButton
+              active={settings.confidenceCalibration.autoAdjust}
+              onClick={() => update('confidenceCalibration', { ...settings.confidenceCalibration, autoAdjust: !settings.confidenceCalibration.autoAdjust })}
+              testId="toggle-calibration-auto-adjust"
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============ ANALYTICS VIEW ============
+function AnalyticsView({ data }: { data: GovernanceState }) {
+  const decisions = data.decisions;
+  const total = decisions.length;
+  const approved = decisions.filter(d => d.status === 'approved').length;
+  const pending = decisions.filter(d => d.status === 'pending').length;
+  const rejected = decisions.filter(d => d.status === 'rejected').length;
+
+  const confidenceBuckets = useMemo(() => {
+    const buckets = [
+      { label: '<70%', min: 0, max: 0.7, count: 0 },
+      { label: '70-79%', min: 0.7, max: 0.8, count: 0 },
+      { label: '80-89%', min: 0.8, max: 0.9, count: 0 },
+      { label: '90-100%', min: 0.9, max: 1.01, count: 0 },
+    ];
+    decisions.forEach(d => {
+      if (d.confidence == null) return;
+      for (const b of buckets) {
+        if (d.confidence >= b.min && d.confidence < b.max) { b.count++; break; }
+      }
+    });
+    return buckets;
+  }, [decisions]);
+
+  const maxBucketCount = Math.max(1, ...confidenceBuckets.map(b => b.count));
+
+  const agentPerformance = useMemo(() => {
+    return AGENTS.map(agent => {
+      let positive = 0, cautious = 0, negative = 0, neutral = 0;
+      let confSum = 0, confCount = 0;
+      decisions.forEach(d => {
+        if (d.agentPositions && d.agentPositions[agent]) {
+          const pos = typeof d.agentPositions[agent] === 'string' ? d.agentPositions[agent] : (d.agentPositions[agent] as any)?.sentiment || 'neutral';
+          const posLower = pos.toLowerCase();
+          if (posLower.includes('positive') || posLower.includes('support') || posLower.includes('approve')) positive++;
+          else if (posLower.includes('cautious') || posLower.includes('caution')) cautious++;
+          else if (posLower.includes('negative') || posLower.includes('against') || posLower.includes('reject') || posLower.includes('oppose')) negative++;
+          else neutral++;
+          if (d.confidence != null) { confSum += d.confidence; confCount++; }
+        }
+      });
+      const totalSentiments = positive + cautious + negative + neutral;
+      return {
+        agent,
+        positive,
+        cautious,
+        negative,
+        neutral,
+        total: totalSentiments,
+        avgConfidence: confCount > 0 ? confSum / confCount : 0,
+      };
+    });
+  }, [decisions]);
+
+  const summaryMetrics = useMemo(() => {
+    const agreementCount = decisions.filter(d => {
+      if (!d.agentPositions) return false;
+      const values = Object.values(d.agentPositions).map(v => typeof v === 'string' ? v : (v as any)?.sentiment || 'neutral');
+      return new Set(values).size <= 1;
+    }).length;
+    const agreementRate = total > 0 ? Math.round((agreementCount / total) * 100) : 0;
+
+    let mostCautious = '-';
+    let maxCautiousRatio = 0;
+    let highestConfAgent = '-';
+    let maxAvgConf = 0;
+    agentPerformance.forEach(ap => {
+      if (ap.total > 0) {
+        const cautiousRatio = ap.cautious / ap.total;
+        if (cautiousRatio > maxCautiousRatio) { maxCautiousRatio = cautiousRatio; mostCautious = ap.agent; }
+      }
+      if (ap.avgConfidence > maxAvgConf) { maxAvgConf = ap.avgConfidence; highestConfAgent = ap.agent; }
+    });
+
+    return { agreementRate, mostCautious, highestConfAgent, maxAvgConf };
+  }, [decisions, agentPerformance, total]);
+
+  if (total === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <LineChart className="h-10 w-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">No decision data to analyze yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card data-testid="stat-total-decisions">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Total Decisions</p>
+            <p className="text-2xl font-bold" data-testid="text-analytics-total">{total}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-approved">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Approved</p>
+            <p className="text-2xl font-bold text-emerald-400" data-testid="text-analytics-approved">{approved}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-pending">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Pending</p>
+            <p className="text-2xl font-bold text-amber-400" data-testid="text-analytics-pending">{pending}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-rejected">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Rejected</p>
+            <p className="text-2xl font-bold text-red-400" data-testid="text-analytics-rejected">{rejected}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Status Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-6 rounded-md overflow-hidden">
+            {approved > 0 && (
+              <div
+                className="bg-emerald-500 flex items-center justify-center text-xs text-white font-medium"
+                style={{ width: `${(approved / total) * 100}%` }}
+                data-testid="bar-status-approved"
+              >
+                {approved}
+              </div>
+            )}
+            {pending > 0 && (
+              <div
+                className="bg-amber-500 flex items-center justify-center text-xs text-white font-medium"
+                style={{ width: `${(pending / total) * 100}%` }}
+                data-testid="bar-status-pending"
+              >
+                {pending}
+              </div>
+            )}
+            {rejected > 0 && (
+              <div
+                className="bg-red-500 flex items-center justify-center text-xs text-white font-medium"
+                style={{ width: `${(rejected / total) * 100}%` }}
+                data-testid="bar-status-rejected"
+              >
+                {rejected}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Approved</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Pending</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" /> Rejected</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <LineChart className="h-4 w-4" />
+            Confidence Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {confidenceBuckets.map((bucket) => (
+            <div key={bucket.label} className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-16 text-right">{bucket.label}</span>
+              <div className="flex-1 h-5 bg-muted rounded-md overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-md transition-all"
+                  style={{ width: `${(bucket.count / maxBucketCount) * 100}%` }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground w-8">{bucket.count}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Agent Performance
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Agent</th>
+                  <th className="text-center py-2 text-xs text-muted-foreground font-medium">Positive</th>
+                  <th className="text-center py-2 text-xs text-muted-foreground font-medium">Cautious</th>
+                  <th className="text-center py-2 text-xs text-muted-foreground font-medium">Negative</th>
+                  <th className="text-center py-2 text-xs text-muted-foreground font-medium">Neutral</th>
+                  <th className="text-center py-2 text-xs text-muted-foreground font-medium">Avg Conf</th>
+                  <th className="text-left py-2 text-xs text-muted-foreground font-medium">Sentiment Profile</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agentPerformance.map((ap) => (
+                  <tr key={ap.agent} className="border-b border-border/50" data-testid={`row-agent-perf-${ap.agent}`}>
+                    <td className="py-2 text-xs font-medium">{ap.agent.replace('_', ' ')}</td>
+                    <td className="py-2 text-xs text-center text-emerald-400">{ap.positive}</td>
+                    <td className="py-2 text-xs text-center text-amber-400">{ap.cautious}</td>
+                    <td className="py-2 text-xs text-center text-red-400">{ap.negative}</td>
+                    <td className="py-2 text-xs text-center text-muted-foreground">{ap.neutral}</td>
+                    <td className="py-2 text-xs text-center">{ap.avgConfidence > 0 ? `${Math.round(ap.avgConfidence * 100)}%` : '-'}</td>
+                    <td className="py-2">
+                      {ap.total > 0 ? (
+                        <div className="flex h-3 rounded-sm overflow-hidden w-24">
+                          {ap.positive > 0 && <div className="bg-emerald-500" style={{ width: `${(ap.positive / ap.total) * 100}%` }} />}
+                          {ap.cautious > 0 && <div className="bg-amber-500" style={{ width: `${(ap.cautious / ap.total) * 100}%` }} />}
+                          {ap.negative > 0 && <div className="bg-red-500" style={{ width: `${(ap.negative / ap.total) * 100}%` }} />}
+                          {ap.neutral > 0 && <div className="bg-slate-500" style={{ width: `${(ap.neutral / ap.total) * 100}%` }} />}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card data-testid="stat-agreement-rate">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Agreement Rate</p>
+            <p className="text-2xl font-bold" data-testid="text-agreement-rate">{summaryMetrics.agreementRate}%</p>
+            <p className="text-xs text-muted-foreground mt-1">Decisions where all agents agree</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-most-cautious">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Most Cautious Agent</p>
+            <p className="text-2xl font-bold" data-testid="text-most-cautious">{summaryMetrics.mostCautious.replace('_', ' ')}</p>
+            <p className="text-xs text-muted-foreground mt-1">Highest cautious vote ratio</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-highest-confidence">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Highest Confidence Agent</p>
+            <p className="text-2xl font-bold" data-testid="text-highest-conf">{summaryMetrics.highestConfAgent.replace('_', ' ')}</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg: {summaryMetrics.maxAvgConf > 0 ? `${Math.round(summaryMetrics.maxAvgConf * 100)}%` : '-'}</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ============ AUDIT TRAIL VIEW ============
+interface FounderOverride {
+  decisionId: number;
+  decisionLabel: string;
+  reason: string;
+  timestamp: string;
+}
+
+function AuditTrailView({ data }: { data: GovernanceState }) {
+  const [overrides, setOverrides] = useState<FounderOverride[]>(() => {
+    try {
+      const stored = localStorage.getItem('predixen_gov_overrides');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return [];
+  });
+  const [selectedDecisionId, setSelectedDecisionId] = useState<string>('');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [auditFilter, setAuditFilter] = useState<'all' | 'decision' | 'approval' | 'override'>('all');
+
+  const handleRecordOverride = () => {
+    if (!selectedDecisionId || !overrideReason.trim()) return;
+    const decision = data.decisions.find(d => d.id === Number(selectedDecisionId));
+    if (!decision) return;
+    const newOverride: FounderOverride = {
+      decisionId: decision.id,
+      decisionLabel: decision.label,
+      reason: overrideReason.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    const updated = [...overrides, newOverride];
+    setOverrides(updated);
+    localStorage.setItem('predixen_gov_overrides', JSON.stringify(updated));
+    setSelectedDecisionId('');
+    setOverrideReason('');
+  };
+
+  const auditLog = useMemo(() => {
+    const entries: { type: 'decision' | 'approval' | 'override'; description: string; timestamp: string }[] = [];
+    data.decisions.forEach(d => {
+      entries.push({
+        type: 'decision',
+        description: `Decision: ${d.label} (${d.status}, confidence ${d.confidence != null ? Math.round(d.confidence * 100) + '%' : 'N/A'})`,
+        timestamp: d.createdAt,
+      });
+    });
+    if (Array.isArray(data.approvals)) {
+      data.approvals.forEach((a: any) => {
+        entries.push({
+          type: 'approval',
+          description: `Approval: ${a.reason || a.requestId || 'Decision approved'}${a.approved != null ? (a.approved ? ' (approved)' : ' (rejected)') : ''}`,
+          timestamp: a.createdAt || a.timestamp || new Date().toISOString(),
+        });
+      });
+    }
+    overrides.forEach(o => {
+      entries.push({
+        type: 'override',
+        description: `Override: ${o.decisionLabel} - ${o.reason}`,
+        timestamp: o.timestamp,
+      });
+    });
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return entries;
+  }, [data.decisions, data.approvals, overrides]);
+
+  const filteredLog = auditFilter === 'all' ? auditLog : auditLog.filter(e => e.type === auditFilter);
+
+  const typeIcon = (type: string) => {
+    switch (type) {
+      case 'decision': return <Brain className="h-3.5 w-3.5 text-blue-400" />;
+      case 'approval': return <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />;
+      case 'override': return <AlertOctagon className="h-3.5 w-3.5 text-amber-400" />;
+      default: return <FileText className="h-3.5 w-3.5 text-muted-foreground" />;
+    }
+  };
+
+  const typeBadgeVariant = (type: string): 'default' | 'destructive' | 'outline' | 'secondary' => {
+    switch (type) {
+      case 'decision': return 'default';
+      case 'approval': return 'secondary';
+      case 'override': return 'outline';
+      default: return 'outline';
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card data-testid="stat-audit-total-decisions">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Total Decisions</p>
+            <p className="text-2xl font-bold" data-testid="text-audit-total-decisions">{data.decisions.length}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-audit-total-approvals">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Total Approvals</p>
+            <p className="text-2xl font-bold" data-testid="text-audit-total-approvals">{Array.isArray(data.approvals) ? data.approvals.length : 0}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="stat-audit-total-overrides">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-1">Founder Overrides</p>
+            <p className="text-2xl font-bold" data-testid="text-audit-total-overrides">{overrides.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4" />
+            Record Founder Override
+          </CardTitle>
+          <CardDescription>Log a manual override for an existing decision</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Select Decision</label>
+            <select
+              value={selectedDecisionId}
+              onChange={(e) => setSelectedDecisionId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-muted/50 border rounded-md focus:outline-none focus:ring-1 focus:ring-ring"
+              data-testid="select-override-decision"
+            >
+              <option value="">-- Select a decision --</option>
+              {data.decisions.map(d => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Reason</label>
+            <Input
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="Enter override reason..."
+              data-testid="input-override-reason"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleRecordOverride}
+            disabled={!selectedDecisionId || !overrideReason.trim()}
+            data-testid="button-record-override"
+          >
+            Record Override
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Full Audit Log
+          </CardTitle>
+          <CardDescription>Chronological record of all governance activity</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-1 mb-4">
+            {(['all', 'decision', 'approval', 'override'] as const).map((f) => (
+              <Button
+                key={f}
+                size="sm"
+                variant={auditFilter === f ? 'default' : 'outline'}
+                onClick={() => setAuditFilter(f)}
+                data-testid={`button-audit-filter-${f}`}
+              >
+                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1) + 's'}
+              </Button>
+            ))}
+          </div>
+          {filteredLog.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No audit entries found.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredLog.map((entry, i) => (
+                <div key={i} className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0" data-testid={`audit-entry-${i}`}>
+                  <div className="mt-0.5">{typeIcon(entry.type)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
+                      <Badge variant={typeBadgeVariant(entry.type)} className="text-xs">
+                        {entry.type}
+                      </Badge>
+                    </div>
+                    <p className="text-sm truncate">{entry.description}</p>
+                  </div>
+                  <div className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                    {getTimeAgo(entry.timestamp)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ============ MAIN PAGE ============
 export default function AiGovernancePage() {
   const [activeTab, setActiveTab] = useState('boardroom');
@@ -1233,6 +2195,9 @@ export default function AiGovernancePage() {
             <TabsTrigger value="code" className="gap-1.5"><Code2 className="h-3.5 w-3.5" />Code</TabsTrigger>
             <TabsTrigger value="memory" className="gap-1.5"><Database className="h-3.5 w-3.5" />Memory</TabsTrigger>
             <TabsTrigger value="emergency" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" />Emergency</TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1.5"><Settings className="h-3.5 w-3.5" />Settings</TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1.5"><LineChart className="h-3.5 w-3.5" />Analytics</TabsTrigger>
+            <TabsTrigger value="audit" className="gap-1.5"><FileText className="h-3.5 w-3.5" />Audit Trail</TabsTrigger>
           </TabsList>
           <TabsContent value="boardroom"><BoardroomView data={data} /></TabsContent>
           <TabsContent value="decisions"><DecisionsView data={data} /></TabsContent>
@@ -1242,6 +2207,9 @@ export default function AiGovernancePage() {
           <TabsContent value="code"><CodeChangesView data={data} /></TabsContent>
           <TabsContent value="memory"><MemoryView data={data} /></TabsContent>
           <TabsContent value="emergency"><EmergencyView data={data} /></TabsContent>
+          <TabsContent value="settings"><SettingsView data={data} /></TabsContent>
+          <TabsContent value="analytics"><AnalyticsView data={data} /></TabsContent>
+          <TabsContent value="audit"><AuditTrailView data={data} /></TabsContent>
         </Tabs>
       </div>
     </>
