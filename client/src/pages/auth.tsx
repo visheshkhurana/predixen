@@ -14,7 +14,7 @@ import { SiGoogle, SiGithub } from 'react-icons/si';
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { setToken, setUser } = useFounderStore();
+  const { setToken, setUser, setCurrentCompany, setCompanies } = useFounderStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -108,6 +108,18 @@ export default function AuthPage() {
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+      
+      try {
+        const companies = await api.companies.list();
+        if (companies && companies.length > 0) {
+          const demoCompany = companies.find((c: any) => c.name === 'TechFlow Analytics') || companies[0];
+          setCompanies(companies);
+          setCurrentCompany(demoCompany);
+        }
+      } catch (e) {
+        console.warn('Failed to auto-select demo company');
+      }
+      
       toast({ title: 'Welcome to the demo!' });
       setLocation('/');
     } catch (err) {

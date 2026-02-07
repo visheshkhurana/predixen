@@ -82,6 +82,12 @@ def seed_demo_data(db: Session):
         company = db.query(Company).filter(Company.user_id == demo_user.id).first()
         if company:
             demo_company = company
+            if demo_company.name != "TechFlow Analytics":
+                demo_company.name = "TechFlow Analytics"
+                demo_company.industry = "saas"
+                demo_company.stage = "series_a"
+                db.commit()
+                logger.info("Reset demo company name to TechFlow Analytics")
             cap_table_exists = db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company.id).first()
             if cap_table_exists:
                 logger.info("Demo data v2 already exists, ensuring v3+ data")
