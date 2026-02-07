@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
-  LayoutDashboard, Users, Mail, Activity, BarChart3, 
+  LayoutDashboard, Users, UsersRound, Mail, Activity, BarChart3, 
   Building2, CreditCard, LogOut, ChevronRight,
   Menu, X, FileText, Shield, FlaskConical, Brain
 } from 'lucide-react';
@@ -24,6 +24,7 @@ const navItems: NavItem[] = [
   { title: 'Invitations', href: '/admin/invites', icon: Mail },
   { title: 'Email Templates', href: '/admin/email-templates', icon: FileText },
   { title: 'Companies', href: '/admin/companies', icon: Building2 },
+  { title: 'Team', href: '/admin/team', icon: UsersRound },
   { title: 'Billing', href: '/admin/billing', icon: CreditCard },
   { title: 'Metrics', href: '/admin/metrics', icon: BarChart3 },
   { title: 'Login History', href: '/admin/login-history', icon: Activity },
