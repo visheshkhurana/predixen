@@ -251,6 +251,7 @@ async def get_connector_status(
     connectors_config = metadata.get("connectors", {})
     
     statuses = []
+    seen_ids = set()
     for provider_id in ConnectorRegistry.get_available_providers():
         config = connectors_config.get(provider_id, {})
         statuses.append({
@@ -260,6 +261,17 @@ async def get_connector_status(
             "records_synced": config.get("records_synced", 0),
             "error": config.get("last_error"),
         })
+        seen_ids.add(provider_id)
+    
+    for provider_id, config in connectors_config.items():
+        if provider_id not in seen_ids and isinstance(config, dict):
+            statuses.append({
+                "provider_id": provider_id,
+                "connected": config.get("connected", False),
+                "last_sync": config.get("last_sync"),
+                "records_synced": config.get("records_synced", 0),
+                "error": config.get("last_error"),
+            })
     
     return {
         "company_id": company_id,
