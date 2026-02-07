@@ -35,12 +35,48 @@ def get_integration_status(
     """
     Get status of all integrations for a company.
     """
+    from server.models.user import User
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    # Return available integrations and their status
-    # In production, this would read from a stored integration config table
+    demo_user = db.query(User).filter(User.id == company.user_id, User.email == "demo@predixen.ai").first()
+    if demo_user:
+        from datetime import datetime, timedelta
+        last_sync_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+        return {
+            "company_id": company_id,
+            "integrations": {
+                "accounting": {
+                    "available": ["quickbooks", "xero"],
+                    "connected": "quickbooks",
+                    "last_sync": last_sync_time,
+                    "sync_details": {
+                        "records_synced": 847,
+                        "last_error": None
+                    }
+                },
+                "crm": {
+                    "available": ["salesforce", "hubspot"],
+                    "connected": "hubspot",
+                    "last_sync": last_sync_time,
+                    "sync_details": {
+                        "records_synced": 234,
+                        "last_error": None
+                    }
+                },
+                "payments": {
+                    "available": ["stripe"],
+                    "connected": "stripe",
+                    "last_sync": last_sync_time,
+                    "sync_details": {
+                        "records_synced": 1256,
+                        "last_error": None
+                    }
+                },
+            },
+        }
+    
     return {
         "company_id": company_id,
         "integrations": {

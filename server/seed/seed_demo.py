@@ -12,9 +12,61 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.team_member import TeamMember
+from server.models.fundraising import CompanyCapTable, FundraisingRound
+from server.models.company_source import CompanyAlert
+from server.models.conversation import Conversation, ConversationMessage
+from server.models.metric_definition import MetricDefinition
+from server.models.metric_value import MetricValue
 from server.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
+
+DEMO_SEED_VERSION = 2
+
+
+def _ensure_connector_metadata(db: Session, company):
+    last_sync = (datetime.now() - timedelta(hours=2)).isoformat()
+    connectors = {
+        "quickbooks": {
+            "connected": True,
+            "last_sync": last_sync,
+            "records_synced": 847,
+            "last_error": None,
+        },
+        "hubspot": {
+            "connected": True,
+            "last_sync": last_sync,
+            "records_synced": 234,
+            "last_error": None,
+        },
+        "stripe": {
+            "connected": True,
+            "last_sync": last_sync,
+            "records_synced": 1256,
+            "last_error": None,
+        },
+        "razorpayx_payroll": {
+            "connected": True,
+            "last_sync": last_sync,
+            "records_synced": 156,
+            "last_error": None,
+        },
+        "google_sheets": {
+            "connected": True,
+            "last_sync": last_sync,
+            "records_synced": 89,
+            "last_error": None,
+        },
+    }
+    metadata = company.metadata_json or {}
+    if metadata.get("connectors") != connectors:
+        metadata["connectors"] = connectors
+        company.metadata_json = metadata
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(company, "metadata_json")
+        db.commit()
+        logger.info("Updated demo company connector metadata")
+
 
 def seed_demo_data(db: Session):
     logger.info("Starting demo data seeding...")
@@ -26,12 +78,20 @@ def seed_demo_data(db: Session):
             db.commit()
         company = db.query(Company).filter(Company.user_id == demo_user.id).first()
         if company:
-            existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
-            if existing_scenario:
-                logger.info("Demo data already exists, skipping seed")
+            demo_company = company
+            cap_table_exists = db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company.id).first()
+            if cap_table_exists:
+                logger.info("Demo data v2 already exists, skipping seed")
+                _ensure_connector_metadata(db, demo_company)
                 seed_team_members(db)
                 return demo_user
-            demo_company = company
+            existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
+            if existing_scenario:
+                _seed_extended_demo_data(db, demo_company, demo_user)
+                _ensure_connector_metadata(db, demo_company)
+                seed_team_members(db)
+                logger.info("Demo data extended successfully")
+                return demo_user
         else:
             demo_company = Company(
                 user_id=demo_user.id,
@@ -296,11 +356,591 @@ def seed_demo_data(db: Session):
     )
     db.add(decision)
     db.commit()
+
+    _seed_extended_demo_data(db, demo_company, demo_user)
     
     seed_team_members(db)
 
     logger.info("Demo data seeding completed successfully")
     return demo_user
+
+
+def _seed_extended_demo_data(db: Session, demo_company, demo_user):
+    _seed_additional_scenarios(db, demo_company)
+    _seed_fundraising(db, demo_company)
+    _seed_alerts(db, demo_company)
+    _seed_conversations(db, demo_company, demo_user)
+    _seed_metric_definitions(db, demo_company)
+    logger.info("Extended demo data seeded successfully")
+
+
+def _seed_additional_scenarios(db: Session, demo_company):
+    existing = db.query(Scenario).filter(
+        Scenario.company_id == demo_company.id,
+        Scenario.name == "Aggressive Growth"
+    ).first()
+    if existing:
+        return
+
+    scenarios_data = [
+        {
+            "name": "Aggressive Growth",
+            "inputs": {
+                "pricing_change_pct": 5,
+                "growth_uplift_pct": 25,
+                "burn_reduction_pct": -10,
+                "fundraise_month": 3,
+                "fundraise_amount": 2000000,
+                "gross_margin_delta_pct": 2
+            },
+            "sim_outputs": {
+                "runway": {"p10": 8, "p50": 14, "p90": 22},
+                "survival": {
+                    "12m": 75, "18m": 58, "24m": 42,
+                    "curve": [
+                        {"month": 0, "probability": 100},
+                        {"month": 3, "probability": 96},
+                        {"month": 6, "probability": 90},
+                        {"month": 9, "probability": 82},
+                        {"month": 12, "probability": 75},
+                        {"month": 15, "probability": 65},
+                        {"month": 18, "probability": 58},
+                        {"month": 21, "probability": 48},
+                        {"month": 24, "probability": 42}
+                    ]
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": 45000*(1.08**i), "p50": 45000*(1.15**i), "p90": 45000*(1.22**i)} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(30000, 400000-(i*35000)), "p50": max(80000, 550000-(i*28000)), "p90": max(150000, 700000-(i*20000))} for i in range(25)]
+                },
+                "summary": {"revenue_18m_median": 380000, "cash_18m_median": 120000, "default_probability": 0.42}
+            }
+        },
+        {
+            "name": "Cost Optimization",
+            "inputs": {
+                "pricing_change_pct": 0,
+                "growth_uplift_pct": 5,
+                "burn_reduction_pct": 20,
+                "fundraise_month": None,
+                "fundraise_amount": 0,
+                "gross_margin_delta_pct": 5
+            },
+            "sim_outputs": {
+                "runway": {"p10": 14, "p50": 22, "p90": 30},
+                "survival": {
+                    "12m": 92, "18m": 82, "24m": 68,
+                    "curve": [
+                        {"month": 0, "probability": 100},
+                        {"month": 3, "probability": 99},
+                        {"month": 6, "probability": 97},
+                        {"month": 9, "probability": 95},
+                        {"month": 12, "probability": 92},
+                        {"month": 15, "probability": 88},
+                        {"month": 18, "probability": 82},
+                        {"month": 21, "probability": 74},
+                        {"month": 24, "probability": 68}
+                    ]
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": 45000*(1.04**i), "p50": 45000*(1.08**i), "p90": 45000*(1.12**i)} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(80000, 550000-(i*20000)), "p50": max(150000, 650000-(i*15000)), "p90": max(250000, 750000-(i*10000))} for i in range(25)]
+                },
+                "summary": {"revenue_18m_median": 200000, "cash_18m_median": 280000, "default_probability": 0.18}
+            }
+        },
+        {
+            "name": "Series A Fundraise",
+            "inputs": {
+                "pricing_change_pct": 10,
+                "growth_uplift_pct": 15,
+                "burn_reduction_pct": 0,
+                "fundraise_month": 6,
+                "fundraise_amount": 5000000,
+                "gross_margin_delta_pct": 3
+            },
+            "sim_outputs": {
+                "runway": {"p10": 18, "p50": 28, "p90": 36},
+                "survival": {
+                    "12m": 95, "18m": 90, "24m": 85,
+                    "curve": [
+                        {"month": 0, "probability": 100},
+                        {"month": 3, "probability": 99},
+                        {"month": 6, "probability": 98},
+                        {"month": 9, "probability": 97},
+                        {"month": 12, "probability": 95},
+                        {"month": 15, "probability": 92},
+                        {"month": 18, "probability": 90},
+                        {"month": 21, "probability": 88},
+                        {"month": 24, "probability": 85}
+                    ]
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": 45000*(1.06**i), "p50": 45000*(1.12**i), "p90": 45000*(1.18**i)} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(200000, 800000-(i*15000)), "p50": max(400000, 1200000-(i*10000)), "p90": max(600000, 1600000-(i*5000))} for i in range(25)]
+                },
+                "summary": {"revenue_18m_median": 320000, "cash_18m_median": 800000, "default_probability": 0.10}
+            }
+        }
+    ]
+
+    for s_data in scenarios_data:
+        scenario = Scenario(
+            company_id=demo_company.id,
+            name=s_data["name"],
+            inputs_json=s_data["inputs"]
+        )
+        db.add(scenario)
+        db.commit()
+        db.refresh(scenario)
+
+        sim_run = SimulationRun(
+            scenario_id=scenario.id,
+            n_sims=1000,
+            outputs_json=s_data["sim_outputs"]
+        )
+        db.add(sim_run)
+        db.commit()
+
+    logger.info("Seeded 3 additional scenarios")
+
+
+def _seed_fundraising(db: Session, demo_company):
+    existing = db.query(CompanyCapTable).filter(CompanyCapTable.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    cap_table = CompanyCapTable(
+        company_id=demo_company.id,
+        name="Current Cap Table",
+        as_of_date=datetime.now().date(),
+        currency="USD",
+        cap_table_json={
+            "common": [
+                {"holder": "Founder 1 - Nikita Luther", "shares": 4000000, "percent": 40.0},
+                {"holder": "Founder 2 - Vyshesh K", "shares": 3000000, "percent": 30.0}
+            ],
+            "preferred": [
+                {"series": "Pre-Seed", "holder": "Angel Syndicate", "shares": 500000, "percent": 5.0, "liquidation_pref": "1x non-participating"},
+                {"series": "Seed", "holder": "Elevation Capital", "shares": 800000, "percent": 8.0, "liquidation_pref": "1x non-participating"},
+                {"series": "Seed", "holder": "Blume Ventures", "shares": 500000, "percent": 5.0, "liquidation_pref": "1x non-participating"}
+            ],
+            "options": {"pool_percent": 12.0, "allocated_percent": 7.5},
+            "notes": [
+                {"holder": "Y Combinator", "principal": 125000, "conversion_cap": 2000000, "discount": 0},
+                {"holder": "Strategic Angel", "principal": 50000, "conversion_cap": 3000000, "discount": 20}
+            ],
+            "fully_diluted_shares": 10000000
+        }
+    )
+    db.add(cap_table)
+
+    rounds = [
+        FundraisingRound(
+            company_id=demo_company.id,
+            name="Pre-Seed Round",
+            target_raise=250000,
+            pre_money=1500000,
+            post_money=1750000,
+            instrument="safe",
+            option_pool_refresh_percent=10.0,
+            status="closed",
+            use_of_funds_json={
+                "Engineering": 40,
+                "Product": 25,
+                "Operations": 20,
+                "Marketing": 15
+            }
+        ),
+        FundraisingRound(
+            company_id=demo_company.id,
+            name="Seed Round",
+            target_raise=1500000,
+            pre_money=6000000,
+            post_money=7500000,
+            instrument="equity",
+            option_pool_refresh_percent=12.0,
+            status="active",
+            use_of_funds_json={
+                "Engineering": 45,
+                "Sales & Marketing": 25,
+                "Product": 15,
+                "Operations": 10,
+                "Legal & Admin": 5
+            }
+        ),
+        FundraisingRound(
+            company_id=demo_company.id,
+            name="Series A (Planned)",
+            target_raise=5000000,
+            pre_money=20000000,
+            post_money=25000000,
+            instrument="equity",
+            option_pool_refresh_percent=10.0,
+            status="planned",
+            use_of_funds_json={
+                "Engineering": 35,
+                "Sales & Marketing": 30,
+                "Product": 15,
+                "Customer Success": 10,
+                "Operations": 10
+            }
+        )
+    ]
+    db.add_all(rounds)
+    db.commit()
+    logger.info("Seeded fundraising data (cap table + 3 rounds)")
+
+
+def _seed_alerts(db: Session, demo_company):
+    existing = db.query(CompanyAlert).filter(CompanyAlert.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    now = datetime.utcnow()
+    alerts = [
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="runway_warning",
+            severity="warning",
+            message="Runway has decreased to 16.5 months. Consider cost optimization or fundraising to extend beyond 18 months.",
+            rule_json={"metric": "runway_months", "operator": "lt", "threshold": 18, "current_value": 16.5},
+            triggered_at=now - timedelta(hours=6),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="burn_rate_spike",
+            severity="critical",
+            message="Monthly burn rate increased 22% over last 3 months ($45K to $55K). Infrastructure costs up 40%.",
+            rule_json={"metric": "burn_rate", "operator": "gt", "threshold": 50000, "current_value": 55000},
+            triggered_at=now - timedelta(hours=12),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="concentration_risk",
+            severity="warning",
+            message="Top 5 customers represent 32% of revenue. Losing any single enterprise client would impact MRR by 6-8%.",
+            rule_json={"metric": "concentration_top5", "operator": "gt", "threshold": 30, "current_value": 32},
+            triggered_at=now - timedelta(days=1),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="growth_milestone",
+            severity="info",
+            message="MRR crossed $45,000 milestone. Year-over-year growth rate at 12.5% month-over-month.",
+            rule_json={"metric": "mrr", "operator": "gt", "threshold": 45000, "current_value": 45000},
+            triggered_at=now - timedelta(days=2),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="churn_improvement",
+            severity="info",
+            message="Net churn rate is negative (-1.2%), indicating expansion revenue exceeds churned revenue.",
+            rule_json={"metric": "net_churn_rate", "operator": "lt", "threshold": 0, "current_value": -1.2},
+            triggered_at=now - timedelta(days=3),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="cac_payback_warning",
+            severity="warning",
+            message="CAC payback period is 8 months. Target below 6 months for efficient growth.",
+            rule_json={"metric": "cac_payback_months", "operator": "gt", "threshold": 6, "current_value": 8},
+            triggered_at=now - timedelta(days=5),
+            status="open"
+        ),
+        CompanyAlert(
+            company_id=demo_company.id,
+            type="data_quality",
+            severity="info",
+            message="Data confidence score improved from 72% to 78% after latest financial data upload.",
+            rule_json={"metric": "data_confidence_score", "operator": "gte", "threshold": 75, "current_value": 78},
+            triggered_at=now - timedelta(days=7),
+            resolved_at=now - timedelta(days=6),
+            status="resolved"
+        )
+    ]
+    db.add_all(alerts)
+    db.commit()
+    logger.info("Seeded 7 demo alerts")
+
+
+def _seed_conversations(db: Session, demo_company, demo_user):
+    existing = db.query(Conversation).filter(Conversation.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    now = datetime.utcnow()
+
+    conv1 = Conversation(
+        company_id=demo_company.id,
+        user_id=demo_user.id,
+        title="Runway analysis and cost optimization",
+        context_metadata={"topic": "runway", "mode": "EXPLAIN"},
+        is_active=True,
+        created_at=now - timedelta(days=2),
+        updated_at=now - timedelta(days=2)
+    )
+    db.add(conv1)
+    db.commit()
+    db.refresh(conv1)
+
+    conv1_messages = [
+        ConversationMessage(
+            conversation_id=conv1.id, role="user",
+            content="What's our current runway and how can we extend it?",
+            intent_type="EXPLAIN", created_at=now - timedelta(days=2, hours=1)
+        ),
+        ConversationMessage(
+            conversation_id=conv1.id, role="assistant",
+            content="Based on your latest Truth Scan data, your current runway is **16.5 months** (P50 estimate from Monte Carlo simulation with 1,000 iterations).\n\nHere's the breakdown:\n- **Monthly Revenue**: $45,000 MRR (growing at 12.5% MoM)\n- **Monthly Burn**: ~$55,000 (including $22,500 payroll, $18,000 opex, $14,500 other)\n- **Cash Balance**: ~$500,000\n\nTo extend runway, I recommend:\n1. **Reduce burn by 15%** - extends runway by 4.2 months to ~20.7 months\n2. **Implement 10% price increase** - adds $4,500/mo MRR with minimal churn risk\n3. **Consider bridge round** - $500-750K extends to 24+ months\n\n*Source: Simulation Run #1, Current Trajectory scenario, data snapshot from latest Truth Scan (confidence: 78%)*",
+            intent_type="EXPLAIN", created_at=now - timedelta(days=2, minutes=59)
+        ),
+        ConversationMessage(
+            conversation_id=conv1.id, role="user",
+            content="Which costs should we cut first?",
+            intent_type="PLAN", created_at=now - timedelta(days=2, minutes=55)
+        ),
+        ConversationMessage(
+            conversation_id=conv1.id, role="assistant",
+            content="Based on your expense breakdown, here are the highest-impact cost reduction opportunities:\n\n**Immediate Wins (Week 1-2):**\n1. **Cloud infrastructure optimization** - Your AWS/GCP spend shows 30% underutilized capacity. Rightsizing and reserved instances could save $3,000-4,000/month\n2. **SaaS tool consolidation** - Audit shows 12 active subscriptions with overlap. Consolidating could save $1,500/month\n\n**Medium-term (Month 1-2):**\n3. **Defer non-critical hire** - Pushing the planned junior dev hire by 3 months saves $8,000/month loaded cost\n4. **Renegotiate vendor contracts** - Annual renewals coming up for 3 vendors\n\n**Impact**: These changes together reduce monthly burn from $55K to ~$47K, extending runway from 16.5 to 20+ months.\n\n*Note: Payroll is 50% of expenses - avoid cuts here as it directly impacts product velocity and your 12.5% MoM growth rate.*",
+            intent_type="PLAN", created_at=now - timedelta(days=2, minutes=53)
+        ),
+    ]
+    db.add_all(conv1_messages)
+
+    conv2 = Conversation(
+        company_id=demo_company.id,
+        user_id=demo_user.id,
+        title="Fundraising strategy discussion",
+        context_metadata={"topic": "fundraising", "mode": "PLAN"},
+        is_active=True,
+        created_at=now - timedelta(days=5),
+        updated_at=now - timedelta(days=5)
+    )
+    db.add(conv2)
+    db.commit()
+    db.refresh(conv2)
+
+    conv2_messages = [
+        ConversationMessage(
+            conversation_id=conv2.id, role="user",
+            content="Should we raise a bridge round or wait for Series A?",
+            intent_type="COMPARE", created_at=now - timedelta(days=5, hours=1)
+        ),
+        ConversationMessage(
+            conversation_id=conv2.id, role="assistant",
+            content="Great question. Let me compare both paths using your simulation data:\n\n**Bridge Round ($500-750K SAFE):**\n- Extends runway to 24+ months\n- Dilution: 8-12% (at current $6M cap)\n- Timeline: 4-6 weeks to close\n- Survival probability at 18m: improves from 65% to 82%\n\n**Wait for Series A ($3-5M):**\n- Need to hit $80K+ MRR first (currently $45K)\n- Timeline: 6-9 months to be \"Series A ready\"\n- Risk: only 65% survival probability at 18 months with current trajectory\n- Better valuation: $15-25M pre-money vs $6M cap on bridge\n\n**My recommendation**: Raise a **small bridge ($500K SAFE)** now to de-risk, then focus on hitting $80K MRR for a strong Series A in 9-12 months. The bridge buys you time without significant dilution.\n\n*Based on: Monte Carlo P50 projections, Current Trajectory scenario*",
+            intent_type="COMPARE", created_at=now - timedelta(days=5, minutes=58)
+        ),
+        ConversationMessage(
+            conversation_id=conv2.id, role="user",
+            content="What metrics do VCs look for at Series A for SaaS?",
+            intent_type="TEACH", created_at=now - timedelta(days=5, minutes=50)
+        ),
+        ConversationMessage(
+            conversation_id=conv2.id, role="assistant",
+            content="Here are the key Series A benchmarks for SaaS and how you compare:\n\n| Metric | Target | Your Current | Status |\n|--------|--------|-------------|--------|\n| ARR | $1-2M | $540K | Need 2-3x growth |\n| MoM Growth | 15-20% | 12.5% | Slightly below |\n| Net Retention | >110% | 108% | Close - focus on expansion |\n| Gross Margin | >70% | 75% | Strong |\n| Burn Multiple | <2x | 1.8x | Good |\n| LTV/CAC | >3x | 3.2x | Solid |\n| Rule of 40 | >40 | 35 | Gap to close |\n\n**Priority areas to improve:**\n1. Accelerate MRR growth to 15%+ MoM\n2. Push NRR above 110% through upselling\n3. Get Rule of 40 above 40 (grow faster or reduce burn)\n\nYou're about 6-9 months away from strong Series A metrics. The bridge gives you the runway to get there.",
+            intent_type="TEACH", created_at=now - timedelta(days=5, minutes=48)
+        ),
+    ]
+    db.add_all(conv2_messages)
+
+    conv3 = Conversation(
+        company_id=demo_company.id,
+        user_id=demo_user.id,
+        title="Customer retention deep dive",
+        context_metadata={"topic": "retention", "mode": "EXPLAIN"},
+        is_active=True,
+        created_at=now - timedelta(days=10),
+        updated_at=now - timedelta(days=10)
+    )
+    db.add(conv3)
+    db.commit()
+    db.refresh(conv3)
+
+    conv3_messages = [
+        ConversationMessage(
+            conversation_id=conv3.id, role="user",
+            content="Why is our customer concentration so high?",
+            intent_type="EXPLAIN", created_at=now - timedelta(days=10, hours=1)
+        ),
+        ConversationMessage(
+            conversation_id=conv3.id, role="assistant",
+            content="Your top 5 customers account for **32% of revenue**, which is flagged as a concentration risk. Here's why:\n\n**Root Causes:**\n1. **Enterprise-heavy mix**: 5 enterprise clients at $5,400/mo avg vs 15 mid-market/SMB at $1,800/mo avg\n2. **Early-stage pattern**: With only 20 customers, each enterprise client naturally has outsized impact\n3. **Landing strategy worked**: Your enterprise clients expanded significantly (108% NRR)\n\n**Risk Assessment:**\n- Losing your largest client would reduce MRR by ~8% ($3,600/mo)\n- Losing any 2 of top 5 would trigger a critical runway alert\n\n**Mitigation Strategy:**\n1. Accelerate mid-market acquisition (currently 3 new customers/month - target 5+)\n2. Multi-thread relationships in top accounts (reduce single-point-of-failure risk)\n3. Build product stickiness through deeper integrations with enterprise workflows\n\nThe good news: your negative net churn (-1.2%) means existing customers are expanding, so focus on diversifying the acquisition funnel.\n\n*Source: Truth Scan metrics, concentration_top5 = 32%, benchmark percentile: 45th*",
+            intent_type="EXPLAIN", created_at=now - timedelta(days=10, minutes=58)
+        ),
+    ]
+    db.add_all(conv3_messages)
+    db.commit()
+    logger.info("Seeded 3 demo conversations with messages")
+
+
+def _seed_metric_definitions(db: Session, demo_company):
+    existing = db.query(MetricDefinition).filter(
+        MetricDefinition.company_id == demo_company.id,
+        MetricDefinition.is_system == True
+    ).first()
+    if existing:
+        return
+
+    now = datetime.utcnow()
+    metrics = [
+        MetricDefinition(
+            company_id=demo_company.id, key="mrr", name="Monthly Recurring Revenue",
+            description="Total recurring revenue normalized to a monthly period",
+            formula="SUM(active_subscriptions.monthly_amount)", source_connector="stripe",
+            grain="monthly", unit="USD", format_type="currency", version=1, status="published",
+            is_system=True, tags=["revenue", "saas", "core"], owners=["finance"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="arr", name="Annual Recurring Revenue",
+            description="MRR multiplied by 12 for annualized view",
+            formula="mrr * 12", source_connector="derived",
+            grain="monthly", unit="USD", format_type="currency", version=1, status="published",
+            is_system=True, dependencies=["mrr"], tags=["revenue", "saas", "core"], owners=["finance"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="burn_rate", name="Monthly Burn Rate",
+            description="Net cash consumed per month (expenses minus revenue)",
+            formula="total_expenses - total_revenue", source_connector="quickbooks",
+            grain="monthly", unit="USD", format_type="currency", version=1, status="published",
+            is_system=True, tags=["expenses", "runway", "core"], owners=["finance"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="runway_months", name="Runway (Months)",
+            description="Months of cash remaining at current burn rate",
+            formula="cash_balance / burn_rate", source_connector="derived",
+            grain="monthly", unit="months", format_type="number", version=1, status="published",
+            is_system=True, dependencies=["burn_rate"], tags=["runway", "survival", "core"], owners=["finance"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="gross_margin", name="Gross Margin",
+            description="Revenue minus COGS as percentage of revenue",
+            formula="(revenue - cogs) / revenue * 100", source_connector="quickbooks",
+            grain="monthly", unit="%", format_type="percent", version=1, status="published",
+            is_system=True, tags=["profitability", "core"], owners=["finance"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="net_revenue_retention", name="Net Revenue Retention",
+            description="Revenue retained from existing customers including expansion",
+            formula="(beginning_mrr + expansion - contraction - churn) / beginning_mrr * 100",
+            source_connector="stripe", grain="monthly", unit="%", format_type="percent",
+            version=1, status="published", is_system=True,
+            tags=["retention", "growth", "core"], owners=["customer_success"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="ltv_cac_ratio", name="LTV/CAC Ratio",
+            description="Customer lifetime value divided by acquisition cost",
+            formula="avg_customer_ltv / avg_cac", source_connector="derived",
+            grain="monthly", unit="x", format_type="number", version=1, status="published",
+            is_system=True, tags=["unit_economics", "core"], owners=["marketing", "finance"],
+            published_at=now - timedelta(days=28)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="cac_payback_months", name="CAC Payback Period",
+            description="Months required to recoup customer acquisition cost",
+            formula="avg_cac / (arpu * gross_margin_pct)", source_connector="derived",
+            grain="monthly", unit="months", format_type="number", version=1, status="published",
+            is_system=True, dependencies=["gross_margin"], tags=["unit_economics", "efficiency"],
+            owners=["marketing"], published_at=now - timedelta(days=28)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="burn_multiple", name="Burn Multiple",
+            description="Net burn divided by net new ARR",
+            formula="net_burn / net_new_arr", source_connector="derived",
+            grain="monthly", unit="x", format_type="number", version=1, status="published",
+            is_system=True, tags=["efficiency", "growth"], owners=["finance"],
+            published_at=now - timedelta(days=25)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="magic_number", name="Magic Number",
+            description="Sales efficiency metric: net new ARR / prior quarter S&M spend",
+            formula="net_new_arr_quarter / prior_quarter_sales_marketing", source_connector="derived",
+            grain="quarterly", unit="x", format_type="number", version=1, status="published",
+            is_system=True, tags=["efficiency", "sales"], owners=["sales"],
+            published_at=now - timedelta(days=25)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="customer_count", name="Active Customers",
+            description="Total number of active paying customers",
+            formula="COUNT(customers WHERE status='active')", source_connector="stripe",
+            grain="monthly", unit="customers", format_type="number", version=1, status="published",
+            is_system=True, tags=["customers", "core"], owners=["customer_success"],
+            published_at=now - timedelta(days=30)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="gross_churn_rate", name="Gross Churn Rate",
+            description="Percentage of MRR lost from churned customers",
+            formula="churned_mrr / beginning_mrr * 100", source_connector="stripe",
+            grain="monthly", unit="%", format_type="percent", version=1, status="published",
+            is_system=True, tags=["retention", "churn"], owners=["customer_success"],
+            published_at=now - timedelta(days=28)
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="pipeline_velocity", name="Pipeline Velocity",
+            description="Speed at which deals move through the sales pipeline",
+            formula="(opportunities * avg_deal_size * win_rate) / avg_sales_cycle_days",
+            source_connector="hubspot", grain="monthly", unit="USD/day", format_type="currency",
+            version=1, status="draft", is_system=False,
+            tags=["sales", "pipeline"], owners=["sales"],
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="engineering_velocity", name="Engineering Velocity",
+            description="Story points completed per sprint per engineer",
+            formula="total_story_points / (sprint_count * engineer_count)",
+            source_connector=None, grain="monthly", unit="pts/eng", format_type="number",
+            version=1, status="draft", is_system=False,
+            tags=["engineering", "productivity"], owners=["engineering"],
+        ),
+        MetricDefinition(
+            company_id=demo_company.id, key="nps_score", name="Net Promoter Score",
+            description="Customer satisfaction and loyalty indicator",
+            formula="(promoters - detractors) / total_respondents * 100",
+            source_connector=None, grain="quarterly", unit="score", format_type="number",
+            version=1, status="draft", is_system=False,
+            tags=["customer_satisfaction", "product"], owners=["product"],
+        ),
+    ]
+    db.add_all(metrics)
+    db.commit()
+
+    metric_mrr = db.query(MetricDefinition).filter(
+        MetricDefinition.company_id == demo_company.id,
+        MetricDefinition.key == "mrr"
+    ).first()
+
+    if metric_mrr:
+        base_date = datetime.now() - timedelta(days=365)
+        mrr_val = 15000
+        for i in range(12):
+            mrr_val = mrr_val * (1.08 + 0.03 * (i / 12))
+            period_start = base_date + timedelta(days=30 * i)
+            period_end = period_start + timedelta(days=29)
+            mv = MetricValue(
+                metric_id=metric_mrr.id,
+                company_id=demo_company.id,
+                value=round(mrr_val, 2),
+                period_start=period_start,
+                period_end=period_end,
+                metric_version=1,
+                raw_event_count=20 + i * 2,
+                contributing_connectors=["stripe"]
+            )
+            db.add(mv)
+        db.commit()
+
+    logger.info("Seeded 15 metric definitions + MRR values")
 
 
 def seed_team_members(db: Session):
