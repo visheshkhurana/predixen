@@ -80,6 +80,9 @@ interface GovernanceState {
 
 const AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'TECH_LEAD', 'FRONTEND_ARCHITECT', 'BACKEND_ARCHITECT', 'QA_STRATEGIST', 'SECURITY_ENGINEER', 'DEVOPS_RELIABILITY', 'DATA_ENGINEER', 'RISK', 'CHIEF_OF_STAFF'] as const;
 
+const EXECUTIVE_AGENTS = ['CEO', 'CFO', 'CRO', 'CPO', 'CTO', 'RISK', 'CHIEF_OF_STAFF'] as const;
+const ENGINEERING_AGENTS = ['TECH_LEAD', 'FRONTEND_ARCHITECT', 'BACKEND_ARCHITECT', 'QA_STRATEGIST', 'SECURITY_ENGINEER', 'DEVOPS_RELIABILITY', 'DATA_ENGINEER'] as const;
+
 function getRationaleItems(rationale: any): string[] {
   if (!rationale) return [];
   if (Array.isArray(rationale)) return rationale.filter((r): r is string => typeof r === 'string');
@@ -252,41 +255,92 @@ function BoardroomView({ data }: { data: GovernanceState }) {
         </div>
       )}
 
-      {/* Agent Ring */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7 gap-3">
-        {AGENTS.map((agent) => {
-          const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
-          const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
-          const isExpanded = expandedAgents[agent] || false;
-          return (
-            <Card
-              key={agent}
-              className={`border ${AGENT_COLORS[agent]} bg-card/50 ${agentData.summary ? 'cursor-pointer hover-elevate' : ''}`}
-              onClick={() => agentData.summary && toggleAgent(agent)}
-              data-testid={`card-agent-${agent}`}
-            >
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold tracking-wide">{agent.replace(/_/g, ' ')}</span>
-                  <StatusIcon className={`h-3.5 w-3.5 ${getStatusColor(agentData.status)}`} />
-                </div>
-                {agentData.summary && (
-                  <p className={`text-xs text-muted-foreground mb-1 ${isExpanded ? '' : 'line-clamp-2'}`}>{agentData.summary}</p>
-                )}
-                <ConfidenceBar value={agentData.confidence} />
-                {agentData.lastUpdate && (
-                  <p className="text-[10px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5">
-                    <Timer className="h-2.5 w-2.5" />
-                    {getTimeAgo(agentData.lastUpdate)}
-                  </p>
-                )}
-                {agentData.summary && (
-                  <p className="text-[10px] text-muted-foreground/60 mt-1">{isExpanded ? 'click to collapse' : 'click to expand'}</p>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* Executive Team */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" /> Executive Team
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {EXECUTIVE_AGENTS.map((agent) => {
+            const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
+            const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
+            const isExpanded = expandedAgents[agent] || false;
+            return (
+              <Card
+                key={agent}
+                className={`border ${AGENT_COLORS[agent]} bg-card/50 ${agentData.summary ? 'cursor-pointer hover-elevate' : ''}`}
+                onClick={() => agentData.summary && toggleAgent(agent)}
+                data-testid={`card-agent-${agent}`}
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold tracking-wide">{agent.replace(/_/g, ' ')}</span>
+                    <StatusIcon className={`h-3.5 w-3.5 ${getStatusColor(agentData.status)}`} />
+                  </div>
+                  {agentData.summary ? (
+                    <p className={`text-xs text-muted-foreground mb-1 ${isExpanded ? '' : 'line-clamp-2'}`}>{agentData.summary}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/50 mb-1 italic">Waiting</p>
+                  )}
+                  <ConfidenceBar value={agentData.confidence} />
+                  {agentData.lastUpdate && (
+                    <p className="text-[10px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5">
+                      <Timer className="h-2.5 w-2.5" />
+                      {getTimeAgo(agentData.lastUpdate)}
+                    </p>
+                  )}
+                  {agentData.summary && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">{isExpanded ? 'click to collapse' : 'click to expand'}</p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Engineering Team */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Code2 className="h-3.5 w-3.5" /> Engineering Team
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {ENGINEERING_AGENTS.map((agent) => {
+            const agentData = data.agents[agent] || { status: 'idle', summary: null, confidence: null, lastUpdate: null };
+            const StatusIcon = STATUS_ICONS[agentData.status] || Clock;
+            const isExpanded = expandedAgents[agent] || false;
+            return (
+              <Card
+                key={agent}
+                className={`border ${AGENT_COLORS[agent]} bg-card/50 ${agentData.summary ? 'cursor-pointer hover-elevate' : ''}`}
+                onClick={() => agentData.summary && toggleAgent(agent)}
+                data-testid={`card-agent-${agent}`}
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold tracking-wide">{agent.replace(/_/g, ' ')}</span>
+                    <StatusIcon className={`h-3.5 w-3.5 ${getStatusColor(agentData.status)}`} />
+                  </div>
+                  {agentData.summary ? (
+                    <p className={`text-xs text-muted-foreground mb-1 ${isExpanded ? '' : 'line-clamp-2'}`}>{agentData.summary}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/50 mb-1 italic">Waiting</p>
+                  )}
+                  <ConfidenceBar value={agentData.confidence} />
+                  {agentData.lastUpdate && (
+                    <p className="text-[10px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5">
+                      <Timer className="h-2.5 w-2.5" />
+                      {getTimeAgo(agentData.lastUpdate)}
+                    </p>
+                  )}
+                  {agentData.summary && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">{isExpanded ? 'click to collapse' : 'click to expand'}</p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
       {/* Confirmation Modal Overlay */}
