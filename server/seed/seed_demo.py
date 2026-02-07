@@ -17,11 +17,13 @@ from server.models.company_source import CompanyAlert
 from server.models.conversation import Conversation, ConversationMessage
 from server.models.metric_definition import MetricDefinition
 from server.models.metric_value import MetricValue
+from server.models.company_decision import CompanyScenario
+from server.models.dashboard import Dashboard, DashboardWidget
 from server.core.security import get_password_hash
 
 logger = logging.getLogger(__name__)
 
-DEMO_SEED_VERSION = 2
+DEMO_SEED_VERSION = 3
 
 
 def _ensure_connector_metadata(db: Session, company):
@@ -81,7 +83,9 @@ def seed_demo_data(db: Session):
             demo_company = company
             cap_table_exists = db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company.id).first()
             if cap_table_exists:
-                logger.info("Demo data v2 already exists, skipping seed")
+                logger.info("Demo data v2 already exists, ensuring v3 data")
+                _seed_company_scenarios(db, demo_company)
+                _seed_dashboard_widgets(db, demo_company)
                 _ensure_connector_metadata(db, demo_company)
                 seed_team_members(db)
                 return demo_user
@@ -281,6 +285,13 @@ def seed_demo_data(db: Session):
         "summary": {
             "revenue_18m_median": 250000,
             "cash_18m_median": 150000,
+            "end_cash_p50": 150000,
+            "monthly_burn_p50": 55000,
+            "runway_p50": 16.5,
+            "runway_p10": 10,
+            "runway_p90": 24,
+            "survival_12m": 82,
+            "survival_18m": 65,
             "default_probability": 0.35
         }
     }
@@ -288,7 +299,10 @@ def seed_demo_data(db: Session):
     sim_run = SimulationRun(
         scenario_id=scenario.id,
         n_sims=1000,
-        outputs_json=sim_outputs
+        outputs_json=sim_outputs,
+        data_snapshot_id="demo-snapshot-v1",
+        status="completed",
+        completed_at=datetime.utcnow()
     )
     db.add(sim_run)
     db.commit()
@@ -371,6 +385,8 @@ def _seed_extended_demo_data(db: Session, demo_company, demo_user):
     _seed_alerts(db, demo_company)
     _seed_conversations(db, demo_company, demo_user)
     _seed_metric_definitions(db, demo_company)
+    _seed_company_scenarios(db, demo_company)
+    _seed_dashboard_widgets(db, demo_company)
     logger.info("Extended demo data seeded successfully")
 
 
@@ -413,7 +429,7 @@ def _seed_additional_scenarios(db: Session, demo_company):
                     "revenue": [{"month": i, "p10": 45000*(1.08**i), "p50": 45000*(1.15**i), "p90": 45000*(1.22**i)} for i in range(25)],
                     "cash": [{"month": i, "p10": max(30000, 400000-(i*35000)), "p50": max(80000, 550000-(i*28000)), "p90": max(150000, 700000-(i*20000))} for i in range(25)]
                 },
-                "summary": {"revenue_18m_median": 380000, "cash_18m_median": 120000, "default_probability": 0.42}
+                "summary": {"revenue_18m_median": 380000, "cash_18m_median": 120000, "end_cash_p50": 120000, "monthly_burn_p50": 70000, "runway_p50": 14, "runway_p10": 8, "runway_p90": 22, "survival_12m": 75, "survival_18m": 58, "default_probability": 0.42}
             }
         },
         {
@@ -446,7 +462,7 @@ def _seed_additional_scenarios(db: Session, demo_company):
                     "revenue": [{"month": i, "p10": 45000*(1.04**i), "p50": 45000*(1.08**i), "p90": 45000*(1.12**i)} for i in range(25)],
                     "cash": [{"month": i, "p10": max(80000, 550000-(i*20000)), "p50": max(150000, 650000-(i*15000)), "p90": max(250000, 750000-(i*10000))} for i in range(25)]
                 },
-                "summary": {"revenue_18m_median": 200000, "cash_18m_median": 280000, "default_probability": 0.18}
+                "summary": {"revenue_18m_median": 200000, "cash_18m_median": 280000, "end_cash_p50": 280000, "monthly_burn_p50": 44000, "runway_p50": 22, "runway_p10": 14, "runway_p90": 30, "survival_12m": 92, "survival_18m": 82, "default_probability": 0.18}
             }
         },
         {
@@ -479,7 +495,7 @@ def _seed_additional_scenarios(db: Session, demo_company):
                     "revenue": [{"month": i, "p10": 45000*(1.06**i), "p50": 45000*(1.12**i), "p90": 45000*(1.18**i)} for i in range(25)],
                     "cash": [{"month": i, "p10": max(200000, 800000-(i*15000)), "p50": max(400000, 1200000-(i*10000)), "p90": max(600000, 1600000-(i*5000))} for i in range(25)]
                 },
-                "summary": {"revenue_18m_median": 320000, "cash_18m_median": 800000, "default_probability": 0.10}
+                "summary": {"revenue_18m_median": 320000, "cash_18m_median": 800000, "end_cash_p50": 800000, "monthly_burn_p50": 55000, "runway_p50": 28, "runway_p10": 18, "runway_p90": 36, "survival_12m": 95, "survival_18m": 90, "default_probability": 0.10}
             }
         }
     ]
@@ -497,7 +513,10 @@ def _seed_additional_scenarios(db: Session, demo_company):
         sim_run = SimulationRun(
             scenario_id=scenario.id,
             n_sims=1000,
-            outputs_json=s_data["sim_outputs"]
+            outputs_json=s_data["sim_outputs"],
+            data_snapshot_id="demo-snapshot-v1",
+            status="completed",
+            completed_at=datetime.utcnow()
         )
         db.add(sim_run)
         db.commit()
@@ -941,6 +960,423 @@ def _seed_metric_definitions(db: Session, demo_company):
         db.commit()
 
     logger.info("Seeded 15 metric definitions + MRR values")
+
+
+def _seed_company_scenarios(db: Session, demo_company):
+    existing = db.query(CompanyScenario).filter(
+        CompanyScenario.company_id == demo_company.id
+    ).first()
+    if existing:
+        return
+
+    now = datetime.utcnow()
+    scenarios = [
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Current Trajectory",
+            assumptions_json={
+                "tags": ["baseline"],
+                "revenue_growth_rate": 0.125,
+                "burn_rate_monthly": 55000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 0,
+                "growth_uplift_pct": 0,
+                "burn_reduction_pct": 0,
+                "fundraise_month": None,
+                "fundraise_amount": 0,
+                "gross_margin_delta_pct": 0,
+            },
+            outputs_json={
+                "runway": {"p10": 10, "p50": 16.5, "p90": 24},
+                "survival": {
+                    "12m": 82, "18m": 65, "24m": 45,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 98},
+                        {"month": 6, "probability": 94}, {"month": 9, "probability": 88},
+                        {"month": 12, "probability": 82}, {"month": 15, "probability": 72},
+                        {"month": 18, "probability": 65}, {"month": 21, "probability": 54},
+                        {"month": 24, "probability": 45},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 85000, "monthly_burn_p50": 55000,
+                    "runway_p50": 16.5, "runway_p10": 10, "runway_p90": 24,
+                    "survival_12m": 82, "survival_18m": 65,
+                    "revenue_18m_median": 180000, "cash_18m_median": 85000,
+                    "default_probability": 0.35,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.06**i)), "p50": round(45000*(1.125**i)), "p90": round(45000*(1.18**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(0, round(500000 - i*42000)), "p50": max(0, round(500000 - i*30000)), "p90": max(0, round(500000 - i*18000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=14),
+            updated_at=now - timedelta(days=2),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Aggressive Growth",
+            assumptions_json={
+                "tags": ["growth", "high-risk"],
+                "revenue_growth_rate": 0.20,
+                "burn_rate_monthly": 70000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 5,
+                "growth_uplift_pct": 25,
+                "burn_reduction_pct": -10,
+                "fundraise_month": 3,
+                "fundraise_amount": 2000000,
+                "gross_margin_delta_pct": 2,
+            },
+            outputs_json={
+                "runway": {"p10": 8, "p50": 14, "p90": 22},
+                "survival": {
+                    "12m": 75, "18m": 58, "24m": 42,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 96},
+                        {"month": 6, "probability": 90}, {"month": 9, "probability": 82},
+                        {"month": 12, "probability": 75}, {"month": 15, "probability": 65},
+                        {"month": 18, "probability": 58}, {"month": 21, "probability": 48},
+                        {"month": 24, "probability": 42},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 120000, "monthly_burn_p50": 70000,
+                    "runway_p50": 14, "runway_p10": 8, "runway_p90": 22,
+                    "survival_12m": 75, "survival_18m": 58,
+                    "revenue_18m_median": 380000, "cash_18m_median": 120000,
+                    "default_probability": 0.42,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.08**i)), "p50": round(45000*(1.15**i)), "p90": round(45000*(1.22**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(30000, round(400000 - i*35000)), "p50": max(80000, round(550000 - i*28000)), "p90": max(150000, round(700000 - i*20000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=12),
+            updated_at=now - timedelta(days=3),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Cost Optimization",
+            assumptions_json={
+                "tags": ["conservative", "efficiency"],
+                "revenue_growth_rate": 0.10,
+                "burn_rate_monthly": 44000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 0,
+                "growth_uplift_pct": 5,
+                "burn_reduction_pct": 20,
+                "fundraise_month": None,
+                "fundraise_amount": 0,
+                "gross_margin_delta_pct": 5,
+            },
+            outputs_json={
+                "runway": {"p10": 14, "p50": 22, "p90": 30},
+                "survival": {
+                    "12m": 92, "18m": 82, "24m": 68,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 99},
+                        {"month": 6, "probability": 97}, {"month": 9, "probability": 95},
+                        {"month": 12, "probability": 92}, {"month": 15, "probability": 88},
+                        {"month": 18, "probability": 82}, {"month": 21, "probability": 74},
+                        {"month": 24, "probability": 68},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 280000, "monthly_burn_p50": 44000,
+                    "runway_p50": 22, "runway_p10": 14, "runway_p90": 30,
+                    "survival_12m": 92, "survival_18m": 82,
+                    "revenue_18m_median": 200000, "cash_18m_median": 280000,
+                    "default_probability": 0.18,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.04**i)), "p50": round(45000*(1.08**i)), "p90": round(45000*(1.12**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(80000, round(550000 - i*20000)), "p50": max(150000, round(650000 - i*15000)), "p90": max(250000, round(750000 - i*10000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=10),
+            updated_at=now - timedelta(days=4),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Series A Fundraise",
+            assumptions_json={
+                "tags": ["fundraise", "growth"],
+                "revenue_growth_rate": 0.15,
+                "burn_rate_monthly": 55000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 10,
+                "growth_uplift_pct": 15,
+                "burn_reduction_pct": 0,
+                "fundraise_month": 6,
+                "fundraise_amount": 5000000,
+                "gross_margin_delta_pct": 3,
+            },
+            outputs_json={
+                "runway": {"p10": 18, "p50": 28, "p90": 36},
+                "survival": {
+                    "12m": 95, "18m": 90, "24m": 85,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 99},
+                        {"month": 6, "probability": 98}, {"month": 9, "probability": 97},
+                        {"month": 12, "probability": 95}, {"month": 15, "probability": 92},
+                        {"month": 18, "probability": 90}, {"month": 21, "probability": 88},
+                        {"month": 24, "probability": 85},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 800000, "monthly_burn_p50": 55000,
+                    "runway_p50": 28, "runway_p10": 18, "runway_p90": 36,
+                    "survival_12m": 95, "survival_18m": 90,
+                    "revenue_18m_median": 320000, "cash_18m_median": 800000,
+                    "default_probability": 0.10,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.06**i)), "p50": round(45000*(1.12**i)), "p90": round(45000*(1.18**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(200000, round(800000 - i*15000)), "p50": max(400000, round(1200000 - i*10000)), "p90": max(600000, round(1600000 - i*5000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=8),
+            updated_at=now - timedelta(days=1),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Bridge Round",
+            assumptions_json={
+                "tags": ["fundraise", "bridge"],
+                "revenue_growth_rate": 0.125,
+                "burn_rate_monthly": 52000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 0,
+                "growth_uplift_pct": 0,
+                "burn_reduction_pct": 5,
+                "fundraise_month": 2,
+                "fundraise_amount": 750000,
+                "gross_margin_delta_pct": 0,
+            },
+            outputs_json={
+                "runway": {"p10": 16, "p50": 24, "p90": 30},
+                "survival": {
+                    "12m": 94, "18m": 85, "24m": 72,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 99},
+                        {"month": 6, "probability": 97}, {"month": 9, "probability": 96},
+                        {"month": 12, "probability": 94}, {"month": 15, "probability": 90},
+                        {"month": 18, "probability": 85}, {"month": 21, "probability": 78},
+                        {"month": 24, "probability": 72},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 350000, "monthly_burn_p50": 52000,
+                    "runway_p50": 24, "runway_p10": 16, "runway_p90": 30,
+                    "survival_12m": 94, "survival_18m": 85,
+                    "revenue_18m_median": 185000, "cash_18m_median": 350000,
+                    "default_probability": 0.15,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.06**i)), "p50": round(45000*(1.10**i)), "p90": round(45000*(1.15**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(100000, round(1250000 - i*35000)), "p50": max(200000, round(1250000 - i*25000)), "p90": max(350000, round(1250000 - i*18000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=7),
+            updated_at=now - timedelta(days=2),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Worst Case",
+            assumptions_json={
+                "tags": ["stress-test", "downside"],
+                "revenue_growth_rate": 0.03,
+                "burn_rate_monthly": 60000,
+                "starting_cash": 500000,
+                "pricing_change_pct": -5,
+                "growth_uplift_pct": -15,
+                "burn_reduction_pct": -5,
+                "fundraise_month": None,
+                "fundraise_amount": 0,
+                "gross_margin_delta_pct": -3,
+            },
+            outputs_json={
+                "runway": {"p10": 5, "p50": 9, "p90": 14},
+                "survival": {
+                    "12m": 42, "18m": 22, "24m": 10,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 88},
+                        {"month": 6, "probability": 72}, {"month": 9, "probability": 55},
+                        {"month": 12, "probability": 42}, {"month": 15, "probability": 30},
+                        {"month": 18, "probability": 22}, {"month": 21, "probability": 15},
+                        {"month": 24, "probability": 10},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 0, "monthly_burn_p50": 60000,
+                    "runway_p50": 9, "runway_p10": 5, "runway_p90": 14,
+                    "survival_12m": 42, "survival_18m": 22,
+                    "revenue_18m_median": 85000, "cash_18m_median": 0,
+                    "default_probability": 0.78,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(0.98**i)), "p50": round(45000*(1.02**i)), "p90": round(45000*(1.06**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(0, round(500000 - i*55000)), "p50": max(0, round(500000 - i*45000)), "p90": max(0, round(500000 - i*32000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=5),
+            updated_at=now - timedelta(days=1),
+        ),
+        CompanyScenario(
+            company_id=demo_company.id,
+            name="Best Case",
+            assumptions_json={
+                "tags": ["upside", "optimistic"],
+                "revenue_growth_rate": 0.20,
+                "burn_rate_monthly": 50000,
+                "starting_cash": 500000,
+                "pricing_change_pct": 15,
+                "growth_uplift_pct": 30,
+                "burn_reduction_pct": 10,
+                "fundraise_month": 4,
+                "fundraise_amount": 3000000,
+                "gross_margin_delta_pct": 5,
+            },
+            outputs_json={
+                "runway": {"p10": 22, "p50": 36, "p90": 48},
+                "survival": {
+                    "12m": 98, "18m": 95, "24m": 92,
+                    "curve": [
+                        {"month": 0, "probability": 100}, {"month": 3, "probability": 100},
+                        {"month": 6, "probability": 99}, {"month": 9, "probability": 99},
+                        {"month": 12, "probability": 98}, {"month": 15, "probability": 96},
+                        {"month": 18, "probability": 95}, {"month": 21, "probability": 93},
+                        {"month": 24, "probability": 92},
+                    ],
+                },
+                "summary": {
+                    "end_cash_p50": 1500000, "monthly_burn_p50": 50000,
+                    "runway_p50": 36, "runway_p10": 22, "runway_p90": 48,
+                    "survival_12m": 98, "survival_18m": 95,
+                    "revenue_18m_median": 520000, "cash_18m_median": 1500000,
+                    "default_probability": 0.05,
+                },
+                "bands": {
+                    "revenue": [{"month": i, "p10": round(45000*(1.10**i)), "p50": round(45000*(1.18**i)), "p90": round(45000*(1.25**i))} for i in range(25)],
+                    "cash": [{"month": i, "p10": max(300000, round(1500000 - i*20000)), "p50": max(600000, round(2000000 - i*10000)), "p90": max(1000000, round(2500000 - i*5000))} for i in range(25)],
+                },
+            },
+            created_at=now - timedelta(days=3),
+            updated_at=now - timedelta(hours=12),
+        ),
+    ]
+    db.add_all(scenarios)
+    db.commit()
+    logger.info("Seeded 7 CompanyScenario records with simulation outputs")
+
+
+def _seed_dashboard_widgets(db: Session, demo_company):
+    dashboard = db.query(Dashboard).filter(
+        Dashboard.company_id == demo_company.id
+    ).first()
+    if not dashboard:
+        dashboard = Dashboard(
+            company_id=demo_company.id,
+            name="Financial Overview",
+            description="Key financial metrics and health indicators",
+            is_default=True,
+        )
+        db.add(dashboard)
+        db.commit()
+        db.refresh(dashboard)
+
+    existing_widgets = db.query(DashboardWidget).filter(
+        DashboardWidget.dashboard_id == dashboard.id
+    ).first()
+    if existing_widgets:
+        return
+
+    widgets = [
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="mrr",
+            title="Monthly Recurring Revenue",
+            config={"format": "currency", "trend": True, "sparkline": True},
+            position={"x": 0, "y": 0, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="arr",
+            title="Annual Recurring Revenue",
+            config={"format": "currency", "trend": True},
+            position={"x": 3, "y": 0, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="runway_months",
+            title="Runway (Months)",
+            config={"format": "number", "trend": True, "alert_threshold": 12},
+            position={"x": 6, "y": 0, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="burn_rate",
+            title="Monthly Burn Rate",
+            config={"format": "currency", "trend": True, "invert_color": True},
+            position={"x": 9, "y": 0, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="line_chart",
+            metric_key="mrr",
+            title="MRR Trend",
+            config={"period": "12m", "show_target": True, "target_value": 80000},
+            position={"x": 0, "y": 2, "w": 6, "h": 4},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="bar_chart",
+            metric_key="burn_rate",
+            title="Burn Rate by Month",
+            config={"period": "6m", "stacked": False},
+            position={"x": 6, "y": 2, "w": 6, "h": 4},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="gross_margin",
+            title="Gross Margin",
+            config={"format": "percent", "trend": True},
+            position={"x": 0, "y": 6, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="net_revenue_retention",
+            title="Net Revenue Retention",
+            config={"format": "percent", "trend": True, "benchmark": 110},
+            position={"x": 3, "y": 6, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="ltv_cac_ratio",
+            title="LTV/CAC Ratio",
+            config={"format": "number", "trend": True, "suffix": "x"},
+            position={"x": 6, "y": 6, "w": 3, "h": 2},
+        ),
+        DashboardWidget(
+            dashboard_id=dashboard.id,
+            widget_type="metric_card",
+            metric_key="customer_count",
+            title="Active Customers",
+            config={"format": "number", "trend": True},
+            position={"x": 9, "y": 6, "w": 3, "h": 2},
+        ),
+    ]
+    db.add_all(widgets)
+    db.commit()
+    logger.info(f"Seeded {len(widgets)} dashboard widgets for dashboard {dashboard.id}")
 
 
 def seed_team_members(db: Session):

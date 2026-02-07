@@ -13,7 +13,7 @@ from server.models import User, Company
 from server.metrics.suggestions.service import SuggestionService
 from server.metrics.suggestions.capability import CapabilityDiscovery
 
-router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
+router = APIRouter(prefix="/suggestions", tags=["suggestions"])
 
 
 def _get_company_or_404(company_id: int, user: User, db: Session) -> Company:
