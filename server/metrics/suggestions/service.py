@@ -54,8 +54,8 @@ class SuggestionService:
         all_capabilities = CapabilityDiscovery.get_all_capabilities(self.db, company_id)
         
         if not all_capabilities:
-            logger.info(f"No capabilities found for company {company_id}")
-            return []
+            logger.info(f"No capabilities found for company {company_id}, generating default SaaS suggestions")
+            return self._generate_default_suggestions(company_id)
         
         org_context = {
             "company_id": company_id,
@@ -148,6 +148,119 @@ class SuggestionService:
             
             return suggestion
     
+    def _generate_default_suggestions(self, company_id: int) -> list:
+        """Generate default SaaS metric suggestions when no data sources are connected."""
+        defaults = [
+            SuggestionOutput(
+                suggestion_key="net_revenue_retention",
+                title="Net Revenue Retention (NRR)",
+                description="Measures revenue retained from existing customers including expansions and contractions. A key indicator of product-market fit and growth efficiency.",
+                category="Finance",
+                metric_dsl_yaml="meta:\n  id: net_revenue_retention\n  name: Net Revenue Retention\n  grain: monthly\n  unit: percent\nlogic:\n  type: formula\n  formula: (beginning_mrr + expansion - contraction - churn) / beginning_mrr * 100",
+                dependencies=[],
+                confidence=92,
+                reason={"trigger": "Core SaaS metric for measuring customer retention quality", "fields_used": ["mrr", "expansion", "contraction", "churn"], "assumptions": ["Company tracks MRR components"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="gross_margin_trend",
+                title="Gross Margin Trend Analysis",
+                description="Track gross margin percentage over time to identify cost structure changes and profitability trends.",
+                category="Finance",
+                metric_dsl_yaml="meta:\n  id: gross_margin_trend\n  name: Gross Margin Trend\n  grain: monthly\n  unit: percent\nlogic:\n  type: formula\n  formula: (revenue - cogs) / revenue * 100",
+                dependencies=[],
+                confidence=88,
+                reason={"trigger": "Essential profitability metric for investor reporting", "fields_used": ["revenue", "cogs"], "assumptions": ["Revenue and COGS data available"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="burn_multiple",
+                title="Burn Multiple",
+                description="Ratio of net burn to net new ARR. Measures capital efficiency - how much you spend to generate each dollar of new revenue.",
+                category="Finance",
+                metric_dsl_yaml="meta:\n  id: burn_multiple\n  name: Burn Multiple\n  grain: monthly\n  unit: ratio\nlogic:\n  type: formula\n  formula: net_burn / net_new_arr",
+                dependencies=[],
+                confidence=85,
+                reason={"trigger": "Key efficiency metric tracked by VCs for capital efficiency", "fields_used": ["net_burn", "net_new_arr"], "assumptions": ["Company tracks burn rate and ARR growth"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="customer_payback_period",
+                title="CAC Payback Period",
+                description="Number of months to recover customer acquisition cost through gross margin. Critical for understanding unit economics sustainability.",
+                category="Growth",
+                metric_dsl_yaml="meta:\n  id: customer_payback_period\n  name: CAC Payback Period\n  grain: monthly\n  unit: months\nlogic:\n  type: formula\n  formula: cac / (arpu * gross_margin_pct)",
+                dependencies=[],
+                confidence=90,
+                reason={"trigger": "Unit economics health indicator for sustainable growth", "fields_used": ["cac", "arpu", "gross_margin"], "assumptions": ["CAC and ARPU data available"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="magic_number",
+                title="SaaS Magic Number",
+                description="Measures sales efficiency by comparing new ARR to sales & marketing spend. Above 1.0 indicates efficient growth.",
+                category="Sales",
+                metric_dsl_yaml="meta:\n  id: magic_number\n  name: Magic Number\n  grain: quarterly\n  unit: ratio\nlogic:\n  type: formula\n  formula: (current_quarter_arr - previous_quarter_arr) / previous_quarter_sales_marketing_spend",
+                dependencies=[],
+                confidence=82,
+                reason={"trigger": "Sales efficiency benchmark used by growth-stage investors", "fields_used": ["arr", "sales_marketing_spend"], "assumptions": ["Quarterly ARR and S&M spend tracked"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="revenue_per_employee",
+                title="Revenue Per Employee",
+                description="Annual revenue divided by headcount. Measures organizational efficiency and scalability.",
+                category="Growth",
+                metric_dsl_yaml="meta:\n  id: revenue_per_employee\n  name: Revenue Per Employee\n  grain: monthly\n  unit: currency\nlogic:\n  type: formula\n  formula: annual_revenue / total_employees",
+                dependencies=[],
+                confidence=78,
+                reason={"trigger": "Operational efficiency metric for scaling companies", "fields_used": ["revenue", "headcount"], "assumptions": ["Headcount data available"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="logo_churn_rate",
+                title="Logo Churn Rate",
+                description="Percentage of customers lost in a period. Complements revenue churn to show breadth of retention issues.",
+                category="Product",
+                metric_dsl_yaml="meta:\n  id: logo_churn_rate\n  name: Logo Churn Rate\n  grain: monthly\n  unit: percent\nlogic:\n  type: formula\n  formula: churned_customers / beginning_customers * 100",
+                dependencies=[],
+                confidence=87,
+                reason={"trigger": "Customer retention quality metric for product-market fit assessment", "fields_used": ["churned_customers", "total_customers"], "assumptions": ["Customer count tracking in place"]},
+                adapter_key="baseline",
+            ),
+            SuggestionOutput(
+                suggestion_key="quick_ratio_saas",
+                title="SaaS Quick Ratio",
+                description="Ratio of revenue gains (new + expansion) to losses (contraction + churn). Above 4x indicates healthy growth.",
+                category="Growth",
+                metric_dsl_yaml="meta:\n  id: quick_ratio_saas\n  name: SaaS Quick Ratio\n  grain: monthly\n  unit: ratio\nlogic:\n  type: formula\n  formula: (new_mrr + expansion_mrr) / (contraction_mrr + churned_mrr)",
+                dependencies=[],
+                confidence=86,
+                reason={"trigger": "Growth quality metric showing revenue momentum health", "fields_used": ["new_mrr", "expansion_mrr", "contraction_mrr", "churned_mrr"], "assumptions": ["MRR breakdown by component available"]},
+                adapter_key="baseline",
+            ),
+        ]
+
+        existing_metrics = [
+            m.key for m in self.db.query(MetricDefinition).filter(
+                MetricDefinition.company_id == company_id
+            ).all()
+        ]
+
+        results = []
+        for output in defaults:
+            status = "new"
+            suggestion = self._upsert_suggestion(
+                company_id=company_id,
+                data_source_id=None,
+                output=output,
+                status=status,
+                missing_deps=None,
+            )
+            results.append(suggestion.to_dict())
+
+        return results
+
     def list_suggestions(
         self,
         company_id: int,

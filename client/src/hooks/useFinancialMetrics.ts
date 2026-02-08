@@ -38,32 +38,64 @@ const EMPTY_METRICS: FinancialMetrics = {
   isProfitable: false, hasData: false,
 };
 
+function getToken(): string | null {
+  let token = localStorage.getItem('predixen-token');
+  if (!token) {
+    try {
+      const raw = localStorage.getItem('predixen-founder-storage');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        token = parsed?.state?.token || null;
+      }
+    } catch {}
+  }
+  return token;
+}
+
+async function fetchJson(url: string): Promise<any> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(url, { headers, credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean } {
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
   const { data: computed, isLoading: computedLoading } = useQuery<any>({
-    queryKey: [`/api/companies/${companyId}/metrics/computed`],
+    queryKey: ['computed-metrics', companyId],
+    queryFn: () => fetchJson(`/api/companies/${companyId}/metrics/computed`),
     enabled: !!companyId,
     staleTime: 30_000,
-    refetchOnMount: 'always',
+    gcTime: 5 * 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
   });
 
-  const { data: truthScan, isLoading: truthLoading } = useQuery<any>({
-    queryKey: [`/api/companies/${companyId}/truth/latest`],
+  const { data: truthScan } = useQuery<any>({
+    queryKey: ['truth-latest', companyId],
+    queryFn: () => fetchJson(`/api/companies/${companyId}/truth/latest`),
     enabled: !!companyId,
     staleTime: 60_000,
-    refetchOnMount: 'always',
+    gcTime: 5 * 60_000,
+    refetchOnMount: true,
     retry: 1,
   });
 
-  const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
-    queryKey: [`/api/companies/${companyId}/financials/baseline`],
+  const { data: backendBaseline } = useQuery<any>({
+    queryKey: ['financials-baseline', companyId],
+    queryFn: () => fetchJson(`/api/companies/${companyId}/financials/baseline`),
     enabled: !!companyId,
     staleTime: 60_000,
-    refetchOnMount: 'always',
+    gcTime: 5 * 60_000,
+    refetchOnMount: true,
     retry: 1,
   });
 
