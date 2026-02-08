@@ -104,7 +104,7 @@ async def resend_webhook(request: Request):
                 "preview", "prefetch", "guard", "antivirus",
             ]
 
-            if seconds_since_sent is not None and seconds_since_sent < 30:
+            if seconds_since_sent is not None and seconds_since_sent < 120:  # 2 min threshold to filter bot pre-fetches
                 is_bot = True
             elif any(kw in ua for kw in bot_ua_keywords):
                 is_bot = True
