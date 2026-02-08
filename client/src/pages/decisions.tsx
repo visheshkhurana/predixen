@@ -174,7 +174,7 @@ function ComparisonBar({
                         "font-mono font-semibold",
                         isPositive ? "text-emerald-500" : "text-red-500"
                       )}>
-                        {isPositive ? '+' : ''}{value.toFixed(1)}%
+                        {isPositive ? '+' : ''}{Math.abs(value) < 0.1 && value !== 0 ? value.toFixed(2) : value.toFixed(1)}%
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -183,7 +183,7 @@ function ComparisonBar({
                           "h-full rounded-full transition-all duration-700",
                           isPositive ? "bg-emerald-500" : "bg-red-500"
                         )}
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${Math.max(percentage, value !== 0 ? 10 : 0)}%` }}
                       />
                     </div>
                   </div>
@@ -216,7 +216,7 @@ function ComparisonBar({
                         "font-mono font-semibold",
                         isPositive ? "text-emerald-500" : "text-red-500"
                       )}>
-                        {isPositive ? '+' : ''}{value.toFixed(1)} mo
+                        {isPositive ? '+' : ''}{Math.abs(value) < 0.1 && value !== 0 ? value.toFixed(2) : value.toFixed(1)} mo
                       </span>
                     </div>
                     <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -225,7 +225,7 @@ function ComparisonBar({
                           "h-full rounded-full transition-all duration-700",
                           isPositive ? "bg-emerald-500" : "bg-red-500"
                         )}
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${Math.max(percentage, value !== 0 ? 10 : 0)}%` }}
                       />
                     </div>
                   </div>

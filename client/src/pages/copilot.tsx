@@ -511,7 +511,7 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
             <div className="text-xs text-muted-foreground">Runway (months)</div>
           </div>
           <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
-            <div className="text-2xl font-bold text-emerald-400">{((results.survival_rate || 0) * 100).toFixed(0)}%</div>
+            <div className="text-2xl font-bold text-emerald-400">{((results.survival_rate || 0) * 100).toFixed(1)}%</div>
             <div className="text-xs text-muted-foreground">Survival Rate</div>
           </div>
           <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
@@ -855,7 +855,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                           <td className="py-1">{s.variable}</td>
                           <td className="text-right py-1">{s.sensitivity}</td>
                           <td className="text-right py-1 text-red-400">{s.runway_impact}</td>
-                          <td className="text-right py-1 text-red-400">{s.survival_impact}</td>
+                          <td className="text-right py-1 text-red-400">{typeof s.survival_impact === 'number' ? Number(s.survival_impact).toFixed(1) + '%' : s.survival_impact}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1109,13 +1109,13 @@ export default function CopilotPage() {
   }, [currentCompany?.id]);
   
   const activeConversation = useMemo(() => {
-    const found = conversations.find(c => c.id === activeConversationId);
-    if (found) return found;
-    if (conversations.length > 0) {
+    return conversations.find(c => c.id === activeConversationId) || conversations[0] || null;
+  }, [conversations, activeConversationId]);
+  
+  useEffect(() => {
+    if (!conversations.find(c => c.id === activeConversationId) && conversations.length > 0) {
       setActiveConversationId(conversations[0].id);
-      return conversations[0];
     }
-    return null;
   }, [conversations, activeConversationId]);
   
   const messages = activeConversation?.messages || [createDefaultMessage()];
@@ -2086,7 +2086,7 @@ export default function CopilotPage() {
                     {simulation ? (
                       <>
                         <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50?.toFixed(1)} mo</span></p>
-                        <p>Survival 18m: <span className="font-mono font-medium">{simulation.survival?.['18m']}%</span></p>
+                        <p>Survival 18m: <span className="font-mono font-medium">{typeof simulation.survival?.['18m'] === 'number' ? Number(simulation.survival['18m']).toFixed(1) : simulation.survival?.['18m']}%</span></p>
                       </>
                     ) : (
                       <p className="text-muted-foreground">No simulation run yet</p>
