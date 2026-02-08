@@ -287,7 +287,7 @@ export default function FundraisingPage() {
                           <TableRow>
                             <TableCell>Option Pool</TableCell>
                             <TableCell><Badge variant="outline">Options</Badge></TableCell>
-                            <TableCell className="text-right">-</TableCell>
+                            <TableCell className="text-right">{(ct.cap_table.fully_diluted_shares * ct.cap_table.options.pool_percent / 100).toLocaleString()}</TableCell>
                             <TableCell className="text-right">{ct.cap_table.options.pool_percent.toFixed(2)}%</TableCell>
                           </TableRow>
                         )}

@@ -970,7 +970,7 @@ export default function OverviewPage() {
     { name: 'Churn Rate', value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: (baseData.ltv > 0 && baseData.cac > 0) ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
-    { name: 'Payback', value: baseData.paybackPeriod, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
+    { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
   return (

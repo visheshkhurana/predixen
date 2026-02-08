@@ -364,7 +364,7 @@ function ThresholdConfigModal({ thresholds, onSave }: { thresholds: AlertThresho
                       {threshold.severity}
                     </Badge>
                     <span className="text-sm">
-                      {METRIC_DISPLAY_NAMES[threshold.metric] || threshold.metric}
+                      {METRIC_DISPLAY_NAMES[threshold.metric] || threshold.metric.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {OPERATOR_LABELS[threshold.operator]}
@@ -671,7 +671,7 @@ export default function AlertsPage() {
                             {alert.type.replace(/_/g, " ")}
                           </Badge>
                           <Badge variant="secondary" className="text-xs">
-                            {alert.metric}
+                            {METRIC_DISPLAY_NAMES[alert.metric] || alert.metric.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                           </Badge>
                         </div>
                         <p className="font-medium">{alert.message}</p>
