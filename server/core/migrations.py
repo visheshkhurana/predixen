@@ -665,6 +665,86 @@ def ensure_email_events_table(engine: Engine) -> None:
         except Exception as e:
             logger.debug(f"Email events table may already exist: {e}")
 
+    with engine.connect() as conn:
+        new_cols = [
+            ('from_email', 'VARCHAR(255)'),
+            ('recipient_id', 'VARCHAR(255)'),
+            ('campaign', 'VARCHAR(255)'),
+            ('sent_at', 'TIMESTAMP'),
+            ('bounced_at', 'TIMESTAMP'),
+            ('complained_at', 'TIMESTAMP'),
+            ('open_count', 'INTEGER DEFAULT 0'),
+            ('click_count', 'INTEGER DEFAULT 0'),
+            ('clicked_urls', 'JSONB DEFAULT \'[]\''),
+            ('is_bot_open', 'BOOLEAN DEFAULT FALSE'),
+            ('utm_source', 'VARCHAR(255)'),
+            ('utm_medium', 'VARCHAR(255)'),
+            ('utm_campaign', 'VARCHAR(255)'),
+            ('utm_content', 'VARCHAR(255)'),
+            ('utm_term', 'VARCHAR(255)'),
+        ]
+        for col_name, col_type in new_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE email_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            except Exception:
+                pass
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_events_to_email ON email_events(to_email)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_events_campaign ON email_events(campaign)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_events_recipient_id ON email_events(recipient_id)"))
+        except Exception:
+            pass
+        conn.commit()
+        logger.info("Email events columns migration complete")
+
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS email_link_clicks (
+                    id SERIAL PRIMARY KEY,
+                    email_id VARCHAR(255),
+                    tracking_id VARCHAR(255) UNIQUE NOT NULL,
+                    recipient_email VARCHAR(255),
+                    recipient_id VARCHAR(255),
+                    destination_url TEXT NOT NULL,
+                    link_label VARCHAR(255),
+                    clicked BOOLEAN DEFAULT FALSE,
+                    click_count INTEGER DEFAULT 0,
+                    first_clicked_at TIMESTAMP,
+                    last_clicked_at TIMESTAMP,
+                    user_agent TEXT,
+                    ip_address VARCHAR(100),
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_link_clicks_tracking_id ON email_link_clicks(tracking_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_link_clicks_email_id ON email_link_clicks(email_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_link_clicks_recipient ON email_link_clicks(recipient_email)"))
+            conn.commit()
+            logger.info("Email link clicks table migration complete")
+        except Exception as e:
+            logger.debug(f"Email link clicks table may already exist: {e}")
+
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS email_feedback (
+                    id SERIAL PRIMARY KEY,
+                    email_id VARCHAR(255),
+                    recipient_email VARCHAR(255),
+                    rating VARCHAR(50),
+                    comment TEXT,
+                    campaign VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_feedback_email_id ON email_feedback(email_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_feedback_recipient ON email_feedback(recipient_email)"))
+            conn.commit()
+            logger.info("Email feedback table migration complete")
+        except Exception as e:
+            logger.debug(f"Email feedback table may already exist: {e}")
+
 
 def ensure_metric_suggestions_tables(engine: Engine) -> None:
     """Create metric suggestions and related tables."""

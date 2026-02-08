@@ -35,6 +35,7 @@ from server.api import connector_catalog as connector_catalog_api
 from server.api import dashboards as dashboards_api
 from server.api import metrics as metrics_api
 from server.api import suggestions as suggestions_api
+from server.api import email_tracking as email_tracking_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -166,6 +167,7 @@ app.include_router(connector_catalog_api.router)
 app.include_router(dashboards_api.router)
 app.include_router(metrics_api.router)
 app.include_router(suggestions_api.router)
+app.include_router(email_tracking_api.router)
 
 @app.get("/")
 def root():
