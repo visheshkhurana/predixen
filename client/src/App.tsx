@@ -34,6 +34,7 @@ import AdminLoginHistory from "@/pages/admin/login-history";
 import AdminActivity from "@/pages/admin/activity";
 import AdminInvites from "@/pages/admin/invites";
 import AdminEmailTemplates from "@/pages/admin/email-templates";
+import AdminEmailTracking from "@/pages/admin/email-tracking";
 import AdminLoginPage from "@/pages/admin/login";
 import AdminLLMAudit from "@/pages/admin/llm-audit";
 import AdminEvals from "@/pages/admin/evals";
@@ -223,6 +224,9 @@ function Router() {
       </Route>
       <Route path="/admin/email-templates">
         {() => <AdminRoute component={AdminEmailTemplates} />}
+      </Route>
+      <Route path="/admin/email-tracking">
+        {() => <AdminRoute component={AdminEmailTracking} />}
       </Route>
       <Route path="/admin/llm-audit">
         {() => <AdminRoute component={AdminLLMAudit} />}
