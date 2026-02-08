@@ -76,14 +76,20 @@ export async function fetchConnectorCatalog(params?: {
 }
 
 export async function fetchConnectorDetail(connectorId: string): Promise<CatalogConnector> {
-  const response = await fetch(`/api/connectors/catalog/${connectorId}`);
+  const token = localStorage.getItem("predixen-token");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const response = await fetch(`/api/connectors/catalog/${connectorId}`, { headers });
   if (!response.ok) throw new Error(`Failed to fetch connector ${connectorId}`);
   const data = await response.json();
   return snakeToCamel(data);
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch("/api/connectors/categories");
+  const token = localStorage.getItem("predixen-token");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const response = await fetch("/api/connectors/categories", { headers });
   if (!response.ok) throw new Error("Failed to fetch categories");
   return response.json();
 }
