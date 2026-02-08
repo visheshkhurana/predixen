@@ -380,6 +380,163 @@ async def email_analytics(
         db.close()
 
 
+@router.get("/dashboard")
+async def email_dashboard(
+    request: Request,
+    token: Optional[str] = Query(default=None),
+    campaign: Optional[str] = Query(default=None)
+):
+    auth_header = request.headers.get("authorization", "")
+    provided_token = token or auth_header.replace("Bearer ", "")
+    if ANALYTICS_TOKEN and provided_token != ANALYTICS_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    camp_filter = campaign or ""
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Predixen Email Analytics</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{background:#0a0a0f;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;padding:24px}}
+h1{{font-size:24px;color:#e0e7ff;margin-bottom:4px}}
+.subtitle{{color:#818cf8;font-size:13px;margin-bottom:24px}}
+.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:28px}}
+.card{{background:#111118;border:1px solid #1e1e2e;border-radius:10px;padding:16px;text-align:center}}
+.card .val{{font-size:28px;font-weight:700;color:#a78bfa}}
+.card .val.green{{color:#22c55e}}.card .val.red{{color:#ef4444}}.card .val.blue{{color:#3b82f6}}
+.card .lbl{{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-top:4px}}
+table{{width:100%;border-collapse:collapse;background:#111118;border:1px solid #1e1e2e;border-radius:10px;overflow:hidden;margin-bottom:24px}}
+th{{background:#161622;color:#a5b4fc;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:10px 12px;text-align:left}}
+td{{padding:10px 12px;border-top:1px solid #1a1a2e;font-size:13px;color:#c4c4d4}}
+.tag{{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}}
+.tag.human{{background:#166534;color:#86efac}}.tag.machine{{background:#7f1d1d;color:#fca5a5}}.tag.pending{{background:#1e1b4b;color:#a5b4fc}}
+.filter-bar{{display:flex;gap:10px;margin-bottom:20px;align-items:center}}
+.filter-bar select,.filter-bar input{{background:#161622;border:1px solid #2e2e3e;color:#e0e0e0;padding:8px 12px;border-radius:8px;font-size:13px}}
+.filter-bar button{{background:#6366f1;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}}
+.filter-bar button:hover{{background:#4f46e5}}
+.section-title{{font-size:16px;color:#c4b5fd;margin:20px 0 10px;font-weight:600}}
+.refresh{{color:#818cf8;font-size:12px;cursor:pointer;text-decoration:underline}}
+</style>
+</head>
+<body>
+<h1>Email Analytics Dashboard</h1>
+<p class="subtitle">Predixen Intelligence OS &middot; Real-time email tracking</p>
+
+<div class="filter-bar">
+<label style="color:#9ca3af;font-size:13px;">Campaign:</label>
+<select id="campSelect" onchange="loadData()">
+<option value="">All Campaigns</option>
+</select>
+<button onclick="loadData()">Refresh</button>
+<span class="refresh" onclick="loadData()">Auto-refreshes every 30s</span>
+</div>
+
+<div class="cards" id="summaryCards"></div>
+
+<p class="section-title">Per Recipient</p>
+<table><thead><tr><th>Recipient</th><th>ID</th><th>Sent</th><th>Delivered</th><th>Opened</th><th>Clicked</th><th>Bounced</th><th>Opens</th><th>Status</th></tr></thead>
+<tbody id="recipientRows"></tbody></table>
+
+<p class="section-title">Top Links</p>
+<table><thead><tr><th>Label</th><th>Clicks</th><th>Recipients</th><th>URL</th></tr></thead>
+<tbody id="linkRows"></tbody></table>
+
+<p class="section-title">Feedback</p>
+<div id="feedbackInfo" style="background:#111118;border:1px solid #1e1e2e;border-radius:10px;padding:16px;font-size:14px;color:#9ca3af;"></div>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+let initialCamp = "{camp_filter}";
+
+function fmt(iso) {{
+  if (!iso) return '<span style="color:#4b5563">--</span>';
+  let d = new Date(iso + "Z");
+  return d.toLocaleString("en-IN", {{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:true}});
+}}
+
+async function loadData() {{
+  let camp = document.getElementById("campSelect").value;
+  let url = `/email-tracking/analytics?token=${{TOKEN}}&days=90`;
+  if (camp) url += `&campaign=${{encodeURIComponent(camp)}}`;
+  try {{
+    let res = await fetch(url);
+    let d = await res.json();
+    renderSummary(d.summary);
+    renderRecipients(d.per_recipient);
+    renderLinks(d.top_links);
+    renderFeedback(d.feedback);
+  }} catch(e) {{ console.error(e); }}
+}}
+
+function renderSummary(s) {{
+  document.getElementById("summaryCards").innerHTML = `
+    <div class="card"><div class="val blue">${{s.total_sent}}</div><div class="lbl">Sent</div></div>
+    <div class="card"><div class="val green">${{s.delivered}}</div><div class="lbl">Delivered</div></div>
+    <div class="card"><div class="val">${{s.opened_human}}</div><div class="lbl">Human Opens</div></div>
+    <div class="card"><div class="val" style="color:#f59e0b">${{s.opened_bot}}</div><div class="lbl">Bot Opens</div></div>
+    <div class="card"><div class="val green">${{s.clicked}}</div><div class="lbl">Clicked</div></div>
+    <div class="card"><div class="val red">${{s.bounced}}</div><div class="lbl">Bounced</div></div>
+    <div class="card"><div class="val">${{s.open_rate_pct.toFixed(1)}}%</div><div class="lbl">Open Rate</div></div>
+    <div class="card"><div class="val">${{s.click_rate_pct.toFixed(1)}}%</div><div class="lbl">Click Rate</div></div>
+  `;
+}}
+
+function renderRecipients(list) {{
+  let html = "";
+  for (let r of list) {{
+    let cls = r.classification === "human" ? "human" : r.classification === "machine" ? "machine" : "pending";
+    let lbl = r.classification || "pending";
+    if (r.bounced_at) {{ cls = "machine"; lbl = "bounced"; }}
+    html += `<tr>
+      <td>${{r.to}}</td><td style="color:#6b7280">${{r.recipient_id||"--"}}</td>
+      <td>${{fmt(r.sent_at)}}</td><td>${{fmt(r.delivered_at)}}</td>
+      <td>${{fmt(r.opened_at)}}</td><td>${{fmt(r.clicked_at)}}</td>
+      <td>${{fmt(r.bounced_at)}}</td><td>${{r.open_count||0}}</td>
+      <td><span class="tag ${{cls}}">${{lbl}}</span></td>
+    </tr>`;
+  }}
+  document.getElementById("recipientRows").innerHTML = html || '<tr><td colspan="9" style="text-align:center;color:#4b5563">No data yet</td></tr>';
+}}
+
+function renderLinks(links) {{
+  let html = "";
+  for (let l of links) {{
+    html += `<tr><td style="color:#a78bfa;font-weight:600">${{l.label}}</td><td>${{l.clicks}}</td><td>${{l.unique_clickers}}</td><td style="color:#6b7280;font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${{l.url}}</td></tr>`;
+  }}
+  document.getElementById("linkRows").innerHTML = html || '<tr><td colspan="4" style="text-align:center;color:#4b5563">No links tracked yet</td></tr>';
+}}
+
+function renderFeedback(fb) {{
+  document.getElementById("feedbackInfo").innerHTML = `Total: ${{fb.total}} &middot; Avg Rating: ${{fb.avg_rating || "N/A"}}`;
+}}
+
+async function loadCampaigns() {{
+  let url = `/email-tracking/analytics?token=${{TOKEN}}&days=365`;
+  try {{
+    let res = await fetch(url);
+    let d = await res.json();
+    let camps = new Set();
+    for (let r of d.per_recipient) if (r.campaign) camps.add(r.campaign);
+    let sel = document.getElementById("campSelect");
+    for (let c of [...camps].sort().reverse()) {{
+      let opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      if (c === initialCamp) opt.selected = true;
+      sel.appendChild(opt);
+    }}
+  }} catch(e) {{}}
+  loadData();
+}}
+
+loadCampaigns();
+setInterval(loadData, 30000);
+</script>
+</body></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/welcome")
 async def welcome_redirect(
     request: Request,
