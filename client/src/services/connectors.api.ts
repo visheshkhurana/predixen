@@ -59,11 +59,13 @@ export async function fetchConnectorCatalog(params?: {
   category?: string;
   nativeOnly?: boolean;
   implementedOnly?: boolean;
+  companyId?: number;
 }): Promise<CatalogConnector[]> {
   const searchParams = new URLSearchParams();
   if (params?.category) searchParams.set("category", params.category);
   if (params?.nativeOnly) searchParams.set("native_only", "true");
   if (params?.implementedOnly) searchParams.set("implemented_only", "true");
+  if (params?.companyId) searchParams.set("company_id", String(params.companyId));
   
   const url = `/api/connectors/catalog${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
   const token = localStorage.getItem("predixen-token");

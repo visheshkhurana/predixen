@@ -155,12 +155,24 @@ async def list_catalog(
     category: Optional[str] = None,
     native_only: Optional[bool] = False,
     implemented_only: Optional[bool] = False,
-    current_user: User = Depends(get_current_user)
+    company_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> List[Dict[str, Any]]:
     """
     List connector catalog in format expected by marketplace UI.
     """
     providers = await list_providers(category, current_user)
+    
+    company_connectors = {}
+    if company_id:
+        from server.models.company import Company
+        try:
+            company = db.query(Company).filter(Company.id == company_id).first()
+            if company and company.metadata_json:
+                company_connectors = company.metadata_json.get("connectors", {})
+        except Exception:
+            pass
     
     catalog = []
     for p in providers:
@@ -170,6 +182,17 @@ async def list_catalog(
             continue
         if native_only and not p.get("native", False):
             continue
+        
+        install_status = None
+        conn_meta = company_connectors.get(p["id"])
+        if conn_meta and conn_meta.get("connected"):
+            install_status = {
+                "connector_id": p["id"],
+                "status": "active",
+                "last_sync": conn_meta.get("last_sync"),
+                "record_count": conn_meta.get("records_synced", 0),
+                "error_summary": conn_meta.get("last_error"),
+            }
         
         catalog.append({
             "id": p["id"],
@@ -193,6 +216,7 @@ async def list_catalog(
             "metrics_unlocked": p.get("metrics_unlocked", []),
             "required_permissions": p.get("required_permissions", []),
             "data_collected": p.get("data_collected", []),
+            "installStatus": install_status,
         })
     
     return catalog

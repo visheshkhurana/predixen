@@ -487,6 +487,7 @@ async def get_connector_catalog(
     category: Optional[str] = None,
     native_only: Optional[bool] = None,
     implemented_only: Optional[bool] = None,
+    company_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -506,11 +507,31 @@ async def get_connector_catalog(
     
     connectors.sort(key=lambda x: x.popularity_rank)
     
+    company_connectors = {}
+    if company_id:
+        from server.models.company import Company
+        try:
+            company = db.query(Company).filter(Company.id == company_id).first()
+            if company and company.metadata_json:
+                company_connectors = company.metadata_json.get("connectors", {})
+        except Exception:
+            pass
+    
     result = []
     for connector in connectors:
+        status = None
+        conn_meta = company_connectors.get(connector.id)
+        if conn_meta and conn_meta.get("connected"):
+            status = ConnectorStatus(
+                connector_id=connector.id,
+                status="active",
+                last_sync=conn_meta.get("last_sync"),
+                record_count=conn_meta.get("records_synced", 0),
+                error_summary=conn_meta.get("last_error"),
+            )
         catalog_connector = CatalogConnector(
             **connector.model_dump(),
-            install_status=None
+            install_status=status
         )
         result.append(catalog_connector)
     

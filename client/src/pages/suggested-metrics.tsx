@@ -318,9 +318,12 @@ export default function SuggestedMetrics() {
   });
   
   const generateMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/suggestions/generate?company_id=${companyId}`, {}),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/suggestions/generate?company_id=${companyId}`, {});
+      return res.json();
+    },
     onSuccess: (data: any) => {
-      toast({ title: `Generated ${data.generated_count} suggestions` });
+      toast({ title: `Generated ${data.generated_count ?? 0} suggestions` });
       queryClient.invalidateQueries({ queryKey: ["/api/suggestions"] });
       refetch();
     },
@@ -330,10 +333,12 @@ export default function SuggestedMetrics() {
   });
   
   const acceptMutation = useMutation({
-    mutationFn: ({ id, autoCompute }: { id: number; autoCompute: boolean }) =>
-      apiRequest("POST", `/api/suggestions/${id}/accept?company_id=${companyId}`, { auto_compute: autoCompute }),
+    mutationFn: async ({ id, autoCompute }: { id: number; autoCompute: boolean }) => {
+      const res = await apiRequest("POST", `/api/suggestions/${id}/accept?company_id=${companyId}`, { auto_compute: autoCompute });
+      return res.json();
+    },
     onSuccess: (data: any) => {
-      toast({ title: `Created metric: ${data.metric.name}` });
+      toast({ title: `Created metric: ${data.metric?.name ?? 'metric'}` });
       queryClient.invalidateQueries({ queryKey: ["/api/suggestions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       refetch();
