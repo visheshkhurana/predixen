@@ -307,8 +307,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
             </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="hidden md:block">
+            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+              <div className="hidden lg:block min-w-0 overflow-hidden">
                 <ContextBar 
                   scenarioName={currentScenario?.name}
                   scenarioId={currentScenario?.id}
