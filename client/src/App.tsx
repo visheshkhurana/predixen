@@ -272,18 +272,18 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const getConfidenceBadge = () => {
     if (!truthScan) return null;
     if (confidence < 60) {
-      return <Badge variant="destructive" className="text-xs">Confidence: {confidence}</Badge>;
+      return <Badge variant="destructive" className="text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
     } else if (confidence < 80) {
-      return <Badge className="bg-amber-500/20 text-amber-400 text-xs">Confidence: {confidence}</Badge>;
+      return <Badge className="bg-amber-500/20 text-amber-400 text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
     }
-    return <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Confidence: {confidence}</Badge>;
+    return <Badge className="bg-emerald-500/20 text-emerald-400 text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
   };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <header className="flex items-center justify-between gap-2 p-3 border-b bg-background sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-4 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
