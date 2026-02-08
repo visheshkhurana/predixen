@@ -426,6 +426,12 @@ export default function DashboardBuilderPage() {
     });
   };
 
+  useEffect(() => {
+    if (!dashboardLoading && !dashboard && dashboardId) {
+      setLocation('/dashboards');
+    }
+  }, [dashboardLoading, dashboard, dashboardId, setLocation]);
+
   if (!currentCompany) {
     return (
       <div className="p-6">
@@ -445,6 +451,18 @@ export default function DashboardBuilderPage() {
         <div className="grid grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
         </div>
+      </div>
+    );
+  }
+
+  if (!dashboard && dashboardId) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground mb-4">Redirecting to dashboards...</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
