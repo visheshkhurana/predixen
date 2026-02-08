@@ -1396,7 +1396,9 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <div className="flex items-baseline gap-2">
-              {baseData.ltv > 0 && baseData.cac > 0 ? (
+              {metricsLoading ? (
+                <div className="h-8 w-16 bg-muted animate-pulse rounded" data-testid="metric-ltvcac-loading" />
+              ) : baseData.ltv > 0 && baseData.cac > 0 ? (
                 <>
                   <p className={`text-2xl font-bold font-mono ${
                     projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
@@ -1418,7 +1420,7 @@ export default function OverviewPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              LTV: {baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
+              LTV: {metricsLoading ? '...' : baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {metricsLoading ? '...' : baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
             </p>
           </CardContent>
         </Card>
@@ -1454,12 +1456,12 @@ export default function OverviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x')})</p>
-                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x')})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x')})</p>
                 <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5, 1, '%')})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
@@ -1486,11 +1488,11 @@ export default function OverviewPage() {
                     <tr key={seg.name} className="border-b last:border-0 hover-elevate" data-testid={`segment-row-${i}`}>
                       <td className="py-2 px-3 font-medium">{seg.name}</td>
                       <td className="text-right py-2 px-3 font-mono">{seg.customers}</td>
-                      <td className="text-right py-2 px-3 font-mono">{seg.cac > 0 ? formatCurrency(seg.cac) : <span className="text-muted-foreground">N/A</span>}</td>
-                      <td className="text-right py-2 px-3 font-mono">{seg.ltv > 0 ? formatCurrency(seg.ltv) : <span className="text-muted-foreground">N/A</span>}</td>
+                      <td className="text-right py-2 px-3 font-mono">{metricsLoading ? <span className="text-muted-foreground">...</span> : seg.cac > 0 ? formatCurrency(seg.cac) : <span className="text-muted-foreground">N/A</span>}</td>
+                      <td className="text-right py-2 px-3 font-mono">{metricsLoading ? <span className="text-muted-foreground">...</span> : seg.ltv > 0 ? formatCurrency(seg.ltv) : <span className="text-muted-foreground">N/A</span>}</td>
                       <td className="text-right py-2 px-3">
                         <span className={`font-mono ${!isFinite(seg.ltvCac) || seg.ltvCac <= 0 ? 'text-muted-foreground' : seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {seg.cac > 0 && seg.ltv > 0 ? safeToFixed(seg.ltvCac, 1, 'x') : 'N/A'}
+                          {metricsLoading ? '...' : seg.cac > 0 && seg.ltv > 0 ? safeToFixed(seg.ltvCac, 1, 'x') : 'N/A'}
                         </span>
                       </td>
                       <td className="text-right py-2 px-3">
