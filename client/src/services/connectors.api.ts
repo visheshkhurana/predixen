@@ -66,7 +66,10 @@ export async function fetchConnectorCatalog(params?: {
   if (params?.implementedOnly) searchParams.set("implemented_only", "true");
   
   const url = `/api/connectors/catalog${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-  const response = await fetch(url);
+  const token = localStorage.getItem("predixen-token");
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const response = await fetch(url, { headers });
   if (!response.ok) throw new Error("Failed to fetch connector catalog");
   const data = await response.json();
   return snakeToCamel(data);
