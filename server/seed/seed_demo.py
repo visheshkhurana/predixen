@@ -201,12 +201,12 @@ def seed_demo_data(db: Session):
     
     truth_outputs = {
         "metrics": {
-            "mrr": {"value": 45000, "benchmark_percentile": 65},
-            "arr": {"value": 540000, "benchmark_percentile": 60},
-            "revenue_growth_mom": {"value": 12.5, "benchmark_percentile": 72},
+            "mrr": {"value": 43949, "benchmark_percentile": 65},
+            "arr": {"value": 527388, "benchmark_percentile": 60},
+            "revenue_growth_mom": {"value": 10.0, "benchmark_percentile": 72},
             "gross_margin": {"value": 75.0, "benchmark_percentile": 68},
             "burn_multiple": {"value": 1.8, "benchmark_percentile": 58},
-            "runway_months": {"value": 16.5, "benchmark_percentile": 55},
+            "runway_months": {"value": 21.3, "benchmark_percentile": 55},
             "net_revenue_retention": {"value": 108, "benchmark_percentile": 70},
             "logo_retention_12m": {"value": 85, "benchmark_percentile": 62},
             "concentration_top5": {"value": 32, "benchmark_percentile": 45},
@@ -215,7 +215,7 @@ def seed_demo_data(db: Session):
             "magic_number": {"value": 0.85, "benchmark_percentile": 60},
             "rule_of_40": {"value": 35, "benchmark_percentile": 52},
             "quick_ratio": {"value": 2.8, "benchmark_percentile": 58},
-            "arpu": {"value": 2250, "benchmark_percentile": 70},
+            "arpu": {"value": 2197, "benchmark_percentile": 70},
             "expansion_rate": {"value": 15, "benchmark_percentile": 65},
             "contraction_rate": {"value": 3, "benchmark_percentile": 72},
             "gross_churn_rate": {"value": 2.5, "benchmark_percentile": 68},
@@ -224,7 +224,14 @@ def seed_demo_data(db: Session):
             "new_customers_mom": {"value": 3, "benchmark_percentile": 55},
             "churned_customers_mom": {"value": 1, "benchmark_percentile": 60},
             "avg_contract_value": {"value": 27000, "benchmark_percentile": 62},
-            "sales_efficiency": {"value": 0.65, "benchmark_percentile": 58}
+            "sales_efficiency": {"value": 0.65, "benchmark_percentile": 58},
+            "net_burn": {"value": 24109, "benchmark_percentile": 55},
+            "cash_balance": {"value": 513746, "benchmark_percentile": 60},
+            "total_customers": {"value": 20, "benchmark_percentile": 50},
+            "cac": {"value": 1500, "benchmark_percentile": 55},
+            "ltv": {"value": 4800, "benchmark_percentile": 65},
+            "churn_rate": {"value": 2.5, "benchmark_percentile": 68},
+            "headcount": {"value": 12, "benchmark_percentile": 50}
         },
         "data_confidence_score": 78,
         "quality_of_growth_index": 72,

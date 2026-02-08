@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan } from '@/api/hooks';
+import { useQuery } from '@tanstack/react-query';
 
 export interface FinancialMetrics {
   mrr: number;
@@ -39,45 +40,45 @@ function extractTruthScanValue(metrics: Record<string, any>, key: string): numbe
 
 export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean } {
   const { currentCompany, financialBaseline } = useFounderStore();
-  const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
+  const companyId = currentCompany?.id ?? null;
+  const { data: truthScan, isLoading: tsLoading } = useTruthScan(companyId);
+
+  const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
+    queryKey: ['/api/companies', companyId, 'financials/baseline'],
+    enabled: !!companyId,
+    staleTime: 30_000,
+  });
+
+  const isLoading = tsLoading || baselineLoading;
 
   const metrics = useMemo(() => {
     const ts = truthScan?.metrics || {};
+    const bb = backendBaseline?.baseline;
+    const ext = backendBaseline?.extendedMetrics;
 
-    const baselineRevenue = financialBaseline?.monthlyRevenue ?? 0;
-    const baselineCash = financialBaseline?.cashOnHand ?? 0;
-    const baselineTotalExpenses = financialBaseline?.totalMonthlyExpenses ?? 0;
+    const baselineRevenue = bb?.monthlyRevenue ?? financialBaseline?.monthlyRevenue ?? 0;
+    const baselineCash = bb?.cashOnHand ?? financialBaseline?.cashOnHand ?? 0;
+    const baselineTotalExpenses = bb?.totalMonthlyExpenses ?? financialBaseline?.totalMonthlyExpenses ?? 0;
 
-    const breakdownSum =
-      (financialBaseline?.expenseBreakdown?.payroll || 0) +
-      (financialBaseline?.expenseBreakdown?.marketing || 0) +
-      (financialBaseline?.expenseBreakdown?.operating || 0) +
-      (financialBaseline?.expenseBreakdown?.cogs || 0) +
-      (financialBaseline?.expenseBreakdown?.otherOpex || 0);
+    const breakdownPayroll = bb?.expenseBreakdown?.payroll ?? financialBaseline?.expenseBreakdown?.payroll ?? 0;
+    const breakdownMarketing = bb?.expenseBreakdown?.marketing ?? financialBaseline?.expenseBreakdown?.marketing ?? 0;
+    const breakdownOperating = bb?.expenseBreakdown?.operating ?? financialBaseline?.expenseBreakdown?.operating ?? 0;
+    const breakdownCogs = bb?.expenseBreakdown?.cogs ?? financialBaseline?.expenseBreakdown?.cogs ?? 0;
+    const breakdownOther = bb?.expenseBreakdown?.otherOpex ?? financialBaseline?.expenseBreakdown?.otherOpex ?? 0;
 
-    const effectiveExpenses = financialBaseline?.hasManualExpenseOverride
+    const breakdownSum = breakdownPayroll + breakdownMarketing + breakdownOperating + breakdownCogs + breakdownOther;
+
+    const hasManualOverride = financialBaseline?.hasManualExpenseOverride ?? false;
+    const effectiveExpenses = hasManualOverride
       ? baselineTotalExpenses
       : (breakdownSum > 0 ? breakdownSum : baselineTotalExpenses);
 
     const baselineNetBurn = Math.max(0, effectiveExpenses - baselineRevenue);
-    const baselineCogs = financialBaseline?.expenseBreakdown?.cogs ?? 0;
 
-    const pick = (tsKey: string, fallback: number): number => {
-      const tsVal = extractTruthScanValue(ts, tsKey);
-      if (tsVal !== null && tsVal > 0) return tsVal;
-      return fallback;
-    };
-
-    const pickAllowZero = (tsKey: string, fallback: number): number => {
-      const tsVal = extractTruthScanValue(ts, tsKey);
-      if (tsVal !== null) return tsVal;
-      return fallback;
-    };
-
-    const mrr = pick('mrr', baselineRevenue);
-    const arr = pick('arr', mrr * 12);
-    const cashOnHand = pick('cash_balance', pick('cash', baselineCash));
-    const netBurn = pick('net_burn', pick('monthly_burn', baselineNetBurn));
+    const mrr = baselineRevenue > 0 ? baselineRevenue : extractTruthScanValue(ts, 'mrr') ?? 0;
+    const arr = mrr > 0 ? mrr * 12 : (extractTruthScanValue(ts, 'arr') ?? mrr * 12);
+    const cashOnHand = baselineCash > 0 ? baselineCash : (extractTruthScanValue(ts, 'cash_balance') ?? extractTruthScanValue(ts, 'cash') ?? 0);
+    const netBurn = baselineNetBurn > 0 ? baselineNetBurn : (extractTruthScanValue(ts, 'net_burn') ?? extractTruthScanValue(ts, 'monthly_burn') ?? 0);
     const burnRate = netBurn;
 
     let runway: number;
@@ -94,25 +95,33 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       runwayDisplay = `${runway.toFixed(1)} mo`;
     }
 
-    const cac = pick('cac', 0);
-    const ltv = pick('ltv', 0);
+    const extCac = ext?.cac ?? null;
+    const extLtv = ext?.ltv ?? null;
+    const extLtvCacRatio = ext?.ltvCacRatio ?? null;
+    const tsCac = extractTruthScanValue(ts, 'cac');
+    const tsLtv = extractTruthScanValue(ts, 'ltv');
+    const tsLtvCacRatio = extractTruthScanValue(ts, 'ltv_cac_ratio');
 
-    const ltvCacRatio = cac > 0 && ltv > 0 ? ltv / cac : 0;
+    const cac = extCac ?? tsCac ?? 0;
+    const ltv = extLtv ?? tsLtv ?? 0;
+    const ltvCacRatio = extLtvCacRatio ?? tsLtvCacRatio ?? (cac > 0 && ltv > 0 ? ltv / cac : 0);
 
-    const baselineGrossMarginDecimal = baselineRevenue > 0
-      ? (baselineRevenue - baselineCogs) / baselineRevenue
-      : 0;
-
-    const tsGrossMargin = extractTruthScanValue(ts, 'gross_margin');
     let grossMarginDecimal: number;
-    if (tsGrossMargin !== null && tsGrossMargin > 0) {
+    const extGrossMargin = ext?.grossMargin ?? null;
+    const tsGrossMargin = extractTruthScanValue(ts, 'gross_margin');
+
+    if (extGrossMargin !== null && extGrossMargin > 0) {
+      grossMarginDecimal = extGrossMargin > 1 ? extGrossMargin / 100 : extGrossMargin;
+    } else if (baselineRevenue > 0 && breakdownCogs >= 0) {
+      grossMarginDecimal = (baselineRevenue - breakdownCogs) / baselineRevenue;
+    } else if (tsGrossMargin !== null && tsGrossMargin > 0) {
       grossMarginDecimal = tsGrossMargin > 1 ? tsGrossMargin / 100 : tsGrossMargin;
     } else {
-      grossMarginDecimal = baselineGrossMarginDecimal;
+      grossMarginDecimal = 0;
     }
     const grossMarginPct = grossMarginDecimal * 100;
 
-    const tsChurn = extractTruthScanValue(ts, 'churn_rate');
+    const tsChurn = extractTruthScanValue(ts, 'churn_rate') ?? extractTruthScanValue(ts, 'gross_churn_rate');
     let churnRateDecimal: number;
     if (tsChurn !== null) {
       churnRateDecimal = tsChurn > 1 ? tsChurn / 100 : tsChurn;
@@ -121,8 +130,13 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     }
     const churnRatePct = churnRateDecimal * 100;
 
-    const totalCustomers = pick('total_customers', pick('customers', 0));
-    const headcount = pick('headcount', currentCompany ? (currentCompany as any).employees || 0 : 0);
+    const extCustomers = ext?.customers ?? null;
+    const tsCustomers = extractTruthScanValue(ts, 'customer_count') ?? extractTruthScanValue(ts, 'total_customers') ?? extractTruthScanValue(ts, 'customers');
+    const totalCustomers = extCustomers ?? tsCustomers ?? 0;
+
+    const extHeadcount = ext?.headcount ?? null;
+    const tsHeadcount = extractTruthScanValue(ts, 'headcount');
+    const headcount = extHeadcount ?? tsHeadcount ?? (currentCompany ? (currentCompany as any).employees || 0 : 0);
 
     const arpu = totalCustomers > 0 ? mrr / totalCustomers : 0;
 
@@ -135,7 +149,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       paybackPeriod = 0;
     }
 
-    const monthlyGrowthRate = financialBaseline?.monthlyGrowthRate ?? 0;
+    const monthlyGrowthRate = bb?.monthlyGrowthRate ?? financialBaseline?.monthlyGrowthRate ?? 0;
     const newMRR = mrr * (monthlyGrowthRate / 100);
     const newARR = newMRR * 12;
     let burnMultiple: number;
@@ -175,7 +189,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       isProfitable,
       hasData,
     };
-  }, [truthScan?.metrics, financialBaseline, currentCompany]);
+  }, [truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
   return { metrics, isLoading };
 }
