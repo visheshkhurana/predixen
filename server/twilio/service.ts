@@ -44,9 +44,13 @@ async function getCredentials() {
 }
 
 export async function getTwilioClient() {
-  const { accountSid, apiKey, apiKeySecret } = await getCredentials();
-  return twilio(apiKey, apiKeySecret, {
-    accountSid: accountSid,
+  const { accountSid: apiKeySid, apiKey: apiKeySecret } = await getCredentials();
+  const realAccountSid = process.env.TWILIO_ACCOUNT_SID;
+  if (!realAccountSid) {
+    throw new Error('TWILIO_ACCOUNT_SID environment variable is required');
+  }
+  return twilio(apiKeySid, apiKeySecret, {
+    accountSid: realAccountSid,
   });
 }
 
