@@ -101,7 +101,7 @@ async def resend_webhook(request: Request):
                 "symantec", "fireeye", "trendmicro", "sophos",
                 "messagelabs", "ironport", "mailguard", "spamhaus",
                 "protection", "scanner", "crawler", "bot", "spider",
-                "preview", "prefetch", "guard", "antivirus",
+                "preview", "prefetch", "guard", "antivirus", "outlook", "yahoo", "aol", "link-preview", "urldefense", "safelinks", "emailsecurity", "clickprotect", "emailprotection",
             ]
 
             if seconds_since_sent is not None and seconds_since_sent < 120:  # 2 min threshold to filter bot pre-fetches
@@ -110,7 +110,7 @@ async def resend_webhook(request: Request):
                 is_bot = True
             elif not event_record.delivered_at:
                 is_bot = True
-            elif event_record.delivered_at and (ts - event_record.delivered_at).total_seconds() < 5:
+            elif event_record.delivered_at and (ts - event_record.delivered_at).total_seconds() < 30:  # 30s after delivery = likely bot
                 is_bot = True
 
             if is_bot:
