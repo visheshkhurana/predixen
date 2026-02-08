@@ -99,7 +99,7 @@ export default function AdminEmailTracking() {
     queryFn: async () => {
       const params = new URLSearchParams({ days: String(days) });
       if (campaign && campaign !== 'all') params.set('campaign', campaign);
-      const res = await apiRequest('GET', `/email-tracking/analytics?${params}`);
+      const res = await apiRequest('GET', `/api/email-tracking/analytics?${params}`);
       return res.json();
     },
     refetchInterval: 30000,

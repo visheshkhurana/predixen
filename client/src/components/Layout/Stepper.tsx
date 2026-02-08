@@ -7,7 +7,7 @@ interface StepperProps {
 }
 
 const steps = [
-  { id: 'truth', label: 'Truth', path: '/truth-scan' },
+  { id: 'truth', label: 'Truth', path: '/truth' },
   { id: 'simulation', label: 'Simulation', path: '/scenarios' },
   { id: 'decision', label: 'Decision', path: '/decisions' },
 ];

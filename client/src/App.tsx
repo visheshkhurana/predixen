@@ -140,7 +140,10 @@ function Router() {
       <Route path="/kpi-board">
         {() => <AuthenticatedRoute component={KPIBoardPage} />}
       </Route>
-      <Route path="/truth">
+      <Route path="/truth-scan">
+          {() => <AuthenticatedRoute component={TruthScanPage} />}
+        </Route>
+        <Route path="/truth">
         {() => <AuthenticatedRoute component={TruthScanPage} />}
       </Route>
       <Route path="/data">
