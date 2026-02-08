@@ -104,15 +104,18 @@ export default function ScenariosPage() {
   
   const [selectedScenarioId, setSelectedScenarioId] = useState<number | null>(null);
   
-  // Auto-select scenario from URL parameter
   useEffect(() => {
-    if (params.id) {
+    if (params.id && scenarios) {
       const idFromUrl = parseInt(params.id, 10);
-      if (!isNaN(idFromUrl)) {
+      if (!isNaN(idFromUrl) && scenarios.some((s: any) => s.id === idFromUrl)) {
         setSelectedScenarioId(idFromUrl);
+      } else if (scenarios.length > 0) {
+        setSelectedScenarioId(scenarios[0].id);
       }
+    } else if (!params.id && scenarios && scenarios.length > 0 && !selectedScenarioId) {
+      setSelectedScenarioId(scenarios[0].id);
     }
-  }, [params.id]);
+  }, [params.id, scenarios]);
   const { data: simulation, isLoading: simLoading } = useSimulation(selectedScenarioId);
   const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
   
