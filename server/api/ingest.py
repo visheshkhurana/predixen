@@ -577,6 +577,141 @@ async def get_financial_baseline(
         }
     }
 
+@router.get("/companies/{company_id}/metrics/computed", response_model=Dict[str, Any])
+async def get_computed_metrics(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Single source of truth: returns all computed metrics from financial_records + truth_scan."""
+    from server.models.truth_scan import TruthScan as TruthScanModel
+    
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+
+    latest_ts = db.query(TruthScanModel).filter(
+        TruthScanModel.company_id == company_id
+    ).order_by(TruthScanModel.created_at.desc()).first()
+
+    ts_metrics = {}
+    if latest_ts and latest_ts.outputs_json:
+        oj = latest_ts.outputs_json
+        if isinstance(oj, dict):
+            ts_metrics = oj.get('metrics', oj.get('computed_metrics', {}))
+
+    def fr_val(attr, default=0):
+        if latest_record is None:
+            return default
+        v = getattr(latest_record, attr, None)
+        if v is not None:
+            return float(v)
+        return default
+
+    def ts_val(key, default=None):
+        v = ts_metrics.get(key)
+        if v is None:
+            camel = key.replace('_', ' ').title().replace(' ', '')
+            camel = camel[0].lower() + camel[1:] if camel else key
+            v = ts_metrics.get(camel)
+        if v is None:
+            return default
+        if isinstance(v, dict):
+            return v.get('value', default)
+        if isinstance(v, (int, float)):
+            return float(v)
+        return default
+
+    mrr = fr_val('mrr') or fr_val('revenue') or ts_val('mrr', 0)
+    arr = fr_val('arr') or (mrr * 12 if mrr else ts_val('arr', 0))
+    cash = fr_val('cash_balance') or ts_val('cash_balance', 0)
+    net_burn = fr_val('net_burn') or ts_val('net_burn', 0)
+
+    payroll = fr_val('payroll')
+    marketing = fr_val('marketing_expense')
+    opex = fr_val('opex')
+    cogs = fr_val('cogs')
+    other = fr_val('other_costs')
+    total_expenses = payroll + marketing + opex + cogs + other
+    if total_expenses <= 0:
+        total_expenses = net_burn + mrr if net_burn > 0 else 0
+
+    if net_burn > 0 and cash > 0:
+        runway = min(cash / net_burn, 120)
+    elif net_burn <= 0:
+        runway = 999
+    else:
+        runway = 0
+
+    gross_margin = fr_val('gross_margin') or ts_val('gross_margin', 0)
+    if gross_margin > 1:
+        gross_margin_pct = gross_margin
+        gross_margin_dec = gross_margin / 100
+    else:
+        gross_margin_dec = gross_margin
+        gross_margin_pct = gross_margin * 100
+
+    ltv = fr_val('ltv') or ts_val('ltv', 0)
+    cac = fr_val('cac') or ts_val('cac', 0)
+    ltv_cac_ratio = fr_val('ltv_cac_ratio') or ts_val('ltv_cac_ratio', 0)
+    if ltv_cac_ratio <= 0 and ltv > 0 and cac > 0:
+        ltv_cac_ratio = ltv / cac
+
+    customers = int(fr_val('customers')) or int(ts_val('customer_count', 0) or ts_val('total_customers', 0) or 0)
+    headcount = int(fr_val('headcount')) or int(ts_val('headcount', 0) or 0)
+    arpu = mrr / customers if customers > 0 else fr_val('arpu') or ts_val('arpu', 0)
+    ndr = fr_val('ndr') or ts_val('net_revenue_retention', 0)
+    mom_growth = fr_val('mom_growth') or ts_val('revenue_growth_mom', 0)
+    churn_rate = ts_val('gross_churn_rate', 0) or ts_val('churn_rate', 0)
+    if churn_rate > 1:
+        churn_rate_pct = churn_rate
+    else:
+        churn_rate_pct = churn_rate * 100
+
+    payback = 0
+    if cac > 0 and arpu > 0:
+        payback = cac / (arpu * gross_margin_dec) if gross_margin_dec > 0 else cac / arpu
+
+    burn_multiple = fr_val('burn_multiple') or ts_val('burn_multiple', 0)
+
+    return {
+        'mrr': mrr,
+        'arr': arr,
+        'cashOnHand': cash,
+        'netBurn': net_burn,
+        'totalExpenses': total_expenses,
+        'runway': runway,
+        'grossMarginPct': gross_margin_pct,
+        'grossMarginDecimal': gross_margin_dec,
+        'ltv': ltv,
+        'cac': cac,
+        'ltvCacRatio': round(ltv_cac_ratio, 2) if ltv_cac_ratio else 0,
+        'totalCustomers': customers,
+        'headcount': headcount,
+        'arpu': arpu,
+        'ndr': ndr,
+        'momGrowth': mom_growth,
+        'churnRatePct': churn_rate_pct,
+        'paybackPeriod': round(payback, 1) if payback else 0,
+        'burnMultiple': burn_multiple,
+        'expenseBreakdown': {
+            'payroll': payroll,
+            'marketing': marketing,
+            'operating': opex,
+            'cogs': cogs,
+            'otherOpex': other,
+        },
+        'currency': company.currency or 'USD',
+        'asOfDate': latest_record.period_end.isoformat() if latest_record and latest_record.period_end else None,
+    }
+
 @router.post("/companies/{company_id}/financials/save", response_model=Dict[str, Any])
 async def save_financial_baseline(
     company_id: int,
