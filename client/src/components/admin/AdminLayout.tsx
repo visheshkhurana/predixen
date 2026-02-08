@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, UsersRound, Mail, Activity, BarChart3, 
   Building2, CreditCard, LogOut, ChevronRight,
-  Menu, X, FileText, Shield, FlaskConical, Brain
+  Menu, X, FileText, Shield, FlaskConical, Brain, Send
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -23,6 +23,7 @@ const navItems: NavItem[] = [
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Invitations', href: '/admin/invites', icon: Mail },
   { title: 'Email Templates', href: '/admin/email-templates', icon: FileText },
+  { title: 'Email Tracking', href: '/admin/email-tracking', icon: Send },
   { title: 'Companies', href: '/admin/companies', icon: Building2 },
   { title: 'Team', href: '/admin/team', icon: UsersRound },
   { title: 'Billing', href: '/admin/billing', icon: CreditCard },
