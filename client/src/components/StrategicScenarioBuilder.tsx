@@ -306,7 +306,7 @@ export function StrategicScenarioBuilder({
                 currentRunway={baseMetrics.currentRunway}
                 onSimulate={handleStrategySelect}
                 isSelected={pendingStrategyId === strategy.id}
-                isLoading={isRunning || pendingStrategyId !== null}
+                isLoading={pendingStrategyId !== null}
               />
             ))}
           </div>

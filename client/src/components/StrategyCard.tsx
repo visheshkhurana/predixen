@@ -72,9 +72,10 @@ export function StrategyCard({
       className={cn(
         "relative transition-all cursor-pointer hover-elevate",
         isSelected && "ring-2 ring-primary border-primary",
+        isLoading && !isSelected && "opacity-60",
         className
       )}
-      onClick={() => !isLoading && onSimulate(strategy.id)}
+      onClick={() => onSimulate(strategy.id)}
       data-testid={`strategy-card-${strategy.id}`}
     >
       {strategy.recommended && (
@@ -160,11 +161,11 @@ export function StrategyCard({
         
         <Button
           onClick={(e) => { e.stopPropagation(); onSimulate(strategy.id); }}
-          disabled={isLoading}
+          disabled={isLoading && isSelected}
           className="w-full gap-2"
           data-testid={`button-simulate-${strategy.id}`}
         >
-          {isLoading ? 'Simulating...' : 'Simulate This Strategy'}
+          {isLoading && isSelected ? 'Selecting...' : 'Simulate This Strategy'}
           <ArrowRight className="w-4 h-4" />
         </Button>
       </CardContent>

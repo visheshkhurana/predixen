@@ -67,6 +67,9 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Metric Catalog**: Auto-initializes system metrics on first visit per company (uses company-scoped ref guard).
 -   **Simulation Fixes**: Decision ranking uses scenario key mapping; query invalidation for timeseries/scenarios after simulation runs; churn rate KPI displays correctly as percentage.
 -   **API**: Added `GET /api/realtime/kpi/{company_id}/history` endpoint for historical KPI data from financial records.
+-   **Strategy Card Fix**: Removed click-blocking guard from StrategyCard; cards always clickable. isLoading only depends on pendingStrategyId, not parent isRunning.
+-   **Suggested Metrics Fallback**: Generate Suggestions now returns 8 default SaaS metric suggestions (NRR, Gross Margin Trend, Burn Multiple, CAC Payback Period, Magic Number, Revenue Per Employee, Logo Churn Rate, SaaS Quick Ratio) when no data sources are connected.
+-   **LTV:CAC Fix**: useFinancialMetrics hook uses explicit fetchJson with auth headers and semantic query keys to prevent N/A flashes. Loading skeletons added to Overview page.
 
 ## External Dependencies
 
