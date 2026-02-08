@@ -197,8 +197,8 @@ function Router() {
       <Route path="/docs">
         {() => <AuthenticatedRoute component={DocsPage} />}
       </Route>
-      <Route path="/messaging">
-        {() => <AuthenticatedRoute component={MessagingPage} />}
+      <Route path="/admin/messaging">
+        {() => <AdminRoute component={MessagingPage} />}
       </Route>
       <Route path="/fundraising">
         {() => <AuthenticatedRoute component={FundraisingPage} />}
