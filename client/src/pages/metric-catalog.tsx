@@ -728,7 +728,7 @@ export default function MetricCatalog() {
   
   if (!companyId) {
     return (
-      <div className="container mx-auto py-8">
+      <div className="p-6">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Please select a company to view metrics.</p>
@@ -740,7 +740,7 @@ export default function MetricCatalog() {
   
   if (selectedMetric) {
     return (
-      <div className="container mx-auto py-6 space-y-4">
+      <div className="p-6 space-y-4">
         <Button variant="ghost" onClick={() => setSelectedMetric(null)} data-testid="button-back-to-catalog">
           <ChevronRight className="h-4 w-4 mr-1 rotate-180" />
           Back to Catalog
@@ -751,7 +751,7 @@ export default function MetricCatalog() {
   }
   
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Metric Catalog</h1>
