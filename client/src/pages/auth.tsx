@@ -68,6 +68,18 @@ export default function AuthPage() {
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
           identifyUser(result.user_id, result.email);
+
+      try {
+        const companies = await api.companies.list();
+        if (companies && companies.length > 0) {
+          const preferred = companies.find((c: any) => c.name === 'TechFlow Analytics') || companies[0];
+          setCompanies(companies);
+          setCurrentCompany(preferred);
+        }
+      } catch {
+        // Company auto-select is non-critical
+      }
+
       toast({ title: 'Welcome back!' });
       setLocation('/');
     } catch (err) {

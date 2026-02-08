@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useFounderStore } from '@/store/founderStore';
-import { useComputedMetrics, useTruthScan } from '@/api/hooks';
+import { useTruthScan, useComputedMetrics } from '@/api/hooks';
 import { useQuery } from '@tanstack/react-query';
 
 export interface FinancialMetrics {
@@ -42,14 +42,24 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
-  const { data: computed, isLoading: computedLoading } = useComputedMetrics(companyId);
-  const { data: truthScan, isLoading: tsLoading } = useTruthScan(companyId);
+  const { data: computed, isLoading: computedLoading, error: computedError } = useComputedMetrics(companyId);
 
-  const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
-    queryKey: ['/api/companies', companyId, 'financials/baseline'],
-    enabled: !!companyId && !computed,
+  const { data: truthScan, isLoading: tsLoading, error: tsError } = useTruthScan(companyId);
+
+  const { data: backendBaseline, isLoading: baselineLoading, error: baselineError } = useQuery<any>({
+    queryKey: ['/api/companies', companyId, 'financials', 'baseline'],
+    enabled: !!companyId,
     staleTime: 60_000,
   });
+
+  if (companyId && (computedError || tsError || baselineError)) {
+    console.warn('[useFinancialMetrics] Query errors:', {
+      computed: computedError?.message,
+      truthScan: tsError?.message,
+      baseline: baselineError?.message,
+      companyId,
+    });
+  }
 
   const isLoading = computedLoading && tsLoading && baselineLoading;
 
@@ -58,6 +68,17 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const ts = truthScan?.metrics || {};
     const bb = backendBaseline?.baseline;
     const ext = backendBaseline?.extendedMetrics;
+
+    if (companyId) {
+      console.log('[useFinancialMetrics] Data state:', {
+        hasComputed: !!computed,
+        computedLtv: c.ltv,
+        hasTruthScan: !!truthScan,
+        tsLtv: ts?.ltv,
+        hasBaseline: !!backendBaseline,
+        extLtv: ext?.ltv,
+      });
+    }
 
     const pick = (...vals: (number | null | undefined)[]) => {
       for (const v of vals) {

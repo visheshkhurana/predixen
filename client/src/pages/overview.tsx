@@ -1486,11 +1486,11 @@ export default function OverviewPage() {
                     <tr key={seg.name} className="border-b last:border-0 hover-elevate" data-testid={`segment-row-${i}`}>
                       <td className="py-2 px-3 font-medium">{seg.name}</td>
                       <td className="text-right py-2 px-3 font-mono">{seg.customers}</td>
-                      <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.cac)}</td>
-                      <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.ltv)}</td>
+                      <td className="text-right py-2 px-3 font-mono">{seg.cac > 0 ? formatCurrency(seg.cac) : <span className="text-muted-foreground">N/A</span>}</td>
+                      <td className="text-right py-2 px-3 font-mono">{seg.ltv > 0 ? formatCurrency(seg.ltv) : <span className="text-muted-foreground">N/A</span>}</td>
                       <td className="text-right py-2 px-3">
-                        <span className={`font-mono ${!isFinite(seg.ltvCac) ? 'text-muted-foreground' : seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {safeToFixed(seg.ltvCac, 1, 'x')}
+                        <span className={`font-mono ${!isFinite(seg.ltvCac) || seg.ltvCac <= 0 ? 'text-muted-foreground' : seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {seg.cac > 0 && seg.ltv > 0 ? safeToFixed(seg.ltvCac, 1, 'x') : 'N/A'}
                         </span>
                       </td>
                       <td className="text-right py-2 px-3">
