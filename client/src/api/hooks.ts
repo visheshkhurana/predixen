@@ -61,6 +61,17 @@ export function useDeleteCompany() {
   });
 }
 
+export function useComputedMetrics(companyId: number | null) {
+  return useQuery({
+    queryKey: ['computed-metrics', companyId],
+    queryFn: () => api.metrics.computed(companyId!),
+    enabled: !!companyId,
+    staleTime: 30_000,
+    retry: 2,
+    retryDelay: 1000,
+  });
+}
+
 export function useTruthScan(companyId: number | null) {
   return useQuery({
     queryKey: ['truth', companyId],

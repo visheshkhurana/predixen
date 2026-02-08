@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useFounderStore } from '@/store/founderStore';
-import { useTruthScan } from '@/api/hooks';
+import { useComputedMetrics, useTruthScan } from '@/api/hooks';
 import { useQuery } from '@tanstack/react-query';
 
 export interface FinancialMetrics {
@@ -42,14 +42,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
-  const { data: computed, isLoading: computedLoading } = useQuery<any>({
-    queryKey: ['/api/companies', companyId, 'metrics/computed'],
-    enabled: !!companyId,
-    staleTime: 30_000,
-    retry: 2,
-    retryDelay: 1000,
-  });
-
+  const { data: computed, isLoading: computedLoading } = useComputedMetrics(companyId);
   const { data: truthScan, isLoading: tsLoading } = useTruthScan(companyId);
 
   const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({

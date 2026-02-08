@@ -199,6 +199,11 @@ export const api = {
     },
   },
   
+  metrics: {
+    computed: (companyId: number) =>
+      request<any>(`/companies/${companyId}/metrics/computed`),
+  },
+
   truth: {
     run: (companyId: number) =>
       request<any>(`/companies/${companyId}/truth/run`, { method: 'POST' }),
