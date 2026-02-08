@@ -213,8 +213,11 @@ export default function ScenariosPage() {
       gross_margin: baseMetrics.grossMargin,
       churn_rate: baseMetrics.churnRate,
       burn_multiple: netNewARR > 0 ? netBurn / netNewARR : 0,
+      ltv_cac_ratio: sharedMetrics.ltvCacRatio,
+      cac: sharedMetrics.cac,
+      ltv: sharedMetrics.ltv,
     };
-  }, [baseMetrics]);
+  }, [baseMetrics, sharedMetrics]);
 
   // These useMemo hooks must be before any early returns to follow Rules of Hooks
   const comparisonData = useMemo(() => {
