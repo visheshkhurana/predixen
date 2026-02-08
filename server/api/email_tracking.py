@@ -89,14 +89,43 @@ async def resend_webhook(request: Request):
         if event_type == "email.delivered":
             event_record.delivered_at = ts
         elif event_type == "email.opened":
-            if event_record.sent_at and (ts - event_record.sent_at).total_seconds() < 3:
+            is_bot = False
+            seconds_since_sent = None
+            if event_record.sent_at:
+                seconds_since_sent = (ts - event_record.sent_at).total_seconds()
+
+            ua = (data.get("user_agent") or data.get("userAgent") or "").lower()
+            bot_ua_keywords = [
+                "googleimageproxy", "mozilla/5.0 (windows nt 10.0; win64; x64)",
+                "barracuda", "mimecast", "proofpoint", "fortiguard",
+                "symantec", "fireeye", "trendmicro", "sophos",
+                "messagelabs", "ironport", "mailguard", "spamhaus",
+                "protection", "scanner", "crawler", "bot", "spider",
+                "preview", "prefetch", "guard", "antivirus",
+            ]
+
+            if seconds_since_sent is not None and seconds_since_sent < 30:
+                is_bot = True
+            elif any(kw in ua for kw in bot_ua_keywords):
+                is_bot = True
+            elif not event_record.delivered_at:
+                is_bot = True
+            elif event_record.delivered_at and (ts - event_record.delivered_at).total_seconds() < 5:
+                is_bot = True
+
+            if is_bot:
                 event_record.is_bot_open = True
                 event_record.classification = "machine"
             else:
-                if not event_record.classification:
+                if not event_record.classification or event_record.classification == "machine":
                     event_record.classification = "human"
+                    event_record.is_bot_open = False
+
             event_record.open_count = (event_record.open_count or 0) + 1
-            if not event_record.opened_at:
+            if is_bot:
+                if not event_record.opened_at:
+                    pass
+            else:
                 event_record.opened_at = ts
         elif event_type == "email.clicked":
             event_record.click_count = (event_record.click_count or 0) + 1
