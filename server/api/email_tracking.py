@@ -292,6 +292,9 @@ def _verify_admin_jwt(auth_header: str) -> bool:
         admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         if not admin_email:
             return True
+            # Handle master admin token
+            if user_id == "master" and payload.get("is_master"):
+                return True
         db = next(get_db())
         try:
             from server.models.user import User
