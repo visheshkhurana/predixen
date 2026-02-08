@@ -13,6 +13,7 @@ from server.models.simulation_run import SimulationRun
 from server.models.decision import Decision
 from server.models.company_decision import CompanyDecision
 from server.models.truth_scan import TruthScan
+from server.models.financial import FinancialRecord
 from server.decision.decision_engine import generate_recommendations
 from server.simulate.simulation_engine import SimulationInputs
 from server.api.simulations import extract_metric_value
@@ -92,14 +93,29 @@ def generate_decisions(
     metrics = truth_scan.outputs_json.get("metrics", {})
     confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
     
+    latest_record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company.id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+    
+    def metric_or_record(metric_key, record_attr, default):
+        val = extract_metric_value(metrics.get(metric_key), 0)
+        if val and val > 0:
+            return val
+        if latest_record and getattr(latest_record, record_attr, None):
+            return float(getattr(latest_record, record_attr))
+        return default
+    
     baseline_inputs = SimulationInputs(
-        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        baseline_revenue=metric_or_record("monthly_revenue", "revenue", 50000),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 10),
         gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        opex=metric_or_record("opex", "opex", 20000),
+        payroll=metric_or_record("payroll", "payroll", 30000),
+        other_costs=metric_or_record("other_costs", "other_costs", 5000),
+        cash_balance=metric_or_record("cash_balance", "cash_balance", 500000),
         n_simulations=500
     )
     

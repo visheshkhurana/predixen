@@ -175,7 +175,10 @@ export default function ScenariosPage() {
     const monthlyRevenue = sharedMetrics.mrr;
     const monthlyExpenses = sharedMetrics.netBurn + monthlyRevenue;
     const grossMargin = sharedMetrics.grossMarginPct;
-    const growthRate = financialBaseline?.monthlyGrowthRate ?? 0;
+    const truthScanGrowth = truthScan?.outputs_json?.metrics?.revenue_growth_mom;
+    const truthGrowthVal = typeof truthScanGrowth === 'object' && truthScanGrowth !== null 
+      ? truthScanGrowth.value : truthScanGrowth;
+    const growthRate = financialBaseline?.monthlyGrowthRate ?? truthGrowthVal ?? 10;
     const churnRate = sharedMetrics.churnRatePct;
     
     const currentRunway = sharedMetrics.runway === Infinity ? 999 : sharedMetrics.runway;
@@ -192,7 +195,7 @@ export default function ScenariosPage() {
       },
       isUsingDemoData: !hasRealData,
     };
-  }, [currentCompany, sharedMetrics]);
+  }, [currentCompany, sharedMetrics, financialBaseline, truthScan]);
   
   const dashboardMetrics = useMemo(() => {
     if (!baseMetrics) return undefined;

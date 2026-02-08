@@ -16,6 +16,7 @@ import { HeadcountPanel } from '@/components/HeadcountPanel';
 import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check, Globe, Loader2, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
+import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -206,6 +207,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
 export default function TruthScanPage() {
   const { currentCompany, setCurrentCompany } = useFounderStore();
   const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
+  const { metrics: sharedMetrics } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -787,13 +789,28 @@ export default function TruthScanPage() {
               />
               <MetricCard 
                 title="Runway (P50)" 
-                value={metrics.runway_sustainable ? "Sustainable" : `${(extractValue(metrics.runway_p50) || 0).toFixed(1)} months`} 
+                value={(() => {
+                  if (metrics.runway_sustainable) return "Sustainable";
+                  const tsRunway = extractValue(metrics.runway_p50);
+                  const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+                  return `${runway.toFixed(1)} months`;
+                })()} 
                 testId="metric-runway"
                 tooltip={metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
-                variant={metrics.runway_sustainable ? "success" : ((extractValue(metrics.runway_p50) || 0) < 12 ? "danger" : "default")}
+                variant={(() => {
+                  if (metrics.runway_sustainable) return "success" as const;
+                  const tsRunway = extractValue(metrics.runway_p50);
+                  const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+                  return runway < 12 ? "danger" as const : "default" as const;
+                })()}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('runway_months') || null, 
-                  value: metrics.runway_sustainable ? "Sustainable" : `${(extractValue(metrics.runway_p50) || 0).toFixed(1)} months` 
+                  value: (() => {
+                    if (metrics.runway_sustainable) return "Sustainable";
+                    const tsRunway = extractValue(metrics.runway_p50);
+                    const runway = (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+                    return `${runway.toFixed(1)} months`;
+                  })()
                 })}
               />
               <MetricCard 
@@ -901,9 +918,12 @@ export default function TruthScanPage() {
           currency={currentCompany?.currency || 'USD'}
         />
         <ScenarioRunwayToggle
-          currentRunway={extractValue(metrics.runway_p50)}
-          currentBurn={extractValue(metrics.net_burn)}
-          cashBalance={extractValue(metrics.cash_balance)}
+          currentRunway={(() => {
+            const tsRunway = extractValue(metrics.runway_p50);
+            return (tsRunway && tsRunway > 0) ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : null);
+          })()}
+          currentBurn={extractValue(metrics.net_burn) || (sharedMetrics.netBurn > 0 ? sharedMetrics.netBurn : null)}
+          cashBalance={extractValue(metrics.cash_balance) || (sharedMetrics.cashOnHand > 0 ? sharedMetrics.cashOnHand : null)}
           currency={currentCompany?.currency || 'USD'}
         />
       </div>

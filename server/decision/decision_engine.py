@@ -119,8 +119,8 @@ def score_action(
         "efficiency_score": round(efficiency_score, 3),
         "growth_score": round(growth_score, 3),
         "risk_penalty": round(risk_penalty, 3),
-        "delta_survival_18m": round(delta_survival, 1),
-        "delta_runway_p50": round(delta_runway, 1),
+        "delta_survival_18m": round(delta_survival, 2),
+        "delta_runway_p50": round(delta_runway, 2),
         "simulation_summary": simulation_outputs.get("summary", {})
     }
 
