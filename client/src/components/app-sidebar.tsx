@@ -47,7 +47,6 @@ import {
   ChevronDown,
   FileCode,
   UsersRound,
-  MessageSquare,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -88,7 +87,6 @@ const navGroups: NavGroup[] = [
       { title: "Data Input", url: "/data", icon: Upload },
       { title: "Integrations", url: "/integrations", icon: Link2 },
       { title: "Marketplace", url: "/marketplace", icon: Store },
-      { title: "Messaging", url: "/messaging", icon: MessageSquare },
     ],
   },
   {
