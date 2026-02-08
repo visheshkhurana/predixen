@@ -151,16 +151,32 @@ def seed_demo_data(db: Session):
         expenses = expenses * 1.02
         cash = cash - (expenses - revenue)
         
+        customers_count = 9 + i
+        headcount_val = 8 + (i // 3)
+        mrr_val = round(revenue, 2)
         fin_record = FinancialRecord(
             company_id=demo_company.id,
             period_start=month_date.date(),
             period_end=(month_date + timedelta(days=29)).date(),
-            revenue=round(revenue, 2),
+            revenue=mrr_val,
             cogs=round(revenue * 0.25, 2),
             opex=round(expenses * 0.4, 2),
             payroll=round(expenses * 0.5, 2),
             other_costs=round(expenses * 0.1, 2),
-            cash_balance=round(max(cash, 50000), 2)
+            cash_balance=round(max(cash, 50000), 2),
+            mrr=mrr_val,
+            arr=round(mrr_val * 12, 2),
+            gross_margin=75.0,
+            customers=customers_count,
+            ndr=105.0 + i * 0.25,
+            arpu=round(mrr_val / customers_count, 2),
+            headcount=headcount_val,
+            net_burn=round(max(0, expenses - revenue), 2),
+            runway_months=round(max(cash, 50000) / max(expenses - revenue, 1), 1),
+            mom_growth=round((growth_rate - 1) * 100, 1),
+            ltv=4800.0,
+            cac=1500.0,
+            ltv_cac_ratio=3.2,
         )
         db.add(fin_record)
     
