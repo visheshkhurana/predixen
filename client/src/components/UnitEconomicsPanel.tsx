@@ -256,7 +256,7 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
         <MetricItem
           icon={<Target className="h-4 w-4" />}
           title="CAC"
-          value={formatCurrency(metrics.cac)}
+          value={isValidNumber(metrics.cac) && metrics.cac! > 0 ? formatCurrency(metrics.cac) : 'N/A'}
           tooltip={{
             description: "Customer Acquisition Cost - Total marketing and sales spend divided by new customers acquired.",
             benchmark: "Target: $1 CAC for every $3+ of LTV. SMB CAC typically $100-$500, Enterprise $5K-$50K.",
@@ -267,7 +267,7 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
         <MetricItem
           icon={<TrendingUp className="h-4 w-4" />}
           title="LTV"
-          value={formatCurrency(metrics.ltv)}
+          value={isValidNumber(metrics.ltv) && metrics.ltv! > 0 ? formatCurrency(metrics.ltv) : 'N/A'}
           tooltip={{
             description: "Lifetime Value - Predicted total revenue from a customer over their entire relationship with you.",
             benchmark: "Healthy LTV should be 3x+ CAC. Top SaaS companies achieve 5-7x LTV:CAC.",
@@ -278,8 +278,8 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
         <MetricItem
           icon={<Repeat className="h-4 w-4" />}
           title="LTV:CAC"
-          value={formatRatio(metrics.ltv_cac_ratio)}
-          subtitle={metrics.ltv_cac_ratio && metrics.ltv_cac_ratio >= 3 ? 'Healthy' : 'Below target'}
+          value={isValidNumber(metrics.ltv_cac_ratio) && metrics.ltv_cac_ratio! > 0 && isValidNumber(metrics.ltv) && metrics.ltv! > 0 && isValidNumber(metrics.cac) && metrics.cac! > 0 ? formatRatio(metrics.ltv_cac_ratio) : 'N/A'}
+          subtitle={isValidNumber(metrics.ltv_cac_ratio) && metrics.ltv_cac_ratio! > 0 && isValidNumber(metrics.ltv) && metrics.ltv! > 0 && isValidNumber(metrics.cac) && metrics.cac! > 0 ? (metrics.ltv_cac_ratio! >= 3 ? 'Healthy' : 'Below target') : undefined}
           tooltip={{
             description: "LTV to CAC ratio - Measures return on customer acquisition investment.",
             benchmark: "3x = Good, 5x+ = Excellent. Below 3x means acquisition is too expensive or retention is poor.",

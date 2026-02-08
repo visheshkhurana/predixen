@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFounderStore } from '@/store/founderStore';
 import { useRealtimeKPI } from '@/hooks/useRealtimeKPI';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -33,9 +34,7 @@ import {
 } from 'recharts';
 
 function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 function formatPercent(value: number): string {
@@ -314,10 +313,10 @@ export default function KPIBoardPage() {
         />
         <KPITile
           title="LTV/CAC Ratio"
-          value={isLoading ? '—' : metrics.ltv_cac_ratio > 0 ? `${metrics.ltv_cac_ratio.toFixed(1)}x` : '—'}
+          value={isLoading ? '—' : (metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio > 0) ? `${metrics.ltv_cac_ratio.toFixed(1)}x` : '—'}
           icon={<TrendingUp className="h-4 w-4" />}
-          trend={metrics.ltv_cac_ratio >= 3 ? 'up' : metrics.ltv_cac_ratio > 0 && metrics.ltv_cac_ratio < 2 ? 'down' : 'neutral'}
-          subtitle={metrics.ltv_cac_ratio >= 3 ? 'Healthy' : metrics.ltv_cac_ratio > 0 && metrics.ltv_cac_ratio < 2 ? 'Needs improvement' : undefined}
+          trend={(metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio >= 3) ? 'up' : (metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio > 0 && metrics.ltv_cac_ratio < 2) ? 'down' : 'neutral'}
+          subtitle={(metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio >= 3) ? 'Healthy' : (metrics.ltv > 0 && metrics.cac > 0 && metrics.ltv_cac_ratio > 0 && metrics.ltv_cac_ratio < 2) ? 'Needs improvement' : undefined}
           isLive={isConnected}
           isLoading={isLoading}
         />

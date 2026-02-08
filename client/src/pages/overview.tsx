@@ -181,7 +181,7 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
     });
   }
   
-  if (metrics.ltvCacRatio < 2) {
+  if (metrics.ltvCacRatio > 0 && metrics.ltvCacRatio < 2 && metrics.cac > 0 && metrics.ltv > 0) {
     alerts.push({
       id: 'ltv-cac-low',
       type: 'warning',
@@ -424,7 +424,7 @@ const COPILOT_PROMPTS = [
 ];
 
 const getKpiStatus = (value: number | null, metric: string): 'green' | 'yellow' | 'red' => {
-  if (value === null || value === undefined) return 'red';
+  if (value === null || value === undefined) return 'yellow';
   
   switch (metric) {
     case 'runway':
@@ -968,7 +968,7 @@ export default function OverviewPage() {
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
     { name: 'Churn Rate', value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
-    { name: 'LTV/CAC', value: baseData.ltvCacRatio, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
+    { name: 'LTV/CAC', value: (baseData.ltv > 0 && baseData.cac > 0) ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
@@ -1223,8 +1223,8 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="CAC"
-          value={formatCurrency(baseData.cac)}
-          subtitle="Cost to Acquire"
+          value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
+          subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
           testId="metric-cac"
           onClick={() => setSelectedDrillDownMetric('cac')}
           provenance={{
@@ -1237,9 +1237,9 @@ export default function OverviewPage() {
         />
         <MetricCard
           title="LTV"
-          value={formatCurrency(baseData.ltv)}
-          subtitle={`LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}`}
-          variant={baseData.ltvCacRatio < 3 ? 'warning' : 'success'}
+          value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
+          subtitle={baseData.ltv > 0 && baseData.cac > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
+          variant={baseData.ltv > 0 && baseData.cac > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
           provenance={{
@@ -1396,21 +1396,29 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <div className="flex items-baseline gap-2">
-              <p className={`text-2xl font-bold font-mono ${
-                projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
-                projectedMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
-              }`} data-testid="metric-ltvcac-value">
-                {safeToFixed(projectedMetrics.ltvCacRatio, 1, 'x')}
-              </p>
-              <Badge 
-                variant={projectedMetrics.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
-                className="text-xs"
-              >
-                {projectedMetrics.ltvCacRatio >= 3 ? 'Healthy' : projectedMetrics.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
-              </Badge>
+              {baseData.ltv > 0 && baseData.cac > 0 ? (
+                <>
+                  <p className={`text-2xl font-bold font-mono ${
+                    projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
+                    projectedMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
+                  }`} data-testid="metric-ltvcac-value">
+                    {safeToFixed(projectedMetrics.ltvCacRatio, 1, 'x')}
+                  </p>
+                  <Badge 
+                    variant={projectedMetrics.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
+                    className="text-xs"
+                  >
+                    {projectedMetrics.ltvCacRatio >= 3 ? 'Healthy' : projectedMetrics.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
+                  </Badge>
+                </>
+              ) : (
+                <p className="text-2xl font-bold font-mono text-muted-foreground" data-testid="metric-ltvcac-value">
+                  N/A
+                </p>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              LTV: {formatCurrency(baseData.ltv)} / CAC: {formatCurrency(baseData.cac)}
+              LTV: {baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
             </p>
           </CardContent>
         </Card>
@@ -1481,7 +1489,7 @@ export default function OverviewPage() {
                       <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.cac)}</td>
                       <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.ltv)}</td>
                       <td className="text-right py-2 px-3">
-                        <span className={`font-mono ${seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
+                        <span className={`font-mono ${!isFinite(seg.ltvCac) ? 'text-muted-foreground' : seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
                           {safeToFixed(seg.ltvCac, 1, 'x')}
                         </span>
                       </td>
@@ -1552,7 +1560,7 @@ export default function OverviewPage() {
                         getKpiStatus(item.value, item.metric) === 'green' ? 'bg-emerald-500' :
                         getKpiStatus(item.value, item.metric) === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
                       }`}
-                      style={{ width: `${Math.min(100, Math.max(10, item.metric === 'churnRate' ? 100 - item.value * 5 : item.value * 1.5))}%` }}
+                      style={{ width: `${Math.min(100, Math.max(10, item.value == null ? 0 : (item.metric === 'churnRate' ? 100 - item.value * 5 : item.value * 1.5)))}%` }}
                     />
                   </div>
                 </div>

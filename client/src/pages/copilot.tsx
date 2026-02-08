@@ -748,7 +748,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                       sim.survival['18m'] >= 60 ? 'text-amber-400' : 'text-red-400'
                     }`}
                   >
-                    {sim.survival['18m']}% @ 18m
+                    {typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}% @ 18m
                   </Badge>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -766,9 +766,9 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                   </div>
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                  <span>12m: {sim.survival['12m']}%</span>
-                  <span>18m: {sim.survival['18m']}%</span>
-                  <span>24m: {sim.survival['24m']}%</span>
+                  <span>12m: {typeof sim.survival['12m'] === 'number' ? Number(sim.survival['12m']).toFixed(1) : sim.survival['12m']}%</span>
+                  <span>18m: {typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}%</span>
+                  <span>24m: {typeof sim.survival['24m'] === 'number' ? Number(sim.survival['24m']).toFixed(1) : sim.survival['24m']}%</span>
                 </div>
               </div>
             ))}
@@ -1353,8 +1353,8 @@ export default function CopilotPage() {
         'arr': { key: 'mrr', label: 'Annual Recurring Revenue', format: (v) => `$${((v || 0) * 12).toLocaleString()}` },
         'runway': { key: 'runway_months', label: 'Runway', format: (v) => `${v?.toFixed(1) || 'N/A'} months` },
         'burn': { key: 'net_burn', label: 'Net Burn Rate', format: (v) => `$${(v || 0).toLocaleString()}/month` },
-        'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => `$${(v || 0).toLocaleString()}` },
-        'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => `$${(v || 0).toLocaleString()}` },
+        'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
+        'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
         'margin': { key: 'gross_margin', label: 'Gross Margin', format: (v) => `${v || 0}%` },
         'churn': { key: 'churn_rate', label: 'Churn Rate', format: (v) => `${v || 0}%` },
         'growth': { key: 'revenue_growth_mom', label: 'Revenue Growth (MoM)', format: (v) => `${v || 0}%` },
@@ -1543,9 +1543,9 @@ export default function CopilotPage() {
       'gross margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
       'runway': { key: 'runway_months', format: (v) => `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
       'cash': { key: 'cash_balance', format: (v) => `$${(v || 500000).toLocaleString()}`, label: 'Cash Balance' },
-      'cac': { key: 'cac', format: (v) => `$${(v || 250).toLocaleString()}`, label: 'Customer Acquisition Cost' },
-      'ltv': { key: 'ltv', format: (v) => `$${(v || 5000).toLocaleString()}`, label: 'Lifetime Value' },
-      'churn': { key: 'churn_rate', format: (v) => `${v || 3}%`, label: 'Churn Rate' },
+      'cac': { key: 'cac', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Customer Acquisition Cost' },
+      'ltv': { key: 'ltv', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Lifetime Value' },
+      'churn': { key: 'churn_rate', format: (v) => v != null ? `${Number(v).toFixed(1)}%` : 'N/A', label: 'Churn Rate' },
       'growth': { key: 'revenue_growth_mom', format: (v) => `${v || 5}% MoM`, label: 'Revenue Growth' },
     };
     
