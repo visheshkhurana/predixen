@@ -96,6 +96,7 @@ export function StrategicScenarioBuilder({
   const [step, setStep] = useState<BuilderStep>('goal');
   const [selectedGoal, setSelectedGoal] = useState<SimulationGoal | undefined>();
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyTemplate | undefined>();
+  const [pendingStrategyId, setPendingStrategyId] = useState<string | null>(null);
   const [customParams, setCustomParams] = useState<Partial<SimulationParams>>({});
   const [isSaving, setIsSaving] = useState(false);
   
@@ -149,9 +150,13 @@ export function StrategicScenarioBuilder({
   const handleStrategySelect = (strategyId: string) => {
     const strategy = getStrategyById(strategyId);
     if (strategy) {
-      setSelectedStrategy(strategy);
-      setCustomParams({});
-      setStep('customize');
+      setPendingStrategyId(strategyId);
+      setTimeout(() => {
+        setSelectedStrategy(strategy);
+        setCustomParams({});
+        setPendingStrategyId(null);
+        setStep('customize');
+      }, 400);
     }
   };
   
@@ -205,6 +210,7 @@ export function StrategicScenarioBuilder({
     setStep('goal');
     setSelectedGoal(undefined);
     setSelectedStrategy(undefined);
+    setPendingStrategyId(null);
     setCustomParams({});
   };
   
@@ -299,7 +305,8 @@ export function StrategicScenarioBuilder({
                 strategy={strategy}
                 currentRunway={baseMetrics.currentRunway}
                 onSimulate={handleStrategySelect}
-                isLoading={isRunning}
+                isSelected={pendingStrategyId === strategy.id}
+                isLoading={isRunning || pendingStrategyId !== null}
               />
             ))}
           </div>
@@ -544,7 +551,7 @@ export function StrategicScenarioBuilder({
           currentStep={stepNumber}
           totalSteps={4}
           statusMessage={
-            step === 'strategy' ? 'Select a strategy to customize' :
+            step === 'strategy' ? (pendingStrategyId ? 'Loading strategy...' : 'Select a strategy to customize') :
             step === 'customize' ? 'Adjust parameters and run simulation' :
             step === 'results' ? 'Save this scenario or try another' :
             undefined

@@ -27,15 +27,16 @@ export interface FinancialMetrics {
   hasData: boolean;
 }
 
-function extractTruthScanValue(metrics: Record<string, any>, key: string): number | null {
-  const val = metrics[key];
-  if (val === null || val === undefined) return null;
-  if (typeof val === 'object' && 'value' in val) {
-    return val.value ?? null;
-  }
-  if (typeof val === 'number') return val;
-  return null;
-}
+const EMPTY_METRICS: FinancialMetrics = {
+  mrr: 0, arr: 0, cashOnHand: 0, burnRate: 0, netBurn: 0,
+  runway: 0, runwayDisplay: '0.0 mo',
+  cac: 0, ltv: 0, ltvCacRatio: 0,
+  grossMargin: 0, grossMarginPct: 0,
+  churnRate: 0, churnRatePct: 0,
+  totalCustomers: 0, headcount: 0, arpu: 0,
+  paybackPeriod: 0, burnMultiple: 0, revenuePerEmployee: 0,
+  isProfitable: false, hasData: false,
+};
 
 export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean } {
   const { currentCompany, financialBaseline } = useFounderStore();
@@ -45,76 +46,78 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     queryKey: [`/api/companies/${companyId}/metrics/computed`],
     enabled: !!companyId,
     staleTime: 30_000,
-    retry: 2,
-    retryDelay: 1000,
+    refetchOnMount: 'always',
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
   });
 
-  const { data: truthScan, isLoading: tsLoading } = useQuery<any>({
+  const { data: truthScan, isLoading: truthLoading } = useQuery<any>({
     queryKey: [`/api/companies/${companyId}/truth/latest`],
     enabled: !!companyId,
-    retry: false,
+    staleTime: 60_000,
+    refetchOnMount: 'always',
+    retry: 1,
   });
 
   const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
     queryKey: [`/api/companies/${companyId}/financials/baseline`],
     enabled: !!companyId,
     staleTime: 60_000,
+    refetchOnMount: 'always',
+    retry: 1,
   });
 
-  const isLoading = computedLoading || (tsLoading && baselineLoading);
-
-  const metrics = useMemo(() => {
+  const metrics = useMemo((): FinancialMetrics => {
     const c = computed || {};
-    const ts = truthScan?.metrics || {};
+    const tsMetrics = truthScan?.metrics || {};
     const bb = backendBaseline?.baseline;
     const ext = backendBaseline?.extendedMetrics;
+    const fb = financialBaseline;
 
-    const pick = (...vals: (number | null | undefined)[]) => {
-      for (const v of vals) {
-        if (v !== null && v !== undefined && v > 0) return v;
+    const v = (primary: any, ...fallbacks: any[]): number => {
+      if (typeof primary === 'number' && isFinite(primary) && primary > 0) return primary;
+      for (const f of fallbacks) {
+        if (typeof f === 'number' && isFinite(f) && f > 0) return f;
       }
       return 0;
     };
 
-    const mrr = pick(
-      c.mrr,
-      bb?.monthlyRevenue,
-      financialBaseline?.monthlyRevenue,
-      extractTruthScanValue(ts, 'mrr')
-    );
-    const arr = pick(c.arr, ext?.arr, extractTruthScanValue(ts, 'arr')) || mrr * 12;
-    const cashOnHand = pick(
-      c.cashOnHand,
-      bb?.cashOnHand,
-      financialBaseline?.cashOnHand,
-      extractTruthScanValue(ts, 'cash_balance')
-    );
+    const tsVal = (key: string): number => {
+      const val = tsMetrics[key];
+      if (val === null || val === undefined) return 0;
+      if (typeof val === 'object' && 'value' in val) return typeof val.value === 'number' ? val.value : 0;
+      if (typeof val === 'number') return val;
+      return 0;
+    };
 
-    const breakdownPayroll = bb?.expenseBreakdown?.payroll ?? financialBaseline?.expenseBreakdown?.payroll ?? 0;
-    const breakdownMarketing = bb?.expenseBreakdown?.marketing ?? financialBaseline?.expenseBreakdown?.marketing ?? 0;
-    const breakdownOperating = bb?.expenseBreakdown?.operating ?? financialBaseline?.expenseBreakdown?.operating ?? 0;
-    const breakdownCogs = bb?.expenseBreakdown?.cogs ?? financialBaseline?.expenseBreakdown?.cogs ?? 0;
-    const breakdownOther = bb?.expenseBreakdown?.otherOpex ?? financialBaseline?.expenseBreakdown?.otherOpex ?? 0;
+    const mrr = v(c.mrr, bb?.monthlyRevenue, fb?.monthlyRevenue, tsVal('mrr'));
+    const arr = v(c.arr, ext?.arr, tsVal('arr')) || mrr * 12;
+    const cashOnHand = v(c.cashOnHand, bb?.cashOnHand, fb?.cashOnHand, tsVal('cash_balance'));
+
+    const breakdownPayroll = bb?.expenseBreakdown?.payroll ?? fb?.expenseBreakdown?.payroll ?? 0;
+    const breakdownMarketing = bb?.expenseBreakdown?.marketing ?? fb?.expenseBreakdown?.marketing ?? 0;
+    const breakdownOperating = bb?.expenseBreakdown?.operating ?? fb?.expenseBreakdown?.operating ?? 0;
+    const breakdownCogs = bb?.expenseBreakdown?.cogs ?? fb?.expenseBreakdown?.cogs ?? 0;
+    const breakdownOther = bb?.expenseBreakdown?.otherOpex ?? fb?.expenseBreakdown?.otherOpex ?? 0;
     const breakdownSum = breakdownPayroll + breakdownMarketing + breakdownOperating + breakdownCogs + breakdownOther;
 
-    const hasManualOverride = financialBaseline?.hasManualExpenseOverride ?? false;
-    const baselineTotalExpenses = bb?.totalMonthlyExpenses ?? financialBaseline?.totalMonthlyExpenses ?? 0;
+    const hasManualOverride = fb?.hasManualExpenseOverride ?? false;
+    const baselineTotalExpenses = bb?.totalMonthlyExpenses ?? fb?.totalMonthlyExpenses ?? 0;
     const effectiveExpenses = hasManualOverride
       ? baselineTotalExpenses
       : (breakdownSum > 0 ? breakdownSum : baselineTotalExpenses);
 
-    const netBurn = pick(
+    const netBurn = v(
       c.netBurn,
-      effectiveExpenses > 0 && mrr > 0 ? Math.max(0, effectiveExpenses - mrr) : null,
-      extractTruthScanValue(ts, 'net_burn')
+      effectiveExpenses > 0 && mrr > 0 ? Math.max(0, effectiveExpenses - mrr) : 0,
+      tsVal('net_burn')
     );
     const burnRate = netBurn;
 
     let runway: number;
     let runwayDisplay: string;
-    const computedRunway = c.runway;
-    if (computedRunway && computedRunway > 0 && computedRunway < 999) {
-      runway = computedRunway;
+    if (c.runway && c.runway > 0 && c.runway < 999) {
+      runway = c.runway;
       runwayDisplay = `${runway.toFixed(1)} mo`;
     } else if (netBurn <= 0) {
       runway = Infinity;
@@ -127,43 +130,23 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       runwayDisplay = `${runway.toFixed(1)} mo`;
     }
 
-    const cac = pick(c.cac, ext?.cac, extractTruthScanValue(ts, 'cac'));
-    const ltv = pick(c.ltv, ext?.ltv, extractTruthScanValue(ts, 'ltv'));
-    const ltvCacRatio = pick(
-      c.ltvCacRatio,
-      ext?.ltvCacRatio,
-      extractTruthScanValue(ts, 'ltv_cac_ratio')
-    ) || (cac > 0 && ltv > 0 ? ltv / cac : 0);
+    const cac = v(c.cac, ext?.cac, tsVal('cac'));
+    const ltv = v(c.ltv, ext?.ltv, tsVal('ltv'));
+    const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsVal('ltv_cac_ratio'))
+      || (cac > 0 && ltv > 0 ? ltv / cac : 0);
 
-    const grossMarginPct = pick(
-      c.grossMarginPct,
-      ext?.grossMargin ? (ext.grossMargin > 1 ? ext.grossMargin : ext.grossMargin * 100) : null,
-      extractTruthScanValue(ts, 'gross_margin') ? (
-        (extractTruthScanValue(ts, 'gross_margin') as number) > 1
-          ? extractTruthScanValue(ts, 'gross_margin')
-          : (extractTruthScanValue(ts, 'gross_margin') as number) * 100
-      ) : null
-    );
+    const grossMarginRaw = v(c.grossMarginPct, ext?.grossMargin, tsVal('gross_margin'));
+    const grossMarginPct = grossMarginRaw > 0 && grossMarginRaw <= 1 ? grossMarginRaw * 100 : grossMarginRaw;
     const grossMarginDecimal = c.grossMarginDecimal || grossMarginPct / 100;
 
-    const churnRatePct = pick(
-      c.churnRatePct,
-      extractTruthScanValue(ts, 'churn_rate') !== null ? (
-        (extractTruthScanValue(ts, 'churn_rate') as number) > 1
-          ? extractTruthScanValue(ts, 'churn_rate')
-          : (extractTruthScanValue(ts, 'churn_rate') as number) * 100
-      ) : null,
-      extractTruthScanValue(ts, 'gross_churn_rate') !== null ? (
-        (extractTruthScanValue(ts, 'gross_churn_rate') as number) > 1
-          ? extractTruthScanValue(ts, 'gross_churn_rate')
-          : (extractTruthScanValue(ts, 'gross_churn_rate') as number) * 100
-      ) : null
-    );
+    const churnRaw = v(c.churnRatePct, tsVal('churn_rate'), tsVal('gross_churn_rate'));
+    const churnRatePct = churnRaw > 0 && churnRaw <= 1 ? churnRaw * 100 : churnRaw;
     const churnRateDecimal = churnRatePct / 100;
 
-    const totalCustomers = pick(c.totalCustomers, ext?.customers, extractTruthScanValue(ts, 'customer_count'), extractTruthScanValue(ts, 'total_customers'));
-    const headcount = pick(c.headcount, ext?.headcount, extractTruthScanValue(ts, 'headcount')) || (currentCompany ? (currentCompany as any).employees || 0 : 0);
-    const arpu = pick(c.arpu) || (totalCustomers > 0 ? mrr / totalCustomers : 0);
+    const totalCustomers = v(c.totalCustomers, ext?.customers, tsVal('customer_count'), tsVal('total_customers'));
+    const headcount = v(c.headcount, ext?.headcount, tsVal('headcount'))
+      || (currentCompany ? (currentCompany as any).employees || 0 : 0);
+    const arpu = v(c.arpu) || (totalCustomers > 0 ? mrr / totalCustomers : 0);
 
     let paybackPeriod: number;
     if (c.paybackPeriod && c.paybackPeriod > 0) {
@@ -176,39 +159,24 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       paybackPeriod = 0;
     }
 
-    const burnMultiple = pick(c.burnMultiple, ext?.burnMultiple, extractTruthScanValue(ts, 'burn_multiple'));
+    const burnMultiple = v(c.burnMultiple, ext?.burnMultiple, tsVal('burn_multiple'));
     const revenuePerEmployee = headcount > 0 ? mrr / headcount : 0;
 
     const totalExpenses = c.totalExpenses || effectiveExpenses || 0;
     const isProfitable = totalExpenses > 0 && mrr >= totalExpenses;
-
     const hasData = mrr > 0 || cashOnHand > 0 || netBurn > 0;
 
     return {
-      mrr,
-      arr,
-      cashOnHand,
-      burnRate,
-      netBurn,
-      runway,
-      runwayDisplay,
-      cac,
-      ltv,
-      ltvCacRatio,
-      grossMargin: grossMarginDecimal,
-      grossMarginPct,
-      churnRate: churnRateDecimal,
-      churnRatePct,
-      totalCustomers,
-      headcount,
-      arpu,
-      paybackPeriod,
-      burnMultiple,
-      revenuePerEmployee,
-      isProfitable,
-      hasData,
+      mrr, arr, cashOnHand, burnRate, netBurn, runway, runwayDisplay,
+      cac, ltv, ltvCacRatio,
+      grossMargin: grossMarginDecimal, grossMarginPct,
+      churnRate: churnRateDecimal, churnRatePct,
+      totalCustomers, headcount, arpu, paybackPeriod,
+      burnMultiple, revenuePerEmployee, isProfitable, hasData,
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
+
+  const isLoading = !companyId || (computedLoading && !computed);
 
   return { metrics, isLoading };
 }
