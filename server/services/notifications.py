@@ -973,41 +973,37 @@ async def send_platform_update(
 
 Hi there,
 
-We've been busy shipping new features and improvements to help you make better financial decisions. Here's what's new:
+We've been shipping new features and squashing bugs to make Predixen even better. Here's what's new:
 
 ---
 
-CANONICAL DATA LAYER (NEW)
+NEW FEATURES
 
-We've completely rebuilt the data foundation of Predixen to ensure every number you see is trustworthy and traceable:
+- Instant Metric Tooltips: Hover over any metric on your dashboard and instantly see what it means, how it's calculated, where the data came from, and its confidence level. No more guessing.
 
-- Company States: Your financial state is now versioned with unique snapshot IDs. Every time you update your data, we create an immutable record.
+- Smarter AI Copilot Errors: When the AI assistant can't connect, you'll now get clear, helpful messages that tell you exactly what to do instead of generic error pages.
 
-- Simulation Provenance: Every simulation run now tracks exactly which data snapshot it used. When you see a runway projection, you can trace it back to the exact inputs.
-
-- Deterministic Hashing: We use cryptographic hashes to detect when your data has changed. Simulations will tell you if they're based on stale data.
-
-- Scenario Overrides: Scenarios now store their parameter changes (expense multipliers, revenue growth deltas, pricing changes) in a structured format for easy comparison.
+- Improved Metric Catalog API: The Metric Catalog now handles edge cases more gracefully, returning clean results instead of errors when switching between companies.
 
 ---
 
-WHAT THIS MEANS FOR YOU
+BUG FIXES
 
-1. Trust Your Numbers: Every KPI on your dashboard shows where it came from - whether Truth Scan validated, simulation generated, or manually entered.
+- Sidebar Toggle: Fixed the collapse/expand button on the sidebar so it works reliably every time.
 
-2. Compare Apples to Apples: When comparing scenarios, you'll know they're all running against the same baseline data.
+- KPI Board Flickering: Resolved the data flickering issue on the KPI Board. Trend charts now load smoothly from your historical data.
 
-3. Audit Trail: If investors ask "where did this runway number come from?", you can show them the exact data, date, and calculations.
+- Churn Rate Display: The churn rate KPI now correctly displays as a percentage.
+
+- Simulation Rankings: Fixed decision ranking to use correct scenario mappings after simulation runs.
 
 ---
 
-PREVIOUS IMPROVEMENTS
+WHAT'S COMING NEXT
 
-- AI Copilot Citations: The AI now cites specific scenario IDs, run IDs, and Truth Scan timestamps when giving advice.
-
-- Real-Time AI Simulation Guidance: As you adjust scenario parameters, the AI explains the impact on runway, survival probability, and cash position.
-
-- Dynamic Horizon Extension: Monte Carlo simulations now automatically extend beyond 24 months when survival probability remains high.
+- WhatsApp/SMS messaging for customer communications
+- Enhanced scenario comparison views
+- More AI-powered financial insights
 
 ---
 
@@ -1037,34 +1033,36 @@ Visit: https://predixen.app
         
         <div style="padding: 32px;">
             <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">Hi there,</p>
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">We've been busy shipping new features and improvements to help you make better financial decisions. Here's what's new:</p>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">We've been shipping new features and squashing bugs to make Predixen even better. Here's what's new:</p>
             
             <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
-                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">Canonical Data Layer (NEW)</h2>
-                <p style="color: #15803d; margin: 0; font-size: 14px;">Complete data foundation rebuild</p>
+                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">New Features</h2>
+                <p style="color: #15803d; margin: 0; font-size: 14px;">Better insights, clearer guidance</p>
             </div>
             
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 16px 0;">We've completely rebuilt the data foundation of Predixen to ensure every number you see is trustworthy and traceable:</p>
-            
             <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;"><strong>Company States:</strong> Your financial state is now versioned with unique snapshot IDs. Every time you update your data, we create an immutable record.</li>
-                <li style="margin-bottom: 8px;"><strong>Simulation Provenance:</strong> Every simulation run now tracks exactly which data snapshot it used. When you see a runway projection, you can trace it back to the exact inputs.</li>
-                <li style="margin-bottom: 8px;"><strong>Deterministic Hashing:</strong> We use cryptographic hashes to detect when your data has changed. Simulations will tell you if they're based on stale data.</li>
-                <li style="margin-bottom: 8px;"><strong>Scenario Overrides:</strong> Scenarios now store their parameter changes in a structured format for easy comparison.</li>
+                <li style="margin-bottom: 8px;"><strong>Instant Metric Tooltips:</strong> Hover over any metric on your dashboard and instantly see what it means, how it's calculated, where the data came from, and its confidence level. No more guessing.</li>
+                <li style="margin-bottom: 8px;"><strong>Smarter AI Copilot Errors:</strong> When the AI assistant can't connect, you'll now get clear, helpful messages that tell you exactly what to do instead of generic error pages.</li>
+                <li style="margin-bottom: 8px;"><strong>Improved Metric Catalog API:</strong> The Metric Catalog now handles edge cases more gracefully, returning clean results instead of errors when switching between companies.</li>
             </ul>
             
-            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">What This Means For You</h3>
-            <ol style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;"><strong>Trust Your Numbers:</strong> Every KPI on your dashboard shows where it came from.</li>
-                <li style="margin-bottom: 8px;"><strong>Compare Apples to Apples:</strong> When comparing scenarios, you'll know they're all running against the same baseline data.</li>
-                <li style="margin-bottom: 8px;"><strong>Audit Trail:</strong> If investors ask "where did this runway number come from?", you can show them the exact data, date, and calculations.</li>
-            </ol>
+            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
+                <h2 style="color: #1e40af; margin: 0 0 8px 0; font-size: 18px;">Bug Fixes</h2>
+                <p style="color: #1d4ed8; margin: 0; font-size: 14px;">Smoother, more reliable experience</p>
+            </div>
             
-            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Previous Improvements</h3>
             <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;">AI Copilot Citations: The AI now cites specific scenario IDs, run IDs, and Truth Scan timestamps.</li>
-                <li style="margin-bottom: 8px;">Real-Time AI Simulation Guidance: As you adjust scenario parameters, the AI explains the impact.</li>
-                <li style="margin-bottom: 8px;">Dynamic Horizon Extension: Monte Carlo simulations now automatically extend beyond 24 months.</li>
+                <li style="margin-bottom: 8px;"><strong>Sidebar Toggle:</strong> Fixed the collapse/expand button on the sidebar so it works reliably every time.</li>
+                <li style="margin-bottom: 8px;"><strong>KPI Board Flickering:</strong> Resolved the data flickering issue on the KPI Board. Trend charts now load smoothly from your historical data.</li>
+                <li style="margin-bottom: 8px;"><strong>Churn Rate Display:</strong> The churn rate KPI now correctly displays as a percentage.</li>
+                <li style="margin-bottom: 8px;"><strong>Simulation Rankings:</strong> Fixed decision ranking to use correct scenario mappings after simulation runs.</li>
+            </ul>
+            
+            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">What's Coming Next</h3>
+            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;">WhatsApp/SMS messaging for customer communications</li>
+                <li style="margin-bottom: 8px;">Enhanced scenario comparison views</li>
+                <li style="margin-bottom: 8px;">More AI-powered financial insights</li>
             </ul>
             
             <p style="color: #4b5563; line-height: 1.6; margin: 0 0 8px 0;">Questions or feedback? Reply directly to this email.</p>
