@@ -328,7 +328,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="predixen-theme">
-        <TooltipProvider>
+        <TooltipProvider delayDuration={0}>
           <AppLayout>
             <Router />
           </AppLayout>

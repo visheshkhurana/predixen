@@ -86,7 +86,12 @@ async def list_metrics(
     current_user: User = Depends(get_current_user),
 ):
     """List all metric definitions for a company with optional filters."""
-    _get_company_or_404(company_id, current_user, db)
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        return []
     
     query = db.query(MetricDefinition).filter(
         MetricDefinition.company_id == company_id
@@ -504,7 +509,12 @@ async def initialize_metrics(
     current_user: User = Depends(get_current_user),
 ):
     """Initialize system metrics for a company."""
-    _get_company_or_404(company_id, current_user, db)
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        return {"success": True, "created_count": 0, "metrics": []}
     
     engine = MetricEngine(db)
     created = engine.create_system_metrics(company_id)

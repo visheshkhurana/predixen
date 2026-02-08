@@ -1464,11 +1464,11 @@ export default function CopilotPage() {
         let errorMessage = 'Something went wrong. Please try again.';
         if (error.message) {
           if (error.message.includes('500')) {
-            errorMessage = 'A server error occurred. Please try again in a moment.';
+            errorMessage = 'AI service is temporarily unavailable. This usually resolves itself in a few moments. Please try again shortly.';
           } else if (error.message.includes('401') || error.message.includes('403')) {
             errorMessage = 'Your session may have expired. Please try logging in again.';
           } else if (error.message.includes('404')) {
-            errorMessage = 'Could not reach the AI service. Make sure you have a company selected and data uploaded.';
+            errorMessage = 'AI service not configured. Please check that your API keys are set up in the Integrations page to enable the AI copilot.';
           } else if (error.message.includes('Failed to fetch')) {
             errorMessage = 'Network error. Please check your connection and try again.';
           }
