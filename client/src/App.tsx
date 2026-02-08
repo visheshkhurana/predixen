@@ -94,6 +94,20 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
       }
     }
   }, [token, user?.role]);
+
+  // Identify user for Analytics & Remarketing when already logged in
+  useEffect(() => {
+    if (user?.id && user?.email) {
+      if ((window as any).gtag) {
+        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
+        (window as any).gtag('set', 'user_properties', { user_email: user.email });
+      }
+      if ((window as any).fbq) {
+        (window as any).fbq('init', '872167299140812', { em: user.email });
+      }
+    }
+  }, [user]);
+
   
   if (!token) {
     return <Redirect to="/admin/login" />;
