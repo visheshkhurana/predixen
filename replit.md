@@ -61,6 +61,7 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Company Level Roles**: `owner`, `admin`, `analyst`, `viewer` with varying access levels.
 
 ## Recent Changes (Feb 2026)
+-   **Email Tracking System**: Full email analytics with per-recipient UTM tracking, click-through link redirects, Resend webhook ingestion (delivery/open/click/bounce with bot detection), feedback collection, and analytics dashboard API. Tables: `email_events`, `email_link_clicks`, `email_feedback`. Webhook endpoint secured with signature verification; analytics protected with token auth.
 -   **KPI Board**: Fixed data flickering/persistence bug by switching from WebSocket-only to React Query-cached historical data endpoint. Trend charts now load from financial records (up to 12 months) instead of only WebSocket updates.
 -   **KPI Board Data Source**: Uses cascade: live snapshot → historical records → financial baseline. Data is cached with `staleTime: 60s` to prevent $0 flash on navigation.
 -   **Metric Catalog**: Auto-initializes system metrics on first visit per company (uses company-scoped ref guard).

@@ -114,11 +114,15 @@ def _send_email_sync(
     to: str,
     subject: str,
     html_content: str,
-    from_email: Optional[str] = None
+    from_email: Optional[str] = None,
+    recipient_id: Optional[str] = None,
+    campaign: Optional[str] = None,
+    utm_params: Optional[dict] = None
 ) -> dict:
     """
     Synchronously send an email using Resend.
     This is run in a thread pool to avoid blocking the event loop.
+    Automatically stores sent email in DB for tracking.
     """
     creds = get_resend_credentials()
     if not creds or not creds.get("api_key"):
@@ -139,10 +143,31 @@ def _send_email_sync(
         }
         
         result = resend.Emails.send(params)
+        email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
+        
+        if email_id:
+            try:
+                from server.api.email_tracking import store_sent_email
+                utm = utm_params or {}
+                store_sent_email(
+                    email_id=email_id,
+                    to_email=to,
+                    subject=subject,
+                    from_email=sender_email,
+                    recipient_id=recipient_id,
+                    campaign=campaign,
+                    utm_source=utm.get("utm_source"),
+                    utm_medium=utm.get("utm_medium"),
+                    utm_campaign=utm.get("utm_campaign"),
+                    utm_content=utm.get("utm_content"),
+                    utm_term=utm.get("utm_term")
+                )
+            except Exception as track_err:
+                print(f"Tracking store warning: {track_err}")
         
         return {
             "success": True,
-            "message_id": result.get("id") if isinstance(result, dict) else getattr(result, "id", None),
+            "message_id": email_id,
             "message": f"Email sent successfully to {to}"
         }
     except Exception as e:
@@ -156,7 +181,10 @@ async def send_email(
     to: str,
     subject: str,
     html_content: str,
-    from_email: Optional[str] = None
+    from_email: Optional[str] = None,
+    recipient_id: Optional[str] = None,
+    campaign: Optional[str] = None,
+    utm_params: Optional[dict] = None
 ) -> dict:
     """
     Send an email using Resend (async wrapper).
@@ -167,12 +195,16 @@ async def send_email(
         subject: Email subject
         html_content: HTML content of the email
         from_email: Optional sender email (defaults to configured from email)
+        recipient_id: Optional unique ID for the recipient
+        campaign: Optional campaign name for tracking
+        utm_params: Optional dict with utm_source, utm_medium, utm_campaign, utm_content, utm_term
     
     Returns:
         dict with success status and message/error
     """
     return await asyncio.to_thread(
-        _send_email_sync, to, subject, html_content, from_email
+        _send_email_sync, to, subject, html_content, from_email,
+        recipient_id, campaign, utm_params
     )
 
 
