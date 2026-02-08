@@ -192,6 +192,8 @@ app.use(
   createProxyMiddleware({
     target: FASTAPI_URL,
     changeOrigin: true,
+    timeout: 120000,
+    proxyTimeout: 120000,
     pathRewrite: {
       "^/api": "",
     },

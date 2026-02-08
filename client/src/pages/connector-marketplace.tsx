@@ -9,6 +9,7 @@ import { ConnectorCard } from "@/components/connectors/ConnectorCard";
 import { ConnectorFilters } from "@/components/connectors/ConnectorFilters";
 import { ConnectorDetailDrawer } from "@/components/connectors/ConnectorDetailDrawer";
 import { fetchConnectorCatalog, fetchCategories, CatalogConnector, Category } from "@/services/connectors.api";
+import { useFounderStore } from "@/store/founderStore";
 import { 
   Link2, 
   Sparkles, 
@@ -21,6 +22,7 @@ import {
 
 export default function ConnectorMarketplace() {
   const [, setLocation] = useLocation();
+  const { currentCompany } = useFounderStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [filters, setFilters] = useState({
@@ -32,8 +34,8 @@ export default function ConnectorMarketplace() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   
   const { data: connectors = [], isLoading: connectorsLoading } = useQuery({
-    queryKey: ["/api/connectors/catalog"],
-    queryFn: () => fetchConnectorCatalog(),
+    queryKey: ["/api/connectors/catalog", currentCompany?.id],
+    queryFn: () => fetchConnectorCatalog({ companyId: currentCompany?.id }),
     staleTime: 5 * 60 * 1000,
   });
   

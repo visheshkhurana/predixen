@@ -1465,6 +1465,8 @@ export default function CopilotPage() {
         if (error.message) {
           if (error.message.includes('500')) {
             errorMessage = 'AI service is temporarily unavailable. This usually resolves itself in a few moments. Please try again shortly.';
+          } else if (error.message.includes('502') || error.message.includes('Backend service unavailable')) {
+            errorMessage = 'The AI is taking longer than expected. Please try a shorter or simpler question, or try again in a moment.';
           } else if (error.message.includes('401') || error.message.includes('403')) {
             errorMessage = 'Your session may have expired. Please try logging in again.';
           } else if (error.message.includes('404')) {
