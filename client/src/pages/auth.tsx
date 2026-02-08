@@ -11,6 +11,22 @@ import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap } from 'lucide-react';
 import { SiGoogle, SiGithub } from 'react-icons/si';
 
+
+// Analytics & Pixel user identification
+const identifyUser = (userId: number, email: string) => {
+  // Google Analytics user identification
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
+    (window as any).gtag('set', 'user_properties', { user_email: email });
+    (window as any).gtag('event', 'login', { method: 'email' });
+  }
+  // Meta Pixel user identification
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('init', '872167299140812', { em: email });
+    (window as any).fbq('track', 'Lead');
+  }
+};
+
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -51,6 +67,7 @@ export default function AuthPage() {
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+          identifyUser(result.user_id, result.email);
       toast({ title: 'Welcome back!' });
       setLocation('/');
     } catch (err) {
@@ -91,6 +108,7 @@ export default function AuthPage() {
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+          identifyUser(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
     } catch (err) {
@@ -108,6 +126,7 @@ export default function AuthPage() {
       localStorage.setItem('predixen-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+          identifyUser(result.user_id, result.email);
       
       try {
         const companies = await api.companies.list();
