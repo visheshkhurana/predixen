@@ -181,9 +181,11 @@ app.get("/health", async (_req: Request, res: Response) => {
   });
 });
 
-// Register Twilio messaging routes before the API proxy (needs its own body parser)
-app.use("/api/messaging", express.json());
-registerTwilioRoutes(app);
+// Register Twilio messaging routes before the API proxy
+const messagingRouter = express.Router();
+messagingRouter.use(express.json());
+registerTwilioRoutes(messagingRouter);
+app.use("/api/messaging", messagingRouter);
 
 app.use(
   "/api",

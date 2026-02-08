@@ -1,9 +1,9 @@
 // Twilio messaging API routes
-import type { Express, Request, Response } from 'express';
+import type { Router, Request, Response } from 'express';
 import { sendSms, sendWhatsApp, getMessageHistory, isTwilioConfigured } from './service';
 
-export function registerTwilioRoutes(app: Express): void {
-  app.get('/api/messaging/status', async (_req: Request, res: Response) => {
+export function registerTwilioRoutes(router: Router): void {
+  router.get('/status', async (_req: Request, res: Response) => {
     try {
       const configured = await isTwilioConfigured();
       res.json({ configured });
@@ -12,7 +12,7 @@ export function registerTwilioRoutes(app: Express): void {
     }
   });
 
-  app.post('/api/messaging/sms', async (req: Request, res: Response) => {
+  router.post('/sms', async (req: Request, res: Response) => {
     try {
       const { to, body } = req.body;
 
@@ -28,7 +28,7 @@ export function registerTwilioRoutes(app: Express): void {
     }
   });
 
-  app.post('/api/messaging/whatsapp', async (req: Request, res: Response) => {
+  router.post('/whatsapp', async (req: Request, res: Response) => {
     try {
       const { to, body } = req.body;
 
@@ -44,7 +44,7 @@ export function registerTwilioRoutes(app: Express): void {
     }
   });
 
-  app.get('/api/messaging/history', async (req: Request, res: Response) => {
+  router.get('/history', async (req: Request, res: Response) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const messages = await getMessageHistory(limit);
