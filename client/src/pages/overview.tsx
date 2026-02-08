@@ -473,7 +473,7 @@ export default function OverviewPage() {
   const { currentCompany, setTruthScan, setCurrentStep } = useFounderStore();
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
-  const { metrics: sharedMetrics } = useFinancialMetrics();
+  const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
@@ -930,9 +930,9 @@ export default function OverviewPage() {
     return formatPct(value);
   };
   
-  const safeToFixed = (value: any, digits: number = 1): string => {
-    if (value == null || typeof value !== 'number' || isNaN(value)) return 'N/A';
-    return value.toFixed(digits);
+  const safeToFixed = (value: any, digits: number = 1, suffix: string = ''): string => {
+    if (value == null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 'N/A';
+    return value.toFixed(digits) + suffix;
   };
   
   const getConfidenceBadge = () => {
@@ -1238,7 +1238,7 @@ export default function OverviewPage() {
         <MetricCard
           title="LTV"
           value={formatCurrency(baseData.ltv)}
-          subtitle={`LTV:CAC = ${safeToFixed(baseData.ltvCacRatio)}x`}
+          subtitle={`LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}`}
           variant={baseData.ltvCacRatio < 3 ? 'warning' : 'success'}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
@@ -1370,7 +1370,7 @@ export default function OverviewPage() {
               100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
               100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
             }`} data-testid="metric-nrr">
-              {safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2)}%
+              {safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
             </p>
             <p className="text-xs text-muted-foreground">net revenue retention</p>
           </CardContent>
@@ -1400,7 +1400,7 @@ export default function OverviewPage() {
                 projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
                 projectedMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
               }`} data-testid="metric-ltvcac-value">
-                {safeToFixed(projectedMetrics.ltvCacRatio)}x
+                {safeToFixed(projectedMetrics.ltvCacRatio, 1, 'x')}
               </p>
               <Badge 
                 variant={projectedMetrics.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
@@ -1446,13 +1446,13 @@ export default function OverviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4))}x)</p>
-                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2))}x)</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x')})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5))}x)</p>
-                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5)}%)</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5, 1, '%')})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Region</h4>
@@ -1482,12 +1482,12 @@ export default function OverviewPage() {
                       <td className="text-right py-2 px-3 font-mono">{formatCurrency(seg.ltv)}</td>
                       <td className="text-right py-2 px-3">
                         <span className={`font-mono ${seg.ltvCac >= 3 ? 'text-emerald-500' : seg.ltvCac >= 2 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {safeToFixed(seg.ltvCac)}x
+                          {safeToFixed(seg.ltvCac, 1, 'x')}
                         </span>
                       </td>
                       <td className="text-right py-2 px-3">
                         <span className={`font-mono ${seg.churn <= 3 ? 'text-emerald-500' : seg.churn <= 7 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {safeToFixed(seg.churn)}%
+                          {safeToFixed(seg.churn, 1, '%')}
                         </span>
                       </td>
                     </tr>
@@ -1542,8 +1542,8 @@ export default function OverviewPage() {
                       {item.metric === 'runway' || item.metric === 'paybackPeriod'
                         ? `${safeToFixed(item.value)} mo`
                         : item.metric === 'ltv_cac' || item.metric === 'burnMultiple'
-                        ? `${safeToFixed(item.value)}x`
-                        : `${safeToFixed(item.value)}%`}
+                        ? safeToFixed(item.value, 1, 'x')
+                        : safeToFixed(item.value, 1, '%')}
                     </span>
                   </div>
                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
@@ -1647,7 +1647,7 @@ export default function OverviewPage() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Gross Margin</span>
               </div>
-              <span className="font-mono font-medium">{safeToFixed(projectedMetrics.grossMargin)}%</span>
+              <span className="font-mono font-medium">{safeToFixed(projectedMetrics.grossMargin, 1, '%')}</span>
             </div>
           </CardContent>
         </Card>
