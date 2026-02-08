@@ -95,7 +95,7 @@ export default function AdminEmailTracking() {
   const [days, setDays] = useState<number>(90);
 
   const { data, isLoading, refetch, isFetching } = useQuery<AnalyticsData>({
-    queryKey: ['/email-tracking/analytics', campaign, days],
+    queryKey: ['/api/email-tracking/analytics', campaign, days],
     queryFn: async () => {
       const params = new URLSearchParams({ days: String(days) });
       if (campaign && campaign !== 'all') params.set('campaign', campaign);
@@ -106,9 +106,9 @@ export default function AdminEmailTracking() {
   });
 
   const allCampaignsQuery = useQuery<AnalyticsData>({
-    queryKey: ['/email-tracking/analytics', 'all-campaigns', 365],
+    queryKey: ['/api/email-tracking/analytics', 'all-campaigns', 365],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/email-tracking/analytics?days=365');
+      const res = await apiRequest('GET', '/api/email-tracking/analytics?days=365');
       return res.json();
     },
   });

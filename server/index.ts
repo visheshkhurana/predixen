@@ -218,6 +218,26 @@ app.use(
   })
 );
 
+// Proxy email-tracking routes (pixel, click, webhook, analytics) to FastAPI
+app.use(
+  "/email-tracking",
+  createProxyMiddleware({
+    target: FASTAPI_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => `/email-tracking${path}`,
+    on: {
+      error: (err: Error, req, res) => {
+        console.error("Email tracking proxy error:", err.message);
+        if ('writeHead' in res && typeof res.writeHead === 'function') {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Email tracking service unavailable", detail: err.message }));
+        }
+      },
+    },
+  })
+);
+
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
