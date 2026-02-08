@@ -52,6 +52,7 @@ import DashboardBuilderPage from "@/pages/dashboard-builder";
 import MetricCatalogPage from "@/pages/metric-catalog";
 import SuggestedMetricsPage from "@/pages/suggested-metrics";
 import DocsPage from "@/pages/docs";
+import MessagingPage from "@/pages/messaging";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -195,6 +196,9 @@ function Router() {
       </Route>
       <Route path="/docs">
         {() => <AuthenticatedRoute component={DocsPage} />}
+      </Route>
+      <Route path="/messaging">
+        {() => <AuthenticatedRoute component={MessagingPage} />}
       </Route>
       <Route path="/fundraising">
         {() => <AuthenticatedRoute component={FundraisingPage} />}

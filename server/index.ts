@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { spawn, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
+import { registerTwilioRoutes } from "./twilio/routes";
 
 const app = express();
 const httpServer = createServer(app);
@@ -179,6 +180,10 @@ app.get("/health", async (_req: Request, res: Response) => {
     environment: process.env.NODE_ENV || "development"
   });
 });
+
+// Register Twilio messaging routes before the API proxy (needs its own body parser)
+app.use("/api/messaging", express.json());
+registerTwilioRoutes(app);
 
 app.use(
   "/api",

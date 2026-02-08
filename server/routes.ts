@@ -9,7 +9,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   registerChatRoutes(app);
-    registerAiGovernanceRoutes(app);
+  registerAiGovernanceRoutes(app);
 
   app.post("/internal/broadcast/metrics", (req: Request, res: Response) => {
     const { companyId, metrics, source } = req.body;
