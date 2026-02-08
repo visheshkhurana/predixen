@@ -43,7 +43,7 @@ async function sendEmail() {
 
   const { data, error } = await resend.emails.send({
     from: fromEmail || 'Predixen <onboarding@resend.dev>',
-    to: ['connectwithpuneet@gmail.com'],
+    to: ['nikita@predixen.ai', 'nikita.luther@gmail.com', 'nikitafl2024@gmail.com'],
     subject: 'See How Monte Carlo Simulations Can Predict Your Startup\'s Future',
     html: `
 <!DOCTYPE html>
