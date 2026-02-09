@@ -9,6 +9,7 @@ from server.models.company import Company
 from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
+from server.models.financial import FinancialRecord
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo, run_multi_scenario_simulation, DEFAULT_SCENARIOS
 from server.simulate.enhanced_engine import EnhancedSimulationEngine, compute_decision_scores
 from server.simulate.enhanced_monte_carlo import (
@@ -377,14 +378,30 @@ def run_simulation(
     metrics = truth_scan.outputs_json.get("metrics", {})
     scenario_inputs = scenario.inputs_json
     
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company.id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+    
+    ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    baseline_growth = ts_growth if ts_growth != 0 else (fr_growth if fr_growth != 0 else 5)
+    
+    ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    baseline_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    
+    ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    baseline_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+    
     enhanced_inputs = EnhancedSimulationInputs(
-        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
+        baseline_revenue=baseline_revenue,
+        baseline_growth_rate=baseline_growth,
         gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
         opex=extract_metric_value(metrics.get("opex"), 20000),
         payroll=extract_metric_value(metrics.get("payroll"), 30000),
         other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        cash_balance=baseline_cash,
         pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
         growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
         burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
