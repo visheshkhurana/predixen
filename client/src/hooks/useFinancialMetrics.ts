@@ -211,7 +211,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
-  const isLoading = !companyId || (computedLoading && !computed);
+  const isLoading = !companyId || (computedLoading && !computed && !backendBaseline && !truthScan);
 
   return { metrics, isLoading };
 }

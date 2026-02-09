@@ -10,6 +10,7 @@ from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.config import settings
 from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun, TeamMember
+from server.models.financial import FinancialRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -133,6 +134,23 @@ def get_dashboard_metrics(
         Subscription.status == "active"
     ).scalar()
     mrr = float(mrr_result) if mrr_result else 0.0
+    
+    if mrr == 0:
+        from sqlalchemy import desc
+        latest_records = (
+            db.query(FinancialRecord.company_id, func.max(FinancialRecord.period_end).label('latest'))
+            .group_by(FinancialRecord.company_id)
+            .subquery()
+        )
+        latest_mrr = (
+            db.query(func.sum(FinancialRecord.mrr))
+            .join(latest_records, 
+                  (FinancialRecord.company_id == latest_records.c.company_id) & 
+                  (FinancialRecord.period_end == latest_records.c.latest))
+            .scalar()
+        )
+        if latest_mrr and latest_mrr > 0:
+            mrr = float(latest_mrr)
     
     active_simulations = db.query(Scenario).filter(
         Scenario.created_at >= datetime.utcnow() - timedelta(days=7)

@@ -275,10 +275,9 @@ export default function AdminDashboard() {
 
   const suspendedUsers = users?.filter(u => !u.is_active).length ?? 0;
   const activeSubscriptions = subscriptions?.filter(s => s.status === 'active').length ?? 0;
-  const platformMRR = aggregateMetrics?.financial?.total_revenue
-    ? Math.round(aggregateMetrics.financial.total_revenue / 12)
-    : (metrics?.mrr ?? 0);
-  const totalMRR = platformMRR || (subscriptions?.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.monthly_price || 0), 0) ?? 0);
+  const dashboardMRR = metrics?.mrr ?? 0;
+  const subscriptionMRR = subscriptions?.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.monthly_price || 0), 0) ?? 0;
+  const totalMRR = dashboardMRR > 0 ? dashboardMRR : subscriptionMRR;
   const successfulLogins = loginHistory?.filter(l => l.success).length ?? 0;
   const failedLogins = loginHistory?.filter(l => !l.success).length ?? 0;
 

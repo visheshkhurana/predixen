@@ -326,10 +326,12 @@ export default function SuggestedMetrics() {
       const token = localStorage.getItem('predixen-token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      headers['Content-Type'] = 'application/json';
       const res = await fetch(`/api/suggestions/generate?company_id=${companyId}`, {
         method: 'POST',
         headers,
         credentials: 'include',
+        body: JSON.stringify({ force_refresh: false }),
       });
       if (!res.ok) {
         const text = await res.text();
