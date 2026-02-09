@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
 import { useFounderStore } from "@/store/founderStore";
 import { useRealtimeKPI, KPIMetrics } from "@/hooks/useRealtimeKPI";
+import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import {
   DollarSign,
   Flame,
@@ -121,6 +122,7 @@ const periodLabels: Record<TimePeriod, string> = {
 };
 
 export default function Dashboard() {
+  const { metrics: financialMetrics } = useFinancialMetrics();
   const { currentCompany: selectedCompany } = useFounderStore();
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("last_12_months");
   const [activeTab, setActiveTab] = useState<string>("overview");
@@ -144,27 +146,27 @@ export default function Dashboard() {
   );
 
   const rawMetrics = liveData?.metrics ?? {
-    monthly_revenue: 0,
-    mrr: 0,
-    arr: 0,
-    cash_balance: 0,
-    net_burn: 0,
-    runway_months: 18,
-    gross_margin: 0,
-    churn_rate: 0,
-    cac: 500,
-    ltv: 3000,
-    ltv_cac_ratio: 6,
-    headcount: 0,
-    revenue_per_employee: 0
+    monthly_revenue: financialMetrics.mrr,
+    mrr: financialMetrics.mrr,
+    arr: financialMetrics.arr,
+    cash_balance: financialMetrics.cashOnHand,
+    net_burn: financialMetrics.netBurn,
+    runway_months: financialMetrics.runway === Infinity ? 60 : financialMetrics.runway,
+    gross_margin: financialMetrics.grossMarginPct,
+    churn_rate: financialMetrics.churnRatePct,
+    cac: financialMetrics.cac,
+    ltv: financialMetrics.ltv,
+    ltv_cac_ratio: financialMetrics.ltvCacRatio,
+    headcount: financialMetrics.headcount,
+    revenue_per_employee: financialMetrics.revenuePerEmployee
   };
   
   const liveMetrics = {
     ...rawMetrics,
-    runway_months: Math.max(0, Math.min(rawMetrics.runway_months || 18, 60)),
-    cac: Math.max(100, Math.min(rawMetrics.cac || 500, 50000)),
-    ltv: Math.max(500, Math.min(rawMetrics.ltv || 3000, 500000)),
-    ltv_cac_ratio: Math.max(0.5, Math.min(rawMetrics.ltv_cac_ratio || 6, 20)),
+    runway_months: Math.max(0, Math.min(rawMetrics.runway_months || (financialMetrics.runway === Infinity ? 60 : financialMetrics.runway) || 18, 60)),
+    cac: rawMetrics.cac > 0 ? rawMetrics.cac : financialMetrics.cac,
+    ltv: rawMetrics.ltv > 0 ? rawMetrics.ltv : financialMetrics.ltv,
+    ltv_cac_ratio: rawMetrics.ltv_cac_ratio > 0 ? rawMetrics.ltv_cac_ratio : financialMetrics.ltvCacRatio,
   };
   
   const { data: scenarios, isLoading: scenariosLoading } = useQuery<Scenario[]>({

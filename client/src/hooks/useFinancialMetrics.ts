@@ -67,7 +67,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
-  const { data: computed, isLoading: computedLoading } = useQuery<any>({
+  const { data: computed, isLoading: computedLoading, isError: computedError } = useQuery<any>({
     queryKey: ['computed-metrics', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/metrics/computed`),
     enabled: !!companyId,
@@ -79,7 +79,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
   });
 
-  const { data: truthScan } = useQuery<any>({
+  const { data: truthScan, isLoading: truthLoading } = useQuery<any>({
     queryKey: ['truth-latest', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/truth/latest`),
     enabled: !!companyId,
@@ -89,7 +89,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retry: 1,
   });
 
-  const { data: backendBaseline } = useQuery<any>({
+  const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
     queryKey: ['financials-baseline', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/financials/baseline`),
     enabled: !!companyId,
@@ -208,7 +208,10 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
-  const isLoading = !companyId || (computedLoading && !computed);
+  const anySourceLoaded = !!computed || !!truthScan || !!backendBaseline;
+  const primaryLoading = computedLoading && !computed;
+  const allLoading = primaryLoading && truthLoading && baselineLoading;
+  const isLoading = !companyId || (primaryLoading && !anySourceLoaded);
 
   return { metrics, isLoading };
 }
