@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextBar } from "@/components/ContextBar";
 import { useFounderStore } from "@/store/founderStore";
-import { Bell, Sun, AlertTriangle, TrendingDown, Clock } from "lucide-react";
+import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { api } from "@/api/client";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
@@ -288,6 +296,7 @@ function Router() {
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { token, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
   const [, navigate] = useLocation();
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const confidence = truthScan?.data_confidence_score || 0;
   
   const style = {
@@ -378,13 +387,81 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate('/overview')} data-testid="button-header-briefing">
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setBriefingOpen(true)} data-testid="button-header-briefing">
                 <Sun className="h-4 w-4 mr-1" />
                 <span className="hidden sm:inline">Briefing</span>
               </Button>
               {getConfidenceBadge()}
             </div>
           </header>
+          <Dialog open={briefingOpen} onOpenChange={setBriefingOpen}>
+            <DialogContent className="sm:max-w-lg" data-testid="modal-briefing">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 flex-wrap" data-testid="text-modal-briefing-title">
+                  <Sun className="h-5 w-5 text-amber-400" />
+                  Morning Briefing
+                </DialogTitle>
+                <DialogDescription data-testid="text-modal-briefing-date">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1 p-3 rounded-md bg-muted/50">
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      MRR
+                    </div>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-mrr">$43,949</p>
+                    <p className="text-xs text-emerald-500" data-testid="text-briefing-modal-mrr-growth">+8.2% growth</p>
+                  </div>
+                  <div className="space-y-1 p-3 rounded-md bg-muted/50">
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                      <Flame className="h-3.5 w-3.5" />
+                      Burn Rate
+                    </div>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-burn">$20,741/mo</p>
+                    <p className="text-xs text-amber-500" data-testid="text-briefing-modal-burn-status">Slightly elevated</p>
+                  </div>
+                  <div className="space-y-1 p-3 rounded-md bg-muted/50">
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                      <Timer className="h-3.5 w-3.5" />
+                      Runway
+                    </div>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-runway">21.3 months</p>
+                    <p className="text-xs text-muted-foreground" data-testid="text-briefing-modal-runway-cash">$513,746 cash</p>
+                  </div>
+                  <div className="space-y-1 p-3 rounded-md bg-muted/50">
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      LTV:CAC
+                    </div>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-ltvcac">3.2x</p>
+                    <p className="text-xs text-emerald-500" data-testid="text-briefing-modal-ltvcac-status">Healthy</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI Insight
+                  </p>
+                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-modal-insight">
+                    Burn multiple is high at 2.1x. Consider simulating "What if we cut hiring by 30%?" to see the runway impact. Your churn is above target at 3.2% — addressing this could add 4+ months of runway.
+                  </p>
+                </div>
+                <Separator />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" onClick={() => { setBriefingOpen(false); navigate('/scenarios'); }} data-testid="button-briefing-modal-simulate">
+                    Run Simulation
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => { setBriefingOpen(false); navigate('/overview'); }} data-testid="button-briefing-modal-overview">
+                    Go to Overview
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <main className="flex-1 overflow-auto bg-background">
             {children}
           </main>
