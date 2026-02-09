@@ -413,11 +413,9 @@ export default function ScenariosPage() {
     }
   };
 
-  const handleQuestionSubmit = () => {
-    if (!questionInput.trim()) return;
-    const scenarioName = questionInput.trim().length > 60 ? questionInput.trim().slice(0, 60) + '...' : questionInput.trim();
-    const scenarioData: any = {
-      name: scenarioName,
+  const parseNaturalLanguageScenario = (text: string) => {
+    const q = text.toLowerCase();
+    const params: any = {
       pricing_change_pct: 0,
       growth_uplift_pct: 0,
       burn_reduction_pct: 0,
@@ -426,80 +424,126 @@ export default function ScenariosPage() {
       cac_change_pct: 0,
       fundraise_month: null,
       fundraise_amount: 0,
-      tags: ['custom'],
+    };
+    const tags: string[] = [];
+    let matched = false;
+
+    const fundraiseMatch = q.match(/(?:(?:raise|fundrais\w*|series\s*[a-z]?)\s+\$?([\d,.]+)\s*(m|mm|million|k|thousand)?)/i);
+    const isRaisePrices = q.match(/raise\s+price/i);
+    if (fundraiseMatch && !isRaisePrices) {
+      let amount = parseFloat(fundraiseMatch[1].replace(/,/g, ''));
+      const unit = (fundraiseMatch[2] || '').toLowerCase();
+      if (unit === 'm' || unit === 'mm' || unit === 'million') amount *= 1_000_000;
+      else if (unit === 'k' || unit === 'thousand') amount *= 1_000;
+      else if (amount < 1000) amount *= 1_000_000;
+      params.fundraise_amount = amount;
+      params.fundraise_month = 3;
+      tags.push('fundraising');
+      matched = true;
+    }
+
+    const hireMatch = q.match(/hire\s+(\d+)\s*(?:engineer|dev|people|employee|person|staff)?/i);
+    if (hireMatch) {
+      const count = parseInt(hireMatch[1]);
+      const salaryEstimate = 12000;
+      params.burn_reduction_pct = Math.round(-(count * salaryEstimate) / (baseMetrics?.monthlyExpenses || 50000) * 100);
+      params.growth_uplift_pct += count * 3;
+      tags.push('growth');
+      matched = true;
+    } else if (q.includes('hire') || q.includes('engineer') || q.includes('team')) {
+      params.burn_reduction_pct = -15;
+      params.growth_uplift_pct += 9;
+      tags.push('growth');
+      matched = true;
+    }
+
+    const cutMatch = q.match(/(?:cut|reduce|slash|lower)\s+(?:(?:burn|marketing|spend|cost|expense)s?\s+)?(?:by\s+)?(\d+)\s*%/i);
+    if (cutMatch) {
+      params.burn_reduction_pct = parseInt(cutMatch[1]);
+      tags.push('cost-cutting');
+      matched = true;
+    } else if (q.match(/(?:cut|reduce|slash|lower)\s+(?:burn|marketing|spend|cost|expense)/i)) {
+      params.burn_reduction_pct = 20;
+      tags.push('cost-cutting');
+      matched = true;
+    }
+
+    const priceUpMatch = q.match(/(?:raise|increase|boost)\s+(?:price|pricing)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    const priceGenMatch = q.match(/(?:price|pricing)\s+.*?(\d+)\s*%/i);
+    if (priceUpMatch) {
+      params.pricing_change_pct = parseInt(priceUpMatch[1]);
+      tags.push('pricing');
+      matched = true;
+    } else if (priceGenMatch) {
+      params.pricing_change_pct = parseInt(priceGenMatch[1]);
+      tags.push('pricing');
+      matched = true;
+    }
+
+    const growthMatch = q.match(/(?:growth|grow)\s+.*?(?:by\s+)?(\d+)\s*%/i);
+    const growthDecreaseMatch = q.match(/(?:growth|grow)\s+(?:drop|decrease|fall|decline)s?\s+(?:by\s+|to\s+)?(\d+)\s*%/i);
+    if (growthDecreaseMatch) {
+      params.growth_uplift_pct += -parseInt(growthDecreaseMatch[1]);
+      tags.push('pessimistic');
+      matched = true;
+    } else if (growthMatch) {
+      params.growth_uplift_pct += parseInt(growthMatch[1]);
+      tags.push('growth');
+      matched = true;
+    }
+
+    const churnMatch = q.match(/churn\s+.*?(\d+)\s*%/i);
+    if (churnMatch) {
+      params.churn_change_pct = parseInt(churnMatch[1]);
+      tags.push('pessimistic');
+      matched = true;
+    } else if (q.includes('churn')) {
+      params.churn_change_pct = 5;
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    if (q.includes('market') || q.includes('expan')) {
+      if (!matched || !tags.includes('growth')) {
+        params.growth_uplift_pct += 25;
+        params.burn_reduction_pct = params.burn_reduction_pct || -15;
+        tags.push('growth');
+        matched = true;
+      }
+    }
+
+    const uniqueTags = tags.length > 0 ? Array.from(new Set(tags)) : ['custom'];
+    return { params, tags: uniqueTags, matched };
+  };
+
+  const handleQuestionSubmit = () => {
+    if (!questionInput.trim()) return;
+    const scenarioName = questionInput.trim().length > 60 ? questionInput.trim().slice(0, 60) + '...' : questionInput.trim();
+
+    const { params, tags } = parseNaturalLanguageScenario(questionInput);
+
+    const scenarioData: any = {
+      name: scenarioName,
+      ...params,
+      tags,
     };
 
-    const q = questionInput.toLowerCase();
-    if (q.includes('price') || q.includes('pricing')) {
-      const match = q.match(/(\d+)\s*%/);
-      scenarioData.pricing_change_pct = match ? parseInt(match[1]) : 15;
-      scenarioData.tags = ['pricing'];
-    }
-    if (q.includes('hire') || q.includes('engineer') || q.includes('team')) {
-      const match = q.match(/(\d+)/);
-      const count = match ? parseInt(match[1]) : 3;
-      scenarioData.burn_reduction_pct = -(count * 5);
-      scenarioData.growth_uplift_pct = count * 3;
-      scenarioData.tags = ['growth'];
-    }
-    if (q.includes('cut') || q.includes('reduce') || q.includes('slash')) {
-      const match = q.match(/(\d+)\s*%/);
-      scenarioData.burn_reduction_pct = match ? parseInt(match[1]) : 20;
-      scenarioData.tags = ['cost-cutting'];
-    }
-    if (q.includes('churn')) {
-      const match = q.match(/(\d+)\s*%/);
-      scenarioData.churn_change_pct = match ? parseInt(match[1]) : 5;
-      scenarioData.tags = ['pessimistic'];
-    }
-    if (q.includes('raise') || q.includes('series') || q.includes('fundrais')) {
-      const amountMatch = q.match(/\$?([\d.]+)\s*m/i);
-      scenarioData.fundraise_amount = amountMatch ? parseFloat(amountMatch[1]) * 1_000_000 : 2_000_000;
-      scenarioData.fundraise_month = 3;
-      scenarioData.tags = ['fundraising'];
-    }
-    if (q.includes('market') || q.includes('expan')) {
-      scenarioData.growth_uplift_pct = 25;
-      scenarioData.burn_reduction_pct = -15;
-      scenarioData.tags = ['growth'];
-    }
+    console.log('[NLP] Input:', questionInput);
+    console.log('[NLP] Parsed params:', JSON.stringify(params));
+    console.log('[NLP] Tags:', tags);
 
     handleWizardComplete(scenarioData);
+    setQuestionInput('');
   };
 
   const handleChipClick = (label: string) => {
     setQuestionInput(label);
+    const { params, tags } = parseNaturalLanguageScenario(label);
     const scenarioData: any = {
       name: label,
-      pricing_change_pct: 0, growth_uplift_pct: 0, burn_reduction_pct: 0,
-      gross_margin_delta_pct: 0, churn_change_pct: 0, cac_change_pct: 0,
-      fundraise_month: null, fundraise_amount: 0, tags: ['custom'],
+      ...params,
+      tags,
     };
-
-    if (label.includes('Cut marketing')) {
-      scenarioData.burn_reduction_pct = 30;
-      scenarioData.growth_uplift_pct = -10;
-      scenarioData.tags = ['cost-cutting'];
-    } else if (label.includes('Raise prices')) {
-      scenarioData.pricing_change_pct = 20;
-      scenarioData.tags = ['pricing'];
-    } else if (label.includes('Hire')) {
-      scenarioData.burn_reduction_pct = -25;
-      scenarioData.growth_uplift_pct = 15;
-      scenarioData.tags = ['growth'];
-    } else if (label.includes('Churn')) {
-      scenarioData.churn_change_pct = 5;
-      scenarioData.tags = ['pessimistic'];
-    } else if (label.includes('Raise $2M')) {
-      scenarioData.fundraise_amount = 2_000_000;
-      scenarioData.fundraise_month = 3;
-      scenarioData.tags = ['fundraising'];
-    } else if (label.includes('New market')) {
-      scenarioData.growth_uplift_pct = 25;
-      scenarioData.burn_reduction_pct = -15;
-      scenarioData.tags = ['growth'];
-    }
-
     handleWizardComplete(scenarioData);
   };
 

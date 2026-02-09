@@ -135,7 +135,7 @@ export function ScenarioComparisonView({
                 <TableHead className="text-right">18-mo Survival</TableHead>
                 <TableHead className="text-right">vs Baseline</TableHead>
                 {scenarios.some(s => s.end_cash !== undefined) && (
-                  <TableHead className="text-right">End Cash</TableHead>
+                  <TableHead className="text-right">Cash @24m</TableHead>
                 )}
                 {scenarios.some(s => s.score !== undefined) && (
                   <TableHead className="text-right">Score</TableHead>
@@ -218,8 +218,20 @@ export function ScenarioComparisonView({
                     </TableCell>
                     
                     {scenarios.some(s => s.end_cash !== undefined) && (
-                      <TableCell className="text-right font-mono">
-                        {scenario.end_cash !== undefined ? formatCurrency(scenario.end_cash) : '—'}
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="font-mono font-semibold">
+                            {scenario.end_cash !== undefined ? formatCurrency(scenario.end_cash) : '—'}
+                          </span>
+                          {!isBaseline && scenario.end_cash !== undefined && baseline.end_cash !== undefined && (() => {
+                            const cashDelta = getDeltaIndicator(scenario.end_cash, baseline.end_cash, true);
+                            return (
+                              <span className={cn("text-xs", cashDelta.color)}>
+                                {cashDelta.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </TableCell>
                     )}
                     
