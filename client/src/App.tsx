@@ -12,7 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextBar } from "@/components/ContextBar";
 import { useFounderStore } from "@/store/founderStore";
-import { Bell, Sun } from "lucide-react";
+import { Bell, Sun, AlertTriangle, TrendingDown, Clock } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api } from "@/api/client";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
@@ -327,10 +335,49 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   runTimestamp={latestRun?.timestamp}
                 />
               </div>
-              <Button variant="ghost" size="icon" className="relative shrink-0" onClick={() => navigate('/alerts')} data-testid="button-header-alerts">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" data-testid="indicator-alert-dot" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative shrink-0" data-testid="button-header-alerts">
+                    <Bell className="h-4 w-4" />
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" data-testid="indicator-alert-dot" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <DropdownMenuLabel className="flex items-center justify-between gap-2 flex-wrap">
+                    <span>Recent Alerts</span>
+                    <Badge variant="destructive" className="text-[10px]" data-testid="badge-alert-count">3 active</Badge>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-runway">
+                    <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-medium" data-testid="text-alert-runway-title">Runway below 12 months</p>
+                      <p className="text-xs text-muted-foreground">Cash reserves declining faster than projected</p>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />2 hours ago</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-burn">
+                    <TrendingDown className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-medium" data-testid="text-alert-burn-title">Burn rate increased 15%</p>
+                      <p className="text-xs text-muted-foreground">Monthly burn up from $18K to $20.7K</p>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />5 hours ago</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-churn">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="text-sm font-medium" data-testid="text-alert-churn-title">Churn spike detected</p>
+                      <p className="text-xs text-muted-foreground">Churn rate at 3.2%, above 2% target</p>
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />1 day ago</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="justify-center text-sm text-primary cursor-pointer" onClick={() => navigate('/alerts')} data-testid="button-view-all-alerts">
+                    View All Alerts
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate('/overview')} data-testid="button-header-briefing">
                 <Sun className="h-4 w-4 mr-1" />
                 <span className="hidden sm:inline">Briefing</span>
