@@ -488,16 +488,25 @@ def get_scenario_timeseries(
         raise HTTPException(status_code=404, detail="No simulation found for this scenario")
     
     outputs = sim_run.outputs_json or {}
-    month_data = outputs.get("month_data", [])
+    metrics = outputs.get("metrics", {})
+    revenue_data = metrics.get("revenue", [])
+    cash_data = metrics.get("cash", [])
+    burn_data = metrics.get("burn", [])
     scenario_inputs = scenario.inputs_json or {}
     
+    horizon = max(len(revenue_data), len(cash_data), len(burn_data))
+    
     timeseries = []
-    for i, m in enumerate(month_data):
-        cash_balance = m.get("cash_p50", 0)
-        monthly_burn = m.get("burn_p50", 0)
-        monthly_revenue = m.get("revenue_p50", 0)
+    for i in range(horizon):
+        rev = revenue_data[i] if i < len(revenue_data) else {}
+        cas = cash_data[i] if i < len(cash_data) else {}
+        brn = burn_data[i] if i < len(burn_data) else {}
+        
+        cash_balance = cas.get("p50", 0)
+        monthly_burn = brn.get("p50", 0)
+        monthly_revenue = rev.get("p50", 0)
         net_burn = max(1, monthly_burn - monthly_revenue)
-        runway_remaining = cash_balance / net_burn if net_burn > 0 else 24
+        runway_remaining = cash_balance / net_burn if net_burn > 0 else 48
         
         timeseries.append({
             "month": i + 1,
@@ -505,7 +514,15 @@ def get_scenario_timeseries(
             "monthlyBurn": monthly_burn,
             "monthlyRevenue": monthly_revenue,
             "runwayRemaining": min(runway_remaining, 48),
-            "headcount": m.get("headcount", 0)
+            "revenue_p10": rev.get("p10", 0),
+            "revenue_p50": rev.get("p50", 0),
+            "revenue_p90": rev.get("p90", 0),
+            "cash_p10": cas.get("p10", 0),
+            "cash_p50": cas.get("p50", 0),
+            "cash_p90": cas.get("p90", 0),
+            "burn_p10": brn.get("p10", 0),
+            "burn_p50": brn.get("p50", 0),
+            "burn_p90": brn.get("p90", 0),
         })
     
     funding_events = []
@@ -525,7 +542,7 @@ def get_scenario_timeseries(
         "fundingEvents": funding_events,
         "summary": outputs.get("summary", {}),
         "runway": outputs.get("runway", {}),
-        "survival": outputs.get("survival", {})
+        "survival": outputs.get("survivalProbability", outputs.get("survival", {}))
     }
 
 
