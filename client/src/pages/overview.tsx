@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -47,6 +48,8 @@ import {
   X,
   FlaskConical,
   Search,
+  Plus,
+  Flag,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -1059,6 +1062,63 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       )}
+
+      <div data-testid="section-goal-tracker">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Flag className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold" data-testid="text-goal-tracker-title">Goal Tracker</h2>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setLocation('/goals')} data-testid="button-add-goal">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Goal
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
+            <CardContent className="pt-4 pb-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach $100K MRR</p>
+                <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 shrink-0" data-testid="badge-goal-mrr-status">On Track</Badge>
+              </div>
+              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+                <span data-testid="text-goal-mrr-progress">{formatCurrency(baseData.mrr)} / $100K</span>
+                <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
+            <CardContent className="pt-4 pb-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
+                <Badge variant="secondary" className="bg-primary/10 text-primary shrink-0" data-testid="badge-goal-runway-status">In Progress</Badge>
+              </div>
+              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+                <span data-testid="text-goal-runway-progress">{safeToFixed(baseData.runway, 1)} / 36.0 months</span>
+                <span data-testid="text-goal-runway-pct">{Math.round((baseData.runway / 36) * 100)}% complete</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
+            <CardContent className="pt-4 pb-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
+                <Badge variant="destructive" className="shrink-0" data-testid="badge-goal-churn-status">Off Track</Badge>
+              </div>
+              <Progress value={Math.min(((2 / Math.max(baseData.churnRate, 0.1)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+                <span data-testid="text-goal-churn-progress">Current: {safeToFixed(baseData.churnRate, 1)}%</span>
+                <span data-testid="text-goal-churn-target">Target: 2.0%</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-company-name">{currentCompany.name}</h1>
