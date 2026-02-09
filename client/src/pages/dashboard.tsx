@@ -706,8 +706,8 @@ export default function Dashboard() {
               title="LTV/CAC Ratio"
               value={metricsLoading ? '...' : financialMetrics.ltvCacRatio > 0 ? `${financialMetrics.ltvCacRatio.toFixed(1)}x` : 'N/A'}
               icon={<TrendingUp className="h-4 w-4" />}
-              trend={financialMetrics.ltvCacRatio >= 3 ? 'up' : financialMetrics.ltvCacRatio < 2 ? 'down' : 'neutral'}
-              subtitle={financialMetrics.ltvCacRatio >= 3 ? 'Healthy' : financialMetrics.ltvCacRatio < 2 ? 'Needs improvement' : ''}
+              trend={financialMetrics.ltvCacRatio > 0 ? (financialMetrics.ltvCacRatio >= 3 ? 'up' : financialMetrics.ltvCacRatio < 2 ? 'down' : 'neutral') : 'neutral'}
+              subtitle={financialMetrics.ltvCacRatio > 0 ? (financialMetrics.ltvCacRatio >= 3 ? 'Healthy' : financialMetrics.ltvCacRatio < 2 ? 'Needs improvement' : '') : ''}
               isLive={isConnected}
             />
           </div>
