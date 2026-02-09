@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
 from server.core.db import get_db
 from server.core.security import get_current_user
@@ -63,6 +63,24 @@ class ScenarioCreate(BaseModel):
     cac_change_pct: float = 0
     tags: Optional[List[str]] = None
     overwrite_id: Optional[int] = None
+
+    @validator('fundraise_amount')
+    def validate_fundraise_amount(cls, v):
+        if v < 0:
+            raise ValueError('fundraise_amount must be >= 0')
+        return v
+
+    @validator('burn_reduction_pct')
+    def validate_burn_reduction(cls, v):
+        if v < 0 or v > 100:
+            raise ValueError('burn_reduction_pct must be between 0 and 100')
+        return v
+
+    @validator('fundraise_month')
+    def validate_fundraise_month(cls, v):
+        if v is not None and v < 1:
+            return 1
+        return v
 
 class SimulateRequest(BaseModel):
     n_sims: int = 1000
@@ -477,6 +495,19 @@ def get_latest_simulation(
         raise HTTPException(status_code=404, detail="No simulation found")
     
     outputs = sim_run.outputs_json or {}
+    
+    if 'survivalProbability' not in outputs and 'survival' in outputs:
+        survival = outputs['survival']
+        if isinstance(survival, dict):
+            sp = {}
+            for k in ['6m', '12m', '18m', '24m']:
+                if k in survival:
+                    sp[k] = survival[k]
+            if sp:
+                outputs['survivalProbability'] = sp
+            if 'curve' in survival and 'survivalCurve' not in outputs:
+                outputs['survivalCurve'] = survival['curve']
+    
     return {
         "id": sim_run.id,
         "scenario_id": scenario_id,

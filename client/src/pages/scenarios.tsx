@@ -543,6 +543,26 @@ export default function ScenariosPage() {
     return Math.max(0, cash);
   }, [baseMetrics]);
 
+  const getSurvivalPct = useCallback((period: string) => {
+    if (simulation?.survivalProbability?.[period] != null) {
+      return simulation.survivalProbability[period];
+    }
+    if (simulation?.survival?.[period] != null) {
+      return simulation.survival[period];
+    }
+    const curve = simulation?.survivalCurve || simulation?.survival?.curve;
+    if (curve && Array.isArray(curve) && curve.length > 0) {
+      const monthNum = parseInt(period);
+      if (!isNaN(monthNum)) {
+        const entry = curve.find((c: any) => c.month === monthNum);
+        if (entry) return entry.survival_rate * 100;
+      }
+      const last = curve[curve.length - 1];
+      return last.survival_rate * 100;
+    }
+    return null;
+  }, [simulation]);
+
   const scenarioP90 = useMemo(() => {
     if (hasSimData) {
       return {
@@ -550,8 +570,7 @@ export default function ScenariosPage() {
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p90'),
         cash12m: getMetricAtMonth(simCash, 11, 'p90'),
         breakeven: getBreakevenMonth('p10'),
-        survival: simulation.survivalProbability?.['18m'] != null
-          ? Math.min(100, simulation.survivalProbability['18m']).toFixed(0) : '?',
+        survival: (() => { const v = getSurvivalPct('18m'); return v != null ? Math.min(100, v).toFixed(0) : '?'; })(),
       };
     }
     if (!baseMetrics) return null;
@@ -563,7 +582,7 @@ export default function ScenariosPage() {
       breakeven: '18+',
       survival: Math.min(100, 65 * 1.15).toFixed(0),
     };
-  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
   const scenarioP50 = useMemo(() => {
     if (hasSimData) {
@@ -572,8 +591,7 @@ export default function ScenariosPage() {
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p50'),
         cash12m: getMetricAtMonth(simCash, 11, 'p50'),
         breakeven: getBreakevenMonth('p50'),
-        survival: simulation.survivalProbability?.['18m'] != null
-          ? simulation.survivalProbability['18m'].toFixed(0) : '?',
+        survival: (() => { const v = getSurvivalPct('18m'); return v != null ? v.toFixed(0) : '?'; })(),
       };
     }
     if (!baseMetrics) return null;
@@ -584,18 +602,12 @@ export default function ScenariosPage() {
       breakeven: '24+',
       survival: '65',
     };
-  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
   const scenarioP10 = useMemo(() => {
     if (hasSimData) {
-      const survivalCurve = simulation.survivalCurve;
-      let p10Survival = '?';
-      if (simulation.survivalProbability?.['24m'] != null) {
-        p10Survival = simulation.survivalProbability['24m'].toFixed(0);
-      } else if (survivalCurve && survivalCurve.length > 0) {
-        const last = survivalCurve[survivalCurve.length - 1];
-        p10Survival = (last.survival_rate * 100).toFixed(0);
-      }
+      const v = getSurvivalPct('24m');
+      const p10Survival = v != null ? v.toFixed(0) : '?';
       return {
         runway: simulation.runway.p10?.toFixed(1) || '?',
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p10'),
@@ -613,7 +625,7 @@ export default function ScenariosPage() {
       breakeven: '24+',
       survival: Math.max(0, 65 * 0.7).toFixed(0),
     };
-  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, getBreakevenMonth, projectedRevenue, projectedCash, getSurvivalPct]);
 
   const sensitivityBars = useMemo(() => {
     if (!baseMetrics) return [];

@@ -283,7 +283,16 @@ export function AppSidebar() {
   });
 
   const { data: decisions } = useQuery<any[]>({
-    queryKey: ["/api/decisions"],
+    queryKey: ["/api/companies", currentCompany?.id, "decisions"],
+    queryFn: async () => {
+      if (!currentCompany?.id) return [];
+      const res = await fetch(`/api/companies/${currentCompany.id}/decisions`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.decisions || []);
+    },
     enabled: !!currentCompany?.id,
   });
 
