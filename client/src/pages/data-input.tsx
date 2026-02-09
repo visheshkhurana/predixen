@@ -561,6 +561,10 @@ export default function DataInput() {
   };
 
   const handleSave = async (values: DataInputValues) => {
+    await doSave(values);
+  };
+
+  const doSave = async (values: DataInputValues) => {
     if (!currentCompany || !token) {
       toast({
         title: "Please select a company",
@@ -583,10 +587,10 @@ export default function DataInput() {
         : (breakdownSum > 0 ? breakdownSum : (values.monthlyExpenses || 0));
       
       const baseline = {
-        cashOnHand: values.cashOnHand,
-        monthlyRevenue: values.monthlyRevenue,
+        cashOnHand: values.cashOnHand || 0,
+        monthlyRevenue: values.monthlyRevenue || 0,
         totalMonthlyExpenses: totalExpenses,
-        monthlyGrowthRate: values.growthRate,
+        monthlyGrowthRate: values.growthRate || 0,
         expenseBreakdown: {
           payroll: values.payrollExpenses || null,
           marketing: values.marketingExpenses || null,
@@ -599,6 +603,8 @@ export default function DataInput() {
         asOfDate: new Date().toISOString().split('T')[0],
       };
 
+      console.log('[SAVE] Sending baseline:', JSON.stringify(baseline));
+
       const response = await fetch(`/api/companies/${currentCompany.id}/financials/save`, {
         method: 'POST',
         headers: {
@@ -609,8 +615,13 @@ export default function DataInput() {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[SAVE] API error:', response.status, errorText);
         throw new Error('Failed to save');
       }
+
+      const result = await response.json();
+      console.log('[SAVE] API response:', JSON.stringify(result));
 
       setFinancialBaseline(baseline);
 
@@ -619,6 +630,7 @@ export default function DataInput() {
         description: "Your company and financial data has been saved successfully",
       });
     } catch (error) {
+      console.error('[SAVE] Error:', error);
       toast({
         title: "Failed to save",
         description: "There was an error saving your data",
@@ -627,6 +639,11 @@ export default function DataInput() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDirectSave = async () => {
+    const values = form.getValues();
+    await doSave(values);
   };
 
   const sendMessage = async (message: string) => {
@@ -2021,8 +2038,9 @@ export default function DataInput() {
                     </p>
                   )}
                   <Button 
-                    type="submit" 
-                    disabled={isSaving || (!form.formState.isValid && form.formState.isDirty)} 
+                    type="button" 
+                    onClick={handleDirectSave}
+                    disabled={isSaving} 
                     data-testid="button-save-all"
                   >
                     {isSaving ? (
