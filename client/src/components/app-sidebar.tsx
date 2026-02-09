@@ -30,6 +30,8 @@ import {
   BookOpen,
   Flag,
   Settings,
+  LogOut,
+  HelpCircle,
   Sparkles,
   Upload,
   Link2,
@@ -148,7 +150,7 @@ function HealthScoreCard() {
 function SettingsDrawer() {
   const [location, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
-  const { isAdmin } = useFounderStore();
+  const { isAdmin, logout } = useFounderStore();
   const showAdmin = isAdmin();
 
   const handleNavigate = (url: string) => {
@@ -231,6 +233,41 @@ function SettingsDrawer() {
               </div>
             </div>
           )}
+
+          <div className="border-t pt-3 mt-2">
+            <p className="text-xs font-medium text-muted-foreground px-3 mb-1 uppercase tracking-wider">
+              Support
+            </p>
+            <div className="space-y-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleNavigate("/docs")}
+                className={cn(
+                  "w-full justify-start gap-2.5",
+                  isActive("/docs") && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                )}
+                data-testid="settings-nav-help-docs"
+              >
+                <HelpCircle className="h-4 w-4 shrink-0" />
+                <span>Help & Docs</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  localStorage.removeItem('predixen-token');
+                  logout();
+                  window.location.href = '/auth';
+                }}
+                className="w-full justify-start gap-2.5 text-destructive"
+                data-testid="settings-nav-sign-out"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                <span>Sign Out</span>
+              </Button>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
