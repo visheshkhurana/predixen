@@ -323,16 +323,28 @@ export default function SuggestedMetrics() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error("No company selected");
-      const res = await apiRequest("POST", `/api/suggestions/generate?company_id=${companyId}`, {});
+      const token = localStorage.getItem('predixen-token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/suggestions/generate?company_id=${companyId}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `${res.status} ${res.statusText}`);
+      }
       return res.json();
     },
     onSuccess: (data: any) => {
-      toast({ title: `Generated ${data.generated_count ?? 0} suggestions` });
+      const count = data.generated_count ?? data.suggestions?.length ?? 0;
+      toast({ title: "Suggestions Generated", description: `${count} metric suggestions are ready for review.` });
       queryClient.invalidateQueries({ queryKey: ["/api/suggestions"] });
       refetch();
     },
     onError: (err: any) => {
-      toast({ title: "Failed to generate suggestions", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to generate suggestions", description: err?.message || "Please try again", variant: "destructive" });
     },
   });
   

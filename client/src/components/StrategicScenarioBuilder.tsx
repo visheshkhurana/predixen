@@ -153,8 +153,10 @@ export function StrategicScenarioBuilder({
       setPendingStrategyId(strategyId);
       setSelectedStrategy(strategy);
       setCustomParams({});
-      setStep('customize');
-      setPendingStrategyId(null);
+      setTimeout(() => {
+        setStep('customize');
+        setPendingStrategyId(null);
+      }, 350);
     }
   };
   
@@ -303,8 +305,8 @@ export function StrategicScenarioBuilder({
                 strategy={strategy}
                 currentRunway={baseMetrics.currentRunway}
                 onSimulate={handleStrategySelect}
-                isSelected={pendingStrategyId === strategy.id}
-                isLoading={pendingStrategyId !== null}
+                isSelected={pendingStrategyId === strategy.id || selectedStrategy?.id === strategy.id}
+                isLoading={pendingStrategyId !== null && pendingStrategyId !== strategy.id}
               />
             ))}
           </div>

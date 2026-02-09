@@ -1410,22 +1410,29 @@ export default function CopilotPage() {
           .slice(-10)
           .map(m => ({ role: m.role, content: m.content }));
         
-        const res = await apiRequest(
-          'POST',
-          `/api/companies/${currentCompany.id}/chat`,
-          { 
-            message: messageText,
-            mode,
-            challenge_mode: challengeMode,
-            investor_lens: investorLens,
-            create_decision: createDecision,
-            show_sources: showSources,
-            privacy: { pii_mode: piiMode },
-            conversation_history: recentHistory
+        const chatPayload = { 
+          message: messageText,
+          mode,
+          challenge_mode: challengeMode,
+          investor_lens: investorLens,
+          create_decision: createDecision,
+          show_sources: showSources,
+          privacy: { pii_mode: piiMode },
+          conversation_history: recentHistory
+        };
+
+        let res: Response;
+        try {
+          res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
+        } catch (firstErr: any) {
+          if (firstErr?.status === 500 || firstErr?.message?.includes('500')) {
+            await new Promise(r => setTimeout(r, 2000));
+            res = await apiRequest('POST', `/api/companies/${currentCompany.id}/chat`, chatPayload);
+          } else {
+            throw firstErr;
           }
-        );
+        }
         
-        // Parse JSON response
         const response = await res.json() as CopilotApiResponse;
         
         const dataSources: DataSource[] = [];
