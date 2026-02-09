@@ -113,10 +113,15 @@ def run_enhanced_monte_carlo(
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
     adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
-    burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
+    clamped_burn_reduction = max(0, min(100, inputs.burn_reduction_pct))
+    burn_reduction_mult = 1 - (clamped_burn_reduction / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
     adjusted_churn = inputs.churn_rate + inputs.churn_change_pct
     adjusted_cac = inputs.cac * (1 + inputs.cac_change_pct / 100) if inputs.cac > 0 else 0
+    fundraise_amount = max(0, inputs.fundraise_amount)
+    fundraise_month = inputs.fundraise_month
+    if fundraise_month is not None and fundraise_month < 1:
+        fundraise_month = 1
     
     revenue_paths = np.zeros((n, horizon))
     cash_paths = np.zeros((n, horizon))
@@ -213,8 +218,8 @@ def run_enhanced_monte_carlo(
             revenue = revenue * (1 + growth_rate)
             revenue = revenue * (1 - churn)
             
-            if inputs.fundraise_month and month + 1 == inputs.fundraise_month:
-                cash += inputs.fundraise_amount
+            if fundraise_month and month + 1 == fundraise_month:
+                cash += fundraise_amount
             
             gross_profit = revenue * margin
             total_opex = inputs.opex * burn_reduction_mult
