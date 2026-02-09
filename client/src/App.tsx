@@ -441,12 +441,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const getConfidenceBadge = () => {
     if (!truthScan) return null;
+    const badgeClass = "text-xs whitespace-nowrap shrink-0 cursor-pointer";
+    const handleClick = () => navigate('/data');
     if (confidence < 60) {
-      return <Badge variant="destructive" className="text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
+      return <Badge variant="destructive" className={badgeClass} onClick={handleClick} data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
     } else if (confidence < 80) {
-      return <Badge className="bg-amber-500/20 text-amber-400 text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
+      return <Badge className={`bg-amber-500/20 text-amber-400 ${badgeClass}`} onClick={handleClick} data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
     }
-    return <Badge className="bg-emerald-500/20 text-emerald-400 text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
+    return <Badge className={`bg-emerald-500/20 text-emerald-400 ${badgeClass}`} onClick={handleClick} data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
   };
 
   return (
