@@ -70,7 +70,7 @@ import { queryClient } from "@/lib/queryClient";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const dataInputSchema = z.object({
-  companyName: z.string().min(1, "Company name is required"),
+  companyName: z.string().min(1, "Company name is required").or(z.literal("")).default(""),
   description: z.string().optional(),
   foundingDate: z.string().optional().refine((val) => {
     if (!val) return true;
@@ -79,8 +79,8 @@ const dataInputSchema = z.object({
     today.setHours(23, 59, 59, 999);
     return date <= today;
   }, { message: "Founding date cannot be in the future" }),
-  stage: z.string().min(1, "Stage is required"),
-  industry: z.string().min(1, "Industry is required"),
+  stage: z.string().min(1).or(z.literal("")).default("seed"),
+  industry: z.string().min(1).or(z.literal("")).default("saas"),
   cashOnHand: z.coerce.number().min(0, "Cash must be positive"),
   monthlyRevenue: z.coerce.number().min(0, "Revenue must be positive"),
   monthlyExpenses: z.coerce.number().min(0, "Expenses must be positive"),
