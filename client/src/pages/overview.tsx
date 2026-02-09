@@ -870,35 +870,39 @@ export default function OverviewPage() {
   }, [baseData, currentCompany, toast]);
 
   const segmentData = useMemo(() => {
-    const baseMetrics = {
-      cac: baseData.cac,
-      ltv: baseData.ltv,
-      ltvCac: baseData.ltvCacRatio,
-      churn: baseData.churnRate,
-      arpu: baseData.mrr / Math.max(baseData.totalCustomers, 1),
+    const hasCac = baseData.cac > 0;
+    const hasLtv = baseData.ltv > 0;
+    const safeCac = hasCac ? baseData.cac : 0;
+    const safeLtv = hasLtv ? baseData.ltv : 0;
+    const safeChurn = baseData.churnRate;
+    const totalCust = Math.max(baseData.totalCustomers, 1);
+
+    const mkSeg = (name: string, cacMul: number, ltvMul: number, churnMul: number, custPct: number) => {
+      const cac = hasCac ? safeCac * cacMul : 0;
+      const ltv = hasLtv ? safeLtv * ltvMul : 0;
+      const ltvCac = cac > 0 && ltv > 0 ? ltv / cac : 0;
+      return { name, cac, ltv, ltvCac, churn: safeChurn * churnMul, customers: Math.round(totalCust * custPct) };
     };
-    
-    const segments = {
+
+    return {
       channel: [
-        { name: 'Organic', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 1.2, ltvCac: (baseMetrics.ltv * 1.2) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 0.8, customers: Math.round(baseData.totalCustomers * 0.35) },
-        { name: 'Paid Search', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 0.9, ltvCac: (baseMetrics.ltv * 0.9) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 1.1, customers: Math.round(baseData.totalCustomers * 0.30) },
-        { name: 'Content', cac: baseMetrics.cac * 0.8, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 0.8), churn: baseMetrics.churn * 0.9, customers: Math.round(baseData.totalCustomers * 0.20) },
-        { name: 'Referral', cac: baseMetrics.cac * 0.4, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 0.4), churn: baseMetrics.churn * 0.7, customers: Math.round(baseData.totalCustomers * 0.15) },
+        mkSeg('Organic', 0.6, 1.2, 0.8, 0.35),
+        mkSeg('Paid Search', 1.2, 0.9, 1.1, 0.30),
+        mkSeg('Content', 0.8, 1.1, 0.9, 0.20),
+        mkSeg('Referral', 0.4, 1.3, 0.7, 0.15),
       ],
       tier: [
-        { name: 'Enterprise', cac: baseMetrics.cac * 2.5, ltv: baseMetrics.ltv * 5, ltvCac: (baseMetrics.ltv * 5) / (baseMetrics.cac * 2.5), churn: baseMetrics.churn * 0.5, customers: Math.round(baseData.totalCustomers * 0.10) },
-        { name: 'Pro', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.5, ltvCac: (baseMetrics.ltv * 1.5) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 0.8, customers: Math.round(baseData.totalCustomers * 0.30) },
-        { name: 'Starter', cac: baseMetrics.cac * 0.5, ltv: baseMetrics.ltv * 0.6, ltvCac: (baseMetrics.ltv * 0.6) / (baseMetrics.cac * 0.5), churn: baseMetrics.churn * 1.5, customers: Math.round(baseData.totalCustomers * 0.60) },
+        mkSeg('Enterprise', 2.5, 5, 0.5, 0.10),
+        mkSeg('Pro', 1.0, 1.5, 0.8, 0.30),
+        mkSeg('Starter', 0.5, 0.6, 1.5, 0.60),
       ],
       region: [
-        { name: 'North America', cac: baseMetrics.cac * 1.2, ltv: baseMetrics.ltv * 1.3, ltvCac: (baseMetrics.ltv * 1.3) / (baseMetrics.cac * 1.2), churn: baseMetrics.churn * 0.9, customers: Math.round(baseData.totalCustomers * 0.50) },
-        { name: 'Europe', cac: baseMetrics.cac * 1.0, ltv: baseMetrics.ltv * 1.1, ltvCac: (baseMetrics.ltv * 1.1) / (baseMetrics.cac * 1.0), churn: baseMetrics.churn * 1.0, customers: Math.round(baseData.totalCustomers * 0.30) },
-        { name: 'APAC', cac: baseMetrics.cac * 0.7, ltv: baseMetrics.ltv * 0.8, ltvCac: (baseMetrics.ltv * 0.8) / (baseMetrics.cac * 0.7), churn: baseMetrics.churn * 1.2, customers: Math.round(baseData.totalCustomers * 0.15) },
-        { name: 'Other', cac: baseMetrics.cac * 0.6, ltv: baseMetrics.ltv * 0.7, ltvCac: (baseMetrics.ltv * 0.7) / (baseMetrics.cac * 0.6), churn: baseMetrics.churn * 1.3, customers: Math.round(baseData.totalCustomers * 0.05) },
+        mkSeg('North America', 1.2, 1.3, 0.9, 0.50),
+        mkSeg('Europe', 1.0, 1.1, 1.0, 0.30),
+        mkSeg('APAC', 0.7, 0.8, 1.2, 0.15),
+        mkSeg('Other', 0.6, 0.7, 1.3, 0.05),
       ],
     };
-    
-    return segments;
   }, [baseData]);
 
   if (!currentCompany) {
@@ -968,7 +972,7 @@ export default function OverviewPage() {
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
     { name: 'Churn Rate', value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
-    { name: 'LTV/CAC', value: (baseData.ltv > 0 && baseData.cac > 0) ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
+    { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
@@ -1238,8 +1242,8 @@ export default function OverviewPage() {
         <MetricCard
           title="LTV"
           value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
-          subtitle={baseData.ltv > 0 && baseData.cac > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
-          variant={baseData.ltv > 0 && baseData.cac > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
+          subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
+          variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
           provenance={{
@@ -1398,19 +1402,19 @@ export default function OverviewPage() {
             <div className="flex items-baseline gap-2">
               {metricsLoading ? (
                 <div className="h-8 w-16 bg-muted animate-pulse rounded" data-testid="metric-ltvcac-loading" />
-              ) : baseData.ltv > 0 && baseData.cac > 0 ? (
+              ) : baseData.ltvCacRatio > 0 ? (
                 <>
                   <p className={`text-2xl font-bold font-mono ${
-                    projectedMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : 
-                    projectedMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
+                    baseData.ltvCacRatio >= 3 ? 'text-emerald-500' : 
+                    baseData.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
                   }`} data-testid="metric-ltvcac-value">
-                    {safeToFixed(projectedMetrics.ltvCacRatio, 1, 'x')}
+                    {safeToFixed(baseData.ltvCacRatio, 1, 'x')}
                   </p>
                   <Badge 
-                    variant={projectedMetrics.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
+                    variant={baseData.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
                     className="text-xs"
                   >
-                    {projectedMetrics.ltvCacRatio >= 3 ? 'Healthy' : projectedMetrics.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
+                    {baseData.ltvCacRatio >= 3 ? 'Healthy' : baseData.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
                   </Badge>
                 </>
               ) : (
@@ -1456,12 +1460,12 @@ export default function OverviewPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x')})</p>
-                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x') : 'N/A'})</p>
+                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x') : 'N/A'})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {metricsLoading ? '...' : safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x')})</p>
+                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x') : 'N/A'})</p>
                 <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5, 1, '%')})</p>
               </div>
               <div className="p-4 rounded-lg border bg-card">
