@@ -117,7 +117,9 @@ def _send_email_sync(
     from_email: Optional[str] = None,
     recipient_id: Optional[str] = None,
     campaign: Optional[str] = None,
-    utm_params: Optional[dict] = None
+    utm_params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+    text_content: Optional[str] = None
 ) -> dict:
     """
     Synchronously send an email using Resend.
@@ -141,6 +143,10 @@ def _send_email_sync(
             "subject": subject,
             "html": html_content
         }
+        if headers:
+            params["headers"] = headers
+        if text_content:
+            params["text"] = text_content
         
         result = resend.Emails.send(params)
         email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
