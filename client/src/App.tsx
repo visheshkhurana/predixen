@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,9 +10,11 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Stepper } from "@/components/Layout/Stepper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 import { ContextBar } from "@/components/ContextBar";
 import { useFounderStore } from "@/store/founderStore";
-import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3 } from "lucide-react";
+import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +32,8 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/api/client";
+import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
+import { formatCurrencyAbbrev } from "@/lib/utils";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
@@ -163,6 +167,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
+      <Route path="/login">
+        {() => <Redirect to="/auth" />}
+      </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} />}
       </Route>
@@ -293,11 +300,128 @@ function Router() {
   );
 }
 
+function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { currentCompany } = useFounderStore();
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [open]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages]);
+
+  const sendMessage = useCallback(async () => {
+    const q = input.trim();
+    if (!q || isLoading) return;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: q }]);
+    setIsLoading(true);
+    try {
+      const res = await apiRequest('POST', '/api/copilot/chat', {
+        message: q,
+        company_id: currentCompany?.id,
+        session_context: { source: 'cmd_k_drawer' },
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.message || 'No response available.' }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t process that request right now. Try again or visit the full Copilot page.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [input, isLoading, currentCompany?.id]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[420px] sm:w-[480px] p-0 flex flex-col" data-testid="drawer-copilot">
+        <SheetHeader className="p-4 pb-2 border-b shrink-0">
+          <SheetTitle className="flex items-center gap-2 text-sm">
+            <Sparkles className="h-4 w-4 text-primary" />
+            AI Copilot
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0 ml-auto">
+              <Command className="h-2.5 w-2.5 mr-0.5" />K
+            </Badge>
+          </SheetTitle>
+        </SheetHeader>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+          {messages.length === 0 && (
+            <div className="text-center py-8 space-y-3">
+              <Sparkles className="h-8 w-8 text-primary/40 mx-auto" />
+              <p className="text-sm text-muted-foreground">Ask anything about your startup finances</p>
+              <div className="flex flex-col gap-1.5">
+                {['How do I extend runway by 6 months?', 'What\'s my biggest risk right now?', 'Should I raise or cut costs?'].map(q => (
+                  <Button key={q} variant="outline" size="sm" className="text-xs justify-start" onClick={() => { setInput(q); setTimeout(() => sendMessage(), 50); }} data-testid={`copilot-prompt-${q.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`}>
+                    {q}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] rounded-md px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`} data-testid={`copilot-msg-${i}`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-md px-3 py-2 text-sm flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Thinking...
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="border-t p-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <Input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
+              placeholder="Ask about your financials..."
+              className="flex-1"
+              data-testid="input-copilot-drawer"
+            />
+            <Button size="icon" onClick={sendMessage} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { token, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
   const [, navigate] = useLocation();
   const [briefingOpen, setBriefingOpen] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const { metrics: liveMetrics } = useFinancialMetrics();
   const confidence = truthScan?.data_confidence_score || 0;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable;
+        if (isEditable && !copilotOpen) return;
+        e.preventDefault();
+        setCopilotOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copilotOpen]);
   
   const style = {
     "--sidebar-width": "16rem",
@@ -377,7 +501,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                     <div className="space-y-0.5 min-w-0">
                       <p className="text-sm font-medium" data-testid="text-alert-churn-title">Churn spike detected</p>
-                      <p className="text-xs text-muted-foreground">Churn rate at 3.2%, above 2% target</p>
+                      <p className="text-xs text-muted-foreground">Churn rate at {liveMetrics.churnRatePct > 0 ? `${liveMetrics.churnRatePct.toFixed(1)}%` : '3.2%'}, above 2% target</p>
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />1 day ago</p>
                     </div>
                   </DropdownMenuItem>
@@ -412,32 +536,32 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                       <DollarSign className="h-3.5 w-3.5" />
                       MRR
                     </div>
-                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-mrr">$43,949</p>
-                    <p className="text-xs text-emerald-500" data-testid="text-briefing-modal-mrr-growth">+8.2% growth</p>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-mrr">{formatCurrencyAbbrev(liveMetrics.mrr)}</p>
+                    <p className="text-xs text-emerald-500" data-testid="text-briefing-modal-mrr-growth">{liveMetrics.mrr > 0 ? '+8.2% growth' : 'No data yet'}</p>
                   </div>
                   <div className="space-y-1 p-3 rounded-md bg-muted/50">
                     <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
                       <Flame className="h-3.5 w-3.5" />
                       Burn Rate
                     </div>
-                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-burn">$20,741/mo</p>
-                    <p className="text-xs text-amber-500" data-testid="text-briefing-modal-burn-status">Slightly elevated</p>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-burn">{formatCurrencyAbbrev(liveMetrics.netBurn)}/mo</p>
+                    <p className={`text-xs ${liveMetrics.burnMultiple > 2 ? 'text-amber-500' : 'text-emerald-500'}`} data-testid="text-briefing-modal-burn-status">{liveMetrics.burnMultiple > 2 ? 'Slightly elevated' : 'Under control'}</p>
                   </div>
                   <div className="space-y-1 p-3 rounded-md bg-muted/50">
                     <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
                       <Timer className="h-3.5 w-3.5" />
                       Runway
                     </div>
-                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-runway">21.3 months</p>
-                    <p className="text-xs text-muted-foreground" data-testid="text-briefing-modal-runway-cash">$513,746 cash</p>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-runway">{liveMetrics.runwayDisplay}</p>
+                    <p className="text-xs text-muted-foreground" data-testid="text-briefing-modal-runway-cash">{formatCurrencyAbbrev(liveMetrics.cashOnHand)} cash</p>
                   </div>
                   <div className="space-y-1 p-3 rounded-md bg-muted/50">
                     <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
                       <BarChart3 className="h-3.5 w-3.5" />
                       LTV:CAC
                     </div>
-                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-ltvcac">3.2x</p>
-                    <p className="text-xs text-emerald-500" data-testid="text-briefing-modal-ltvcac-status">Healthy</p>
+                    <p className="text-lg font-semibold" data-testid="text-briefing-modal-ltvcac">{liveMetrics.ltvCacRatio > 0 ? `${liveMetrics.ltvCacRatio.toFixed(1)}x` : 'N/A'}</p>
+                    <p className={`text-xs ${liveMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : liveMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'}`} data-testid="text-briefing-modal-ltvcac-status">{liveMetrics.ltvCacRatio >= 3 ? 'Healthy' : liveMetrics.ltvCacRatio >= 2 ? 'Fair' : 'Needs attention'}</p>
                   </div>
                 </div>
                 <Separator />
@@ -447,7 +571,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     AI Insight
                   </p>
                   <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-modal-insight">
-                    Burn multiple is high at 2.1x. Consider simulating "What if we cut hiring by 30%?" to see the runway impact. Your churn is above target at 3.2% — addressing this could add 4+ months of runway.
+                    {liveMetrics.burnMultiple > 1.5 ? `Burn multiple is ${liveMetrics.burnMultiple > 0 ? `at ${liveMetrics.burnMultiple.toFixed(1)}x` : 'elevated'}. Consider simulating "What if we cut hiring by 30%?" to see the runway impact.` : `Your burn efficiency looks solid.`}
+                    {liveMetrics.churnRatePct > 2 ? ` Your churn is above target at ${liveMetrics.churnRatePct.toFixed(1)}% \u2014 addressing this could add 4+ months of runway.` : liveMetrics.churnRatePct > 0 ? ` Churn at ${liveMetrics.churnRatePct.toFixed(1)}% is within healthy range.` : ''}
                   </p>
                 </div>
                 <Separator />
@@ -462,6 +587,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </DialogContent>
           </Dialog>
+          <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
           <main className="flex-1 overflow-auto bg-background">
             {children}
           </main>

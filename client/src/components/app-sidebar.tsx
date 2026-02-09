@@ -72,7 +72,6 @@ const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
     items: [
       { title: "Data Input", url: "/data", icon: Upload },
       { title: "Integrations", url: "/integrations", icon: Link2 },
-      { title: "Marketplace", url: "/marketplace", icon: Store },
     ],
   },
   {

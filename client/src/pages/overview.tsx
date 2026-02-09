@@ -1107,11 +1107,11 @@ export default function OverviewPage() {
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
-                <Badge variant="destructive" className="shrink-0" data-testid="badge-goal-churn-status">Off Track</Badge>
+                <Badge variant={baseData.churnRate <= 2 ? "secondary" : "destructive"} className={baseData.churnRate <= 2 ? "bg-emerald-500/20 text-emerald-400 shrink-0" : "shrink-0"} data-testid="badge-goal-churn-status">{baseData.churnRate <= 2 ? 'On Track' : 'Off Track'}</Badge>
               </div>
-              <Progress value={Math.min(((2 / 3.2) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
+              <Progress value={Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-churn-progress">Current: 3.2%</span>
+                <span data-testid="text-goal-churn-progress">Current: {baseData.churnRate.toFixed(1)}%</span>
                 <span data-testid="text-goal-churn-target">Target: 2.0%</span>
               </div>
             </CardContent>

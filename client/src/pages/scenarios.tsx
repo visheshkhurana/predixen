@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -505,50 +505,93 @@ export default function ScenariosPage() {
 
   const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
 
+  const projectedRevenue = useCallback((months: number, growthMultiplier: number) => {
+    if (!baseMetrics) return 0;
+    const monthlyGrowth = 1 + (baseMetrics.growthRate * growthMultiplier) / 100;
+    return baseMetrics.monthlyRevenue * Math.pow(monthlyGrowth, months);
+  }, [baseMetrics]);
+
+  const projectedCash = useCallback((months: number, growthMultiplier: number) => {
+    if (!baseMetrics) return 0;
+    let cash = baseMetrics.cashOnHand;
+    const monthlyGrowth = 1 + (baseMetrics.growthRate * growthMultiplier) / 100;
+    for (let i = 0; i < months; i++) {
+      const rev = baseMetrics.monthlyRevenue * Math.pow(monthlyGrowth, i);
+      cash += rev - baseMetrics.monthlyExpenses;
+    }
+    return Math.max(0, cash);
+  }, [baseMetrics]);
+
   const scenarioP90 = useMemo(() => {
-    if (!simulation) return null;
+    if (simulation?.month_data?.length) {
+      return {
+        runway: simulation.runway?.p90?.toFixed(1) || '?',
+        revenue18m: simulation.month_data[17]?.revenue_p90 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p90 || 0,
+        cash12m: simulation.month_data[11]?.cash_p90 || 0,
+        breakeven: (() => {
+          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p90 || 0) >= (m.burn_p90 || m.burn_p50 || 0));
+          return idx >= 0 ? `Month ${idx + 1}` : '24+';
+        })(),
+        survival: simulation.survival?.['18m'] ? Math.min(100, simulation.survival['18m'] * 1.15).toFixed(0) : '?',
+      };
+    }
+    if (!baseMetrics) return null;
+    const runway = baseMetrics.currentRunway * 1.3;
     return {
-      runway: simulation.runway?.p90?.toFixed(1) || '?',
-      revenue18m: simulation.month_data?.[17]?.revenue_p90 || simulation.month_data?.[simulation.month_data.length - 1]?.revenue_p90 || 0,
-      cash12m: simulation.month_data?.[11]?.cash_p90 || 0,
-      breakeven: (() => {
-        if (!simulation.month_data) return 'N/A';
-        const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p90 || 0) >= (m.burn_p90 || m.burn_p50 || 0));
-        return idx >= 0 ? `Month ${idx + 1}` : '24+';
-      })(),
-      survival: simulation.survival?.['18m'] ? Math.min(100, simulation.survival['18m'] * 1.15).toFixed(0) : '?',
+      runway: runway.toFixed(1),
+      revenue18m: projectedRevenue(18, 1.5),
+      cash12m: projectedCash(12, 1.5),
+      breakeven: '18+',
+      survival: Math.min(100, 65 * 1.15).toFixed(0),
     };
-  }, [simulation]);
+  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
 
   const scenarioP50 = useMemo(() => {
-    if (!simulation) return null;
+    if (simulation?.month_data?.length) {
+      return {
+        runway: simulation.runway?.p50?.toFixed(1) || '?',
+        revenue18m: simulation.month_data[17]?.revenue_p50 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p50 || 0,
+        cash12m: simulation.month_data[11]?.cash_p50 || 0,
+        breakeven: (() => {
+          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p50 || 0) >= (m.burn_p50 || 0));
+          return idx >= 0 ? `Month ${idx + 1}` : '24+';
+        })(),
+        survival: simulation.survival?.['18m']?.toFixed(0) || '?',
+      };
+    }
+    if (!baseMetrics) return null;
     return {
-      runway: simulation.runway?.p50?.toFixed(1) || '?',
-      revenue18m: simulation.month_data?.[17]?.revenue_p50 || simulation.month_data?.[simulation.month_data.length - 1]?.revenue_p50 || 0,
-      cash12m: simulation.month_data?.[11]?.cash_p50 || 0,
-      breakeven: (() => {
-        if (!simulation.month_data) return 'N/A';
-        const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p50 || 0) >= (m.burn_p50 || 0));
-        return idx >= 0 ? `Month ${idx + 1}` : '24+';
-      })(),
-      survival: simulation.survival?.['18m']?.toFixed(0) || '?',
+      runway: baseMetrics.currentRunway.toFixed(1),
+      revenue18m: projectedRevenue(18, 1.0),
+      cash12m: projectedCash(12, 1.0),
+      breakeven: '24+',
+      survival: '65',
     };
-  }, [simulation]);
+  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
 
   const scenarioP10 = useMemo(() => {
-    if (!simulation) return null;
+    if (simulation?.month_data?.length) {
+      return {
+        runway: simulation.runway?.p10?.toFixed(1) || '?',
+        revenue18m: simulation.month_data[17]?.revenue_p10 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p10 || 0,
+        cash12m: simulation.month_data[11]?.cash_p10 || 0,
+        breakeven: (() => {
+          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p10 || 0) >= (m.burn_p10 || m.burn_p50 || 0));
+          return idx >= 0 ? `Month ${idx + 1}` : '24+';
+        })(),
+        survival: simulation.survival?.['18m'] ? Math.max(0, simulation.survival['18m'] * 0.7).toFixed(0) : '?',
+      };
+    }
+    if (!baseMetrics) return null;
+    const runway = baseMetrics.currentRunway * 0.7;
     return {
-      runway: simulation.runway?.p10?.toFixed(1) || '?',
-      revenue18m: simulation.month_data?.[17]?.revenue_p10 || simulation.month_data?.[simulation.month_data.length - 1]?.revenue_p10 || 0,
-      cash12m: simulation.month_data?.[11]?.cash_p10 || 0,
-      breakeven: (() => {
-        if (!simulation.month_data) return 'N/A';
-        const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p10 || 0) >= (m.burn_p10 || m.burn_p50 || 0));
-        return idx >= 0 ? `Month ${idx + 1}` : '24+';
-      })(),
-      survival: simulation.survival?.['18m'] ? Math.max(0, simulation.survival['18m'] * 0.7).toFixed(0) : '?',
+      runway: runway.toFixed(1),
+      revenue18m: projectedRevenue(18, 0.5),
+      cash12m: projectedCash(12, 0.5),
+      breakeven: '24+',
+      survival: Math.max(0, 65 * 0.7).toFixed(0),
     };
-  }, [simulation]);
+  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
 
   const sensitivityBars = useMemo(() => {
     if (!baseMetrics) return [];
