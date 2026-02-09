@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,8 +9,10 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Stepper } from "@/components/Layout/Stepper";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ContextBar } from "@/components/ContextBar";
 import { useFounderStore } from "@/store/founderStore";
+import { Bell, Sun } from "lucide-react";
 import { api } from "@/api/client";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
@@ -277,6 +279,7 @@ function Router() {
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { token, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
+  const [, navigate] = useLocation();
   const confidence = truthScan?.data_confidence_score || 0;
   
   const style = {
@@ -298,11 +301,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const getConfidenceBadge = () => {
     if (!truthScan) return null;
     if (confidence < 60) {
-      return <Badge variant="destructive" className="text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
+      return <Badge variant="destructive" className="text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
     } else if (confidence < 80) {
-      return <Badge className="bg-amber-500/20 text-amber-400 text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
+      return <Badge className="bg-amber-500/20 text-amber-400 text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
     }
-    return <Badge className="bg-emerald-500/20 text-emerald-400 text-xs whitespace-nowrap shrink-0">Confidence: {confidence}</Badge>;
+    return <Badge className="bg-emerald-500/20 text-emerald-400 text-xs whitespace-nowrap shrink-0" data-testid="badge-confidence">Confidence: {confidence}%</Badge>;
   };
 
   return (
@@ -315,7 +318,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
             </div>
-            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="hidden lg:block min-w-0 overflow-hidden">
                 <ContextBar 
                   scenarioName={currentScenario?.name}
@@ -324,6 +327,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                   runTimestamp={latestRun?.timestamp}
                 />
               </div>
+              <Button variant="ghost" size="icon" className="relative shrink-0" onClick={() => navigate('/alerts')} data-testid="button-header-alerts">
+                <Bell className="h-4 w-4" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" data-testid="indicator-alert-dot" />
+              </Button>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate('/overview')} data-testid="button-header-briefing">
+                <Sun className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Briefing</span>
+              </Button>
               {getConfidenceBadge()}
             </div>
           </header>
