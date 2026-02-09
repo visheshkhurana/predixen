@@ -89,6 +89,8 @@ class EnhancedSimulationInputs:
     fundraise_month: Optional[int] = None
     fundraise_amount: float = 0
     gross_margin_delta_pct: float = 0
+    churn_change_pct: float = 0
+    cac_change_pct: float = 0
     
     events: List[ScenarioEvent] = field(default_factory=list)
     
@@ -113,11 +115,14 @@ def run_enhanced_monte_carlo(
     adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
     burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
+    adjusted_churn = inputs.churn_rate + inputs.churn_change_pct
+    adjusted_cac = inputs.cac * (1 + inputs.cac_change_pct / 100) if inputs.cac > 0 else 0
     
     revenue_paths = np.zeros((n, horizon))
     cash_paths = np.zeros((n, horizon))
     burn_paths = np.zeros((n, horizon))
     runway_months = np.zeros(n)
+    breakeven_months = np.full(n, horizon + 1, dtype=float)
     
     event_occurrences = {event.id: 0 for event in inputs.events}
     event_runway_impacts = {event.id: [] for event in inputs.events}
@@ -129,7 +134,8 @@ def run_enhanced_monte_carlo(
         payroll = inputs.payroll
         current_growth = adjusted_growth
         current_margin = adjusted_margin
-        current_churn = inputs.churn_rate
+        current_churn = adjusted_churn
+        found_breakeven = False
         
         active_events = {}
         base_runway_estimate = 0
@@ -222,6 +228,10 @@ def run_enhanced_monte_carlo(
             cash_paths[sim, month] = cash
             burn_paths[sim, month] = burn
             
+            if not found_breakeven and net_cashflow >= 0:
+                breakeven_months[sim] = month + 1
+                found_breakeven = True
+            
             if cash <= 0 and runway_months[sim] == 0:
                 runway_months[sim] = month + 1
         
@@ -259,6 +269,7 @@ def run_enhanced_monte_carlo(
         return percentiles
     
     runway_stats = compute_percentiles(runway_months)
+    breakeven_stats = compute_percentiles(breakeven_months)
     
     revenue_percentiles = []
     cash_percentiles = []
@@ -328,6 +339,12 @@ def run_enhanced_monte_carlo(
             "24m": round(survival_24m * 100, 1)
         },
         "survivalCurve": survival_curve,
+        "breakEvenMonth": {
+            "p10": round(float(breakeven_stats["p10"]), 1),
+            "p50": round(float(breakeven_stats["p50"]), 1),
+            "p90": round(float(breakeven_stats["p90"]), 1),
+            "mean": round(float(breakeven_stats["mean"]), 1),
+        },
         "metrics": {
             "revenue": revenue_percentiles,
             "cash": cash_percentiles,
