@@ -862,7 +862,87 @@ async def save_financial_baseline(
     
     db.commit()
     
-    # Calculate total expenses from all components
+    from server.models.truth_scan import TruthScan as TruthScanModel
+    latest_ts = db.query(TruthScanModel).filter(
+        TruthScanModel.company_id == company_id
+    ).order_by(TruthScanModel.created_at.desc()).first()
+    
+    if latest_ts and latest_ts.outputs_json:
+        ts_metrics = latest_ts.outputs_json.get("metrics", {})
+        updated = False
+        
+        if mom_growth is not None:
+            existing_growth = ts_metrics.get("revenue_growth_mom")
+            if isinstance(existing_growth, dict):
+                existing_growth["value"] = float(mom_growth)
+            else:
+                ts_metrics["revenue_growth_mom"] = {"value": float(mom_growth), "benchmark_percentile": None}
+            updated = True
+        
+        if revenue > 0:
+            existing_rev = ts_metrics.get("monthly_revenue")
+            if isinstance(existing_rev, dict):
+                existing_rev["value"] = float(revenue)
+            else:
+                ts_metrics["monthly_revenue"] = {"value": float(revenue), "benchmark_percentile": None}
+            
+            existing_mrr = ts_metrics.get("mrr")
+            if isinstance(existing_mrr, dict):
+                existing_mrr["value"] = float(revenue)
+            else:
+                ts_metrics["mrr"] = {"value": float(revenue), "benchmark_percentile": None}
+            updated = True
+        
+        if baseline.cashOnHand is not None and baseline.cashOnHand > 0:
+            existing_cash = ts_metrics.get("cash_balance")
+            if isinstance(existing_cash, dict):
+                existing_cash["value"] = float(baseline.cashOnHand)
+            else:
+                ts_metrics["cash_balance"] = {"value": float(baseline.cashOnHand), "benchmark_percentile": None}
+            updated = True
+
+        if payroll is not None:
+            existing_payroll = ts_metrics.get("payroll")
+            if isinstance(existing_payroll, dict):
+                existing_payroll["value"] = float(payroll)
+            else:
+                ts_metrics["payroll"] = {"value": float(payroll), "benchmark_percentile": None}
+            updated = True
+
+        if opex is not None:
+            existing_opex = ts_metrics.get("opex")
+            if isinstance(existing_opex, dict):
+                existing_opex["value"] = float(opex)
+            else:
+                ts_metrics["opex"] = {"value": float(opex), "benchmark_percentile": None}
+            updated = True
+
+        if other_costs is not None:
+            existing_other = ts_metrics.get("other_costs")
+            if isinstance(existing_other, dict):
+                existing_other["value"] = float(other_costs)
+            else:
+                ts_metrics["other_costs"] = {"value": float(other_costs), "benchmark_percentile": None}
+            updated = True
+        
+        actual_total_expenses = cogs + opex + (payroll or 0) + (marketing or 0) + other_costs
+        net_burn_val = max(0, actual_total_expenses - revenue)
+        if net_burn_val > 0:
+            existing_burn = ts_metrics.get("net_burn")
+            if isinstance(existing_burn, dict):
+                existing_burn["value"] = float(net_burn_val)
+            else:
+                ts_metrics["net_burn"] = {"value": float(net_burn_val), "benchmark_percentile": None}
+            updated = True
+        
+        if updated:
+            updated_outputs = dict(latest_ts.outputs_json)
+            updated_outputs["metrics"] = ts_metrics
+            latest_ts.outputs_json = updated_outputs
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(latest_ts, "outputs_json")
+            db.commit()
+    
     actual_total = cogs + opex + (payroll or 0) + (marketing or 0) + other_costs
     net_burn = max(0, actual_total - revenue)
     runway = (baseline.cashOnHand / net_burn) if net_burn > 0 and baseline.cashOnHand else None
