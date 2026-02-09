@@ -310,7 +310,10 @@ export default function SuggestedMetrics() {
     queryFn: async () => {
       const params = new URLSearchParams({ company_id: String(companyId) });
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
-      const res = await fetch(`/api/suggestions?${params}`);
+      const token = localStorage.getItem('predixen-token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/suggestions?${params}`, { headers, credentials: 'include' });
       if (!res.ok) throw new Error("Failed to fetch suggestions");
       return res.json();
     },
@@ -319,6 +322,7 @@ export default function SuggestedMetrics() {
   
   const generateMutation = useMutation({
     mutationFn: async () => {
+      if (!companyId) throw new Error("No company selected");
       const res = await apiRequest("POST", `/api/suggestions/generate?company_id=${companyId}`, {});
       return res.json();
     },
@@ -398,7 +402,7 @@ export default function SuggestedMetrics() {
         </div>
         <Button
           onClick={() => generateMutation.mutate()}
-          disabled={generateMutation.isPending}
+          disabled={generateMutation.isPending || !companyId}
           data-testid="button-generate-suggestions"
         >
           <RefreshCw className={`h-4 w-4 mr-1 ${generateMutation.isPending ? "animate-spin" : ""}`} />
@@ -480,7 +484,7 @@ export default function SuggestedMetrics() {
                 ? "No suggestions match your filters."
                 : "Connect a data source and generate suggestions to get started."}
             </p>
-            <Button onClick={() => generateMutation.mutate()} data-testid="button-generate-empty">
+            <Button onClick={() => generateMutation.mutate()} disabled={!companyId} data-testid="button-generate-empty">
               <RefreshCw className="h-4 w-4 mr-1" />
               Generate Suggestions
             </Button>
