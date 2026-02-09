@@ -829,10 +829,15 @@ async def save_financial_baseline(
         gross_margin_pct = 65.0
 
     gross_profit = revenue - cogs
-    total_exp = sum(p for p in [cogs, payroll or 0, marketing or 0, opex, other_costs] if p)
+    breakdown_total = float(cogs or 0) + float(payroll or 0) + float(marketing or 0) + float(opex or 0) + float(other_costs or 0)
+    total_exp = breakdown_total if breakdown_total > 0 else float(baseline.totalMonthlyExpenses or 0)
     net_burn = total_exp - revenue if total_exp > revenue else 0
-    cash_val = baseline.cashOnHand or 0
+    cash_val = float(baseline.cashOnHand or 0)
     runway = cash_val / net_burn if net_burn > 0 else 0
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"save_financial_baseline: revenue={revenue}, cogs={cogs}, payroll={payroll}, marketing={marketing}, opex={opex}, other_costs={other_costs}, total_exp={total_exp}, net_burn={net_burn}, cash={cash_val}, runway={runway}")
 
     computed = dict(
         mrr=revenue,
@@ -951,7 +956,7 @@ async def save_financial_baseline(
                 ts_metrics["other_costs"] = {"value": float(other_costs), "benchmark_percentile": None}
             updated = True
         
-        actual_total_expenses = cogs + opex + (payroll or 0) + (marketing or 0) + other_costs
+        actual_total_expenses = float(cogs or 0) + float(opex or 0) + float(payroll or 0) + float(marketing or 0) + float(other_costs or 0)
         net_burn_val = max(0, actual_total_expenses - revenue)
         if net_burn_val > 0:
             existing_burn = ts_metrics.get("net_burn")
@@ -969,9 +974,9 @@ async def save_financial_baseline(
             flag_modified(latest_ts, "outputs_json")
             db.commit()
     
-    actual_total = cogs + opex + (payroll or 0) + (marketing or 0) + other_costs
+    actual_total = float(cogs or 0) + float(opex or 0) + float(payroll or 0) + float(marketing or 0) + float(other_costs or 0)
     net_burn = max(0, actual_total - revenue)
-    runway = (baseline.cashOnHand / net_burn) if net_burn > 0 and baseline.cashOnHand else None
+    runway = (cash_val / net_burn) if net_burn > 0 and cash_val else None
     
     return {
         'success': True,
