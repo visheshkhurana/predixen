@@ -290,6 +290,9 @@ async def copilot_chat(
     - create_decision: Creates a tracked decision from the recommendation
     - scenario_id: Uses a specific scenario's assumptions as context
     """
+    import logging
+    _logger = logging.getLogger(__name__)
+    
     from server.copilot.agents import RouterAgent
     from server.copilot.agents.base import CompanyKnowledgeBase
     from server.copilot.ckb_storage import CKBStorage
@@ -306,6 +309,52 @@ async def copilot_chat(
     
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    try:
+        return await _copilot_chat_inner(company_id, company, request, db, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.error(f"Copilot chat error for company {company_id}: {e}", exc_info=True)
+        return CopilotChatResponse(
+            executive_summary=[
+                f"I wasn't able to fully process your question right now due to a temporary service issue.",
+                f"Here's what I can tell you about {company.name or 'your company'} based on available data:",
+                "Try rephrasing your question or asking something more specific. You can also check the Dashboard or Truth Scan pages for current metrics.",
+            ],
+            company_snapshot=[
+                f"Company: {company.name}",
+                f"Industry: {company.industry or 'Not specified'}",
+                f"Stage: {company.stage or 'Not specified'}",
+            ],
+            assumptions=["AI analysis was limited due to a temporary service issue."],
+            risks=[],
+            next_questions=[
+                "What are my key financial metrics?",
+                "Show me my current runway",
+                "What's my burn rate trend?",
+            ],
+            confidence="Low",
+            intent_detected="error_recovery",
+        )
+
+
+async def _copilot_chat_inner(
+    company_id: int,
+    company: Company,
+    request: CopilotChatRequest,
+    db: Session,
+    current_user: User,
+) -> CopilotChatResponse:
+    """Inner logic for copilot chat, wrapped by error handler above."""
+    from server.copilot.agents import RouterAgent
+    from server.copilot.agents.base import CompanyKnowledgeBase
+    from server.copilot.ckb_storage import CKBStorage
+    from server.models.company_decision import CompanyDecision, CompanyScenario
+    from server.lib.llm.llm_router import get_llm_router
+    from server.copilot.conversation_state import conversation_store
+    from server.copilot.prompt_templates import detect_response_mode, detect_clarification_needed, get_mode_instructions
+    import uuid as uuid_lib
     
     conv_state = conversation_store.get(company_id, current_user.id)
     session_context = conv_state.get_session_context()

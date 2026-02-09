@@ -1461,24 +1461,52 @@ export default function CopilotPage() {
         }
       } catch (error: any) {
         console.error('Copilot API error:', error);
-        let errorMessage = 'Something went wrong. Please try again.';
+        let errorContent = '';
+        let structuredFallback: CopilotApiResponse | undefined = undefined;
+
         if (error.message) {
           if (error.message.includes('500')) {
-            errorMessage = 'AI service is temporarily unavailable. This usually resolves itself in a few moments. Please try again shortly.';
+            errorContent = `I'm having trouble connecting to the AI analysis service right now. Here are some things you can do in the meantime:\n\n` +
+              `- **Check your Dashboard** for current KPI metrics and trends\n` +
+              `- **Review Truth Scan** results for validated financial data\n` +
+              `- **Try a simpler question** like "What is my runway?" or "Show my burn rate"\n\n` +
+              `This usually resolves itself within a few moments. Try again shortly.`;
+            structuredFallback = {
+              executive_summary: [
+                "The AI service encountered a temporary issue while processing your request.",
+                "Your data is safe and accessible through other pages.",
+              ],
+              company_snapshot: currentCompany ? [`Company: ${currentCompany.name}`] : [],
+              assumptions: ["AI analysis was limited due to a temporary service issue."],
+              risks: [],
+              next_questions: [
+                "What are my key financial metrics?",
+                "Show me my current runway",
+                "What's my burn rate trend?",
+              ],
+              confidence: "Low",
+              ckb_updated: false,
+            };
           } else if (error.message.includes('502') || error.message.includes('Backend service unavailable')) {
-            errorMessage = 'The AI is taking longer than expected. Please try a shorter or simpler question, or try again in a moment.';
+            errorContent = 'The AI analysis is taking longer than expected. Try asking a shorter or simpler question, or try again in a moment.';
           } else if (error.message.includes('401') || error.message.includes('403')) {
-            errorMessage = 'Your session may have expired. Please try logging in again.';
+            errorContent = 'Your session may have expired. Please refresh the page or log in again to continue.';
           } else if (error.message.includes('404')) {
-            errorMessage = 'AI service not configured. Please check that your API keys are set up in the Integrations page to enable the AI copilot.';
+            errorContent = 'The AI copilot endpoint could not be found. This may indicate a configuration issue. Please check that the service is running properly.';
           } else if (error.message.includes('Failed to fetch')) {
-            errorMessage = 'Network error. Please check your connection and try again.';
+            errorContent = 'Unable to reach the server. Please check your internet connection and try again.';
+          } else {
+            errorContent = 'Something unexpected happened. Please try again or rephrase your question.';
           }
+        } else {
+          errorContent = 'Something unexpected happened. Please try again or rephrase your question.';
         }
+
         const errorMsg: Message = {
           role: 'assistant',
-          content: errorMessage,
+          content: errorContent,
           timestamp: new Date(),
+          structuredResponse: structuredFallback,
         };
         setMessages((prev) => [...prev, errorMsg]);
       }
