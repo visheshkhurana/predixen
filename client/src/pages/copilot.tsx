@@ -1395,7 +1395,15 @@ export default function CopilotPage() {
     setInput('');
     setIsTyping(true);
     
-    if (useApiMode && token) {
+    const effectiveToken = token || localStorage.getItem('predixen-token') || (() => {
+      try {
+        const raw = localStorage.getItem('predixen-founder-storage');
+        if (raw) { const p = JSON.parse(raw); return p?.state?.token || null; }
+      } catch { }
+      return null;
+    })();
+    
+    if (useApiMode && effectiveToken) {
       try {
         const recentHistory = messages
           .filter(m => m.role === 'user' || m.role === 'assistant')

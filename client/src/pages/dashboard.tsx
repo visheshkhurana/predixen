@@ -692,22 +692,22 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <KPITile
               title="CAC"
-              value={metricsLoading && !liveData ? '...' : liveMetrics.cac > 0 ? formatCurrency(liveMetrics.cac) : 'N/A'}
+              value={metricsLoading ? '...' : financialMetrics.cac > 0 ? formatCurrency(financialMetrics.cac) : 'N/A'}
               icon={<DollarSign className="h-4 w-4" />}
               isLive={isConnected}
             />
             <KPITile
               title="LTV"
-              value={metricsLoading && !liveData ? '...' : liveMetrics.ltv > 0 ? formatCurrency(liveMetrics.ltv) : 'N/A'}
+              value={metricsLoading ? '...' : financialMetrics.ltv > 0 ? formatCurrency(financialMetrics.ltv) : 'N/A'}
               icon={<DollarSign className="h-4 w-4" />}
               isLive={isConnected}
             />
             <KPITile
               title="LTV/CAC Ratio"
-              value={metricsLoading && !liveData ? '...' : liveMetrics.ltv_cac_ratio > 0 ? `${liveMetrics.ltv_cac_ratio.toFixed(1)}x` : 'N/A'}
+              value={metricsLoading ? '...' : financialMetrics.ltvCacRatio > 0 ? `${financialMetrics.ltvCacRatio.toFixed(1)}x` : 'N/A'}
               icon={<TrendingUp className="h-4 w-4" />}
-              trend={liveMetrics.ltv_cac_ratio >= 3 ? 'up' : liveMetrics.ltv_cac_ratio < 2 ? 'down' : 'neutral'}
-              subtitle={liveMetrics.ltv_cac_ratio >= 3 ? 'Healthy' : liveMetrics.ltv_cac_ratio < 2 ? 'Needs improvement' : ''}
+              trend={financialMetrics.ltvCacRatio >= 3 ? 'up' : financialMetrics.ltvCacRatio < 2 ? 'down' : 'neutral'}
+              subtitle={financialMetrics.ltvCacRatio >= 3 ? 'Healthy' : financialMetrics.ltvCacRatio < 2 ? 'Needs improvement' : ''}
               isLive={isConnected}
             />
           </div>

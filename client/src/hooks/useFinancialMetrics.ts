@@ -46,6 +46,9 @@ function getToken(): string | null {
       if (raw) {
         const parsed = JSON.parse(raw);
         token = parsed?.state?.token || null;
+        if (token) {
+          localStorage.setItem('predixen-token', token);
+        }
       }
     } catch {}
   }
@@ -67,7 +70,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
-  const { data: computed, isLoading: computedLoading, isError: computedError } = useQuery<any>({
+  const { data: computed, isLoading: computedLoading } = useQuery<any>({
     queryKey: ['computed-metrics', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/metrics/computed`),
     enabled: !!companyId,
@@ -79,7 +82,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
   });
 
-  const { data: truthScan, isLoading: truthLoading } = useQuery<any>({
+  const { data: truthScan } = useQuery<any>({
     queryKey: ['truth-latest', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/truth/latest`),
     enabled: !!companyId,
@@ -89,7 +92,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retry: 1,
   });
 
-  const { data: backendBaseline, isLoading: baselineLoading } = useQuery<any>({
+  const { data: backendBaseline } = useQuery<any>({
     queryKey: ['financials-baseline', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/financials/baseline`),
     enabled: !!companyId,
@@ -107,9 +110,10 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const fb = financialBaseline;
 
     const v = (primary: any, ...fallbacks: any[]): number => {
-      if (typeof primary === 'number' && isFinite(primary) && primary > 0) return primary;
-      for (const f of fallbacks) {
-        if (typeof f === 'number' && isFinite(f) && f > 0) return f;
+      const candidates = [primary, ...fallbacks];
+      for (const val of candidates) {
+        const n = typeof val === 'string' ? parseFloat(val) : val;
+        if (typeof n === 'number' && isFinite(n) && n > 0) return n;
       }
       return 0;
     };
@@ -207,8 +211,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
-  const primaryLoading = computedLoading && !computed;
-  const isLoading = !companyId || primaryLoading;
+  const isLoading = !companyId || (computedLoading && !computed);
 
   return { metrics, isLoading };
 }

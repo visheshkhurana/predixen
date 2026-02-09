@@ -151,12 +151,10 @@ export function StrategicScenarioBuilder({
     const strategy = getStrategyById(strategyId);
     if (strategy) {
       setPendingStrategyId(strategyId);
-      setTimeout(() => {
-        setSelectedStrategy(strategy);
-        setCustomParams({});
-        setPendingStrategyId(null);
-        setStep('customize');
-      }, 400);
+      setSelectedStrategy(strategy);
+      setCustomParams({});
+      setStep('customize');
+      setPendingStrategyId(null);
     }
   };
   
