@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Sidebar,
   SidebarContent,
@@ -14,21 +15,31 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   LayoutDashboard,
+  FlaskConical,
+  Target,
+  DollarSign,
   Search,
-  TrendingUp,
-  Lightbulb,
-  Sparkles,
+  BookOpen,
+  Flag,
+  Settings,
   LogOut,
+  HelpCircle,
+  Sparkles,
   Upload,
   Link2,
-  Bell,
-  Layers,
+  Store,
+  FileCode,
+  LayoutGrid,
+  Briefcase,
+  Activity,
   Shield,
   Users,
   Building2,
@@ -36,17 +47,10 @@ import {
   BarChart3,
   History,
   FileText,
-  HelpCircle,
-  ExternalLink,
   Mail,
-  DollarSign,
-  Briefcase,
-  Activity,
-  Store,
-  LayoutGrid,
-  ChevronDown,
-  FileCode,
   UsersRound,
+  Command,
+  ChevronRight,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -54,35 +58,17 @@ import { useFounderStore } from "@/store/founderStore";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import predixenLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
-interface NavItem {
+interface SettingsNavItem {
   title: string;
   url: string;
   icon: React.ComponentType<{ className?: string }>;
 }
 
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-  defaultOpen?: boolean;
-}
-
-const navGroups: NavGroup[] = [
-  {
-    label: "Analytics",
-    defaultOpen: true,
-    items: [
-      { title: "Overview", url: "/", icon: LayoutDashboard },
-      { title: "KPI Board", url: "/kpi-board", icon: Activity },
-      { title: "Metric Catalog", url: "/metrics", icon: FileCode },
-      { title: "Suggested Metrics", url: "/suggested-metrics", icon: Sparkles },
-      { title: "Truth Scan", url: "/truth", icon: Search },
-      { title: "Alerts", url: "/alerts", icon: Bell },
-    ],
-  },
+const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
   {
     label: "Data & Setup",
-    defaultOpen: true,
     items: [
       { title: "Data Input", url: "/data", icon: Upload },
       { title: "Integrations", url: "/integrations", icon: Link2 },
@@ -90,26 +76,23 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Planning",
-    defaultOpen: true,
+    label: "Metrics",
     items: [
-      { title: "Simulation", url: "/scenarios", icon: TrendingUp },
-      { title: "Templates", url: "/templates", icon: Layers },
-      { title: "Decisions", url: "/decisions", icon: Lightbulb },
+      { title: "Metric Catalog", url: "/metrics", icon: FileCode },
+      { title: "Suggested Metrics", url: "/suggested-metrics", icon: Sparkles },
+      { title: "KPI Dashboards", url: "/dashboards", icon: LayoutGrid },
     ],
   },
   {
     label: "Stakeholders",
-    defaultOpen: true,
     items: [
-      { title: "Fundraising", url: "/fundraising", icon: DollarSign },
-      { title: "KPI Dashboards", url: "/dashboards", icon: LayoutGrid },
       { title: "Investor Room", url: "/investor-room", icon: Briefcase },
+      { title: "KPI Board", url: "/kpi-board", icon: Activity },
     ],
   },
 ];
 
-const adminMenuItems: NavItem[] = [
+const adminSettingsItems: SettingsNavItem[] = [
   { title: "Dashboard", url: "/admin", icon: Shield },
   { title: "Users", url: "/admin/users", icon: Users },
   { title: "Invitations", url: "/admin/invites", icon: Mail },
@@ -121,59 +104,157 @@ const adminMenuItems: NavItem[] = [
   { title: "Metrics", url: "/admin/metrics", icon: BarChart3 },
 ];
 
-function NavGroupSection({ group, location }: { group: NavGroup; location: string }) {
-  const [isOpen, setIsOpen] = useState(group.defaultOpen ?? true);
-  const hasActiveItem = group.items.some(item => item.url === location);
-  
+function HealthScoreCard() {
+  const { truthScan } = useFounderStore();
+  const confidence = truthScan?.data_confidence_score || 0;
+  const qualityIndex = truthScan?.quality_of_growth_index || 0;
+  const healthScore = qualityIndex > 0 ? Math.min(Math.round(qualityIndex), 100) : (confidence > 0 ? Math.round(confidence * 0.8 + 15) : 73);
+
+  const getHealthColor = (score: number) => {
+    if (score >= 70) return "text-emerald-400";
+    if (score >= 50) return "text-amber-400";
+    return "text-red-400";
+  };
+
+  const getProgressColor = (score: number) => {
+    if (score >= 70) return "[&>div]:bg-emerald-500";
+    if (score >= 50) return "[&>div]:bg-amber-500";
+    return "[&>div]:bg-red-500";
+  };
+
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <SidebarGroup className="py-0">
-        <CollapsibleTrigger className="w-full">
-          <SidebarGroupLabel 
-            className={cn(
-              "flex items-center justify-between cursor-pointer rounded-md transition-colors px-2 py-1.5 hover-elevate",
-              hasActiveItem && "text-sidebar-accent-foreground"
-            )}
-          >
-            <span>{group.label}</span>
-            <ChevronDown 
-              className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform duration-200",
-                isOpen && "rotate-180"
-              )} 
-            />
-          </SidebarGroupLabel>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {group.items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+    <div
+      className="mx-3 rounded-md p-3 border border-primary/20"
+      style={{ background: "linear-gradient(135deg, hsl(217 91% 60% / 0.08), hsl(271 81% 56% / 0.08))" }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Business Health</span>
+        <span className={cn("text-sm font-bold font-mono", getHealthColor(healthScore))} data-testid="text-health-score">
+          {healthScore}/100
+        </span>
+      </div>
+      <Progress
+        value={healthScore}
+        className={cn("h-1.5 bg-muted/40", getProgressColor(healthScore))}
+      />
+      <div className="flex items-center justify-between gap-2 mt-2">
+        <span className="text-[11px] text-muted-foreground">Data Confidence</span>
+        <span className="text-[11px] font-medium text-muted-foreground font-mono" data-testid="text-data-confidence">
+          {confidence > 0 ? `${confidence}%` : "60%"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SettingsDrawer() {
+  const [location, setLocation] = useLocation();
+  const [open, setOpen] = useState(false);
+  const { isAdmin } = useFounderStore();
+  const showAdmin = isAdmin();
+
+  const handleNavigate = (url: string) => {
+    setLocation(url);
+    setOpen(false);
+  };
+
+  const isActive = (url: string) => location === url;
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "w-full justify-start gap-2",
+            open && "text-foreground"
+          )}
+          data-testid="button-settings"
+        >
+          <Settings className="h-4 w-4" />
+          <span className="flex-1 text-left">Settings</span>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-80 p-0 overflow-y-auto">
+        <SheetHeader className="p-4 pb-2 border-b">
+          <SheetTitle className="text-sm font-semibold">Settings & Tools</SheetTitle>
+        </SheetHeader>
+        <div className="p-2 space-y-4">
+          {settingsGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-xs font-medium text-muted-foreground px-3 mb-1 uppercase tracking-wider">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <Button
+                    key={item.url}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleNavigate(item.url)}
+                    className={cn(
+                      "w-full justify-start gap-2.5",
+                      isActive(item.url) && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    )}
+                    data-testid={`settings-nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
                   >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span>{item.title}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {showAdmin && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground px-3 mb-1 uppercase tracking-wider">
+                Admin
+              </p>
+              <div className="space-y-0.5">
+                {adminSettingsItems.map((item) => (
+                  <Button
+                    key={item.url}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleNavigate(item.url)}
+                    className={cn(
+                      "w-full justify-start gap-2.5",
+                      isActive(item.url) && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    )}
+                    data-testid={`settings-nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span>{item.title}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { currentCompany, logout, isAdmin } = useFounderStore();
-  const showAdmin = isAdmin();
-  const [adminOpen, setAdminOpen] = useState(true);
+  const { currentCompany, logout } = useFounderStore();
+
+  const { data: scenarios } = useQuery<any[]>({
+    queryKey: ["/api/scenarios"],
+    enabled: !!currentCompany?.id,
+  });
+
+  const { data: decisions } = useQuery<any[]>({
+    queryKey: ["/api/decisions"],
+    enabled: !!currentCompany?.id,
+  });
+
+  const scenarioCount = scenarios?.length ?? 0;
+  const pendingDecisionCount = decisions?.filter((d: any) => d.status === "pending" || d.status === "open")?.length ?? 0;
 
   const handleLogout = () => {
     localStorage.removeItem('predixen-token');
@@ -185,9 +266,9 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <img 
-            src={predixenLogo} 
-            alt="Predixen" 
+          <img
+            src={predixenLogo}
+            alt="Predixen"
             className="h-9 w-9 rounded-md"
           />
           <div>
@@ -196,26 +277,94 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
+
       <SidebarContent className="px-2">
         <div className="px-2 py-2 mb-1">
           <p className="text-xs text-muted-foreground mb-2 px-2">Company</p>
           <CompanySwitcher />
         </div>
-        
-        {/* AI Copilot - Prominent at top */}
-        <SidebarGroup className="py-1">
+
+        {/* AI Copilot - Gradient Button */}
+        <div className="px-3 mb-2">
+          <Link href="/copilot">
+            <Button
+              variant="default"
+              size="sm"
+              className={cn(
+                "w-full justify-start gap-2.5 text-white border border-white/10",
+                location === "/copilot" && "ring-1 ring-white/30"
+              )}
+              style={{
+                background: "linear-gradient(135deg, hsl(217 91% 55%), hsl(271 81% 50%))",
+              }}
+              data-testid="nav-copilot"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="flex-1 text-left">AI Copilot</span>
+              <span
+                className="flex items-center gap-0.5 text-[10px] font-mono bg-white/15 px-1.5 py-0.5 rounded"
+              >
+                <Command className="h-2.5 w-2.5" />K
+              </span>
+            </Button>
+          </Link>
+        </div>
+
+        {/* Health Score Card */}
+        <HealthScoreCard />
+
+        <div className="h-px bg-border/50 mx-3 my-3" />
+
+        {/* Core Section */}
+        <SidebarGroup className="py-0">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Core
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/copilot"}
-                  className="bg-primary/10 border border-primary/20"
-                  data-testid="nav-copilot"
+                  isActive={location === "/" || location === "/overview"}
+                  data-testid="nav-dashboard"
                 >
-                  <Link href="/copilot">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <span className="font-medium">AI Copilot</span>
+                  <Link href="/">
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span>Dashboard</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/scenarios" || location.startsWith("/scenarios/")}
+                  data-testid="nav-simulate"
+                >
+                  <Link href="/scenarios">
+                    <FlaskConical className="h-4 w-4" />
+                    <span className="flex-1">Simulate</span>
+                    {scenarioCount > 0 && (
+                      <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0" data-testid="badge-scenario-count">
+                        {scenarioCount}
+                      </Badge>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/decisions"}
+                  data-testid="nav-decisions"
+                >
+                  <Link href="/decisions">
+                    <Target className="h-4 w-4" />
+                    <span className="flex-1">Decisions</span>
+                    {pendingDecisionCount > 0 && (
+                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-decision-count">
+                        {pendingDecisionCount}
+                      </Badge>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -223,72 +372,96 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <div className="h-px bg-border/50 mx-2 my-2" />
+        {/* Finance Section */}
+        <SidebarGroup className="py-0 mt-2">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Finance
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/fundraising"}
+                  data-testid="nav-fundraising"
+                >
+                  <Link href="/fundraising">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Fundraising</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/truth" || location === "/truth-scan"}
+                  data-testid="nav-health-check"
+                >
+                  <Link href="/truth">
+                    <Search className="h-4 w-4" />
+                    <span>Health Check</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-        {/* Navigation Groups */}
-        <div className="space-y-1">
-          {navGroups.map((group) => (
-            <NavGroupSection key={group.label} group={group} location={location} />
-          ))}
-        </div>
-
-        {/* Admin Section */}
-        {showAdmin && (
-          <>
-            <div className="h-px bg-border/50 mx-2 my-2" />
-            <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
-              <SidebarGroup className="py-0">
-                <CollapsibleTrigger className="w-full">
-                  <SidebarGroupLabel className="flex items-center justify-between cursor-pointer rounded-md transition-colors px-2 py-1.5 hover-elevate">
-                    <span className="flex items-center gap-2">
-                      <Shield className="h-3.5 w-3.5" />
-                      Admin
-                    </span>
-                    <ChevronDown 
-                      className={cn(
-                        "h-4 w-4 text-muted-foreground transition-transform duration-200",
-                        adminOpen && "rotate-180"
-                      )} 
-                    />
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {adminMenuItems.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={location === item.url || (item.url === "/admin" && location === "/admin")}
-                            data-testid={`nav-admin-${item.title.toLowerCase().replace(/\s/g, "-")}`}
-                          >
-                            <Link href={item.url}>
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </SidebarGroup>
-            </Collapsible>
-          </>
-        )}
+        {/* Track Section */}
+        <SidebarGroup className="py-0 mt-2">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Track
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/journal"}
+                  data-testid="nav-journal"
+                >
+                  <Link href="/journal">
+                    <BookOpen className="h-4 w-4" />
+                    <span className="flex-1">Decision Journal</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                      New
+                    </Badge>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/goals"}
+                  data-testid="nav-goals"
+                >
+                  <Link href="/goals">
+                    <Flag className="h-4 w-4" />
+                    <span className="flex-1">Goals</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                      New
+                    </Badge>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
+
+      <SidebarFooter className="p-3 space-y-1">
+        <div className="flex items-center justify-between gap-2 px-2 mb-1">
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
+        <SettingsDrawer />
         <Link href="/docs">
           <div
             className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
             data-testid="link-help-docs"
           >
             <HelpCircle className="h-4 w-4" />
-            <span className="flex-1">Help & Docs</span>
+            <span>Help & Docs</span>
           </div>
         </Link>
         <Button

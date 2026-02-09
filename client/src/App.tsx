@@ -53,6 +53,8 @@ import MetricCatalogPage from "@/pages/metric-catalog";
 import SuggestedMetricsPage from "@/pages/suggested-metrics";
 import DocsPage from "@/pages/docs";
 import MessagingPage from "@/pages/messaging";
+import JournalPage from "@/pages/journal";
+import GoalsPage from "@/pages/goals";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -217,6 +219,12 @@ function Router() {
       </Route>
       <Route path="/suggested-metrics">
         {() => <AuthenticatedRoute component={SuggestedMetricsPage} />}
+      </Route>
+      <Route path="/journal">
+        {() => <AuthenticatedRoute component={JournalPage} />}
+      </Route>
+      <Route path="/goals">
+        {() => <AuthenticatedRoute component={GoalsPage} />}
       </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
