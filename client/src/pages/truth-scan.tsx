@@ -348,7 +348,7 @@ export default function TruthScanPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Truth Scan</h1>
+          <h1 className="text-2xl font-bold">Health Check</h1>
           <p className="text-muted-foreground">24 financial metrics for startup health assessment</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
