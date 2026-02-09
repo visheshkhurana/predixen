@@ -166,7 +166,6 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const ltv = v(c.ltv, ext?.ltv, tsVal('ltv'));
     const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsVal('ltv_cac_ratio'))
       || (cac > 0 && ltv > 0 ? ltv / cac : 0);
-
     const grossMarginRaw = v(c.grossMarginPct, ext?.grossMargin, tsVal('gross_margin'));
     const grossMarginPct = grossMarginRaw > 0 && grossMarginRaw <= 1 ? grossMarginRaw * 100 : grossMarginRaw;
     const grossMarginDecimal = c.grossMarginDecimal || grossMarginPct / 100;
@@ -208,10 +207,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
-  const anySourceLoaded = !!computed || !!truthScan || !!backendBaseline;
   const primaryLoading = computedLoading && !computed;
-  const allLoading = primaryLoading && truthLoading && baselineLoading;
-  const isLoading = !companyId || (primaryLoading && !anySourceLoaded);
+  const isLoading = !companyId || primaryLoading;
 
   return { metrics, isLoading };
 }
