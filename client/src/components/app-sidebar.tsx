@@ -287,7 +287,7 @@ export function AppSidebar() {
     queryFn: async () => {
       if (!currentCompany?.id) return [];
       const res = await fetch(`/api/companies/${currentCompany.id}/decisions`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('predixen-token')}` },
       });
       if (!res.ok) return [];
       const data = await res.json();
