@@ -245,7 +245,7 @@ def run_enhanced_monte_carlo(
             final_cash = cash_paths[sim, horizon - 1]
             final_revenue = revenue_paths[sim, horizon - 1]
             
-            net_cf = final_revenue * (inputs.gross_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
+            net_cf = final_revenue * (adjusted_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
             if net_cf >= 0:
                 runway_months[sim] = max_cap
             else:
