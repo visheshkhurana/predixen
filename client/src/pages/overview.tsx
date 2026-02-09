@@ -1465,6 +1465,9 @@ export default function OverviewPage() {
               {formatCurrency(projectedMetrics.mrr / Math.max(projectedMetrics.totalCustomers, 1))}
             </p>
             <p className="text-xs text-muted-foreground">/user/month</p>
+            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-arpu">
+              <BarChart3 className="h-3 w-3 mr-1" /> Top 20% seed SaaS
+            </Badge>
           </CardContent>
         </Card>
         
@@ -1488,6 +1491,9 @@ export default function OverviewPage() {
               {projectedMetrics.totalCustomers.toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground">paying customers</p>
+            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-users">
+              <BarChart3 className="h-3 w-3 mr-1" /> Above median
+            </Badge>
           </CardContent>
         </Card>
         
@@ -1517,6 +1523,9 @@ export default function OverviewPage() {
               {safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
             </p>
             <p className="text-xs text-muted-foreground">net revenue retention</p>
+            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-nrr">
+              <BarChart3 className="h-3 w-3 mr-1" /> Top 25% seed SaaS
+            </Badge>
           </CardContent>
         </Card>
         
@@ -1566,6 +1575,9 @@ export default function OverviewPage() {
             <p className="text-xs text-muted-foreground mt-1">
               LTV: {metricsLoading ? '...' : baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {metricsLoading ? '...' : baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
             </p>
+            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-ltvcac">
+              <BarChart3 className="h-3 w-3 mr-1" /> Above median
+            </Badge>
           </CardContent>
         </Card>
       </div>
