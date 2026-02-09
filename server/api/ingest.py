@@ -822,18 +822,43 @@ async def save_financial_baseline(
         FinancialRecord.period_start == first_of_month
     ).first()
     
+    gross_margin_pct = baseline.grossMargin
+    if gross_margin_pct is None and revenue > 0:
+        gross_margin_pct = ((revenue - cogs) / revenue) * 100 if revenue > 0 else 65.0
+    elif gross_margin_pct is None:
+        gross_margin_pct = 65.0
+
+    gross_profit = revenue - cogs
+    total_exp = sum(p for p in [cogs, payroll or 0, marketing or 0, opex, other_costs] if p)
+    net_burn = total_exp - revenue if total_exp > revenue else 0
+    cash_val = baseline.cashOnHand or 0
+    runway = cash_val / net_burn if net_burn > 0 else 0
+
+    computed = dict(
+        mrr=revenue,
+        arr=revenue * 12,
+        gross_profit=gross_profit,
+        gross_margin=gross_margin_pct,
+        operating_income=revenue - total_exp if total_exp else None,
+        operating_margin=((revenue - total_exp) / revenue * 100) if revenue > 0 and total_exp else None,
+        net_burn=net_burn,
+        runway_months=round(runway, 1) if runway > 0 else None,
+    )
+
     if existing_record:
-        # Update existing record with new values
         existing_record.period_end = today
         existing_record.revenue = revenue
         existing_record.cogs = cogs
         existing_record.opex = opex
         existing_record.payroll = payroll or 0
         existing_record.other_costs = other_costs
-        existing_record.cash_balance = baseline.cashOnHand or 0
+        existing_record.cash_balance = cash_val
         existing_record.marketing_expense = marketing or 0
         existing_record.mom_growth = mom_growth
         existing_record.headcount = headcount
+        for k, v in computed.items():
+            if hasattr(existing_record, k):
+                setattr(existing_record, k, v)
         record = existing_record
     else:
         record = FinancialRecord(
@@ -845,10 +870,11 @@ async def save_financial_baseline(
             opex=opex,
             payroll=payroll or 0,
             other_costs=other_costs,
-            cash_balance=baseline.cashOnHand or 0,
-            marketing_expense=marketing or 0,  # Store marketing separately
-            mom_growth=mom_growth,  # Store user-entered growth rate
-            headcount=headcount,  # Store employee count
+            cash_balance=cash_val,
+            marketing_expense=marketing or 0,
+            mom_growth=mom_growth,
+            headcount=headcount,
+            **computed,
         )
         db.add(record)
     
