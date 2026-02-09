@@ -58,6 +58,10 @@ class ScenarioCreate(BaseModel):
     fundraise_month: Optional[int] = None
     fundraise_amount: float = 0
     gross_margin_delta_pct: float = 0
+    churn_change_pct: float = 0
+    cac_change_pct: float = 0
+    tags: Optional[List[str]] = None
+    overwrite_id: Optional[int] = None
 
 class SimulateRequest(BaseModel):
     n_sims: int = 1000
@@ -121,8 +125,10 @@ def list_scenarios(
             out = latest_run.outputs_json
             latest_sim = {
                 "runway": out.get("runway"),
-                "survival": out.get("survival"),
+                "survival": out.get("survivalProbability", out.get("survival")),
+                "survivalProbability": out.get("survivalProbability", out.get("survival")),
                 "summary": out.get("summary"),
+                "breakEvenMonth": out.get("breakEvenMonth"),
             }
             summary = out.get("summary")
         result.append({
@@ -385,6 +391,8 @@ def run_simulation(
         fundraise_month=scenario_inputs.get("fundraise_month"),
         fundraise_amount=scenario_inputs.get("fundraise_amount", 0),
         gross_margin_delta_pct=scenario_inputs.get("gross_margin_delta_pct", 0),
+        churn_change_pct=scenario_inputs.get("churn_change_pct", 0),
+        cac_change_pct=scenario_inputs.get("cac_change_pct", 0),
     )
     
     sim_config = SimulationConfig(
