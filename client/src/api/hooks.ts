@@ -133,7 +133,11 @@ export function useSimulation(scenarioId: number | null) {
     queryKey: ['simulations', scenarioId],
     queryFn: () => api.simulations.latest(scenarioId!),
     enabled: !!scenarioId,
-    retry: false,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes('404') || error?.status === 404) return false;
+      return failureCount < 2;
+    },
+    retryDelay: 1000,
   });
 }
 
@@ -142,7 +146,11 @@ export function useScenarioTimeseries(scenarioId: number | null) {
     queryKey: ['timeseries', scenarioId],
     queryFn: () => api.simulations.getTimeseries(scenarioId!),
     enabled: !!scenarioId,
-    retry: false,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes('404') || error?.status === 404) return false;
+      return failureCount < 2;
+    },
+    retryDelay: 1000,
   });
 }
 

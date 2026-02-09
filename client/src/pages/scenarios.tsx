@@ -505,6 +505,27 @@ export default function ScenariosPage() {
 
   const netBurn = baseMetrics ? baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue : 0;
 
+  const simRevenue = useMemo(() => simulation?.metrics?.revenue || [], [simulation]);
+  const simCash = useMemo(() => simulation?.metrics?.cash || [], [simulation]);
+  const simBurn = useMemo(() => simulation?.metrics?.burn || [], [simulation]);
+  const hasSimData = simulation?.runway?.p50 != null;
+
+  const getMetricAtMonth = useCallback((data: any[], monthIdx: number, percentile: string) => {
+    if (monthIdx < data.length) return data[monthIdx]?.[percentile] || 0;
+    if (data.length > 0) return data[data.length - 1]?.[percentile] || 0;
+    return 0;
+  }, []);
+
+  const findBreakevenMonth = useCallback((revData: any[], burnData: any[], percentile: string) => {
+    const len = Math.min(revData.length, burnData.length);
+    for (let i = 0; i < len; i++) {
+      const rev = revData[i]?.[percentile] || 0;
+      const burn = burnData[i]?.[percentile] || burnData[i]?.p50 || 0;
+      if (rev >= burn && rev > 0) return `Month ${i + 1}`;
+    }
+    return '24+';
+  }, []);
+
   const projectedRevenue = useCallback((months: number, growthMultiplier: number) => {
     if (!baseMetrics) return 0;
     const monthlyGrowth = 1 + (baseMetrics.growthRate * growthMultiplier) / 100;
@@ -523,16 +544,14 @@ export default function ScenariosPage() {
   }, [baseMetrics]);
 
   const scenarioP90 = useMemo(() => {
-    if (simulation?.month_data?.length) {
+    if (hasSimData) {
       return {
-        runway: simulation.runway?.p90?.toFixed(1) || '?',
-        revenue18m: simulation.month_data[17]?.revenue_p90 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p90 || 0,
-        cash12m: simulation.month_data[11]?.cash_p90 || 0,
-        breakeven: (() => {
-          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p90 || 0) >= (m.burn_p90 || m.burn_p50 || 0));
-          return idx >= 0 ? `Month ${idx + 1}` : '24+';
-        })(),
-        survival: simulation.survival?.['18m'] ? Math.min(100, simulation.survival['18m'] * 1.15).toFixed(0) : '?',
+        runway: simulation.runway.p90?.toFixed(1) || '?',
+        revenue18m: getMetricAtMonth(simRevenue, 17, 'p90'),
+        cash12m: getMetricAtMonth(simCash, 11, 'p90'),
+        breakeven: simRevenue.length > 0 ? findBreakevenMonth(simRevenue, simBurn, 'p90') : '24+',
+        survival: simulation.survivalProbability?.['18m'] != null
+          ? Math.min(100, simulation.survivalProbability['18m']).toFixed(0) : '?',
       };
     }
     if (!baseMetrics) return null;
@@ -544,19 +563,17 @@ export default function ScenariosPage() {
       breakeven: '18+',
       survival: Math.min(100, 65 * 1.15).toFixed(0),
     };
-  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, findBreakevenMonth, projectedRevenue, projectedCash]);
 
   const scenarioP50 = useMemo(() => {
-    if (simulation?.month_data?.length) {
+    if (hasSimData) {
       return {
-        runway: simulation.runway?.p50?.toFixed(1) || '?',
-        revenue18m: simulation.month_data[17]?.revenue_p50 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p50 || 0,
-        cash12m: simulation.month_data[11]?.cash_p50 || 0,
-        breakeven: (() => {
-          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p50 || 0) >= (m.burn_p50 || 0));
-          return idx >= 0 ? `Month ${idx + 1}` : '24+';
-        })(),
-        survival: simulation.survival?.['18m']?.toFixed(0) || '?',
+        runway: simulation.runway.p50?.toFixed(1) || '?',
+        revenue18m: getMetricAtMonth(simRevenue, 17, 'p50'),
+        cash12m: getMetricAtMonth(simCash, 11, 'p50'),
+        breakeven: simRevenue.length > 0 ? findBreakevenMonth(simRevenue, simBurn, 'p50') : '24+',
+        survival: simulation.survivalProbability?.['18m'] != null
+          ? simulation.survivalProbability['18m'].toFixed(0) : '?',
       };
     }
     if (!baseMetrics) return null;
@@ -567,19 +584,17 @@ export default function ScenariosPage() {
       breakeven: '24+',
       survival: '65',
     };
-  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, findBreakevenMonth, projectedRevenue, projectedCash]);
 
   const scenarioP10 = useMemo(() => {
-    if (simulation?.month_data?.length) {
+    if (hasSimData) {
       return {
-        runway: simulation.runway?.p10?.toFixed(1) || '?',
-        revenue18m: simulation.month_data[17]?.revenue_p10 || simulation.month_data[simulation.month_data.length - 1]?.revenue_p10 || 0,
-        cash12m: simulation.month_data[11]?.cash_p10 || 0,
-        breakeven: (() => {
-          const idx = simulation.month_data.findIndex((m: any) => (m.revenue_p10 || 0) >= (m.burn_p10 || m.burn_p50 || 0));
-          return idx >= 0 ? `Month ${idx + 1}` : '24+';
-        })(),
-        survival: simulation.survival?.['18m'] ? Math.max(0, simulation.survival['18m'] * 0.7).toFixed(0) : '?',
+        runway: simulation.runway.p10?.toFixed(1) || '?',
+        revenue18m: getMetricAtMonth(simRevenue, 17, 'p10'),
+        cash12m: getMetricAtMonth(simCash, 11, 'p10'),
+        breakeven: simRevenue.length > 0 ? findBreakevenMonth(simRevenue, simBurn, 'p10') : '24+',
+        survival: simulation.survivalProbability?.['18m'] != null
+          ? Math.max(0, simulation.survivalProbability['18m'] * 0.7).toFixed(0) : '?',
       };
     }
     if (!baseMetrics) return null;
@@ -591,7 +606,7 @@ export default function ScenariosPage() {
       breakeven: '24+',
       survival: Math.max(0, 65 * 0.7).toFixed(0),
     };
-  }, [simulation, baseMetrics, projectedRevenue, projectedCash]);
+  }, [simulation, hasSimData, simRevenue, simCash, simBurn, baseMetrics, getMetricAtMonth, findBreakevenMonth, projectedRevenue, projectedCash]);
 
   const sensitivityBars = useMemo(() => {
     if (!baseMetrics) return [];

@@ -520,6 +520,60 @@ async def get_financial_baseline(
     ).order_by(FinancialRecord.period_end.desc()).first()
     
     if not latest_record:
+        from server.models.truth_scan import TruthScan as TruthScanModel
+        latest_ts = db.query(TruthScanModel).filter(
+            TruthScanModel.company_id == company_id
+        ).order_by(TruthScanModel.created_at.desc()).first()
+        
+        if latest_ts and latest_ts.outputs_json:
+            ts_m = latest_ts.outputs_json.get('metrics', {})
+            def _tsv(key, default=0):
+                v = ts_m.get(key)
+                if v is None: return default
+                if isinstance(v, dict): return v.get('value', default)
+                if isinstance(v, (int, float)): return float(v)
+                return default
+            
+            ts_mrr = _tsv('mrr', 0)
+            ts_burn = _tsv('net_burn', 0)
+            ts_total_exp = ts_burn + ts_mrr if ts_mrr > 0 else max(ts_burn, 0)
+            
+            return {
+                'hasBaseline': True,
+                'baseline': {
+                    'cashOnHand': _tsv('cash_balance', 0),
+                    'monthlyRevenue': ts_mrr,
+                    'totalMonthlyExpenses': ts_total_exp,
+                    'monthlyGrowthRate': _tsv('revenue_growth_mom', 0),
+                    'expenseBreakdown': {
+                        'payroll': round(ts_total_exp * 0.45),
+                        'marketing': round(ts_total_exp * 0.20),
+                        'operating': round(ts_total_exp * 0.15),
+                        'cogs': round(ts_total_exp * 0.12),
+                        'otherOpex': round(ts_total_exp * 0.08),
+                    },
+                    'currency': company.currency or 'USD',
+                    'asOfDate': None,
+                },
+                'extendedMetrics': {
+                    'mrr': ts_mrr,
+                    'arr': ts_mrr * 12,
+                    'grossMargin': _tsv('gross_margin', 0),
+                    'netBurn': ts_burn,
+                    'runwayMonths': _tsv('runway_months', 0),
+                    'headcount': int(_tsv('headcount', 0)),
+                    'customers': int(_tsv('customer_count', 0) or _tsv('total_customers', 0)),
+                    'ltv': _tsv('ltv', 0),
+                    'cac': _tsv('cac', 0),
+                    'ltvCacRatio': _tsv('ltv_cac_ratio', 0),
+                },
+                'company': {
+                    'name': company.name,
+                    'currency': company.currency,
+                    'industry': company.industry,
+                }
+            }
+        
         return {
             'hasBaseline': False,
             'baseline': None,
