@@ -484,6 +484,29 @@ export function AppSidebar() {
           <ThemeToggle />
         </div>
         <SettingsDrawer />
+        <Link href="/docs">
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
+            data-testid="link-help-docs"
+          >
+            <HelpCircle className="h-4 w-4" />
+            <span>Help & Docs</span>
+          </div>
+        </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => {
+            localStorage.removeItem('predixen-token');
+            useFounderStore.getState().logout();
+            window.location.href = '/auth';
+          }}
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );
