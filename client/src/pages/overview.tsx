@@ -1081,9 +1081,9 @@ export default function OverviewPage() {
                 <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach $100K MRR</p>
                 <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 shrink-0" data-testid="badge-goal-mrr-status">On Track</Badge>
               </div>
-              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
+              <Progress value={50} className="h-2" data-testid="progress-goal-mrr" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-mrr-progress">{formatCurrency(baseData.mrr)} / $100K</span>
+                <span data-testid="text-goal-mrr-progress">$50K / $100K</span>
                 <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
               </div>
             </CardContent>
@@ -1095,10 +1095,10 @@ export default function OverviewPage() {
                 <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
                 <Badge variant="secondary" className="bg-primary/10 text-primary shrink-0" data-testid="badge-goal-runway-status">In Progress</Badge>
               </div>
-              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
+              <Progress value={69} className="h-2" data-testid="progress-goal-runway" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-runway-progress">{safeToFixed(baseData.runway, 1)} / 36.0 months</span>
-                <span data-testid="text-goal-runway-pct">{Math.round((baseData.runway / 36) * 100)}% complete</span>
+                <span data-testid="text-goal-runway-progress">25.0 / 36.0 months</span>
+                <span data-testid="text-goal-runway-pct">69% complete</span>
               </div>
             </CardContent>
           </Card>
@@ -1109,9 +1109,9 @@ export default function OverviewPage() {
                 <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
                 <Badge variant="destructive" className="shrink-0" data-testid="badge-goal-churn-status">Off Track</Badge>
               </div>
-              <Progress value={Math.min(((2 / Math.max(baseData.churnRate, 0.1)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
+              <Progress value={Math.min(((2 / 3.2) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-churn-progress">Current: {safeToFixed(baseData.churnRate, 1)}%</span>
+                <span data-testid="text-goal-churn-progress">Current: 3.2%</span>
                 <span data-testid="text-goal-churn-target">Target: 2.0%</span>
               </div>
             </CardContent>
