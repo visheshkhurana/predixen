@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Dict, Any, Optional, List
 from datetime import date, datetime
 import tempfile
@@ -27,23 +27,50 @@ class FieldExtraction(BaseModel):
     evidence: Optional[str] = None
 
 class ExpenseBreakdown(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     payroll: Optional[float] = None
     marketing: Optional[float] = None
-    operating: Optional[float] = None
+    operating: Optional[float] = Field(None, alias="operating_expenses")
     cogs: Optional[float] = None
-    otherOpex: Optional[float] = None
+    otherOpex: Optional[float] = Field(None, alias="other_opex")
 
 class NormalizedFinancials(BaseModel):
-    cashOnHand: Optional[float] = None
-    monthlyRevenue: Optional[float] = None
-    totalMonthlyExpenses: Optional[float] = None
-    monthlyGrowthRate: Optional[float] = None
-    expenseBreakdown: ExpenseBreakdown = ExpenseBreakdown()
-    hasManualExpenseOverride: Optional[bool] = None
+    model_config = ConfigDict(populate_by_name=True)
+    cashOnHand: Optional[float] = Field(None, alias="cash_on_hand")
+    monthlyRevenue: Optional[float] = Field(None, alias="monthly_revenue")
+    totalMonthlyExpenses: Optional[float] = Field(None, alias="total_monthly_expenses")
+    monthlyGrowthRate: Optional[float] = Field(None, alias="monthly_growth_rate")
+    expenseBreakdown: ExpenseBreakdown = Field(default_factory=ExpenseBreakdown, alias="expense_breakdown")
+    hasManualExpenseOverride: Optional[bool] = Field(None, alias="has_manual_expense_override")
     currency: Optional[str] = None
-    asOfDate: Optional[str] = None
-    numberOfEmployees: Optional[int] = None
-    grossMargin: Optional[float] = None
+    asOfDate: Optional[str] = Field(None, alias="as_of_date")
+    numberOfEmployees: Optional[int] = Field(None, alias="number_of_employees")
+    grossMargin: Optional[float] = Field(None, alias="gross_margin")
+
+    @model_validator(mode="before")
+    @classmethod
+    def flatten_expenses(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "expenseBreakdown" not in data and "expense_breakdown" not in data:
+                eb = {}
+                for src_key, dest_key in [
+                    ("payroll", "payroll"),
+                    ("marketing", "marketing"),
+                    ("operating", "operating"),
+                    ("operating_expenses", "operating"),
+                    ("cogs", "cogs"),
+                    ("otherOpex", "otherOpex"),
+                    ("other_opex", "otherOpex"),
+                ]:
+                    if src_key in data and data[src_key] is not None:
+                        eb[dest_key] = data[src_key]
+                if eb:
+                    data["expenseBreakdown"] = eb
+            rev_growth = data.pop("revenue_growth_rate", None)
+            if rev_growth is not None and data.get("monthlyGrowthRate") is None and data.get("monthly_growth_rate") is None:
+                data["monthlyGrowthRate"] = rev_growth
+            burn = data.pop("monthly_burn_rate", None)
+        return data
 
 class ExtractionResponse(BaseModel):
     extracted: Dict[str, Any]
@@ -770,10 +797,15 @@ async def get_computed_metrics(
 async def save_financial_baseline(
     company_id: int,
     baseline: NormalizedFinancials,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Save or update the financial baseline for a company."""
+    logger.info(f"[SAVE] Parsed baseline: cashOnHand={baseline.cashOnHand}, monthlyRevenue={baseline.monthlyRevenue}, "
+                f"totalMonthlyExpenses={baseline.totalMonthlyExpenses}, monthlyGrowthRate={baseline.monthlyGrowthRate}, "
+                f"grossMargin={baseline.grossMargin}, expenseBreakdown={baseline.expenseBreakdown}")
+    
     company = db.query(Company).filter(
         Company.id == company_id,
         Company.user_id == current_user.id
@@ -785,38 +817,46 @@ async def save_financial_baseline(
     today = date.today()
     first_of_month = today.replace(day=1)
     
-    # Extract expense breakdown values - use actual user-entered values
-    payroll = baseline.expenseBreakdown.payroll if baseline.expenseBreakdown else 0
-    marketing = baseline.expenseBreakdown.marketing if baseline.expenseBreakdown else 0
-    operating = baseline.expenseBreakdown.operating if baseline.expenseBreakdown else 0
-    cogs_entered = getattr(baseline.expenseBreakdown, 'cogs', None) if baseline.expenseBreakdown else None
-    other_opex = getattr(baseline.expenseBreakdown, 'otherOpex', None) if baseline.expenseBreakdown else None
+    eb = baseline.expenseBreakdown
+    payroll = eb.payroll if eb is not None else None
+    marketing = eb.marketing if eb is not None else None
+    operating = eb.operating if eb is not None else None
+    cogs_entered = eb.cogs if eb is not None else None
+    other_opex = eb.otherOpex if eb is not None else None
     
-    total_expenses = baseline.totalMonthlyExpenses
-    if total_expenses is None:
-        parts = [payroll, marketing, operating, cogs_entered, other_opex]
-        total_expenses = sum(p for p in parts if p is not None) or 0
+    revenue = float(baseline.monthlyRevenue) if baseline.monthlyRevenue is not None else 0.0
     
-    revenue = baseline.monthlyRevenue or 0
-    
-    # Use user-entered COGS if available, otherwise estimate from gross margin
     if cogs_entered is not None and cogs_entered > 0:
-        cogs = cogs_entered
+        cogs = float(cogs_entered)
     else:
         estimated_gross_margin = 0.65
-        cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0
+        cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0.0
     
-    # Store opex as user's "operating" expenses (not combined with marketing)
-    opex = operating or 0
+    opex = float(operating) if operating is not None else 0.0
+    payroll_val = float(payroll) if payroll is not None else 0.0
+    marketing_val = float(marketing) if marketing is not None else 0.0
+    other_costs = float(other_opex) if other_opex is not None else 0.0
     
-    # Store other costs
-    other_costs = other_opex or 0
+    breakdown_total = cogs + payroll_val + marketing_val + opex + other_costs
     
-    # Store growth rate and headcount
+    if breakdown_total > 0:
+        total_exp = breakdown_total
+    elif baseline.totalMonthlyExpenses is not None and baseline.totalMonthlyExpenses > 0:
+        total_exp = float(baseline.totalMonthlyExpenses)
+    else:
+        total_exp = 0.0
+    
+    net_burn = max(0.0, total_exp - revenue)
+    cash_val = float(baseline.cashOnHand) if baseline.cashOnHand is not None else 0.0
+    runway = cash_val / net_burn if net_burn > 0 else 0.0
+    
     mom_growth = baseline.monthlyGrowthRate
     headcount = baseline.numberOfEmployees
     
-    # Check if a record already exists for this period - update instead of create duplicate
+    logger.info(f"[SAVE] Computed: revenue={revenue}, cogs={cogs}, payroll={payroll_val}, marketing={marketing_val}, "
+                f"opex={opex}, other={other_costs}, breakdown_total={breakdown_total}, total_exp={total_exp}, "
+                f"net_burn={net_burn}, cash={cash_val}, runway={runway}")
+    
     existing_record = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company_id,
         FinancialRecord.period_start == first_of_month
@@ -824,20 +864,11 @@ async def save_financial_baseline(
     
     gross_margin_pct = baseline.grossMargin
     if gross_margin_pct is None and revenue > 0:
-        gross_margin_pct = ((revenue - cogs) / revenue) * 100 if revenue > 0 else 65.0
+        gross_margin_pct = ((revenue - cogs) / revenue) * 100
     elif gross_margin_pct is None:
         gross_margin_pct = 65.0
 
     gross_profit = revenue - cogs
-    breakdown_total = float(cogs or 0) + float(payroll or 0) + float(marketing or 0) + float(opex or 0) + float(other_costs or 0)
-    total_exp = breakdown_total if breakdown_total > 0 else float(baseline.totalMonthlyExpenses or 0)
-    net_burn = total_exp - revenue if total_exp > revenue else 0
-    cash_val = float(baseline.cashOnHand or 0)
-    runway = cash_val / net_burn if net_burn > 0 else 0
-    
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"save_financial_baseline: revenue={revenue}, cogs={cogs}, payroll={payroll}, marketing={marketing}, opex={opex}, other_costs={other_costs}, total_exp={total_exp}, net_burn={net_burn}, cash={cash_val}, runway={runway}")
 
     computed = dict(
         mrr=revenue,
@@ -855,10 +886,10 @@ async def save_financial_baseline(
         existing_record.revenue = revenue
         existing_record.cogs = cogs
         existing_record.opex = opex
-        existing_record.payroll = payroll or 0
+        existing_record.payroll = payroll_val
         existing_record.other_costs = other_costs
         existing_record.cash_balance = cash_val
-        existing_record.marketing_expense = marketing or 0
+        existing_record.marketing_expense = marketing_val
         existing_record.mom_growth = mom_growth
         existing_record.headcount = headcount
         for k, v in computed.items():
@@ -873,10 +904,10 @@ async def save_financial_baseline(
             revenue=revenue,
             cogs=cogs,
             opex=opex,
-            payroll=payroll or 0,
+            payroll=payroll_val,
             other_costs=other_costs,
             cash_balance=cash_val,
-            marketing_expense=marketing or 0,
+            marketing_expense=marketing_val,
             mom_growth=mom_growth,
             headcount=headcount,
             **computed,
@@ -932,32 +963,32 @@ async def save_financial_baseline(
                 ts_metrics["cash_balance"] = {"value": float(baseline.cashOnHand), "benchmark_percentile": None}
             updated = True
 
-        if payroll is not None:
+        if payroll_val > 0:
             existing_payroll = ts_metrics.get("payroll")
             if isinstance(existing_payroll, dict):
-                existing_payroll["value"] = float(payroll)
+                existing_payroll["value"] = payroll_val
             else:
-                ts_metrics["payroll"] = {"value": float(payroll), "benchmark_percentile": None}
+                ts_metrics["payroll"] = {"value": payroll_val, "benchmark_percentile": None}
             updated = True
 
-        if opex is not None:
+        if opex > 0:
             existing_opex = ts_metrics.get("opex")
             if isinstance(existing_opex, dict):
-                existing_opex["value"] = float(opex)
+                existing_opex["value"] = opex
             else:
-                ts_metrics["opex"] = {"value": float(opex), "benchmark_percentile": None}
+                ts_metrics["opex"] = {"value": opex, "benchmark_percentile": None}
             updated = True
 
-        if other_costs is not None:
+        if other_costs > 0:
             existing_other = ts_metrics.get("other_costs")
             if isinstance(existing_other, dict):
-                existing_other["value"] = float(other_costs)
+                existing_other["value"] = other_costs
             else:
-                ts_metrics["other_costs"] = {"value": float(other_costs), "benchmark_percentile": None}
+                ts_metrics["other_costs"] = {"value": other_costs, "benchmark_percentile": None}
             updated = True
         
-        actual_total_expenses = float(cogs or 0) + float(opex or 0) + float(payroll or 0) + float(marketing or 0) + float(other_costs or 0)
-        net_burn_val = max(0, actual_total_expenses - revenue)
+        ts_total_expenses = cogs + opex + payroll_val + marketing_val + other_costs
+        net_burn_val = max(0, ts_total_expenses - revenue)
         if net_burn_val > 0:
             existing_burn = ts_metrics.get("net_burn")
             if isinstance(existing_burn, dict):
@@ -974,17 +1005,23 @@ async def save_financial_baseline(
             flag_modified(latest_ts, "outputs_json")
             db.commit()
     
-    actual_total = float(cogs or 0) + float(opex or 0) + float(payroll or 0) + float(marketing or 0) + float(other_costs or 0)
-    net_burn = max(0, actual_total - revenue)
-    runway = (cash_val / net_burn) if net_burn > 0 and cash_val else None
+    final_total = cogs + opex + payroll_val + marketing_val + other_costs
+    final_burn = max(0.0, final_total - revenue)
+    final_runway = (cash_val / final_burn) if final_burn > 0 and cash_val > 0 else None
+    
+    logger.info(f"[SAVE] Return: totalExpenses={final_total}, netBurn={final_burn}, runway={final_runway}")
     
     return {
         'success': True,
         'message': 'Financial baseline saved successfully',
         'calculatedMetrics': {
-            'netBurnRate': net_burn,
-            'runwayMonths': runway,
-            'totalExpenses': actual_total,
+            'netBurnRate': final_burn,
+            'runwayMonths': round(final_runway, 1) if final_runway else None,
+            'totalExpenses': final_total,
+            'mrr': revenue,
+            'arr': revenue * 12,
+            'grossMargin': gross_margin_pct,
+            'cashOnHand': cash_val,
         }
     }
 
