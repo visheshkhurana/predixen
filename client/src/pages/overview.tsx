@@ -44,6 +44,9 @@ import {
   Zap,
   TrendingDown,
   Scale,
+  X,
+  FlaskConical,
+  Search,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -484,6 +487,7 @@ export default function OverviewPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [assumptionsPanelOpen, setAssumptionsPanelOpen] = useState(false);
+  const [briefingDismissed, setBriefingDismissed] = useState(false);
   const [selectedDrillDownMetric, setSelectedDrillDownMetric] = useState<string | null>(null);
   const [selectedIndustry, setSelectedIndustry] = useState<string>(currentCompany?.industry || 'saas');
   const [selectedStage, setSelectedStage] = useState<string>(currentCompany?.stage || 'seed');
@@ -977,8 +981,84 @@ export default function OverviewPage() {
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
+  const briefingDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const briefingHour = new Date().getHours();
+  const briefingGreeting = briefingHour < 12 ? 'Good Morning' : briefingHour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  const briefingMrrGrowth = baseData.mrr > 0 ? ((baseData.mrr - (baseData.mrr / (1 + assumptions.growthRate / 100))) / (baseData.mrr / (1 + assumptions.growthRate / 100)) * 100) : 0;
+  const briefingBurnStatus = baseData.burnRate > 0
+    ? (baseData.burnRate < baseData.mrr ? 'below revenue — you are burning efficiently' : 'above revenue — monitor spending closely')
+    : 'not tracked yet';
+  const briefingRunwayShift = baseData.runway >= 18 ? 'comfortably above 18 months' : baseData.runway >= 12 ? 'in the safe zone at 12+ months' : baseData.runway >= 6 ? 'getting tight — consider extending' : 'critically low — immediate action needed';
+  const briefingCriticalCount = riskAlerts.filter(a => a.type === 'critical').length;
+  const briefingWarningCount = riskAlerts.filter(a => a.type === 'warning').length;
+
+  const briefingAiSuggestion = baseData.runway < 12
+    ? `Your runway is ${safeToFixed(baseData.runway, 1)} months. Try simulating "What if we reduce burn by 20%?" to find an optimal path.`
+    : baseData.burnRate > baseData.mrr * 2
+    ? `Burn multiple is high at ${(baseData.burnRate / Math.max(baseData.mrr, 1)).toFixed(1)}x. Simulate "What if we cut hiring by 30%?" to see the impact.`
+    : baseData.ltvCacRatio > 0 && baseData.ltvCacRatio < 3
+    ? `LTV:CAC is ${safeToFixed(baseData.ltvCacRatio, 1)}x. Simulate "What if we improve CAC by 25%?" to boost unit economics.`
+    : `Your metrics look healthy. Try simulating "What if we raise prices by 15%?" to explore upside scenarios.`;
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {!briefingDismissed && (
+        <Card className="relative border-primary/20" data-testid="card-morning-briefing">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-3 right-3"
+            onClick={() => setBriefingDismissed(true)}
+            data-testid="button-dismiss-briefing"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <CardContent className="pt-5 pb-5 pr-12 space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold" data-testid="text-briefing-title">
+                {briefingGreeting} — Here's your daily briefing
+              </h2>
+              <p className="text-xs text-muted-foreground" data-testid="text-briefing-date">{briefingDate}</p>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-summary">
+              MRR is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
+              <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
+              Burn is {briefingBurnStatus} at{' '}
+              <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
+              Runway is {briefingRunwayShift} at{' '}
+              <span className="font-medium text-foreground">{safeToFixed(baseData.runway, 1)} months</span>.
+              {briefingCriticalCount > 0 && (
+                <span className="text-red-500 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
+              )}
+              {briefingCriticalCount === 0 && briefingWarningCount > 0 && (
+                <span className="text-amber-500 font-medium"> {briefingWarningCount} warning{briefingWarningCount > 1 ? 's' : ''} to review.</span>
+              )}
+              {briefingCriticalCount === 0 && briefingWarningCount === 0 && (
+                <span className="text-emerald-500 font-medium"> No critical alerts — looking good.</span>
+              )}
+            </p>
+            <p className="text-sm text-primary font-medium" data-testid="text-briefing-ai-suggestion">
+              <Sparkles className="h-3.5 w-3.5 inline-block mr-1 -translate-y-px" />
+              {briefingAiSuggestion}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <Button size="sm" onClick={() => setLocation('/scenarios')} data-testid="button-briefing-run-simulation">
+                <FlaskConical className="h-4 w-4 mr-1" />
+                Run Simulation
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setLocation('/truth')} data-testid="button-briefing-view-health">
+                <Search className="h-4 w-4 mr-1" />
+                View Health Check
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setLocation('/alerts')} data-testid="button-briefing-view-alerts">
+                <Bell className="h-4 w-4 mr-1" />
+                View All Alerts
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-company-name">{currentCompany.name}</h1>
