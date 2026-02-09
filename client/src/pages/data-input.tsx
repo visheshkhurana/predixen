@@ -207,14 +207,6 @@ export default function DataInput() {
     enabled: !!currentCompany?.id,
   });
 
-  // Reset loaded state when company changes
-  useEffect(() => {
-    if (currentCompany?.id && currentCompany.id !== lastLoadedCompanyId) {
-      setHasLoadedFromBackend(false);
-      setLastLoadedCompanyId(currentCompany.id);
-    }
-  }, [currentCompany?.id, lastLoadedCompanyId]);
-
   const form = useForm<DataInputValues>({
     resolver: zodResolver(dataInputSchema),
     defaultValues: {
@@ -240,6 +232,22 @@ export default function DataInput() {
       fundingTimeline: 12,
     },
   });
+
+  useEffect(() => {
+    if (currentCompany?.id && currentCompany.id !== lastLoadedCompanyId) {
+      setHasLoadedFromBackend(false);
+      setLastLoadedCompanyId(currentCompany.id);
+    }
+    if (currentCompany?.name) {
+      form.setValue('companyName', currentCompany.name);
+    }
+    if (currentCompany?.stage) {
+      form.setValue('stage', currentCompany.stage);
+    }
+    if (currentCompany?.industry) {
+      form.setValue('industry', currentCompany.industry);
+    }
+  }, [currentCompany?.id, currentCompany?.name, currentCompany?.stage, currentCompany?.industry, lastLoadedCompanyId, form]);
 
   const watchedValues = form.watch();
   
@@ -303,7 +311,13 @@ export default function DataInput() {
       
       setHasLoadedFromBackend(true);
       
-      // Also sync to local store for other components
+      if (currentCompany?.name) {
+        form.setValue('companyName', currentCompany.name);
+      }
+      if (currentCompany?.stage) {
+        form.setValue('stage', currentCompany.stage);
+      }
+      
       setFinancialBaseline({
         cashOnHand: b.cashOnHand || 0,
         monthlyRevenue: b.monthlyRevenue || 0,
@@ -1212,7 +1226,17 @@ export default function DataInput() {
             </TabsContent>
 
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSave)}>
+              <form onSubmit={form.handleSubmit(handleSave, (errors) => {
+                const errorFields = Object.keys(errors);
+                if (errorFields.length > 0) {
+                  const firstError = errors[errorFields[0] as keyof DataInputValues];
+                  toast({
+                    title: "Please fix form errors",
+                    description: firstError?.message || `${errorFields.length} field(s) need attention`,
+                    variant: "destructive",
+                  });
+                }
+              })}>
                 <TabsContent value="company" className="mt-6">
                   <Card className="overflow-visible">
                     <CardHeader>

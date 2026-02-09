@@ -247,9 +247,7 @@ def run_enhanced_monte_carlo(
             
             net_cf = final_revenue * (inputs.gross_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
             if net_cf >= 0:
-                monthly_surplus = max(net_cf, 1)
-                cash_runway_ratio = final_cash / monthly_surplus
-                runway_months[sim] = min(horizon + cash_runway_ratio, max_cap)
+                runway_months[sim] = max_cap
             else:
                 extra = final_cash / abs(net_cf) if abs(net_cf) > 0 else max_cap
                 runway_months[sim] = min(horizon + extra, max_cap)
