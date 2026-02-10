@@ -179,6 +179,7 @@ export default function DataInput() {
     lastExtraction,
     extractionInProgress,
     setFinancialBaseline,
+    setCurrentCompany,
     setLastExtraction,
     setExtractionInProgress,
     clearFinancialBaseline,
@@ -609,7 +610,10 @@ export default function DataInput() {
         },
         body: JSON.stringify(companyUpdate),
       });
-      if (!companyRes.ok) {
+      if (companyRes.ok) {
+        const updatedCompany = await companyRes.json();
+        setCurrentCompany({ ...currentCompany, ...updatedCompany });
+      } else {
         console.error('[SAVE] Company update failed:', companyRes.status);
       }
 
