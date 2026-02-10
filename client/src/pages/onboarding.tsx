@@ -17,13 +17,44 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe, History } from 'lucide-react';
+import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe, History, Database, CreditCard, BarChart3, Users, Building2, Link2, ArrowRight, ExternalLink, ChevronRight, SkipForward } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
   { id: 2, title: 'Financial Baseline', description: 'Enter your current financials' },
-  { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
+  { id: 3, title: 'Connect Data Sources', description: 'Link your tools for live data' },
+  { id: 4, title: 'First Truth Scan', description: 'Analyzing your data' },
 ];
+
+interface DataSourceConnector {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  auth_type: string;
+  native: boolean;
+  beta: boolean;
+  popularity_rank: number;
+  setup_complexity: string;
+  metrics_unlocked: string[];
+  implemented: boolean;
+  [key: string]: unknown;
+}
+
+const CATEGORY_ICONS: Record<string, typeof Database> = {
+  Finance: CreditCard,
+  Banking: Building2,
+  Payroll: Users,
+  CRM: Users,
+  Analytics: BarChart3,
+  ERP: Building2,
+  Files: FileText,
+  Databases: Database,
+  Custom: Link2,
+};
+
+const CATEGORY_ORDER = ['Finance', 'Banking', 'Payroll', 'CRM', 'Analytics', 'ERP', 'Files'];
 
 const SAMPLE_COMPANY = {
   name: 'TechFlow AI',
@@ -473,6 +504,75 @@ export default function OnboardingPage() {
     return null;
   };
   
+  const [selectedConnectors, setSelectedConnectors] = useState<Set<string>>(new Set());
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  const { data: connectorCatalog, isLoading: connectorsLoading } = useQuery<DataSourceConnector[]>({
+    queryKey: ['/api/connectors/catalog'],
+    enabled: step === 3,
+  });
+
+  const groupedConnectors = (() => {
+    if (!connectorCatalog) return {};
+    const groups: Record<string, DataSourceConnector[]> = {};
+    for (const c of connectorCatalog) {
+      if (c.category === 'Custom' || c.category === 'Databases') continue;
+      if (!groups[c.category]) groups[c.category] = [];
+      groups[c.category].push(c);
+    }
+    for (const cat of Object.keys(groups)) {
+      groups[cat].sort((a, b) => a.popularity_rank - b.popularity_rank);
+    }
+    return groups;
+  })();
+
+  const toggleConnector = (id: string) => {
+    setSelectedConnectors(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleRunTruthScan = async () => {
+    const { currentCompany, token } = useFounderStore.getState();
+    if (!token) {
+      toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
+      setLocation('/auth');
+      return;
+    }
+    if (!currentCompany) {
+      toast({ title: 'Error', description: 'No company found. Please go back.', variant: 'destructive' });
+      setStep(1);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStep(4);
+    setScanError(null);
+
+    try {
+      const truthScan = await runTruthScanMutation.mutateAsync(currentCompany.id);
+      setTruthScan(truthScan);
+      setStoreStep('truth');
+      toast({ title: 'Setup complete!', description: 'Your first Truth Scan is ready.' });
+      setTimeout(() => setLocation('/'), 1500);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
+        setLocation('/auth');
+        return;
+      }
+      const message = err instanceof ApiError ? err.message : 'Failed to run Truth Scan. Please try again.';
+      setScanError(message);
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+      setStep(3);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleBaselineSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
@@ -508,7 +608,6 @@ export default function OnboardingPage() {
     }
     
     setIsSubmitting(true);
-    setStep(3);
     
     try {
       await manualBaselineMutation.mutateAsync({
@@ -516,12 +615,8 @@ export default function OnboardingPage() {
         data: baselineData,
       });
       
-      const truthScan = await runTruthScanMutation.mutateAsync(currentCompany.id);
-      setTruthScan(truthScan);
-      setStoreStep('truth');
-      
-      toast({ title: 'Setup complete!', description: 'Your first Truth Scan is ready.' });
-      setTimeout(() => setLocation('/'), 1500);
+      toast({ title: 'Baseline saved!', description: 'Now connect your data sources.' });
+      setStep(3);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({ 
@@ -534,10 +629,8 @@ export default function OnboardingPage() {
       }
       const message = err instanceof ApiError 
         ? err.message 
-        : 'Failed to run Truth Scan. Please check your financial data and try again.';
-      setScanError(message);
+        : 'Failed to save baseline. Please try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
-      setStep(2);
     } finally {
       setIsSubmitting(false);
     }
@@ -547,7 +640,7 @@ export default function OnboardingPage() {
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-xl space-y-6">
+      <div className={`w-full space-y-6 ${step === 3 ? 'max-w-3xl' : 'max-w-xl'}`}>
         <div className="text-center">
           <h1 className="text-2xl font-bold">Getting Started</h1>
           <p className="text-muted-foreground">
@@ -1300,18 +1393,19 @@ export default function OnboardingPage() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending}
-                  data-testid="button-run-scan"
+                  disabled={isSubmitting || manualBaselineMutation.isPending}
+                  data-testid="button-save-baseline"
                 >
-                  {isSubmitting || manualBaselineMutation.isPending || runTruthScanMutation.isPending ? (
+                  {isSubmitting || manualBaselineMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Running Truth Scan...
+                      Saving...
                     </>
-                  ) : scanError ? (
-                    'Retry Truth Scan'
                   ) : (
-                    'Run First Truth Scan'
+                    <>
+                      Continue to Data Sources
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
                   )}
                 </Button>
               </form>
@@ -1320,6 +1414,210 @@ export default function OnboardingPage() {
         )}
         
         {step === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Connect Your Data Sources
+              </CardTitle>
+              <CardDescription>
+                Link the tools you already use so Predixen can pull live data automatically. You can also skip this and connect later.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {connectorsLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="space-y-3">
+                      <Skeleton className="h-5 w-32" />
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[1, 2, 3].map(j => (
+                          <Skeleton key={j} className="h-20 rounded-md" />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {selectedConnectors.size > 0 && (
+                    <div className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/20 rounded-md">
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                      <span className="text-sm">
+                        <span className="font-medium">{selectedConnectors.size}</span> source{selectedConnectors.size > 1 ? 's' : ''} selected for connection
+                      </span>
+                    </div>
+                  )}
+
+                  {CATEGORY_ORDER.filter(cat => groupedConnectors[cat]?.length).map(category => {
+                    const CategoryIcon = CATEGORY_ICONS[category] || Database;
+                    const connectors = groupedConnectors[category] || [];
+                    const isExpanded = activeCategory === category || activeCategory === null;
+                    const displayConnectors = isExpanded ? connectors : connectors.slice(0, 3);
+
+                    return (
+                      <div key={category} className="space-y-3">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 w-full text-left"
+                          onClick={() => setActiveCategory(activeCategory === category ? null : category)}
+                          data-testid={`button-category-${category.toLowerCase()}`}
+                        >
+                          <CategoryIcon className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{category}</span>
+                          <Badge variant="secondary" className="text-xs">{connectors.length}</Badge>
+                          <ChevronRight className={`h-3 w-3 ml-auto text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {displayConnectors.map(connector => {
+                            const isSelected = selectedConnectors.has(connector.id);
+                            return (
+                              <button
+                                key={connector.id}
+                                type="button"
+                                onClick={() => toggleConnector(connector.id)}
+                                className={`relative flex flex-col items-start gap-1.5 p-3 rounded-md border text-left transition-colors ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border hover-elevate'
+                                }`}
+                                data-testid={`button-connector-${connector.id}`}
+                              >
+                                {isSelected && (
+                                  <div className="absolute top-2 right-2">
+                                    <Check className="h-3.5 w-3.5 text-primary" />
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium truncate">{connector.name}</span>
+                                  {connector.beta && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0">Beta</Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2">{connector.description}</p>
+                                {connector.metrics_unlocked.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {connector.metrics_unlocked.slice(0, 2).map(m => (
+                                      <Badge key={m} variant="secondary" className="text-[10px] px-1.5 py-0">{m}</Badge>
+                                    ))}
+                                    {connector.metrics_unlocked.length > 2 && (
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">+{connector.metrics_unlocked.length - 2}</Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {!isExpanded && connectors.length > 3 && (
+                          <button
+                            type="button"
+                            className="text-xs text-primary hover:underline ml-6"
+                            onClick={() => setActiveCategory(category)}
+                          >
+                            Show {connectors.length - 3} more...
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or upload files directly</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleConnector('csv_upload')}
+                      className={`flex items-center gap-3 p-4 rounded-md border text-left transition-colors ${
+                        selectedConnectors.has('csv_upload')
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover-elevate'
+                      }`}
+                      data-testid="button-connector-csv"
+                    >
+                      <div className="p-2 rounded-md bg-muted">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">CSV Upload</p>
+                        <p className="text-xs text-muted-foreground">Upload CSV files directly</p>
+                      </div>
+                      {selectedConnectors.has('csv_upload') && <Check className="h-4 w-4 text-primary ml-auto" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleConnector('excel_upload')}
+                      className={`flex items-center gap-3 p-4 rounded-md border text-left transition-colors ${
+                        selectedConnectors.has('excel_upload')
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover-elevate'
+                      }`}
+                      data-testid="button-connector-excel"
+                    >
+                      <div className="p-2 rounded-md bg-muted">
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Excel Upload</p>
+                        <p className="text-xs text-muted-foreground">Upload .xls or .xlsx spreadsheets</p>
+                      </div>
+                      {selectedConnectors.has('excel_upload') && <Check className="h-4 w-4 text-primary ml-auto" />}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleRunTruthScan}
+                  disabled={isSubmitting}
+                  data-testid="button-skip-connectors"
+                >
+                  <SkipForward className="mr-2 h-4 w-4" />
+                  Skip for Now
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleRunTruthScan}
+                  disabled={isSubmitting || selectedConnectors.size === 0}
+                  data-testid="button-continue-connectors"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Setting up...
+                    </>
+                  ) : selectedConnectors.size > 0 ? (
+                    <>
+                      Continue with {selectedConnectors.size} Source{selectedConnectors.size > 1 ? 's' : ''}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  ) : (
+                    'Select sources to continue'
+                  )}
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                You can always connect more data sources later from the Integrations page.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 4 && (
           <Card>
             <CardHeader className="text-center">
               <CardTitle>Analyzing Your Data</CardTitle>
