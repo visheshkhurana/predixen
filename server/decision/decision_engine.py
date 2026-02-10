@@ -111,6 +111,20 @@ def score_action(
     delta_survival = simulation_outputs.get("survival", {}).get("18m", 0) - baseline_survival_18m
     delta_runway = runway_p50 - baseline_runway
     
+    if abs(delta_survival) < 0.5 and baseline_survival_18m >= 95:
+        baseline_cash = baseline_outputs.get("summary", {}).get("final_cash_p50", 1)
+        sim_cash = simulation_outputs.get("summary", {}).get("final_cash_p50", 1)
+        if abs(baseline_cash) > 0:
+            cash_pct_change = ((sim_cash - baseline_cash) / max(abs(baseline_cash), 1)) * 100
+            delta_survival = round(cash_pct_change * 0.15, 2)
+    
+    if abs(delta_runway) < 0.5:
+        baseline_cash_end = baseline_outputs.get("summary", {}).get("final_cash_p50", 0)
+        sim_cash_end = simulation_outputs.get("summary", {}).get("final_cash_p50", 0)
+        cash_diff = sim_cash_end - baseline_cash_end
+        avg_burn = max(baseline_outputs.get("summary", {}).get("avg_burn_p50", 0), 10000)
+        delta_runway = round(min(max(cash_diff / avg_burn / 3, -12), 12), 1)
+    
     return {
         "action": action,
         "total_score": round(total_score, 3),

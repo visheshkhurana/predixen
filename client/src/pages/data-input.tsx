@@ -591,16 +591,22 @@ export default function DataInput() {
       const description = values.description ?? '';
       const stageValue = values.stage || 'seed';
       const industryValue = values.industry || '';
-      const res = await fetch(`/api/companies/${currentCompany.id}`, {
+      const putUrl = `/api/companies/${currentCompany.id}`;
+      const putBody = { name: companyName, description, stage: stageValue, industry: industryValue };
+      console.log('[SAVE] Attempting company PUT to', putUrl, JSON.stringify(putBody));
+      const res = await fetch(putUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: companyName, description, stage: stageValue, industry: industryValue })
+        body: JSON.stringify(putBody)
       });
+      console.log('[SAVE] Company PUT response:', res.status, res.statusText);
       if (res.ok) {
         const updated = await res.json();
+        console.log('[SAVE] Company updated successfully:', JSON.stringify(updated));
         setCurrentCompany({ ...currentCompany, ...updated });
       } else {
-        console.error('[SAVE] Company PUT failed:', res.status);
+        const errText = await res.text();
+        console.error('[SAVE] Company PUT failed:', res.status, errText);
       }
     } catch (e) {
       console.error('[SAVE] Company update failed', e);
