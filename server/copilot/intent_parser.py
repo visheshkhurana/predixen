@@ -60,14 +60,14 @@ class ParsedIntent:
 
 INTENT_PATTERNS = {
     CopilotIntent.RUN_SIMULATION: [
-        r'\b(simulate|run\s+simulation|run\s+a?\s*sim|model|project|forecast)\b',
-        r'\bwhat\s+(if|happens\s+if)\b',
+        r'\b(simulate|simulating|run\s+simulation|run\s+a?\s*sim|model|project|forecast)\b',
+        r'\bwhat\s+(if|happens\s+if|would\s+happen)\b',
         r'\b(scenario|test|try)\b.*\b(with|where|assuming)\b',
-        r'\b(raise|fundraise)\s*\$?\d+',
-        r'\b(cut|reduce|lower)\s*(burn|costs?|expenses?)\b',
-        r'\b(increase|raise|bump)\s*(price|revenue)\b',
-        r'\b(freeze|stop|pause)\s*hir(ing|es?)\b',
-        r'\b(hire|add|lay\s*off)\s*\d+\s*(people|employees?)\b',
+        r'\b(raise|fundraise|raising)\s*\$?\d+',
+        r'\b(cut|cuts?|reduce|reduces?|reducing|lower|lowering|decrease|decreasing|slash|slashing)\s*(the\s+)?(burn|costs?|expenses?|spending|opex|overhead)\b',
+        r'\b(increase|increasing|raise|raising|bump|bumping|grow|growing)\s*(the\s+)?(price|prices|revenue|pricing|mrr)\b',
+        r'\b(freeze|freezing|stop|stopping|pause|pausing|halt|halting)\s*(the\s+)?hir(ing|es?)\b',
+        r'\b(hire|hiring|add|adding|lay\s*off|laying\s*off)\s*\d+\s*(people|employees?)\b',
     ],
     CopilotIntent.COMPARE_SCENARIOS: [
         r'\b(compare|versus|vs\.?|against)\b',
@@ -96,20 +96,23 @@ INTENT_PATTERNS = {
 
 PARAMETER_PATTERNS = {
     'burn_reduction': [
-        (r'(reduce|cut|lower|decrease)\s*(burn|costs?|expenses?|spending)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 3),
-        (r'(\d+(?:\.\d+)?)\s*%\s*(burn|cost)\s*(reduction|cut|decrease)', 1),
-        (r'burn\s*(reduction|cut)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduc\w*|cut\w*|lower\w*|decrease\w*|slash\w*)\s*(?:the\s+)?(?:overall\s+)?(burn|costs?|expenses?|spending|opex|overhead)\s*(?:rate\s*)?(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 3),
+        (r'(\d+(?:\.\d+)?)\s*%\s*(?:burn|cost|expense|spending)\s*(reduction|cut|decrease)', 1),
+        (r'(?:burn|cost|expense)\s*(reduction|cut)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduc\w*|cut\w*|lower\w*|slash\w*)\s+(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?(?:the\s+)?(?:burn|costs?|expenses?|spending)', 2),
     ],
     'price_change': [
-        (r'(increase|raise|bump)\s*price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(increas\w*|rais\w*|bump\w*|grow\w*)\s*(?:the\s+)?price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'(\d+(?:\.\d+)?)\s*%\s*price\s*(increase|hike|raise)', 1),
-        (r'price\s*(increase|change)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
-        (r'(decrease|lower|reduce)\s*price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'price\s*(increase|change|hike)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(decreas\w*|lower\w*|reduc\w*|drop\w*)\s*(?:the\s+)?price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'(increas\w*|rais\w*|bump\w*)\s+(\d+(?:\.\d+)?)\s*%\s*(?:on\s+)?(?:the\s+)?(?:price|pricing)', 2),
     ],
     'hiring_freeze': [
-        (r'(freeze|stop|pause|halt)\s*hir(ing|es?)\s*(?:for\s*)?(\d+)\s*(month|mo)', 3),
+        (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:the\s+)?hir(ing|es?)\s*(?:for\s*)?(\d+)\s*(month|mo)', 3),
         (r'hiring\s*freeze\s*(?:for\s*)?(\d+)\s*(month|mo)', 1),
         (r'no\s*(new\s*)?(hir(ing|es?))\s*(?:for\s*)?(\d+)\s*(month|mo)', 4),
+        (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:all\s+)?(?:new\s+)?hir(ing|es?)', None),
     ],
     'headcount': [
         (r'(hire|add)\s*(\d+)\s*(people|employees?|heads?|staff)', 2),
@@ -270,6 +273,9 @@ def extract_parameters(message: str) -> SimulationParameters:
         group_idx = pattern_tuple[1]
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
+            if group_idx is None:
+                params.hiring_freeze_months = 6
+                break
             try:
                 params.hiring_freeze_months = int(match.group(group_idx))
                 break

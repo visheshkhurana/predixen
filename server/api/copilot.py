@@ -641,27 +641,77 @@ async def copilot_chat(
     except HTTPException:
         raise
     except Exception as e:
-        _logger.error(f"Copilot chat error for company {company_id}: {e}", exc_info=True)
+        _logger.warning(f"Copilot chat first attempt failed for company {company_id}: {e}, retrying...")
+        try:
+            return await _copilot_chat_inner(company_id, company, request, db, current_user)
+        except Exception as retry_err:
+            _logger.error(f"Copilot chat retry also failed for company {company_id}: {retry_err}", exc_info=True)
+
+        truth_scan_summary = []
+        financial_snapshot = []
+        try:
+            from server.models.truth_scan import TruthScanResult
+            from server.models.financial import FinancialRecord
+            ts = db.query(TruthScanResult).filter(
+                TruthScanResult.company_id == company_id
+            ).order_by(TruthScanResult.created_at.desc()).first()
+            if ts and ts.outputs_json:
+                outputs = ts.outputs_json
+                if outputs.get("revenue"):
+                    financial_snapshot.append(f"Revenue: ${outputs['revenue']:,.0f}/mo")
+                if outputs.get("mrr"):
+                    financial_snapshot.append(f"MRR: ${outputs['mrr']:,.0f}")
+                if outputs.get("cash_balance"):
+                    financial_snapshot.append(f"Cash Balance: ${outputs['cash_balance']:,.0f}")
+                if outputs.get("net_burn"):
+                    financial_snapshot.append(f"Net Burn: ${outputs['net_burn']:,.0f}/mo")
+                if outputs.get("runway_months"):
+                    financial_snapshot.append(f"Runway: {outputs['runway_months']:.1f} months")
+                if outputs.get("gross_margin"):
+                    financial_snapshot.append(f"Gross Margin: {outputs['gross_margin']:.1f}%")
+                truth_scan_summary.append(f"Data Quality: {outputs.get('overall_status', 'Unknown')}")
+                issue_count = len(outputs.get("issues", []))
+                if issue_count:
+                    truth_scan_summary.append(f"{issue_count} data issues found in Truth Scan")
+
+            latest_fin = db.query(FinancialRecord).filter(
+                FinancialRecord.company_id == company_id
+            ).order_by(FinancialRecord.date.desc()).first()
+            if latest_fin and not financial_snapshot:
+                if latest_fin.revenue: financial_snapshot.append(f"Revenue: ${latest_fin.revenue:,.0f}/mo")
+                if latest_fin.mrr: financial_snapshot.append(f"MRR: ${latest_fin.mrr:,.0f}")
+                if latest_fin.cash_balance: financial_snapshot.append(f"Cash Balance: ${latest_fin.cash_balance:,.0f}")
+                if latest_fin.net_burn: financial_snapshot.append(f"Net Burn: ${latest_fin.net_burn:,.0f}/mo")
+                if latest_fin.runway_months: financial_snapshot.append(f"Runway: {latest_fin.runway_months:.1f} months")
+        except Exception:
+            pass
+
+        summary_lines = [
+            f"I wasn't able to run the full AI analysis right now, but here's your latest data from {company.name or 'your company'}:",
+        ]
+        if financial_snapshot:
+            summary_lines.append("**Current Metrics:** " + " | ".join(financial_snapshot))
+        if truth_scan_summary:
+            summary_lines.append("**Data Status:** " + " | ".join(truth_scan_summary))
+        if not financial_snapshot and not truth_scan_summary:
+            summary_lines.append("No financial data is available yet. Try uploading data on the Data Input page first.")
+
         return CopilotChatResponse(
-            executive_summary=[
-                f"I wasn't able to fully process your question right now due to a temporary service issue.",
-                f"Here's what I can tell you about {company.name or 'your company'} based on available data:",
-                "Try rephrasing your question or asking something more specific. You can also check the Dashboard or Truth Scan pages for current metrics.",
-            ],
+            executive_summary=summary_lines,
             company_snapshot=[
                 f"Company: {company.name}",
                 f"Industry: {company.industry or 'Not specified'}",
                 f"Stage: {company.stage or 'Not specified'}",
             ],
-            assumptions=["AI analysis was limited due to a temporary service issue."],
+            assumptions=["AI analysis unavailable -- showing latest verified data instead."],
             risks=[],
             next_questions=[
                 "What are my key financial metrics?",
                 "Show me my current runway",
-                "What's my burn rate trend?",
+                "Run a simulation cutting burn by 20%",
             ],
-            confidence="Low",
-            intent_detected="error_recovery",
+            confidence="Medium",
+            intent_detected="error_recovery_with_data",
         )
 
 
