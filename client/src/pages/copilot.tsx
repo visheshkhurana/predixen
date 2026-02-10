@@ -884,11 +884,26 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
   
+  const handleAction = (action: string) => {
+    const actionPrompts: Record<string, string> = {
+      save_scenario: 'Save this scenario',
+      compare: 'Compare this with my baseline scenario',
+      sensitivity: 'Run sensitivity analysis on this scenario',
+      optimize: 'Optimize this scenario for maximum runway',
+    };
+    const prompt = actionPrompts[action] || `Simulate ${action.replace(/_/g, ' ')}`;
+    onTryPrompt?.(prompt);
+  };
+
+  const handleClarificationSelect = (option: string) => {
+    onTryPrompt?.(`Simulate: ${option}`);
+  };
+  
   return (
     <div className="mt-4 space-y-3">
       {response.decision_advisor && <DecisionAdvisorPanel advisor={response.decision_advisor} />}
-      {response.simulation_result && <SimulationResultCard response={response} onTryPrompt={onTryPrompt} />}
-      {response.clarifications && response.clarifications.length > 0 && <ClarificationPanel response={response} />}
+      {response.simulation_result && <SimulationResultCard response={response} onAction={handleAction} onTryPrompt={onTryPrompt} />}
+      {response.clarifications && response.clarifications.length > 0 && <ClarificationPanel response={response} onSelect={handleClarificationSelect} />}
       
       {showSources && response.citations && response.citations.length > 0 && (
         <Collapsible open={openSections['citations']} onOpenChange={() => toggleSection('citations')}>
@@ -1382,6 +1397,81 @@ export default function CopilotPage() {
         };
       }
       setMessages(prev => [...prev, userMsg, responseMsg]);
+      setInput('');
+      return;
+    }
+
+    const trimmedLower = messageText.trim().toLowerCase();
+
+    if (trimmedLower === 'help' || trimmedLower === '/help' || trimmedLower === 'what can you do' || trimmedLower === 'what can you do?') {
+      const userMsg: Message = { role: 'user', content: messageText.trim(), timestamp: new Date() };
+      const helpMsg: Message = {
+        role: 'assistant',
+        content: `**Here's what I can help you with:**
+
+**Financial Analysis**
+- "What's my current runway?" -- Get your cash runway estimate
+- "Show me my burn rate trend" -- Analyze spending patterns
+- "What are my key metrics?" -- Overview of MRR, ARR, margins, etc.
+
+**Simulations**
+- "Simulate reducing burn by 20%" -- Run Monte Carlo simulations
+- "What if we raise prices by 15%?" -- Test pricing changes
+- "Freeze hiring for 6 months" -- Model hiring scenarios
+- "Simulate a $2M fundraise" -- Test fundraising impact
+
+**Scenario Comparison**
+- "Compare Plan A vs Plan B" -- Side-by-side scenario analysis
+- "Save this as Plan B" -- Save simulation results
+
+**Strategy & Decisions**
+- "How can I extend my runway?" -- Get actionable recommendations
+- "Am I ready to fundraise?" -- Fundraising readiness assessment
+- "What are my biggest risks?" -- Risk analysis
+
+**Market Research**
+- "What's the average SaaS churn rate?" -- Industry benchmarks
+- "Compare my metrics to competitors" -- Market positioning
+
+**Slash Commands**
+- \`/fetch-metric mrr\` -- Quick metric lookup (mrr, arr, runway, burn, cac, ltv, margin, churn, growth, cash)
+
+Type any question about your company's finances, strategy, or market to get started.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMsg, helpMsg]);
+      setInput('');
+      return;
+    }
+
+    const OUT_OF_SCOPE_PATTERNS = [
+      /\b(weather|temperature|forecast\s+(?:for\s+)?(?:today|tomorrow|this\s+week))\b/i,
+      /\b(recipe|cook|food|restaurant|movie|film|tv\s+show|music|song|lyrics|sports?\s+score|game\s+score)\b/i,
+      /\b(joke|riddle|poem|story|creative\s+writing|write\s+me\s+a)\b/i,
+      /\b(translate|translation|what\s+is\s+.*\s+in\s+(?:spanish|french|german|chinese|japanese|hindi))\b/i,
+      /\b(who\s+is\s+the\s+president|capital\s+of|how\s+tall|how\s+old\s+is)\b/i,
+      /\b(play\s+a\s+game|tic\s+tac\s+toe|chess|trivia)\b/i,
+    ];
+
+    const isOutOfScope = OUT_OF_SCOPE_PATTERNS.some(p => p.test(trimmedLower));
+    if (isOutOfScope) {
+      const userMsg: Message = { role: 'user', content: messageText.trim(), timestamp: new Date() };
+      const redirectMsg: Message = {
+        role: 'assistant',
+        content: `I'm designed specifically to help with **business and financial topics** for your company. I can't help with general knowledge questions, but here's what I'm great at:
+
+- Analyzing your financial metrics and runway
+- Running simulations (burn reduction, pricing changes, fundraising)
+- Comparing scenarios and strategic options
+- Market research and industry benchmarks
+- Fundraising readiness and investor analysis
+
+Try asking something like: **"What's my current runway?"** or **"Simulate cutting burn by 20%"**
+
+Type **help** for a full list of what I can do.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMsg, redirectMsg]);
       setInput('');
       return;
     }
