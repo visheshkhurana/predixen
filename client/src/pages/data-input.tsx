@@ -120,11 +120,11 @@ const SAMPLE_PROMPTS = [
 ];
 
 const STAGES = [
-  { value: "pre-seed", label: "Pre-Seed" },
+  { value: "pre_seed", label: "Pre-Seed" },
   { value: "seed", label: "Seed" },
-  { value: "series-a", label: "Series A" },
-  { value: "series-b", label: "Series B" },
-  { value: "series-c", label: "Series C+" },
+  { value: "series_a", label: "Series A" },
+  { value: "series_b", label: "Series B" },
+  { value: "series_c", label: "Series C+" },
   { value: "growth", label: "Growth" },
 ];
 
@@ -251,6 +251,9 @@ export default function DataInput() {
     }
     if (currentCompany?.industry) {
       form.setValue('industry', currentCompany.industry);
+    }
+    if ((currentCompany as any)?.description) {
+      form.setValue('description', (currentCompany as any).description);
     }
   }, [currentCompany?.id, currentCompany?.name, currentCompany?.stage, currentCompany?.industry, lastLoadedCompanyId, form]);
 
@@ -457,16 +460,16 @@ export default function DataInput() {
       const missingFields = result.missingFields || [];
 
       const baseline: FinancialBaseline = {
-        cashOnHand: normalized.cashOnHand,
-        monthlyRevenue: normalized.monthlyRevenue,
-        totalMonthlyExpenses: normalized.totalMonthlyExpenses,
-        monthlyGrowthRate: normalized.monthlyGrowthRate,
+        cashOnHand: Number(normalized.cashOnHand) || 0,
+        monthlyRevenue: Number(normalized.monthlyRevenue) || 0,
+        totalMonthlyExpenses: Number(normalized.totalMonthlyExpenses) || 0,
+        monthlyGrowthRate: Number(normalized.monthlyGrowthRate) || 0,
         expenseBreakdown: {
-          payroll: normalized.expenseBreakdown?.payroll ?? null,
-          marketing: normalized.expenseBreakdown?.marketing || null,
-          operating: normalized.expenseBreakdown?.operating || null,
-          cogs: normalized.expenseBreakdown?.cogs || null,
-          otherOpex: normalized.expenseBreakdown?.otherOpex || null,
+          payroll: normalized.expenseBreakdown?.payroll != null ? Number(normalized.expenseBreakdown.payroll) : null,
+          marketing: normalized.expenseBreakdown?.marketing != null ? Number(normalized.expenseBreakdown.marketing) : null,
+          operating: normalized.expenseBreakdown?.operating != null ? Number(normalized.expenseBreakdown.operating) : null,
+          cogs: normalized.expenseBreakdown?.cogs != null ? Number(normalized.expenseBreakdown.cogs) : null,
+          otherOpex: normalized.expenseBreakdown?.otherOpex != null ? Number(normalized.expenseBreakdown.otherOpex) : null,
         },
         currency: normalized.currency || 'USD',
         asOfDate: normalized.asOfDate,
@@ -591,17 +594,36 @@ export default function DataInput() {
         ? (values.monthlyExpenses || 0)
         : (breakdownSum > 0 ? breakdownSum : (values.monthlyExpenses || 0));
       
+      const companyUpdate: Record<string, string> = {
+        name: values.companyName || currentCompany.name,
+        description: values.description ?? '',
+        stage: values.stage || 'seed',
+        industry: values.industry || '',
+      };
+
+      const companyRes = await fetch(`/api/companies/${currentCompany.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(companyUpdate),
+      });
+      if (!companyRes.ok) {
+        console.error('[SAVE] Company update failed:', companyRes.status);
+      }
+
       const baseline = {
-        cashOnHand: values.cashOnHand || 0,
-        monthlyRevenue: values.monthlyRevenue || 0,
-        totalMonthlyExpenses: totalExpenses,
-        monthlyGrowthRate: values.growthRate || 0,
+        cashOnHand: Number(values.cashOnHand) || 0,
+        monthlyRevenue: Number(values.monthlyRevenue) || 0,
+        totalMonthlyExpenses: Number(totalExpenses),
+        monthlyGrowthRate: Number(values.growthRate) || 0,
         expenseBreakdown: {
-          payroll: values.payrollExpenses || null,
-          marketing: values.marketingExpenses || null,
-          operating: values.operatingExpenses || null,
-          cogs: values.cogsExpenses || null,
-          otherOpex: values.otherOpexExpenses || null,
+          payroll: values.payrollExpenses ? Number(values.payrollExpenses) : null,
+          marketing: values.marketingExpenses ? Number(values.marketingExpenses) : null,
+          operating: values.operatingExpenses ? Number(values.operatingExpenses) : null,
+          cogs: values.cogsExpenses ? Number(values.cogsExpenses) : null,
+          otherOpex: values.otherOpexExpenses ? Number(values.otherOpexExpenses) : null,
         },
         hasManualExpenseOverride: hasManualExpenseOverride,
         currency: 'USD',
@@ -629,6 +651,11 @@ export default function DataInput() {
       console.log('[SAVE] API response:', JSON.stringify(result));
 
       setFinancialBaseline(baseline);
+
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies"] });
+      queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
+      queryClient.invalidateQueries({ queryKey: ['truth-latest', currentCompany.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
 
       toast({
         title: "Data saved",

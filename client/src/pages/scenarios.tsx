@@ -210,7 +210,7 @@ export default function ScenariosPage() {
     const truthScanGrowth = truthScan?.metrics?.revenue_growth_mom ?? truthScan?.outputs_json?.metrics?.revenue_growth_mom;
     const truthGrowthVal = typeof truthScanGrowth === 'object' && truthScanGrowth !== null
       ? truthScanGrowth.value : truthScanGrowth;
-    const growthRate = financialBaseline?.monthlyGrowthRate ?? truthGrowthVal ?? 10;
+    const growthRate = Number(financialBaseline?.monthlyGrowthRate ?? truthGrowthVal ?? 10);
     const churnRate = sharedMetrics.churnRatePct;
     const currentRunway = sharedMetrics.runway === Infinity ? 999 : sharedMetrics.runway;
     return {
@@ -678,7 +678,7 @@ export default function ScenariosPage() {
     }
     if (!baseMetrics) return null;
     return {
-      runway: baseMetrics.currentRunway.toFixed(1),
+      runway: Number(baseMetrics.currentRunway).toFixed(1),
       revenue18m: projectedRevenue(18, 1.0),
       cash12m: projectedCash(12, 1.0),
       breakeven: '24+',
@@ -793,7 +793,7 @@ export default function ScenariosPage() {
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Runway</p>
                   <p className="text-sm font-semibold font-mono" data-testid="text-context-runway">
-                    {baseMetrics.currentRunway.toFixed(1)} mo
+                    {Number(baseMetrics.currentRunway).toFixed(1)} mo
                   </p>
                 </div>
                 <div>
@@ -805,13 +805,13 @@ export default function ScenariosPage() {
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Growth Rate</p>
                   <p className="text-sm font-semibold font-mono" data-testid="text-context-growth">
-                    {baseMetrics.growthRate.toFixed(1)}%
+                    {Number(baseMetrics.growthRate).toFixed(1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider">LTV:CAC</p>
                   <p className="text-sm font-semibold font-mono" data-testid="text-context-ltvcac">
-                    {sharedMetrics.ltvCacRatio.toFixed(1)}x
+                    {Number(sharedMetrics.ltvCacRatio).toFixed(1)}x
                   </p>
                 </div>
               </div>
