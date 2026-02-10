@@ -993,8 +993,13 @@ export default function OverviewPage() {
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
-  const briefingDate = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const briefingHour = new Date().getHours();
+  const [liveNow, setLiveNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setLiveNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+  const briefingDate = liveNow.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const briefingHour = liveNow.getHours();
   const briefingGreeting = briefingHour < 12 ? 'Good Morning' : briefingHour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   const briefingMrrGrowth = baseData.mrr > 0 ? ((baseData.mrr - (baseData.mrr / (1 + assumptions.growthRate / 100))) / (baseData.mrr / (1 + assumptions.growthRate / 100)) * 100) : 0;

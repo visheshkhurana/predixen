@@ -131,7 +131,22 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                 runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
-            runway_months[sim] = horizon + 12
+            ending_cash = cash_paths[sim, -1]
+            last_burns = burn_paths[sim, -3:]
+            avg_burn = np.mean(last_burns) if np.any(last_burns > 0) else 0
+            if avg_burn > 0:
+                extra_months = ending_cash / avg_burn
+                runway_months[sim] = horizon + min(extra_months, 36)
+            else:
+                last_net = 0
+                for m_idx in range(max(0, horizon - 3), horizon):
+                    rev_m = revenue_paths[sim, m_idx]
+                    cash_diff = cash_paths[sim, m_idx] - (cash_paths[sim, m_idx - 1] if m_idx > 0 else inputs.cash_balance)
+                    last_net = cash_diff
+                if last_net > 0:
+                    runway_months[sim] = horizon + 36
+                else:
+                    runway_months[sim] = horizon + 12
     
     survival_6m = np.sum(runway_months > 6) / n
     survival_12m = np.sum(runway_months > 12) / n
