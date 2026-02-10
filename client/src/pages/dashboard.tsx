@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
@@ -39,6 +41,9 @@ import {
   Activity,
   Users,
   RefreshCw,
+  Mail,
+  Loader2,
+  Send,
 } from "lucide-react";
 import {
   LineChart,
@@ -182,6 +187,34 @@ export default function Dashboard() {
     queryFn: async () => {
       const res = await fetch(`/api/dashboard/companies/${selectedCompany?.id}/kpis?period=${selectedPeriod}`);
       if (!res.ok) throw new Error("Failed to fetch KPIs");
+      return res.json();
+    },
+    enabled: !!selectedCompany?.id,
+  });
+
+  const { data: trendData } = useQuery<{ days: number; data: Array<{ date: string; runway_p50?: number; runway_p10?: number; runway_p90?: number }> }>({
+    queryKey: ["/api/companies", selectedCompany?.id, "trends"],
+    queryFn: async () => {
+      const token = localStorage.getItem('predixen-token');
+      const res = await fetch(`/api/companies/${selectedCompany?.id}/trends?days=90`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) return { days: 90, data: [] };
+      return res.json();
+    },
+    enabled: !!selectedCompany?.id,
+  });
+
+  const [digestSending, setDigestSending] = useState(false);
+
+  const { data: digestPrefs } = useQuery<{ monthly_digest: boolean }>({
+    queryKey: ["/api/companies", selectedCompany?.id, "digest/preferences"],
+    queryFn: async () => {
+      const t = localStorage.getItem('predixen-token');
+      const res = await fetch(`/api/companies/${selectedCompany?.id}/digest/preferences`, {
+        headers: { 'Authorization': `Bearer ${t}` },
+      });
+      if (!res.ok) return { monthly_digest: true };
       return res.json();
     },
     enabled: !!selectedCompany?.id,
@@ -601,6 +634,32 @@ export default function Dashboard() {
           </div>
 
           <CashFlowChart projections={latestResult.projections} />
+
+          {trendData && trendData.data && trendData.data.length > 1 && (
+            <Card data-testid="card-runway-trend">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Runway Trend (90 days)
+                </CardTitle>
+                <CardDescription>How your projected runway has changed over time based on simulation snapshots</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={trendData.data}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(v: string) => { const d = new Date(v); return `${d.getMonth()+1}/${d.getDate()}`; }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${v.toFixed(0)}mo`} />
+                    <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }} formatter={(value: number) => [`${value.toFixed(1)} months`]} />
+                    <Line type="monotone" dataKey="runway_p50" stroke="#3b82f6" strokeWidth={2} dot={false} name="Runway (P50)" />
+                    <Line type="monotone" dataKey="runway_p90" stroke="#22c55e" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Best Case (P90)" />
+                    <Line type="monotone" dataKey="runway_p10" stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Worst Case (P10)" />
+                    <Legend />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
         </>
       ) : (
         <Card className="border-dashed">
@@ -621,6 +680,62 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+          <Card data-testid="card-digest-preferences">
+            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <Mail className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Monthly Digest Email</p>
+                  <p className="text-xs text-muted-foreground">Receive a summary of your key metrics, risks, and recommendations each month</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={digestPrefs?.monthly_digest ?? true}
+                  onCheckedChange={async (checked) => {
+                    if (!selectedCompany) return;
+                    try {
+                      const t = localStorage.getItem('predixen-token');
+                      const res = await fetch(`/api/companies/${selectedCompany.id}/digest/preferences`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ monthly_digest: checked }),
+                      });
+                      if (!res.ok) throw new Error();
+                      const { queryClient } = await import("@/lib/queryClient");
+                      queryClient.invalidateQueries({ queryKey: ["/api/companies", selectedCompany.id, "digest/preferences"] });
+                    } catch {
+                      const { queryClient } = await import("@/lib/queryClient");
+                      queryClient.invalidateQueries({ queryKey: ["/api/companies", selectedCompany.id, "digest/preferences"] });
+                    }
+                  }}
+                  data-testid="switch-digest"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={digestSending}
+                  onClick={async () => {
+                    if (!selectedCompany) return;
+                    setDigestSending(true);
+                    const t = localStorage.getItem('predixen-token');
+                    try {
+                      await fetch(`/api/companies/${selectedCompany.id}/digest/send`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${t}` },
+                      });
+                    } catch {}
+                    setDigestSending(false);
+                  }}
+                  data-testid="button-send-digest"
+                >
+                  {digestSending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+                  Send Now
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="realtime" className="space-y-6">

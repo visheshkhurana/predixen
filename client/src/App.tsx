@@ -77,6 +77,7 @@ import DocsPage from "@/pages/docs";
 import MessagingPage from "@/pages/messaging";
 import JournalPage from "@/pages/journal";
 import GoalsPage from "@/pages/goals";
+import SharedScenarioPage from "@/pages/shared-scenario";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -294,6 +295,7 @@ function Router() {
       <Route path="/admin/team">
         {() => <AdminRoute component={AdminTeam} />}
       </Route>
+      <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
       <Route path="/owner-console" component={OwnerConsole} />
       <Route component={NotFound} />
     </Switch>
@@ -433,7 +435,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     (window.location.pathname === '/owner-console' || 
      window.location.pathname === '/auth' ||
      window.location.pathname === '/onboarding' ||
-     window.location.pathname.startsWith('/admin'));
+     window.location.pathname.startsWith('/admin') ||
+     window.location.pathname.startsWith('/scenarios/shared/'));
   
   if (!token || isStandalonePage) {
     return <>{children}</>;
