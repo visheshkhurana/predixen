@@ -64,6 +64,8 @@ const providerIcons: Record<string, React.ReactNode> = {
   salesforce: <SiSalesforce className="h-6 w-6" />,
   hubspot: <SiHubspot className="h-6 w-6" />,
   stripe: <SiStripe className="h-6 w-6" />,
+  plaid: <Link2 className="h-6 w-6" />,
+  gusto: <DollarSign className="h-6 w-6" />,
   netsuite: <Database className="h-6 w-6" />,
   pipedrive: <Users className="h-6 w-6" />,
   zoho: <Users className="h-6 w-6" />,
@@ -193,6 +195,34 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View customer records",
     ],
   },
+  plaid: {
+    dataImported: [
+      "Bank account balances",
+      "Transaction history (30+ days)",
+      "Cash inflow & outflow",
+      "Account types & institutions",
+      "Real-time balance updates",
+    ],
+    permissions: [
+      "Read account balances",
+      "Access transaction history",
+      "View account information",
+    ],
+  },
+  gusto: {
+    dataImported: [
+      "Employee headcount & roles",
+      "Payroll run amounts",
+      "Total compensation costs",
+      "Employer tax obligations",
+      "Benefits & deductions",
+    ],
+    permissions: [
+      "Read employee data",
+      "Access payroll records",
+      "View company information",
+    ],
+  },
   razorpayx_payroll: {
     dataImported: [
       "Employee salary data",
@@ -306,6 +336,12 @@ const additionalCrmProviders: IntegrationProvider[] = [
 
 const payrollProviders: IntegrationProvider[] = [
   {
+    id: "gusto",
+    name: "Gusto",
+    description: "US payroll, benefits, and HR platform for modern businesses",
+    features: ["Employee Costs", "Payroll Runs", "Headcount Tracking", "Tax Obligations"],
+  },
+  {
     id: "razorpayx_payroll",
     name: "RazorpayX Payroll",
     description: "Automated payroll and compliance for Indian startups",
@@ -376,6 +412,12 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "Stripe",
     description: "Payment processing and subscription billing data",
     features: ["MRR/ARR Tracking", "Churn Analytics", "Payment History", "Revenue Recognition"],
+  },
+  {
+    id: "plaid",
+    name: "Plaid",
+    description: "Bank account connections for real-time balances and transactions",
+    features: ["Bank Balances", "Transaction History", "Cash Flow Analysis", "Multi-Account Support"],
   },
 ];
 
@@ -496,10 +538,12 @@ export default function IntegrationsPage() {
     queryKey: ["/api/connectors/companies", companyId, "status"],
   });
 
+  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
       setSyncingProvider(provider);
-      if (type === "payroll" || type === "erp") {
+      if (type === "payroll" || type === "erp" || connectorSyncIds.includes(provider)) {
         const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/sync/${provider}`);
         return res.json();
       }
@@ -541,22 +585,25 @@ export default function IntegrationsPage() {
     return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
   };
   
+  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
-    const isConnected = (type === "payroll" || type === "erp")
+    const isConnectorBacked = type === "payroll" || type === "erp" || connectorBackedIds.includes(provider.id);
+    const isConnected = isConnectorBacked
       ? connectorInfo?.connected || false
       : type === "payments" 
         ? status?.integrations.payments?.connected === provider.id
         : status?.integrations[type]?.connected === provider.id;
-    const integrationStatus = type === "payments" 
-      ? status?.integrations.payments 
-      : type === "payroll" || type === "erp"
-        ? undefined
+    const integrationStatus = isConnectorBacked
+      ? undefined
+      : type === "payments" 
+        ? status?.integrations.payments 
         : status?.integrations[type];
-    const lastSync = (type === "payroll" || type === "erp") 
+    const lastSync = isConnectorBacked 
       ? connectorInfo?.last_sync 
       : integrationStatus?.last_sync;
-    const syncDetails = (type === "payroll" || type === "erp")
+    const syncDetails = isConnectorBacked
       ? connectorInfo ? { records_synced: connectorInfo.records_synced, last_error: connectorInfo.error } : undefined
       : integrationStatus?.sync_details;
     const isSyncing = syncingProvider === provider.id && syncMutation.isPending;
@@ -780,7 +827,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {connectorStatus?.connectors?.some(c => 
-                  ["razorpayx_payroll", "greythr", "keka"].includes(c.provider_id) && c.connected
+                  ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                 ) ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
@@ -791,7 +838,7 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payroll</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {connectorStatus?.connectors?.find(c => 
-                    ["razorpayx_payroll", "greythr", "keka"].includes(c.provider_id) && c.connected
+                    ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                   )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
@@ -948,6 +995,28 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "tally_url", label: "Tally Server URL", placeholder: "http://localhost:9000" },
     { field: "company_name", label: "Company Name", placeholder: "Enter your Tally Company name" },
   ],
+  plaid: [
+    { field: "client_id", label: "Client ID", placeholder: "Enter Plaid Client ID" },
+    { field: "secret", label: "Secret Key", placeholder: "Enter Plaid Secret" },
+    { field: "access_token", label: "Access Token", placeholder: "access-sandbox-..." },
+  ],
+  hubspot: [
+    { field: "access_token", label: "Private App Token", placeholder: "pat-na1-..." },
+  ],
+  gusto: [
+    { field: "client_id", label: "Client ID", placeholder: "Enter Gusto Client ID" },
+    { field: "client_secret", label: "Client Secret", placeholder: "Enter Gusto Client Secret" },
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+    { field: "refresh_token", label: "Refresh Token", placeholder: "OAuth2 Refresh Token" },
+    { field: "company_uuid", label: "Company UUID", placeholder: "Gusto Company UUID" },
+  ],
+  xero: [
+    { field: "client_id", label: "Client ID", placeholder: "Enter Xero Client ID" },
+    { field: "client_secret", label: "Client Secret", placeholder: "Enter Xero Client Secret" },
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+    { field: "refresh_token", label: "Refresh Token", placeholder: "OAuth2 Refresh Token" },
+    { field: "tenant_id", label: "Tenant ID", placeholder: "Xero Organization Tenant ID" },
+  ],
 };
 
 function ConnectDialog({
@@ -971,7 +1040,8 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const isPayrollOrErp = type === "payroll" || type === "erp";
+  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
     dataImported: ["Financial data", "Transaction history"],

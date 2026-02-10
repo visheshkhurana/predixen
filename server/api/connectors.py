@@ -26,7 +26,7 @@ from server.connectors import ConnectorRegistry, ConnectorConfig
 from server.connectors.base import ProviderCategory
 
 # Import connectors to register them
-from server.connectors import razorpayx, greythr, zoho_books, keka, tally, stripe, quickbooks
+from server.connectors import razorpayx, greythr, zoho_books, keka, tally, stripe, quickbooks, plaid, hubspot, gusto, xero
 
 logger = logging.getLogger(__name__)
 
