@@ -569,6 +569,38 @@ export default function IntegrationsPage() {
     },
   });
 
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+
+  const testSampleMutation = useMutation({
+    mutationFn: async (provider: string) => {
+      setTestingProvider(provider);
+      const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/test-sample/${provider}`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      const metrics = Object.entries(data.verification || {})
+        .filter(([, v]: [string, any]) => v.stored !== null && v.stored !== undefined)
+        .map(([k]: [string, any]) => k);
+      toast({
+        title: "Sample Data Synced",
+        description: `${data.provider_name}: ${metrics.length} metrics stored (${metrics.slice(0, 4).join(", ")}${metrics.length > 4 ? "..." : ""})`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/financials"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/realtime"] });
+      setTestingProvider(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Sample Test Failed",
+        description: String(error),
+        variant: "destructive",
+      });
+      setTestingProvider(null);
+    },
+  });
+
   const allAccountingProviders = [
     ...(availableIntegrations?.accounting || []),
     ...additionalAccountingProviders,
@@ -676,7 +708,23 @@ export default function IntegrationsPage() {
                 </Button>
               </>
             ) : (
-              <ConnectDialog provider={provider} type={type} companyId={companyId} />
+              <>
+                <ConnectDialog provider={provider} type={type} companyId={companyId} />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => testSampleMutation.mutate(provider.id)}
+                  disabled={testingProvider === provider.id && testSampleMutation.isPending}
+                  data-testid={`button-test-sample-${provider.id}`}
+                >
+                  {testingProvider === provider.id && testSampleMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4 mr-2" />
+                  )}
+                  Test with Sample Data
+                </Button>
+              </>
             )}
           </div>
         </CardContent>

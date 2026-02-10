@@ -25,8 +25,7 @@ from server.models.financial import FinancialRecord
 from server.connectors import ConnectorRegistry, ConnectorConfig
 from server.connectors.base import ProviderCategory
 
-# Import connectors to register them
-from server.connectors import razorpayx, greythr, zoho_books, keka, tally, stripe, quickbooks, plaid, hubspot, gusto, xero
+import server.connectors
 
 logger = logging.getLogger(__name__)
 
@@ -458,21 +457,10 @@ async def sync_provider(
         metadata["connectors"] = connectors
         company.metadata_json = metadata
         
-        # Save financial data if sync was successful
         if result.success and result.metadata.get("financials"):
             financials = result.metadata["financials"]
-            
             today = datetime.utcnow().date()
-            record = FinancialRecord(
-                company_id=company_id,
-                period_start=today.replace(day=1),
-                period_end=today,
-                source_type=f"connector_{provider_id}",
-                extraction_summary=f"Synced from {connector.PROVIDER_NAME}",
-                revenue=financials.get("revenue"),
-                payroll=financials.get("payroll"),
-                headcount=financials.get("headcount"),
-            )
+            record = _build_financial_record(company_id, provider_id, connector.PROVIDER_NAME, financials, today)
             db.add(record)
         
         db.commit()
@@ -538,3 +526,307 @@ async def get_sync_history(
         "company_id": company_id,
         "history": history,
     }
+
+
+def _build_financial_record(company_id: int, provider_id: str, provider_name: str, financials: Dict[str, Any], today) -> FinancialRecord:
+    revenue = financials.get("revenue")
+    cogs = financials.get("cogs")
+    opex = financials.get("opex")
+    payroll = financials.get("payroll")
+    other_costs = financials.get("other_costs")
+    cash_balance = financials.get("cash_balance")
+
+    gross_profit = None
+    gross_margin = None
+    if revenue is not None and cogs is not None:
+        gross_profit = revenue - cogs
+        gross_margin = (gross_profit / revenue * 100) if revenue else None
+
+    operating_income = None
+    operating_margin = None
+    total_expenses = sum(v for v in [cogs, opex, payroll, other_costs] if v is not None)
+    if revenue is not None and total_expenses:
+        operating_income = revenue - total_expenses
+        operating_margin = (operating_income / revenue * 100) if revenue else None
+
+    net_burn = financials.get("net_burn")
+    if net_burn is None and revenue is not None and total_expenses:
+        net_burn = total_expenses - revenue
+
+    runway_months = None
+    if cash_balance and net_burn and net_burn > 0:
+        runway_months = cash_balance / net_burn
+
+    mrr = financials.get("mrr")
+    arr = financials.get("arr")
+    if mrr is not None and arr is None:
+        arr = mrr * 12
+
+    record = FinancialRecord(
+        company_id=company_id,
+        period_start=today.replace(day=1),
+        period_end=today,
+        source_type=f"connector_{provider_id}",
+        extraction_summary=financials.get("extraction_summary", f"Synced from {provider_name}"),
+        revenue=revenue,
+        cogs=cogs,
+        opex=opex,
+        payroll=payroll,
+        other_costs=other_costs,
+        cash_balance=cash_balance,
+        mrr=mrr,
+        arr=arr,
+        gross_profit=gross_profit,
+        gross_margin=gross_margin,
+        operating_income=operating_income,
+        operating_margin=operating_margin,
+        net_burn=net_burn,
+        runway_months=runway_months,
+        burn_multiple=financials.get("burn_multiple"),
+        headcount=financials.get("headcount"),
+        customers=financials.get("customers"),
+        mom_growth=financials.get("mom_growth"),
+        yoy_growth=financials.get("yoy_growth"),
+        ndr=financials.get("ndr"),
+        ltv=financials.get("ltv"),
+        cac=financials.get("cac"),
+        ltv_cac_ratio=financials.get("ltv_cac_ratio"),
+        arpu=financials.get("arpu"),
+        marketing_expense=financials.get("marketing_expense"),
+    )
+    return record
+
+
+SAMPLE_DATA: Dict[str, Dict[str, Any]] = {
+    "stripe": {
+        "revenue": 185000, "mrr": 15400, "arr": 184800,
+        "customers": 312, "cash_balance": 420000,
+        "cogs": 18500, "opex": 45000, "payroll": 95000,
+        "extraction_summary": "Sample: Stripe MRR/ARR from 312 customers, 847 invoices",
+    },
+    "quickbooks": {
+        "revenue": 210000, "cogs": 42000, "opex": 63000, "payroll": 98000,
+        "cash_balance": 380000, "other_costs": 12000,
+        "extraction_summary": "Sample: QuickBooks P&L and balance sheet data",
+    },
+    "xero": {
+        "revenue": 195000, "cogs": 39000, "opex": 58000, "payroll": 92000,
+        "cash_balance": 345000,
+        "extraction_summary": "Sample: Xero invoices, P&L, and bank transactions",
+    },
+    "zoho_books": {
+        "revenue": 145000, "cogs": 29000, "opex": 43000,
+        "cash_balance": 260000,
+        "extraction_summary": "Sample: Zoho Books invoices and chart of accounts",
+    },
+    "freshbooks": {
+        "revenue": 78000, "opex": 23000, "payroll": 45000,
+        "cash_balance": 190000,
+        "extraction_summary": "Sample: FreshBooks invoices, expenses, time entries",
+    },
+    "wave": {
+        "revenue": 62000, "opex": 18000, "payroll": 38000,
+        "cash_balance": 145000,
+        "extraction_summary": "Sample: Wave invoices and transactions via GraphQL",
+    },
+    "bench": {
+        "revenue": 130000, "cogs": 26000, "opex": 39000, "payroll": 72000,
+        "cash_balance": 290000,
+        "extraction_summary": "Sample: Bench categorized monthly financials",
+    },
+    "chargebee": {
+        "revenue": 168000, "mrr": 14000, "customers": 280,
+        "extraction_summary": "Sample: Chargebee subscriptions, MRR, 280 customers",
+    },
+    "recurly": {
+        "revenue": 142000, "mrr": 11800, "customers": 195,
+        "extraction_summary": "Sample: Recurly subscriptions and revenue recognition",
+    },
+    "shopify": {
+        "revenue": 230000, "cogs": 92000, "customers": 1840,
+        "extraction_summary": "Sample: Shopify orders, revenue, 1840 customers",
+    },
+    "hubspot": {
+        "revenue": 320000, "customers": 48,
+        "extraction_summary": "Sample: HubSpot 48 closed deals, pipeline $1.2M",
+    },
+    "salesforce": {
+        "revenue": 450000, "customers": 67,
+        "extraction_summary": "Sample: Salesforce 67 closed opportunities via SOQL",
+    },
+    "pipedrive": {
+        "revenue": 175000, "customers": 34,
+        "extraction_summary": "Sample: Pipedrive 34 won deals, pipeline $650K",
+    },
+    "close_crm": {
+        "revenue": 98000, "customers": 22,
+        "extraction_summary": "Sample: Close CRM 22 won opportunities",
+    },
+    "gusto": {
+        "payroll": 112000, "headcount": 18,
+        "extraction_summary": "Sample: Gusto payroll for 18 employees",
+    },
+    "rippling": {
+        "payroll": 145000, "headcount": 24,
+        "extraction_summary": "Sample: Rippling payroll for 24 workers",
+    },
+    "deel": {
+        "payroll": 68000, "headcount": 12,
+        "extraction_summary": "Sample: Deel contracts and payments for 12 contractors",
+    },
+    "razorpayx": {
+        "payroll": 85000, "headcount": 15,
+        "extraction_summary": "Sample: RazorpayX payouts for 15 employees",
+    },
+    "keka": {
+        "payroll": 72000, "headcount": 14,
+        "extraction_summary": "Sample: Keka payroll summaries for 14 employees",
+    },
+    "greythr": {
+        "payroll": 55000, "headcount": 11,
+        "extraction_summary": "Sample: greytHR payroll for 11 employees",
+    },
+    "plaid": {
+        "cash_balance": 520000,
+        "extraction_summary": "Sample: Plaid 3 bank accounts, 245 transactions",
+    },
+    "mercury": {
+        "cash_balance": 380000,
+        "extraction_summary": "Sample: Mercury 2 accounts, real-time cash position",
+    },
+    "brex": {
+        "opex": 34000, "cash_balance": 290000,
+        "extraction_summary": "Sample: Brex card transactions and expense categories",
+    },
+    "ramp": {
+        "opex": 28000,
+        "extraction_summary": "Sample: Ramp transactions across 4 departments",
+    },
+    "google_analytics": {
+        "customers": 12500,
+        "extraction_summary": "Sample: GA4 45K sessions, 12.5K users, 3.2% conversion",
+    },
+    "mixpanel": {
+        "customers": 8400,
+        "extraction_summary": "Sample: Mixpanel 8.4K active users, 67% retention",
+    },
+    "profitwell": {
+        "mrr": 16200, "customers": 340,
+        "extraction_summary": "Sample: ProfitWell MRR $16.2K, 2.1% churn, 340 subscribers",
+    },
+    "amplitude": {
+        "customers": 15200,
+        "extraction_summary": "Sample: Amplitude 15.2K users, cohort retention analysis",
+    },
+    "tally": {
+        "revenue": 95000, "cogs": 38000, "opex": 28000,
+        "extraction_summary": "Sample: Tally ledger entries via XML API",
+    },
+    "netsuite": {
+        "revenue": 520000, "cogs": 156000, "opex": 130000, "payroll": 180000,
+        "cash_balance": 890000,
+        "extraction_summary": "Sample: NetSuite full financial suite via OAuth 1.0",
+    },
+    "mysql": {
+        "revenue": 165000, "customers": 450,
+        "extraction_summary": "Sample: MySQL direct query - revenue and customer data",
+    },
+    "rest_api": {
+        "revenue": 88000,
+        "extraction_summary": "Sample: REST API custom endpoint financial data",
+    },
+    "google_sheets": {
+        "revenue": 72000, "cogs": 14400, "opex": 21600, "payroll": 36000,
+        "extraction_summary": "Sample: Google Sheets imported financial data",
+    },
+}
+
+
+@router.post("/companies/{company_id}/test-sample/{provider_id}")
+async def test_with_sample_data(
+    company_id: int,
+    provider_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    sample = SAMPLE_DATA.get(provider_id)
+    if not sample:
+        raise HTTPException(status_code=400, detail=f"No sample data available for {provider_id}")
+
+    today = datetime.utcnow().date()
+    connector_class = ConnectorRegistry.get_connector_class(provider_id)
+    provider_name = connector_class.PROVIDER_NAME if connector_class else provider_id
+
+    record = _build_financial_record(company_id, provider_id, provider_name, sample, today)
+    db.add(record)
+
+    metadata = company.metadata_json or {}
+    if "connectors" not in metadata:
+        metadata["connectors"] = {}
+
+    metadata["connectors"][provider_id] = {
+        "connected": True,
+        "credentials": {"mode": "sample_data"},
+        "connected_at": datetime.utcnow().isoformat(),
+        "last_sync": datetime.utcnow().isoformat(),
+        "records_synced": sum(1 for v in sample.values() if v is not None and isinstance(v, (int, float))),
+        "sample_mode": True,
+    }
+    company.metadata_json = metadata
+    db.commit()
+
+    stored = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id,
+        FinancialRecord.source_type == f"connector_{provider_id}",
+    ).order_by(FinancialRecord.created_at.desc()).first()
+
+    verification = {}
+    if stored:
+        for field_name in ["revenue", "cogs", "opex", "payroll", "cash_balance", "mrr", "arr",
+                           "gross_profit", "gross_margin", "operating_income", "operating_margin",
+                           "net_burn", "runway_months", "headcount", "customers"]:
+            db_val = getattr(stored, field_name, None)
+            sample_val = sample.get(field_name)
+            if db_val is not None or sample_val is not None:
+                verification[field_name] = {
+                    "input": sample_val,
+                    "stored": db_val,
+                    "computed": sample_val is None and db_val is not None,
+                }
+
+    return {
+        "success": True,
+        "provider_id": provider_id,
+        "provider_name": provider_name,
+        "sample_data_used": {k: v for k, v in sample.items() if k != "extraction_summary"},
+        "record_id": stored.id if stored else None,
+        "extraction_summary": sample.get("extraction_summary", ""),
+        "verification": verification,
+        "message": f"Sample data synced for {provider_name}. Financial record created and verified.",
+    }
+
+
+@router.get("/sample-providers")
+async def list_sample_providers(
+    current_user: User = Depends(get_current_user)
+) -> List[Dict[str, Any]]:
+    result = []
+    for pid, data in SAMPLE_DATA.items():
+        connector_class = ConnectorRegistry.get_connector_class(pid)
+        name = connector_class.PROVIDER_NAME if connector_class else pid
+        metrics = [k for k, v in data.items() if isinstance(v, (int, float))]
+        result.append({
+            "provider_id": pid,
+            "provider_name": name,
+            "available_metrics": metrics,
+            "summary": data.get("extraction_summary", ""),
+        })
+    return result
