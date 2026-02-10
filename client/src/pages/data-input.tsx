@@ -595,28 +595,6 @@ export default function DataInput() {
         ? (values.monthlyExpenses || 0)
         : (breakdownSum > 0 ? breakdownSum : (values.monthlyExpenses || 0));
       
-      const companyUpdate: Record<string, string> = {
-        name: values.companyName || currentCompany.name,
-        description: values.description ?? '',
-        stage: values.stage || 'seed',
-        industry: values.industry || '',
-      };
-
-      const companyRes = await fetch(`/api/companies/${currentCompany.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(companyUpdate),
-      });
-      if (companyRes.ok) {
-        const updatedCompany = await companyRes.json();
-        setCurrentCompany({ ...currentCompany, ...updatedCompany });
-      } else {
-        console.error('[SAVE] Company update failed:', companyRes.status);
-      }
-
       const baseline = {
         cashOnHand: Number(values.cashOnHand) || 0,
         monthlyRevenue: Number(values.monthlyRevenue) || 0,
@@ -655,6 +633,24 @@ export default function DataInput() {
       console.log('[SAVE] API response:', JSON.stringify(result));
 
       setFinancialBaseline(baseline);
+
+      try {
+        const companyName = values.companyName || currentCompany.name;
+        const description = values.description ?? '';
+        const stageValue = values.stage || 'seed';
+        const industryValue = values.industry || '';
+        const res = await fetch(`/api/companies/${currentCompany.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: companyName, description, stage: stageValue, industry: industryValue })
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setCurrentCompany({ ...currentCompany, ...updated });
+        }
+      } catch (e) {
+        console.error('Company update failed', e);
+      }
 
       queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies"] });
       queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
