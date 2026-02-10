@@ -377,20 +377,26 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
           </SheetTitle>
         </SheetHeader>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && (
+          {!currentCompany && messages.length === 0 && (
+            <div className="text-center py-8 space-y-3">
+              <AlertTriangle className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+              <p className="text-sm text-muted-foreground">Select a company first to start chatting with the AI copilot.</p>
+            </div>
+          )}
+          {currentCompany && messages.length === 0 && (
             <div className="text-center py-8 space-y-4">
               <Sparkles className="h-8 w-8 text-primary/40 mx-auto" />
               <div>
                 <p className="text-sm font-medium">Ask anything about your finances</p>
-                <p className="text-xs text-muted-foreground mt-1">I have access to all your company data</p>
+                <p className="text-xs text-muted-foreground mt-1">I have access to all your company data and real-time market research</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 {[
                   'What was my payroll cost last month?',
                   'How has revenue trended over the last 3 months?',
                   'What\'s my current runway?',
-                  'Compare my revenue vs expenses',
-                  'What\'s my burn rate breakdown?',
+                  'How does my burn rate compare to industry benchmarks?',
+                  'What should my target gross margin be?',
                 ].map(q => (
                   <Button key={q} variant="outline" size="sm" className="text-xs justify-start" onClick={() => sendMessage(q)} data-testid={`copilot-prompt-${q.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`}>
                     {q}

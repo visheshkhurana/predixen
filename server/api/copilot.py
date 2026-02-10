@@ -384,6 +384,76 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+_WEB_RESEARCH_KEYWORDS = [
+    "market", "industry", "benchmark", "competitor", "trend", "average",
+    "standard", "best practice", "typical", "compare to", "compared to",
+    "sector", "valuation", "funding", "vc", "venture", "series a", "series b",
+    "pre-seed", "seed round", "interest rate", "inflation", "economy",
+    "regulation", "compliance", "tax", "saas benchmark", "median",
+    "percentile", "top quartile", "bottom quartile", "peer", "similar companies",
+    "what is a good", "what's a good", "how does my", "am i doing well",
+    "news", "latest", "recent", "current market", "2024", "2025", "2026",
+    "research", "report", "study", "forecast", "outlook", "prediction",
+    "rule of 40", "magic number", "burn multiple", "gross margin benchmark",
+    "churn benchmark", "nrr benchmark", "cac benchmark", "ltv benchmark",
+    "what should", "optimal", "target", "goal",
+]
+
+
+def _needs_web_research(message: str) -> bool:
+    """Detect if a question would benefit from real-time web research."""
+    msg_lower = message.lower()
+    return any(kw in msg_lower for kw in _WEB_RESEARCH_KEYWORDS)
+
+
+def _build_research_query(message: str, company_industry: str, company_stage: str) -> str:
+    """Build an optimized Perplexity search query from the user's question."""
+    context_parts = []
+    if company_industry and company_industry != "N/A":
+        context_parts.append(company_industry)
+    if company_stage and company_stage != "N/A":
+        context_parts.append(f"{company_stage} stage")
+    context_parts.append("startup")
+    context_str = " ".join(context_parts)
+    return f"{message} for {context_str} (provide specific numbers, benchmarks, and data points)"
+
+
+async def _do_web_research(
+    query: str,
+    db,
+    company_id: int,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Run a Perplexity web search and return results with citations."""
+    import logging
+    _logger = logging.getLogger(__name__)
+    try:
+        from server.lib.llm.perplexity_client import get_perplexity_client
+        client = get_perplexity_client(
+            db_session=db,
+            company_id=company_id,
+            user_id=user_id,
+            pii_mode="standard"
+        )
+        if not client:
+            _logger.info("Perplexity not available, skipping web research")
+            return None
+
+        result = client.search(
+            query=query,
+            model="sonar-small",
+            system_prompt="You are a financial research assistant. Provide concise, data-driven answers with specific numbers, benchmarks, and statistics relevant to startups and SaaS businesses. Focus on the most recent and reliable data.",
+            temperature=0.2,
+            max_tokens=1500,
+            search_recency_filter="month",
+            return_citations=True,
+        )
+        return result
+    except Exception as e:
+        _logger.warning(f"Web research failed (non-critical): {e}")
+        return None
+
+
 @router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
 async def copilot_quick_chat(
     company_id: int,
@@ -393,7 +463,8 @@ async def copilot_quick_chat(
 ):
     """
     Natural language copilot chat for the Cmd+K drawer.
-    Returns a conversational text response grounded in all company financial data.
+    Returns a conversational text response grounded in all company financial data
+    and optionally enriched with real-time web research via Perplexity.
     """
     import logging
     _logger = logging.getLogger(__name__)
@@ -415,6 +486,25 @@ async def copilot_quick_chat(
         from datetime import datetime as dt
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
+        web_research_text = ""
+        web_citations = []
+        did_web_research = False
+
+        if _needs_web_research(request.message):
+            company_info = context.get("company", {})
+            research_query = _build_research_query(
+                request.message,
+                company_info.get("industry", ""),
+                company_info.get("stage", ""),
+            )
+            research_result = await _do_web_research(
+                research_query, db, company_id, current_user.id
+            )
+            if research_result and research_result.get("content"):
+                did_web_research = True
+                web_research_text = research_result["content"]
+                web_citations = research_result.get("citations", [])
+
         messages = []
         if request.conversation_history:
             for msg in request.conversation_history[-10:]:
@@ -422,6 +512,12 @@ async def copilot_quick_chat(
         messages.append({"role": "user", "content": request.message})
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
+
+        if web_research_text:
+            citation_note = ""
+            if web_citations:
+                citation_note = "\nSources: " + ", ".join(web_citations[:5])
+            system_prompt += f"\n\n--- REAL-TIME WEB RESEARCH ---\n{web_research_text}{citation_note}\n--- END RESEARCH ---\n\nIMPORTANT: When using web research data, clearly distinguish between the company's own data and external benchmarks/market data. Cite web sources when referencing external data points."
 
         llm_router = get_llm_router(
             db_session=db,
@@ -448,6 +544,8 @@ async def copilot_quick_chat(
             sources.append("Uploaded Data")
         if context.get("latest_simulation"):
             sources.append("Simulation Results")
+        if did_web_research:
+            sources.append("Web Research")
 
         followups = _generate_followups(request.message, context)
 

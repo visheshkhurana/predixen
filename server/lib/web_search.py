@@ -37,7 +37,7 @@ async def _search_with_perplexity(company_name: str, website: Optional[str] = No
     search_query = _get_company_prompt(company_name, website)
     
     payload = {
-        "model": "llama-3.1-sonar-small-128k-online",
+        "model": "sonar",
         "messages": [
             {
                 "role": "system",
