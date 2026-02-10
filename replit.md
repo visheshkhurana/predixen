@@ -76,6 +76,15 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Smart CSV Import**: POST /api/companies/{id}/financials/csv-detect (auto-detect columns, returns all rows), POST /api/companies/{id}/financials/import-csv, drag-and-drop UI with column mapping on Data Input page.
 -   **Copilot Quick Chat with Web Research**: POST /api/companies/{id}/quick-chat endpoint for natural language financial queries. Context pack includes 12 months financial history, uploaded metric points, simulation summaries. Keyword-based detection triggers Perplexity web search for market benchmarks, industry trends, and competitor data. Responses combine internal company data with real-time web research. Frontend Cmd+K drawer with ReactMarkdown rendering, conversation history, source citations (Truth Scan, Financial Records, Uploaded Data, Simulation Results, Web Research), and follow-up suggestions.
 -   **Perplexity Model Update**: Updated from deprecated `llama-3.1-sonar-*` models to current `sonar` / `sonar-pro` / `sonar-reasoning-pro` model names.
+-   **Production Data Connectors**: 4 fully implemented connectors with real API integration:
+    -   **Plaid**: Banking data — accounts, transactions, balances via Plaid API (client_id + secret + access_token). File: `server/connectors/plaid.py`
+    -   **HubSpot**: CRM data — deals, contacts, companies, revenue pipeline via Private App token. File: `server/connectors/hubspot.py`
+    -   **Gusto**: Payroll data — employees, payroll runs, compensation costs via API credentials. File: `server/connectors/gusto.py`
+    -   **Xero**: Accounting data — invoices, P&L, balance sheet, bank transactions via OAuth credentials. File: `server/connectors/xero.py`
+    -   All connectors implement `BaseConnector` interface (authenticate, sync_all, close) with `@ConnectorRegistry.register` decorator
+    -   Connector catalog (`server/api/connector_catalog.py`) has 37 total entries, 4 marked `implemented=True`
+    -   Frontend integrations page shows credential forms per connector via `ConnectDialog`, connect/disconnect/sync flows via `/api/connectors` endpoints
+    -   Credentials stored in `company.metadata_json["connectors"]` — needs encryption for production
 
 ## External Dependencies
 
