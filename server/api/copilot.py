@@ -266,6 +266,234 @@ class CopilotFeedbackRequest(BaseModel):
     improvement_suggestion: Optional[str] = None
 
 
+class QuickChatRequest(BaseModel):
+    """Request for natural language copilot chat."""
+    message: str
+    conversation_history: Optional[List[ConversationMessage]] = None
+
+
+class QuickChatResponse(BaseModel):
+    """Simple conversational response for Cmd+K drawer."""
+    response: str
+    sources_used: List[str] = []
+    suggested_followups: List[str] = []
+
+
+QUICK_CHAT_SYSTEM_PROMPT = """You are Predixen AI, a skilled financial copilot for startup founders. You have access to the company's complete financial data and should answer questions directly and conversationally.
+
+Rules:
+- Be concise but thorough. Answer in 2-5 sentences for simple questions, more for complex analysis.
+- Always use EXACT numbers from the data provided. Never invent or estimate numbers.
+- Format currency as $X,XXX or $X.XK/$X.XM for readability.
+- Format percentages with one decimal place.
+- When comparing periods, clearly state both values and the change.
+- If data for a specific period isn't available, say so clearly.
+- Use markdown formatting: **bold** for key numbers, bullet points for lists.
+- Be direct and founder-friendly. No corporate jargon.
+- When asked about projections or forecasts, reference simulation data if available.
+- Today's date context is provided - use it to determine "this month", "last month", etc.
+"""
+
+
+def _build_data_summary(context: Dict[str, Any]) -> str:
+    """Build a compact data summary string for the LLM from context pack."""
+    parts = []
+    company = context.get("company", {})
+    parts.append(f"Company: {company.get('name', 'Unknown')} | Industry: {company.get('industry', 'N/A')} | Stage: {company.get('stage', 'N/A')} | Currency: {company.get('currency', 'USD')}")
+
+    ts = context.get("truth_scan")
+    if ts:
+        metrics = ts.get("metrics", {})
+        parts.append(f"\n--- Current Metrics (Truth Scan, computed {ts.get('computed_at', 'N/A')}) ---")
+        for k, v in metrics.items():
+            if v is not None:
+                parts.append(f"  {k}: {v}")
+
+    history = context.get("financial_history", [])
+    if history:
+        parts.append(f"\n--- Financial History ({len(history)} months, newest first) ---")
+        for rec in history:
+            period = rec.get("period", "?")
+            line = f"  {period}: rev=${rec.get('revenue', 0):,.0f} payroll=${rec.get('payroll', 0):,.0f} opex=${rec.get('opex', 0):,.0f} cogs=${rec.get('cogs', 0):,.0f} other=${rec.get('other_costs', 0):,.0f} cash=${rec.get('cash_balance', 0):,.0f}"
+            if rec.get("mrr") is not None:
+                line += f" mrr=${rec['mrr']:,.0f}"
+            if rec.get("net_burn") is not None:
+                line += f" net_burn=${rec['net_burn']:,.0f}"
+            if rec.get("runway_months") is not None:
+                line += f" runway={rec['runway_months']:.1f}mo"
+            if rec.get("headcount") is not None:
+                line += f" headcount={rec['headcount']}"
+            if rec.get("customers") is not None:
+                line += f" customers={rec['customers']}"
+            if rec.get("ltv") is not None:
+                line += f" ltv=${rec['ltv']:,.0f}"
+            if rec.get("cac") is not None:
+                line += f" cac=${rec['cac']:,.0f}"
+            if rec.get("ltv_cac_ratio") is not None:
+                line += f" ltv:cac={rec['ltv_cac_ratio']:.1f}x"
+            if rec.get("gross_margin") is not None:
+                line += f" gm={rec['gross_margin']:.1f}%"
+            if rec.get("mom_growth") is not None:
+                line += f" mom_growth={rec['mom_growth']:.1f}%"
+            parts.append(line)
+
+    baseline = context.get("financial_baseline")
+    if baseline and not history:
+        parts.append(f"\n--- Financial Baseline (as of {baseline.get('as_of_date', 'N/A')}) ---")
+        for k, v in baseline.get("metrics", {}).items():
+            if v is not None:
+                parts.append(f"  {k}: {v}")
+
+    uploaded = context.get("uploaded_metrics", {})
+    if uploaded:
+        parts.append(f"\n--- Uploaded Metric Data ({len(uploaded)} metric types) ---")
+        for metric_key, points in uploaded.items():
+            if points:
+                vals = ", ".join([f"{p['period']}: {p['value']:,.2f}" for p in points[:6]])
+                parts.append(f"  {metric_key}: {vals}")
+
+    sim = context.get("latest_simulation")
+    if sim:
+        parts.append(f"\n--- Latest Simulation (computed {sim.get('computed_at', 'N/A')}) ---")
+        runway = sim.get("runway", {})
+        survival = sim.get("survival", {})
+        summary = sim.get("summary", {})
+        if runway:
+            parts.append(f"  Runway: P10={runway.get('p10', 'N/A')}mo P50={runway.get('p50', 'N/A')}mo P90={runway.get('p90', 'N/A')}mo")
+        if survival:
+            parts.append(f"  Survival: 12m={survival.get('12_month', 'N/A')} 18m={survival.get('18_month', 'N/A')} 24m={survival.get('24_month', 'N/A')}")
+        if summary:
+            for k, v in summary.items():
+                parts.append(f"  {k}: {v}")
+
+    scenarios = context.get("scenarios", [])
+    if scenarios:
+        parts.append(f"\n--- Scenarios ({len(scenarios)}) ---")
+        for s in scenarios:
+            parts.append(f"  {s.get('name', 'Unnamed')}: {s.get('inputs', {})}")
+
+    decision = context.get("latest_decision")
+    if decision:
+        parts.append(f"\n--- Latest Decision Recommendation ---")
+        recs = decision.get("recommendations", [])
+        if isinstance(recs, list):
+            for r in recs[:3]:
+                if isinstance(r, dict):
+                    parts.append(f"  - {r.get('action', r.get('title', 'Action'))}: {r.get('rationale', r.get('description', ''))}")
+
+    return "\n".join(parts)
+
+
+@router.post("/companies/{company_id}/quick-chat", response_model=QuickChatResponse)
+async def copilot_quick_chat(
+    company_id: int,
+    request: QuickChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Natural language copilot chat for the Cmd+K drawer.
+    Returns a conversational text response grounded in all company financial data.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+    from server.lib.llm.llm_router import get_llm_router, TaskType
+
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    try:
+        from server.copilot.context_pack import build_context_pack
+        context = build_context_pack(company, db)
+        data_summary = _build_data_summary(context)
+
+        from datetime import datetime as dt
+        today_str = dt.utcnow().strftime("%B %d, %Y")
+
+        messages = []
+        if request.conversation_history:
+            for msg in request.conversation_history[-10:]:
+                messages.append({"role": msg.role, "content": msg.content})
+        messages.append({"role": "user", "content": request.message})
+
+        system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
+
+        llm_router = get_llm_router(
+            db_session=db,
+            company_id=company_id,
+            user_id=current_user.id
+        )
+
+        result = llm_router.chat(
+            messages=messages,
+            task_type=TaskType.FINANCIAL_ANALYSIS,
+            system=system_prompt,
+            temperature=0.4,
+            max_tokens=1500,
+        )
+
+        response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
+
+        sources = []
+        if context.get("truth_scan"):
+            sources.append("Truth Scan")
+        if context.get("financial_history"):
+            sources.append("Financial Records")
+        if context.get("uploaded_metrics"):
+            sources.append("Uploaded Data")
+        if context.get("latest_simulation"):
+            sources.append("Simulation Results")
+
+        followups = _generate_followups(request.message, context)
+
+        return QuickChatResponse(
+            response=response_text,
+            sources_used=sources,
+            suggested_followups=followups,
+        )
+
+    except Exception as e:
+        _logger.error(f"Quick chat error for company {company_id}: {e}", exc_info=True)
+        return QuickChatResponse(
+            response=f"I'm having trouble processing your question right now. Here's what I know about {company.name or 'your company'}: check the Dashboard for current metrics, or try asking a more specific question.",
+            sources_used=[],
+            suggested_followups=[
+                "What are my key metrics?",
+                "Show me my runway",
+                "What's my burn rate?",
+            ],
+        )
+
+
+def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
+    """Generate contextual follow-up suggestions based on the question asked."""
+    msg_lower = message.lower()
+    followups = []
+
+    if any(w in msg_lower for w in ["revenue", "mrr", "arr", "sales"]):
+        followups.extend(["How has my revenue trended over the last 6 months?", "What's driving my revenue growth?"])
+    elif any(w in msg_lower for w in ["payroll", "salary", "team", "headcount", "hiring"]):
+        followups.extend(["What percentage of my burn is payroll?", "How has headcount changed over time?"])
+    elif any(w in msg_lower for w in ["burn", "expenses", "costs", "spending"]):
+        followups.extend(["Where can I cut costs?", "What's my biggest expense category?"])
+    elif any(w in msg_lower for w in ["runway", "cash", "survive"]):
+        followups.extend(["How can I extend my runway?", "What if I cut burn by 20%?"])
+    elif any(w in msg_lower for w in ["growth", "trend", "compare"]):
+        followups.extend(["What's my month-over-month growth?", "How do I compare to benchmarks?"])
+    else:
+        followups.extend(["What's my current runway?", "Show me my burn breakdown"])
+
+    if context.get("latest_simulation"):
+        followups.append("What did my latest simulation project?")
+
+    return followups[:3]
+
+
 @router.post("/companies/{company_id}/chat", response_model=CopilotChatResponse)
 async def copilot_chat(
     company_id: int,
