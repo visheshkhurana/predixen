@@ -129,7 +129,8 @@ export function safeToFixed(value: number | null | undefined, decimals = 1, fall
  */
 export function formatChartTooltip(
   value: number | null | undefined, 
-  type: 'currency' | 'percent' | 'number' = 'currency'
+  type: 'currency' | 'percent' | 'number' = 'currency',
+  currency: string = 'USD'
 ): string {
   if (value === null || value === undefined || isNaN(value)) {
     return 'N/A';
@@ -137,7 +138,7 @@ export function formatChartTooltip(
   
   switch (type) {
     case 'currency':
-      return formatCurrencyAbbrev(value);
+      return formatCurrencyAbbrev(value, currency);
     case 'percent':
       return formatPercent(value);
     case 'number':

@@ -2,23 +2,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, TrendingDown, Calendar, DollarSign, Flame } from "lucide-react";
 import type { SimulationResult } from "@shared/schema";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrencyFull } from "@/lib/utils";
 
 interface SimulationSummaryProps {
   result: SimulationResult;
+  currency?: string;
 }
 
-export function SimulationSummary({ result }: SimulationSummaryProps) {
+export function SimulationSummary({ result, currency = 'USD' }: SimulationSummaryProps) {
   const { summary } = result;
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const formatCurrency = (value: number) => formatCurrencyFull(value, currency);
 
   const getRunwayStatus = () => {
     if (!summary.runwayMonths) return { status: "safe", label: "Profitable" };

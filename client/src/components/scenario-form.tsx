@@ -21,6 +21,7 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
+import { formatCurrencyFull } from "@/lib/utils";
 import {
   DollarSign,
   Users,
@@ -54,9 +55,10 @@ interface ScenarioFormProps {
   onSubmit: (values: ScenarioFormValues) => void;
   isLoading?: boolean;
   defaultValues?: Partial<ScenarioFormValues>;
+  currency?: string;
 }
 
-export function ScenarioForm({ onSubmit, isLoading, defaultValues }: ScenarioFormProps) {
+export function ScenarioForm({ onSubmit, isLoading, defaultValues, currency = 'USD' }: ScenarioFormProps) {
   const form = useForm<ScenarioFormValues>({
     resolver: zodResolver(scenarioFormSchema),
     defaultValues: {
@@ -77,15 +79,6 @@ export function ScenarioForm({ onSubmit, isLoading, defaultValues }: ScenarioFor
       ...defaultValues,
     },
   });
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   return (
     <Form {...form}>

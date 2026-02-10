@@ -58,12 +58,7 @@ import {
   Legend,
 } from "recharts";
 import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
-
-function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
+import { formatCurrencyAbbrev } from "@/lib/utils";
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
@@ -129,6 +124,8 @@ const periodLabels: Record<TimePeriod, string> = {
 export default function Dashboard() {
   const { metrics: financialMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const { currentCompany: selectedCompany } = useFounderStore();
+  const companyCurrency = selectedCompany?.currency || 'USD';
+  const formatCurrency = useCallback((value: number) => formatCurrencyAbbrev(value, companyCurrency), [companyCurrency]);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("last_12_months");
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [historicalData, setHistoricalData] = useState<Array<KPIMetrics & { time: string }>>([]);
@@ -419,6 +416,7 @@ export default function Dashboard() {
               data={kpis.cashOnHand}
               title="Cash on Hand"
               format="currency"
+              currency={companyCurrency}
               icon={<DollarSign className="h-4 w-4" />}
               testId="kpi-cash"
             />
@@ -427,6 +425,7 @@ export default function Dashboard() {
               data={kpis.netBurn}
               title="Net Burn"
               format="currency"
+              currency={companyCurrency}
               icon={<Flame className="h-4 w-4" />}
               testId="kpi-burn"
             />
@@ -435,6 +434,7 @@ export default function Dashboard() {
               data={kpis.mrr}
               title="MRR"
               format="currency"
+              currency={companyCurrency}
               icon={<TrendingUp className="h-4 w-4" />}
               testId="kpi-mrr"
             />
@@ -544,7 +544,7 @@ export default function Dashboard() {
             </Card>
           )}
 
-          {latestResult && <CashFlowChart projections={latestResult.projections} />}
+          {latestResult && <CashFlowChart projections={latestResult.projections} currency={companyCurrency} />}
 
           {scenarios && scenarios.length > 0 && (
             <Card>
@@ -633,7 +633,7 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <CashFlowChart projections={latestResult.projections} />
+          <CashFlowChart projections={latestResult.projections} currency={companyCurrency} />
 
           {trendData && trendData.data && trendData.data.length > 1 && (
             <Card data-testid="card-runway-trend">

@@ -9,22 +9,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import type { MonthlyProjection } from "@shared/schema";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrencyFull } from "@/lib/utils";
 
 interface DataTableProps {
   projections: MonthlyProjection[];
   title?: string;
+  currency?: string;
 }
 
-export function DataTable({ projections, title = "Monthly Projections" }: DataTableProps) {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+export function DataTable({ projections, title = "Monthly Projections", currency = 'USD' }: DataTableProps) {
 
   return (
     <Card data-testid="table-projections">
@@ -55,10 +48,10 @@ export function DataTable({ projections, title = "Monthly Projections" }: DataTa
                   >
                     <TableCell className="font-medium">{projection.date}</TableCell>
                     <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(projection.revenue)}
+                      {formatCurrencyFull(projection.revenue, currency)}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {formatCurrency(projection.expenses)}
+                      {formatCurrencyFull(projection.expenses, currency)}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -69,7 +62,7 @@ export function DataTable({ projections, title = "Monthly Projections" }: DataTa
                       )}
                     >
                       {projection.netBurn > 0 ? "-" : "+"}
-                      {formatCurrency(Math.abs(projection.netBurn))}
+                      {formatCurrencyFull(Math.abs(projection.netBurn), currency)}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -79,7 +72,7 @@ export function DataTable({ projections, title = "Monthly Projections" }: DataTa
                           : ""
                       )}
                     >
-                      {formatCurrency(Math.max(0, projection.cashBalance))}
+                      {formatCurrencyFull(Math.max(0, projection.cashBalance), currency)}
                     </TableCell>
                   </TableRow>
                 ))}
