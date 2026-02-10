@@ -35,7 +35,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
 
   return (
     <div 
-      className="flex items-center gap-1 text-xs bg-muted/50 rounded-md px-2 py-1"
+      className="flex items-center gap-1 text-xs bg-muted/50 rounded-md px-2 py-1 overflow-hidden whitespace-nowrap"
       data-testid="context-bar"
     >
       <Tooltip>
@@ -105,7 +105,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
         <TooltipTrigger asChild>
           <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-default">
             <Database className={`h-3 w-3 ${getDataFreshnessColor()}`} />
-            <span className={`${getDataFreshnessColor()}`} data-testid="context-data-freshness">
+            <span className={`${getDataFreshnessColor()} truncate max-w-[120px]`} data-testid="context-data-freshness">
               {dataFreshness ? `Data ${dataFreshness}` : "No Data"}
             </span>
           </div>
@@ -134,7 +134,7 @@ export function ContextBar({ scenarioName, scenarioId, runId, runTimestamp }: Co
             <TooltipTrigger asChild>
               <div className="flex items-center gap-1 px-1.5 py-0.5 rounded hover-elevate cursor-default">
                 <Clock className={`h-3 w-3 ${runTimestamp ? 'text-amber-400' : 'text-emerald-400'}`} />
-                <span className="text-[10px] font-mono" data-testid="context-timestamp">
+                <span className="text-[10px] font-mono truncate" data-testid="context-timestamp">
                   {new Date(runTimestamp || truthTimestamp!).toLocaleString(undefined, { 
                     month: 'short', 
                     day: 'numeric', 

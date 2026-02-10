@@ -476,14 +476,17 @@ const KpiStatusIcon = ({ status }: { status: 'green' | 'yellow' | 'red' }) => {
 export default function OverviewPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { currentCompany, setTruthScan, setCurrentStep } = useFounderStore();
+  const { currentCompany, setTruthScan, setCurrentStep, financialBaseline } = useFounderStore();
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
-  const [assumptions, setAssumptions] = useState<ScenarioAssumptions>(DEFAULT_ASSUMPTIONS);
+  const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
+    ...DEFAULT_ASSUMPTIONS,
+    growthRate: Number(financialBaseline?.monthlyGrowthRate) || DEFAULT_ASSUMPTIONS.growthRate,
+  });
   const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
   const [newScenarioName, setNewScenarioName] = useState('');
@@ -499,6 +502,12 @@ export default function OverviewPage() {
   
   const { data: dynamicBenchmarks, isLoading: benchmarksLoading, error: benchmarksError } = useBenchmarkSearch(selectedIndustry, selectedStage);
   const { data: benchmarkOptions } = useBenchmarkIndustries();
+
+  useEffect(() => {
+    if (financialBaseline?.monthlyGrowthRate != null) {
+      setAssumptions(prev => ({ ...prev, growthRate: Number(financialBaseline.monthlyGrowthRate) }));
+    }
+  }, [financialBaseline?.monthlyGrowthRate]);
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -1079,11 +1088,11 @@ export default function OverviewPage() {
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach $100K MRR</p>
-                <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 shrink-0" data-testid="badge-goal-mrr-status">On Track</Badge>
+                <Badge variant={baseData.mrr >= 100000 ? "secondary" : baseData.mrr >= 50000 ? "secondary" : "destructive"} className={baseData.mrr >= 50000 ? "bg-emerald-500/10 text-emerald-500 shrink-0" : "shrink-0"} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</Badge>
               </div>
-              <Progress value={50} className="h-2" data-testid="progress-goal-mrr" />
+              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-mrr-progress">$50K / $100K</span>
+                <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / $100K</span>
                 <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
               </div>
             </CardContent>
@@ -1093,12 +1102,12 @@ export default function OverviewPage() {
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
-                <Badge variant="secondary" className="bg-primary/10 text-primary shrink-0" data-testid="badge-goal-runway-status">In Progress</Badge>
+                <Badge variant={baseData.runway >= 36 ? "secondary" : baseData.runway >= 18 ? "secondary" : "destructive"} className={baseData.runway >= 18 ? "bg-primary/10 text-primary shrink-0" : "shrink-0"} data-testid="badge-goal-runway-status">{baseData.runway >= 36 ? 'Complete' : baseData.runway >= 18 ? 'In Progress' : 'Off Track'}</Badge>
               </div>
-              <Progress value={69} className="h-2" data-testid="progress-goal-runway" />
+              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-runway-progress">25.0 / 36.0 months</span>
-                <span data-testid="text-goal-runway-pct">69% complete</span>
+                <span data-testid="text-goal-runway-progress">{baseData.runway.toFixed(1)} / 36.0 months</span>
+                <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}% complete</span>
               </div>
             </CardContent>
           </Card>

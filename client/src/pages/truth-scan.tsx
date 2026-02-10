@@ -205,7 +205,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
 }
 
 export default function TruthScanPage() {
-  const { currentCompany, setCurrentCompany } = useFounderStore();
+  const { currentCompany, setCurrentCompany, financialBaseline } = useFounderStore();
   const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
   const { metrics: sharedMetrics } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
@@ -283,7 +283,33 @@ export default function TruthScanPage() {
     }
   });
 
-  const metrics = truthScan?.metrics || {};
+  const rawMetrics = truthScan?.metrics || {};
+  const enhancedMetrics = useMemo(() => {
+    const m = { ...rawMetrics } as Record<string, any>;
+    if (financialBaseline) {
+      const revenue = Number(financialBaseline.monthlyRevenue) || 0;
+      const expenses = Number(financialBaseline.totalMonthlyExpenses) || 0;
+      const cogs = Number(financialBaseline.expenseBreakdown?.cogs) || 0;
+      const cash = Number(financialBaseline.cashOnHand) || 0;
+      if (revenue > 0 && !getMetricValue(m.arr)) {
+        m.arr = revenue * 12;
+      }
+      if (revenue > 0 && !getMetricValue(m.gross_margin)) {
+        m.gross_margin = ((revenue - cogs) / revenue) * 100;
+      }
+      if (revenue > 0 && !getMetricValue(m.mrr)) {
+        m.mrr = revenue;
+      }
+      if (!getMetricValue(m.runway_p50) && cash > 0 && expenses > revenue) {
+        m.runway_p50 = cash / (expenses - revenue);
+      }
+      if (!getMetricValue(m.revenue_growth_mom) && financialBaseline.monthlyGrowthRate) {
+        m.revenue_growth_mom = Number(financialBaseline.monthlyGrowthRate);
+      }
+    }
+    return m;
+  }, [rawMetrics, financialBaseline]);
+  const metrics = enhancedMetrics;
   const flags = truthScan?.flags || [];
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
