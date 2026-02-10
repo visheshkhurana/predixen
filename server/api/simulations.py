@@ -462,6 +462,12 @@ def run_simulation(
         source="simulation"
     )
     
+    try:
+        from server.api.metric_trends import save_simulation_snapshot
+        save_simulation_snapshot(db, company.id, outputs)
+    except Exception:
+        pass
+    
     return {
         "id": sim_run.id,
         "scenario_id": scenario_id,

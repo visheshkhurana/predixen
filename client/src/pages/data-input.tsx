@@ -196,6 +196,11 @@ export default function DataInput() {
   const [useVerificationFlow, setUseVerificationFlow] = useState(true);
   const [hasManualExpenseOverride, setHasManualExpenseOverride] = useState(false);
   const [hasLoadedFromBackend, setHasLoadedFromBackend] = useState(false);
+  const [csvDetection, setCsvDetection] = useState<{ headers: string[]; suggested_mappings: Record<string, string>; preview_rows: Record<string, string>[]; total_rows: number; raw_rows?: Record<string, string>[] } | null>(null);
+  const [csvMappings, setCsvMappings] = useState<Record<string, string>>({});
+  const [csvDragActive, setCsvDragActive] = useState(false);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvRawRows, setCsvRawRows] = useState<Record<string, string>[]>([]);
   const [lastLoadedCompanyId, setLastLoadedCompanyId] = useState<number | null>(null);
   const [, navigate] = useLocation();
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -1010,6 +1015,65 @@ export default function DataInput() {
     window.location.reload();
   };
 
+  const handleCsvDetect = async (file: File) => {
+    if (!currentCompany || !token) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch(`/api/companies/${currentCompany.id}/financials/csv-detect`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCsvDetection(data);
+        setCsvMappings(data.suggested_mappings || {});
+        setCsvRawRows(data.all_rows || data.preview_rows || []);
+        toast({ title: 'CSV analyzed', description: `${data.total_rows} rows detected, ${Object.keys(data.suggested_mappings || {}).length} columns auto-mapped` });
+      } else {
+        const err = await res.json();
+        toast({ title: 'Detection failed', description: err.detail || 'Invalid CSV file', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Detection failed', description: 'Network error', variant: 'destructive' });
+    }
+  };
+
+  const handleCsvImport = async () => {
+    if (!currentCompany || !token || !csvDetection) return;
+    const activeMappings: Record<string, string> = {};
+    for (const [k, v] of Object.entries(csvMappings)) {
+      if (v && v !== "__none__") activeMappings[k] = v;
+    }
+    if (Object.keys(activeMappings).length === 0) {
+      toast({ title: 'No columns mapped', description: 'Map at least one column before importing', variant: 'destructive' });
+      return;
+    }
+    setCsvImporting(true);
+    try {
+      const res = await fetch(`/api/companies/${currentCompany.id}/financials/import-csv`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mappings: activeMappings, rows: csvRawRows }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast({ title: 'Import successful', description: `${data.imported} records imported${data.errors?.length ? `, ${data.errors.length} errors` : ''}` });
+        setCsvDetection(null);
+        setCsvMappings({});
+        setCsvRawRows([]);
+        queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id] });
+      } else {
+        const err = await res.json();
+        toast({ title: 'Import failed', description: err.detail || 'Check column mappings', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
+    }
+    setCsvImporting(false);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
@@ -1073,144 +1137,123 @@ export default function DataInput() {
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <FileUp className="h-5 w-5 text-primary" />
-                      Import CSV Data
+                      Smart CSV Import
                     </CardTitle>
                     <CardDescription>
-                      Upload a CSV file with your financial data. We'll automatically detect columns and validate the data.
+                      Upload any CSV file and we'll automatically detect your columns. You can review and adjust the mapping before importing.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-financial-input')?.click()}>
-                        <CardContent className="p-4 text-center">
-                          <DollarSign className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
-                          <p className="font-medium">Financial Data</p>
-                          <p className="text-xs text-muted-foreground mt-1">Revenue, expenses, P&L</p>
-                          <input
-                            id="csv-financial-input"
-                            type="file"
-                            accept=".csv"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file && currentCompany && token) {
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                try {
-                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=financial`, {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${token}` },
-                                    body: formData
-                                  });
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    toast({ title: 'CSV imported successfully', description: `${data.row_count} records processed` });
-                                    queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
-                                  } else {
-                                    const err = await res.json();
-                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
-                                  }
-                                } catch {
-                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
-                                }
-                              }
-                            }}
-                            data-testid="input-csv-financial"
-                          />
-                        </CardContent>
-                      </Card>
-                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-transactions-input')?.click()}>
-                        <CardContent className="p-4 text-center">
-                          <TrendingUp className="h-8 w-8 mx-auto mb-2 text-blue-500" />
-                          <p className="font-medium">Transactions</p>
-                          <p className="text-xs text-muted-foreground mt-1">Customer payments, invoices</p>
-                          <input
-                            id="csv-transactions-input"
-                            type="file"
-                            accept=".csv"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file && currentCompany && token) {
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                try {
-                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=transactions`, {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${token}` },
-                                    body: formData
-                                  });
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    toast({ title: 'Transactions imported', description: `${data.row_count} records processed` });
-                                  } else {
-                                    const err = await res.json();
-                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
-                                  }
-                                } catch {
-                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
-                                }
-                              }
-                            }}
-                            data-testid="input-csv-transactions"
-                          />
-                        </CardContent>
-                      </Card>
-                      <Card className="border-dashed hover-elevate cursor-pointer" onClick={() => document.getElementById('csv-customers-input')?.click()}>
-                        <CardContent className="p-4 text-center">
-                          <Users className="h-8 w-8 mx-auto mb-2 text-purple-500" />
-                          <p className="font-medium">Customers</p>
-                          <p className="text-xs text-muted-foreground mt-1">Customer list, segments</p>
-                          <input
-                            id="csv-customers-input"
-                            type="file"
-                            accept=".csv"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file && currentCompany && token) {
-                                const formData = new FormData();
-                                formData.append('file', file);
-                                try {
-                                  const res = await fetch(`/api/companies/${currentCompany.id}/datasets/upload?dataset_type=customers`, {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${token}` },
-                                    body: formData
-                                  });
-                                  if (res.ok) {
-                                    const data = await res.json();
-                                    toast({ title: 'Customers imported', description: `${data.row_count} records processed` });
-                                  } else {
-                                    const err = await res.json();
-                                    toast({ title: 'Import failed', description: err.detail || 'Check file format', variant: 'destructive' });
-                                  }
-                                } catch {
-                                  toast({ title: 'Import failed', description: 'Network error', variant: 'destructive' });
-                                }
-                              }
-                            }}
-                            data-testid="input-csv-customers"
-                          />
-                        </CardContent>
-                      </Card>
-                    </div>
-                    <div className="bg-muted/30 rounded-lg p-4 mt-4">
-                      <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                        <Info className="h-4 w-4" />
-                        CSV Format Requirements
-                      </h4>
-                      <ul className="text-xs text-muted-foreground space-y-1">
-                        <li><strong>Financial:</strong> period_start, period_end, revenue, cogs, opex, payroll, cash_balance</li>
-                        <li><strong>Transactions:</strong> date, customer_id, amount, description, type</li>
-                        <li><strong>Customers:</strong> customer_id, name, segment, start_date, mrr</li>
-                      </ul>
-                      <Button variant="ghost" size="sm" className="px-0 mt-2 text-xs h-auto" onClick={() => {
-                        toast({ title: 'Sample CSV templates', description: 'Download sample CSVs from the Help section' });
-                      }}>
-                        <Download className="h-3 w-3 mr-1" />
-                        Download sample templates
-                      </Button>
-                    </div>
+                    {!csvDetection ? (
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${csvDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}`}
+                        onDragOver={(e) => { e.preventDefault(); setCsvDragActive(true); }}
+                        onDragLeave={() => setCsvDragActive(false)}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          setCsvDragActive(false);
+                          const file = e.dataTransfer.files[0];
+                          if (file) await handleCsvDetect(file);
+                        }}
+                        data-testid="csv-drop-zone"
+                      >
+                        <FileUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <p className="font-medium mb-1">Drag and drop your CSV file here</p>
+                        <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
+                        <Button variant="outline" onClick={() => document.getElementById('csv-smart-input')?.click()} data-testid="button-browse-csv">
+                          Browse Files
+                        </Button>
+                        <input
+                          id="csv-smart-input"
+                          type="file"
+                          accept=".csv"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) await handleCsvDetect(file);
+                          }}
+                          data-testid="input-csv-smart"
+                        />
+                        <p className="text-xs text-muted-foreground mt-4">
+                          Supported columns: date, revenue, expenses, cash, payroll, MRR, ARR, customers, headcount, burn, gross margin, CAC
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                          <div>
+                            <p className="font-medium">Column Mapping</p>
+                            <p className="text-sm text-muted-foreground">
+                              {csvDetection.total_rows} rows detected. Adjust mappings if needed, then import.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => { setCsvDetection(null); setCsvMappings({}); }} data-testid="button-csv-reset">
+                              <X className="h-4 w-4 mr-1" /> Reset
+                            </Button>
+                            <Button size="sm" onClick={handleCsvImport} disabled={csvImporting} data-testid="button-csv-import">
+                              {csvImporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                              {csvImporting ? 'Importing...' : `Import ${csvDetection.total_rows} rows`}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {["date", "revenue", "expenses", "cash_balance", "payroll", "mrr", "arr", "customers", "headcount", "burn", "gross_margin", "cac"].map((field) => (
+                            <div key={field} className="space-y-1">
+                              <Label className="text-xs capitalize">{field.replace("_", " ")}</Label>
+                              <Select
+                                value={csvMappings[field] || "__none__"}
+                                onValueChange={(v) => setCsvMappings(prev => ({ ...prev, [field]: v === "__none__" ? "" : v }))}
+                              >
+                                <SelectTrigger className="text-xs" data-testid={`select-csv-map-${field}`}>
+                                  <SelectValue placeholder="Not mapped" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">Not mapped</SelectItem>
+                                  {csvDetection.headers.map((h: string) => (
+                                    <SelectItem key={h} value={h}>{h}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {csvMappings[field] && csvMappings[field] !== "__none__" && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <Check className="h-3 w-3 mr-1" /> Mapped
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {csvDetection.preview_rows && csvDetection.preview_rows.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">Preview (first {Math.min(csvDetection.preview_rows.length, 5)} rows)</p>
+                            <ScrollArea className="h-48">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr>
+                                      {csvDetection.headers.map((h: string) => (
+                                        <th key={h} className="px-2 py-1 text-left border-b font-medium text-muted-foreground whitespace-nowrap">{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {csvDetection.preview_rows.slice(0, 5).map((row: Record<string, string>, i: number) => (
+                                      <tr key={i}>
+                                        {csvDetection.headers.map((h: string) => (
+                                          <td key={h} className="px-2 py-1 border-b whitespace-nowrap">{row[h] || ''}</td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : (

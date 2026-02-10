@@ -66,6 +66,9 @@ from server.models.email_event import EmailEvent
 from server.models.connector_capability import ConnectorCapability
 from server.models.metric_suggestion import MetricSuggestion, SuggestionEvent
 from server.models.team_member import TeamMember, TeamMemberType, TeamMemberStatus
+from server.models.shared_scenario import SharedScenario
+from server.models.metric_snapshot import MetricSnapshot
+from server.models.workspace import NotificationPreference
 
 __all__ = [
     "User",
@@ -146,4 +149,7 @@ __all__ = [
     "TeamMember",
     "TeamMemberType",
     "TeamMemberStatus",
+    "SharedScenario",
+    "MetricSnapshot",
+    "NotificationPreference",
 ]

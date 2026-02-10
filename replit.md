@@ -70,6 +70,10 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Strategy Card Fix**: Removed click-blocking guard from StrategyCard; cards always clickable. isLoading only depends on pendingStrategyId, not parent isRunning.
 -   **Suggested Metrics Fallback**: Generate Suggestions now returns 8 default SaaS metric suggestions (NRR, Gross Margin Trend, Burn Multiple, CAC Payback Period, Magic Number, Revenue Per Employee, Logo Churn Rate, SaaS Quick Ratio) when no data sources are connected.
 -   **LTV:CAC Fix**: useFinancialMetrics hook uses explicit fetchJson with auth headers and semantic query keys to prevent N/A flashes. Loading skeletons added to Overview page.
+-   **Share Scenario**: SharedScenario model, POST /api/companies/{id}/scenarios/share, GET /api/scenarios/shared/{uuid} (no auth), Share button with modal on scenarios page, standalone read-only page at /scenarios/shared/:uuid.
+-   **Runway Trends**: MetricSnapshot model, save_simulation_snapshot() wired into simulation run, GET /api/companies/{id}/trends with 90-day data, Runway Trend P10/P50/P90 line chart on Dashboard.
+-   **Monthly Digest**: Uses NotificationPreference model (workspace.py, added monthly_digest column), GET/PUT /api/companies/{id}/digest/preferences, POST /api/companies/{id}/digest/send with HTML email via Resend, toggle + "Send Now" on Dashboard.
+-   **Smart CSV Import**: POST /api/companies/{id}/financials/csv-detect (auto-detect columns, returns all rows), POST /api/companies/{id}/financials/import-csv, drag-and-drop UI with column mapping on Data Input page.
 
 ## External Dependencies
 

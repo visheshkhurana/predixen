@@ -39,7 +39,7 @@ import {
   ChevronRight, FlaskConical, TrendingUp, DollarSign,
   Clock, Percent, ArrowRight, Users, FileText, MessageSquare,
   ChevronDown, ChevronUp, Search, Flame, ArrowUpRight,
-  RotateCcw, Download, Shield
+  RotateCcw, Download, Shield, Share2, Copy, Check
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
@@ -152,6 +152,44 @@ export default function ScenariosPage() {
 
   const [questionInput, setQuestionInput] = useState('');
   const resultsRef = useRef<HTMLDivElement>(null);
+  const [shareModal, setShareModal] = useState<{ open: boolean; url: string; loading: boolean }>({ open: false, url: '', loading: false });
+  const [copied, setCopied] = useState(false);
+
+  const handleShareScenario = async () => {
+    if (!simulation || !currentCompany) return;
+    const currentScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
+    setShareModal({ open: true, url: '', loading: true });
+    try {
+      const token = localStorage.getItem('predixen-token');
+      const res = await fetch(`/api/companies/${currentCompany.id}/scenarios/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          scenario_name: currentScenario?.name || currentScenarioName,
+          scenario_description: currentScenario?.description || '',
+          simulation_data: simulation,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const fullUrl = `${window.location.origin}${data.url}`;
+        setShareModal({ open: true, url: fullUrl, loading: false });
+      } else {
+        toast({ title: 'Share failed', description: 'Could not generate share link', variant: 'destructive' });
+        setShareModal({ open: false, url: '', loading: false });
+      }
+    } catch {
+      toast({ title: 'Share failed', description: 'Network error', variant: 'destructive' });
+      setShareModal({ open: false, url: '', loading: false });
+    }
+  };
+
+  const handleCopyShareLink = () => {
+    navigator.clipboard.writeText(shareModal.url);
+    setCopied(true);
+    toast({ title: 'Link copied', description: 'Share link copied to clipboard' });
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const hasRunScenario = useMemo(() => {
     if (!scenarios || scenarios.length === 0) return false;
@@ -865,10 +903,16 @@ export default function ScenariosPage() {
                 <h2 className="text-xl font-bold" data-testid="text-results-title">Simulation Results</h2>
                 <p className="text-sm text-muted-foreground">{currentScenarioName} &mdash; 1,000 Monte Carlo runs</p>
               </div>
-              <ExportButton
-                data={formatSimulationForExport(simulation)}
-                filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
-              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={handleShareScenario} data-testid="button-share-scenario">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+                <ExportButton
+                  data={formatSimulationForExport(simulation)}
+                  filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1489,6 +1533,39 @@ export default function ScenariosPage() {
           onComplete={() => toast({ title: 'Data validated', description: 'You can now run simulations.' })}
         />
       )}
+
+      <Dialog open={shareModal.open} onOpenChange={(open) => setShareModal({ ...shareModal, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Share Scenario
+            </DialogTitle>
+            <DialogDescription>Anyone with this link can view the simulation results (read-only).</DialogDescription>
+          </DialogHeader>
+          {shareModal.loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Generating link...</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={shareModal.url}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  data-testid="input-share-url"
+                />
+                <Button size="sm" onClick={handleCopyShareLink} data-testid="button-copy-share-link">
+                  {copied ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

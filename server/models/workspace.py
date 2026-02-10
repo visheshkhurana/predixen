@@ -42,11 +42,13 @@ class NotificationPreference(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     email_enabled = Column(Boolean, default=True)
     email_address = Column(String, nullable=True)
     alert_types = Column(JSON, default=dict)
     thresholds = Column(JSON, default=dict)
     frequency = Column(String, default="immediate")  # immediate, daily, weekly
+    monthly_digest = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = relationship("User", backref="notification_preferences")
