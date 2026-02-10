@@ -29,12 +29,17 @@ def truncate_preview(text: str, max_length: int = 1000) -> str:
 
 
 PERPLEXITY_MODELS = {
-    "sonar-small": "llama-3.1-sonar-small-128k-online",
-    "sonar-large": "llama-3.1-sonar-large-128k-online",
-    "sonar-huge": "llama-3.1-sonar-huge-128k-online",
+    "sonar-small": "sonar",
+    "sonar": "sonar",
+    "sonar-pro": "sonar-pro",
+    "sonar-large": "sonar-pro",
+    "sonar-huge": "sonar-pro",
+    "sonar-reasoning": "sonar-reasoning-pro",
+    "sonar-reasoning-pro": "sonar-reasoning-pro",
+    "sonar-deep-research": "sonar-deep-research",
 }
 
-DEFAULT_MODEL = "sonar-small"
+DEFAULT_MODEL = "sonar"
 
 
 class PerplexityClient:

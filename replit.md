@@ -74,12 +74,15 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Runway Trends**: MetricSnapshot model, save_simulation_snapshot() wired into simulation run, GET /api/companies/{id}/trends with 90-day data, Runway Trend P10/P50/P90 line chart on Dashboard.
 -   **Monthly Digest**: Uses NotificationPreference model (workspace.py, added monthly_digest column), GET/PUT /api/companies/{id}/digest/preferences, POST /api/companies/{id}/digest/send with HTML email via Resend, toggle + "Send Now" on Dashboard.
 -   **Smart CSV Import**: POST /api/companies/{id}/financials/csv-detect (auto-detect columns, returns all rows), POST /api/companies/{id}/financials/import-csv, drag-and-drop UI with column mapping on Data Input page.
+-   **Copilot Quick Chat with Web Research**: POST /api/companies/{id}/quick-chat endpoint for natural language financial queries. Context pack includes 12 months financial history, uploaded metric points, simulation summaries. Keyword-based detection triggers Perplexity web search for market benchmarks, industry trends, and competitor data. Responses combine internal company data with real-time web research. Frontend Cmd+K drawer with ReactMarkdown rendering, conversation history, source citations (Truth Scan, Financial Records, Uploaded Data, Simulation Results, Web Research), and follow-up suggestions.
+-   **Perplexity Model Update**: Updated from deprecated `llama-3.1-sonar-*` models to current `sonar` / `sonar-pro` / `sonar-reasoning-pro` model names.
 
 ## External Dependencies
 
 -   **OpenAI**: GPT-4o for financial analysis, metrics extraction, vision tasks.
 -   **Anthropic**: Claude Opus/Sonnet/Haiku for complex reasoning, coding, strategy.
 -   **Google Gemini**: Gemini 2.5/3 Flash/Pro for general chat, high-volume tasks.
+-   **Perplexity**: Sonar models for real-time web search, market research, and benchmark data in copilot.
 -   **PostgreSQL**: Primary relational database.
 -   **Google Fonts**: Inter, IBM Plex Mono.
 -   **Resend**: Email delivery service.
