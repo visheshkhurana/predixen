@@ -5,16 +5,18 @@ const RECIPIENTS = [
   { phone: "+919818540514", name: "Nikita" },
 ];
 
-const MESSAGE = `Predixen Intelligence OS — Major UX Redesign shipped!
+const MESSAGE = `Predixen — Multi-Currency Support Live
 
-Key changes:
-- Workflow stepper: Upload → Validate → Simulate → Decide
-- Morning Briefing with live AI insights
-- Cmd+K AI Copilot from anywhere
-- Goal tracking & competitive benchmarks
-- Streamlined 5-item navigation
+33 global currencies now supported across the entire platform:
 
-Try it now: demo@predixen.ai / demo123
+- Set your company's base currency (USD, EUR, GBP, INR, SGD, JPY, AED + 26 more)
+- Dashboard, KPIs, simulations, charts all auto-convert
+- Live ECB exchange rates with 6-hour cache
+- Full audit trail: original currency + FX rate stored per record
+
+To set: Sidebar → Edit Company → Currency dropdown
+
+Try it: demo@predixen.ai / demo123
 https://predixen-intelligence-os.replit.app
 
 — Predixen Team`;
