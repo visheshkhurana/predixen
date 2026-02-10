@@ -13,36 +13,23 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { MonthlyProjection } from "@shared/schema";
+import { formatCurrencyAbbrev, formatCurrencyFull } from "@/lib/utils";
 
 interface CashFlowChartProps {
   projections: MonthlyProjection[];
   title?: string;
   showRunwayLine?: boolean;
+  currency?: string;
 }
 
 export function CashFlowChart({
   projections,
   title = "Cash Balance Projection",
   showRunwayLine = true,
+  currency = 'USD',
 }: CashFlowChartProps) {
-  const formatCurrency = (value: number) => {
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    if (Math.abs(value) >= 1000) {
-      return `$${(value / 1000).toFixed(0)}K`;
-    }
-    return `$${value.toFixed(0)}`;
-  };
-
-  const formatTooltipValue = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const formatCurrency = (value: number) => formatCurrencyAbbrev(value, currency);
+  const formatTooltipValue = (value: number) => formatCurrencyFull(value, currency);
 
   const cashOutMonth = projections.find((p) => p.cashBalance <= 0);
 

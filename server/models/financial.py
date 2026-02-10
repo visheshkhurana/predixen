@@ -177,6 +177,10 @@ class FinancialRecord(Base):
     
     marketing_expense = Column(Float, nullable=True)
     
+    original_currency = Column(String(3), default="USD")
+    fx_rate_to_base = Column(Float, default=1.0)
+    base_currency = Column(String(3), default="USD")
+    
     source_type = Column(String(20), nullable=True)
     extraction_summary = Column(Text, nullable=True)
     

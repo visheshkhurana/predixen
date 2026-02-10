@@ -10,6 +10,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { formatCurrencyFull } from '@/lib/utils';
 import { 
   Trophy, TrendingUp, Shield, AlertTriangle, Coins, 
   Info, ArrowUpRight, ArrowDownRight, SlidersHorizontal, 
@@ -41,6 +42,7 @@ interface DecisionRankingTableProps {
   baselineKey?: string;
   onSelectScenario?: (scenarioKey: string) => void;
   testId?: string;
+  currency?: string;
 }
 
 type SortField = 'composite_score' | 'survival_18m_prob' | 'expected_arr_18m' | 'downside_risk_cvar' | 'dilution_pct' | 'complexity_score';
@@ -127,14 +129,6 @@ function formatCurrency(value: number): string {
     return `$${(value / 1000).toFixed(0)}K`;
   }
   return `$${value.toFixed(0)}`;
-}
-
-function formatFullCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0
-  }).format(value);
 }
 
 function getRankBadge(rank: number) {
@@ -572,7 +566,8 @@ export function DecisionRankingTable({
   rankings, 
   baselineKey,
   onSelectScenario,
-  testId = 'decision-ranking'
+  testId = 'decision-ranking',
+  currency = 'USD'
 }: DecisionRankingTableProps) {
   const [sortBy, setSortBy] = useState<SortField>('composite_score');
   const [sortDesc, setSortDesc] = useState(true);
@@ -940,7 +935,7 @@ export function DecisionRankingTable({
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>{formatFullCurrency(score.expected_arr_18m)}</p>
+                            <p>{formatCurrencyFull(score.expected_arr_18m, currency)}</p>
                           </TooltipContent>
                         </Tooltip>
                         {!isBaseline && effectiveBaseline && effectiveBaseline.expected_arr_18m > 0 && (
@@ -972,7 +967,7 @@ export function DecisionRankingTable({
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>P10 cash position: {formatFullCurrency(score.downside_risk_cvar)}</p>
+                            <p>P10 cash position: {formatCurrencyFull(score.downside_risk_cvar, currency)}</p>
                             <p className="text-xs text-muted-foreground">Lower is better (less downside)</p>
                           </TooltipContent>
                         </Tooltip>

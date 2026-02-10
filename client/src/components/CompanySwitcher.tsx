@@ -68,7 +68,24 @@ const STAGES = [
   'Profitable'
 ];
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+const CURRENCIES = [
+  'USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'SGD', 'JPY',
+  'AED', 'CHF', 'CNY', 'HKD', 'NZD', 'SEK', 'NOK', 'DKK',
+  'BRL', 'MXN', 'ZAR', 'KRW', 'THB', 'IDR', 'MYR', 'PHP',
+  'TWD', 'ILS', 'PLN', 'CZK', 'HUF', 'TRY', 'RON', 'BGN', 'ISK',
+];
+
+const CURRENCY_LABELS: Record<string, string> = {
+  USD: '$ USD', EUR: '\u20ac EUR', GBP: '\u00a3 GBP', INR: '\u20b9 INR',
+  CAD: 'C$ CAD', AUD: 'A$ AUD', SGD: 'S$ SGD', JPY: '\u00a5 JPY',
+  AED: 'AED', CHF: 'CHF', CNY: '\u00a5 CNY', HKD: 'HK$ HKD',
+  NZD: 'NZ$ NZD', SEK: 'kr SEK', NOK: 'kr NOK', DKK: 'kr DKK',
+  BRL: 'R$ BRL', MXN: 'MX$ MXN', ZAR: 'R ZAR', KRW: '\u20a9 KRW',
+  THB: '\u0e3f THB', IDR: 'Rp IDR', MYR: 'RM MYR', PHP: '\u20b1 PHP',
+  TWD: 'NT$ TWD', ILS: '\u20aa ILS', PLN: 'z\u0142 PLN', CZK: 'K\u010d CZK',
+  HUF: 'Ft HUF', TRY: '\u20ba TRY', RON: 'lei RON', BGN: '\u043b\u0432 BGN',
+  ISK: 'kr ISK',
+};
 
 export function CompanySwitcher() {
   const { currentCompany, setCurrentCompany } = useFounderStore();
@@ -314,7 +331,7 @@ export function CompanySwitcher() {
                 <SelectContent>
                   {CURRENCIES.map((currency) => (
                     <SelectItem key={currency} value={currency}>
-                      {currency}
+                      {CURRENCY_LABELS[currency] || currency}
                     </SelectItem>
                   ))}
                 </SelectContent>

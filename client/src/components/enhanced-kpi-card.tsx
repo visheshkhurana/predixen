@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, Info, Calculator, Database } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrencyAbbrev } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import type { KPITimeSeries } from "@shared/schema";
 
@@ -24,6 +24,7 @@ interface EnhancedKPICardProps {
   highlighted?: boolean;
   onClick?: () => void;
   testId?: string;
+  currency?: string;
 }
 
 export function EnhancedKPICard({
@@ -34,14 +35,13 @@ export function EnhancedKPICard({
   highlighted = false,
   onClick,
   testId = "enhanced-kpi-card",
+  currency = "USD",
 }: EnhancedKPICardProps) {
   const formatValue = (value: number | null): string => {
     if (value === null || value === undefined) return "N/A";
     switch (format) {
       case "currency":
-        if (Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-        if (Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-        return `$${value.toFixed(0)}`;
+        return formatCurrencyAbbrev(value, currency);
       case "percent":
         return `${value.toFixed(1)}%`;
       case "months":
