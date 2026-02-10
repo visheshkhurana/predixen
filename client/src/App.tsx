@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
+const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -302,8 +303,15 @@ function Router() {
   );
 }
 
+interface CopilotMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: string[];
+  followups?: string[];
+}
+
 function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -318,26 +326,38 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = useCallback(async () => {
-    const q = input.trim();
-    if (!q || isLoading) return;
-    setInput('');
+  const sendMessage = useCallback(async (overrideMsg?: string) => {
+    const q = (overrideMsg || input).trim();
+    if (!q || isLoading || !currentCompany?.id) return;
+    if (!overrideMsg) setInput('');
     setMessages(prev => [...prev, { role: 'user', content: q }]);
     setIsLoading(true);
     try {
-      const res = await apiRequest('POST', '/api/copilot/chat', {
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      const res = await apiRequest('POST', `/api/companies/${currentCompany.id}/quick-chat`, {
         message: q,
-        company_id: currentCompany?.id,
-        session_context: { source: 'cmd_k_drawer' },
+        conversation_history: history,
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.message || 'No response available.' }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.response || 'No response available.',
+        sources: data.sources_used,
+        followups: data.suggested_followups,
+      }]);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t process that request right now. Try again or visit the full Copilot page.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t process that right now. Try again or visit the full Copilot page.' }]);
     } finally {
       setIsLoading(false);
     }
-  }, [input, isLoading, currentCompany?.id]);
+  }, [input, isLoading, currentCompany?.id, messages]);
+
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setInput('');
+  }, []);
+
+  const lastAssistantMsg = messages.filter(m => m.role === 'assistant').slice(-1)[0];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -346,19 +366,33 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
           <SheetTitle className="flex items-center gap-2 text-sm">
             <Sparkles className="h-4 w-4 text-primary" />
             AI Copilot
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0 ml-auto">
+            {messages.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearChat} className="ml-auto text-xs text-muted-foreground h-6 px-2" data-testid="button-copilot-clear">
+                Clear
+              </Button>
+            )}
+            <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0 ${messages.length === 0 ? 'ml-auto' : ''}`}>
               <Command className="h-2.5 w-2.5 mr-0.5" />K
             </Badge>
           </SheetTitle>
         </SheetHeader>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
-            <div className="text-center py-8 space-y-3">
+            <div className="text-center py-8 space-y-4">
               <Sparkles className="h-8 w-8 text-primary/40 mx-auto" />
-              <p className="text-sm text-muted-foreground">Ask anything about your startup finances</p>
+              <div>
+                <p className="text-sm font-medium">Ask anything about your finances</p>
+                <p className="text-xs text-muted-foreground mt-1">I have access to all your company data</p>
+              </div>
               <div className="flex flex-col gap-1.5">
-                {['How do I extend runway by 6 months?', 'What\'s my biggest risk right now?', 'Should I raise or cut costs?'].map(q => (
-                  <Button key={q} variant="outline" size="sm" className="text-xs justify-start" onClick={() => { setInput(q); setTimeout(() => sendMessage(), 50); }} data-testid={`copilot-prompt-${q.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`}>
+                {[
+                  'What was my payroll cost last month?',
+                  'How has revenue trended over the last 3 months?',
+                  'What\'s my current runway?',
+                  'Compare my revenue vs expenses',
+                  'What\'s my burn rate breakdown?',
+                ].map(q => (
+                  <Button key={q} variant="outline" size="sm" className="text-xs justify-start" onClick={() => sendMessage(q)} data-testid={`copilot-prompt-${q.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`}>
                     {q}
                   </Button>
                 ))}
@@ -367,8 +401,19 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
           )}
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-md px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`} data-testid={`copilot-msg-${i}`}>
-                {msg.content}
+              <div className={`max-w-[90%] rounded-md px-3 py-2 text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`} data-testid={`copilot-msg-${i}`}>
+                {msg.role === 'assistant' ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground">
+                    <Suspense fallback={<span>{msg.content}</span>}><ReactMarkdownLazy skipHtml disallowedElements={['script', 'iframe', 'object', 'embed']}>{msg.content}</ReactMarkdownLazy></Suspense>
+                  </div>
+                ) : msg.content}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-border/50">
+                    {msg.sources.map(s => (
+                      <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary/70">{s}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -376,11 +421,22 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
             <div className="flex justify-start">
               <div className="bg-muted rounded-md px-3 py-2 text-sm flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Thinking...
+                Analyzing your data...
               </div>
             </div>
           )}
         </div>
+        {!isLoading && lastAssistantMsg?.followups && lastAssistantMsg.followups.length > 0 && (
+          <div className="px-4 pb-2 shrink-0">
+            <div className="flex flex-wrap gap-1">
+              {lastAssistantMsg.followups.map(f => (
+                <Button key={f} variant="outline" size="sm" className="text-[11px] h-7" onClick={() => sendMessage(f)} data-testid={`copilot-followup-${f.slice(0, 15).replace(/\s/g, '-').toLowerCase()}`}>
+                  {f}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="border-t p-3 shrink-0">
           <div className="flex items-center gap-2">
             <Input
@@ -393,7 +449,7 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               className="flex-1"
               data-testid="input-copilot-drawer"
             />
-            <Button size="icon" onClick={sendMessage} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
+            <Button size="icon" onClick={() => sendMessage()} disabled={isLoading || !input.trim()} data-testid="button-copilot-send">
               <Send className="h-4 w-4" />
             </Button>
           </div>
