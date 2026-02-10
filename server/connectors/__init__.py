@@ -21,6 +21,26 @@ from . import plaid
 from . import hubspot
 from . import gusto
 from . import xero
+from . import salesforce
+from . import google_analytics
+from . import pipedrive
+from . import close_crm
+from . import mixpanel
+from . import mercury
+from . import brex
+from . import ramp
+from . import shopify
+from . import mysql_connector
+from . import freshbooks
+from . import wave
+from . import bench
+from . import chargebee
+from . import recurly
+from . import rippling
+from . import deel
+from . import netsuite
+from . import profitwell
+from . import amplitude
 
 __all__ = [
     "BaseConnector",
