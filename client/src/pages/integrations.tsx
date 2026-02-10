@@ -1017,6 +1017,87 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "refresh_token", label: "Refresh Token", placeholder: "OAuth2 Refresh Token" },
     { field: "tenant_id", label: "Tenant ID", placeholder: "Xero Organization Tenant ID" },
   ],
+  stripe: [
+    { field: "api_key", label: "Secret Key", placeholder: "sk_live_... or sk_test_..." },
+  ],
+  salesforce: [
+    { field: "instance_url", label: "Instance URL", placeholder: "https://yourorg.salesforce.com" },
+    { field: "access_token", label: "Access Token", placeholder: "Bearer access token" },
+  ],
+  google_analytics: [
+    { field: "property_id", label: "GA4 Property ID", placeholder: "123456789" },
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+  ],
+  pipedrive: [
+    { field: "api_token", label: "API Token", placeholder: "Enter Pipedrive API Token" },
+    { field: "company_domain", label: "Company Domain", placeholder: "yourcompany" },
+  ],
+  close_crm: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Close CRM API Key" },
+  ],
+  mixpanel: [
+    { field: "project_id", label: "Project ID", placeholder: "Enter Mixpanel Project ID" },
+    { field: "api_secret", label: "API Secret", placeholder: "Enter Mixpanel API Secret" },
+  ],
+  mercury: [
+    { field: "api_token", label: "API Token", placeholder: "Enter Mercury API Token" },
+  ],
+  brex: [
+    { field: "api_key", label: "User Token", placeholder: "Enter Brex User Token" },
+  ],
+  ramp: [
+    { field: "client_id", label: "Client ID", placeholder: "Enter Ramp Client ID" },
+    { field: "client_secret", label: "Client Secret", placeholder: "Enter Ramp Client Secret" },
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+  ],
+  shopify: [
+    { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
+    { field: "access_token", label: "Admin API Token", placeholder: "shpat_..." },
+  ],
+  mysql: [
+    { field: "host", label: "Host", placeholder: "localhost or IP address" },
+    { field: "port", label: "Port", placeholder: "3306" },
+    { field: "database", label: "Database", placeholder: "Enter database name" },
+    { field: "username", label: "Username", placeholder: "Enter MySQL username" },
+    { field: "password", label: "Password", placeholder: "Enter MySQL password" },
+  ],
+  freshbooks: [
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+    { field: "account_id", label: "Account ID", placeholder: "Enter FreshBooks Account ID" },
+  ],
+  wave: [
+    { field: "access_token", label: "Access Token", placeholder: "OAuth2 Access Token" },
+  ],
+  bench: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Bench API Key" },
+  ],
+  chargebee: [
+    { field: "site", label: "Site Name", placeholder: "yoursite (from yoursite.chargebee.com)" },
+    { field: "api_key", label: "API Key", placeholder: "Enter Chargebee API Key" },
+  ],
+  recurly: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Recurly Private API Key" },
+  ],
+  rippling: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Rippling API Key" },
+  ],
+  deel: [
+    { field: "api_key", label: "API Token", placeholder: "Enter Deel API Token" },
+  ],
+  netsuite: [
+    { field: "account_id", label: "Account ID", placeholder: "Enter NetSuite Account ID" },
+    { field: "consumer_key", label: "Consumer Key", placeholder: "Enter Consumer Key" },
+    { field: "consumer_secret", label: "Consumer Secret", placeholder: "Enter Consumer Secret" },
+    { field: "token_id", label: "Token ID", placeholder: "Enter Token ID" },
+    { field: "token_secret", label: "Token Secret", placeholder: "Enter Token Secret" },
+  ],
+  profitwell: [
+    { field: "api_token", label: "Private API Token", placeholder: "Enter ProfitWell API Token" },
+  ],
+  amplitude: [
+    { field: "api_key", label: "API Key", placeholder: "Enter Amplitude API Key" },
+    { field: "secret_key", label: "Secret Key", placeholder: "Enter Amplitude Secret Key" },
+  ],
 };
 
 function ConnectDialog({
@@ -1040,7 +1121,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {
