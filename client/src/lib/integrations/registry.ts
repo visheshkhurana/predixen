@@ -191,19 +191,19 @@ export const hubspotIntegration: IntegrationConfig = {
   description: 'CRM data - deals, contacts, and sales pipeline metrics.',
   icon: 'hubspot',
   category: 'crm',
-  authType: 'oauth2',
+  authType: 'api_key',
   status: 'disconnected',
-  isComingSoon: true,
   
-  oauthConfig: {
-    authUrl: 'https://app.hubspot.com/oauth/authorize',
-    tokenUrl: 'https://api.hubapi.com/oauth/v1/token',
-    scopes: ['crm.objects.deals.read', 'crm.objects.contacts.read'],
+  apiKeyConfig: {
+    fields: [
+      { name: 'access_token', label: 'Private App Access Token', type: 'password', required: true, placeholder: 'pat-na1-...', helpText: 'Create a Private App in HubSpot Settings > Integrations > Private Apps' },
+    ],
   },
   
   dataPoints: [
     { id: 'total_deals', name: 'Total Deals', description: 'All deals in pipeline', dataType: 'number', category: 'sales', refreshRate: 'daily' },
     { id: 'pipeline_value', name: 'Pipeline Value', description: 'Total pipeline value', dataType: 'currency', category: 'sales', refreshRate: 'daily' },
+    { id: 'won_revenue', name: 'Won Revenue', description: 'Closed-won deal revenue', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
     { id: 'contacts', name: 'Total Contacts', description: 'All contacts', dataType: 'number', category: 'contacts', refreshRate: 'daily' },
   ],
   
@@ -279,20 +279,90 @@ export const xeroIntegration: IntegrationConfig = {
   description: 'Cloud accounting - invoices, expenses, and bank reconciliation.',
   icon: 'xero',
   category: 'accounting',
-  authType: 'oauth2',
+  authType: 'api_key',
   status: 'disconnected',
-  isComingSoon: true,
   
-  oauthConfig: {
-    authUrl: 'https://login.xero.com/identity/connect/authorize',
-    tokenUrl: 'https://identity.xero.com/connect/token',
-    scopes: ['openid', 'profile', 'email', 'accounting.transactions.read'],
+  apiKeyConfig: {
+    fields: [
+      { name: 'client_id', label: 'Client ID', type: 'text', required: true, placeholder: 'Your Xero App Client ID' },
+      { name: 'client_secret', label: 'Client Secret', type: 'password', required: true, placeholder: 'Your Xero App Client Secret' },
+      { name: 'access_token', label: 'Access Token', type: 'password', required: true, placeholder: 'OAuth2 Access Token', helpText: 'Generate from Xero Developer portal' },
+      { name: 'refresh_token', label: 'Refresh Token', type: 'password', required: true, placeholder: 'OAuth2 Refresh Token' },
+      { name: 'tenant_id', label: 'Tenant ID', type: 'text', required: true, placeholder: 'Xero Organization Tenant ID' },
+    ],
   },
   
   dataPoints: [
     { id: 'revenue', name: 'Revenue', description: 'Total revenue', dataType: 'currency', category: 'revenue', refreshRate: 'daily' },
     { id: 'expenses', name: 'Expenses', description: 'Total expenses', dataType: 'currency', category: 'expenses', refreshRate: 'daily' },
+    { id: 'net_profit', name: 'Net Profit', description: 'Revenue minus expenses', dataType: 'currency', category: 'profit', refreshRate: 'daily' },
     { id: 'bank_balance', name: 'Bank Balance', description: 'Total bank balance', dataType: 'currency', category: 'assets', refreshRate: 'daily' },
+    { id: 'accounts_receivable', name: 'Accounts Receivable', description: 'Outstanding invoices', dataType: 'currency', category: 'assets', refreshRate: 'daily' },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'daily',
+    availableIntervals: ['daily', 'weekly'],
+    supportsRealtime: false,
+  },
+};
+
+export const plaidIntegration: IntegrationConfig = {
+  id: 'plaid',
+  name: 'Plaid',
+  description: 'Bank account data - transactions, balances, and cash flow from connected bank accounts.',
+  icon: 'plaid',
+  category: 'payments',
+  authType: 'api_key',
+  status: 'disconnected',
+  
+  apiKeyConfig: {
+    fields: [
+      { name: 'client_id', label: 'Client ID', type: 'text', required: true, placeholder: 'Your Plaid Client ID' },
+      { name: 'secret', label: 'Secret Key', type: 'password', required: true, placeholder: 'Your Plaid Secret', helpText: 'Use sandbox secret for testing' },
+      { name: 'access_token', label: 'Access Token', type: 'password', required: true, placeholder: 'access-sandbox-...', helpText: 'Generated via Plaid Link flow' },
+    ],
+  },
+  
+  dataPoints: [
+    { id: 'cash_balance', name: 'Cash Balance', description: 'Total across all accounts', dataType: 'currency', category: 'assets', refreshRate: 'daily' },
+    { id: 'transactions', name: 'Transactions', description: 'Recent bank transactions', dataType: 'number', category: 'activity', refreshRate: 'daily' },
+    { id: 'accounts', name: 'Connected Accounts', description: 'Number of bank accounts', dataType: 'number', category: 'accounts', refreshRate: 'daily' },
+    { id: 'inflow', name: 'Cash Inflow', description: 'Money coming in', dataType: 'currency', category: 'cashflow', refreshRate: 'daily' },
+    { id: 'outflow', name: 'Cash Outflow', description: 'Money going out', dataType: 'currency', category: 'cashflow', refreshRate: 'daily' },
+  ],
+  
+  syncConfig: {
+    defaultInterval: 'daily',
+    availableIntervals: ['daily', 'weekly'],
+    supportsRealtime: false,
+  },
+};
+
+export const gustoIntegration: IntegrationConfig = {
+  id: 'gusto',
+  name: 'Gusto',
+  description: 'Payroll and HR data - employee costs, payroll runs, and headcount metrics.',
+  icon: 'gusto',
+  category: 'payroll',
+  authType: 'api_key',
+  status: 'disconnected',
+  
+  apiKeyConfig: {
+    fields: [
+      { name: 'client_id', label: 'Client ID', type: 'text', required: true, placeholder: 'Your Gusto App Client ID' },
+      { name: 'client_secret', label: 'Client Secret', type: 'password', required: true, placeholder: 'Your Gusto App Client Secret' },
+      { name: 'access_token', label: 'Access Token', type: 'password', required: true, placeholder: 'OAuth2 Access Token', helpText: 'Generated from Gusto Developer portal' },
+      { name: 'refresh_token', label: 'Refresh Token', type: 'password', required: true, placeholder: 'OAuth2 Refresh Token' },
+      { name: 'company_uuid', label: 'Company UUID', type: 'text', required: true, placeholder: 'Gusto Company UUID' },
+    ],
+  },
+  
+  dataPoints: [
+    { id: 'headcount', name: 'Headcount', description: 'Total active employees', dataType: 'number', category: 'hr', refreshRate: 'daily' },
+    { id: 'total_payroll', name: 'Total Payroll Cost', description: 'Monthly payroll expense', dataType: 'currency', category: 'expenses', refreshRate: 'daily' },
+    { id: 'avg_salary', name: 'Average Salary', description: 'Average employee compensation', dataType: 'currency', category: 'hr', refreshRate: 'daily' },
+    { id: 'payroll_tax', name: 'Payroll Taxes', description: 'Employer tax obligations', dataType: 'currency', category: 'expenses', refreshRate: 'daily' },
   ],
   
   syncConfig: {
@@ -308,10 +378,12 @@ export const integrationRegistry: IntegrationConfig[] = [
   mixpanelIntegration,
   chartMogulIntegration,
   stripeIntegration,
+  plaidIntegration,
   hubspotIntegration,
   salesforceIntegration,
   quickbooksIntegration,
   xeroIntegration,
+  gustoIntegration,
 ];
 
 export function getIntegrationById(id: string): IntegrationConfig | undefined {
