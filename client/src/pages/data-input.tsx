@@ -584,6 +584,28 @@ export default function DataInput() {
     }
 
     setIsSaving(true);
+    let financialSaveOk = false;
+
+    try {
+      const companyName = values.companyName || currentCompany.name;
+      const description = values.description ?? '';
+      const stageValue = values.stage || 'seed';
+      const industryValue = values.industry || '';
+      const res = await fetch(`/api/companies/${currentCompany.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: companyName, description, stage: stageValue, industry: industryValue })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setCurrentCompany({ ...currentCompany, ...updated });
+      } else {
+        console.error('[SAVE] Company PUT failed:', res.status);
+      }
+    } catch (e) {
+      console.error('[SAVE] Company update failed', e);
+    }
+
     try {
       const breakdownSum = (values.payrollExpenses || 0) + 
                            (values.marketingExpenses || 0) + 
@@ -633,34 +655,7 @@ export default function DataInput() {
       console.log('[SAVE] API response:', JSON.stringify(result));
 
       setFinancialBaseline(baseline);
-
-      try {
-        const companyName = values.companyName || currentCompany.name;
-        const description = values.description ?? '';
-        const stageValue = values.stage || 'seed';
-        const industryValue = values.industry || '';
-        const res = await fetch(`/api/companies/${currentCompany.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: companyName, description, stage: stageValue, industry: industryValue })
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setCurrentCompany({ ...currentCompany, ...updated });
-        }
-      } catch (e) {
-        console.error('Company update failed', e);
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies"] });
-      queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
-      queryClient.invalidateQueries({ queryKey: ['truth-latest', currentCompany.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
-
-      toast({
-        title: "Data saved",
-        description: "Your company and financial data has been saved successfully",
-      });
+      financialSaveOk = true;
     } catch (error) {
       console.error('[SAVE] Error:', error);
       toast({
@@ -668,9 +663,21 @@ export default function DataInput() {
         description: "There was an error saving your data",
         variant: "destructive",
       });
-    } finally {
-      setIsSaving(false);
     }
+
+    queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies"] });
+    queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
+    queryClient.invalidateQueries({ queryKey: ['truth-latest', currentCompany.id] });
+    queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+
+    if (financialSaveOk) {
+      toast({
+        title: "Data saved",
+        description: "Your company and financial data has been saved successfully",
+      });
+    }
+
+    setIsSaving(false);
   };
 
   const handleDirectSave = async () => {
