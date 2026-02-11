@@ -532,6 +532,201 @@ export function findBaselineScenario(scenarios: any[]): any | null {
   return first || null;
 }
 
+interface CounterMoveResult {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  overrides_applied: Record<string, number>;
+  runway: { p10: number; p50: number; p90: number };
+  survival: Record<string, number>;
+  survivalProbability: Record<string, number>;
+  breakEvenMonth: { p10: number; p50: number; p90: number };
+}
+
+const ICON_MAP: Record<string, typeof ArrowUp> = {
+  'scissors': TrendingDown,
+  'dollar-sign': TrendingUp,
+  'user-minus': Timer,
+};
+
+function CounterMoveCard({
+  move,
+  currentSimulation,
+  onApply,
+}: {
+  move: CounterMoveResult;
+  currentSimulation: SimulationData;
+  onApply?: (move: CounterMoveResult) => void;
+}) {
+  const currentRunway = currentSimulation.runway?.p50 ?? 0;
+  const currentSurvival = getSurvival(currentSimulation, '18m') ?? 0;
+  const moveRunway = move.runway?.p50 ?? 0;
+  const moveSurvival = (move.survivalProbability?.['18m'] ?? move.survival?.['18m']) ?? 0;
+
+  const runwayDelta = moveRunway - currentRunway;
+  const survivalDelta = moveSurvival - currentSurvival;
+
+  const isPositiveRunway = runwayDelta > 0.2;
+  const isPositiveSurvival = survivalDelta > 1;
+  const isNeutral = Math.abs(runwayDelta) <= 0.2 && Math.abs(survivalDelta) <= 1;
+
+  const IconComponent = ICON_MAP[move.icon] || ArrowRight;
+
+  return (
+    <Card
+      className="hover-elevate transition-all"
+      data-testid={`card-counter-move-${move.id}`}
+    >
+      <CardContent className="pt-4 pb-3 px-4">
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-md shrink-0 ${
+            isNeutral
+              ? 'bg-muted'
+              : isPositiveSurvival || isPositiveRunway
+                ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                : 'bg-amber-100 dark:bg-amber-900/30'
+          }`}>
+            <IconComponent className={`h-4 w-4 ${
+              isNeutral
+                ? 'text-muted-foreground'
+                : isPositiveSurvival || isPositiveRunway
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-amber-600 dark:text-amber-400'
+            }`} />
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div>
+              <p className="text-sm font-semibold leading-tight">{move.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{move.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2 rounded-md bg-muted/40">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Runway</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-sm font-semibold font-mono">{moveRunway.toFixed(1)}mo</span>
+                  <span className={`text-xs font-mono ${deltaColor(runwayDelta, true)}`}>
+                    {runwayDelta > 0 ? '+' : ''}{runwayDelta.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+              <div className="p-2 rounded-md bg-muted/40">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Survival</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-sm font-semibold font-mono">{moveSurvival.toFixed(0)}%</span>
+                  <span className={`text-xs font-mono ${deltaColor(survivalDelta, true)}`}>
+                    {survivalDelta > 0 ? '+' : ''}{survivalDelta.toFixed(0)}pp
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {onApply && (
+          <div className="mt-3 pt-2 border-t">
+            <button
+              onClick={() => onApply(move)}
+              className="w-full text-xs font-medium text-primary hover:underline text-center py-1"
+              data-testid={`button-apply-counter-move-${move.id}`}
+            >
+              Apply this counter-move
+            </button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function CounterMoveCards({
+  counterMoves,
+  currentSimulation,
+  isLoading,
+  onSimulate,
+  onApply,
+}: {
+  counterMoves: CounterMoveResult[] | null;
+  currentSimulation: SimulationData;
+  isLoading: boolean;
+  onSimulate: () => void;
+  onApply?: (move: CounterMoveResult) => void;
+}) {
+  if (!counterMoves && !isLoading) {
+    return (
+      <Card data-testid="card-counter-moves-trigger">
+        <CardContent className="pt-4 pb-4 px-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">What if you respond?</p>
+                <p className="text-xs text-muted-foreground">
+                  Simulate 3 counter-moves: cost cut, price increase, hiring freeze
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onSimulate}
+              className="text-xs font-medium text-primary hover:underline shrink-0"
+              data-testid="button-simulate-counter-moves"
+            >
+              Run counter-moves
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3" data-testid="section-counter-moves">
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Automatic Counter-Moves
+        </span>
+        {isLoading && (
+          <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        )}
+      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className="space-y-3 animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-md bg-muted" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-24 rounded bg-muted" />
+                      <div className="h-3 w-32 rounded bg-muted" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="h-12 rounded bg-muted" />
+                    <div className="h-12 rounded bg-muted" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : counterMoves ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {counterMoves.map((move) => (
+            <CounterMoveCard
+              key={move.id}
+              move={move}
+              currentSimulation={currentSimulation}
+              onApply={onApply}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function getBaselineSimulation(
   scenarios: any[],
   currentScenarioId: number | null

@@ -47,6 +47,7 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 20. **Copilot Quick Chat with Web Research**: Natural language financial queries supported by internal data and real-time web research using Perplexity for market benchmarks and industry trends.
 21. **Consultant-Grade Copilot Persona**: System prompts upgraded to a McKinsey + a16z partner persona, providing structured, opinionated recommendations backed by data.
 22. **Simulation Experience Upgrade**: Before/After Delta Cards for scenario comparison (auto-detects baseline), Payback Clock Widget with P10-P90 range, Risk Alert Banner (warning/critical thresholds), data-driven recommendations with GO/CONDITIONAL/NO-GO verdicts, second-order effects detection, and confidence scoring.
+23. **Automatic Counter-Move Simulation**: When a scenario is simulated, the system automatically runs 3 counter-move simulations (Cost Cut 20%, Raise Prices 10%, Freeze Hiring) using 500-iteration Monte Carlo with additive overrides on top of current scenario inputs. Results show runway/survival deltas vs current scenario. Users can "Apply" any counter-move to create a new derived scenario. Backend endpoint: `POST /scenarios/{id}/counter-moves`. Frontend: `CounterMoveCards` component in `ScenarioDeltas.tsx`.
 
 ### User Roles
 -   **Platform Admin**: Application owner.
