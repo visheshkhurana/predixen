@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
 import { useFounderStore } from "@/store/founderStore";
+import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
 import { useRealtimeKPI, KPIMetrics } from "@/hooks/useRealtimeKPI";
 import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import {
@@ -232,6 +233,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <CrossPageIntelligence context="dashboard" className="mb-2" testId="dashboard-intelligence" />
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>

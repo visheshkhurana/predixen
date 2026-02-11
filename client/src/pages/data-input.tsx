@@ -68,6 +68,7 @@ import {
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
 
 const dataInputSchema = z.object({
   companyName: z.string().min(1, "Company name is required").or(z.literal("")).default(""),
@@ -1116,6 +1117,7 @@ export default function DataInput() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      <CrossPageIntelligence context="data-input" className="mb-4" testId="data-input-intelligence" />
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Data Input</h1>

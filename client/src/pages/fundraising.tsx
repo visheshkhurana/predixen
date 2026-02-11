@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
+import { CrossPageIntelligence } from '@/components/CrossPageIntelligence';
 import { apiRequest } from '@/lib/queryClient';
 import { 
   Plus, DollarSign, Users, TrendingUp, PieChart, 
@@ -191,6 +192,7 @@ export default function FundraisingPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <CrossPageIntelligence context="fundraising" className="mb-2" testId="fundraising-intelligence" />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
