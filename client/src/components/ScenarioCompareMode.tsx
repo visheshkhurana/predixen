@@ -70,6 +70,12 @@ function DeltaIndicator({ value, baseline, unit, higherIsBetter = true }: { valu
   );
 }
 
+function getBarBg(v: number): string {
+  if (v >= 7) return 'bg-emerald-600';
+  if (v >= 5) return 'bg-amber-600';
+  return 'bg-red-600';
+}
+
 function ScoreBar({ value, max, label, color }: { value: number; max: number; label: string; color: string }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   return (
@@ -79,7 +85,7 @@ function ScoreBar({ value, max, label, color }: { value: number; max: number; la
         <span className={cn("text-xs font-bold font-mono", color)}>{value}/{max}</span>
       </div>
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all duration-500", color.replace('text-', 'bg-').replace('dark:', ''))} style={{ width: `${pct}%` }} />
+        <div className={cn("h-full rounded-full transition-all duration-500", getBarBg(value))} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
