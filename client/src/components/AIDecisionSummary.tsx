@@ -171,6 +171,17 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       watchMetric = `Survival probability trend \u2014 if ${survival18m.toFixed(0)}% drops below 50% in future sims, reassess immediately.`;
     }
 
+    let score = 0;
+    score += Math.min(survival18m / 100, 1) * 3;
+    score += Math.min(runwayP50 / 24, 1) * 2.5;
+    if (breakeven && breakeven <= 24) score += Math.max(0, (24 - breakeven) / 24) * 1.5;
+    if (spread > 0) score += Math.max(0, 1 - spread / 20) * 1;
+    if (burnCoverage !== null) score += Math.min(burnCoverage / 12, 1) * 1;
+    else score += 0.5;
+    if (bRunwayDelta > 0) score += Math.min(bRunwayDelta / 10, 1) * 0.5;
+    if (bSurvDelta > 0) score += Math.min(bSurvDelta / 30, 1) * 0.5;
+    const decisionScore = Math.max(1, Math.min(10, Math.round(score)));
+
     let baselineDelta = '';
     if (baselineSimulation) {
       if (bSurvDelta !== 0 || bRunwayDelta !== 0) {
@@ -181,7 +192,7 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       }
     }
 
-    return { verdict, verdictLabel, verdictColor, verdictBg, verdictIcon, headline, keyRisk, keyOpportunity, watchMetric, baselineDelta };
+    return { verdict, verdictLabel, verdictColor, verdictBg, verdictIcon, headline, keyRisk, keyOpportunity, watchMetric, baselineDelta, decisionScore };
   }, [simulation, scenarioName, baselineSimulation, counterMoves]);
 
   if (!analysis) return null;
@@ -194,15 +205,22 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     >
       <Card className={cn('overflow-visible border-0 rounded-[5px]', analysis.verdictBg)}>
         <CardContent className="pt-5 pb-4 px-5">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <div className="h-9 w-9 rounded-md bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-primary" />
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 flex flex-col items-center gap-0.5" data-testid="decision-score">
+              <div
+                className="h-14 w-14 rounded-md flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #10b981, #3b82f6)' }}
+              >
+                <span className="text-2xl font-bold text-white">{analysis.decisionScore}</span>
               </div>
+              <span className="text-[10px] font-medium text-muted-foreground">/10</span>
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground" data-testid="text-ai-summary-title">Your Answer</h3>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground" data-testid="text-ai-summary-title">Your Answer</h3>
+                </div>
                 <Badge
                   variant="outline"
                   className={cn('text-xs font-bold gap-1', analysis.verdictColor)}
