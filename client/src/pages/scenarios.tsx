@@ -29,6 +29,7 @@ import { ProjectionChart } from '@/components/ProjectionChart';
 import { ProjectionSummary } from '@/components/ProjectionSummary';
 import { SimulationInsights } from '@/components/SimulationInsights';
 import { AISummaryCard } from '@/components/AISummaryCard';
+import { AIDecisionSummary } from '@/components/AIDecisionSummary';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
@@ -1088,6 +1089,14 @@ export default function ScenariosPage() {
                 />
               </div>
             </div>
+
+            <AIDecisionSummary
+              simulation={simulation}
+              scenarioName={currentScenarioName}
+              baselineSimulation={baselineComparison.simulation}
+              counterMoves={simulation.counter_moves}
+              className="mb-4"
+            />
 
             {founderMode && (() => {
               const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
