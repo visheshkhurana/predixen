@@ -197,7 +197,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <nfl9@predixen.app>"
+    sender = "Predixen <8w0s1b38@predixen.app>"
 
     print(f"Sending scenario intelligence update emails to {len(RECIPIENTS)} recipients...")
     print(f"Campaign: {CAMPAIGN}")
