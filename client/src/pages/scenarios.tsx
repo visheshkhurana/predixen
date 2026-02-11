@@ -34,6 +34,7 @@ import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { ScenarioComparePicker, ScenarioCompareMode } from '@/components/ScenarioCompareMode';
+import { SensitivitySliders } from '@/components/SensitivitySliders';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -798,6 +799,31 @@ export default function ScenariosPage() {
             </Button>
           ))}
         </div>
+
+        {baseMetrics && (
+          <div className="mb-6">
+            <SensitivitySliders
+              baseMetrics={baseMetrics}
+              isRunning={isCreating || isRunning}
+              onRunSimulation={(params) => {
+                const scenarioData = {
+                  name: params.name,
+                  pricing_change_pct: params.pricing_change_pct ?? 0,
+                  growth_uplift_pct: params.growth_uplift_pct ?? 0,
+                  burn_reduction_pct: params.burn_reduction_pct ?? 0,
+                  gross_margin_delta_pct: params.gross_margin_delta_pct ?? 0,
+                  churn_change_pct: params.churn_change_pct ?? 0,
+                  cac_change_pct: params.cac_change_pct ?? 0,
+                  fundraise_month: params.fundraise_month ?? null,
+                  fundraise_amount: params.fundraise_amount ?? 0,
+                  tags: params.tags ?? ['slider-scenario'],
+                };
+                runScenario(scenarioData, false);
+              }}
+              testId="sensitivity-sliders"
+            />
+          </div>
+        )}
 
         {baseMetrics && (
           <Card className="max-w-4xl mx-auto" data-testid="card-context-bar">
