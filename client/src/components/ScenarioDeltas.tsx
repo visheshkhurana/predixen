@@ -642,36 +642,44 @@ export function CounterMoveCards({
   counterMoves,
   currentSimulation,
   isLoading,
-  onSimulate,
+  hasFailed,
+  onRetry,
   onApply,
 }: {
   counterMoves: CounterMoveResult[] | null;
   currentSimulation: SimulationData;
   isLoading: boolean;
-  onSimulate: () => void;
+  hasFailed?: boolean;
+  onRetry?: () => void;
   onApply?: (move: CounterMoveResult) => void;
 }) {
-  if (!counterMoves && !isLoading) {
+  if (!counterMoves && !isLoading && !hasFailed) {
+    return null;
+  }
+
+  if (hasFailed && !isLoading && !counterMoves) {
     return (
-      <Card data-testid="card-counter-moves-trigger">
+      <Card data-testid="card-counter-moves-failed">
         <CardContent className="pt-4 pb-4 px-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 min-w-0">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
               <div>
-                <p className="text-sm font-semibold">What if you respond?</p>
+                <p className="text-sm font-semibold">Counter-moves failed to load</p>
                 <p className="text-xs text-muted-foreground">
-                  Simulate 3 counter-moves: cost cut, price increase, hiring freeze
+                  Automatic counter-move analysis could not be completed
                 </p>
               </div>
             </div>
-            <button
-              onClick={onSimulate}
-              className="text-xs font-medium text-primary hover:underline shrink-0"
-              data-testid="button-simulate-counter-moves"
-            >
-              Run counter-moves
-            </button>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="text-xs font-medium text-primary hover:underline shrink-0"
+                data-testid="button-retry-counter-moves"
+              >
+                Retry
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>
