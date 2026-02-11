@@ -32,6 +32,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -256,6 +257,11 @@ export default function ScenariosPage() {
     const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
     return selected?.name || 'New Scenario';
   }, [selectedScenarioId, scenarios]);
+
+  const baselineComparison = useMemo(() => {
+    if (!scenarios || !selectedScenarioId) return { simulation: null, name: 'Baseline' };
+    return getBaselineSimulation(scenarios, selectedScenarioId);
+  }, [scenarios, selectedScenarioId]);
 
   useEffect(() => {
     if (selectedScenarioId && scenarios) {
@@ -1037,8 +1043,25 @@ export default function ScenariosPage() {
               </Card>
             </div>
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {baselineComparison.simulation && (
+              <RiskAlertBanner
+                baselineSimulation={baselineComparison.simulation}
+                scenarioSimulation={simulation}
+                scenarioName={currentScenarioName}
+              />
+            )}
+
+            {baselineComparison.simulation && (
+              <BeforeAfterDeltaCards
+                baselineSimulation={baselineComparison.simulation}
+                scenarioSimulation={simulation}
+                baselineName={baselineComparison.name}
+                scenarioName={currentScenarioName}
+              />
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              <PaybackClock simulation={simulation} />
               <Card data-testid="card-survival-chart">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Survival Probability</CardTitle>
@@ -1048,12 +1071,13 @@ export default function ScenariosPage() {
                   <SurvivalCurveChart data={simulation.survivalCurve || simulation.survival?.curve || simulation.survival_curve || []} />
                 </CardContent>
               </Card>
-              <BandsChart
-                data={getCashBands(simulation)}
-                title="Cash Projection Bands"
-                description="10th, 50th, and 90th percentile outcomes"
-              />
             </div>
+
+            <BandsChart
+              data={getCashBands(simulation)}
+              title="Cash Projection Bands"
+              description="10th, 50th, and 90th percentile outcomes"
+            />
           </>
         )}
       </section>
@@ -1061,7 +1085,7 @@ export default function ScenariosPage() {
       {/* STEP 3: AI Recommendation */}
       {simulation && !isRunning && !isCreating && (
         <section data-testid="section-ai-recommendation">
-          <h2 className="text-xl font-bold mb-4" data-testid="text-recommendation-title">AI Recommendation</h2>
+          <h2 className="text-xl font-bold mb-4" data-testid="text-recommendation-title">Strategic Assessment</h2>
 
           <Card
             className="mb-6 relative overflow-visible"
@@ -1077,18 +1101,14 @@ export default function ScenariosPage() {
                 <div className="p-2 rounded-md bg-primary/10 shrink-0">
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-sm mb-1">Strategic Assessment</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-ai-recommendation-body">
-                    Based on {currentScenarioName}, your most likely outcome is a runway of{' '}
-                    <strong>{scenarioP50?.runway} months</strong> with a{' '}
-                    <strong>{scenarioP50?.survival}%</strong> survival probability at 18 months.
-                    {parseFloat(scenarioP50?.survival || '0') >= 70
-                      ? ' This is a healthy trajectory. Focus on maintaining growth while controlling burn.'
-                      : parseFloat(scenarioP50?.survival || '0') >= 40
-                        ? ' This indicates moderate risk. Consider reducing burn or accelerating revenue growth to improve your position.'
-                        : ' This signals significant risk. Immediate action is recommended—cut costs, extend runway, or pursue fundraising.'}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm mb-2">{currentScenarioName}</h3>
+                  <DataDrivenRecommendation
+                    baselineSimulation={baselineComparison.simulation}
+                    scenarioSimulation={simulation}
+                    baselineName={baselineComparison.name}
+                    scenarioName={currentScenarioName}
+                  />
                 </div>
               </div>
 
