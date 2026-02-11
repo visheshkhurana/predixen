@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["cargo", "freetype", "gcc-unwrapped", "glibcLocales", "lcms2", "libiconv", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "libyaml", "openjpeg", "pkg-config", "poppler_utils", "psmisc", "rustc", "tcl", "tk", "xsimd", "yakut", "zlib", "lsof"]
+packages = ["cargo", "freetype", "gcc-unwrapped", "glibcLocales", "lcms2", "libiconv", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "libyaml", "lsof", "openjpeg", "pkg-config", "poppler_utils", "psmisc", "rustc", "tcl", "tk", "xsimd", "yakut", "zlib"]
 
 [[ports]]
 localPort = 5000
