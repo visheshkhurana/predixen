@@ -136,7 +136,6 @@ export default function ScenariosPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<{ open: boolean; existingId?: number; scenarioData?: any }>({ open: false });
-  const [showAdvancedView, setShowAdvancedView] = useState(false);
   const [advancedTab, setAdvancedTab] = useState('builder');
 
   const multiSimMutation = useMultiScenarioSimulation();
@@ -163,6 +162,7 @@ export default function ScenariosPage() {
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [founderMode, setFounderMode] = useState(false);
   const [founderDetailOpen, setFounderDetailOpen] = useState(false);
+  const [dualPathMode, setDualPathMode] = useState<{ active: boolean; pathA?: { name: string; scenarioId?: number }; pathB?: { name: string; scenarioId?: number }; originalQuery?: string }>({ active: false });
 
   const handleShareScenario = async () => {
     if (!simulation || !currentCompany) return;
@@ -583,8 +583,95 @@ export default function ScenariosPage() {
     return { params, tags: uniqueTags, matched };
   };
 
+  const detectDualPath = (text: string): { isDual: boolean; pathA: string; pathB: string } => {
+    const orPatterns = [
+      /^(.+?)\s+or\s+(.+)$/i,
+      /^(.+?)\s+vs\.?\s+(.+)$/i,
+      /^(.+?)\s+versus\s+(.+)$/i,
+    ];
+    for (const pattern of orPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const a = match[1].trim();
+        const b = match[2].trim();
+        const aHasAction = parseNaturalLanguageScenario(a).matched;
+        const bHasAction = parseNaturalLanguageScenario(b).matched;
+        if (aHasAction && bHasAction) {
+          return { isDual: true, pathA: a, pathB: b };
+        }
+      }
+    }
+    return { isDual: false, pathA: text, pathB: '' };
+  };
+
+  const handleDualPathSubmit = async (pathA: string, pathB: string, originalQuery: string) => {
+    if (!currentCompany) return;
+    setDualPathMode({ active: true, pathA: { name: `Path A: ${pathA}` }, pathB: { name: `Path B: ${pathB}` }, originalQuery });
+    setIsCreating(true);
+
+    try {
+      const parsedA = parseNaturalLanguageScenario(pathA);
+      const scenarioAData = {
+        name: `Path A: ${pathA}`,
+        ...parsedA.params,
+        tags: [...parsedA.tags, 'dual-path-a'],
+      };
+      const scenarioA = await createScenarioMutation.mutateAsync({ companyId: currentCompany.id, data: scenarioAData });
+      setDualPathMode(prev => ({ ...prev, pathA: { name: scenarioAData.name, scenarioId: scenarioA.id } }));
+
+      const parsedB = parseNaturalLanguageScenario(pathB);
+      const scenarioBData = {
+        name: `Path B: ${pathB}`,
+        ...parsedB.params,
+        tags: [...parsedB.tags, 'dual-path-b'],
+      };
+      const scenarioB = await createScenarioMutation.mutateAsync({ companyId: currentCompany.id, data: scenarioBData });
+      setDualPathMode(prev => ({ ...prev, pathB: { name: scenarioBData.name, scenarioId: scenarioB.id } }));
+
+      setIsRunning(true);
+      const simResults = await Promise.allSettled([
+        runSimulationMutation.mutateAsync({ scenarioId: scenarioA.id, nSims: 1000 }),
+        runSimulationMutation.mutateAsync({ scenarioId: scenarioB.id, nSims: 1000 }),
+      ]);
+
+      const aOk = simResults[0].status === 'fulfilled';
+      const bOk = simResults[1].status === 'fulfilled';
+
+      if (aOk && bOk) {
+        setCompareIds([scenarioA.id, scenarioB.id]);
+        setSelectedScenarioId(scenarioA.id);
+        setCurrentStep('simulation');
+        toast({ title: 'Dual-path simulation complete', description: `Both "${pathA}" and "${pathB}" have been simulated. Scroll down to compare.` });
+      } else if (aOk || bOk) {
+        const successId = aOk ? scenarioA.id : scenarioB.id;
+        const failedPath = aOk ? pathB : pathA;
+        setSelectedScenarioId(successId);
+        setCurrentStep('simulation');
+        toast({ title: 'Partial dual-path result', description: `"${failedPath}" failed to simulate. Showing the successful path.`, variant: 'destructive' });
+      } else {
+        toast({ title: 'Both simulations failed', description: 'Neither path could be simulated. Please try again.', variant: 'destructive' });
+      }
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+    } catch (err: any) {
+      toast({ title: 'Simulation error', description: err.message || 'Failed to run dual-path simulation', variant: 'destructive' });
+    } finally {
+      setIsCreating(false);
+      setIsRunning(false);
+    }
+  };
+
   const handleQuestionSubmit = () => {
     if (!questionInput.trim()) return;
+
+    const { isDual, pathA, pathB } = detectDualPath(questionInput.trim());
+
+    if (isDual) {
+      console.log('[NLP] Dual-path detected:', pathA, 'OR', pathB);
+      handleDualPathSubmit(pathA, pathB, questionInput.trim());
+      setQuestionInput('');
+      return;
+    }
+
     const scenarioName = questionInput.trim().length > 60 ? questionInput.trim().slice(0, 60) + '...' : questionInput.trim();
 
     const { params, tags } = parseNaturalLanguageScenario(questionInput);
@@ -599,6 +686,7 @@ export default function ScenariosPage() {
     console.log('[NLP] Parsed params:', JSON.stringify(params));
     console.log('[NLP] Tags:', tags);
 
+    setDualPathMode({ active: false });
     handleWizardComplete(scenarioData);
     setQuestionInput('');
   };
@@ -748,6 +836,24 @@ export default function ScenariosPage() {
     ];
     return bars;
   }, [baseMetrics]);
+
+  const stressTestFinancialState: FinancialState = useMemo(() => {
+    const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
+    return baseMetrics ? {
+      monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
+      opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
+      cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
+      cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
+    } : { monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0, cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0 };
+  }, [baseMetrics]);
+
+  const stressTestCurrentRunway = useMemo(() => baseMetrics?.currentRunway || 0, [baseMetrics]);
+
+  const stressTestBaselineResults = useMemo(() => ({
+    runway: stressTestCurrentRunway,
+    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
+    cashAt18m: simulation?.end_cash ?? Math.max(0, stressTestFinancialState.cashBalance - ((baseMetrics?.monthlyExpenses || 80000) - stressTestFinancialState.monthlyRevenue) * 18),
+  }), [stressTestCurrentRunway, stressTestFinancialState, simulation, baseMetrics]);
 
   const handleGeneratePDF = useCallback(async () => {
     if (!simulation) return;
@@ -905,7 +1011,74 @@ export default function ScenariosPage() {
               Simulate
             </Button>
           </div>
+          {(() => {
+            const detected = questionInput.trim() ? detectDualPath(questionInput.trim()) : { isDual: false, pathA: '', pathB: '' };
+            if (!detected.isDual) return null;
+            return (
+              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-md bg-primary/5 border border-primary/20" data-testid="dual-path-preview">
+                <GitCompare className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs text-muted-foreground">Dual-path detected:</span>
+                <Badge variant="outline" className="text-[10px]">A: {detected.pathA}</Badge>
+                <span className="text-xs text-muted-foreground">vs</span>
+                <Badge variant="outline" className="text-[10px]">B: {detected.pathB}</Badge>
+              </div>
+            );
+          })()}
         </div>
+
+        {dualPathMode.active && (isCreating || isRunning) && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <Card className="border-primary/20">
+              <CardContent className="pt-4 pb-4 px-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <GitCompare className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Running Dual-Path Comparison</span>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-auto" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-2.5 rounded-md bg-muted/50 border">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Path A</p>
+                    <p className="text-xs font-medium">{dualPathMode.pathA?.name?.replace('Path A: ', '')}</p>
+                    {dualPathMode.pathA?.scenarioId && <Badge variant="outline" className="text-[10px] mt-1.5">Created</Badge>}
+                  </div>
+                  <div className="p-2.5 rounded-md bg-muted/50 border">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Path B</p>
+                    <p className="text-xs font-medium">{dualPathMode.pathB?.name?.replace('Path B: ', '')}</p>
+                    {dualPathMode.pathB?.scenarioId && <Badge variant="outline" className="text-[10px] mt-1.5">Created</Badge>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {dualPathMode.active && !isCreating && !isRunning && compareIds.length === 2 && (
+          <div className="max-w-3xl mx-auto mb-4">
+            <Card className="border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/10">
+              <CardContent className="pt-4 pb-4 px-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <GitCompare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-sm font-semibold">Dual-Path Comparison Ready</span>
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-600 dark:text-emerald-400">2 paths simulated</Badge>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDualPathMode({ active: false });
+                      setCompareIds([]);
+                    }}
+                    data-testid="button-clear-dual-path"
+                  >
+                    Clear Comparison
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Both scenarios are shown in your results below. Switch between Path A and Path B in the scenario list, or view the Compare tab for side-by-side analysis.</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-3xl mx-auto">
           {SUGGESTION_CHIPS.map((chip) => (
@@ -1072,487 +1245,8 @@ export default function ScenariosPage() {
 
         {simulation && !isRunning && !isCreating && (
           <>
-            <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-              <div>
-                <h2 className="text-xl font-bold" data-testid="text-results-title">Simulation Results</h2>
-                <p className="text-sm text-muted-foreground">{currentScenarioName} &mdash; 1,000 Monte Carlo runs</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm" onClick={handleShareScenario} data-testid="button-share-scenario">
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
-                <ExportButton
-                  data={formatSimulationForExport(simulation)}
-                  filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
-                  onGeneratePDF={handleGeneratePDF}
-                />
-              </div>
-            </div>
-
-            <AIDecisionSummary
-              simulation={simulation}
-              scenarioName={currentScenarioName}
-              baselineSimulation={baselineComparison.simulation}
-              counterMoves={simulation.counter_moves}
-              className="mb-4"
-            />
-
-            {founderMode && (() => {
-              const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
-              const runwayP50 = simulation.runway?.p50 ?? 0;
-              const rev24m = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
-              const cash18m = simulation.metrics?.cash?.[17]?.p50 ?? simulation.month_data?.[17]?.cash_p50 ?? 0;
-              const spread = (simulation.runway?.p90 ?? 0) - (simulation.runway?.p10 ?? 0);
-              let riskScore = 5;
-              if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
-              else if (survival18m >= 80 && runwayP50 >= 14) riskScore = 8;
-              else if (survival18m >= 70 && runwayP50 >= 12) riskScore = 7;
-              else if (survival18m >= 60 && runwayP50 >= 10) riskScore = 6;
-              else if (survival18m >= 50 && runwayP50 >= 8) riskScore = 5;
-              else if (survival18m >= 40) riskScore = 4;
-              else if (survival18m >= 30) riskScore = 3;
-              else riskScore = 2;
-              if (spread > 15) riskScore = Math.max(1, riskScore - 1);
-
-              const survivalColor = survival18m >= 70 ? 'text-emerald-600 dark:text-emerald-400' : survival18m >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
-              const runwayColor = runwayP50 >= 18 ? 'text-emerald-600 dark:text-emerald-400' : runwayP50 >= 12 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
-              const riskColor = riskScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : riskScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
-
-              return (
-                <Card className="mb-6 border-primary/20" data-testid="card-founder-dashboard">
-                  <CardContent className="pt-4 pb-4 px-4">
-                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Founder Dashboard
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px]">{currentScenarioName}</Badge>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-                      <div data-testid="founder-metric-survival">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Survival</p>
-                        <p className={`text-2xl font-bold font-mono ${survivalColor}`}>{survival18m.toFixed(0)}%</p>
-                        <p className="text-[10px] text-muted-foreground">18-month</p>
-                      </div>
-                      <div data-testid="founder-metric-runway">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Runway</p>
-                        <p className={`text-2xl font-bold font-mono ${runwayColor}`}>{runwayP50.toFixed(1)}</p>
-                        <p className="text-[10px] text-muted-foreground">months (P50)</p>
-                      </div>
-                      <div data-testid="founder-metric-arr24">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">ARR @24m</p>
-                        <p className="text-2xl font-bold font-mono">{formatCurrency(rev24m * 12)}</p>
-                        <p className="text-[10px] text-muted-foreground">projected</p>
-                      </div>
-                      <div data-testid="founder-metric-cash18">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Cash @18m</p>
-                        <p className="text-2xl font-bold font-mono">{formatCurrency(cash18m)}</p>
-                        <p className="text-[10px] text-muted-foreground">projected</p>
-                      </div>
-                      <div data-testid="founder-metric-risk">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Risk Score</p>
-                        <p className={`text-2xl font-bold font-mono ${riskColor}`}>{riskScore}/10</p>
-                        <p className="text-[10px] text-muted-foreground">{riskScore >= 7 ? 'Low Risk' : riskScore >= 5 ? 'Moderate' : 'High Risk'}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-dashed flex items-center justify-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setFounderDetailOpen(!founderDetailOpen)}
-                        className="text-muted-foreground"
-                        data-testid="button-founder-details"
-                      >
-                        {founderDetailOpen ? <ChevronUp className="h-3.5 w-3.5 mr-1.5" /> : <ChevronDown className="h-3.5 w-3.5 mr-1.5" />}
-                        {founderDetailOpen ? 'Hide Details' : 'Show Full Analysis'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })()}
-
-            {(!founderMode || founderDetailOpen) && (<><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {/* Best Case - P90 */}
-              <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" data-testid="card-scenario-p90">
-                <CardContent className="pt-4 pb-4 px-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Best Case (P90)</span>
-                  </div>
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Runway</span>
-                      <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway} mo</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p90-revenue">{formatCurrency(scenarioP90?.revenue18m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p90-cash">{formatCurrency(scenarioP90?.cash12m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Break-even</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p90-breakeven">{scenarioP90?.breakeven}</span>
-                    </div>
-                    <div className="mt-2 pt-2 border-t">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground">Survival</span>
-                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, parseFloat(scenarioP90?.survival || '0'))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Most Likely - P50 */}
-              <Card className="border-primary/30 bg-primary/5" data-testid="card-scenario-p50">
-                <CardContent className="pt-4 pb-4 px-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-2 w-2 rounded-full bg-primary" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-primary">Most Likely (P50)</span>
-                  </div>
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Runway</span>
-                      <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway} mo</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p50-revenue">{formatCurrency(scenarioP50?.revenue18m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p50-cash">{formatCurrency(scenarioP50?.cash12m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Break-even</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p50-breakeven">{scenarioP50?.breakeven}</span>
-                    </div>
-                    <div className="mt-2 pt-2 border-t">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground">Survival</span>
-                        <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${Math.min(100, parseFloat(scenarioP50?.survival || '0'))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Worst Case - P10 */}
-              <Card className="border-red-500/30 bg-red-50/30 dark:bg-red-950/10" data-testid="card-scenario-p10">
-                <CardContent className="pt-4 pb-4 px-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="h-2 w-2 rounded-full bg-red-500" />
-                    <span className="text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-400">Worst Case (P10)</span>
-                  </div>
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Runway</span>
-                      <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway} mo</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p10-revenue">{formatCurrency(scenarioP10?.revenue18m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p10-cash">{formatCurrency(scenarioP10?.cash12m || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-muted-foreground">Break-even</span>
-                      <span className="text-sm font-semibold font-mono" data-testid="text-p10-breakeven">{scenarioP10?.breakeven}</span>
-                    </div>
-                    <div className="mt-2 pt-2 border-t">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground">Survival</span>
-                        <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-red-500 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, parseFloat(scenarioP10?.survival || '0'))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {baselineComparison.simulation && (
-              <RiskAlertBanner
-                baselineSimulation={baselineComparison.simulation}
-                scenarioSimulation={simulation}
-                scenarioName={currentScenarioName}
-              />
-            )}
-
-            {baselineComparison.simulation && (
-              <BeforeAfterDeltaCards
-                baselineSimulation={baselineComparison.simulation}
-                scenarioSimulation={simulation}
-                baselineName={baselineComparison.name}
-                scenarioName={currentScenarioName}
-              />
-            )}
-
-            <CounterMoveCards
-              counterMoves={simulation?.counter_moves || null}
-              currentSimulation={simulation}
-              isLoading={false}
-              hasFailed={false}
-              onRetry={() => {}}
-              onApply={handleApplyCounterMove}
-            />
-
-            {simulation?.fundraising_intelligence && (
-              <>
-                <FundraisingIntelligence data={simulation.fundraising_intelligence} />
-                <FundraiseDilutionModel data={{
-                  fundraiseAmount: simulation.fundraising_intelligence.fundraise_amount,
-                  valuationRange: simulation.fundraising_intelligence.valuation_range,
-                  dilution: simulation.fundraising_intelligence.dilution,
-                  ownershipPost: simulation.fundraising_intelligence.ownership_post_raise,
-                  runwayExtMonths: simulation.fundraising_intelligence.runway_extension_months,
-                  monthlyBurn: simulation.fundraising_intelligence.monthly_burn,
-                  monthlyRevenue: baseMetrics?.monthlyRevenue,
-                  growthRate: baseMetrics?.growthRate ? baseMetrics.growthRate / 100 : 0.3,
-                  currentCash: baseMetrics?.cashOnHand,
-                  survivalLift: simulation.fundraising_intelligence.survival_lift_pct,
-                }} />
-              </>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-              <PaybackClock simulation={simulation} />
-              <Card data-testid="card-survival-chart">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Survival Probability</CardTitle>
-                  <CardDescription className="text-xs">Probability of remaining cash positive over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <SurvivalCurveChart data={simulation.survivalCurve || simulation.survival?.curve || simulation.survival_curve || []} />
-                </CardContent>
-              </Card>
-            </div>
-
-            <BandsChart
-              data={getCashBands(simulation)}
-              title="Cash Projection Bands"
-              description="10th, 50th, and 90th percentile outcomes"
-            />
-            </>)}
-          </>
-        )}
-      </section>
-
-      {/* STEP 3: AI Recommendation */}
-      {simulation && !isRunning && !isCreating && (!founderMode || founderDetailOpen) && (
-        <section data-testid="section-ai-recommendation">
-          <h2 className="text-xl font-bold mb-4" data-testid="text-recommendation-title">Strategic Assessment</h2>
-
-          <Card
-            className="mb-6 relative overflow-visible"
-            style={{
-              borderImage: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.4), hsl(var(--primary)/0.1)) 1',
-              borderWidth: '2px',
-              borderStyle: 'solid',
-            }}
-            data-testid="card-ai-recommendation"
-          >
-            <CardContent className="pt-5 pb-5 px-5">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="p-2 rounded-md bg-primary/10 shrink-0">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm mb-2">{currentScenarioName}</h3>
-                  <DataDrivenRecommendation
-                    baselineSimulation={baselineComparison.simulation}
-                    scenarioSimulation={simulation}
-                    baselineName={baselineComparison.name}
-                    scenarioName={currentScenarioName}
-                  />
-                </div>
-              </div>
-
-              <div className="my-4">
-                <DecisionScoreCard
-                  scenarioSimulation={simulation}
-                  baselineSimulation={baselineComparison.simulation}
-                />
-              </div>
-
-              <div className="space-y-2.5 mb-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Key Sensitivity Levers</p>
-                {sensitivityBars.map((bar) => (
-                  <div key={bar.label} className="flex items-center gap-3" data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
-                    <span className="text-xs w-28 shrink-0">{bar.label}</span>
-                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${bar.level === 'high' ? 'bg-red-500' : bar.level === 'med' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${bar.impact}%` }}
-                      />
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] px-1.5 py-0 h-4 ${bar.level === 'high' ? 'border-red-500/50 text-red-600 dark:text-red-400' : bar.level === 'med' ? 'border-amber-500/50 text-amber-600 dark:text-amber-400' : 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400'}`}
-                    >
-                      {bar.level}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" data-testid="button-adopt-strategy" onClick={() => toast({ title: 'Strategy adopted', description: `${currentScenarioName} saved as your active strategy.` })}>
-                  <Shield className="h-3.5 w-3.5 mr-1.5" />
-                  Adopt This Strategy
-                </Button>
-                <ExportButton
-                  data={formatSimulationForExport(simulation)}
-                  filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-report`}
-                  onGeneratePDF={handleGeneratePDF}
-                />
-                <Button variant="outline" size="sm" data-testid="button-discuss-team" onClick={() => toast({ title: 'Coming soon', description: 'Team discussion feature is in development.' })}>
-                  <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                  Discuss with Team
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setQuestionInput('');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  data-testid="button-run-another"
-                >
-                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Run Another Scenario
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      {/* Recent Simulations History */}
-      {scenarios && scenarios.length > 0 && (
-        <section data-testid="section-recent-simulations">
-          <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
-            <h2 className="text-lg font-semibold" data-testid="text-recent-title">Recent Simulations</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{scenarios.length} saved</span>
-              {scenarios.filter((s: any) => s.latest_simulation).length >= 2 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setComparePickerOpen(true)}
-                  data-testid="button-compare-open"
-                >
-                  <GitCompare className="h-3.5 w-3.5 mr-1.5" />
-                  Compare
-                </Button>
-              )}
-            </div>
-          </div>
-          <ScrollArea className="w-full">
-            <div className="flex gap-3 pb-3">
-              {scenarios.slice(0, 10).map((s: any) => (
-                <Card
-                  key={s.id}
-                  className={`shrink-0 w-52 hover-elevate cursor-pointer ${selectedScenarioId === s.id ? 'border-primary' : ''}`}
-                  onClick={() => handleRunScenario(s.id)}
-                  data-testid={`card-recent-sim-${s.id}`}
-                >
-                  <CardContent className="p-3">
-                    <p className="text-sm font-medium truncate mb-1" data-testid={`text-recent-name-${s.id}`}>{s.name}</p>
-                    {s.latest_simulation ? (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-muted-foreground">Runway</span>
-                          <span className="text-xs font-mono font-semibold" data-testid={`text-recent-runway-${s.id}`}>
-                            {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-muted-foreground">Survival</span>
-                          <span className="text-xs font-mono font-semibold" data-testid={`text-recent-survival-${s.id}`}>
-                            {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground">Not yet simulated</p>
-                    )}
-                    {s.created_at && (
-                      <p className="text-[10px] text-muted-foreground mt-1.5 border-t pt-1" data-testid={`text-recent-date-${s.id}`}>
-                        {new Date(s.created_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        </section>
-      )}
-
-      {compareIds.length >= 2 && scenarios && (
-        <section data-testid="section-compare-mode">
-          <ScenarioCompareMode
-            scenarios={scenarios}
-            selectedIds={compareIds}
-            onClose={() => setCompareIds([])}
-            onSelectScenario={(id) => { setCompareIds([]); handleRunScenario(id); }}
-          />
-        </section>
-      )}
-
-      {scenarios && (
-        <ScenarioComparePicker
-          open={comparePickerOpen}
-          onOpenChange={setComparePickerOpen}
-          scenarios={scenarios}
-          onCompare={(ids) => setCompareIds(ids)}
-        />
-      )}
-
-      {/* Advanced View Toggle */}
-      <section data-testid="section-advanced-view">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-center text-muted-foreground"
-          onClick={() => setShowAdvancedView(!showAdvancedView)}
-          data-testid="button-toggle-advanced"
-        >
-          {showAdvancedView ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-          {showAdvancedView ? 'Hide Advanced View' : 'Show Advanced View'}
-        </Button>
-
-        {showAdvancedView && (
-          <div className="mt-4">
-            <Tabs value={advancedTab} onValueChange={setAdvancedTab}>
+            <div className="mb-6">
+              <Tabs value={advancedTab} onValueChange={setAdvancedTab}>
               <TabsList className="flex-wrap h-auto gap-1">
                 <TabsTrigger value="builder" data-testid="adv-tab-builder">
                   <Zap className="h-4 w-4 mr-2" />
@@ -1760,33 +1454,12 @@ export default function ScenariosPage() {
               </TabsContent>
 
               <TabsContent value="analysis" className="mt-6 space-y-6">
-                {(() => {
-                  const totalExpenses = baseMetrics?.monthlyExpenses || 80000;
-                  const financialState: FinancialState = baseMetrics ? {
-                    monthlyRevenue: baseMetrics.monthlyRevenue, grossMargin: baseMetrics.grossMargin,
-                    opex: totalExpenses * 0.3, payroll: totalExpenses * 0.6, otherCosts: totalExpenses * 0.1,
-                    cashBalance: baseMetrics.cashOnHand, churnRate: baseMetrics.churnRate, growthRate: baseMetrics.growthRate,
-                    cac: baseMetrics.monthlyRevenue * 0.3, ltv: baseMetrics.churnRate > 0 ? (baseMetrics.monthlyRevenue / baseMetrics.churnRate) * 100 : baseMetrics.monthlyRevenue * 24,
-                  } : {
-                    monthlyRevenue: 0, grossMargin: 0, opex: 0, payroll: 0, otherCosts: 0,
-                    cashBalance: 0, churnRate: 0, growthRate: 0, cac: 0, ltv: 0,
-                  };
-                  const currentRunway = baseMetrics?.currentRunway || 0;
-                  const sensitivityData = calculateSensitivity(financialState);
-                  const baselineResults = {
-                    runway: currentRunway,
-                    survival18m: simulation?.survival_18m ?? (simulation?.survival_12m ? Math.max(0, simulation.survival_12m * 0.85) : 65),
-                    cashAt18m: simulation?.end_cash ?? Math.max(0, financialState.cashBalance - (totalExpenses - financialState.monthlyRevenue) * 18),
-                  };
-                  return (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <TornadoChart baselineRunway={currentRunway} variables={sensitivityData} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
-                      <WhatIfExplorer baselineState={financialState} baselineResults={baselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(financialState, adj, baselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
-                      <StressTestPanel currentState={financialState} currentRunway={currentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
-                      <ReverseStressTest currentState={financialState} />
-                    </div>
-                  );
-                })()}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
+                  <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
+                  <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
+                  <ReverseStressTest currentState={stressTestFinancialState} />
+                </div>
               </TabsContent>
 
               <TabsContent value="results" className="mt-6 space-y-4">
@@ -1851,9 +1524,470 @@ export default function ScenariosPage() {
                 )}
               </TabsContent>
             </Tabs>
-          </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+              <div>
+                <h2 className="text-xl font-bold" data-testid="text-results-title">Simulation Results</h2>
+                <p className="text-sm text-muted-foreground">{currentScenarioName} &mdash; 1,000 Monte Carlo runs</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={handleShareScenario} data-testid="button-share-scenario">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+                <ExportButton
+                  data={formatSimulationForExport(simulation)}
+                  filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
+                  onGeneratePDF={handleGeneratePDF}
+                />
+              </div>
+            </div>
+
+            <AIDecisionSummary
+              simulation={simulation}
+              scenarioName={currentScenarioName}
+              baselineSimulation={baselineComparison.simulation}
+              counterMoves={simulation.counter_moves}
+              className="mb-4"
+            />
+
+            {founderMode && (() => {
+              const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+              const runwayP50 = simulation.runway?.p50 ?? 0;
+              const rev24m = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
+              const cash18m = simulation.metrics?.cash?.[17]?.p50 ?? simulation.month_data?.[17]?.cash_p50 ?? 0;
+              const spread = (simulation.runway?.p90 ?? 0) - (simulation.runway?.p10 ?? 0);
+              let riskScore = 5;
+              if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
+              else if (survival18m >= 80 && runwayP50 >= 14) riskScore = 8;
+              else if (survival18m >= 70 && runwayP50 >= 12) riskScore = 7;
+              else if (survival18m >= 60 && runwayP50 >= 10) riskScore = 6;
+              else if (survival18m >= 50 && runwayP50 >= 8) riskScore = 5;
+              else if (survival18m >= 40) riskScore = 4;
+              else if (survival18m >= 30) riskScore = 3;
+              else riskScore = 2;
+              if (spread > 15) riskScore = Math.max(1, riskScore - 1);
+
+              const survivalColor = survival18m >= 70 ? 'text-emerald-600 dark:text-emerald-400' : survival18m >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+              const runwayColor = runwayP50 >= 18 ? 'text-emerald-600 dark:text-emerald-400' : runwayP50 >= 12 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+              const riskColor = riskScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : riskScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+
+              return (
+                <Card className="mb-6 border-primary/20" data-testid="card-founder-dashboard">
+                  <CardContent className="pt-4 pb-4 px-4">
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Eye className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Founder Dashboard
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">{currentScenarioName}</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                      <div data-testid="founder-metric-survival">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Survival</p>
+                        <p className={`text-2xl font-bold font-mono ${survivalColor}`}>{survival18m.toFixed(0)}%</p>
+                        <p className="text-[10px] text-muted-foreground">18-month</p>
+                      </div>
+                      <div data-testid="founder-metric-runway">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Runway</p>
+                        <p className={`text-2xl font-bold font-mono ${runwayColor}`}>{runwayP50.toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground">months (P50)</p>
+                      </div>
+                      <div data-testid="founder-metric-arr24">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">ARR @24m</p>
+                        <p className="text-2xl font-bold font-mono">{formatCurrency(rev24m * 12)}</p>
+                        <p className="text-[10px] text-muted-foreground">projected</p>
+                      </div>
+                      <div data-testid="founder-metric-cash18">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Cash @18m</p>
+                        <p className="text-2xl font-bold font-mono">{formatCurrency(cash18m)}</p>
+                        <p className="text-[10px] text-muted-foreground">projected</p>
+                      </div>
+                      <div data-testid="founder-metric-risk">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Risk Score</p>
+                        <p className={`text-2xl font-bold font-mono ${riskColor}`}>{riskScore}/10</p>
+                        <p className="text-[10px] text-muted-foreground">{riskScore >= 7 ? 'Low Risk' : riskScore >= 5 ? 'Moderate' : 'High Risk'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-dashed flex items-center justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFounderDetailOpen(!founderDetailOpen)}
+                        className="text-muted-foreground"
+                        data-testid="button-founder-details"
+                      >
+                        {founderDetailOpen ? <ChevronUp className="h-3.5 w-3.5 mr-1.5" /> : <ChevronDown className="h-3.5 w-3.5 mr-1.5" />}
+                        {founderDetailOpen ? 'Hide Details' : 'Show Full Analysis'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {(!founderMode || founderDetailOpen) && (<>
+              <Card
+                className="mb-6 relative overflow-visible"
+                style={{
+                  borderImage: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.4), hsl(var(--primary)/0.1)) 1',
+                  borderWidth: '2px',
+                  borderStyle: 'solid',
+                }}
+                data-testid="card-ai-recommendation"
+              >
+                <CardContent className="pt-5 pb-5 px-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="p-2 rounded-md bg-primary/10 shrink-0">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm mb-2">{currentScenarioName}</h3>
+                      <DataDrivenRecommendation
+                        baselineSimulation={baselineComparison.simulation}
+                        scenarioSimulation={simulation}
+                        baselineName={baselineComparison.name}
+                        scenarioName={currentScenarioName}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="my-4">
+                    <DecisionScoreCard
+                      scenarioSimulation={simulation}
+                      baselineSimulation={baselineComparison.simulation}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" data-testid="button-adopt-strategy" onClick={() => toast({ title: 'Strategy adopted', description: `${currentScenarioName} saved as your active strategy.` })}>
+                      <Shield className="h-3.5 w-3.5 mr-1.5" />
+                      Adopt This Strategy
+                    </Button>
+                    <ExportButton
+                      data={formatSimulationForExport(simulation)}
+                      filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-report`}
+                      onGeneratePDF={handleGeneratePDF}
+                    />
+                    <Button variant="outline" size="sm" data-testid="button-discuss-team" onClick={() => toast({ title: 'Coming soon', description: 'Team discussion feature is in development.' })}>
+                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                      Discuss with Team
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setQuestionInput('');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      data-testid="button-run-another"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                      Run Another Scenario
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {baselineComparison.simulation && (
+                <RiskAlertBanner
+                  baselineSimulation={baselineComparison.simulation}
+                  scenarioSimulation={simulation}
+                  scenarioName={currentScenarioName}
+                />
+              )}
+
+              {baselineComparison.simulation && (
+                <BeforeAfterDeltaCards
+                  baselineSimulation={baselineComparison.simulation}
+                  scenarioSimulation={simulation}
+                  baselineName={baselineComparison.name}
+                  scenarioName={currentScenarioName}
+                />
+              )}
+
+              <div className="space-y-2.5 mb-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Key Sensitivity Levers</p>
+                {sensitivityBars.map((bar) => (
+                  <div key={bar.label} className="flex items-center gap-3" data-testid={`sensitivity-bar-${bar.label.toLowerCase().replace(/\s/g, '-')}`}>
+                    <span className="text-xs w-28 shrink-0">{bar.label}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${bar.level === 'high' ? 'bg-red-500' : bar.level === 'med' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${bar.impact}%` }}
+                      />
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] px-1.5 py-0 h-4 ${bar.level === 'high' ? 'border-red-500/50 text-red-600 dark:text-red-400' : bar.level === 'med' ? 'border-amber-500/50 text-amber-600 dark:text-amber-400' : 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400'}`}
+                    >
+                      {bar.level}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
+                <ReverseStressTest currentState={stressTestFinancialState} />
+              </div>
+
+              <CounterMoveCards
+                counterMoves={simulation?.counter_moves || null}
+                currentSimulation={simulation}
+                isLoading={false}
+                hasFailed={false}
+                onRetry={() => {}}
+                onApply={handleApplyCounterMove}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" data-testid="card-scenario-p90">
+                  <CardContent className="pt-4 pb-4 px-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Best Case (P90)</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Runway</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway} mo</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Revenue @18mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-revenue">{formatCurrency(scenarioP90?.revenue18m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Cash @12mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-cash">{formatCurrency(scenarioP90?.cash12m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Break-even</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-breakeven">{scenarioP90?.breakeven}</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Survival</span>
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all"
+                            style={{ width: `${Math.min(100, parseFloat(scenarioP90?.survival || '0'))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary/30 bg-primary/5" data-testid="card-scenario-p50">
+                  <CardContent className="pt-4 pb-4 px-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-primary">Most Likely (P50)</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Runway</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway} mo</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Revenue @18mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-revenue">{formatCurrency(scenarioP50?.revenue18m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Cash @12mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-cash">{formatCurrency(scenarioP50?.cash12m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Break-even</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-breakeven">{scenarioP50?.breakeven}</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Survival</span>
+                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${Math.min(100, parseFloat(scenarioP50?.survival || '0'))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-red-500/30 bg-red-50/30 dark:bg-red-950/10" data-testid="card-scenario-p10">
+                  <CardContent className="pt-4 pb-4 px-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-2 w-2 rounded-full bg-red-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-400">Worst Case (P10)</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Runway</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway} mo</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Revenue @18mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-revenue">{formatCurrency(scenarioP10?.revenue18m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Cash @12mo</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-cash">{formatCurrency(scenarioP10?.cash12m || 0)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">Break-even</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-breakeven">{scenarioP10?.breakeven}</span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Survival</span>
+                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            className="h-full bg-red-500 rounded-full transition-all"
+                            style={{ width: `${Math.min(100, parseFloat(scenarioP10?.survival || '0'))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <PaybackClock simulation={simulation} />
+                <Card data-testid="card-survival-chart">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Survival Probability</CardTitle>
+                    <CardDescription className="text-xs">Probability of remaining cash positive over time</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <SurvivalCurveChart data={simulation.survivalCurve || simulation.survival?.curve || simulation.survival_curve || []} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <BandsChart
+                data={getCashBands(simulation)}
+                title="Cash Projection Bands"
+                description="10th, 50th, and 90th percentile outcomes"
+              />
+
+              {simulation?.fundraising_intelligence && (
+                <>
+                  <FundraisingIntelligence data={simulation.fundraising_intelligence} />
+                  <FundraiseDilutionModel data={{
+                    fundraiseAmount: simulation.fundraising_intelligence.fundraise_amount,
+                    valuationRange: simulation.fundraising_intelligence.valuation_range,
+                    dilution: simulation.fundraising_intelligence.dilution,
+                    ownershipPost: simulation.fundraising_intelligence.ownership_post_raise,
+                    runwayExtMonths: simulation.fundraising_intelligence.runway_extension_months,
+                    monthlyBurn: simulation.fundraising_intelligence.monthly_burn,
+                    monthlyRevenue: baseMetrics?.monthlyRevenue,
+                    growthRate: baseMetrics?.growthRate ? baseMetrics.growthRate / 100 : 0.3,
+                    currentCash: baseMetrics?.cashOnHand,
+                    survivalLift: simulation.fundraising_intelligence.survival_lift_pct,
+                  }} />
+                </>
+              )}
+            </>)}
+          </>
         )}
       </section>
+
+      {/* Recent Simulations History */}
+      {scenarios && scenarios.length > 0 && (
+        <section data-testid="section-recent-simulations">
+          <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+            <h2 className="text-lg font-semibold" data-testid="text-recent-title">Recent Simulations</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{scenarios.length} saved</span>
+              {scenarios.filter((s: any) => s.latest_simulation).length >= 2 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setComparePickerOpen(true)}
+                  data-testid="button-compare-open"
+                >
+                  <GitCompare className="h-3.5 w-3.5 mr-1.5" />
+                  Compare
+                </Button>
+              )}
+            </div>
+          </div>
+          <ScrollArea className="w-full">
+            <div className="flex gap-3 pb-3">
+              {scenarios.slice(0, 10).map((s: any) => (
+                <Card
+                  key={s.id}
+                  className={`shrink-0 w-52 hover-elevate cursor-pointer ${selectedScenarioId === s.id ? 'border-primary' : ''}`}
+                  onClick={() => handleRunScenario(s.id)}
+                  data-testid={`card-recent-sim-${s.id}`}
+                >
+                  <CardContent className="p-3">
+                    <p className="text-sm font-medium truncate mb-1" data-testid={`text-recent-name-${s.id}`}>{s.name}</p>
+                    {s.latest_simulation ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-muted-foreground">Runway</span>
+                          <span className="text-xs font-mono font-semibold" data-testid={`text-recent-runway-${s.id}`}>
+                            {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-muted-foreground">Survival</span>
+                          <span className="text-xs font-mono font-semibold" data-testid={`text-recent-survival-${s.id}`}>
+                            {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">Not yet simulated</p>
+                    )}
+                    {s.created_at && (
+                      <p className="text-[10px] text-muted-foreground mt-1.5 border-t pt-1" data-testid={`text-recent-date-${s.id}`}>
+                        {new Date(s.created_at).toLocaleDateString()}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+        </section>
+      )}
+
+      {compareIds.length >= 2 && scenarios && (
+        <section data-testid="section-compare-mode">
+          <ScenarioCompareMode
+            scenarios={scenarios}
+            selectedIds={compareIds}
+            onClose={() => setCompareIds([])}
+            onSelectScenario={(id) => { setCompareIds([]); handleRunScenario(id); }}
+          />
+        </section>
+      )}
+
+      {scenarios && (
+        <ScenarioComparePicker
+          open={comparePickerOpen}
+          onOpenChange={setComparePickerOpen}
+          scenarios={scenarios}
+          onCompare={(ids) => setCompareIds(ids)}
+        />
+      )}
+
+
 
       {/* Duplicate Dialog */}
       <Dialog open={duplicateDialog.open} onOpenChange={(open) => setDuplicateDialog({ ...duplicateDialog, open })}>
