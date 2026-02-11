@@ -3,7 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowUp, ArrowDown, Minus, AlertTriangle,
-  TrendingUp, TrendingDown, Timer, ArrowRight
+  TrendingUp, TrendingDown, Timer, ArrowRight,
+  DollarSign, PieChart, Fuel, Shield
 } from 'lucide-react';
 
 interface SimulationData {
@@ -514,6 +515,139 @@ export function DataDrivenRecommendation({
         </p>
       )}
     </div>
+  );
+}
+
+interface FundraisingData {
+  fundraise_amount: number;
+  fundraise_month?: number;
+  dilution: { low: number; mid: number; high: number };
+  ownership_post_raise: { best_case: number; expected: number; worst_case: number };
+  valuation_range: { low: number; mid: number; high: number };
+  runway_extension_months: number;
+  capital_efficiency: number;
+  pre_raise_runway: number;
+  post_raise_runway: number;
+  monthly_burn: number;
+  survival_lift_pct: number;
+  runway_lift_months: number;
+}
+
+export function FundraisingIntelligence({
+  data,
+}: {
+  data: FundraisingData;
+}) {
+  const efficiencyLabel = data.capital_efficiency >= 18 ? 'Excellent' : data.capital_efficiency >= 12 ? 'Good' : data.capital_efficiency >= 6 ? 'Fair' : 'Low';
+  const efficiencyColor = data.capital_efficiency >= 18
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : data.capital_efficiency >= 12
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : data.capital_efficiency >= 6
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400';
+
+  return (
+    <Card data-testid="card-fundraising-intelligence">
+      <CardContent className="pt-4 pb-4 px-4">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <DollarSign className="h-4 w-4 text-primary" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Fundraising Intelligence
+          </span>
+          <Badge variant="outline" className="text-[10px]">
+            {formatCurrency(data.fundraise_amount)} raise
+          </Badge>
+          {data.fundraise_month && (
+            <Badge variant="outline" className="text-[10px]">
+              Month {data.fundraise_month}
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-dilution">
+            <div className="flex items-center gap-1">
+              <PieChart className="h-3 w-3 text-muted-foreground" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dilution</p>
+            </div>
+            <p className="text-sm font-semibold font-mono" data-testid="text-dilution-mid">
+              {data.dilution.mid.toFixed(1)}%
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {data.dilution.low.toFixed(1)}% &ndash; {data.dilution.high.toFixed(1)}%
+            </p>
+          </div>
+
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-ownership">
+            <div className="flex items-center gap-1">
+              <Shield className="h-3 w-3 text-muted-foreground" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Ownership</p>
+            </div>
+            <p className="text-sm font-semibold font-mono" data-testid="text-ownership-post">
+              {data.ownership_post_raise.expected.toFixed(1)}%
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {data.ownership_post_raise.worst_case.toFixed(1)}% &ndash; {data.ownership_post_raise.best_case.toFixed(1)}%
+            </p>
+          </div>
+
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-runway-ext">
+            <div className="flex items-center gap-1">
+              <Fuel className="h-3 w-3 text-muted-foreground" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Runway Ext.</p>
+            </div>
+            <p className="text-sm font-semibold font-mono text-emerald-600 dark:text-emerald-400" data-testid="text-runway-extension">
+              +{data.runway_extension_months.toFixed(1)} mo
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {data.pre_raise_runway.toFixed(1)} &rarr; {data.post_raise_runway.toFixed(1)} mo
+            </p>
+          </div>
+
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-cap-efficiency">
+            <div className="flex items-center gap-1">
+              <TrendingUp className="h-3 w-3 text-muted-foreground" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cap. Efficiency</p>
+            </div>
+            <p className={`text-sm font-semibold font-mono ${efficiencyColor}`} data-testid="text-capital-efficiency">
+              {data.capital_efficiency.toFixed(1)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              mo / $1M &middot; {efficiencyLabel}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-survival-lift">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Survival Lift</p>
+            <div className="flex items-center gap-1">
+              {data.survival_lift_pct > 0 && <ArrowUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+              <span className={`text-sm font-semibold font-mono ${data.survival_lift_pct > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                {data.survival_lift_pct > 0 ? '+' : ''}{data.survival_lift_pct.toFixed(1)}pp
+              </span>
+              <span className="text-[10px] text-muted-foreground">vs no raise</span>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-valuation">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Implied Valuation</p>
+            <p className="text-sm font-semibold font-mono">
+              {formatCurrency(data.valuation_range.mid)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {formatCurrency(data.valuation_range.low)} &ndash; {formatCurrency(data.valuation_range.high)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-2 border-t border-dashed">
+          <p className="text-[10px] text-muted-foreground">
+            Monthly burn: {formatCurrency(data.monthly_burn)} &middot; Runway lift from raise: +{data.runway_lift_months.toFixed(1)} months (simulated)
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

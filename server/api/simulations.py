@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -441,6 +444,10 @@ def run_simulation(
     counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
     outputs["counter_moves"] = counter_moves_results
     
+    fundraising_intel = _compute_fundraising_metrics(scenario, metrics, latest_record, outputs)
+    if fundraising_intel:
+        outputs["fundraising_intelligence"] = fundraising_intel
+    
     sim_run = SimulationRun(
         scenario_id=scenario_id,
         n_sims=request.n_sims,
@@ -510,6 +517,116 @@ def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, ove
         churn_change_pct=si.get("churn_change_pct", 0),
         cac_change_pct=si.get("cac_change_pct", 0),
     )
+
+
+def _compute_fundraising_metrics(
+    scenario, 
+    metrics: Dict, 
+    latest_record, 
+    simulation_outputs: Dict
+) -> Optional[Dict[str, Any]]:
+    """Compute fundraising intelligence metrics when scenario involves fundraising."""
+    si = scenario.inputs_json or {}
+    fundraise_amount = si.get("fundraise_amount", 0)
+    fundraise_month = si.get("fundraise_month")
+    
+    if not fundraise_amount or fundraise_amount <= 0:
+        return None
+    
+    ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    current_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+    
+    ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    monthly_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    
+    opex = extract_metric_value(metrics.get("opex"), 20000)
+    payroll = extract_metric_value(metrics.get("payroll"), 30000)
+    other_costs = extract_metric_value(metrics.get("other_costs"), 5000)
+    gross_margin_pct = extract_metric_value(metrics.get("gross_margin"), 70) / 100
+    
+    gross_profit = monthly_revenue * gross_margin_pct
+    monthly_burn = max(0, opex + payroll + other_costs - gross_profit)
+    
+    pre_raise_runway = current_cash / monthly_burn if monthly_burn > 0 else 48
+    post_raise_cash = current_cash + fundraise_amount
+    post_raise_runway = post_raise_cash / monthly_burn if monthly_burn > 0 else 48
+    runway_extension = post_raise_runway - pre_raise_runway
+    
+    annual_revenue = monthly_revenue * 12
+    if annual_revenue > 0:
+        valuation_low = annual_revenue * 8
+        valuation_mid = annual_revenue * 12
+        valuation_high = annual_revenue * 18
+    else:
+        valuation_low = fundraise_amount * 3
+        valuation_mid = fundraise_amount * 5
+        valuation_high = fundraise_amount * 8
+    
+    dilution_low = (fundraise_amount / (valuation_high + fundraise_amount)) * 100
+    dilution_mid = (fundraise_amount / (valuation_mid + fundraise_amount)) * 100
+    dilution_high = (fundraise_amount / (valuation_low + fundraise_amount)) * 100
+    
+    founder_ownership_pre = 100.0
+    founder_ownership_post_low = founder_ownership_pre * (1 - dilution_low / 100)
+    founder_ownership_post_mid = founder_ownership_pre * (1 - dilution_mid / 100)
+    founder_ownership_post_high = founder_ownership_pre * (1 - dilution_high / 100)
+    
+    def _get_survival_18m(outputs: Dict) -> float:
+        sp = outputs.get("survivalProbability", {})
+        if isinstance(sp, dict) and "18m" in sp:
+            return sp["18m"]
+        sv = outputs.get("survival", {})
+        if isinstance(sv, dict) and "18m" in sv:
+            return sv["18m"]
+        return 0
+    
+    survival_18m = _get_survival_18m(simulation_outputs)
+    runway_p50 = simulation_outputs.get("runway", {}).get("p50", 0)
+    
+    no_raise_inputs = _build_enhanced_inputs(scenario, metrics, latest_record, overrides={"fundraise_amount": 0})
+    no_raise_config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
+    try:
+        no_raise_outputs = run_enhanced_monte_carlo(no_raise_inputs, no_raise_config)
+        no_raise_survival = _get_survival_18m(no_raise_outputs)
+        no_raise_runway = no_raise_outputs.get("runway", {}).get("p50", 0)
+        survival_lift = survival_18m - no_raise_survival
+        runway_lift = runway_p50 - no_raise_runway
+    except Exception as e:
+        logger.warning(f"No-raise simulation failed: {e}")
+        survival_lift = 0
+        runway_lift = runway_extension
+    
+    simulated_runway_ext = runway_lift if runway_lift > 0 else runway_extension
+    capital_efficiency = simulated_runway_ext / (fundraise_amount / 1_000_000) if fundraise_amount > 0 else 0
+    
+    return {
+        "fundraise_amount": fundraise_amount,
+        "fundraise_month": fundraise_month,
+        "dilution": {
+            "low": round(dilution_low, 1),
+            "mid": round(dilution_mid, 1),
+            "high": round(dilution_high, 1),
+        },
+        "ownership_post_raise": {
+            "best_case": round(founder_ownership_post_low, 1),
+            "expected": round(founder_ownership_post_mid, 1),
+            "worst_case": round(founder_ownership_post_high, 1),
+        },
+        "valuation_range": {
+            "low": round(valuation_low),
+            "mid": round(valuation_mid),
+            "high": round(valuation_high),
+        },
+        "runway_extension_months": round(simulated_runway_ext, 1),
+        "capital_efficiency": round(capital_efficiency, 1),
+        "pre_raise_runway": round(pre_raise_runway, 1),
+        "post_raise_runway": round(min(post_raise_runway, 48), 1),
+        "monthly_burn": round(monthly_burn),
+        "survival_lift_pct": round(survival_lift, 1),
+        "runway_lift_months": round(runway_lift, 1),
+    }
 
 
 def _run_counter_moves(scenario, metrics: Dict, latest_record) -> list:
@@ -688,13 +805,31 @@ def get_latest_simulation(
         except Exception:
             pass
 
-    return {
+    fundraising_intel = outputs.pop("fundraising_intelligence", None)
+    if fundraising_intel is None:
+        try:
+            truth_scan_fi = db.query(TruthScan).filter(
+                TruthScan.company_id == company.id
+            ).order_by(TruthScan.created_at.desc()).first()
+            if truth_scan_fi:
+                fi_metrics = truth_scan_fi.outputs_json.get("metrics", {})
+                fi_record = db.query(FinancialRecord).filter(
+                    FinancialRecord.company_id == company.id
+                ).order_by(FinancialRecord.period_end.desc()).first()
+                fundraising_intel = _compute_fundraising_metrics(scenario, fi_metrics, fi_record, outputs)
+        except Exception:
+            pass
+
+    result = {
         "id": sim_run.id,
         "scenario_id": scenario_id,
         **outputs,
         "counter_moves": counter_moves_results,
         "created_at": sim_run.created_at.isoformat()
     }
+    if fundraising_intel:
+        result["fundraising_intelligence"] = fundraising_intel
+    return result
 
 
 @router.get("/scenarios/{scenario_id}/timeseries", response_model=Dict[str, Any])
