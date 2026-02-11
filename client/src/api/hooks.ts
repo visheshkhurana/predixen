@@ -128,6 +128,12 @@ export function useRunSimulation() {
   });
 }
 
+export function useCounterMoves(scenarioId: number | null) {
+  return useMutation({
+    mutationFn: () => api.simulations.counterMoves(scenarioId!),
+  });
+}
+
 export function useSimulation(scenarioId: number | null) {
   return useQuery({
     queryKey: ['simulations', scenarioId],

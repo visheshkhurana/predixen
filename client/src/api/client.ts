@@ -291,6 +291,24 @@ export const api = {
       request<any>(`/companies/${companyId}/sensitivity-analysis?target_runway=${targetRunway}&target_probability=${targetProbability}`, {
         method: 'POST',
       }),
+    counterMoves: (scenarioId: number) =>
+      request<{
+        scenario_id: number;
+        counter_moves: Array<{
+          id: string;
+          name: string;
+          description: string;
+          icon: string;
+          overrides_applied: Record<string, number>;
+          runway: { p10: number; p50: number; p90: number };
+          survival: Record<string, number>;
+          survivalProbability: Record<string, number>;
+          breakEvenMonth: { p10: number; p50: number; p90: number };
+          summary: any;
+        }>;
+      }>(`/scenarios/${scenarioId}/counter-moves`, {
+        method: 'POST',
+      }),
     getTimeseries: (scenarioId: number) =>
       request<{
         scenario_id: number;

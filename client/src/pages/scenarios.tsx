@@ -32,7 +32,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
-import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -48,7 +48,7 @@ import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan, useCounterMoves } from '@/api/hooks';
 import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
@@ -144,6 +144,10 @@ export default function ScenariosPage() {
   const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
+  const counterMovesMutation = useCounterMoves(selectedScenarioId);
+  const [counterMovesData, setCounterMovesData] = useState<any>(null);
+  const [counterMovesScenarioId, setCounterMovesScenarioId] = useState<number | null>(null);
+  const counterMovesTriggeredRef = useRef<number | null>(null);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -282,6 +286,13 @@ export default function ScenariosPage() {
     }
   }, [simulation, selectedScenarioId, setLatestRun]);
 
+  useEffect(() => {
+    if (simulation && selectedScenarioId && counterMovesTriggeredRef.current !== selectedScenarioId) {
+      counterMovesTriggeredRef.current = selectedScenarioId;
+      handleRunCounterMoves();
+    }
+  }, [simulation, selectedScenarioId]);
+
   if (!currentCompany) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
@@ -363,6 +374,30 @@ export default function ScenariosPage() {
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const handleRunCounterMoves = async () => {
+    if (!selectedScenarioId) return;
+    try {
+      const result = await counterMovesMutation.mutateAsync();
+      setCounterMovesData(result.counter_moves);
+      setCounterMovesScenarioId(selectedScenarioId);
+    } catch (err: any) {
+      toast({ title: 'Counter-moves failed', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleApplyCounterMove = async (move: any) => {
+    if (!currentCompany || !selectedScenarioId) return;
+    const currentScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
+    if (!currentScenario) return;
+    const mergedInputs = { ...(currentScenario.inputs || {}), ...move.overrides_applied };
+    const scenarioData = {
+      name: `${currentScenario.name} + ${move.name}`,
+      description: `Counter-move applied: ${move.description}`,
+      ...mergedInputs,
+    };
+    await runScenario(scenarioData, false);
   };
 
   const handleRunMultiScenario = async () => {
@@ -1059,6 +1094,14 @@ export default function ScenariosPage() {
                 scenarioName={currentScenarioName}
               />
             )}
+
+            <CounterMoveCards
+              counterMoves={counterMovesScenarioId === selectedScenarioId ? counterMovesData : null}
+              currentSimulation={simulation}
+              isLoading={counterMovesMutation.isPending}
+              onSimulate={handleRunCounterMoves}
+              onApply={handleApplyCounterMove}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
               <PaybackClock simulation={simulation} />

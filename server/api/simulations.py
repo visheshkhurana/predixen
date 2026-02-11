@@ -474,6 +474,128 @@ def run_simulation(
         **outputs
     }
 
+
+def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, overrides: Dict = None) -> EnhancedSimulationInputs:
+    ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    baseline_growth = ts_growth if ts_growth != 0 else (fr_growth if fr_growth != 0 else 5)
+    ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    baseline_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    baseline_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+
+    si = scenario.inputs_json or {}
+    if overrides:
+        si = {**si, **overrides}
+
+    return EnhancedSimulationInputs(
+        baseline_revenue=baseline_revenue,
+        baseline_growth_rate=baseline_growth,
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
+        opex=extract_metric_value(metrics.get("opex"), 20000),
+        payroll=extract_metric_value(metrics.get("payroll"), 30000),
+        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        cash_balance=baseline_cash,
+        pricing_change_pct=si.get("pricing_change_pct", 0),
+        growth_uplift_pct=si.get("growth_uplift_pct", 0),
+        burn_reduction_pct=si.get("burn_reduction_pct", 0),
+        fundraise_month=si.get("fundraise_month"),
+        fundraise_amount=si.get("fundraise_amount", 0),
+        gross_margin_delta_pct=si.get("gross_margin_delta_pct", 0),
+        churn_change_pct=si.get("churn_change_pct", 0),
+        cac_change_pct=si.get("cac_change_pct", 0),
+    )
+
+
+COUNTER_MOVES = [
+    {
+        "id": "cost_cut_20",
+        "name": "Cut Costs 20%",
+        "description": "Reduce operating expenses by 20% across the board",
+        "icon": "scissors",
+        "overrides": {"burn_reduction_pct": 20},
+        "additive_keys": ["burn_reduction_pct"],
+    },
+    {
+        "id": "raise_price_10",
+        "name": "Raise Prices 10%",
+        "description": "Increase pricing by 10% with expected minor churn impact",
+        "icon": "dollar-sign",
+        "overrides": {"pricing_change_pct": 10, "churn_change_pct": 1.5},
+        "additive_keys": ["pricing_change_pct", "churn_change_pct"],
+    },
+    {
+        "id": "reduce_hiring",
+        "name": "Freeze Hiring",
+        "description": "Pause all new hires, reducing payroll growth and burn",
+        "icon": "user-minus",
+        "overrides": {"burn_reduction_pct": 15, "growth_uplift_pct": -2},
+        "additive_keys": ["burn_reduction_pct", "growth_uplift_pct"],
+    },
+]
+
+
+@router.post("/scenarios/{scenario_id}/counter-moves", response_model=Dict[str, Any])
+def simulate_counter_moves(
+    scenario_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+
+    company = db.query(Company).filter(
+        Company.id == scenario.company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company.id
+    ).order_by(TruthScan.created_at.desc()).first()
+    if not truth_scan:
+        raise HTTPException(status_code=400, detail="Run a truth scan first")
+
+    metrics = truth_scan.outputs_json.get("metrics", {})
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company.id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+
+    sim_config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
+    si = scenario.inputs_json or {}
+
+    results = []
+    for move in COUNTER_MOVES:
+        merged = {}
+        for key, val in move["overrides"].items():
+            if key in move.get("additive_keys", []):
+                merged[key] = si.get(key, 0) + val
+            else:
+                merged[key] = val
+
+        enhanced = _build_enhanced_inputs(scenario, metrics, latest_record, overrides=merged)
+        outputs = run_enhanced_monte_carlo(enhanced, sim_config)
+
+        results.append({
+            "id": move["id"],
+            "name": move["name"],
+            "description": move["description"],
+            "icon": move["icon"],
+            "overrides_applied": merged,
+            "runway": outputs.get("runway"),
+            "survival": outputs.get("survival", outputs.get("survivalProbability")),
+            "survivalProbability": outputs.get("survivalProbability", outputs.get("survival")),
+            "breakEvenMonth": outputs.get("breakEvenMonth"),
+            "summary": outputs.get("summary"),
+        })
+
+    return {"scenario_id": scenario_id, "counter_moves": results}
+
+
 @router.get("/scenarios/{scenario_id}/simulation/latest", response_model=Dict[str, Any])
 def get_latest_simulation(
     scenario_id: int,
