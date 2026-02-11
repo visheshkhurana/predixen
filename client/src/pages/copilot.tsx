@@ -52,7 +52,9 @@ import {
   PanelRight,
   Menu,
   ChevronRight,
-  MessageSquare
+  MessageSquare,
+  Globe,
+  AlertCircle
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useFounderStore } from '@/store/founderStore';
@@ -261,6 +263,10 @@ interface CopilotApiResponse {
       what_changes: string;
     };
   };
+  web_research_used?: boolean;
+  web_research_citations?: string[];
+  web_research_type?: string;
+  data_gaps?: string[];
 }
 
 interface Message {
@@ -268,6 +274,8 @@ interface Message {
   content: string;
   metrics?: string[];
   dataSources?: DataSource[];
+  webResearchUsed?: boolean;
+  webResearchType?: string;
   suggestion?: { label: string; action: string };
   timestamp?: Date;
   structuredResponse?: CopilotApiResponse;
@@ -1036,12 +1044,34 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
         </div>
       )}
       
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className={response.confidence === 'High' ? 'text-green-400 border-green-500/30' : response.confidence === 'Low' ? 'text-red-400 border-red-500/30' : 'text-yellow-400 border-yellow-500/30'}>
+      {response.data_gaps && response.data_gaps.length > 0 && (
+        <div className="pt-2 border-t border-border/30">
+          <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1" data-testid="text-data-gaps-label">
+            <AlertCircle className="h-3 w-3" />
+            Data gaps that could improve analysis:
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {response.data_gaps.slice(0, 4).map((gap, i) => (
+              <Badge key={i} variant="outline" className="text-xs text-orange-400 border-orange-500/30" data-testid={`badge-data-gap-${i}`}>
+                {gap}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      <div className="flex items-center flex-wrap gap-2 text-xs text-muted-foreground">
+        <Badge variant="outline" className={response.confidence === 'High' ? 'text-green-400 border-green-500/30' : response.confidence === 'Low' ? 'text-red-400 border-red-500/30' : 'text-yellow-400 border-yellow-500/30'} data-testid="badge-confidence">
           {response.confidence} Confidence
         </Badge>
+        {response.web_research_used && (
+          <Badge variant="outline" className="text-purple-400 border-purple-500/30" data-testid="badge-web-research">
+            <Globe className="h-3 w-3 mr-1" />
+            Web Research{response.web_research_type ? `: ${response.web_research_type.replace('_', ' ')}` : ''}
+          </Badge>
+        )}
         {response.ckb_updated && (
-          <Badge variant="outline" className="text-blue-400 border-blue-500/30">
+          <Badge variant="outline" className="text-blue-400 border-blue-500/30" data-testid="badge-ckb-updated">
             Knowledge Base Updated
           </Badge>
         )}
@@ -1554,6 +1584,8 @@ Type **help** for a full list of what I can do.`,
           dataSources,
           timestamp: new Date(),
           structuredResponse: response,
+          webResearchUsed: response.web_research_used,
+          webResearchType: response.web_research_type,
         };
         setMessages((prev) => [...prev, assistantMessage]);
         
@@ -1926,6 +1958,15 @@ Type **help** for a full list of what I can do.`,
                           );
                         })}
                       </div>
+                    </div>
+                  )}
+                  
+                  {message.webResearchUsed && (
+                    <div className="mt-2">
+                      <Badge variant="outline" className="text-xs text-purple-400 border-purple-500/30" data-testid={`badge-web-research-msg-${i}`}>
+                        <Globe className="h-3 w-3 mr-1" />
+                        Enriched with web research{message.webResearchType ? ` (${message.webResearchType.replace('_', ' ')})` : ''}
+                      </Badge>
                     </div>
                   )}
                   

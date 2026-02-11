@@ -256,6 +256,10 @@ class CopilotChatResponse(BaseModel):
     causal_drivers: Optional[List[Dict[str, Any]]] = None
     feedback_prompt: Optional[str] = None
     message_id: Optional[str] = None
+    web_research_used: bool = False
+    web_research_citations: Optional[List[str]] = None
+    web_research_type: Optional[str] = None
+    data_gaps: Optional[List[str]] = None
 
 
 class CopilotFeedbackRequest(BaseModel):
@@ -279,19 +283,40 @@ class QuickChatResponse(BaseModel):
     suggested_followups: List[str] = []
 
 
-QUICK_CHAT_SYSTEM_PROMPT = """You are Predixen AI, a skilled financial copilot for startup founders. You have access to the company's complete financial data and should answer questions directly and conversationally.
+QUICK_CHAT_SYSTEM_PROMPT = """You are Predixen AI, a world-class strategy consultant and financial advisor for startup founders and CXOs. You have access to the company's complete financial data, market intelligence, and simulation engine.
 
-Rules:
-- Be concise but thorough. Answer in 2-5 sentences for simple questions, more for complex analysis.
+## PERSONALITY
+- Act as a senior McKinsey consultant who happens to be a startup operator
+- Be direct, opinionated, and action-oriented
+- Give clear recommendations backed by data, not wishy-washy advice
+- Use frameworks (TAM/SAM/SOM, unit economics, Porter's Five Forces) when relevant
+
+## RULES
 - Always use EXACT numbers from the data provided. Never invent or estimate numbers.
 - Format currency as $X,XXX or $X.XK/$X.XM for readability.
 - Format percentages with one decimal place.
 - When comparing periods, clearly state both values and the change.
 - If data for a specific period isn't available, say so clearly.
-- Use markdown formatting: **bold** for key numbers, bullet points for lists.
+- Use markdown formatting: **bold** for key numbers, bullet points for lists, headers for sections.
 - Be direct and founder-friendly. No corporate jargon.
 - When asked about projections or forecasts, reference simulation data if available.
 - Today's date context is provided - use it to determine "this month", "last month", etc.
+
+## FOR STRATEGIC QUESTIONS (launching products, entering markets, pivoting, etc.)
+Structure your response with clear sections:
+- **Financial Assessment**: What the company can afford based on current cash/runway
+- **Market Research**: Market size, competitors, benchmarks (use web research data if provided)
+- **Unit Economics**: Expected costs, margins, break-even analysis
+- **Recommendation**: Clear GO/NO-GO/CONDITIONAL-GO with reasoning
+- **Next Steps**: 3-5 concrete actions the founder can take immediately
+
+## FOR ANALYTICAL QUESTIONS
+Be concise (2-5 sentences) but always include specific numbers.
+
+## CONVERSATION CONTINUITY
+You have access to conversation history. When the user asks a follow-up question,
+maintain context from the previous exchange. For example, if they asked about launching
+a product and then ask "what about pricing?", analyze pricing for that specific product.
 """
 
 
@@ -480,30 +505,33 @@ async def copilot_quick_chat(
 
     try:
         from server.copilot.context_pack import build_context_pack
+        from server.copilot.business_context import build_business_context, format_context_for_prompt
+        from server.copilot.web_search import search_for_copilot, format_web_research_for_prompt
         context = build_context_pack(company, db)
         data_summary = _build_data_summary(context)
+
+        business_ctx = build_business_context(company, db)
+        business_context_text = format_context_for_prompt(business_ctx)
 
         from datetime import datetime as dt
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
+        web_research = await search_for_copilot(
+            message=request.message,
+            company_industry=company.industry or "",
+            company_stage=company.stage or "",
+            company_name=company.name or "",
+            db_session=db,
+            company_id=company_id,
+            user_id=current_user.id,
+        )
         web_research_text = ""
         web_citations = []
         did_web_research = False
-
-        if _needs_web_research(request.message):
-            company_info = context.get("company", {})
-            research_query = _build_research_query(
-                request.message,
-                company_info.get("industry", ""),
-                company_info.get("stage", ""),
-            )
-            research_result = await _do_web_research(
-                research_query, db, company_id, current_user.id
-            )
-            if research_result and research_result.get("content"):
-                did_web_research = True
-                web_research_text = research_result["content"]
-                web_citations = research_result.get("citations", [])
+        if web_research and web_research.get("success"):
+            did_web_research = True
+            web_research_text = format_web_research_for_prompt(web_research)
+            web_citations = web_research.get("citations", [])
 
         messages = []
         if request.conversation_history:
@@ -513,11 +541,15 @@ async def copilot_quick_chat(
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
 
+        if business_context_text:
+            system_prompt += f"\n\n--- ENRICHED BUSINESS CONTEXT ---\n{business_context_text}\n--- END BUSINESS CONTEXT ---"
+
         if web_research_text:
-            citation_note = ""
-            if web_citations:
-                citation_note = "\nSources: " + ", ".join(web_citations[:5])
-            system_prompt += f"\n\n--- REAL-TIME WEB RESEARCH ---\n{web_research_text}{citation_note}\n--- END RESEARCH ---\n\nIMPORTANT: When using web research data, clearly distinguish between the company's own data and external benchmarks/market data. Cite web sources when referencing external data points."
+            system_prompt += f"\n\n--- REAL-TIME WEB RESEARCH ---\n{web_research_text}\n--- END RESEARCH ---\n\nIMPORTANT: When using web research data, clearly distinguish between the company's own data and external benchmarks/market data."
+
+        data_gaps = business_ctx.get("data_gaps", [])
+        if data_gaps:
+            system_prompt += f"\n\n--- DATA GAPS ---\nThe following data is not yet available: {'; '.join(data_gaps)}\nMention relevant gaps when they would improve the analysis quality.\n--- END GAPS ---"
 
         llm_router = get_llm_router(
             db_session=db,
@@ -530,7 +562,7 @@ async def copilot_quick_chat(
             task_type=TaskType.FINANCIAL_ANALYSIS,
             system=system_prompt,
             temperature=0.4,
-            max_tokens=1500,
+            max_tokens=2000,
         )
 
         response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
@@ -546,6 +578,8 @@ async def copilot_quick_chat(
             sources.append("Simulation Results")
         if did_web_research:
             sources.append("Web Research")
+        if business_ctx.get("connector_data"):
+            sources.append("Connected Services")
 
         followups = _generate_followups(request.message, context)
 
@@ -730,6 +764,8 @@ async def _copilot_chat_inner(
     from server.lib.llm.llm_router import get_llm_router
     from server.copilot.conversation_state import conversation_store
     from server.copilot.prompt_templates import detect_response_mode, detect_clarification_needed, get_mode_instructions
+    from server.copilot.business_context import build_business_context, format_context_for_prompt
+    from server.copilot.web_search import search_for_copilot, format_web_research_for_prompt
     import uuid as uuid_lib
     
     conv_state = conversation_store.get(company_id, current_user.id)
@@ -753,6 +789,28 @@ async def _copilot_chat_inner(
             stage=company.stage or "",
             currency=company.currency or "USD"
         )
+    
+    business_ctx = build_business_context(company, db)
+    business_context_text = format_context_for_prompt(business_ctx)
+    
+    web_research = await search_for_copilot(
+        message=request.message,
+        company_industry=company.industry or "",
+        company_stage=company.stage or "",
+        company_name=company.name or "",
+        db_session=db,
+        company_id=company_id,
+        user_id=current_user.id,
+    )
+    web_research_text = ""
+    web_research_used = False
+    web_research_citations = None
+    web_research_type = None
+    if web_research and web_research.get("success"):
+        web_research_used = True
+        web_research_text = format_web_research_for_prompt(web_research)
+        web_research_citations = web_research.get("citations", [])
+        web_research_type = web_research.get("search_type")
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -897,7 +955,11 @@ async def _copilot_chat_inner(
         "response_mode": response_mode_str,
         "response_mode_instructions": mode_instructions,
         "session_context": session_context,
-        "conversation_history": conversation_context
+        "conversation_history": conversation_context,
+        "business_context": business_context_text,
+        "web_research": web_research_text,
+        "web_research_used": web_research_used,
+        "data_gaps": business_ctx.get("data_gaps", []),
     }
     
     llm_router = get_llm_router(
@@ -1054,8 +1116,13 @@ async def _copilot_chat_inner(
     citations = generate_citations(truth_scan, output, scenario_id_for_citation, run_id_for_citation)
     highlighted_claims = generate_highlighted_claims(output, citations)
     
-    conv_state.add_message("user", request.message)
-    conv_state.add_message("assistant", output.get("executive_summary", [""])[0] if output.get("executive_summary") else "")
+    conv_state.add_message("user", request.message, metadata={"web_research_used": web_research_used})
+    summary_text = output.get("executive_summary", [""])[0] if output.get("executive_summary") else ""
+    conv_state.add_message("assistant", summary_text, metadata={
+        "web_research_used": web_research_used,
+        "web_research_type": web_research_type,
+    })
+    conversation_store.save(conv_state)
     
     return CopilotChatResponse(
         executive_summary=output.get("executive_summary", []),
@@ -1088,7 +1155,11 @@ async def _copilot_chat_inner(
         session_context=session_context,
         causal_drivers=output.get("causal_drivers"),
         feedback_prompt="Was this helpful?",
-        message_id=f"msg_{company_id}_{current_user.id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        message_id=f"msg_{company_id}_{current_user.id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+        web_research_used=web_research_used,
+        web_research_citations=web_research_citations,
+        web_research_type=web_research_type,
+        data_gaps=business_ctx.get("data_gaps", []),
     )
 
 
