@@ -48,7 +48,8 @@ import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
-import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan, useCounterMoves } from '@/api/hooks';
+import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
+import { api } from '@/api/client';
 import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
@@ -144,10 +145,12 @@ export default function ScenariosPage() {
   const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
-  const counterMovesMutation = useCounterMoves(selectedScenarioId);
   const [counterMovesData, setCounterMovesData] = useState<any>(null);
   const [counterMovesScenarioId, setCounterMovesScenarioId] = useState<number | null>(null);
+  const [counterMovesLoading, setCounterMovesLoading] = useState<number | null>(null);
+  const [counterMovesFailed, setCounterMovesFailed] = useState<number | null>(null);
   const counterMovesTriggeredRef = useRef<number | null>(null);
+  const counterMovesRequestRef = useRef(0);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -267,6 +270,27 @@ export default function ScenariosPage() {
     return getBaselineSimulation(scenarios, selectedScenarioId);
   }, [scenarios, selectedScenarioId]);
 
+  const fireCounterMoves = async (scenarioId: number) => {
+    const requestId = ++counterMovesRequestRef.current;
+    setCounterMovesLoading(scenarioId);
+    setCounterMovesFailed(null);
+    counterMovesTriggeredRef.current = scenarioId;
+    try {
+      const result = await api.simulations.counterMoves(scenarioId);
+      if (counterMovesRequestRef.current !== requestId) return;
+      setCounterMovesData(result.counter_moves);
+      setCounterMovesScenarioId(scenarioId);
+    } catch (err: any) {
+      if (counterMovesRequestRef.current !== requestId) return;
+      toast({ title: 'Counter-moves failed', description: err.message, variant: 'destructive' });
+      setCounterMovesFailed(scenarioId);
+    } finally {
+      if (counterMovesRequestRef.current === requestId) {
+        setCounterMovesLoading(null);
+      }
+    }
+  };
+
   useEffect(() => {
     if (selectedScenarioId && scenarios) {
       const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
@@ -289,7 +313,7 @@ export default function ScenariosPage() {
   useEffect(() => {
     if (simulation && selectedScenarioId && counterMovesTriggeredRef.current !== selectedScenarioId) {
       counterMovesTriggeredRef.current = selectedScenarioId;
-      handleRunCounterMoves();
+      fireCounterMoves(selectedScenarioId);
     }
   }, [simulation, selectedScenarioId]);
 
@@ -335,6 +359,8 @@ export default function ScenariosPage() {
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+      counterMovesTriggeredRef.current = scenario.id;
+      fireCounterMoves(scenario.id);
     } catch (err: any) {
       if (isTruthScanRequired(err)) {
         const uploadId = getTruthScanUploadId(err);
@@ -360,6 +386,8 @@ export default function ScenariosPage() {
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
+      counterMovesTriggeredRef.current = scenarioId;
+      fireCounterMoves(scenarioId);
     } catch (err: any) {
       if (isTruthScanRequired(err)) {
         const uploadId = getTruthScanUploadId(err);
@@ -373,17 +401,6 @@ export default function ScenariosPage() {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setIsRunning(false);
-    }
-  };
-
-  const handleRunCounterMoves = async () => {
-    if (!selectedScenarioId) return;
-    try {
-      const result = await counterMovesMutation.mutateAsync();
-      setCounterMovesData(result.counter_moves);
-      setCounterMovesScenarioId(selectedScenarioId);
-    } catch (err: any) {
-      toast({ title: 'Counter-moves failed', description: err.message, variant: 'destructive' });
     }
   };
 
@@ -1098,8 +1115,9 @@ export default function ScenariosPage() {
             <CounterMoveCards
               counterMoves={counterMovesScenarioId === selectedScenarioId ? counterMovesData : null}
               currentSimulation={simulation}
-              isLoading={counterMovesMutation.isPending}
-              onSimulate={handleRunCounterMoves}
+              isLoading={counterMovesLoading === selectedScenarioId}
+              hasFailed={counterMovesFailed === selectedScenarioId}
+              onRetry={() => selectedScenarioId && fireCounterMoves(selectedScenarioId)}
               onApply={handleApplyCounterMove}
             />
 
