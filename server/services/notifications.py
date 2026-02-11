@@ -927,7 +927,7 @@ async def send_platform_update(
     to_emails: Optional[List[str]] = None,
     subject: str = "Predixen v14: AI Copilot Now Thinks Like a McKinsey Partner",
     author: str = "Predixen Team",
-    from_email: str = "Predixen Updates <updates@predixen.app>"
+    from_email: str = "Predixen <notifications@predixen.app>"
 ) -> dict:
     """
     Send a multipart (HTML + text) platform update email to all specified recipients individually.
