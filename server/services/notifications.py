@@ -925,27 +925,18 @@ async def check_and_send_publish_notification() -> None:
 
 async def send_platform_update(
     to_emails: Optional[List[str]] = None,
-    subject: str = "Predixen Platform Update - February 2026",
+    subject: str = "Predixen v14: AI Copilot Now Thinks Like a McKinsey Partner",
     author: str = "Predixen Team",
     from_email: str = "Predixen Updates <updates@predixen.app>"
 ) -> dict:
     """
     Send a multipart (HTML + text) platform update email to all specified recipients individually.
     Uses both HTML and plain text parts so Resend can add open tracking pixel to the HTML.
-    
-    Args:
-        to_emails: List of email addresses (defaults to all active users from database)
-        subject: Email subject line
-        author: Name of the sender
-    
-    Returns:
-        Dict with success status and list of sent/failed emails
     """
     import os
     from server.core.db import SessionLocal
     from server.models import User
     
-    # Get emails from database if not provided
     if to_emails is None:
         try:
             db = SessionLocal()
@@ -968,42 +959,52 @@ async def send_platform_update(
         credentials = await get_resend_credentials()
         timestamp = datetime.now().strftime("%B %d, %Y")
         
-        text_content = f"""PREDIXEN INTELLIGENCE OS - PLATFORM UPDATE
+        text_content = f"""PREDIXEN INTELLIGENCE OS v14 - MAJOR COPILOT UPGRADE
 {timestamp}
 
 Hi there,
 
-We've been shipping new features and squashing bugs to make Predixen even better. Here's what's new:
+This is a big one. We've completely overhauled the AI Copilot to think and respond like a senior strategy consultant - combining McKinsey-grade structured analysis with a16z-level startup expertise. Here's everything that's new:
 
 ---
 
-NEW FEATURES
+AI COPILOT: CONSULTANT-GRADE UPGRADE
 
-- Instant Metric Tooltips: Hover over any metric on your dashboard and instantly see what it means, how it's calculated, where the data came from, and its confidence level. No more guessing.
+- Strategic Consultant Persona: The Copilot now responds with structured, opinionated analysis using proven frameworks (TAM/SAM/SOM, Porter's Five Forces, unit economics). Every strategic question gets a clear GO / NO-GO / CONDITIONAL-GO recommendation.
 
-- Smarter AI Copilot Errors: When the AI assistant can't connect, you'll now get clear, helpful messages that tell you exactly what to do instead of generic error pages.
+- Structured Response Format: Strategic questions now get organized sections - Financial Assessment, Market Research, Customer Fit, Unit Economics, Recommendation, Risk Analysis, and Implementation Roadmap. No more walls of text.
 
-- Improved Metric Catalog API: The Metric Catalog now handles edge cases more gracefully, returning clean results instead of errors when switching between companies.
+- Real-Time Web Research: Ask about competitors, market benchmarks, or industry trends and the Copilot automatically pulls live market data via Perplexity. 8 specialized search types: competitor analysis, benchmark lookup, market sizing, COGS research, market entry, pricing research, trend analysis, and general research.
+
+- Business Context Engine: The Copilot now pulls data from ALL your sources - Truth Scan, financial records, uploaded metrics, simulations, and all 37+ connected services (Stripe, Shopify, QuickBooks, HubSpot, etc.). It sees your complete business picture.
+
+- Data Gap Detection: The Copilot identifies what data is missing and suggests which connectors to link. Orange badges in the UI show exactly what would improve your analysis quality.
 
 ---
 
-BUG FIXES
+UI IMPROVEMENTS
 
-- Sidebar Toggle: Fixed the collapse/expand button on the sidebar so it works reliably every time.
+- Web Research Badges: Purple badges appear on messages enriched with real-time market data, showing exactly which type of research was used.
 
-- KPI Board Flickering: Resolved the data flickering issue on the KPI Board. Trend charts now load smoothly from your historical data.
+- Data Gap Badges: Orange badges suggest which connectors to add for better analysis (e.g., "No CAC/LTV data - connect CRM or analytics").
 
-- Churn Rate Display: The churn rate KPI now correctly displays as a percentage.
+- Enriched Quick Chat: The Cmd+K drawer now also uses the business context engine and web research for richer, more contextual answers.
 
-- Simulation Rankings: Fixed decision ranking to use correct scenario mappings after simulation runs.
+- Connected Services Source: When the Copilot uses data from your connected integrations (Stripe, Shopify, etc.), it now shows "Connected Services" as a data source.
+
+---
+
+CONVERSATION MEMORY
+
+- Web research usage is now tracked across conversation exchanges, so follow-up questions maintain context about what market data was already retrieved.
 
 ---
 
 WHAT'S COMING NEXT
 
-- WhatsApp/SMS messaging for customer communications
-- Enhanced scenario comparison views
-- More AI-powered financial insights
+- Connector-specific deep analysis (e.g., "analyze my Stripe cohort retention")
+- Automated weekly strategy briefs
+- Competitive intelligence alerts
 
 ---
 
@@ -1024,56 +1025,89 @@ Visit: https://predixen.app
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
-        <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Predixen Intelligence OS</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Platform Update - {timestamp}</p>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 20px;">
+    <div style="max-width: 640px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px; line-height: 48px; color: #fff; font-weight: 700; font-size: 24px;">P</div>
         </div>
-        
-        <div style="padding: 32px;">
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">Hi there,</p>
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">We've been shipping new features and squashing bugs to make Predixen even better. Here's what's new:</p>
-            
-            <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
-                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">New Features</h2>
-                <p style="color: #15803d; margin: 0; font-size: 14px;">Better insights, clearer guidance</p>
+        <div style="background-color: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #8b5cf6 100%); padding: 32px; text-align: center;">
+                <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; margin-bottom: 16px;">
+                    <span style="color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">v14 Major Release</span>
+                </div>
+                <h1 style="color: #fff; margin: 0; font-size: 26px; font-weight: 700;">AI Copilot: Consultant-Grade Upgrade</h1>
+                <p style="color: rgba(255,255,255,0.85); margin: 12px 0 0; font-size: 15px;">Your AI now thinks like a McKinsey partner with real-time market intelligence</p>
             </div>
             
-            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;"><strong>Instant Metric Tooltips:</strong> Hover over any metric on your dashboard and instantly see what it means, how it's calculated, where the data came from, and its confidence level. No more guessing.</li>
-                <li style="margin-bottom: 8px;"><strong>Smarter AI Copilot Errors:</strong> When the AI assistant can't connect, you'll now get clear, helpful messages that tell you exactly what to do instead of generic error pages.</li>
-                <li style="margin-bottom: 8px;"><strong>Improved Metric Catalog API:</strong> The Metric Catalog now handles edge cases more gracefully, returning clean results instead of errors when switching between companies.</li>
-            </ul>
-            
-            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
-                <h2 style="color: #1e40af; margin: 0 0 8px 0; font-size: 18px;">Bug Fixes</h2>
-                <p style="color: #1d4ed8; margin: 0; font-size: 14px;">Smoother, more reliable experience</p>
+            <div style="padding: 32px;">
+                <p style="color: #e2e8f0; font-size: 15px; line-height: 1.7; margin: 0 0 24px;">Hi there,</p>
+                <p style="color: #cbd5e1; font-size: 15px; line-height: 1.7; margin: 0 0 28px;">This is a big one. We've completely overhauled the AI Copilot to think and respond like a <strong style="color: #a78bfa;">senior strategy consultant</strong> - combining McKinsey-grade structured analysis with a16z-level startup expertise.</p>
+                
+                <div style="background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(99,102,241,0.1)); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 24px; margin-bottom: 28px;">
+                    <h2 style="color: #a78bfa; margin: 0 0 16px; font-size: 18px; font-weight: 600;">AI Copilot Upgrade</h2>
+                    
+                    <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #8b5cf6;">
+                        <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Strategic Consultant Persona</h4>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Opinionated analysis using frameworks (TAM/SAM/SOM, Porter's Five Forces, unit economics). Every strategic question gets a clear <strong style="color: #22c55e;">GO</strong> / <strong style="color: #ef4444;">NO-GO</strong> / <strong style="color: #f59e0b;">CONDITIONAL</strong> recommendation.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #6366f1;">
+                        <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Structured Response Sections</h4>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Financial Assessment, Market Research, Customer Fit, Unit Economics, Recommendation, Risk Analysis, Implementation Roadmap.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #0ea5e9;">
+                        <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Real-Time Web Research</h4>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">8 specialized Perplexity search types auto-trigger based on your query: competitor analysis, benchmarks, market sizing, COGS, pricing, trends, and more.</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 18px; padding-left: 16px; border-left: 3px solid #22c55e;">
+                        <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Business Context Engine</h4>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Pulls from ALL your data sources - Truth Scan, financials, metrics, simulations, and all 37+ connectors (Stripe, Shopify, QuickBooks, HubSpot, etc.).</p>
+                    </div>
+                    
+                    <div style="padding-left: 16px; border-left: 3px solid #f59e0b;">
+                        <h4 style="color: #e2e8f0; font-size: 15px; margin: 0 0 6px; font-weight: 600;">Data Gap Detection</h4>
+                        <p style="color: #94a3b8; font-size: 13px; margin: 0; line-height: 1.6;">Identifies missing data and suggests which connectors to link. Orange badges show what would improve your analysis quality.</p>
+                    </div>
+                </div>
+                
+                <div style="background-color: rgba(30,41,59,0.5); border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
+                    <h2 style="color: #60a5fa; margin: 0 0 16px; font-size: 18px; font-weight: 600;">UI Improvements</h2>
+                    <ul style="color: #cbd5e1; margin: 0; padding-left: 20px; line-height: 1.8; font-size: 14px;">
+                        <li style="margin-bottom: 8px;"><strong style="color: #a78bfa;">Web Research Badges:</strong> Purple badges on messages enriched with real-time market data</li>
+                        <li style="margin-bottom: 8px;"><strong style="color: #f59e0b;">Data Gap Badges:</strong> Orange badges suggest which connectors to add for better analysis</li>
+                        <li style="margin-bottom: 8px;"><strong style="color: #e2e8f0;">Enriched Quick Chat:</strong> Cmd+K drawer now uses business context + web research</li>
+                        <li><strong style="color: #e2e8f0;">Connected Services Source:</strong> Shows when Copilot uses data from your integrations</li>
+                    </ul>
+                </div>
+                
+                <div style="background-color: rgba(30,41,59,0.5); border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 28px;">
+                    <h3 style="color: #94a3b8; margin: 0 0 12px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Coming Next</h3>
+                    <ul style="color: #cbd5e1; margin: 0; padding-left: 20px; line-height: 1.8; font-size: 14px;">
+                        <li style="margin-bottom: 6px;">Connector-specific deep analysis (Stripe cohort retention, etc.)</li>
+                        <li style="margin-bottom: 6px;">Automated weekly strategy briefs</li>
+                        <li>Competitive intelligence alerts</li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center; margin: 32px 0 16px;">
+                    <a href="https://predixen.app" style="display: inline-block; padding: 14px 40px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Try the Upgraded Copilot</a>
+                </div>
+                
+                <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 24px 0 0;">Questions or feedback? Reply directly to this email.</p>
+                <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin: 16px 0 0;">Best,<br><strong style="color: #e2e8f0;">{author}</strong><br><span style="color: #6366f1;">Predixen Intelligence OS</span></p>
             </div>
             
-            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;"><strong>Sidebar Toggle:</strong> Fixed the collapse/expand button on the sidebar so it works reliably every time.</li>
-                <li style="margin-bottom: 8px;"><strong>KPI Board Flickering:</strong> Resolved the data flickering issue on the KPI Board. Trend charts now load smoothly from your historical data.</li>
-                <li style="margin-bottom: 8px;"><strong>Churn Rate Display:</strong> The churn rate KPI now correctly displays as a percentage.</li>
-                <li style="margin-bottom: 8px;"><strong>Simulation Rankings:</strong> Fixed decision ranking to use correct scenario mappings after simulation runs.</li>
-            </ul>
-            
-            <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">What's Coming Next</h3>
-            <ul style="color: #4b5563; line-height: 1.8; margin: 0 0 24px 0; padding-left: 20px;">
-                <li style="margin-bottom: 8px;">WhatsApp/SMS messaging for customer communications</li>
-                <li style="margin-bottom: 8px;">Enhanced scenario comparison views</li>
-                <li style="margin-bottom: 8px;">More AI-powered financial insights</li>
-            </ul>
-            
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 8px 0;">Questions or feedback? Reply directly to this email.</p>
-            <p style="color: #4b5563; line-height: 1.6; margin: 24px 0 0 0;">Best,<br><strong>{author}</strong><br>Predixen Intelligence OS</p>
+            <div style="padding: 20px 32px; border-top: 1px solid #334155; text-align: center;">
+                <p style="color: #64748b; font-size: 12px; margin: 0;">
+                    This is an automated notification from Predixen Intelligence OS.<br>
+                    <a href="https://predixen.app" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
+                </p>
+            </div>
         </div>
-        
-        <div style="background-color: #f9fafb; padding: 20px 32px; border-top: 1px solid #e5e7eb;">
-            <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
-                This is an automated notification from Predixen Intelligence OS.<br>
-                <a href="https://predixen.app" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
-            </p>
+        <div style="text-align: center; margin-top: 24px;">
+            <p style="color: #475569; font-size: 11px; margin: 0;">Predixen Intelligence OS v14 &bull; {timestamp}</p>
         </div>
     </div>
 </body>
