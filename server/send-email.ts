@@ -48,11 +48,9 @@ async function sendEmail() {
     'vysheshk@gmail.com'
   ];
 
-  const { data, error } = await resend.emails.send({
-    from: 'Predixen <hi@predixen.app>',
-    to: recipients,
-    subject: 'Founder Feedback Session - Key Insights & Product Direction for Predixen',
-    html: `
+  const senderEmail = 'Predixen <nfl10@predixen.app>';
+  const subject = 'Founder Feedback Session - Key Insights & Product Direction for Predixen';
+  const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -434,17 +432,26 @@ async function sendEmail() {
   </table>
 </body>
 </html>
-    `
-  });
+    `;
 
-  if (error) {
-    console.error('Failed to send email:', error);
-    process.exit(1);
+  for (const recipient of recipients) {
+    console.log(`Sending to ${recipient}...`);
+    const { data, error } = await resend.emails.send({
+      from: senderEmail,
+      to: [recipient],
+      subject,
+      html: htmlContent
+    });
+
+    if (error) {
+      console.error(`Failed to send to ${recipient}:`, error);
+    } else {
+      console.log(`Sent to ${recipient} - ID: ${data?.id}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
   }
 
-  console.log('Email sent successfully!');
-  console.log('Email ID:', data?.id);
-  console.log('Sent to:', recipients.join(', '));
+  console.log('All emails sent.');
 }
 
 sendEmail().catch(err => {
