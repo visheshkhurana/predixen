@@ -32,7 +32,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
-import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -1084,6 +1084,10 @@ export default function ScenariosPage() {
               onRetry={() => {}}
               onApply={handleApplyCounterMove}
             />
+
+            {simulation?.fundraising_intelligence && (
+              <FundraisingIntelligence data={simulation.fundraising_intelligence} />
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
               <PaybackClock simulation={simulation} />
