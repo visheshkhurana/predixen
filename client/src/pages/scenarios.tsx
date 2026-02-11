@@ -33,6 +33,7 @@ import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { ScenarioComparePicker, ScenarioCompareMode } from '@/components/ScenarioCompareMode';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -40,7 +41,7 @@ import {
   ChevronRight, FlaskConical, TrendingUp, DollarSign,
   Clock, Percent, ArrowRight, Users, FileText, MessageSquare,
   ChevronDown, ChevronUp, Search, Flame, ArrowUpRight,
-  RotateCcw, Download, Shield, Share2, Copy, Check
+  RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
@@ -156,6 +157,8 @@ export default function ScenariosPage() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [shareModal, setShareModal] = useState<{ open: boolean; url: string; loading: boolean }>({ open: false, url: '', loading: false });
   const [copied, setCopied] = useState(false);
+  const [comparePickerOpen, setComparePickerOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
 
   const handleShareScenario = async () => {
     if (!simulation || !currentCompany) return;
@@ -1205,7 +1208,20 @@ export default function ScenariosPage() {
         <section data-testid="section-recent-simulations">
           <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
             <h2 className="text-lg font-semibold" data-testid="text-recent-title">Recent Simulations</h2>
-            <span className="text-xs text-muted-foreground">{scenarios.length} saved</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{scenarios.length} saved</span>
+              {scenarios.filter((s: any) => s.latest_simulation).length >= 2 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setComparePickerOpen(true)}
+                  data-testid="button-compare-open"
+                >
+                  <GitCompare className="h-3.5 w-3.5 mr-1.5" />
+                  Compare
+                </Button>
+              )}
+            </div>
           </div>
           <ScrollArea className="w-full">
             <div className="flex gap-3 pb-3">
@@ -1248,6 +1264,26 @@ export default function ScenariosPage() {
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </section>
+      )}
+
+      {compareIds.length >= 2 && scenarios && (
+        <section data-testid="section-compare-mode">
+          <ScenarioCompareMode
+            scenarios={scenarios}
+            selectedIds={compareIds}
+            onClose={() => setCompareIds([])}
+            onSelectScenario={(id) => { setCompareIds([]); handleRunScenario(id); }}
+          />
+        </section>
+      )}
+
+      {scenarios && (
+        <ScenarioComparePicker
+          open={comparePickerOpen}
+          onOpenChange={setComparePickerOpen}
+          scenarios={scenarios}
+          onCompare={(ids) => setCompareIds(ids)}
+        />
       )}
 
       {/* Advanced View Toggle */}
