@@ -42,7 +42,7 @@ import {
   ChevronRight, FlaskConical, TrendingUp, DollarSign,
   Clock, Percent, ArrowRight, Users, FileText, MessageSquare,
   ChevronDown, ChevronUp, Search, Flame, ArrowUpRight,
-  RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare
+  RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare, Eye, EyeOff
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
@@ -160,6 +160,8 @@ export default function ScenariosPage() {
   const [copied, setCopied] = useState(false);
   const [comparePickerOpen, setComparePickerOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [founderMode, setFounderMode] = useState(false);
+  const [founderDetailOpen, setFounderDetailOpen] = useState(false);
 
   const handleShareScenario = async () => {
     if (!simulation || !currentCompany) return;
@@ -751,8 +753,24 @@ export default function ScenariosPage() {
       {/* STEP 1: "What's the question?" */}
       <section data-testid="section-question">
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">Simulate Any Scenario</h1>
-          <p className="text-muted-foreground mt-1">Ask a question about your startup's future and see what happens</p>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">Simulate Any Scenario</h1>
+            <Button
+              variant={founderMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setFounderMode(!founderMode); setFounderDetailOpen(false); }}
+              className="shrink-0"
+              data-testid="button-founder-mode"
+            >
+              {founderMode ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
+              Founder Mode
+            </Button>
+          </div>
+          <p className="text-muted-foreground mt-1">
+            {founderMode
+              ? 'Focused view showing only what matters most'
+              : 'Ask a question about your startup\'s future and see what happens'}
+          </p>
         </div>
 
         <div className="relative max-w-3xl mx-auto mb-5">
@@ -966,7 +984,84 @@ export default function ScenariosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {founderMode && (() => {
+              const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+              const runwayP50 = simulation.runway?.p50 ?? 0;
+              const rev24m = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
+              const cash18m = simulation.metrics?.cash?.[17]?.p50 ?? simulation.month_data?.[17]?.cash_p50 ?? 0;
+              const spread = (simulation.runway?.p90 ?? 0) - (simulation.runway?.p10 ?? 0);
+              let riskScore = 5;
+              if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
+              else if (survival18m >= 80 && runwayP50 >= 14) riskScore = 8;
+              else if (survival18m >= 70 && runwayP50 >= 12) riskScore = 7;
+              else if (survival18m >= 60 && runwayP50 >= 10) riskScore = 6;
+              else if (survival18m >= 50 && runwayP50 >= 8) riskScore = 5;
+              else if (survival18m >= 40) riskScore = 4;
+              else if (survival18m >= 30) riskScore = 3;
+              else riskScore = 2;
+              if (spread > 15) riskScore = Math.max(1, riskScore - 1);
+
+              const survivalColor = survival18m >= 70 ? 'text-emerald-600 dark:text-emerald-400' : survival18m >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+              const runwayColor = runwayP50 >= 18 ? 'text-emerald-600 dark:text-emerald-400' : runwayP50 >= 12 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+              const riskColor = riskScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : riskScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+
+              return (
+                <Card className="mb-6 border-primary/20" data-testid="card-founder-dashboard">
+                  <CardContent className="pt-4 pb-4 px-4">
+                    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Eye className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Founder Dashboard
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">{currentScenarioName}</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                      <div data-testid="founder-metric-survival">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Survival</p>
+                        <p className={`text-2xl font-bold font-mono ${survivalColor}`}>{survival18m.toFixed(0)}%</p>
+                        <p className="text-[10px] text-muted-foreground">18-month</p>
+                      </div>
+                      <div data-testid="founder-metric-runway">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Runway</p>
+                        <p className={`text-2xl font-bold font-mono ${runwayColor}`}>{runwayP50.toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground">months (P50)</p>
+                      </div>
+                      <div data-testid="founder-metric-arr24">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">ARR @24m</p>
+                        <p className="text-2xl font-bold font-mono">{formatCurrency(rev24m * 12)}</p>
+                        <p className="text-[10px] text-muted-foreground">projected</p>
+                      </div>
+                      <div data-testid="founder-metric-cash18">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Cash @18m</p>
+                        <p className="text-2xl font-bold font-mono">{formatCurrency(cash18m)}</p>
+                        <p className="text-[10px] text-muted-foreground">projected</p>
+                      </div>
+                      <div data-testid="founder-metric-risk">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Risk Score</p>
+                        <p className={`text-2xl font-bold font-mono ${riskColor}`}>{riskScore}/10</p>
+                        <p className="text-[10px] text-muted-foreground">{riskScore >= 7 ? 'Low Risk' : riskScore >= 5 ? 'Moderate' : 'High Risk'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-dashed flex items-center justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setFounderDetailOpen(!founderDetailOpen)}
+                        className="text-muted-foreground"
+                        data-testid="button-founder-details"
+                      >
+                        {founderDetailOpen ? <ChevronUp className="h-3.5 w-3.5 mr-1.5" /> : <ChevronDown className="h-3.5 w-3.5 mr-1.5" />}
+                        {founderDetailOpen ? 'Hide Details' : 'Show Full Analysis'}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {(!founderMode || founderDetailOpen) && (<><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {/* Best Case - P90 */}
               <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" data-testid="card-scenario-p90">
                 <CardContent className="pt-4 pb-4 px-4">
@@ -1150,12 +1245,13 @@ export default function ScenariosPage() {
               title="Cash Projection Bands"
               description="10th, 50th, and 90th percentile outcomes"
             />
+            </>)}
           </>
         )}
       </section>
 
       {/* STEP 3: AI Recommendation */}
-      {simulation && !isRunning && !isCreating && (
+      {simulation && !isRunning && !isCreating && (!founderMode || founderDetailOpen) && (
         <section data-testid="section-ai-recommendation">
           <h2 className="text-xl font-bold mb-4" data-testid="text-recommendation-title">Strategic Assessment</h2>
 
