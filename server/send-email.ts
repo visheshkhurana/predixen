@@ -49,7 +49,7 @@ async function sendEmail() {
   ];
 
   const { data, error } = await resend.emails.send({
-    from: fromEmail || 'Predixen <onboarding@resend.dev>',
+    from: 'Predixen <hi@predixen.app>',
     to: recipients,
     subject: 'Founder Feedback Session - Key Insights & Product Direction for Predixen',
     html: `
