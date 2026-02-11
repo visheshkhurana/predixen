@@ -15,6 +15,7 @@ interface ExportButtonProps {
   formatForCSV?: (data: any) => Record<string, any>[];
   pdfTitle?: string;
   showPDF?: boolean;
+  onGeneratePDF?: () => Promise<void>;
   testId?: string;
 }
 
@@ -24,6 +25,7 @@ export function ExportButton({
   formatForCSV,
   pdfTitle,
   showPDF = false,
+  onGeneratePDF,
   testId = 'export-button',
 }: ExportButtonProps) {
   const { toast } = useToast();
@@ -69,13 +71,21 @@ export function ExportButton({
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
-      downloadPDF(data, filename, pdfTitle || 'Truth Scan Report');
-      toast({
-        title: 'PDF opened',
-        description: 'Use your browser print dialog to save as PDF.',
-      });
+      if (onGeneratePDF) {
+        await onGeneratePDF();
+        toast({
+          title: 'PDF downloaded',
+          description: 'Your investor report has been saved.',
+        });
+      } else {
+        downloadPDF(data, filename, pdfTitle || 'Truth Scan Report');
+        toast({
+          title: 'PDF opened',
+          description: 'Use your browser print dialog to save as PDF.',
+        });
+      }
     } catch (error) {
       toast({
         title: 'Export failed',
@@ -94,10 +104,10 @@ export function ExportButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {showPDF && (
+        {(showPDF || onGeneratePDF) && (
           <DropdownMenuItem onClick={handleExportPDF} data-testid={`${testId}-pdf`}>
             <FileText className="h-4 w-4 mr-2" />
-            Export as PDF
+            {onGeneratePDF ? 'Download PDF Report' : 'Export as PDF'}
           </DropdownMenuItem>
         )}
         <DropdownMenuItem onClick={handleExportCSV} data-testid={`${testId}-csv`}>

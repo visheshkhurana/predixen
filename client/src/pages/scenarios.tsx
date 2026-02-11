@@ -56,7 +56,7 @@ import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
 import { useToast } from '@/hooks/use-toast';
-import { formatSimulationForExport } from '@/lib/exportUtils';
+import { formatSimulationForExport, downloadSimulationPDF, type SimulationPDFData } from '@/lib/exportUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { SCENARIO_TEMPLATES } from '@/config/templates';
@@ -748,6 +748,110 @@ export default function ScenariosPage() {
     return bars;
   }, [baseMetrics]);
 
+  const handleGeneratePDF = useCallback(async () => {
+    if (!simulation) return;
+    const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+    const runwayP50Val = simulation.runway?.p50 ?? 0;
+    const runwayP10Val = simulation.runway?.p10 ?? 0;
+    const runwayP90Val = simulation.runway?.p90 ?? 0;
+    const spread = runwayP90Val - runwayP10Val;
+
+    let riskScore = 5;
+    if (survival18m >= 90 && runwayP50Val >= 18) riskScore = 9;
+    else if (survival18m >= 80 && runwayP50Val >= 14) riskScore = 8;
+    else if (survival18m >= 70 && runwayP50Val >= 12) riskScore = 7;
+    else if (survival18m >= 60 && runwayP50Val >= 10) riskScore = 6;
+    else if (survival18m >= 50 && runwayP50Val >= 8) riskScore = 5;
+    else if (survival18m >= 40) riskScore = 4;
+    else if (survival18m >= 30) riskScore = 3;
+    else riskScore = 2;
+    if (spread > 15) riskScore = Math.max(1, riskScore - 1);
+
+    let rewardScore = 5;
+    if (baselineComparison.simulation) {
+      const bRev = baselineComparison.simulation.metrics?.revenue?.[23]?.p50 ?? 0;
+      const sRev = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
+      const revGrowthPct = bRev > 0 ? ((sRev - bRev) / bRev) * 100 : 0;
+      const bRunway = baselineComparison.simulation.runway?.p50 ?? 0;
+      const runwayGain = runwayP50Val - bRunway;
+      if (revGrowthPct > 30 && runwayGain > 3) rewardScore = 10;
+      else if (revGrowthPct > 20 || runwayGain > 5) rewardScore = 9;
+      else if (revGrowthPct > 10 || runwayGain > 3) rewardScore = 8;
+      else if (revGrowthPct > 5 || runwayGain > 1) rewardScore = 7;
+      else if (revGrowthPct > 0 || runwayGain > 0) rewardScore = 6;
+      else if (revGrowthPct > -5) rewardScore = 5;
+      else rewardScore = 4;
+    } else {
+      if (survival18m >= 85 && runwayP50Val >= 18) rewardScore = 9;
+      else if (survival18m >= 70) rewardScore = 7;
+      else if (survival18m >= 50) rewardScore = 5;
+      else rewardScore = 3;
+    }
+
+    const breakeven = simulation.breakEvenMonth?.p50 ?? 25;
+    let capEffScore = 5;
+    if (breakeven <= 12 && runwayP50Val >= 18) capEffScore = 10;
+    else if (breakeven <= 15 && runwayP50Val >= 14) capEffScore = 9;
+    else if (breakeven <= 18 && runwayP50Val >= 12) capEffScore = 8;
+    else if (breakeven <= 20 && runwayP50Val >= 10) capEffScore = 7;
+    else if (breakeven <= 22) capEffScore = 6;
+    else if (breakeven <= 24) capEffScore = 5;
+    else capEffScore = 4;
+
+    let survivalImpact = survival18m - 50;
+    if (baselineComparison.simulation) {
+      const bSurv = baselineComparison.simulation.survivalProbability?.['18m'] ?? baselineComparison.simulation.survival?.['18m'] ?? 50;
+      survivalImpact = survival18m - bSurv;
+    }
+
+    const counterMoves = simulation.counter_moves
+      ? Object.entries(simulation.counter_moves)
+          .filter(([_, v]: [string, any]) => v && !v.error)
+          .map(([key, v]: [string, any]) => ({
+            name: key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+            runwayDelta: (v.runway?.p50 ?? 0) - runwayP50Val,
+            survivalDelta: ((v.survivalProbability?.['18m'] ?? v.survival?.['18m'] ?? 0) - survival18m),
+          }))
+      : undefined;
+
+    const fr = simulation.fundraising_intelligence;
+    const fundraising = fr ? {
+      fundraiseAmount: fr.fundraise_amount ?? 0,
+      dilution: fr.dilution ?? 0,
+      ownershipPost: fr.ownership_post_raise ?? 0,
+      runwayExtMonths: fr.runway_extension_months ?? 0,
+      survivalLift: fr.survival_lift_pct ?? 0,
+    } : undefined;
+
+    const rawCurve = simulation.survivalCurve ?? simulation.survival?.curve ?? simulation.survival_curve ?? simulation.results_json?.survival_curve ?? [];
+    const survivalCurve = rawCurve.map((pt: any, idx: number) => {
+      const rate = pt.survival_rate ?? pt.survivalRate ?? pt.rate ?? 0;
+      return { month: pt.month ?? idx + 1, survival_rate: rate > 1 ? rate / 100 : rate };
+    });
+    const cashBands = getCashBands(simulation);
+
+    const pdfData: SimulationPDFData = {
+      scenarioName: currentScenarioName,
+      companyName: currentCompany?.name,
+      p90: scenarioP90 ? { ...scenarioP90, revenue18m: scenarioP90.revenue18m || 0, cash12m: scenarioP90.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
+      p50: scenarioP50 ? { ...scenarioP50, revenue18m: scenarioP50.revenue18m || 0, cash12m: scenarioP50.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
+      p10: scenarioP10 ? { ...scenarioP10, revenue18m: scenarioP10.revenue18m || 0, cash12m: scenarioP10.cash12m || 0 } : { runway: '?', revenue18m: 0, cash12m: 0, breakeven: '?', survival: '0' },
+      decisionScore: {
+        risk: Math.min(10, Math.max(1, riskScore)),
+        reward: Math.min(10, Math.max(1, rewardScore)),
+        capitalEfficiency: Math.min(10, Math.max(1, capEffScore)),
+        survivalImpact: Math.round(survivalImpact),
+      },
+      sensitivityBars,
+      counterMoves: counterMoves && counterMoves.length > 0 ? counterMoves : undefined,
+      fundraising,
+      survivalCurve: survivalCurve.length > 0 ? survivalCurve : undefined,
+      cashBands: cashBands.p50.length > 0 ? cashBands : undefined,
+    };
+
+    await downloadSimulationPDF(pdfData);
+  }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
       {/* STEP 1: "What's the question?" */}
@@ -980,6 +1084,7 @@ export default function ScenariosPage() {
                 <ExportButton
                   data={formatSimulationForExport(simulation)}
                   filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
+                  onGeneratePDF={handleGeneratePDF}
                 />
               </div>
             </div>
@@ -1316,6 +1421,7 @@ export default function ScenariosPage() {
                 <ExportButton
                   data={formatSimulationForExport(simulation)}
                   filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-report`}
+                  onGeneratePDF={handleGeneratePDF}
                 />
                 <Button variant="outline" size="sm" data-testid="button-discuss-team" onClick={() => toast({ title: 'Coming soon', description: 'Team discussion feature is in development.' })}>
                   <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
