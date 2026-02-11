@@ -651,6 +651,194 @@ export function FundraisingIntelligence({
   );
 }
 
+interface DilutionModelProps {
+  fundraiseAmount: number;
+  valuationRange: { low: number; mid: number; high: number };
+  dilution: { low: number; mid: number; high: number };
+  ownershipPost: { best_case: number; expected: number; worst_case: number };
+  runwayExtMonths: number;
+  monthlyBurn: number;
+  monthlyRevenue?: number;
+  growthRate?: number;
+  currentCash?: number;
+  survivalLift?: number;
+}
+
+function computeIRR(investmentAmount: number, postMoneyVal: number, yearlyGrowthRate: number, years: number = 5): number {
+  const initialOwnership = investmentAmount / postMoneyVal;
+  const exitValuation = postMoneyVal * Math.pow(1 + yearlyGrowthRate, years);
+  const exitValue = initialOwnership * exitValuation;
+  if (exitValue <= 0 || investmentAmount <= 0) return 0;
+  const irr = Math.pow(exitValue / investmentAmount, 1 / years) - 1;
+  return irr * 100;
+}
+
+function generateValuationTrajectory(
+  postMoneyVal: number,
+  growthRate: number,
+  years: number = 5
+): Array<{ year: number; low: number; mid: number; high: number }> {
+  const points: Array<{ year: number; low: number; mid: number; high: number }> = [];
+  for (let y = 0; y <= years; y++) {
+    const lowMult = Math.pow(1 + growthRate * 0.5, y);
+    const midMult = Math.pow(1 + growthRate, y);
+    const highMult = Math.pow(1 + growthRate * 1.5, y);
+    points.push({
+      year: y,
+      low: postMoneyVal * lowMult,
+      mid: postMoneyVal * midMult,
+      high: postMoneyVal * highMult,
+    });
+  }
+  return points;
+}
+
+export function FundraiseDilutionModel({ data }: { data: DilutionModelProps }) {
+  const preMoneyLow = data.valuationRange.low;
+  const preMoneyMid = data.valuationRange.mid;
+  const preMoneyHigh = data.valuationRange.high;
+  const postMoneyLow = preMoneyLow + data.fundraiseAmount;
+  const postMoneyMid = preMoneyMid + data.fundraiseAmount;
+  const postMoneyHigh = preMoneyHigh + data.fundraiseAmount;
+
+  const investorOwnershipMid = data.dilution.mid;
+  const founderOwnershipMid = data.ownershipPost.expected;
+
+  const growthRate = data.growthRate ?? 0.3;
+  const irrLow = computeIRR(data.fundraiseAmount, postMoneyHigh, growthRate * 0.5);
+  const irrMid = computeIRR(data.fundraiseAmount, postMoneyMid, growthRate);
+  const irrHigh = computeIRR(data.fundraiseAmount, postMoneyLow, growthRate * 1.5);
+
+  const trajectory = generateValuationTrajectory(postMoneyMid, growthRate, 5);
+  const maxVal = Math.max(...trajectory.map(t => t.high));
+
+  const ownershipSegments = [
+    { label: 'Founders', pct: founderOwnershipMid, color: 'bg-primary' },
+    { label: 'New Investor', pct: investorOwnershipMid, color: 'bg-amber-500' },
+  ];
+
+  return (
+    <Card data-testid="card-dilution-model">
+      <CardContent className="pt-4 pb-4 px-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <PieChart className="h-4 w-4 text-primary" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Dilution Model
+          </span>
+          <Badge variant="outline" className="text-[10px]">
+            {formatCurrency(data.fundraiseAmount)} round
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-pre-money">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pre-Money Valuation</p>
+            <p className="text-sm font-bold font-mono" data-testid="text-pre-money-mid">{formatCurrency(preMoneyMid)}</p>
+            <p className="text-[10px] text-muted-foreground">{formatCurrency(preMoneyLow)} &ndash; {formatCurrency(preMoneyHigh)}</p>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-post-money">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Post-Money Valuation</p>
+            <p className="text-sm font-bold font-mono" data-testid="text-post-money-mid">{formatCurrency(postMoneyMid)}</p>
+            <p className="text-[10px] text-muted-foreground">{formatCurrency(postMoneyLow)} &ndash; {formatCurrency(postMoneyHigh)}</p>
+          </div>
+        </div>
+
+        <div className="mb-4" data-testid="ownership-bar">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Ownership Split (Post-Round)</p>
+          <div className="h-5 rounded-md overflow-hidden flex">
+            {ownershipSegments.map((seg) => (
+              <div
+                key={seg.label}
+                className={`${seg.color} flex items-center justify-center transition-all duration-500`}
+                style={{ width: `${seg.pct}%` }}
+              >
+                {seg.pct >= 10 && (
+                  <span className="text-[9px] font-bold text-white">{seg.pct.toFixed(1)}%</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-1 gap-2">
+            {ownershipSegments.map((seg) => (
+              <div key={seg.label} className="flex items-center gap-1">
+                <div className={`h-2 w-2 rounded-full ${seg.color}`} />
+                <span className="text-[10px] text-muted-foreground">{seg.label}: {seg.pct.toFixed(1)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="p-2 rounded-md bg-muted/40 text-center" data-testid="metric-dilution-impact">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Dilution</p>
+            <p className="text-sm font-bold font-mono text-amber-600 dark:text-amber-400">{data.dilution.mid.toFixed(1)}%</p>
+          </div>
+          <div className="p-2 rounded-md bg-muted/40 text-center" data-testid="metric-runway-extend">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Runway Ext.</p>
+            <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">+{data.runwayExtMonths.toFixed(1)} mo</p>
+          </div>
+          <div className="p-2 rounded-md bg-muted/40 text-center" data-testid="metric-survival-lift-dilution">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Survival Lift</p>
+            <p className={`text-sm font-bold font-mono ${(data.survivalLift ?? 0) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+              {(data.survivalLift ?? 0) > 0 ? '+' : ''}{(data.survivalLift ?? 0).toFixed(1)}pp
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-4 p-2.5 rounded-md bg-muted/40" data-testid="irr-section">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Investor IRR (5-Year Est.)</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Bear</p>
+              <p className="text-xs font-bold font-mono text-red-600 dark:text-red-400">{irrLow.toFixed(0)}%</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Base</p>
+              <p className="text-xs font-bold font-mono text-amber-600 dark:text-amber-400">{irrMid.toFixed(0)}%</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Bull</p>
+              <p className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">{irrHigh.toFixed(0)}%</p>
+            </div>
+          </div>
+        </div>
+
+        <div data-testid="valuation-trajectory">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Valuation Trajectory (5-Year)</p>
+          <div className="h-28 flex items-end gap-1.5">
+            {trajectory.map((t) => {
+              const lowH = Math.max(4, (t.low / maxVal) * 100);
+              const midH = Math.max(4, (t.mid / maxVal) * 100);
+              const highH = Math.max(4, (t.high / maxVal) * 100);
+              return (
+                <div key={t.year} className="flex-1 flex flex-col items-center gap-0.5" data-testid={`trajectory-year-${t.year}`}>
+                  <div className="w-full flex items-end justify-center gap-px" style={{ height: '96px' }}>
+                    <div className="w-1/3 bg-muted-foreground/20 rounded-t-sm transition-all duration-500" style={{ height: `${lowH}%` }} />
+                    <div className="w-1/3 bg-primary/60 rounded-t-sm transition-all duration-500" style={{ height: `${midH}%` }} />
+                    <div className="w-1/3 bg-emerald-500/50 rounded-t-sm transition-all duration-500" style={{ height: `${highH}%` }} />
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">Y{t.year}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-center gap-3 mt-1.5">
+            <div className="flex items-center gap-1"><div className="h-2 w-2 rounded-full bg-muted-foreground/20" /><span className="text-[9px] text-muted-foreground">Bear</span></div>
+            <div className="flex items-center gap-1"><div className="h-2 w-2 rounded-full bg-primary/60" /><span className="text-[9px] text-muted-foreground">Base</span></div>
+            <div className="flex items-center gap-1"><div className="h-2 w-2 rounded-full bg-emerald-500/50" /><span className="text-[9px] text-muted-foreground">Bull</span></div>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-2 border-t border-dashed">
+          <p className="text-[10px] text-muted-foreground">
+            Dilution assumes {formatCurrency(preMoneyMid)} pre-money. IRR based on {(growthRate * 100).toFixed(0)}% annual growth. Trajectory is illustrative.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function findBaselineScenario(scenarios: any[]): any | null {
   if (!scenarios || scenarios.length === 0) return null;
   const byTag = scenarios.find(

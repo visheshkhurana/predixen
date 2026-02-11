@@ -32,7 +32,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
-import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, FundraiseDilutionModel, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { ScenarioComparePicker, ScenarioCompareMode } from '@/components/ScenarioCompareMode';
 import { SensitivitySliders } from '@/components/SensitivitySliders';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
@@ -1115,7 +1115,21 @@ export default function ScenariosPage() {
             />
 
             {simulation?.fundraising_intelligence && (
-              <FundraisingIntelligence data={simulation.fundraising_intelligence} />
+              <>
+                <FundraisingIntelligence data={simulation.fundraising_intelligence} />
+                <FundraiseDilutionModel data={{
+                  fundraiseAmount: simulation.fundraising_intelligence.fundraise_amount,
+                  valuationRange: simulation.fundraising_intelligence.valuation_range,
+                  dilution: simulation.fundraising_intelligence.dilution,
+                  ownershipPost: simulation.fundraising_intelligence.ownership_post_raise,
+                  runwayExtMonths: simulation.fundraising_intelligence.runway_extension_months,
+                  monthlyBurn: simulation.fundraising_intelligence.monthly_burn,
+                  monthlyRevenue: baseMetrics?.monthlyRevenue,
+                  growthRate: baseMetrics?.growthRate ? baseMetrics.growthRate / 100 : 0.3,
+                  currentCash: baseMetrics?.cashOnHand,
+                  survivalLift: simulation.fundraising_intelligence.survival_lift_pct,
+                }} />
+              </>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
