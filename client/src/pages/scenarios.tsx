@@ -1245,267 +1245,6 @@ export default function ScenariosPage() {
 
         {simulation && !isRunning && !isCreating && (
           <>
-            <div className="mb-6">
-              <Tabs value={advancedTab} onValueChange={setAdvancedTab}>
-              <TabsList className="flex-wrap h-auto gap-1">
-                <TabsTrigger value="builder" data-testid="adv-tab-builder">
-                  <Zap className="h-4 w-4 mr-2" />
-                  Strategic Builder
-                </TabsTrigger>
-                <TabsTrigger value="classic" data-testid="adv-tab-classic">
-                  Classic Wizard
-                </TabsTrigger>
-                <TabsTrigger value="results" data-testid="adv-tab-results" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
-                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
-                  Detailed Results
-                </TabsTrigger>
-                <TabsTrigger value="compare" data-testid="adv-tab-compare" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
-                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
-                  Compare All
-                </TabsTrigger>
-                <TabsTrigger value="enhanced" data-testid="adv-tab-enhanced" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
-                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
-                  Decision Ranking
-                </TabsTrigger>
-                {scenarios && scenarios.length > 0 && (
-                  <TabsTrigger value="history" data-testid="adv-tab-history">
-                    <History className="h-4 w-4 mr-2" />
-                    Saved ({scenarios.length})
-                  </TabsTrigger>
-                )}
-                {selectedScenarioId && (
-                  <TabsTrigger value="collaborate" data-testid="adv-tab-collaborate">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Discussion
-                    {comments.length > 0 && (
-                      <span className="ml-1 text-xs bg-muted rounded-full px-1.5">{comments.length}</span>
-                    )}
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="builder" className="mt-6 space-y-4">
-                <StrategicScenarioBuilder
-                  baseMetrics={baseMetrics}
-                  onRunSimulation={async (params) => { await handleWizardComplete(params); }}
-                  onSaveScenario={async (params) => { await handleWizardComplete(params); }}
-                  isRunning={isCreating || isRunning}
-                  simulation={simulation}
-                />
-              </TabsContent>
-
-              <TabsContent value="classic" className="mt-6">
-                <ScenarioWizard
-                  templates={SCENARIO_TEMPLATES}
-                  onComplete={handleWizardComplete}
-                  isRunning={isCreating || isRunning}
-                  companyId={currentCompany.id}
-                  baseMetrics={baseMetrics}
-                />
-              </TabsContent>
-
-              <TabsContent value="history" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Saved Scenarios</CardTitle>
-                    <CardDescription>{scenarios?.length || 0} scenarios available</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {scenariosLoading ? (
-                      <div className="space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
-                    ) : !scenarios || scenarios.length === 0 ? (
-                      <EmptyState icon={TrendingUp} title="No Saved Scenarios" description="Build your first scenario using the Strategic or Classic builder above." compact />
-                    ) : (
-                      <ScrollArea className="h-[400px]">
-                        <div className="space-y-2">
-                          {scenarios.map((s: any) => (
-                            <div key={s.id} className="flex items-center justify-between gap-4 p-4 rounded-lg border hover-elevate">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium">{s.name}</span>
-                                  {s.created_at && <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</span>}
-                                </div>
-                                {s.tags && s.tags.length > 0 && (
-                                  <div className="flex gap-1 mt-1 flex-wrap">
-                                    {s.tags.map((tag: string) => <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>)}
-                                  </div>
-                                )}
-                                {s.latest_simulation && (
-                                  <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                                    <span>Runway: {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo</span>
-                                    <span>Survival: {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%</span>
-                                  </div>
-                                )}
-                              </div>
-                              <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
-                                <Play className="h-4 w-4 mr-2" />Run
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="compare" className="mt-6 space-y-6">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <h2 className="text-lg font-semibold">Compare All Scenarios</h2>
-                    <p className="text-sm text-muted-foreground">Run simulations for 5 default scenarios and compare results</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <GlossaryModal />
-                    <Button onClick={handleRunMultiScenario} disabled={multiSimMutation.isPending} data-testid="button-run-multi-scenario">
-                      {multiSimMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>) : (<><Play className="h-4 w-4 mr-2" />Run All Scenarios</>)}
-                    </Button>
-                  </div>
-                </div>
-                {multiSimMutation.isPending && <Card><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div></CardContent></Card>}
-                {multiSimResults && !multiSimMutation.isPending && (
-                  <>
-                    {multiSimResults.comparison && (
-                      <ExecutiveSummary
-                        scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
-                          id: key, name: scenario.name || key, runway_p50: scenario.summary?.runway_p50 || 0,
-                          runway_p10: scenario.summary?.runway_p10, runway_p90: scenario.summary?.runway_p90,
-                          survival_rate: (scenario.summary?.survival_18m || 0) / 100, end_cash_p50: scenario.summary?.end_cash_p50,
-                          monthly_burn_p50: scenario.summary?.monthly_burn_p50, assumptions: scenario.assumptions,
-                        }))}
-                        baselineId="baseline" targetRunway={18} minSurvival={0.8}
-                      />
-                    )}
-                    <MultiScenarioSummary comparison={multiSimResults.comparison} />
-                    <ScenarioComparisonView
-                      scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
-                        name: scenario.name || key, runway_p50: scenario.summary?.runway_p50 || 0,
-                        runway_p10: scenario.summary?.runway_p10, runway_p90: scenario.summary?.runway_p90,
-                        survival_18m: scenario.summary?.survival_18m || 0, survival_12m: scenario.summary?.survival_12m,
-                        end_cash: scenario.summary?.end_cash_p50, avg_burn: scenario.summary?.monthly_burn_p50, score: scenario.score,
-                      }))}
-                      testId="scenario-comparison-view"
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => (
-                        <ScenarioCard key={key} id={key} name={scenario.name || key}
-                          runwayP50={scenario.summary?.runway_p50 || 0} runwayP10={scenario.summary?.runway_p10}
-                          runwayP90={scenario.summary?.runway_p90} survivalRate={(scenario.summary?.survival_18m || 0) / 100}
-                          endCash={scenario.summary?.end_cash_p50} monthlyBurn={scenario.summary?.monthly_burn_p50}
-                          assumptions={scenario.assumptions} tags={scenario.tags} isBaseline={key === 'baseline'}
-                          isBest={multiSimResults.comparison?.best_scenario === key}
-                          meetsBenchmark={(scenario.summary?.runway_p50 || 0) >= 18 && (scenario.summary?.survival_18m || 0) >= 80}
-                          cashProjection={scenario.month_data?.map((m: any) => m.cash_p50)} testId={`scenario-card-${key}`}
-                        />
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <ScenarioComparisonChart scenarios={multiSimResults.scenarios} />
-                      <MonthlyResultsTable scenarios={multiSimResults.scenarios} />
-                    </div>
-                  </>
-                )}
-                {!multiSimResults && !multiSimMutation.isPending && (
-                  <Card><CardContent className="py-12 text-center">
-                    <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground mb-4">Compare 5 pre-built scenarios side-by-side</p>
-                    <Button onClick={handleRunMultiScenario} data-testid="button-run-multi-cta"><Play className="h-4 w-4 mr-2" />Run All Scenarios</Button>
-                  </CardContent></Card>
-                )}
-              </TabsContent>
-
-              <TabsContent value="enhanced" className="mt-6 space-y-6">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <h2 className="text-lg font-semibold">Enhanced Scenario Analysis</h2>
-                    <p className="text-sm text-muted-foreground">Regime-aware simulation with correlated drivers and decision ranking</p>
-                  </div>
-                  <Button onClick={handleRunEnhancedMulti} disabled={enhancedMultiMutation.isPending} data-testid="button-run-enhanced-multi">
-                    {enhancedMultiMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>) : (<><Play className="h-4 w-4 mr-2" />Run Enhanced Analysis</>)}
-                  </Button>
-                </div>
-                {enhancedMultiMutation.isPending && <Card><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div></CardContent></Card>}
-                {enhancedResults && !enhancedMultiMutation.isPending && (
-                  <>
-                    {enhancedResults.decision_ranking && <DecisionRankingTable rankings={enhancedResults.decision_ranking} onSelectScenario={(key) => { const scenario = enhancedResults.scenarios?.[key]; if (scenario) toast({ title: `Selected: ${scenario.name}` }); }} />}
-                    {enhancedResults.sensitivity && <SensitivityAnalysisPanel data={enhancedResults.sensitivity} isLoading={false} />}
-                    {Object.entries(enhancedResults.scenarios || {}).slice(0, 1).map(([key, scenario]: [string, any]) => scenario.regime_distribution && <RegimeDistributionChart key={key} distribution={scenario.regime_distribution} scenarioName={scenario.name} />)}
-                  </>
-                )}
-                {!enhancedResults && !enhancedMultiMutation.isPending && (
-                  <Card><CardContent className="py-12 text-center">
-                    <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground mb-4">Run enhanced simulation with regime-aware Monte Carlo</p>
-                    <Button onClick={handleRunEnhancedMulti} data-testid="button-run-enhanced-cta"><Play className="h-4 w-4 mr-2" />Run Enhanced Analysis</Button>
-                  </CardContent></Card>
-                )}
-              </TabsContent>
-
-
-              <TabsContent value="results" className="mt-6 space-y-4">
-                {simLoading ? <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card> : simulation ? (
-                  <>
-                    <DashboardKPICards simulation={simulation} metrics={dashboardMetrics} companyId={currentCompany?.id} testId="dashboard-kpis-results" />
-                    <SimulationSummaryBanner runwayP50={simulation.runway?.p50 || 0} survival18m={simulation.survival?.['18m'] || 0} survival12m={simulation.survival?.['12m'] || 0} endCash={simulation.summary?.end_cash} monthlyBurn={simulation.summary?.monthly_burn} monthlyRevenue={simulation.summary?.monthly_revenue} scenarioName={currentScenarioName} />
-                    <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-3"><span className="text-sm font-medium">Risk Assessment:</span><RiskGauge survivalProbability={(simulation.survival?.['18m'] || 0) / 100} size="sm" /></div>
-                      <GlossaryModal />
-                    </div>
-                    <SimulationInsights simulation={simulation} scenarioName={currentScenarioName} testId="simulation-insights-results" />
-                    <AISummaryCard companyId={currentCompany.id} simulationResults={simulation} scenarioName={currentScenarioName} testId="ai-summary-card-results" />
-                    {simulation.month_data && simulation.month_data.length > 0 && (
-                      <>
-                        <DrillDownChart data={simulation.month_data.map((m: any, idx: number) => ({ month: idx + 1, cash_p10: m.cash_p10, cash_p50: m.cash_p50 ?? 0, cash_p90: m.cash_p90, revenue_p10: m.revenue_p10, revenue_p50: m.revenue_p50 ?? 0, revenue_p90: m.revenue_p90, burn_p10: m.burn_p10, burn_p50: m.burn_p50 ?? 0, burn_p90: m.burn_p90, runway_p50: Math.min(60, m.runway_p50 || (m.cash_p50 / Math.max(1, (m.burn_p50 ?? 1) - (m.revenue_p50 ?? 0)))), survival_rate: m.survival_rate }))} scenarioName={currentScenarioName} targetRunway={18} testId="drill-down-chart-results" />
-                        <StackedBurnRevenueChart data={simulation.month_data.map((m: any, idx: number) => ({ month: idx + 1, revenue: m.revenue_p50 ?? 0, burn: m.burn_p50 ?? 0, cash: m.cash_p50 }))} scenarioName={currentScenarioName} testId="stacked-burn-revenue-chart" />
-                      </>
-                    )}
-                    {timeseriesData && timeseriesData.timeseries && timeseriesData.timeseries.length > 0 && (
-                      <>
-                        <ProjectionChart timeseries={timeseriesData.timeseries} fundingEvents={timeseriesData.fundingEvents} scenarioName={timeseriesData.scenario_name || currentScenarioName} targetRunway={18} testId="projection-chart-results" />
-                        <ProjectionSummary timeseries={timeseriesData.timeseries} targetRunway={18} testId="projection-summary-results" />
-                      </>
-                    )}
-                    <Card><CardHeader><CardTitle className="text-lg">Runway Distribution</CardTitle><CardDescription>Distribution of runway outcomes across all simulations</CardDescription></CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p10?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Worst case</p></div>
-                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{simulation.runway?.p50?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Most likely</p></div>
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p90?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Best case</p></div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : (
-                  <EmptyStateCard icon={BarChart3} title="No Simulation Results" description="Run a Monte Carlo simulation to see probabilistic projections." action={{ label: "Create Scenario", onClick: () => setAdvancedTab('builder') }} />
-                )}
-              </TabsContent>
-
-              <TabsContent value="collaborate" className="mt-6 space-y-6">
-                {selectedScenarioId ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <ScenarioComments scenarioId={selectedScenarioId} comments={comments} isLoading={commentsLoading} currentUserEmail={currentUserEmail}
-                      onAddComment={async (content, parentId) => { await addCommentMutation.mutateAsync({ scenarioId: selectedScenarioId, content, parentId }); }}
-                      onEditComment={async (commentId, content) => { await editCommentMutation.mutateAsync({ commentId, content, scenarioId: selectedScenarioId }); }}
-                      onDeleteComment={async (commentId) => { await deleteCommentMutation.mutateAsync({ commentId, scenarioId: selectedScenarioId }); }}
-                    />
-                    {simulation && (
-                      <DistributionView title="Runway Distribution" description="Distribution across all Monte Carlo runs"
-                        data={Array.from({ length: 1000 }, () => (simulation.runway?.p50 || 12) + (Math.random() - 0.5) * (simulation.runway?.p90 - simulation.runway?.p10 || 6))}
-                        unit="months" thresholds={{ warning: 18, critical: 12 }} higherIsBetter={true}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <Card><CardContent className="py-12 text-center">
-                    <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Select a scenario to view and add comments</p>
-                    <Button variant="outline" className="mt-4" onClick={() => setAdvancedTab('history')}>View Saved Scenarios</Button>
-                  </CardContent></Card>
-                )}
-              </TabsContent>
-            </Tabs>
-            </div>
-
             <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
               <div>
                 <h2 className="text-xl font-bold" data-testid="text-results-title">Simulation Results</h2>
@@ -1887,6 +1626,271 @@ export default function ScenariosPage() {
                 </>
               )}
             </>)}
+
+            <div className="mt-8 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Zap className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold" data-testid="text-tools-title">Scenario Tools</h2>
+              </div>
+              <Tabs value={advancedTab} onValueChange={setAdvancedTab}>
+              <TabsList className="flex-wrap h-auto gap-1">
+                <TabsTrigger value="builder" data-testid="adv-tab-builder">
+                  <Zap className="h-4 w-4 mr-2" />
+                  Strategic Builder
+                </TabsTrigger>
+                <TabsTrigger value="classic" data-testid="adv-tab-classic">
+                  Classic Wizard
+                </TabsTrigger>
+                <TabsTrigger value="results" data-testid="adv-tab-results" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
+                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
+                  Detailed Results
+                </TabsTrigger>
+                <TabsTrigger value="compare" data-testid="adv-tab-compare" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
+                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
+                  Compare All
+                </TabsTrigger>
+                <TabsTrigger value="enhanced" data-testid="adv-tab-enhanced" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
+                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
+                  Decision Ranking
+                </TabsTrigger>
+                {scenarios && scenarios.length > 0 && (
+                  <TabsTrigger value="history" data-testid="adv-tab-history">
+                    <History className="h-4 w-4 mr-2" />
+                    Saved ({scenarios.length})
+                  </TabsTrigger>
+                )}
+                {selectedScenarioId && (
+                  <TabsTrigger value="collaborate" data-testid="adv-tab-collaborate">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Discussion
+                    {comments.length > 0 && (
+                      <span className="ml-1 text-xs bg-muted rounded-full px-1.5">{comments.length}</span>
+                    )}
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              <TabsContent value="builder" className="mt-6 space-y-4">
+                <StrategicScenarioBuilder
+                  baseMetrics={baseMetrics}
+                  onRunSimulation={async (params) => { await handleWizardComplete(params); }}
+                  onSaveScenario={async (params) => { await handleWizardComplete(params); }}
+                  isRunning={isCreating || isRunning}
+                  simulation={simulation}
+                />
+              </TabsContent>
+
+              <TabsContent value="classic" className="mt-6">
+                <ScenarioWizard
+                  templates={SCENARIO_TEMPLATES}
+                  onComplete={handleWizardComplete}
+                  isRunning={isCreating || isRunning}
+                  companyId={currentCompany.id}
+                  baseMetrics={baseMetrics}
+                />
+              </TabsContent>
+
+              <TabsContent value="history" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Saved Scenarios</CardTitle>
+                    <CardDescription>{scenarios?.length || 0} scenarios available</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {scenariosLoading ? (
+                      <div className="space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
+                    ) : !scenarios || scenarios.length === 0 ? (
+                      <EmptyState icon={TrendingUp} title="No Saved Scenarios" description="Build your first scenario using the Strategic or Classic builder above." compact />
+                    ) : (
+                      <ScrollArea className="h-[400px]">
+                        <div className="space-y-2">
+                          {scenarios.map((s: any) => (
+                            <div key={s.id} className="flex items-center justify-between gap-4 p-4 rounded-lg border hover-elevate">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">{s.name}</span>
+                                  {s.created_at && <span className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleDateString()}</span>}
+                                </div>
+                                {s.tags && s.tags.length > 0 && (
+                                  <div className="flex gap-1 mt-1 flex-wrap">
+                                    {s.tags.map((tag: string) => <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>)}
+                                  </div>
+                                )}
+                                {s.latest_simulation && (
+                                  <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
+                                    <span>Runway: {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo</span>
+                                    <span>Survival: {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%</span>
+                                  </div>
+                                )}
+                              </div>
+                              <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
+                                <Play className="h-4 w-4 mr-2" />Run
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="compare" className="mt-6 space-y-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h2 className="text-lg font-semibold">Compare All Scenarios</h2>
+                    <p className="text-sm text-muted-foreground">Run simulations for 5 default scenarios and compare results</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <GlossaryModal />
+                    <Button onClick={handleRunMultiScenario} disabled={multiSimMutation.isPending} data-testid="button-run-multi-scenario">
+                      {multiSimMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>) : (<><Play className="h-4 w-4 mr-2" />Run All Scenarios</>)}
+                    </Button>
+                  </div>
+                </div>
+                {multiSimMutation.isPending && <Card><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div></CardContent></Card>}
+                {multiSimResults && !multiSimMutation.isPending && (
+                  <>
+                    {multiSimResults.comparison && (
+                      <ExecutiveSummary
+                        scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
+                          id: key, name: scenario.name || key, runway_p50: scenario.summary?.runway_p50 || 0,
+                          runway_p10: scenario.summary?.runway_p10, runway_p90: scenario.summary?.runway_p90,
+                          survival_rate: (scenario.summary?.survival_18m || 0) / 100, end_cash_p50: scenario.summary?.end_cash_p50,
+                          monthly_burn_p50: scenario.summary?.monthly_burn_p50, assumptions: scenario.assumptions,
+                        }))}
+                        baselineId="baseline" targetRunway={18} minSurvival={0.8}
+                      />
+                    )}
+                    <MultiScenarioSummary comparison={multiSimResults.comparison} />
+                    <ScenarioComparisonView
+                      scenarios={Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => ({
+                        name: scenario.name || key, runway_p50: scenario.summary?.runway_p50 || 0,
+                        runway_p10: scenario.summary?.runway_p10, runway_p90: scenario.summary?.runway_p90,
+                        survival_18m: scenario.summary?.survival_18m || 0, survival_12m: scenario.summary?.survival_12m,
+                        end_cash: scenario.summary?.end_cash_p50, avg_burn: scenario.summary?.monthly_burn_p50, score: scenario.score,
+                      }))}
+                      testId="scenario-comparison-view"
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {Object.entries(multiSimResults.scenarios || {}).map(([key, scenario]: [string, any]) => (
+                        <ScenarioCard key={key} id={key} name={scenario.name || key}
+                          runwayP50={scenario.summary?.runway_p50 || 0} runwayP10={scenario.summary?.runway_p10}
+                          runwayP90={scenario.summary?.runway_p90} survivalRate={(scenario.summary?.survival_18m || 0) / 100}
+                          endCash={scenario.summary?.end_cash_p50} monthlyBurn={scenario.summary?.monthly_burn_p50}
+                          assumptions={scenario.assumptions} tags={scenario.tags} isBaseline={key === 'baseline'}
+                          isBest={multiSimResults.comparison?.best_scenario === key}
+                          meetsBenchmark={(scenario.summary?.runway_p50 || 0) >= 18 && (scenario.summary?.survival_18m || 0) >= 80}
+                          cashProjection={scenario.month_data?.map((m: any) => m.cash_p50)} testId={`scenario-card-${key}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                      <ScenarioComparisonChart scenarios={multiSimResults.scenarios} />
+                      <MonthlyResultsTable scenarios={multiSimResults.scenarios} />
+                    </div>
+                  </>
+                )}
+                {!multiSimResults && !multiSimMutation.isPending && (
+                  <Card><CardContent className="py-12 text-center">
+                    <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">Compare 5 pre-built scenarios side-by-side</p>
+                    <Button onClick={handleRunMultiScenario} data-testid="button-run-multi-cta"><Play className="h-4 w-4 mr-2" />Run All Scenarios</Button>
+                  </CardContent></Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="enhanced" className="mt-6 space-y-6">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h2 className="text-lg font-semibold">Enhanced Scenario Analysis</h2>
+                    <p className="text-sm text-muted-foreground">Regime-aware simulation with correlated drivers and decision ranking</p>
+                  </div>
+                  <Button onClick={handleRunEnhancedMulti} disabled={enhancedMultiMutation.isPending} data-testid="button-run-enhanced-multi">
+                    {enhancedMultiMutation.isPending ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Running...</>) : (<><Play className="h-4 w-4 mr-2" />Run Enhanced Analysis</>)}
+                  </Button>
+                </div>
+                {enhancedMultiMutation.isPending && <Card><CardContent className="p-6"><div className="space-y-3"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div></CardContent></Card>}
+                {enhancedResults && !enhancedMultiMutation.isPending && (
+                  <>
+                    {enhancedResults.decision_ranking && <DecisionRankingTable rankings={enhancedResults.decision_ranking} onSelectScenario={(key) => { const scenario = enhancedResults.scenarios?.[key]; if (scenario) toast({ title: `Selected: ${scenario.name}` }); }} />}
+                    {enhancedResults.sensitivity && <SensitivityAnalysisPanel data={enhancedResults.sensitivity} isLoading={false} />}
+                    {Object.entries(enhancedResults.scenarios || {}).slice(0, 1).map(([key, scenario]: [string, any]) => scenario.regime_distribution && <RegimeDistributionChart key={key} distribution={scenario.regime_distribution} scenarioName={scenario.name} />)}
+                  </>
+                )}
+                {!enhancedResults && !enhancedMultiMutation.isPending && (
+                  <Card><CardContent className="py-12 text-center">
+                    <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-4">Run enhanced simulation with regime-aware Monte Carlo</p>
+                    <Button onClick={handleRunEnhancedMulti} data-testid="button-run-enhanced-cta"><Play className="h-4 w-4 mr-2" />Run Enhanced Analysis</Button>
+                  </CardContent></Card>
+                )}
+              </TabsContent>
+
+
+              <TabsContent value="results" className="mt-6 space-y-4">
+                {simLoading ? <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card> : simulation ? (
+                  <>
+                    <DashboardKPICards simulation={simulation} metrics={dashboardMetrics} companyId={currentCompany?.id} testId="dashboard-kpis-results" />
+                    <SimulationSummaryBanner runwayP50={simulation.runway?.p50 || 0} survival18m={simulation.survival?.['18m'] || 0} survival12m={simulation.survival?.['12m'] || 0} endCash={simulation.summary?.end_cash} monthlyBurn={simulation.summary?.monthly_burn} monthlyRevenue={simulation.summary?.monthly_revenue} scenarioName={currentScenarioName} />
+                    <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-3"><span className="text-sm font-medium">Risk Assessment:</span><RiskGauge survivalProbability={(simulation.survival?.['18m'] || 0) / 100} size="sm" /></div>
+                      <GlossaryModal />
+                    </div>
+                    <SimulationInsights simulation={simulation} scenarioName={currentScenarioName} testId="simulation-insights-results" />
+                    <AISummaryCard companyId={currentCompany.id} simulationResults={simulation} scenarioName={currentScenarioName} testId="ai-summary-card-results" />
+                    {simulation.month_data && simulation.month_data.length > 0 && (
+                      <>
+                        <DrillDownChart data={simulation.month_data.map((m: any, idx: number) => ({ month: idx + 1, cash_p10: m.cash_p10, cash_p50: m.cash_p50 ?? 0, cash_p90: m.cash_p90, revenue_p10: m.revenue_p10, revenue_p50: m.revenue_p50 ?? 0, revenue_p90: m.revenue_p90, burn_p10: m.burn_p10, burn_p50: m.burn_p50 ?? 0, burn_p90: m.burn_p90, runway_p50: Math.min(60, m.runway_p50 || (m.cash_p50 / Math.max(1, (m.burn_p50 ?? 1) - (m.revenue_p50 ?? 0)))), survival_rate: m.survival_rate }))} scenarioName={currentScenarioName} targetRunway={18} testId="drill-down-chart-results" />
+                        <StackedBurnRevenueChart data={simulation.month_data.map((m: any, idx: number) => ({ month: idx + 1, revenue: m.revenue_p50 ?? 0, burn: m.burn_p50 ?? 0, cash: m.cash_p50 }))} scenarioName={currentScenarioName} testId="stacked-burn-revenue-chart" />
+                      </>
+                    )}
+                    {timeseriesData && timeseriesData.timeseries && timeseriesData.timeseries.length > 0 && (
+                      <>
+                        <ProjectionChart timeseries={timeseriesData.timeseries} fundingEvents={timeseriesData.fundingEvents} scenarioName={timeseriesData.scenario_name || currentScenarioName} targetRunway={18} testId="projection-chart-results" />
+                        <ProjectionSummary timeseries={timeseriesData.timeseries} targetRunway={18} testId="projection-summary-results" />
+                      </>
+                    )}
+                    <Card><CardHeader><CardTitle className="text-lg">Runway Distribution</CardTitle><CardDescription>Distribution of runway outcomes across all simulations</CardDescription></CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p10?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Worst case</p></div>
+                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{simulation.runway?.p50?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Most likely</p></div>
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p90?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Best case</p></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                ) : (
+                  <EmptyStateCard icon={BarChart3} title="No Simulation Results" description="Run a Monte Carlo simulation to see probabilistic projections." action={{ label: "Create Scenario", onClick: () => setAdvancedTab('builder') }} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="collaborate" className="mt-6 space-y-6">
+                {selectedScenarioId ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <ScenarioComments scenarioId={selectedScenarioId} comments={comments} isLoading={commentsLoading} currentUserEmail={currentUserEmail}
+                      onAddComment={async (content, parentId) => { await addCommentMutation.mutateAsync({ scenarioId: selectedScenarioId, content, parentId }); }}
+                      onEditComment={async (commentId, content) => { await editCommentMutation.mutateAsync({ commentId, content, scenarioId: selectedScenarioId }); }}
+                      onDeleteComment={async (commentId) => { await deleteCommentMutation.mutateAsync({ commentId, scenarioId: selectedScenarioId }); }}
+                    />
+                    {simulation && (
+                      <DistributionView title="Runway Distribution" description="Distribution across all Monte Carlo runs"
+                        data={Array.from({ length: 1000 }, () => (simulation.runway?.p50 || 12) + (Math.random() - 0.5) * (simulation.runway?.p90 - simulation.runway?.p10 || 6))}
+                        unit="months" thresholds={{ warning: 18, critical: 12 }} higherIsBetter={true}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <Card><CardContent className="py-12 text-center">
+                    <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">Select a scenario to view and add comments</p>
+                    <Button variant="outline" className="mt-4" onClick={() => setAdvancedTab('history')}>View Saved Scenarios</Button>
+                  </CardContent></Card>
+                )}
+              </TabsContent>
+            </Tabs>
+            </div>
           </>
         )}
       </section>
