@@ -205,56 +205,51 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     >
       <Card className={cn('overflow-visible border-0 rounded-[5px]', analysis.verdictBg)}>
         <CardContent className="pt-5 pb-4 px-5">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 flex flex-col items-center gap-0.5" data-testid="decision-score">
-              <div
-                className="h-14 w-14 rounded-md flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, #10b981, #3b82f6)' }}
-              >
-                <span className="text-2xl font-bold text-white">{analysis.decisionScore}</span>
-              </div>
-              <span className="text-[10px] font-medium text-muted-foreground">/10</span>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" data-testid="text-ai-summary-title">Your Answer</h3>
+          </div>
+
+          <p className="text-base font-semibold leading-snug mb-3" data-testid="text-ai-headline">
+            {analysis.headline}
+          </p>
+
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <div
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1"
+              style={{ background: 'linear-gradient(135deg, #10b981, #3b82f6)' }}
+              data-testid="decision-score"
+            >
+              <span className="text-sm font-bold text-white">{analysis.decisionScore}/10</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground" data-testid="text-ai-summary-title">Your Answer</h3>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={cn('text-xs font-bold gap-1', analysis.verdictColor)}
-                  data-testid="badge-verdict"
-                >
-                  {analysis.verdictIcon}
-                  {analysis.verdictLabel}
-                </Badge>
-                {analysis.baselineDelta && (
-                  <Badge variant="secondary" className="text-[10px] gap-1" data-testid="badge-baseline-delta">
-                    <ArrowRight className="h-3 w-3" />
-                    {analysis.baselineDelta}
-                  </Badge>
-                )}
-              </div>
+            <Badge
+              variant="outline"
+              className={cn('text-xs font-bold gap-1', analysis.verdictColor)}
+              data-testid="badge-verdict"
+            >
+              {analysis.verdictIcon}
+              {analysis.verdictLabel}
+            </Badge>
+            {analysis.baselineDelta && (
+              <Badge variant="secondary" className="text-[10px] gap-1" data-testid="badge-baseline-delta">
+                <ArrowRight className="h-3 w-3" />
+                {analysis.baselineDelta}
+              </Badge>
+            )}
+          </div>
 
-              <p className="text-sm font-medium leading-relaxed mb-3" data-testid="text-ai-headline">
-                {analysis.headline}
-              </p>
-
-              <div className="space-y-2">
-                <div className="flex items-start gap-2" data-testid="bullet-key-risk">
-                  <CircleAlert className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Risk:</span> {analysis.keyRisk}</span>
-                </div>
-                <div className="flex items-start gap-2" data-testid="bullet-key-opportunity">
-                  <Target className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Opportunity:</span> {analysis.keyOpportunity}</span>
-                </div>
-                <div className="flex items-start gap-2" data-testid="bullet-watch-metric">
-                  <Activity className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Watch:</span> {analysis.watchMetric}</span>
-                </div>
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2" data-testid="bullet-key-risk">
+              <CircleAlert className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Risk:</span> {analysis.keyRisk}</span>
+            </div>
+            <div className="flex items-start gap-2" data-testid="bullet-key-opportunity">
+              <Target className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+              <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Opportunity:</span> {analysis.keyOpportunity}</span>
+            </div>
+            <div className="flex items-start gap-2" data-testid="bullet-watch-metric">
+              <Activity className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Watch:</span> {analysis.watchMetric}</span>
             </div>
           </div>
         </CardContent>
