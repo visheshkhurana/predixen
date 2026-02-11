@@ -438,6 +438,9 @@ def run_simulation(
     
     outputs = run_enhanced_monte_carlo(enhanced_inputs, sim_config)
     
+    counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
+    outputs["counter_moves"] = counter_moves_results
+    
     sim_run = SimulationRun(
         scenario_id=scenario_id,
         n_sims=request.n_sims,
@@ -507,6 +510,38 @@ def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, ove
         churn_change_pct=si.get("churn_change_pct", 0),
         cac_change_pct=si.get("cac_change_pct", 0),
     )
+
+
+def _run_counter_moves(scenario, metrics: Dict, latest_record) -> list:
+    """Run all counter-move simulations and return results list."""
+    sim_config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
+    si = scenario.inputs_json or {}
+    results = []
+    for move in COUNTER_MOVES:
+        try:
+            merged = {}
+            for key, val in move["overrides"].items():
+                if key in move.get("additive_keys", []):
+                    merged[key] = si.get(key, 0) + val
+                else:
+                    merged[key] = val
+            enhanced = _build_enhanced_inputs(scenario, metrics, latest_record, overrides=merged)
+            outputs = run_enhanced_monte_carlo(enhanced, sim_config)
+            results.append({
+                "id": move["id"],
+                "name": move["name"],
+                "description": move["description"],
+                "icon": move["icon"],
+                "overrides_applied": merged,
+                "runway": outputs.get("runway"),
+                "survival": outputs.get("survival", outputs.get("survivalProbability")),
+                "survivalProbability": outputs.get("survivalProbability", outputs.get("survival")),
+                "breakEvenMonth": outputs.get("breakEvenMonth"),
+                "summary": outputs.get("summary"),
+            })
+        except Exception:
+            pass
+    return results
 
 
 COUNTER_MOVES = [
@@ -636,10 +671,28 @@ def get_latest_simulation(
             if 'curve' in survival and 'survivalCurve' not in outputs:
                 outputs['survivalCurve'] = survival['curve']
     
+    counter_moves_results = []
+    if "counter_moves" in outputs:
+        counter_moves_results = outputs.pop("counter_moves")
+    else:
+        try:
+            truth_scan = db.query(TruthScan).filter(
+                TruthScan.company_id == company.id
+            ).order_by(TruthScan.created_at.desc()).first()
+            if truth_scan:
+                metrics = truth_scan.outputs_json.get("metrics", {})
+                latest_record = db.query(FinancialRecord).filter(
+                    FinancialRecord.company_id == company.id
+                ).order_by(FinancialRecord.period_end.desc()).first()
+                counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
+        except Exception:
+            pass
+
     return {
         "id": sim_run.id,
         "scenario_id": scenario_id,
         **outputs,
+        "counter_moves": counter_moves_results,
         "created_at": sim_run.created_at.isoformat()
     }
 

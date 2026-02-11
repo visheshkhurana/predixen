@@ -145,12 +145,6 @@ export default function ScenariosPage() {
   const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
-  const [counterMovesData, setCounterMovesData] = useState<any>(null);
-  const [counterMovesScenarioId, setCounterMovesScenarioId] = useState<number | null>(null);
-  const [counterMovesLoading, setCounterMovesLoading] = useState<number | null>(null);
-  const [counterMovesFailed, setCounterMovesFailed] = useState<number | null>(null);
-  const counterMovesTriggeredRef = useRef<number | null>(null);
-  const counterMovesRequestRef = useRef(0);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -270,26 +264,6 @@ export default function ScenariosPage() {
     return getBaselineSimulation(scenarios, selectedScenarioId);
   }, [scenarios, selectedScenarioId]);
 
-  const fireCounterMoves = async (scenarioId: number) => {
-    const requestId = ++counterMovesRequestRef.current;
-    setCounterMovesLoading(scenarioId);
-    setCounterMovesFailed(null);
-    counterMovesTriggeredRef.current = scenarioId;
-    try {
-      const result = await api.simulations.counterMoves(scenarioId);
-      if (counterMovesRequestRef.current !== requestId) return;
-      setCounterMovesData(result.counter_moves);
-      setCounterMovesScenarioId(scenarioId);
-    } catch (err: any) {
-      if (counterMovesRequestRef.current !== requestId) return;
-      toast({ title: 'Counter-moves failed', description: err.message, variant: 'destructive' });
-      setCounterMovesFailed(scenarioId);
-    } finally {
-      if (counterMovesRequestRef.current === requestId) {
-        setCounterMovesLoading(null);
-      }
-    }
-  };
 
   useEffect(() => {
     if (selectedScenarioId && scenarios) {
@@ -310,12 +284,6 @@ export default function ScenariosPage() {
     }
   }, [simulation, selectedScenarioId, setLatestRun]);
 
-  useEffect(() => {
-    if (simulation && selectedScenarioId && counterMovesTriggeredRef.current !== selectedScenarioId) {
-      counterMovesTriggeredRef.current = selectedScenarioId;
-      fireCounterMoves(selectedScenarioId);
-    }
-  }, [simulation, selectedScenarioId]);
 
   if (!currentCompany) {
     return (
@@ -359,8 +327,6 @@ export default function ScenariosPage() {
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-      counterMovesTriggeredRef.current = scenario.id;
-      fireCounterMoves(scenario.id);
     } catch (err: any) {
       if (isTruthScanRequired(err)) {
         const uploadId = getTruthScanUploadId(err);
@@ -386,8 +352,6 @@ export default function ScenariosPage() {
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
-      counterMovesTriggeredRef.current = scenarioId;
-      fireCounterMoves(scenarioId);
     } catch (err: any) {
       if (isTruthScanRequired(err)) {
         const uploadId = getTruthScanUploadId(err);
@@ -1113,11 +1077,11 @@ export default function ScenariosPage() {
             )}
 
             <CounterMoveCards
-              counterMoves={counterMovesScenarioId === selectedScenarioId ? counterMovesData : null}
+              counterMoves={simulation?.counter_moves || null}
               currentSimulation={simulation}
-              isLoading={counterMovesLoading === selectedScenarioId}
-              hasFailed={counterMovesFailed === selectedScenarioId}
-              onRetry={() => selectedScenarioId && fireCounterMoves(selectedScenarioId)}
+              isLoading={false}
+              hasFailed={false}
+              onRetry={() => {}}
               onApply={handleApplyCounterMove}
             />
 
