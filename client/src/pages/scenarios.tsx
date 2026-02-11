@@ -1267,14 +1267,6 @@ export default function ScenariosPage() {
                   {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
                   Decision Ranking
                 </TabsTrigger>
-                <TabsTrigger value="sensitivity" data-testid="adv-tab-sensitivity" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
-                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
-                  Sensitivity
-                </TabsTrigger>
-                <TabsTrigger value="analysis" data-testid="adv-tab-analysis" disabled={!hasRunScenario && !hasSimulationResults} className={!hasRunScenario && !hasSimulationResults ? 'opacity-50' : ''}>
-                  {!hasRunScenario && !hasSimulationResults && <Lock className="h-3 w-3 mr-1" />}
-                  Analysis
-                </TabsTrigger>
                 {scenarios && scenarios.length > 0 && (
                   <TabsTrigger value="history" data-testid="adv-tab-history">
                     <History className="h-4 w-4 mr-2" />
@@ -1449,18 +1441,6 @@ export default function ScenariosPage() {
                 )}
               </TabsContent>
 
-              <TabsContent value="sensitivity" className="mt-6 space-y-6">
-                <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
-              </TabsContent>
-
-              <TabsContent value="analysis" className="mt-6 space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
-                  <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
-                  <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
-                  <ReverseStressTest currentState={stressTestFinancialState} />
-                </div>
-              </TabsContent>
 
               <TabsContent value="results" className="mt-6 space-y-4">
                 {simLoading ? <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card> : simulation ? (
@@ -1729,6 +1709,13 @@ export default function ScenariosPage() {
                   </div>
                 ))}
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
+                <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
+              </div>
+
+              <SensitivityAnalysisPanel data={sensitivityResults} isLoading={sensitivityMutation.isPending} onRunAnalysis={handleRunSensitivityAnalysis} />
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                 <StressTestPanel currentState={stressTestFinancialState} currentRunway={stressTestCurrentRunway} onApplyStressTest={(_, t) => toast({ title: `Stress Test Applied: ${t.name}`, description: t.description })} />
