@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, TrendingUp, TrendingDown, Shield, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
+import { Sparkles, Shield, AlertTriangle, CheckCircle, ArrowRight, CircleAlert, Target, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AIDecisionSummaryProps {
@@ -125,26 +125,50 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       }
     }
 
-    const signals: Array<{ text: string; type: 'positive' | 'negative' | 'neutral' }> = [];
-
-    if (runwayP50 >= 18) signals.push({ text: `${runwayP50.toFixed(0)}mo runway exceeds 18mo safety threshold`, type: 'positive' });
-    else if (runwayP50 >= 12) signals.push({ text: `${runwayP50.toFixed(0)}mo runway is adequate but tight`, type: 'neutral' });
-    else signals.push({ text: `${runwayP50.toFixed(0)}mo runway is below 12mo minimum`, type: 'negative' });
-
-    if (survival18m >= 80) signals.push({ text: `${survival18m.toFixed(0)}% survival is strong`, type: 'positive' });
-    else if (survival18m >= 50) signals.push({ text: `${survival18m.toFixed(0)}% survival needs improvement`, type: 'neutral' });
-    else signals.push({ text: `${survival18m.toFixed(0)}% survival is critically low`, type: 'negative' });
-
     const spread = runwayP90 - runwayP10;
-    if (spread > 15) signals.push({ text: `Wide range (${runwayP10.toFixed(0)}\u2013${runwayP90.toFixed(0)}mo) \u2014 high uncertainty`, type: 'negative' });
-    else if (spread <= 6) signals.push({ text: `Tight range (${runwayP10.toFixed(0)}\u2013${runwayP90.toFixed(0)}mo) \u2014 predictable`, type: 'positive' });
+    const burnCoverage = monthlyBurn > 0 && endCash > 0 ? endCash / monthlyBurn : null;
 
-    if (breakeven && breakeven <= 18) signals.push({ text: `Breakeven month ${breakeven} \u2014 strong unit economics`, type: 'positive' });
-    else if (breakeven && breakeven > 24) signals.push({ text: `Breakeven beyond 24mo \u2014 capital risk`, type: 'negative' });
+    let keyRisk = '';
+    if (survival18m < 50) {
+      keyRisk = `${survival18m.toFixed(0)}% survival probability at 18 months puts you in the danger zone \u2014 one bad quarter could be fatal.`;
+    } else if (runwayP50 < 12) {
+      keyRisk = `${runwayP50.toFixed(0)} months of runway is below the 12-month minimum \u2014 you'll be fundraising from a position of weakness.`;
+    } else if (spread > 12) {
+      keyRisk = `Outcome spread of ${spread.toFixed(0)} months (P10: ${runwayP10.toFixed(0)}mo, P90: ${runwayP90.toFixed(0)}mo) means high variance \u2014 the downside tail is real.`;
+    } else if (burnCoverage !== null && burnCoverage < 6) {
+      keyRisk = `End cash of ${fmtCurrency(endCash)} only covers ${burnCoverage.toFixed(0)} months at ${fmtCurrency(monthlyBurn)}/mo burn \u2014 you have no margin for error.`;
+    } else if (monthlyBurn > 0) {
+      keyRisk = `Monthly burn of ${fmtCurrency(monthlyBurn)} compounds quickly \u2014 any revenue miss accelerates your cash-out date.`;
+    } else {
+      keyRisk = `P10 downside scenario gives you only ${runwayP10.toFixed(0)} months \u2014 stress-test your assumptions.`;
+    }
 
-    if (monthlyBurn > 0 && endCash > 0) {
-      const burnCoverage = endCash / monthlyBurn;
-      if (burnCoverage < 6) signals.push({ text: `End cash covers only ${burnCoverage.toFixed(0)} months of burn`, type: 'negative' });
+    let keyOpportunity = '';
+    if (cm) {
+      keyOpportunity = `${cm.name} adds +${cm.runwayGain.toFixed(0)} months of runway \u2014 combine it with this scenario to move into a stronger position.`;
+    } else if (breakeven && breakeven <= 18) {
+      keyOpportunity = `Breakeven at month ${breakeven} means you can stop burning cash and grow from revenue \u2014 that's the best position to negotiate from.`;
+    } else if (bRunwayDelta > 3) {
+      keyOpportunity = `+${bRunwayDelta.toFixed(0)} months of runway vs baseline gives you significantly more time to execute and hit milestones.`;
+    } else if (runwayP90 >= 24) {
+      keyOpportunity = `In the best case (P90), you have ${runwayP90.toFixed(0)} months of runway \u2014 enough to reach key milestones and raise from strength.`;
+    } else if (survival18m >= 75) {
+      keyOpportunity = `${survival18m.toFixed(0)}% survival gives you strong odds \u2014 use this window to hit growth targets that improve your next raise.`;
+    } else {
+      keyOpportunity = `Each month of additional runway you unlock through efficiency gains compounds your optionality.`;
+    }
+
+    let watchMetric = '';
+    if (monthlyBurn > 0 && runwayP50 < 15) {
+      watchMetric = `Monthly burn rate (currently ${fmtCurrency(monthlyBurn)}/mo) \u2014 a 10% reduction extends runway by ~${(runwayP50 * 0.11).toFixed(1)} months.`;
+    } else if (breakeven && breakeven > 18) {
+      watchMetric = `Months to breakeven (currently month ${breakeven}) \u2014 every month earlier is a month less dependency on external capital.`;
+    } else if (spread > 10) {
+      watchMetric = `Outcome variance (${runwayP10.toFixed(0)}\u2013${runwayP90.toFixed(0)}mo spread) \u2014 track which assumptions drive the widest range and lock them down.`;
+    } else if (burnCoverage !== null) {
+      watchMetric = `Cash coverage ratio (${burnCoverage.toFixed(1)}x monthly burn) \u2014 keep this above 6x to maintain negotiating leverage.`;
+    } else {
+      watchMetric = `Survival probability trend \u2014 if ${survival18m.toFixed(0)}% drops below 50% in future sims, reassess immediately.`;
     }
 
     let baselineDelta = '';
@@ -157,7 +181,7 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       }
     }
 
-    return { verdict, verdictLabel, verdictColor, verdictBg, verdictIcon, headline, signals, baselineDelta };
+    return { verdict, verdictLabel, verdictColor, verdictBg, verdictIcon, headline, keyRisk, keyOpportunity, watchMetric, baselineDelta };
   }, [simulation, scenarioName, baselineSimulation, counterMoves]);
 
   if (!analysis) return null;
@@ -194,19 +218,19 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
               {analysis.headline}
             </p>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {analysis.signals.slice(0, 4).map((signal, idx) => (
-                <div key={idx} className="flex items-center gap-1.5" data-testid={`signal-item-${idx}`}>
-                  {signal.type === 'positive' ? (
-                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                  ) : signal.type === 'negative' ? (
-                    <TrendingDown className="h-3.5 w-3.5 text-red-500 flex-shrink-0" />
-                  ) : (
-                    <ArrowRight className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
-                  )}
-                  <span className="text-xs text-muted-foreground">{signal.text}</span>
-                </div>
-              ))}
+            <div className="space-y-2">
+              <div className="flex items-start gap-2" data-testid="bullet-key-risk">
+                <CircleAlert className="h-3.5 w-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Risk:</span> {analysis.keyRisk}</span>
+              </div>
+              <div className="flex items-start gap-2" data-testid="bullet-key-opportunity">
+                <Target className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Key Opportunity:</span> {analysis.keyOpportunity}</span>
+              </div>
+              <div className="flex items-start gap-2" data-testid="bullet-watch-metric">
+                <Activity className="h-3.5 w-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">Watch:</span> {analysis.watchMetric}</span>
+              </div>
             </div>
           </div>
         </div>
