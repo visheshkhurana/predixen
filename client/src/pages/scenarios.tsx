@@ -32,7 +32,7 @@ import { AISummaryCard } from '@/components/AISummaryCard';
 import { DashboardKPICards } from '@/components/DashboardKPICards';
 import { ScenarioComparisonView } from '@/components/ScenarioComparisonView';
 import { TruthScanBlockedModal } from '@/components/TruthScanGate';
-import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, getBaselineSimulation } from '@/components/ScenarioDeltas';
+import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
@@ -1139,6 +1139,13 @@ export default function ScenariosPage() {
                     scenarioName={currentScenarioName}
                   />
                 </div>
+              </div>
+
+              <div className="my-4">
+                <DecisionScoreCard
+                  scenarioSimulation={simulation}
+                  baselineSimulation={baselineComparison.simulation}
+                />
               </div>
 
               <div className="space-y-2.5 mb-5">

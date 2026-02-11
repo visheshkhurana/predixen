@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowUp, ArrowDown, Minus, AlertTriangle,
   TrendingUp, TrendingDown, Timer, ArrowRight,
-  DollarSign, PieChart, Fuel, Shield
+  DollarSign, PieChart, Fuel, Shield, Target
 } from 'lucide-react';
 
 interface SimulationData {
@@ -881,4 +881,166 @@ export function getBaselineSimulation(
     simulation: baseline.latest_simulation as SimulationData,
     name: baseline.name || 'Baseline',
   };
+}
+
+interface ScoreItem {
+  label: string;
+  value: number;
+  max: number;
+  suffix: string;
+  color: string;
+  bgColor: string;
+}
+
+function computeDecisionScores(
+  scenario: SimulationData,
+  baseline: SimulationData | null
+): ScoreItem[] {
+  const survival18m = getSurvival(scenario, '18m') ?? 0;
+  const runwayP50 = scenario.runway?.p50 ?? 0;
+  const runwayP10 = scenario.runway?.p10 ?? 0;
+  const runwayP90 = scenario.runway?.p90 ?? 0;
+  const spread = runwayP90 - runwayP10;
+
+  let riskScore: number;
+  if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
+  else if (survival18m >= 80 && runwayP50 >= 14) riskScore = 8;
+  else if (survival18m >= 70 && runwayP50 >= 12) riskScore = 7;
+  else if (survival18m >= 60 && runwayP50 >= 10) riskScore = 6;
+  else if (survival18m >= 50 && runwayP50 >= 8) riskScore = 5;
+  else if (survival18m >= 40) riskScore = 4;
+  else if (survival18m >= 30) riskScore = 3;
+  else if (survival18m >= 20) riskScore = 2;
+  else riskScore = 1;
+  if (spread > 15) riskScore = Math.max(1, riskScore - 1);
+  riskScore = Math.min(10, Math.max(1, riskScore));
+
+  let rewardScore: number;
+  if (baseline) {
+    const bRevenue24 = getMetricAtMonth(baseline.metrics?.revenue, 23, 'p50');
+    const sRevenue24 = getMetricAtMonth(scenario.metrics?.revenue, 23, 'p50');
+    const revGrowthPct = bRevenue24 > 0 ? ((sRevenue24 - bRevenue24) / bRevenue24) * 100 : 0;
+    const bRunway = baseline.runway?.p50 ?? 0;
+    const runwayGain = runwayP50 - bRunway;
+
+    if (revGrowthPct > 30 && runwayGain > 3) rewardScore = 10;
+    else if (revGrowthPct > 20 || runwayGain > 5) rewardScore = 9;
+    else if (revGrowthPct > 10 || runwayGain > 3) rewardScore = 8;
+    else if (revGrowthPct > 5 || runwayGain > 1) rewardScore = 7;
+    else if (revGrowthPct > 0 || runwayGain > 0) rewardScore = 6;
+    else if (revGrowthPct > -5) rewardScore = 5;
+    else if (revGrowthPct > -15) rewardScore = 4;
+    else rewardScore = 3;
+  } else {
+    if (survival18m >= 85 && runwayP50 >= 18) rewardScore = 9;
+    else if (survival18m >= 70) rewardScore = 7;
+    else if (survival18m >= 50) rewardScore = 5;
+    else rewardScore = 3;
+  }
+  rewardScore = Math.min(10, Math.max(1, rewardScore));
+
+  let capEffScore: number;
+  const breakeven = scenario.breakEvenMonth?.p50 ?? 25;
+  if (breakeven <= 12 && runwayP50 >= 18) capEffScore = 10;
+  else if (breakeven <= 15 && runwayP50 >= 14) capEffScore = 9;
+  else if (breakeven <= 18 && runwayP50 >= 12) capEffScore = 8;
+  else if (breakeven <= 20 && runwayP50 >= 10) capEffScore = 7;
+  else if (breakeven <= 22) capEffScore = 6;
+  else if (breakeven <= 24) capEffScore = 5;
+  else capEffScore = 4;
+  if (runwayP50 >= 24) capEffScore = Math.min(10, capEffScore + 1);
+  capEffScore = Math.min(10, Math.max(1, capEffScore));
+
+  let survivalImpact: number;
+  if (baseline) {
+    const bSurvival = getSurvival(baseline, '18m') ?? 0;
+    survivalImpact = survival18m - bSurvival;
+  } else {
+    survivalImpact = survival18m - 50;
+  }
+
+  const riskColor = riskScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : riskScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+  const riskBg = riskScore >= 7 ? 'bg-emerald-500' : riskScore >= 5 ? 'bg-amber-500' : 'bg-red-500';
+  const rewardColor = rewardScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : rewardScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+  const rewardBg = rewardScore >= 7 ? 'bg-emerald-500' : rewardScore >= 5 ? 'bg-amber-500' : 'bg-red-500';
+  const capColor = capEffScore >= 7 ? 'text-emerald-600 dark:text-emerald-400' : capEffScore >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+  const capBg = capEffScore >= 7 ? 'bg-emerald-500' : capEffScore >= 5 ? 'bg-amber-500' : 'bg-red-500';
+  const survColor = survivalImpact > 5 ? 'text-emerald-600 dark:text-emerald-400' : survivalImpact >= -5 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+  const survBg = survivalImpact > 5 ? 'bg-emerald-500' : survivalImpact >= -5 ? 'bg-amber-500' : 'bg-red-500';
+
+  return [
+    { label: 'Risk', value: riskScore, max: 10, suffix: '/10', color: riskColor, bgColor: riskBg },
+    { label: 'Reward', value: rewardScore, max: 10, suffix: '/10', color: rewardColor, bgColor: rewardBg },
+    { label: 'Capital Efficiency', value: capEffScore, max: 10, suffix: '/10', color: capColor, bgColor: capBg },
+    { label: 'Survival Impact', value: Math.round(survivalImpact), max: 100, suffix: '%', color: survColor, bgColor: survBg },
+  ];
+}
+
+export function DecisionScoreCard({
+  scenarioSimulation,
+  baselineSimulation,
+}: {
+  scenarioSimulation: SimulationData;
+  baselineSimulation: SimulationData | null;
+}) {
+  const scores = useMemo(
+    () => computeDecisionScores(scenarioSimulation, baselineSimulation),
+    [scenarioSimulation, baselineSimulation]
+  );
+
+  const overallScore = Math.round(
+    (scores[0].value + scores[1].value + scores[2].value) / 3
+  );
+  const overallColor = overallScore >= 7
+    ? 'text-emerald-600 dark:text-emerald-400'
+    : overallScore >= 5
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-red-600 dark:text-red-400';
+
+  return (
+    <Card data-testid="card-decision-score">
+      <CardContent className="pt-4 pb-4 px-4">
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Decision Score
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Overall</span>
+            <span className={`text-lg font-bold font-mono ${overallColor}`} data-testid="text-overall-score">
+              {overallScore}/10
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          {scores.map((score) => (
+            <div key={score.label} data-testid={`score-${score.label.toLowerCase().replace(/\s/g, '-')}`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium">{score.label}</span>
+                <span className={`text-sm font-bold font-mono ${score.color}`}>
+                  {score.label === 'Survival Impact'
+                    ? `${score.value > 0 ? '+' : ''}${score.value}${score.suffix}`
+                    : `${score.value}${score.suffix}`
+                  }
+                </span>
+              </div>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ease-out ${score.bgColor}`}
+                  style={{
+                    width: score.label === 'Survival Impact'
+                      ? `${Math.min(100, Math.max(5, Math.abs(score.value)))}%`
+                      : `${(score.value / score.max) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
