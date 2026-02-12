@@ -144,83 +144,110 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
 
     if runway_months < 12:
         playbook.append({
+            "phase": "Phase 1: Preparation (Week 1-2)",
             "action": f"Pull a full vendor and subscription audit. List every recurring charge over $500/month. Cancel or renegotiate anything non-essential to immediate revenue generation.",
-            "owner": "Head of Finance / CEO",
-            "timeline": "Complete within 48 hours",
-            "expected_outcome": f"Identify ${vendor_target:,.0f}+ in monthly savings from vendor consolidation"
-        })
-        playbook.append({
-            "action": f"Implement an immediate hiring freeze across all departments. Convert any open requisitions to contractor-based roles with 30-day termination clauses.",
-            "owner": "CEO / Head of People",
-            "timeline": "Effective immediately",
-            "expected_outcome": f"Prevent ${burn * 0.15:,.0f}/month in new payroll commitments"
-        })
-        playbook.append({
-            "action": f"Identify your top 3 revenue-generating channels by conversion rate. Reallocate 80% of sales and marketing effort to those channels only. Pause all experimental campaigns.",
-            "owner": "Head of Sales / Head of Marketing",
-            "timeline": "By end of Week 1",
-            "expected_outcome": f"Increase pipeline efficiency and target ${revenue * 0.2:,.0f}/month in incremental revenue within 60 days"
-        })
-        playbook.append({
-            "action": f"Contact your top 10 customers and offer annual prepay discounts (15-20% off) in exchange for upfront cash. Prioritize accounts with monthly contracts over $1,000.",
-            "owner": "Head of Sales / Account Management",
-            "timeline": "Outreach complete by end of Week 2",
-            "expected_outcome": f"Generate ${cash * 0.05:,.0f}-${cash * 0.1:,.0f} in immediate cash from prepaid contracts"
-        })
-        playbook.append({
-            "action": f"Renegotiate payment terms with your 5 largest vendors to Net-60 or Net-90. Offer early payment discounts on future invoices as leverage.",
             "owner": "Head of Finance",
-            "timeline": "Negotiations initiated by end of Week 1",
-            "expected_outcome": f"Free up ${burn * 0.1:,.0f}-${burn * 0.15:,.0f} in near-term cash flow"
+            "timeline": "Week 1",
+            "definition_of_done": f"Spreadsheet of all recurring charges reviewed by CEO, with ${vendor_target:,.0f}+ in identified savings and cancellation/renegotiation initiated on each line item"
         })
         playbook.append({
-            "action": f"Schedule a board/advisor call to discuss bridge financing options. Prepare a 90-day operating plan showing path to ${burn * 0.75:,.0f}/month burn rate.",
+            "phase": "Phase 1: Preparation (Week 1-2)",
+            "action": f"Implement an immediate hiring freeze across all departments. Convert any open requisitions to contractor-based roles with 30-day termination clauses.",
             "owner": "CEO",
-            "timeline": "Within 5 business days",
-            "expected_outcome": "Secure bridge commitment or term sheet within 30 days"
+            "timeline": "Week 1",
+            "definition_of_done": f"All open job postings paused, hiring managers notified in writing, contractor templates prepared for any critical roles"
         })
         playbook.append({
+            "phase": "Phase 1: Preparation (Week 1-2)",
             "action": f"Reduce infrastructure costs by right-sizing cloud resources, eliminating unused environments, and consolidating dev/staging servers.",
             "owner": "VP Engineering / DevOps Lead",
-            "timeline": "Audit by end of Week 1, changes deployed by Week 2",
-            "expected_outcome": f"Reduce infrastructure spend by 20-30%, saving ${burn * 0.04:,.0f}-${burn * 0.06:,.0f}/month"
+            "timeline": "Week 1-2",
+            "definition_of_done": f"Infrastructure audit complete, unused resources terminated, projected savings of ${burn * 0.04:,.0f}-${burn * 0.06:,.0f}/month confirmed in next billing cycle"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Identify your top 3 revenue-generating channels by conversion rate. Reallocate 80% of sales and marketing effort to those channels only. Pause all experimental campaigns.",
+            "owner": "Head of Sales / Head of Marketing",
+            "timeline": "Week 3",
+            "definition_of_done": f"Channel performance report shared with leadership, budget reallocated, experimental campaigns paused with target of ${revenue * 0.2:,.0f}/month incremental revenue within 60 days"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Contact your top 10 customers and offer annual prepay discounts (15-20% off) in exchange for upfront cash. Prioritize accounts with monthly contracts over $1,000.",
+            "owner": "Head of Sales / Account Management",
+            "timeline": "Week 3-4",
+            "definition_of_done": f"All 10 customers contacted, at least 3 prepay proposals sent, target ${cash * 0.05:,.0f}-${cash * 0.1:,.0f} in committed upfront cash"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Renegotiate payment terms with your 5 largest vendors to Net-60 or Net-90. Offer early payment discounts on future invoices as leverage.",
+            "owner": "Head of Finance",
+            "timeline": "Week 3",
+            "definition_of_done": f"Renegotiation conversations initiated with all 5 vendors, at least 2 signed amendments in hand freeing ${burn * 0.1:,.0f}-${burn * 0.15:,.0f} in near-term cash"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Schedule a board/advisor call to discuss bridge financing options. Prepare a 90-day operating plan showing path to ${burn * 0.75:,.0f}/month burn rate.",
+            "owner": "CEO",
+            "timeline": "Week 4",
+            "definition_of_done": "Board call completed, 90-day plan presented, bridge commitment or term sheet timeline agreed upon"
+        })
+        playbook.append({
+            "phase": "Phase 3: Optimization (Week 5-8)",
+            "action": f"Track weekly burn against the new target of ${burn * 0.75:,.0f}/month. Review progress every Friday with the leadership team and adjust levers as needed.",
+            "owner": "CEO / Head of Finance",
+            "timeline": "Week 5-8",
+            "definition_of_done": f"4 consecutive weekly reviews completed, actual burn within 10% of ${burn * 0.75:,.0f}/month target, course corrections documented"
         })
     else:
         playbook.append({
-            "action": f"Map your full customer acquisition funnel with conversion rates at each stage. Identify the single biggest drop-off point and assign a dedicated team to fix it within 2 weeks.",
+            "phase": "Phase 1: Preparation (Week 1-2)",
+            "action": f"Map your full customer acquisition funnel with conversion rates at each stage. Identify the single biggest drop-off point and assign a dedicated team to fix it.",
             "owner": "Head of Growth / Head of Product",
-            "timeline": "Funnel audit by end of Week 1, fix deployed by Week 3",
-            "expected_outcome": f"Improve conversion by 15-25%, translating to ${revenue * 0.15:,.0f}-${revenue * 0.25:,.0f} incremental MRR"
+            "timeline": "Week 1-2",
+            "definition_of_done": f"Funnel analysis document with conversion rates at each stage, drop-off point identified, 2-person team assigned with a 2-week sprint to fix it"
         })
         playbook.append({
-            "action": f"Launch a pricing experiment: test a 15-20% price increase on new customers while grandfathering existing accounts. Measure impact on conversion over 30 days.",
-            "owner": "Head of Product / CEO",
-            "timeline": "Launch by end of Week 2",
-            "expected_outcome": f"If conversion holds, adds ${revenue * 0.15:,.0f}-${revenue * 0.2:,.0f}/month in revenue with zero incremental cost"
-        })
-        playbook.append({
-            "action": f"Identify your 5 highest-value customers and schedule executive-level check-ins. Understand their expansion needs and propose upsell packages.",
-            "owner": "Head of Sales / CEO",
-            "timeline": "All meetings scheduled within 10 days",
-            "expected_outcome": f"Target 20-30% expansion revenue from top accounts, adding ${revenue * 0.06:,.0f}-${revenue * 0.1:,.0f}/month"
-        })
-        playbook.append({
+            "phase": "Phase 1: Preparation (Week 1-2)",
             "action": f"Audit all non-revenue-critical engineering projects. Pause or descope any initiative that does not directly contribute to customer acquisition, retention, or monetization.",
             "owner": "VP Engineering / CTO",
-            "timeline": "Review complete by end of Week 1",
-            "expected_outcome": "Redirect 30-40% of engineering capacity toward revenue-driving features"
+            "timeline": "Week 1",
+            "definition_of_done": "Project inventory reviewed, non-critical projects paused or descoped, 30-40% of engineering capacity redirected to revenue-driving features"
         })
         playbook.append({
-            "action": f"Build a 6-month financial model with three scenarios (base, optimistic, downside). Present to the board with specific asks for each scenario.",
-            "owner": "CEO / Head of Finance",
-            "timeline": "Complete by end of Week 3",
-            "expected_outcome": "Align board on strategy, secure pre-commitment for follow-on if needed"
-        })
-        playbook.append({
+            "phase": "Phase 1: Preparation (Week 1-2)",
             "action": f"Set up weekly cash flow monitoring with a dashboard visible to the leadership team. Track actual vs. projected burn every Friday.",
             "owner": "Head of Finance",
-            "timeline": "Operational by end of Week 1",
-            "expected_outcome": "Early detection of burn rate deviations, enabling faster course corrections"
+            "timeline": "Week 1",
+            "definition_of_done": "Dashboard live and shared with leadership team, first weekly review completed with actual vs. projected comparison"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Launch a pricing experiment: test a 15-20% price increase on new customers while grandfathering existing accounts. Measure impact on conversion over 30 days.",
+            "owner": "Head of Product / CEO",
+            "timeline": "Week 3",
+            "definition_of_done": f"New pricing live for new signups, A/B test instrumented, 30-day measurement window started with target of ${revenue * 0.15:,.0f}-${revenue * 0.2:,.0f}/month incremental revenue if conversion holds"
+        })
+        playbook.append({
+            "phase": "Phase 2: Execution (Week 3-4)",
+            "action": f"Identify your 5 highest-value customers and schedule executive-level check-ins. Understand their expansion needs and propose upsell packages.",
+            "owner": "Head of Sales / CEO",
+            "timeline": "Week 3-4",
+            "definition_of_done": f"All 5 meetings completed, expansion proposals sent to at least 3 accounts, target ${revenue * 0.06:,.0f}-${revenue * 0.1:,.0f}/month in expansion revenue"
+        })
+        playbook.append({
+            "phase": "Phase 3: Optimization (Week 5-8)",
+            "action": f"Build a 6-month financial model with three scenarios (base, optimistic, downside). Present to the board with specific asks for each scenario.",
+            "owner": "CEO / Head of Finance",
+            "timeline": "Week 5-6",
+            "definition_of_done": "Model complete with all three scenarios, board presentation delivered, strategic alignment confirmed and next steps agreed"
+        })
+        playbook.append({
+            "phase": "Phase 3: Optimization (Week 5-8)",
+            "action": f"Review funnel fix results and pricing experiment data. Double down on what worked, kill what didn't. Set revised growth targets for the next quarter.",
+            "owner": "Head of Growth / CEO",
+            "timeline": "Week 7-8",
+            "definition_of_done": f"Results report shared with leadership, revised quarterly growth targets set, resource allocation updated based on experiment outcomes"
         })
 
     return playbook
@@ -331,9 +358,9 @@ Respond in valid JSON with this exact structure:
 {
   "situation_narrative": "A 3-5 sentence paragraph in plain English describing the company's current financial state. Use specific numbers from the data (MRR, burn rate, runway, growth rate). Example tone: 'TechFlow Analytics is currently burning $143K/month against $15.4K in MRR. At this rate, you have approximately 2.9 months of runway remaining. Revenue growth has stalled at 0%, which means the gap between what you earn and what you spend is not closing. This puts you in a critical position where decisive action in the next 2-4 weeks will significantly impact your outcomes.'",
   "recommendation_headline": "A bold, specific action statement — e.g. 'Cut Monthly Burn by 30% and Launch Emergency Revenue Sprint'",
-  "recommendation_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS of written reasoning — NOT a one-liner like 'Raise capital in Q1'. Write as if you are sitting across the table from the founder advising them in person. Paragraph 1: Explain WHY this specific action is the highest-leverage move right now. Reference their exact revenue, burn, and runway numbers. What makes this the right play versus alternatives? Paragraph 2: Explain what happens if the founder waits — quantify the cost of delay using their burn rate (e.g., 'Every week you wait costs $X and reduces your negotiating leverage'). Describe the trade-offs honestly: what gets sacrificed, what risks are introduced, and why the trade-off is still worth it. Paragraph 3 (optional): Describe the mechanics — what specifically to do first, who to talk to, what to deprioritize. Separate paragraphs with double newlines.",
+  "recommendation_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS of written reasoning — NOT a one-liner like 'Raise capital in Q1 to extend runway'. Write as if you are a senior advisor sitting across the table from the founder. Paragraph 1 (WHY THIS ACTION): Explain WHY this specific action is the highest-leverage move right now. Reference their exact revenue, burn, and runway numbers. What makes this the right play versus alternatives like cutting costs, raising a bridge, or pivoting? Be specific about what you considered and rejected. Paragraph 2 (WHY NOW / COST OF DELAY): Explain what happens if the founder waits — quantify the cost of delay using their burn rate (e.g., 'Every week you wait costs $X and reduces your negotiating leverage'). Describe the trade-offs honestly: what gets sacrificed, what risks are introduced, and why the trade-off is still worth it. Be concrete about the narrowing window. Paragraph 3 (MECHANICS): Describe the mechanics — what specifically to do first, who to talk to, what to deprioritize. This paragraph should read like the opening move of a chess game: precise and sequenced. Separate paragraphs with double newlines (\\n\\n).",
   "urgency_text": "A specific, time-bound urgency statement using the company's data — e.g. 'Act within the next 2 weeks. At your current burn of $X/month, each day of inaction costs $Y and your fundraising window closes by [date].' or 'This decision becomes materially less effective after 30 days because [specific reason].'",
-  "inaction_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS painting a vivid, specific picture of what happens if the founder does nothing. Paragraph 1: State the math plainly — 'If no action is taken, at your current burn rate of $X/month, runway will be exhausted by [specific month/year]. Revenue would need to grow by Y% month-over-month to reach break-even, which is significantly above your current trajectory of Z%.' Paragraph 2: Describe the cascade of consequences — when does the crisis become visible to employees, when do fundraising options narrow, when does the company lose leverage with investors/customers/partners? Use specific timeline markers. Paragraph 3 (optional): Describe the end state — forced fire sale, down round at punitive terms, talent exodus, etc. Make it concrete, not abstract. Separate paragraphs with double newlines.",
+  "inaction_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS painting a vivid, specific picture of what happens if the founder does nothing. Paragraph 1: State the math plainly — 'If no action is taken, at your current burn rate of $X/month, runway will be exhausted by [specific month/year]. Revenue would need to grow by Y% month-over-month to reach break-even, which is significantly above your current trajectory of Z%.' Paragraph 2: Describe the cascade of consequences — when does the crisis become visible to employees, when do fundraising options narrow, when does the company lose leverage with investors/customers/partners? Use specific timeline markers. Paragraph 3 (optional): Describe the end state — forced fire sale, down round at punitive terms, talent exodus, etc. Make it concrete, not abstract. Separate paragraphs with double newlines (\\n\\n).",
   "company_stage_label": "One of: Pre-Revenue, Early Revenue, Growth, Scale, or Distressed",
   "health_score": 1-100,
   "health_label": "One of: Critical, Concerning, Stable, Healthy, Strong",
@@ -346,10 +373,11 @@ Respond in valid JSON with this exact structure:
   },
   "execution_playbook": [
     {
-      "action": "A specific, concrete instruction written as a clear directive — e.g. 'Audit all vendor contracts over $500/month and renegotiate or cancel within 7 days'",
-      "owner": "The role responsible — e.g. 'CEO', 'Head of Finance', 'VP Engineering', 'Founder'",
-      "timeline": "A specific deadline — e.g. 'By end of Week 1', 'Within 48 hours', 'Complete by March 15'",
-      "expected_outcome": "The quantified result — e.g. 'Reduce monthly vendor spend by $8K-$12K', 'Add $15K MRR within 60 days'"
+      "phase": "Phase name — one of: 'Phase 1: Preparation (Week 1-2)', 'Phase 2: Execution (Week 3-4)', 'Phase 3: Optimization (Week 5-8)'",
+      "action": "A specific, concrete instruction written as a clear directive — e.g. 'Update the pitch deck to include Q4 metrics and a clear use-of-funds breakdown'",
+      "owner": "The role responsible — e.g. 'CEO', 'Head of Finance', 'CTO', 'VP Engineering'",
+      "timeline": "A specific deadline within the phase — e.g. 'Week 1', 'By end of Week 2', 'Within 48 hours'",
+      "definition_of_done": "What 'complete' looks like — a clear, verifiable condition. e.g. 'Deck sent to 5 target investors with follow-up meetings scheduled', 'Vendor list reviewed and 3+ contracts renegotiated with signed amendments'"
     }
   ],
   "top_3_priorities": [
@@ -362,7 +390,11 @@ Respond in valid JSON with this exact structure:
   "blind_spots": ["2-3 things the founder probably isn't thinking about"]
 }
 
-CRITICAL INSTRUCTION FOR execution_playbook: Generate 5-8 SPECIFIC action items that the founder can forward directly to their team. Each action must be a clear instruction — not vague advice like 'improve sales'. Write them as if you are handing a to-do list to an operator. Use the company's actual numbers to set targets. Order them by urgency (most urgent first). The playbook should be so specific that a team member could execute it without asking clarifying questions."""
+CRITICAL INSTRUCTION FOR execution_playbook: Generate 6-10 SPECIFIC action items that the founder can forward directly to their team. Group them into phases:
+- Phase 1: Preparation (Week 1-2) — what to get ready, audits, analysis, team alignment
+- Phase 2: Execution (Week 3-4) — the core actions, launches, negotiations, outreach
+- Phase 3: Optimization (Week 5-8) — measure results, iterate, course-correct
+Each action must be a clear instruction — not vague advice like 'improve sales'. Write them as if you are handing a to-do list to an operator. Use the company's actual numbers to set targets. The playbook should be so specific that a team member could execute it without asking clarifying questions. Each item MUST include a 'definition_of_done' field describing the verifiable completion criteria."""
     
     try:
         from server.lib.llm.llm_router import get_llm_router, TaskType

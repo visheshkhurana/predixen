@@ -131,7 +131,7 @@ export default function DecisionsPage() {
   const urgencyText = diagnosisData?.urgency_text || null;
   const inactionNarrative = diagnosisData?.inaction_narrative || null;
   const inactionProjection = diagnosisData?.inaction_projection || null;
-  const executionPlaybook: Array<{action: string; owner: string; timeline: string; expected_outcome: string}> | null = diagnosisData?.execution_playbook || null;
+  const executionPlaybook: Array<{phase?: string; action: string; owner: string; timeline: string; definition_of_done?: string; expected_outcome?: string}> | null = diagnosisData?.execution_playbook || null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto" data-testid="page-decisions">
@@ -341,7 +341,7 @@ export default function DecisionsPage() {
                 Execution Playbook
               </h2>
               <p className="text-xs text-muted-foreground mb-6">
-                Forward this to your team. Each item is a specific action with an owner, deadline, and expected result.
+                Forward this to your team. Each item is a specific action with an owner, deadline, and definition of done.
               </p>
               {isAnalyzing ? (
                 <div className="space-y-6">
@@ -357,42 +357,125 @@ export default function DecisionsPage() {
                   ))}
                 </div>
               ) : executionPlaybook && executionPlaybook.length > 0 ? (
-                <ol className="space-y-6 list-none p-0 m-0">
-                  {executionPlaybook.map((item, i) => {
-                    const action = item?.action || item?.description || '';
-                    const owner = item?.owner || item?.responsible || 'Team Lead';
-                    const timeline = item?.timeline || item?.deadline || 'This week';
-                    const outcome = item?.expected_outcome || item?.outcome || item?.impact || '';
-                    if (!action) return null;
+                (() => {
+                  const hasPhases = executionPlaybook.some(item => item?.phase);
+                  if (hasPhases) {
+                    const phases: Record<string, typeof executionPlaybook> = {};
+                    const phaseOrder: string[] = [];
+                    executionPlaybook.forEach(item => {
+                      const phase = item?.phase || 'Actions';
+                      if (!phases[phase]) {
+                        phases[phase] = [];
+                        phaseOrder.push(phase);
+                      }
+                      phases[phase].push(item);
+                    });
+                    let globalIndex = 0;
+                    const phaseSort = (a: string, b: string) => {
+                      const num = (s: string) => { const m = s.match(/Phase\s*(\d+)/i); return m ? parseInt(m[1]) : 99; };
+                      return num(a) - num(b);
+                    };
+                    phaseOrder.sort(phaseSort);
                     return (
-                      <li
-                        key={i}
-                        className="relative pl-8"
-                        data-testid={`playbook-item-${i}`}
-                      >
-                        <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
-                          {i + 1}.
-                        </span>
-                        <p className="text-sm font-medium text-foreground leading-relaxed mb-2">
-                          {action}
-                        </p>
-                        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
-                          <span data-testid={`playbook-owner-${i}`}>
-                            <span className="font-medium text-foreground/70">Owner:</span> {owner}
-                          </span>
-                          <span data-testid={`playbook-timeline-${i}`}>
-                            <span className="font-medium text-foreground/70">Deadline:</span> {timeline}
-                          </span>
-                        </div>
-                        {outcome && (
-                          <p className="text-xs text-muted-foreground italic" data-testid={`playbook-outcome-${i}`}>
-                            Expected outcome: {outcome}
-                          </p>
-                        )}
-                      </li>
+                      <div className="space-y-8">
+                        {phaseOrder.map((phase, phaseIdx) => (
+                          <div key={phase} data-testid={`playbook-phase-${phaseIdx}`}>
+                            <h3 className="text-sm font-semibold text-foreground mb-4 tracking-tight">
+                              {phase}
+                            </h3>
+                            <ol className="space-y-5 list-none p-0 m-0">
+                              {phases[phase].map((item) => {
+                                const idx = globalIndex++;
+                                const action = (item as any)?.action || (item as any)?.description || '';
+                                const owner = (item as any)?.owner || (item as any)?.responsible || 'Team Lead';
+                                const timeline = (item as any)?.timeline || (item as any)?.deadline || 'This week';
+                                const dod = (item as any)?.definition_of_done || '';
+                                const outcome = (item as any)?.expected_outcome || (item as any)?.outcome || '';
+                                if (!action) return null;
+                                return (
+                                  <li
+                                    key={idx}
+                                    className="relative pl-8"
+                                    data-testid={`playbook-item-${idx}`}
+                                  >
+                                    <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
+                                      {idx + 1}.
+                                    </span>
+                                    <p className="text-sm font-medium text-foreground leading-relaxed mb-2">
+                                      {action}
+                                    </p>
+                                    <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
+                                      <span data-testid={`playbook-owner-${idx}`}>
+                                        <span className="font-medium text-foreground/70">Owner:</span> {owner}
+                                      </span>
+                                      <span data-testid={`playbook-timeline-${idx}`}>
+                                        <span className="font-medium text-foreground/70">Timeline:</span> {timeline}
+                                      </span>
+                                    </div>
+                                    {dod && (
+                                      <p className="text-xs text-muted-foreground mt-1" data-testid={`playbook-dod-${idx}`}>
+                                        <span className="font-medium text-foreground/70">Done when:</span> {dod}
+                                      </p>
+                                    )}
+                                    {!dod && outcome && (
+                                      <p className="text-xs text-muted-foreground italic mt-1" data-testid={`playbook-outcome-${idx}`}>
+                                        Expected outcome: {outcome}
+                                      </p>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          </div>
+                        ))}
+                      </div>
                     );
-                  })}
-                </ol>
+                  }
+                  return (
+                    <ol className="space-y-6 list-none p-0 m-0">
+                      {executionPlaybook.map((item, i) => {
+                        const action = (item as any)?.action || (item as any)?.description || '';
+                        const owner = (item as any)?.owner || (item as any)?.responsible || 'Team Lead';
+                        const timeline = (item as any)?.timeline || (item as any)?.deadline || 'This week';
+                        const dod = (item as any)?.definition_of_done || '';
+                        const outcome = (item as any)?.expected_outcome || (item as any)?.outcome || '';
+                        if (!action) return null;
+                        return (
+                          <li
+                            key={i}
+                            className="relative pl-8"
+                            data-testid={`playbook-item-${i}`}
+                          >
+                            <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
+                              {i + 1}.
+                            </span>
+                            <p className="text-sm font-medium text-foreground leading-relaxed mb-2">
+                              {action}
+                            </p>
+                            <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
+                              <span data-testid={`playbook-owner-${i}`}>
+                                <span className="font-medium text-foreground/70">Owner:</span> {owner}
+                              </span>
+                              <span data-testid={`playbook-timeline-${i}`}>
+                                <span className="font-medium text-foreground/70">Timeline:</span> {timeline}
+                              </span>
+                            </div>
+                            {dod && (
+                              <p className="text-xs text-muted-foreground mt-1" data-testid={`playbook-dod-${i}`}>
+                                <span className="font-medium text-foreground/70">Done when:</span> {dod}
+                              </p>
+                            )}
+                            {!dod && outcome && (
+                              <p className="text-xs text-muted-foreground italic mt-1" data-testid={`playbook-outcome-${i}`}>
+                                Expected outcome: {outcome}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  );
+                })()
               ) : null}
             </section>
           )}
