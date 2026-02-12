@@ -35,10 +35,12 @@ export default function DecisionsPage() {
     data: diagnosisData,
     isLoading: isDiagnosisLoading,
     isError: diagnosisError,
-    refetch: refetchDiagnosis,
+    refetch: refetchDiagnosisQuery,
   } = useStrategicDiagnosisQuery(currentCompany?.id || null, true);
 
-  console.error('[DIAG-DEBUG] companyId:', currentCompany?.id, 'diagnosisData:', !!diagnosisData, 'isLoading:', isDiagnosisLoading, 'isError:', diagnosisError);
+  const refetchDiagnosis = () => {
+    refetchDiagnosisQuery();
+  };
 
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
@@ -59,7 +61,7 @@ export default function DecisionsPage() {
       await generateDecisionsMutation.mutateAsync(simResult.id);
 
       await refetch();
-      queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id, 'strategic-diagnosis'] });
+      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', currentCompany.id] });
       setCurrentStep('decision');
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
@@ -79,8 +81,6 @@ export default function DecisionsPage() {
   };
 
   const handleRefreshDiagnosis = () => {
-    if (!currentCompany) return;
-    queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id, 'strategic-diagnosis'] });
     refetchDiagnosis();
   };
 
