@@ -202,6 +202,7 @@ export function useStrategicDiagnosisQuery(companyId: number | null, enabled: bo
     retry: 1,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchOnMount: 'always',
   });
 }
 
