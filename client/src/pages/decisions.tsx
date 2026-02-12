@@ -36,7 +36,7 @@ export default function DecisionsPage() {
     isLoading: isDiagnosisLoading,
     isError: diagnosisError,
     refetch: refetchDiagnosisQuery,
-  } = useStrategicDiagnosisQuery(currentCompany?.id || null, true);
+  } = useStrategicDiagnosisQuery(currentCompany?.id || null, !!currentCompany?.id);
 
   const refetchDiagnosis = () => {
     refetchDiagnosisQuery();
@@ -105,6 +105,7 @@ export default function DecisionsPage() {
   const inactionNarrative = diagnosisData?.inaction_narrative || null;
   const inactionProjection = diagnosisData?.inaction_projection || null;
   const executionPlaybook: Array<{phase?: string; action: string; owner: string; timeline: string; definition_of_done?: string; expected_outcome?: string}> | null = diagnosisData?.execution_playbook || null;
+  const keyRisks: Array<{risk: string; likelihood: string; impact: string; contingency: string}> | null = diagnosisData?.key_risks || null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto" data-testid="page-decisions">
@@ -449,6 +450,69 @@ export default function DecisionsPage() {
                     </ol>
                   );
                 })()
+              ) : null}
+            </section>
+          )}
+
+          {(keyRisks || isAnalyzing) && (
+            <section data-testid="section-key-risks">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-5-title">
+                Key Risks & Contingency Plans
+              </h2>
+              <p className="text-xs text-muted-foreground mb-6">
+                The most significant risks facing your company, with specific action plans if they materialize.
+              </p>
+              {isAnalyzing ? (
+                <div className="space-y-6">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                  ))}
+                </div>
+              ) : keyRisks && keyRisks.length > 0 ? (
+                <ol className="space-y-6 list-none p-0 m-0">
+                  {keyRisks.map((item, i) => {
+                    const risk = item?.risk || '';
+                    const likelihood = item?.likelihood || '';
+                    const impact = item?.impact || '';
+                    const contingency = item?.contingency || '';
+                    if (!risk) return null;
+                    return (
+                      <li
+                        key={i}
+                        className="relative pl-8"
+                        data-testid={`risk-item-${i}`}
+                      >
+                        <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
+                          {i + 1}.
+                        </span>
+                        <p className="text-sm font-medium text-foreground leading-relaxed mb-1">
+                          {risk}
+                        </p>
+                        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
+                          {likelihood && (
+                            <span data-testid={`risk-likelihood-${i}`}>
+                              <span className="font-medium text-foreground/70">Likelihood:</span> {likelihood}
+                            </span>
+                          )}
+                        </div>
+                        {impact && (
+                          <p className="text-xs text-muted-foreground mb-1" data-testid={`risk-impact-${i}`}>
+                            <span className="font-medium text-foreground/70">Impact:</span> {impact}
+                          </p>
+                        )}
+                        {contingency && (
+                          <p className="text-xs text-muted-foreground" data-testid={`risk-contingency-${i}`}>
+                            <span className="font-medium text-foreground/70">Contingency:</span> {contingency}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
               ) : null}
             </section>
           )}

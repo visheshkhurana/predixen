@@ -138,6 +138,45 @@ def generate_decisions(
         "recommendations": recommendations
     }
 
+def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth):
+    risks = []
+    if runway_months < 12:
+        risks.append({
+            "risk": f"Cash exhaustion: At ${net_burn:,.0f}/month net burn, runway is approximately {runway_months:.0f} months",
+            "likelihood": "High" if runway_months < 6 else "Medium",
+            "impact": f"Company becomes insolvent and unable to meet payroll or vendor obligations within {runway_months:.0f} months",
+            "contingency": f"Trigger emergency cost reduction plan targeting 25% burn reduction (${burn * 0.25:,.0f}/month savings). Simultaneously initiate bridge financing conversations with existing investors. Target: extend runway by {runway_months * 0.25 / (1 - 0.25):.0f}+ months."
+        })
+    if revenue > 0 and growth <= 5:
+        risks.append({
+            "risk": f"Revenue stagnation: MoM growth is {growth:.1f}%, insufficient to reach break-even",
+            "likelihood": "High" if growth <= 0 else "Medium",
+            "impact": f"Without accelerating growth above {((burn / revenue) - 1) * 100:.0f}% MoM, the company cannot self-sustain and remains fully dependent on external capital",
+            "contingency": f"Reassign 50% of engineering capacity to revenue-driving features. Launch pricing experiment (15-20% increase for new customers). Target 3 high-value upsell conversations per week with existing accounts."
+        })
+    risks.append({
+        "risk": "Key person dependency: Critical knowledge concentrated in 1-2 team members",
+        "likelihood": "Medium",
+        "impact": "Loss of a key contributor delays product roadmap by 2-3 months and disrupts customer relationships",
+        "contingency": "Document critical processes within 2 weeks. Cross-train at least one backup for each critical function. Implement retention packages for top 3 most critical team members."
+    })
+    if burn > 0 and revenue > 0:
+        concentration_risk = min(revenue * 0.4, burn * 0.3)
+        risks.append({
+            "risk": f"Customer concentration: Losing a top account could eliminate ${concentration_risk:,.0f}+/month in revenue",
+            "likelihood": "Medium",
+            "impact": f"Revenue drops by 30-40%, triggering immediate cash crisis and reducing runway by {max(1, int(runway_months * 0.3)):.0f}+ months",
+            "contingency": f"Diversify pipeline: target 5+ new accounts per quarter. Implement quarterly business reviews with top 5 accounts. Build contractual protections (annual commitments, 90-day notice periods)."
+        })
+    risks.append({
+        "risk": "Market timing: Fundraising conditions may deteriorate before next round",
+        "likelihood": "Medium",
+        "impact": "Available capital decreases, valuations compress, and terms become more investor-favorable",
+        "contingency": "Begin investor outreach 6 months before cash need (not 3). Maintain a warm pipeline of 15+ investors. Prepare a 'Plan B' operating model that reaches cash-flow breakeven without additional funding."
+    })
+    return risks[:5]
+
+
 def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn):
     vendor_target = burn * 0.08
     playbook = []
@@ -392,8 +431,18 @@ Respond in valid JSON with this exact structure:
       "expected_impact": "Quantified expected outcome"
     }
   ],
-  "blind_spots": ["2-3 things the founder probably isn't thinking about"]
+  "blind_spots": ["2-3 things the founder probably isn't thinking about"],
+  "key_risks": [
+    {
+      "risk": "A specific, concrete risk the company faces — e.g. 'Customer concentration: top 3 accounts represent 60%+ of revenue'",
+      "likelihood": "High, Medium, or Low",
+      "impact": "One sentence describing the severity if this risk materializes — e.g. 'Revenue drops 40% within one quarter, triggering a cash crisis'",
+      "contingency": "A specific action plan if this risk materializes — e.g. 'Immediately activate pipeline of 10 warm leads, offer 20% discount for annual prepay, and cut discretionary spend by $15K/month'"
+    }
+  ]
 }
+
+CRITICAL INSTRUCTION FOR key_risks: Generate 3-5 specific risks with concrete contingency plans. Each risk should be data-driven and reference the company's actual metrics. Each contingency should be a specific, executable action — not vague advice like 'diversify revenue'. Write contingencies as if you are handing an emergency playbook to an operator.
 
 CRITICAL INSTRUCTION FOR execution_playbook: Generate 6-10 SPECIFIC action items that the founder can forward directly to their team. Group them into phases:
 - Phase 1: Preparation (Week 1-2) — what to get ready, audits, analysis, team alignment
@@ -488,6 +537,7 @@ Each action must be a clear instruction — not vague advice like 'improve sales
                 "Team capacity constraints that could limit growth execution",
                 "Market timing risk as conditions may shift"
             ],
+            "key_risks": _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth),
             "company_name": company.name,
             "generated_at": datetime.utcnow().isoformat(),
             "model_used": "fallback",
