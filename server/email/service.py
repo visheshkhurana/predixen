@@ -106,10 +106,8 @@ def get_from_email() -> str:
 
 def get_transactional_from_email() -> str:
     """Get the transactional from email address for user-triggered emails (invites, shares, resets)."""
-    creds = get_resend_credentials()
-    configured = creds.get("from_email") if creds else None
     env_override = os.getenv("RESEND_TRANSACTIONAL_FROM")
-    return env_override or configured or "Predixen <notifications@predixen.app>"
+    return env_override or "Predixen <breifing@updates.predixen.me>"
 
 
 def is_email_configured() -> bool:
