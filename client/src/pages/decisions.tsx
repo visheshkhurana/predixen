@@ -36,10 +36,18 @@ export default function DecisionsPage() {
     }
   }, [currentCompany]);
 
+  const [diagnosisError, setDiagnosisError] = useState(false);
+
   useEffect(() => {
-    if (currentCompany && rawRecommendations.length > 0 && !diagnosisData && !strategicDiagnosisMutation.isPending) {
+    if (currentCompany && rawRecommendations.length > 0 && !diagnosisData && !diagnosisError && !strategicDiagnosisMutation.isPending) {
       strategicDiagnosisMutation.mutate(currentCompany.id, {
-        onSuccess: (data) => setDiagnosisData(data),
+        onSuccess: (data) => {
+          setDiagnosisData(data);
+          setDiagnosisError(false);
+        },
+        onError: () => {
+          setDiagnosisError(true);
+        },
       });
     }
   }, [currentCompany, rawRecommendations.length]);
@@ -62,8 +70,13 @@ export default function DecisionsPage() {
       const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
       await generateDecisionsMutation.mutateAsync(simResult.id);
 
+      setDiagnosisError(false);
       strategicDiagnosisMutation.mutate(currentCompany.id, {
-        onSuccess: (data) => setDiagnosisData(data),
+        onSuccess: (data) => {
+          setDiagnosisData(data);
+          setDiagnosisError(false);
+        },
+        onError: () => setDiagnosisError(true),
       });
 
       await refetch();
@@ -87,8 +100,13 @@ export default function DecisionsPage() {
 
   const handleRefreshDiagnosis = () => {
     if (!currentCompany) return;
+    setDiagnosisError(false);
     strategicDiagnosisMutation.mutate(currentCompany.id, {
-      onSuccess: (data) => setDiagnosisData(data),
+      onSuccess: (data) => {
+        setDiagnosisData(data);
+        setDiagnosisError(false);
+      },
+      onError: () => setDiagnosisError(true),
     });
   };
 
@@ -196,6 +214,22 @@ export default function DecisionsPage() {
         </div>
       ) : hasBriefing ? (
         <article className="space-y-10" data-testid="article-briefing">
+
+          {diagnosisError && !isAnalyzing && !diagnosisData && (
+            <div className="text-center py-8" data-testid="section-diagnosis-error">
+              <p className="text-sm text-muted-foreground mb-4">
+                The strategic analysis could not be loaded. Click below to try again.
+              </p>
+              <Button
+                variant="outline"
+                onClick={handleRefreshDiagnosis}
+                data-testid="button-retry-diagnosis"
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                Retry Analysis
+              </Button>
+            </div>
+          )}
 
           {(situationNarrative || isAnalyzing) && (
             <section data-testid="section-situation">
