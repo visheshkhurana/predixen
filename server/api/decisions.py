@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid as uuid_lib
 import logging
 
@@ -213,15 +213,25 @@ Data Confidence: {confidence}%"""
     if survival_prob is not None:
         company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
     
+    net_burn = burn - revenue
+    months_to_zero = cash / net_burn if net_burn > 0 else 99
+    exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"
+    breakeven_growth_needed = ((burn / revenue) - 1) * 100 if revenue > 0 else 0
+
+    company_context += f"\nNet Monthly Burn (burn minus revenue): ${net_burn:,.0f}"
+    company_context += f"\nProjected Cash Exhaustion: {exhaustion_date}"
+    if revenue > 0:
+        company_context += f"\nMoM Growth Needed to Reach Break-Even: {breakeven_growth_needed:.1f}%"
+
     system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You write brutally honest, data-backed strategic briefing memos for startup founders. Write in plain prose — no bullet points, no dashboards, no charts. This is a document the founder will read top-to-bottom and forward to their team.
 
 Respond in valid JSON with this exact structure:
 {
   "situation_narrative": "A 3-5 sentence paragraph in plain English describing the company's current financial state. Use specific numbers from the data (MRR, burn rate, runway, growth rate). Example tone: 'TechFlow Analytics is currently burning $143K/month against $15.4K in MRR. At this rate, you have approximately 2.9 months of runway remaining. Revenue growth has stalled at 0%, which means the gap between what you earn and what you spend is not closing. This puts you in a critical position where decisive action in the next 2-4 weeks will significantly impact your outcomes.'",
   "recommendation_headline": "A bold, specific action statement — e.g. 'Cut Monthly Burn by 30% and Launch Emergency Revenue Sprint'",
-  "recommendation_narrative": "2-3 paragraphs of WRITTEN RATIONALE. Not a one-liner. Explain WHY this action, WHY now, what happens if the founder waits, and what the trade-offs are. Use the company's specific numbers. Write as if you are advising a founder in person. Be specific about the mechanics — what to cut, who to talk to, what to prioritize.",
-  "urgency_text": "A plain-English urgency statement — e.g. 'Act within the next 2 weeks' or 'This decision becomes less effective after 30 days'",
-  "inaction_narrative": "A 2-3 paragraph written projection of what happens if the founder does nothing. Paint the specific picture: when cash runs out, what triggers the crisis, what options disappear. Use real numbers. Write it as a cautionary narrative, not a data table.",
+  "recommendation_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS of written reasoning — NOT a one-liner like 'Raise capital in Q1'. Write as if you are sitting across the table from the founder advising them in person. Paragraph 1: Explain WHY this specific action is the highest-leverage move right now. Reference their exact revenue, burn, and runway numbers. What makes this the right play versus alternatives? Paragraph 2: Explain what happens if the founder waits — quantify the cost of delay using their burn rate (e.g., 'Every week you wait costs $X and reduces your negotiating leverage'). Describe the trade-offs honestly: what gets sacrificed, what risks are introduced, and why the trade-off is still worth it. Paragraph 3 (optional): Describe the mechanics — what specifically to do first, who to talk to, what to deprioritize. Separate paragraphs with double newlines.",
+  "urgency_text": "A specific, time-bound urgency statement using the company's data — e.g. 'Act within the next 2 weeks. At your current burn of $X/month, each day of inaction costs $Y and your fundraising window closes by [date].' or 'This decision becomes materially less effective after 30 days because [specific reason].'",
+  "inaction_narrative": "CRITICAL: This must be 2-3 FULL PARAGRAPHS painting a vivid, specific picture of what happens if the founder does nothing. Paragraph 1: State the math plainly — 'If no action is taken, at your current burn rate of $X/month, runway will be exhausted by [specific month/year]. Revenue would need to grow by Y% month-over-month to reach break-even, which is significantly above your current trajectory of Z%.' Paragraph 2: Describe the cascade of consequences — when does the crisis become visible to employees, when do fundraising options narrow, when does the company lose leverage with investors/customers/partners? Use specific timeline markers. Paragraph 3 (optional): Describe the end state — forced fire sale, down round at punitive terms, talent exodus, etc. Make it concrete, not abstract. Separate paragraphs with double newlines.",
   "company_stage_label": "One of: Pre-Revenue, Early Revenue, Growth, Scale, or Distressed",
   "health_score": 1-100,
   "health_label": "One of: Critical, Concerning, Stable, Healthy, Strong",
@@ -277,12 +287,35 @@ Respond in valid JSON with this exact structure:
         logger.error(f"Strategic diagnosis failed: {traceback.format_exc()}")
         growth_text = "Revenue growth is positive, which is encouraging, but it is not yet enough to close the gap between what you earn and what you spend." if growth > 0 else f"Revenue growth is at {growth:.1f}%, which means the gap between what you earn and what you spend is not closing."
         crisis_months = max(1, int(runway_months - 2))
+        daily_burn = burn / 30
+        weekly_burn = burn / 4
+        cash_at_crisis = max(0, cash - burn * crisis_months)
+        be_growth_text = f" Revenue would need to grow by {breakeven_growth_needed:.0f}% month-over-month to reach break-even, which is significantly above your current trajectory of {growth:.1f}%." if revenue > 0 and breakeven_growth_needed > 0 else ""
+
+        if runway_months < 12:
+            rec_headline = "Cut Monthly Burn by 25% and Launch an Emergency Revenue Sprint"
+            rec_p1 = f"Your most urgent priority is survival. With ${cash:,.0f} in the bank and a net monthly burn of ${net_burn:,.0f}, you have roughly {runway_months:.0f} months before cash runs out. The single highest-leverage action right now is to reduce burn immediately. This means auditing every vendor contract, pausing all non-essential hiring, consolidating overlapping tools, and renegotiating payment terms where possible. A 25% burn reduction would extend your runway by approximately {runway_months * 0.25 / (1 - 0.25):.0f} months — time that could mean the difference between a strong fundraise and a fire sale."
+            rec_p2 = f"If you wait even 30 days to act, you will have consumed another ${burn:,.0f}, and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development and strain team morale. But the alternative — running out of cash entirely — eliminates all options. Every week of delay costs you ${weekly_burn:,.0f} and makes each subsequent decision more constrained."
+            rec_p3 = f"Start this week. Pull your team leads into a room, lay out the numbers, and identify the three largest non-essential cost lines. Simultaneously, identify your highest-conversion revenue channels and double down on them. The goal is not just to cut — it is to buy yourself the runway to execute a focused revenue sprint that changes the trajectory."
+            rec_narrative = f"{rec_p1}\n\n{rec_p2}\n\n{rec_p3}"
+        else:
+            rec_headline = "Accelerate Revenue Growth While Maintaining Capital Efficiency"
+            rec_p1 = f"With {runway_months:.0f} months of runway and ${cash:,.0f} in reserves, you are not in immediate danger — but you are also not in a position of strength. Your current revenue of ${revenue:,.0f}/month growing at {growth:.1f}% is not on a trajectory to reach profitability before your cash runs out. The highest-leverage move right now is to accelerate revenue growth while keeping burn flat. This means reallocating resources from infrastructure and internal tooling toward direct revenue-generating activities."
+            rec_p2 = f"The trade-off is clear: investing aggressively in growth now means accepting some short-term inefficiency, but the compounding effect of even a few additional percentage points of monthly growth will dramatically extend your effective runway and strengthen your position for future fundraising. If you wait 2-3 months to make this shift, you will have spent ${burn * 2.5:,.0f} without meaningfully changing your trajectory, and your fundraising window will be narrower."
+            rec_narrative = f"{rec_p1}\n\n{rec_p2}"
+
+        urgency = f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. At your current burn of ${burn:,.0f}/month, each day of inaction costs ${daily_burn:,.0f}. {'Your fundraising window effectively closes when you drop below 3 months of runway, which happens in approximately ' + f'{max(1, int(runway_months - 3)):.0f}' + ' months.' if runway_months < 12 else 'This decision becomes materially less effective after 60 days as your runway shortens and fundraising leverage decreases.'}"
+
+        inaction_p1 = f"If no action is taken, at your current burn rate of ${burn:,.0f}/month against revenue of ${revenue:,.0f}/month, runway will be exhausted by approximately {exhaustion_date}.{be_growth_text} The math is unforgiving: every month that passes without a change in trajectory consumes ${net_burn:,.0f} in net cash."
+        inaction_p2 = f"The consequences begin well before cash actually hits zero. Within {max(1, crisis_months - 2)} months, your cash position will be visible to employees — expect your best people to start exploring other options. Within {crisis_months} months, you will have approximately ${cash_at_crisis:,.0f} remaining, which puts you below the threshold where investors consider you a viable investment. At that point, fundraising shifts from 'raising a round' to 'negotiating a rescue' — terms become punitive, dilution becomes severe, and board control may shift."
+        inaction_p3 = f"By the time cash reserves approach zero, your options narrow to three: a distressed acquisition at a fraction of your peak valuation, a bridge round with onerous terms from existing investors, or an orderly wind-down. None of these outcomes are inevitable today — but they become increasingly likely with each month of inaction."
+
         return {
             "situation_narrative": f"{company.name} is currently burning ${burn:,.0f}/month against ${revenue:,.0f} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
-            "recommendation_headline": "Cut Monthly Burn by 25% and Launch an Emergency Revenue Sprint" if runway_months < 12 else "Accelerate Revenue Growth While Maintaining Capital Efficiency",
-            "recommendation_narrative": f"Your most urgent priority is {'survival' if runway_months < 12 else 'sustainable growth'}. With ${cash:,.0f} in the bank and a monthly burn of ${burn:,.0f}, every week of delay narrows your options. The single highest-leverage action right now is to {'reduce burn immediately — audit every vendor contract, pause non-essential hiring, and consolidate overlapping tools' if runway_months < 12 else 'increase revenue velocity while keeping costs disciplined'}.\n\n{'If you wait even 30 days to act, you will have consumed another $' + f'{burn:,.0f}' + ' and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development, but the alternative — running out of cash — is worse.' if runway_months < 12 else 'The trade-off is clear: investing in growth now means accepting higher short-term burn, but the compounding effect of revenue growth will extend your effective runway and strengthen your position for future fundraising.'}",
-            "urgency_text": f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. {'Every day of delay costs you $' + f'{burn/30:,.0f}' + ' and reduces your options.' if runway_months < 12 else 'This window of opportunity will not remain open indefinitely.'}",
-            "inaction_narrative": f"If you change nothing about how {company.name} operates today, here is what happens: In approximately {crisis_months} months, your cash reserves will drop below a safe operating threshold. At that point, you will be forced into emergency fundraising — which means accepting worse terms, higher dilution, and potentially losing control of key decisions.\n\nThe trigger is straightforward: your monthly burn of ${burn:,.0f} continues to outpace your revenue of ${revenue:,.0f}. Without intervention, this math does not change. By month {crisis_months}, you will have approximately ${max(0, cash - burn * crisis_months):,.0f} remaining — not enough to operate with confidence or negotiate from strength.",
+            "recommendation_headline": rec_headline,
+            "recommendation_narrative": rec_narrative,
+            "urgency_text": urgency,
+            "inaction_narrative": f"{inaction_p1}\n\n{inaction_p2}\n\n{inaction_p3}",
             "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of ${burn:,.0f}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
             "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
             "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
