@@ -178,6 +178,43 @@ def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, grow
     return risks[:5]
 
 
+def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth):
+    paths = []
+    if runway_months < 12:
+        paths.append({
+            "strategy": "Raise an Emergency Bridge Round",
+            "why_rejected": f"With only {runway_months:.0f} months of runway and {growth:.1f}% MoM growth, you lack the metrics to attract favorable terms. A bridge at this stage would likely come with heavy dilution, aggressive liquidation preferences, and board control concessions that permanently damage your cap table.",
+            "when_it_might_work": "If you can demonstrate 3+ consecutive months of 15%+ MoM growth, or if an existing investor proactively offers bridge terms, this becomes viable."
+        })
+        paths.append({
+            "strategy": "Maintain Current Spend and Bet on Growth",
+            "why_rejected": f"At ${burn:,.0f}/month burn against ${revenue:,.0f} in revenue, doing nothing gives you {runway_months:.0f} months before cash runs out. The current growth rate of {growth:.1f}% is insufficient to reach break-even before exhaustion. This is a bet on a miracle, not a strategy.",
+            "when_it_might_work": "If you secure a large enterprise contract that would immediately cover 50%+ of burn, or if you have a product launch in the next 30 days with strong pre-orders."
+        })
+        paths.append({
+            "strategy": "Pursue Acquisition or Acqui-hire Now",
+            "why_rejected": f"While you still have ${cash:,.0f} in the bank, your negotiating position is weak but not desperate. Selling now likely means accepting 0.3-0.5x of your last valuation. The recommended cost-cutting path could extend runway enough to either improve metrics for fundraising or negotiate from a stronger position.",
+            "when_it_might_work": "If burn reduction efforts fail to hit targets within 6 weeks, or if a strategic acquirer approaches with terms above 1x your last valuation."
+        })
+    else:
+        paths.append({
+            "strategy": "Aggressive Fundraise Now",
+            "why_rejected": f"With {runway_months:.0f} months of runway, you have time but not enough traction to command premium terms. Raising now at {growth:.1f}% MoM growth would result in a down round or flat round with unfavorable terms. Better to spend 2-3 months improving metrics first.",
+            "when_it_might_work": "If MoM growth exceeds 20% for 2+ months, or if a tier-1 VC reaches out proactively with a term sheet."
+        })
+        paths.append({
+            "strategy": "Cut to Profitability Immediately",
+            "why_rejected": f"Cutting deep enough to reach profitability would require reducing burn from ${burn:,.0f} to below ${revenue:,.0f}, a {max(0, ((burn - revenue) / burn) * 100):.0f}% reduction. This would gut the team and product velocity, making future growth nearly impossible. You still have enough runway to pursue growth.",
+            "when_it_might_work": "If the market turns severely against startups, fundraising becomes impossible, and survival becomes the only objective."
+        })
+        paths.append({
+            "strategy": "Pivot to a New Market or Product",
+            "why_rejected": f"Your current product has ${revenue:,.0f}/month in revenue, which means you have some product-market fit. A pivot would reset the clock to zero while burning ${burn:,.0f}/month. With {runway_months:.0f} months of runway, you cannot afford the 6-12 months a pivot typically requires.",
+            "when_it_might_work": "If customer churn exceeds 10% monthly for 3+ consecutive months and customer interviews reveal fundamental misalignment between your product and market needs."
+        })
+    return paths
+
+
 def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn):
     vendor_target = burn * 0.08
     playbook = []
@@ -374,7 +411,9 @@ def generate_strategic_diagnosis(
     except Exception as data_err:
         logger.warning(f"Error gathering financial data for diagnosis: {data_err}")
     
-    company_context = f"""Company: {company.name}
+    today_date = datetime.utcnow().strftime("%B %d, %Y")
+    company_context = f"""Today's Date: {today_date}
+Company: {company.name}
 Industry: {getattr(company, 'industry', 'Technology')}
 Stage: {getattr(company, 'stage', 'Seed/Series A')}
 Monthly Revenue: ${revenue:,.0f}
@@ -392,9 +431,10 @@ Data Confidence: {confidence}%"""
     if revenue > 0:
         company_context += f"\nMoM Growth Needed to Reach Break-Even: {breakeven_growth_needed:.1f}%"
 
-    system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You write brutally honest, data-backed strategic briefing memos for startup founders. Write all narrative sections in plain prose — no bullet points, no dashboards, no charts. The only exception is the execution_playbook field, which is a structured list of action items designed for the founder to forward directly to their team.
+    current_year = datetime.utcnow().year
+    date_instruction = f"\n\nTODAY'S DATE IS {today_date}. ALL dates you generate (pivot deadlines, exhaustion dates, timeline references) MUST be relative to today and use dates in {current_year} or later. NEVER use dates in the past. If you reference '3 months from now', calculate the actual month and year from today's date.\n\n"
 
-ABSOLUTE REQUIREMENTS:
+    system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You write brutally honest, data-backed strategic briefing memos for startup founders. Write all narrative sections in plain prose — no bullet points, no dashboards, no charts. The only exception is the execution_playbook field, which is a structured list of action items designed for the founder to forward directly to their team.""" + date_instruction + """ABSOLUTE REQUIREMENTS:
 1. recommendation_narrative MUST be 2-3 FULL PARAGRAPHS (each 3-5 sentences). A single sentence is UNACCEPTABLE. Write real reasoning, not summaries.
 2. inaction_narrative MUST include the specific cash exhaustion date and the exact month-over-month growth rate needed to break even.
 3. execution_playbook MUST contain 6-10 items, each with a clear task written as an instruction and an owner role.
@@ -435,10 +475,17 @@ Respond in valid JSON with this exact structure:
   "blind_spots": ["2-3 things the founder probably isn't thinking about"],
   "key_risks": [
     {
-      "risk": "A mini-paragraph (3-5 sentences) describing a specific risk scenario. Start with WHAT could go wrong in concrete terms, then describe WHY it is likely given the company's current data, and HOW SEVERE the consequences would be. Example: 'Your top 3 accounts represent over 60% of monthly revenue. If any one of them churns — due to budget cuts, competitive displacement, or contract non-renewal — you would lose approximately $9K/month in recurring revenue overnight. At your current burn rate, this would reduce runway from 9 months to under 5 months, pushing you into crisis territory where fundraising becomes a rescue operation rather than a growth round. The concentration risk is compounded by the fact that none of these accounts are on annual contracts, meaning they can leave with 30 days notice.'",
+      "risk": "A mini-paragraph (3-5 sentences) describing a specific risk scenario.",
       "likelihood": "High, Medium, or Low",
-      "contingency": "A specific, executable action plan written as 2-3 sentences. Example: 'Immediately initiate annual contract negotiations with all three accounts, offering a 15% discount for 12-month commitments. In parallel, activate your pipeline of 10 warm leads and target closing 2 new accounts within 60 days to reduce concentration below 40%.'",
-      "pivot_deadline": "A specific, time-bound deadline by which the founder must make a decision or change course on this risk. Example: 'If customer concentration has not dropped below 40% by end of Q2, pivot to a self-serve product motion that does not depend on large accounts.' or 'Decide by March 15 whether to raise a bridge round or cut burn — waiting past that date means fundraising under duress.'"
+      "contingency": "A specific, executable action plan written as 2-3 sentences.",
+      "pivot_deadline": "A specific, time-bound deadline by which the founder must make a decision or change course."
+    }
+  ],
+  "alternative_paths": [
+    {
+      "strategy": "Name of the alternative strategy considered — e.g. 'Raise a Bridge Round Instead'",
+      "why_rejected": "2-3 sentences explaining why this path was NOT recommended. Be specific about what makes it inferior given the company's current data.",
+      "when_it_might_work": "1-2 sentences describing the conditions under which this alternative WOULD be the right choice. e.g. 'If your MoM growth reaches 15%+ and you receive inbound investor interest, revisit this path.'"
     }
   ]
 }
@@ -449,7 +496,9 @@ CRITICAL INSTRUCTION FOR execution_playbook: Generate 6-10 SPECIFIC action items
 - Phase 1: Preparation (Week 1-2) — what to get ready, audits, analysis, team alignment
 - Phase 2: Execution (Week 3-6) — the core actions, launches, negotiations, outreach
 - Phase 3: Optimization (Week 7-8) — measure results, iterate, course-correct
-Each action must be a clear instruction — not vague advice like 'improve sales'. Write them as if you are handing a to-do list to an operator. Use the company's actual numbers to set targets. The playbook should be so specific that a team member could execute it without asking clarifying questions. Each item MUST include a 'definition_of_done' field describing the verifiable completion criteria."""
+Each action must be a clear instruction — not vague advice like 'improve sales'. Write them as if you are handing a to-do list to an operator. Use the company's actual numbers to set targets. The playbook should be so specific that a team member could execute it without asking clarifying questions. Each item MUST include a 'definition_of_done' field describing the verifiable completion criteria.
+
+CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strategies that you CONSIDERED but ultimately DID NOT recommend. For each, explain clearly why it was rejected given the company's specific data, and under what conditions it might become the right choice. This shows the founder you considered multiple angles."""
     
     try:
         from server.lib.llm.llm_router import get_llm_router, TaskType
@@ -554,6 +603,7 @@ Each action must be a clear instruction — not vague advice like 'improve sales
                 "Market timing risk as conditions may shift"
             ],
             "key_risks": _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth),
+            "alternative_paths": _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth),
             "company_name": company.name,
             "generated_at": datetime.utcnow().isoformat(),
             "model_used": "fallback",

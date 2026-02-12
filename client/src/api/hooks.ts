@@ -199,10 +199,12 @@ export function useStrategicDiagnosisQuery(companyId: number | null, enabled: bo
       return result;
     },
     enabled: !!companyId && enabled,
-    retry: false,
+    retry: 2,
+    retryDelay: 3000,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: 'always',
+    placeholderData: (previousData: any) => previousData,
   });
 }
 
