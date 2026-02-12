@@ -113,6 +113,7 @@ export default function DecisionsPage() {
   const urgencyText = diagnosisData?.urgency_text || null;
   const inactionNarrative = diagnosisData?.inaction_narrative || null;
   const inactionProjection = diagnosisData?.inaction_projection || null;
+  const executionPlaybook: Array<{action: string; owner: string; timeline: string; expected_outcome: string}> | null = diagnosisData?.execution_playbook || null;
 
   return (
     <div className="p-6 max-w-3xl mx-auto" data-testid="page-decisions">
@@ -297,6 +298,68 @@ export default function DecisionsPage() {
                   ))}
                 </div>
               )}
+            </section>
+          )}
+
+          {hasBriefing && (executionPlaybook || isAnalyzing) && (
+            <section data-testid="section-playbook">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-4-title">
+                Execution Playbook
+              </h2>
+              <p className="text-xs text-muted-foreground mb-6">
+                Forward this to your team. Each item is a specific action with an owner, deadline, and expected result.
+              </p>
+              {isAnalyzing ? (
+                <div className="space-y-6">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <div className="flex gap-4 flex-wrap">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <Skeleton className="h-3 w-4/5" />
+                    </div>
+                  ))}
+                </div>
+              ) : executionPlaybook && executionPlaybook.length > 0 ? (
+                <ol className="space-y-6 list-none p-0 m-0">
+                  {executionPlaybook.map((item, i) => {
+                    const action = item?.action || item?.description || '';
+                    const owner = item?.owner || item?.responsible || 'Team Lead';
+                    const timeline = item?.timeline || item?.deadline || 'This week';
+                    const outcome = item?.expected_outcome || item?.outcome || item?.impact || '';
+                    if (!action) return null;
+                    return (
+                      <li
+                        key={i}
+                        className="relative pl-8"
+                        data-testid={`playbook-item-${i}`}
+                      >
+                        <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
+                          {i + 1}.
+                        </span>
+                        <p className="text-sm font-medium text-foreground leading-relaxed mb-2">
+                          {action}
+                        </p>
+                        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
+                          <span data-testid={`playbook-owner-${i}`}>
+                            <span className="font-medium text-foreground/70">Owner:</span> {owner}
+                          </span>
+                          <span data-testid={`playbook-timeline-${i}`}>
+                            <span className="font-medium text-foreground/70">Deadline:</span> {timeline}
+                          </span>
+                        </div>
+                        {outcome && (
+                          <p className="text-xs text-muted-foreground italic" data-testid={`playbook-outcome-${i}`}>
+                            Expected outcome: {outcome}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : null}
             </section>
           )}
 
