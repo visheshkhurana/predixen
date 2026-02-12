@@ -995,12 +995,18 @@ def share_action_item(
     )
 
     try:
-        from server.email.service import _send_email_sync
+        from server.email.service import _send_email_sync, get_transactional_from_email
+        transactional_sender = get_transactional_from_email()
         result = _send_email_sync(
             to=request.to_email,
             subject=subject,
             html_content=html_content,
-            campaign=f"share_action_item_{company_id}",
+            from_email=transactional_sender,
+            campaign=None,
+            headers={
+                "X-Entity-Ref-ID": f"share-{company_id}-{request.content_type}",
+                "List-Unsubscribe": "",
+            },
         )
         if result.get("success"):
             return {"success": True, "message": f"Email sent to {request.to_email}", "message_id": result.get("message_id")}
