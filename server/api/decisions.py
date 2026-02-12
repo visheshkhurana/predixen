@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import uuid as uuid_lib
@@ -836,3 +836,178 @@ def delete_company_decision(
     db.commit()
     
     return {"success": True, "message": "Decision deleted"}
+
+
+class ShareActionItemRequest(BaseModel):
+    to_email: str
+    subject: Optional[str] = None
+    content_type: str = "playbook_item"
+    content_data: Dict[str, Any] = {}
+    personal_note: Optional[str] = None
+
+    @validator('to_email')
+    def validate_email(cls, v):
+        import re
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', v.strip()):
+            raise ValueError('Invalid email address')
+        return v.strip()
+
+
+def _escape_html(text: str) -> str:
+    import html
+    return html.escape(str(text)) if text else ""
+
+
+def _build_share_email_html(company_name: str, content_type: str, content_data: Dict[str, Any], personal_note: Optional[str] = None) -> str:
+    header_labels = {
+        "playbook_item": "Action Item",
+        "risk": "Risk Alert",
+        "recommendation": "Strategic Recommendation",
+        "full_briefing": "Full Strategic Briefing",
+        "custom": "Shared Item",
+    }
+    header_label = header_labels.get(content_type, "Shared Item")
+
+    body_html = ""
+
+    if content_type == "playbook_item":
+        action = _escape_html(content_data.get("action", content_data.get("title", "")))
+        owner = _escape_html(content_data.get("owner", ""))
+        timeline = _escape_html(content_data.get("timeline", ""))
+        done_when = _escape_html(content_data.get("done_when", content_data.get("definition_of_done", "")))
+        phase = _escape_html(content_data.get("phase", ""))
+        body_html = f"""
+        <p style="font-size:15px;font-weight:600;color:#e2e8f0;margin:0 0 12px;">{action}</p>
+        <table cellpadding="0" cellspacing="0" border="0" style="font-size:13px;color:#94a3b8;margin-bottom:8px;">
+        {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Phase</td><td style='padding:3px 0;'>" + phase + "</td></tr>" if phase else ""}
+        {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Owner</td><td style='padding:3px 0;'>" + owner + "</td></tr>" if owner else ""}
+        {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Timeline</td><td style='padding:3px 0;'>" + timeline + "</td></tr>" if timeline else ""}
+        {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Done when</td><td style='padding:3px 0;'>" + done_when + "</td></tr>" if done_when else ""}
+        </table>"""
+
+    elif content_type == "risk":
+        risk = _escape_html(content_data.get("risk", content_data.get("title", "")))
+        likelihood = _escape_html(content_data.get("likelihood", ""))
+        contingency = _escape_html(content_data.get("contingency", ""))
+        pivot_deadline = _escape_html(content_data.get("pivot_deadline", ""))
+        likelihood_colors = {"high": "#ef4444", "medium": "#f59e0b", "low": "#22c55e"}
+        lc = likelihood_colors.get(likelihood.lower(), "#94a3b8") if likelihood else "#94a3b8"
+        body_html = f"""
+        <p style="font-size:15px;font-weight:600;color:#e2e8f0;margin:0 0 8px;">{risk}</p>
+        {"<p style='margin:0 0 12px;'><span style='display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;background:" + lc + ";'>" + likelihood + "</span></p>" if likelihood else ""}
+        {"<p style='font-size:13px;color:#94a3b8;margin:0 0 6px;'><span style='font-weight:600;color:#cbd5e1;'>If this happens:</span> " + contingency + "</p>" if contingency else ""}
+        {"<p style='font-size:13px;color:#94a3b8;margin:0;'><span style='font-weight:600;color:#cbd5e1;'>When to pivot:</span> " + pivot_deadline + "</p>" if pivot_deadline else ""}"""
+
+    elif content_type == "recommendation":
+        headline = _escape_html(content_data.get("headline", content_data.get("title", "")))
+        narrative = _escape_html(content_data.get("narrative", content_data.get("description", "")))
+        urgency = _escape_html(content_data.get("urgency", ""))
+        body_html = f"""
+        <p style="font-size:17px;font-weight:700;color:#e2e8f0;margin:0 0 14px;">{headline}</p>
+        {"<p style='font-size:14px;color:#94a3b8;line-height:1.7;margin:0 0 14px;'>" + narrative.replace(chr(10)+chr(10), "</p><p style='font-size:14px;color:#94a3b8;line-height:1.7;margin:0 0 14px;'>") + "</p>" if narrative else ""}
+        {"<div style='margin-top:12px;padding:10px 14px;border-radius:6px;border:1px solid #f59e0b40;background:#f59e0b15;'><p style='margin:0;font-size:13px;font-weight:600;color:#fbbf24;'>⚠ " + urgency + "</p></div>" if urgency else ""}"""
+
+    elif content_type == "full_briefing":
+        sections = content_data.get("sections", [])
+        for sec in sections:
+            title = _escape_html(sec.get("title", ""))
+            text = _escape_html(sec.get("text", ""))
+            body_html += f"""
+            <div style="margin-bottom:20px;">
+                <p style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#64748b;margin:0 0 6px;">{title}</p>
+                <p style="font-size:14px;color:#94a3b8;line-height:1.7;margin:0;">{text}</p>
+            </div>"""
+
+    else:
+        title = _escape_html(content_data.get("title", ""))
+        description = _escape_html(content_data.get("description", ""))
+        body_html = f"""
+        {"<p style='font-size:15px;font-weight:600;color:#e2e8f0;margin:0 0 8px;'>" + title + "</p>" if title else ""}
+        {"<p style='font-size:14px;color:#94a3b8;line-height:1.7;margin:0;'>" + description + "</p>" if description else ""}"""
+
+    note_html = ""
+    if personal_note:
+        escaped_note = _escape_html(personal_note)
+        note_html = f"""
+        <div style="margin-top:20px;padding:14px 16px;border-radius:8px;background:#1e293b;border:1px solid #334155;">
+            <p style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin:0 0 6px;">Note from sender</p>
+            <p style="font-size:14px;color:#cbd5e1;line-height:1.6;margin:0;">{escaped_note}</p>
+        </div>"""
+
+    safe_company_name = _escape_html(company_name)
+
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#0f172a;color:#e2e8f0;">
+<div style="max-width:600px;margin:0 auto;padding:32px 24px;">
+
+<div style="margin-bottom:28px;">
+    <p style="font-size:18px;font-weight:700;color:#a5b4fc;margin:0 0 4px;">Predixen</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">Intelligence OS</p>
+</div>
+
+<div style="margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #1e293b;">
+    <p style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#64748b;margin:0 0 6px;">{header_label}</p>
+    <p style="font-size:20px;font-weight:700;color:#e2e8f0;margin:0;">{safe_company_name}</p>
+</div>
+
+<div style="margin-bottom:24px;">
+{body_html}
+</div>
+
+{note_html}
+
+<div style="margin-top:28px;text-align:center;">
+    <a href="https://predixen.app/decisions" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">View in Predixen</a>
+</div>
+
+<div style="margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;text-align:center;">
+    <p style="font-size:12px;color:#475569;margin:0;">Sent via Predixen Intelligence OS</p>
+</div>
+
+</div>
+</body>
+</html>"""
+
+
+@router.post("/companies/{company_id}/share-action-item")
+def share_action_item(
+    company_id: int,
+    request: ShareActionItemRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    subject = request.subject or f"Action Item from {company.name}"
+
+    html_content = _build_share_email_html(
+        company_name=company.name,
+        content_type=request.content_type,
+        content_data=request.content_data,
+        personal_note=request.personal_note,
+    )
+
+    try:
+        from server.email.service import _send_email_sync
+        result = _send_email_sync(
+            to=request.to_email,
+            subject=subject,
+            html_content=html_content,
+            campaign=f"share_action_item_{company_id}",
+        )
+        if result.get("success"):
+            return {"success": True, "message": f"Email sent to {request.to_email}", "message_id": result.get("message_id")}
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Failed to send email"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send share email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
