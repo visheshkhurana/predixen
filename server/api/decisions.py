@@ -1005,7 +1005,6 @@ def share_action_item(
             campaign=None,
             headers={
                 "X-Entity-Ref-ID": f"share-{company_id}-{request.content_type}",
-                "List-Unsubscribe": "",
             },
         )
         if result.get("success"):
