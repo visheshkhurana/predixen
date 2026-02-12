@@ -186,14 +186,18 @@ export function useStrategicDiagnosis() {
   return useMutation({
     mutationFn: (companyId: number) => api.decisions.strategicDiagnosis(companyId),
     onSuccess: (_, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'strategic-diagnosis'] });
+      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', companyId] });
     },
   });
 }
 
 export function useStrategicDiagnosisQuery(companyId: number | null, enabled: boolean) {
   return useQuery({
-    queryKey: ['/api/companies', companyId, 'strategic-diagnosis'],
+    queryKey: ['strategic-diagnosis', companyId],
+    queryFn: async () => {
+      const result = await api.decisions.strategicDiagnosis(companyId!);
+      return result;
+    },
     enabled: !!companyId && enabled,
     retry: 1,
     staleTime: 5 * 60 * 1000,
