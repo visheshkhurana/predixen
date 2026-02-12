@@ -144,31 +144,36 @@ def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, grow
         risks.append({
             "risk": f"Your net monthly burn of ${net_burn:,.0f} gives you approximately {runway_months:.0f} months before cash hits zero. If revenue growth does not accelerate or costs are not reduced, you will be unable to meet payroll and vendor obligations. The danger is not just insolvency — it is the cascading loss of leverage that begins 2-3 months before cash actually runs out, when employees start leaving, investors stop returning calls, and customers sense instability. At your current trajectory, this tipping point arrives in roughly {max(1, int(runway_months - 3)):.0f} months.",
             "likelihood": "High" if runway_months < 6 else "Medium",
-            "contingency": f"Trigger an emergency cost reduction plan targeting a 25% burn reduction, which would save approximately ${burn * 0.25:,.0f}/month and extend runway by {runway_months * 0.25 / (1 - 0.25):.0f}+ months. Simultaneously initiate bridge financing conversations with existing investors — they are your fastest path to capital because they already know the business and can move in 2-3 weeks versus 2-3 months for new investors."
+            "contingency": f"Trigger an emergency cost reduction plan targeting a 25% burn reduction, which would save approximately ${burn * 0.25:,.0f}/month and extend runway by {runway_months * 0.25 / (1 - 0.25):.0f}+ months. Simultaneously initiate bridge financing conversations with existing investors — they are your fastest path to capital because they already know the business and can move in 2-3 weeks versus 2-3 months for new investors.",
+            "pivot_deadline": f"If burn has not decreased by at least 15% within 6 weeks, pivot to a skeleton-crew operating model and begin acqui-hire or soft-landing conversations. Do not wait past {max(1, int(runway_months - 4)):.0f} months of remaining runway to make this call."
         })
     if revenue > 0 and growth <= 5:
         be_growth = ((burn / revenue) - 1) * 100
         risks.append({
             "risk": f"Your month-over-month revenue growth is {growth:.1f}%, but you need approximately {be_growth:.0f}% MoM growth to reach break-even at your current cost structure. At this rate, revenue will never catch up to expenses, leaving you permanently dependent on external capital to survive. Every month that passes without a step-change in growth trajectory makes the next fundraise harder — investors want to see acceleration, not linear crawl. The gap between your current growth and break-even growth is not something that closes gradually; it requires a deliberate, aggressive shift in go-to-market strategy.",
             "likelihood": "High" if growth <= 0 else "Medium",
-            "contingency": f"Reassign 50% of engineering capacity from infrastructure to revenue-driving features immediately. Launch a pricing experiment targeting a 15-20% increase for new customers while grandfathering existing accounts. Aim for 3 high-value upsell conversations per week with existing accounts — expansion revenue is the fastest path to closing the growth gap."
+            "contingency": f"Reassign 50% of engineering capacity from infrastructure to revenue-driving features immediately. Launch a pricing experiment targeting a 15-20% increase for new customers while grandfathering existing accounts. Aim for 3 high-value upsell conversations per week with existing accounts — expansion revenue is the fastest path to closing the growth gap.",
+            "pivot_deadline": f"If MoM growth has not reached at least {max(5, int(be_growth * 0.3)):.0f}% within 90 days, pivot the go-to-market strategy entirely — either shift to a different customer segment, change the pricing model, or explore a fundamentally different distribution channel. Continuing the current approach past that point is burning cash without evidence of traction."
         })
     risks.append({
         "risk": "Critical knowledge and customer relationships are concentrated in 1-2 team members. If either leaves — whether for a competing offer, burnout, or personal reasons — you lose not just their output but months of institutional knowledge that cannot be quickly replaced. In an early-stage company, this kind of departure can stall the product roadmap by 2-3 months and damage customer confidence at the worst possible time. The risk is heightened during periods of uncertainty, which is exactly where you are now.",
         "likelihood": "Medium",
-        "contingency": "Within the next 2 weeks, have each critical team member document their top 5 processes and decision frameworks. Cross-train at least one backup for each critical function. For your top 3 most essential people, implement retention packages — even modest equity refreshers or retention bonuses signal commitment and buy you stability."
+        "contingency": "Within the next 2 weeks, have each critical team member document their top 5 processes and decision frameworks. Cross-train at least one backup for each critical function. For your top 3 most essential people, implement retention packages — even modest equity refreshers or retention bonuses signal commitment and buy you stability.",
+        "pivot_deadline": "If documentation and cross-training are not complete within 30 days, escalate to a board-level discussion about key-person risk and consider restructuring responsibilities even at the cost of short-term velocity. The window to mitigate this risk shrinks every week you delay."
     })
     if burn > 0 and revenue > 0:
         concentration_risk = min(revenue * 0.4, burn * 0.3)
         risks.append({
             "risk": f"If your revenue is concentrated in a small number of accounts, losing even one major customer could eliminate ${concentration_risk:,.0f}+/month overnight. At your current burn rate, that kind of revenue loss would cut your runway by {max(1, int(runway_months * 0.3)):.0f}+ months and force you into emergency mode. Customer concentration is an invisible risk — everything looks stable until a single contract non-renewal or budget cut changes the math completely. The problem is compounded if these accounts are on monthly contracts with short notice periods.",
             "likelihood": "Medium",
-            "contingency": f"Target signing 5+ new accounts per quarter to reduce concentration below 30% for any single customer. Implement quarterly business reviews with your top 5 accounts to surface churn signals early. Push for annual contracts with 90-day notice periods — the upfront discount is worth the stability."
+            "contingency": f"Target signing 5+ new accounts per quarter to reduce concentration below 30% for any single customer. Implement quarterly business reviews with your top 5 accounts to surface churn signals early. Push for annual contracts with 90-day notice periods — the upfront discount is worth the stability.",
+            "pivot_deadline": "If no single customer accounts for less than 30% of revenue by end of next quarter, pivot to a product-led growth model with self-serve onboarding that removes dependency on large enterprise deals. The longer concentration persists, the more fragile the business becomes."
         })
     risks.append({
         "risk": f"Fundraising conditions are not static. If the macro environment shifts — rising interest rates, a market correction, or a sector-specific downturn — the capital available to startups at your stage could shrink significantly before you need to raise. When that happens, valuations compress, terms become more investor-favorable, and rounds that would have closed in 6 weeks take 6 months. With approximately {runway_months:.0f} months of runway, you do not have the luxury of assuming the fundraising window stays open indefinitely.",
         "likelihood": "Medium",
-        "contingency": "Begin investor outreach 6 months before your projected cash need, not 3 months. Maintain a warm pipeline of at least 15 investors through regular updates and informal check-ins. Prepare a 'Plan B' operating model that shows a credible path to cash-flow breakeven without additional funding — this gives you leverage in negotiations and a real fallback if the market turns."
+        "contingency": "Begin investor outreach 6 months before your projected cash need, not 3 months. Maintain a warm pipeline of at least 15 investors through regular updates and informal check-ins. Prepare a 'Plan B' operating model that shows a credible path to cash-flow breakeven without additional funding — this gives you leverage in negotiations and a real fallback if the market turns.",
+        "pivot_deadline": f"If you have not received at least 2 term sheets by the time runway drops below {max(3, int(runway_months * 0.5)):.0f} months, immediately activate the Plan B operating model and shift to breakeven mode. Do not continue fundraising past 3 months of runway — at that point, survival takes priority over growth."
     })
     return risks[:5]
 
@@ -432,12 +437,13 @@ Respond in valid JSON with this exact structure:
     {
       "risk": "A mini-paragraph (3-5 sentences) describing a specific risk scenario. Start with WHAT could go wrong in concrete terms, then describe WHY it is likely given the company's current data, and HOW SEVERE the consequences would be. Example: 'Your top 3 accounts represent over 60% of monthly revenue. If any one of them churns — due to budget cuts, competitive displacement, or contract non-renewal — you would lose approximately $9K/month in recurring revenue overnight. At your current burn rate, this would reduce runway from 9 months to under 5 months, pushing you into crisis territory where fundraising becomes a rescue operation rather than a growth round. The concentration risk is compounded by the fact that none of these accounts are on annual contracts, meaning they can leave with 30 days notice.'",
       "likelihood": "High, Medium, or Low",
-      "contingency": "A specific, executable action plan written as 2-3 sentences. Example: 'Immediately initiate annual contract negotiations with all three accounts, offering a 15% discount for 12-month commitments. In parallel, activate your pipeline of 10 warm leads and target closing 2 new accounts within 60 days to reduce concentration below 40%. Set up quarterly business reviews with each top account to identify churn signals early.'"
+      "contingency": "A specific, executable action plan written as 2-3 sentences. Example: 'Immediately initiate annual contract negotiations with all three accounts, offering a 15% discount for 12-month commitments. In parallel, activate your pipeline of 10 warm leads and target closing 2 new accounts within 60 days to reduce concentration below 40%.'",
+      "pivot_deadline": "A specific, time-bound deadline by which the founder must make a decision or change course on this risk. Example: 'If customer concentration has not dropped below 40% by end of Q2, pivot to a self-serve product motion that does not depend on large accounts.' or 'Decide by March 15 whether to raise a bridge round or cut burn — waiting past that date means fundraising under duress.'"
     }
   ]
 }
 
-CRITICAL INSTRUCTION FOR key_risks: Generate 3-5 specific risks. Each "risk" field must be a MINI-PARAGRAPH (3-5 sentences) that tells a specific story: what could go wrong, why it is likely given the data, and what the impact would be. Do NOT write one-line risk labels — write a vivid scenario paragraph. Each "contingency" field must be 2-3 sentences of specific, executable actions — not vague advice. Write as if handing an emergency playbook to an operator. Reference the company's actual numbers.
+CRITICAL INSTRUCTION FOR key_risks: Generate 3-5 specific risks. Each "risk" field must be a MINI-PARAGRAPH (3-5 sentences) that tells a specific story: what could go wrong, why it is likely given the data, and what the impact would be. Do NOT write one-line risk labels — write a vivid scenario paragraph. Each "contingency" field must be 2-3 sentences of specific, executable actions — not vague advice. Each "pivot_deadline" field must be a specific, time-bound deadline stating WHEN the founder must decide or change course — not vague timing like 'soon' but a concrete date, milestone, or metric threshold that triggers a pivot. Write as if handing an emergency playbook to an operator. Reference the company's actual numbers.
 
 CRITICAL INSTRUCTION FOR execution_playbook: Generate 6-10 SPECIFIC action items that the founder can forward directly to their team. Group them into phases:
 - Phase 1: Preparation (Week 1-2) — what to get ready, audits, analysis, team alignment
@@ -459,17 +465,31 @@ Each action must be a clear instruction — not vague advice like 'improve sales
             model="gpt-4o",
             system=system_prompt,
             temperature=0.6,
-            max_tokens=6000,
+            max_tokens=8000,
         )
         
-        import json
+        import json, re
         content = result.get("content", "{}")
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
         
-        diagnosis = json.loads(content)
+        content = re.sub(r',\s*}', '}', content)
+        content = re.sub(r',\s*]', ']', content)
+        
+        try:
+            diagnosis = json.loads(content)
+        except json.JSONDecodeError:
+            first_brace = content.find('{')
+            last_brace = content.rfind('}')
+            if first_brace != -1 and last_brace != -1:
+                content = content[first_brace:last_brace + 1]
+                content = re.sub(r',\s*}', '}', content)
+                content = re.sub(r',\s*]', ']', content)
+                diagnosis = json.loads(content)
+            else:
+                raise
         diagnosis["company_name"] = company.name
         diagnosis["generated_at"] = datetime.utcnow().isoformat()
         diagnosis["model_used"] = result.get("model", "unknown")
