@@ -52,6 +52,13 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 25. **Reorganized Simulation Results Hierarchy**: Results flow in decision-intelligence-first order: AI Summary → Decision Recommendations → Before/After → Sensitivity Levers + Breaking Points → Stress Tests → P10/P50/P90 Monte Carlo → Charts → Fundraising Intelligence. No hidden sections or Advanced View toggle.
 26. **Dual-Path "Or" Detection**: When users type "X or Y" / "X vs Y" in the scenario input, the system detects two separate decision paths, runs both Monte Carlo simulations in parallel, and sets up side-by-side comparison. Visual preview indicator below search bar, loading/completion banners, and partial-failure handling via `Promise.allSettled`.
 27. **Cross-Page Intelligence Alerts**: Reusable `CrossPageIntelligence` component that fetches latest simulation data via `useScenarios`/`useSimulation` hooks and generates contextual alerts (critical/warning/opportunity) based on survival, runway, and burn metrics. Displayed on Dashboard, Data Input, and Fundraising pages.
+28. **Decision Intelligence Redesign**: Major redesign of the Decisions page with AI-powered personalized advice. Includes:
+    - **Strategic Diagnosis**: AI-generated narrative from LLM router analyzing company health with health score gauge, stage label, top 3 priorities, and blind spots. Backend: `POST /api/companies/{id}/strategic-diagnosis`.
+    - **Inaction Projection**: "If You Do Nothing" warning card showing months to crisis, probability, cash at crisis, and key trigger with urgency-based styling (critical/urgent/standard).
+    - **Enhanced Decision Cards**: Each card now includes Execution Playbook (step-by-step actions), Research Insights (data-backed context), and Second-Order Effects (downstream consequences).
+    - **Decision Journal**: Replaces KPI cards with a tracking journal showing adoption stats, aggregate survival/runway gains, and per-decision status entries.
+    - Components: `StrategicDiagnosis.tsx`, `InactionProjection.tsx`, `DecisionJournal.tsx`. Enhanced: `DecisionCard.tsx`.
+    - Layout order: Strategic Diagnosis -> Inaction Projection -> Comparison Bar -> Decision Cards -> Decision Journal -> Charts.
 
 ### User Roles
 -   **Platform Admin**: Application owner.

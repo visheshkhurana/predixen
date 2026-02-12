@@ -15,7 +15,8 @@ import {
 import { 
   TrendingUp, AlertTriangle, Clock, Link2, ChevronDown, ChevronUp, 
   Sparkles, Trophy, Target, Zap, HelpCircle, Play, RefreshCw, 
-  Calendar, DollarSign, BarChart3, Check, X, Pause
+  Calendar, DollarSign, BarChart3, Check, X, Pause,
+  ListChecks, Search, ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -47,6 +48,9 @@ interface DecisionCardProps {
   detailedRiskFactors?: string[];
   runwayImpactDetails?: string;
   survivalImpactDetails?: string;
+  executionPlaybook?: string[];
+  researchInsights?: string[];
+  secondOrderEffects?: string[];
   status?: DecisionStatus;
   onStatusChange?: (status: DecisionStatus) => void;
   onAdoptPlan?: () => void;
@@ -176,6 +180,9 @@ export function DecisionCard({
   detailedRiskFactors = [],
   runwayImpactDetails,
   survivalImpactDetails,
+  executionPlaybook = [],
+  researchInsights = [],
+  secondOrderEffects = [],
   status = 'pending',
   onStatusChange,
   onAdoptPlan,
@@ -531,6 +538,57 @@ export function DecisionCard({
               </p>
               <p className="text-sm italic bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">{keyAssumption}</p>
             </div>
+
+            {executionPlaybook.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-primary" />
+                  Execution Playbook
+                </p>
+                <ol className="text-sm space-y-1.5 ml-1">
+                  {executionPlaybook.map((step, i) => (
+                    <li key={i} className="flex items-start gap-2.5 p-2 rounded-lg bg-primary/5">
+                      <span className="text-xs font-bold text-primary bg-primary/10 rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {researchInsights.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <Search className="h-4 w-4 text-primary" />
+                  Research Insights
+                </p>
+                <ul className="text-sm space-y-1.5">
+                  {researchInsights.map((insight, i) => (
+                    <li key={i} className="flex items-start gap-2 p-2 rounded-lg bg-secondary/50">
+                      <ArrowRight className="h-3 w-3 mt-1 text-primary flex-shrink-0" />
+                      <span>{insight}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {secondOrderEffects.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-amber-500" />
+                  Second-Order Effects
+                </p>
+                <ul className="text-sm space-y-1.5">
+                  {secondOrderEffects.map((effect, i) => (
+                    <li key={i} className="flex items-start gap-2 text-muted-foreground">
+                      <span className="text-amber-500 mt-0.5 flex-shrink-0">~</span>
+                      <span>{effect}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             
             <div className="space-y-3">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-2">
