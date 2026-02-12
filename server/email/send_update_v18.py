@@ -9,7 +9,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_decisions_briefing_feb2026_v18"
+CAMPAIGN = "predixen_decisions_briefing_feb2026_v18b"
+
+BASE_URL = "https://predixen.app"
+IMG_AI_SUMMARY = f"{BASE_URL}/email-assets/sim-ai-summary.png"
+IMG_SENSITIVITY = f"{BASE_URL}/email-assets/sim-sensitivity.png"
+IMG_STRESS_TESTS = f"{BASE_URL}/email-assets/sim-stress-tests.png"
+IMG_COUNTER_MOVES = f"{BASE_URL}/email-assets/sim-counter-moves.png"
+IMG_METRICS = f"{BASE_URL}/email-assets/sim-metrics.png"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
@@ -108,6 +115,38 @@ def build_html(rcpt: dict) -> str:
 <p>Hi {rcpt['name']},</p>
 
 <p>The Decisions page in Predixen Intelligence OS has been completely redesigned. It now reads like a strategic briefing document from a senior advisor &mdash; no charts, no dashboards, just clear prose that tells you what to do and why.</p>
+
+<p style="font-size:14px;color:#4b5563;">Below are screenshots of the platform in action, followed by a breakdown of the new Decisions page.</p>
+
+<!-- Screenshot: AI Decision Summary -->
+<div style="margin:20px 0;">
+<p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#6366f1;">AI Decision Summary &amp; Simulation Results</p>
+<img src="{IMG_AI_SUMMARY}" alt="AI Decision Summary showing GO verdict, Decision Score 6/10, and key risk/opportunity analysis" style="width:100%;max-width:600px;border-radius:8px;border:1px solid #e5e7eb;" />
+</div>
+
+<!-- Screenshot: Sensitivity Analysis -->
+<div style="margin:20px 0;">
+<p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#6366f1;">Sensitivity Analysis &amp; What-If Explorer</p>
+<img src="{IMG_SENSITIVITY}" alt="Tornado chart showing variable impact on runway, with interactive What-If Explorer sliders" style="width:100%;max-width:600px;border-radius:8px;border:1px solid #e5e7eb;" />
+</div>
+
+<!-- Screenshot: Stress Tests & Breaking Points -->
+<div style="margin:20px 0;">
+<p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#6366f1;">Stress Tests &amp; Breaking Point Analysis</p>
+<img src="{IMG_STRESS_TESTS}" alt="Six stress test scenarios with severity ratings and breaking point analysis for key variables" style="width:100%;max-width:600px;border-radius:8px;border:1px solid #e5e7eb;" />
+</div>
+
+<!-- Screenshot: Counter-Moves & Monte Carlo -->
+<div style="margin:20px 0;">
+<p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#6366f1;">Automatic Counter-Moves &amp; P10/P50/P90 Monte Carlo</p>
+<img src="{IMG_COUNTER_MOVES}" alt="Three automatic counter-move simulations and P10/P50/P90 Monte Carlo probability distributions" style="width:100%;max-width:600px;border-radius:8px;border:1px solid #e5e7eb;" />
+</div>
+
+<!-- Screenshot: Key Metrics & Unit Economics -->
+<div style="margin:20px 0;">
+<p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#6366f1;">Key Metrics &amp; Unit Economics Dashboard</p>
+<img src="{IMG_METRICS}" alt="Key financial metrics including MRR, Net Burn, Cash Balance, Runway, and unit economics with CAC, LTV, and payback period" style="width:100%;max-width:600px;border-radius:8px;border:1px solid #e5e7eb;" />
+</div>
 
 <h2 style="font-size:17px;color:#1e1b4b;margin:28px 0 12px;padding-bottom:6px;border-bottom:2px solid #6366f1;">The New Decisions Page &mdash; Narrative Strategic Briefing</h2>
 
