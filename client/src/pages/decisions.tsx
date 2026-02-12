@@ -1,499 +1,56 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { DecisionCard, DecisionStatus } from '@/components/DecisionCard';
-import { StrategicDiagnosis } from '@/components/StrategicDiagnosis';
-import { InactionProjection } from '@/components/InactionProjection';
-import { DecisionJournal } from '@/components/DecisionJournal';
-import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
-import { BandsChart } from '@/components/BandsChart';
-import { 
-  RefreshCw, ArrowRight, Trophy, TrendingUp, Clock, 
-  BarChart3, HelpCircle, Target, Zap, Scale, Brain
-} from 'lucide-react';
+import { RefreshCw, ArrowRight, Brain } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useDecisions, useSimulation, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosis } from '@/api/hooks';
+import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosis } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
-
-interface StoredDecisionStatus {
-  [decisionId: string]: DecisionStatus;
-}
-
-interface PreviousRecommendation {
-  id: string;
-  title: string;
-  rank: number;
-  expectedImpact: {
-    delta_survival_18m: number;
-    delta_runway_p50: number;
-  };
-}
-
-const STORAGE_KEY_PREFIX = 'decision_statuses_';
-const PREV_RECS_KEY_PREFIX = 'prev_recommendations_';
-
-function getStorageKey(companyId: number): string {
-  return `${STORAGE_KEY_PREFIX}${companyId}`;
-}
-
-function getPrevRecsKey(companyId: number): string {
-  return `${PREV_RECS_KEY_PREFIX}${companyId}`;
-}
-
-function loadDecisionStatuses(companyId: number): StoredDecisionStatus {
-  try {
-    const stored = localStorage.getItem(getStorageKey(companyId));
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveDecisionStatuses(companyId: number, statuses: StoredDecisionStatus): void {
-  try {
-    localStorage.setItem(getStorageKey(companyId), JSON.stringify(statuses));
-  } catch {
-    console.warn('Failed to save decision statuses to localStorage');
-  }
-}
-
-function loadPreviousRecommendations(companyId: number): PreviousRecommendation[] {
-  try {
-    const stored = localStorage.getItem(getPrevRecsKey(companyId));
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePreviousRecommendations(companyId: number, recs: PreviousRecommendation[]): void {
-  try {
-    localStorage.setItem(getPrevRecsKey(companyId), JSON.stringify(recs));
-  } catch {
-    console.warn('Failed to save previous recommendations to localStorage');
-  }
-}
-
-function getTimeHorizon(rank: number): string {
-  switch (rank) {
-    case 1: return '1-2 weeks';
-    case 2: return '2-4 weeks';
-    case 3: return '4-8 weeks';
-    default: return '2-4 weeks';
-  }
-}
-
-function getExecutionPlaybook(title: string): string[] {
-  const lowerTitle = title.toLowerCase();
-  if (lowerTitle.includes('hire') || lowerTitle.includes('team')) {
-    return [
-      'Define role scope and success metrics within 2 days',
-      'Source candidates from existing network and targeted outreach',
-      'Run structured interviews with scorecard evaluation',
-      'Make offer with clear 30/60/90 day plan',
-    ];
-  }
-  if (lowerTitle.includes('revenue') || lowerTitle.includes('sales') || lowerTitle.includes('growth')) {
-    return [
-      'Identify top 10 highest-conversion customer segments',
-      'Build targeted outreach sequences for each segment',
-      'Implement tracking for conversion funnel metrics',
-      'Run A/B tests on pricing and messaging weekly',
-    ];
-  }
-  if (lowerTitle.includes('cost') || lowerTitle.includes('expense') || lowerTitle.includes('reduce') || lowerTitle.includes('cut')) {
-    return [
-      'Audit all vendor contracts and identify top 5 by spend',
-      'Negotiate 15-20% reductions with 30-day deadlines',
-      'Consolidate overlapping tools and subscriptions',
-      'Implement spending approval workflow for non-essential costs',
-    ];
-  }
-  if (lowerTitle.includes('fund') || lowerTitle.includes('raise')) {
-    return [
-      'Update financial model with latest actuals and 24-month projections',
-      'Build targeted investor list of 30-50 aligned VCs',
-      'Prepare data room with key metrics and due diligence materials',
-      'Start warm introductions 6-8 weeks before planned close',
-    ];
-  }
-  return [];
-}
-
-function getResearchInsights(title: string): string[] {
-  const lowerTitle = title.toLowerCase();
-  if (lowerTitle.includes('hire') || lowerTitle.includes('team')) {
-    return [
-      'Top-performing startups fill key roles 40% faster with referral-based hiring',
-      'Early-stage hires who receive structured onboarding retain at 2.5x the rate',
-    ];
-  }
-  if (lowerTitle.includes('revenue') || lowerTitle.includes('sales') || lowerTitle.includes('growth')) {
-    return [
-      'Companies growing >20% MoM are 3x more likely to reach Series A benchmarks',
-      'Focused ICP targeting improves conversion rates by 35-50% vs. broad outreach',
-    ];
-  }
-  if (lowerTitle.includes('cost') || lowerTitle.includes('reduce') || lowerTitle.includes('cut')) {
-    return [
-      'Startups that proactively cut costs extend runway by an average of 4.2 months',
-      'Renegotiating top 3 vendor contracts typically yields 15-25% savings',
-    ];
-  }
-  if (lowerTitle.includes('fund') || lowerTitle.includes('raise')) {
-    return [
-      'Fundraising processes starting 4+ months before runway end close 2x faster',
-      'Warm introductions convert to term sheets at 8x the rate of cold outreach',
-    ];
-  }
-  return [];
-}
-
-function getSecondOrderEffects(title: string): string[] {
-  const lowerTitle = title.toLowerCase();
-  if (lowerTitle.includes('hire') || lowerTitle.includes('team')) {
-    return [
-      'Increased payroll burn reduces runway if revenue doesn\'t scale proportionally',
-      'New hire onboarding temporarily reduces existing team velocity by 15-20%',
-    ];
-  }
-  if (lowerTitle.includes('revenue') || lowerTitle.includes('growth')) {
-    return [
-      'Rapid growth may strain customer support capacity and increase churn',
-      'Higher revenue improves fundraising positioning and valuation multiples',
-    ];
-  }
-  if (lowerTitle.includes('cost') || lowerTitle.includes('reduce') || lowerTitle.includes('cut')) {
-    return [
-      'Aggressive cuts may slow product velocity and delay feature releases',
-      'Extended runway gives more time to find product-market fit',
-    ];
-  }
-  if (lowerTitle.includes('fund') || lowerTitle.includes('raise')) {
-    return [
-      'Fundraising distracts leadership from operations for 3-6 months',
-      'Successful raise provides capital buffer but introduces new stakeholder expectations',
-    ];
-  }
-  return [];
-}
-
-function getDependencies(title: string): string[] {
-  const lowerTitle = title.toLowerCase();
-  if (lowerTitle.includes('hire') || lowerTitle.includes('team')) {
-    return ['Budget approval', 'Job description finalization', 'Interview process setup'];
-  }
-  if (lowerTitle.includes('revenue') || lowerTitle.includes('sales')) {
-    return ['Sales team capacity', 'Marketing materials', 'CRM setup'];
-  }
-  if (lowerTitle.includes('cost') || lowerTitle.includes('expense') || lowerTitle.includes('reduce')) {
-    return ['Vendor contract review', 'Team communication plan'];
-  }
-  if (lowerTitle.includes('fund') || lowerTitle.includes('raise')) {
-    return ['Pitch deck update', 'Financial model preparation', 'Investor list'];
-  }
-  return [];
-}
-
-function normalizeRecommendation(rec: any): any {
-  const expectedImpact = rec.expected_impact || {
-    delta_survival_18m: rec.details?.survival_18m_delta || 0,
-    delta_runway_p50: rec.details?.runway_delta || 0,
-  };
-  
-  const risks = rec.risks || rec.details?.suggested_cuts || [];
-  const rationale = rec.rationale || rec.impact_summary || '';
-  const keyAssumption = rec.key_assumption || `Assumes ${rec.effort || 'medium'} effort over ${rec.timeline || '2-4 weeks'}`;
-  
-  return {
-    ...rec,
-    id: rec.id || rec.action_id || `rec-${rec.rank}`,
-    expected_impact: expectedImpact,
-    risks: Array.isArray(risks) ? risks : [risks],
-    rationale,
-    key_assumption: keyAssumption,
-  };
-}
-
-function ComparisonBar({ 
-  recommendations 
-}: { 
-  recommendations: any[] 
-}) {
-  if (!Array.isArray(recommendations) || recommendations.length < 2) return null;
-
-  const maxSurvival = Math.max(...recommendations.map(r => Math.abs(r.expected_impact?.delta_survival_18m || 0)));
-  const maxRunway = Math.max(...recommendations.map(r => Math.abs(r.expected_impact?.delta_runway_p50 || 0)));
-
-  return (
-    <Card className="mb-4">
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-2">
-          <Scale className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg">Quick Comparison</CardTitle>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              <p className="text-sm">Compare all options at a glance. Green bars show positive impact, red shows negative.</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Survival Impact (18 months)
-            </p>
-            <div className="space-y-3">
-              {recommendations.map((rec, idx) => {
-                const value = rec.expected_impact.delta_survival_18m;
-                const isPositive = value >= 0;
-                const percentage = maxSurvival > 0 ? (Math.abs(value) / maxSurvival) * 100 : 0;
-                
-                return (
-                  <div key={rec.id} className="space-y-1" data-testid={`comparison-survival-${idx}`}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        {idx === 0 && <Trophy className="h-4 w-4 text-emerald-500" />}
-                        {idx === 1 && <Target className="h-4 w-4 text-primary" />}
-                        {idx === 2 && <Zap className="h-4 w-4 text-slate-400" />}
-                        <span className="truncate max-w-[200px]">{rec.title}</span>
-                      </span>
-                      <span className={cn(
-                        "font-mono font-semibold",
-                        isPositive ? "text-emerald-500" : "text-red-500"
-                      )}>
-                        {isPositive ? '+' : ''}{Math.abs(value) < 0.1 && value !== 0 ? value.toFixed(2) : value.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          "h-full rounded-full transition-all duration-700",
-                          isPositive ? "bg-emerald-500" : "bg-red-500"
-                        )}
-                        style={{ width: `${Math.max(percentage, value !== 0 ? 10 : 0)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Runway Change (months)
-            </p>
-            <div className="space-y-3">
-              {recommendations.map((rec, idx) => {
-                const value = rec.expected_impact.delta_runway_p50;
-                const isPositive = value >= 0;
-                const percentage = maxRunway > 0 ? (Math.abs(value) / maxRunway) * 100 : 0;
-                
-                return (
-                  <div key={rec.id} className="space-y-1" data-testid={`comparison-runway-${idx}`}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        {idx === 0 && <Trophy className="h-4 w-4 text-emerald-500" />}
-                        {idx === 1 && <Target className="h-4 w-4 text-primary" />}
-                        {idx === 2 && <Zap className="h-4 w-4 text-slate-400" />}
-                        <span className="truncate max-w-[200px]">{rec.title}</span>
-                      </span>
-                      <span className={cn(
-                        "font-mono font-semibold",
-                        isPositive ? "text-emerald-500" : "text-red-500"
-                      )}>
-                        {isPositive ? '+' : ''}{Math.abs(value) < 0.1 && value !== 0 ? value.toFixed(2) : value.toFixed(1)} mo
-                      </span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          "h-full rounded-full transition-all duration-700",
-                          isPositive ? "bg-emerald-500" : "bg-red-500"
-                        )}
-                        style={{ width: `${Math.max(percentage, value !== 0 ? 10 : 0)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function DecisionsPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
   const { toast } = useToast();
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const latestScenarioId = scenarios?.[0]?.id;
-  const { data: simulation } = useSimulation(latestScenarioId || null);
   const { data: decisions, isLoading, refetch } = useDecisions(currentCompany?.id || null);
-  
+
   const createScenarioMutation = useCreateScenario();
   const runSimulationMutation = useRunSimulation();
   const generateDecisionsMutation = useGenerateDecisions();
   const strategicDiagnosisMutation = useStrategicDiagnosis();
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
-  const [decisionStatuses, setDecisionStatuses] = useState<StoredDecisionStatus>({});
-  const [previousRecs, setPreviousRecs] = useState<PreviousRecommendation[]>([]);
-  const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
-  const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [diagnosisData, setDiagnosisData] = useState<any>(null);
   const hasInitialized = useRef(false);
 
   const recommendationsData = decisions?.recommendations;
-  const rawRecommendations = Array.isArray(recommendationsData) 
-    ? recommendationsData 
-    : Array.isArray(recommendationsData?.recommendations) 
-      ? recommendationsData.recommendations 
+  const rawRecommendations = Array.isArray(recommendationsData)
+    ? recommendationsData
+    : Array.isArray(recommendationsData?.recommendations)
+      ? recommendationsData.recommendations
       : [];
-  const recommendations = rawRecommendations.map(normalizeRecommendation);
-  
-  const maxImpactValues = useMemo(() => {
-    if (!Array.isArray(recommendations) || recommendations.length === 0) {
-      return { survival: 20, runway: 12 };
-    }
-    const survivalValues = recommendations.map((r: any) => Math.abs(r.expected_impact?.delta_survival_18m || 0));
-    const runwayValues = recommendations.map((r: any) => Math.abs(r.expected_impact?.delta_runway_p50 || 0));
-    return {
-      survival: Math.max(20, ...survivalValues),
-      runway: Math.max(12, ...runwayValues),
-    };
-  }, [recommendations]);
-
-  const journalEntries = useMemo(() => {
-    return recommendations.map((rec: any) => ({
-      id: rec.id,
-      title: rec.title,
-      rank: rec.rank,
-      status: (decisionStatuses[rec.id] || 'pending') as DecisionStatus,
-      survivalImpact: rec.expected_impact?.delta_survival_18m || 0,
-      runwayChange: rec.expected_impact?.delta_runway_p50 || 0,
-    }));
-  }, [recommendations, decisionStatuses]);
 
   useEffect(() => {
     if (currentCompany && !hasInitialized.current) {
-      const loadedStatuses = loadDecisionStatuses(currentCompany.id);
-      const loadedPrevRecs = loadPreviousRecommendations(currentCompany.id);
-      setDecisionStatuses(loadedStatuses);
-      setPreviousRecs(loadedPrevRecs);
       hasInitialized.current = true;
     }
   }, [currentCompany]);
 
   useEffect(() => {
-    if (currentCompany && recommendations.length > 0 && !diagnosisData && !strategicDiagnosisMutation.isPending) {
+    if (currentCompany && rawRecommendations.length > 0 && !diagnosisData && !strategicDiagnosisMutation.isPending) {
       strategicDiagnosisMutation.mutate(currentCompany.id, {
         onSuccess: (data) => setDiagnosisData(data),
       });
     }
-  }, [currentCompany, recommendations.length]);
-
-  useEffect(() => {
-    if (!hasInitialized.current) return;
-
-    if (!Array.isArray(recommendations) || recommendations.length === 0 || previousRecs.length === 0) {
-      setChangedIds(new Set());
-      setNewIds(new Set());
-      return;
-    }
-
-    const prevMap = new Map(previousRecs.map(r => [r.id, r]));
-    const prevTitles = new Set(previousRecs.map(r => r.title));
-    
-    const newSet = new Set<string>();
-    const changedSet = new Set<string>();
-
-    for (const rec of recommendations) {
-      const prevRec = prevMap.get(rec.id);
-      
-      if (!prevRec && !prevTitles.has(rec.title)) {
-        newSet.add(rec.id);
-      } else if (prevRec) {
-        const prevImpact = prevRec.expectedImpact;
-        const currImpact = rec.expected_impact;
-        if (
-          prevRec.rank !== rec.rank ||
-          Math.abs(prevImpact.delta_survival_18m - currImpact.delta_survival_18m) > 0.1 ||
-          Math.abs(prevImpact.delta_runway_p50 - currImpact.delta_runway_p50) > 0.1
-        ) {
-          changedSet.add(rec.id);
-        }
-      }
-    }
-
-    setNewIds(newSet);
-    setChangedIds(changedSet);
-  }, [decisions, previousRecs]);
-  
-  const handleStatusChange = (decisionId: string, status: DecisionStatus) => {
-    if (!currentCompany) return;
-    
-    const updated = { ...decisionStatuses, [decisionId]: status };
-    setDecisionStatuses(updated);
-    saveDecisionStatuses(currentCompany.id, updated);
-    
-    toast({
-      title: 'Status Updated',
-      description: `Decision marked as ${status}`,
-    });
-  };
-
-  const handleAdoptPlan = (rec: any) => {
-    handleStatusChange(rec.id, 'adopted');
-    toast({
-      title: 'Plan Adopted',
-      description: `"${rec.title}" has been marked as your chosen strategy.`,
-    });
-  };
-
-  const handleRunScenario = (rec: any) => {
-    toast({
-      title: 'Running Scenario',
-      description: `Simulating "${rec.title}" with current assumptions...`,
-    });
-  };
-
-  const handleRefineAssumptions = (recId: string, assumptions: Record<string, number>) => {
-    console.log('Refining assumptions for', recId, assumptions);
-  };
+  }, [currentCompany, rawRecommendations.length]);
 
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
     setIsGenerating(true);
-    
-    const currentRecs = decisions?.recommendations || [];
-    if (currentRecs.length > 0) {
-      const prevRecsData: PreviousRecommendation[] = currentRecs.map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        rank: r.rank,
-        expectedImpact: r.expected_impact,
-      }));
-      setPreviousRecs(prevRecsData);
-      savePreviousRecommendations(currentCompany.id, prevRecsData);
-    }
-    
+
     try {
       let scenarioId = latestScenarioId;
-      
+
       if (!scenarioId) {
         const scenario = await createScenarioMutation.mutateAsync({
           companyId: currentCompany.id,
@@ -501,24 +58,24 @@ export default function DecisionsPage() {
         });
         scenarioId = scenario.id;
       }
-      
+
       const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
       await generateDecisionsMutation.mutateAsync(simResult.id);
-      
+
       strategicDiagnosisMutation.mutate(currentCompany.id, {
         onSuccess: (data) => setDiagnosisData(data),
       });
-      
+
       await refetch();
       setCurrentStep('decision');
-      toast({ title: 'Decisions generated!', description: 'New recommendations are ready for review.' });
+      toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
       const message = err.message || 'Something went wrong';
       if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
-        toast({ 
-          title: 'Session Expired', 
+        toast({
+          title: 'Session Expired',
           description: 'Please sign in again to continue.',
-          variant: 'destructive' 
+          variant: 'destructive'
         });
       } else {
         toast({ title: 'Error', description: message, variant: 'destructive' });
@@ -534,204 +91,265 @@ export default function DecisionsPage() {
       onSuccess: (data) => setDiagnosisData(data),
     });
   };
-  
+
   if (!currentCompany) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-3xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground" data-testid="text-no-company">Select a company to view decisions</p>
+            <p className="text-muted-foreground" data-testid="text-no-company">Select a company to view your strategic briefing.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
-  
-  const survivalCurve = simulation?.survival?.curve || [];
-  const bands = simulation?.bands || {};
-  
+
+  const hasBriefing = rawRecommendations.length > 0;
+  const isAnalyzing = strategicDiagnosisMutation.isPending;
+
+  const situationNarrative = diagnosisData?.situation_narrative || diagnosisData?.diagnosis_narrative || null;
+  const recommendationHeadline = diagnosisData?.recommendation_headline || null;
+  const recommendationNarrative = diagnosisData?.recommendation_narrative || null;
+  const urgencyText = diagnosisData?.urgency_text || null;
+  const inactionNarrative = diagnosisData?.inaction_narrative || null;
+  const inactionProjection = diagnosisData?.inaction_projection || null;
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="text-page-title">Decision Intelligence</h1>
-          <p className="text-muted-foreground mt-1">
-            AI-powered strategic advice personalized to your company's situation
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {recommendations.length > 0 && (
+    <div className="p-6 max-w-3xl mx-auto" data-testid="page-decisions">
+      <header className="mb-10">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2" data-testid="text-document-label">
+              Strategic Briefing
+            </p>
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
+              {currentCompany.name}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {diagnosisData?.generated_at
+                ? `Prepared ${new Date(diagnosisData.generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                : 'Founder\u2019s Briefing Document'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {hasBriefing && (
+              <Button
+                variant="outline"
+                onClick={handleRefreshDiagnosis}
+                disabled={isAnalyzing}
+                data-testid="button-refresh-diagnosis"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Brain className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="h-4 w-4 mr-2" />
+                    Refresh Briefing
+                  </>
+                )}
+              </Button>
+            )}
             <Button
-              variant="outline"
-              onClick={handleRefreshDiagnosis}
-              disabled={strategicDiagnosisMutation.isPending}
-              data-testid="button-refresh-diagnosis"
+              onClick={handleGenerateDecisions}
+              disabled={isGenerating}
+              data-testid="button-generate-decisions"
             >
-              {strategicDiagnosisMutation.isPending ? (
+              {isGenerating ? (
                 <>
-                  <Brain className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                   Analyzing...
                 </>
               ) : (
                 <>
-                  <Brain className="h-4 w-4 mr-2" />
-                  Refresh Diagnosis
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {hasBriefing ? 'Regenerate Briefing' : 'Generate Briefing'}
                 </>
               )}
             </Button>
+          </div>
+        </div>
+        {hasBriefing && (
+          <div className="mt-6 border-b border-border" />
+        )}
+      </header>
+
+      {isLoading ? (
+        <div className="space-y-8">
+          <div>
+            <Skeleton className="h-5 w-40 mb-4" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-5/6 mb-2" />
+            <Skeleton className="h-4 w-4/6" />
+          </div>
+          <div>
+            <Skeleton className="h-5 w-56 mb-4" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </div>
+      ) : hasBriefing ? (
+        <article className="space-y-10" data-testid="article-briefing">
+
+          {(situationNarrative || isAnalyzing) && (
+            <section data-testid="section-situation">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-1-title">
+                The Situation
+              </h2>
+              {isAnalyzing ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-4/6" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {situationNarrative.split('\n\n').map((paragraph: string, i: number) => (
+                    <p
+                      key={i}
+                      className="text-sm leading-relaxed text-muted-foreground"
+                      data-testid={`text-situation-p${i}`}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
+
+          {(recommendationHeadline || recommendationNarrative || isAnalyzing) && (
+            <section data-testid="section-recommendation">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-2-title">
+                What We Recommend
+              </h2>
+              {isAnalyzing ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/6" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recommendationHeadline && (
+                    <p
+                      className="text-base font-semibold text-foreground"
+                      data-testid="text-recommendation-headline"
+                    >
+                      {recommendationHeadline}
+                    </p>
+                  )}
+                  {recommendationNarrative && recommendationNarrative.split('\n\n').map((paragraph: string, i: number) => (
+                    <p
+                      key={i}
+                      className="text-sm leading-relaxed text-muted-foreground"
+                      data-testid={`text-recommendation-p${i}`}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                  {urgencyText && (
+                    <p
+                      className="text-sm font-medium text-foreground italic"
+                      data-testid="text-urgency"
+                    >
+                      {urgencyText}
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {(inactionNarrative || isAnalyzing) && (
+            <section data-testid="section-inaction">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-3-title">
+                What Happens If You Do Nothing
+              </h2>
+              {isAnalyzing ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-4/6" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {inactionNarrative.split('\n\n').map((paragraph: string, i: number) => (
+                    <p
+                      key={i}
+                      className="text-sm leading-relaxed text-muted-foreground"
+                      data-testid={`text-inaction-p${i}`}
+                    >
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {!diagnosisData && !isAnalyzing && rawRecommendations.length > 0 && (
+            <section data-testid="section-fallback">
+              <h2 className="text-lg font-semibold mb-4 tracking-tight">
+                The Situation
+              </h2>
+              {rawRecommendations.map((rec: any, i: number) => {
+                const rationale = rec.rationale || rec.impact_summary || '';
+                return (
+                  <div key={rec.id || i} className="mb-6" data-testid={`text-recommendation-fallback-${i}`}>
+                    <p className="text-base font-semibold text-foreground mb-2">
+                      {i + 1}. {rec.title}
+                    </p>
+                    {rationale && (
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {rationale}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          <footer className="pt-6 border-t border-border" data-testid="section-footer">
+            <p className="text-xs text-muted-foreground">
+              This briefing was generated using your company's financial data and AI-powered analysis.
+              {diagnosisData?.model_used && diagnosisData.model_used !== 'fallback' && (
+                <span> Model: {diagnosisData.model_used}.</span>
+              )}
+              {' '}Refresh to update with the latest data.
+            </p>
+          </footer>
+        </article>
+      ) : (
+        <div className="text-center py-16" data-testid="section-empty">
+          <p className="text-lg font-semibold mb-2">No briefing yet</p>
+          <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+            Generate a strategic briefing to get a written assessment of your company's
+            situation, a recommended course of action, and a projection of what happens
+            if you do nothing.
+          </p>
           <Button
             onClick={handleGenerateDecisions}
             disabled={isGenerating}
-            size="lg"
-            data-testid="button-generate-decisions"
+            data-testid="button-first-decision"
           >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {recommendations.length > 0 ? 'Regenerate Decisions' : 'Generate Decisions'}
-              </>
-            )}
+            {isGenerating ? 'Generating...' : 'Generate Strategic Briefing'}
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
-      </div>
-      
-      {isLoading ? (
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-6">
-              <Skeleton className="h-6 w-48 mb-4" />
-              <div className="grid grid-cols-2 gap-6">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-            </CardContent>
-          </Card>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Array(3).fill(0).map((_, i) => (
-              <Card key={i} className="overflow-visible">
-                <CardContent className="p-6">
-                  <Skeleton className="h-8 w-24 mb-4" />
-                  <Skeleton className="h-6 w-full mb-2" />
-                  <Skeleton className="h-4 w-3/4 mb-4" />
-                  <Skeleton className="h-24 w-full mb-4" />
-                  <Skeleton className="h-10 w-32" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ) : recommendations.length > 0 ? (
-        <>
-          <StrategicDiagnosis 
-            data={diagnosisData} 
-            isLoading={strategicDiagnosisMutation.isPending}
-            onRefresh={handleRefreshDiagnosis}
-          />
-
-          {diagnosisData?.inaction_projection && (
-            <InactionProjection data={diagnosisData.inaction_projection} />
-          )}
-
-          <ComparisonBar recommendations={recommendations} />
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {recommendations.map((rec: any) => (
-              <DecisionCard
-                key={rec.id}
-                id={rec.id}
-                rank={rec.rank}
-                title={rec.title}
-                rationale={rec.rationale}
-                expectedImpact={rec.expected_impact}
-                risks={rec.risks}
-                keyAssumption={rec.key_assumption}
-                timeHorizon={getTimeHorizon(rec.rank)}
-                dependencies={getDependencies(rec.title)}
-                detailedRiskFactors={rec.detailed_risks || rec.risks}
-                runwayImpactDetails={rec.runway_impact_details}
-                survivalImpactDetails={rec.survival_impact_details}
-                executionPlaybook={getExecutionPlaybook(rec.title)}
-                researchInsights={getResearchInsights(rec.title)}
-                secondOrderEffects={getSecondOrderEffects(rec.title)}
-                status={decisionStatuses[rec.id] || 'pending'}
-                onStatusChange={(status) => handleStatusChange(rec.id, status)}
-                onAdoptPlan={() => handleAdoptPlan(rec)}
-                onRunScenario={() => handleRunScenario(rec)}
-                onRefineAssumptions={(assumptions) => handleRefineAssumptions(rec.id, assumptions)}
-                isNew={newIds.has(rec.id)}
-                isChanged={changedIds.has(rec.id)}
-                maxSurvivalImpact={maxImpactValues.survival}
-                maxRunwayChange={maxImpactValues.runway}
-                testId={`decision-${rec.rank}`}
-              />
-            ))}
-          </div>
-          
-          <DecisionJournal entries={journalEntries} />
-          
-          {simulation && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {survivalCurve.length > 0 && (
-                <SurvivalCurveChart
-                  data={survivalCurve}
-                  title="Baseline Survival Curve"
-                  testId="chart-survival"
-                />
-              )}
-              
-              {bands.revenue && (
-                <BandsChart
-                  data={bands.revenue}
-                  title="Revenue Projection (P10/P50/P90)"
-                  testId="chart-revenue-bands"
-                />
-              )}
-              
-              {bands.cash && (
-                <BandsChart
-                  data={bands.cash}
-                  title="Cash Balance Projection"
-                  testId="chart-cash-bands"
-                />
-              )}
-              
-              {bands.burn && (
-                <BandsChart
-                  data={bands.burn}
-                  title="Monthly Burn Projection"
-                  testId="chart-burn-bands"
-                />
-              )}
-            </div>
-          )}
-        </>
-      ) : (
-        <Card className="border-dashed border-2">
-          <CardContent className="py-16 text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <Brain className="h-8 w-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2" data-testid="text-no-decisions">No Decisions Yet</h2>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Generate AI-powered strategic recommendations with personalized diagnosis, inaction projections, and execution playbooks.
-            </p>
-            <Button 
-              onClick={handleGenerateDecisions} 
-              disabled={isGenerating} 
-              size="lg"
-              data-testid="button-first-decision"
-            >
-              {isGenerating ? 'Generating...' : 'Generate Decision Intelligence'}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
       )}
     </div>
   );

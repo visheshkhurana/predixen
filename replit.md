@@ -52,13 +52,12 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 25. **Reorganized Simulation Results Hierarchy**: Results flow in decision-intelligence-first order: AI Summary → Decision Recommendations → Before/After → Sensitivity Levers + Breaking Points → Stress Tests → P10/P50/P90 Monte Carlo → Charts → Fundraising Intelligence. No hidden sections or Advanced View toggle.
 26. **Dual-Path "Or" Detection**: When users type "X or Y" / "X vs Y" in the scenario input, the system detects two separate decision paths, runs both Monte Carlo simulations in parallel, and sets up side-by-side comparison. Visual preview indicator below search bar, loading/completion banners, and partial-failure handling via `Promise.allSettled`.
 27. **Cross-Page Intelligence Alerts**: Reusable `CrossPageIntelligence` component that fetches latest simulation data via `useScenarios`/`useSimulation` hooks and generates contextual alerts (critical/warning/opportunity) based on survival, runway, and burn metrics. Displayed on Dashboard, Data Input, and Fundraising pages.
-28. **Decision Intelligence Redesign**: Major redesign of the Decisions page with AI-powered personalized advice. Includes:
-    - **Strategic Diagnosis**: AI-generated narrative from LLM router analyzing company health with health score gauge, stage label, top 3 priorities, and blind spots. Backend: `POST /api/companies/{id}/strategic-diagnosis`.
-    - **Inaction Projection**: "If You Do Nothing" warning card showing months to crisis, probability, cash at crisis, and key trigger with urgency-based styling (critical/urgent/standard).
-    - **Enhanced Decision Cards**: Each card now includes Execution Playbook (step-by-step actions), Research Insights (data-backed context), and Second-Order Effects (downstream consequences).
-    - **Decision Journal**: Replaces KPI cards with a tracking journal showing adoption stats, aggregate survival/runway gains, and per-decision status entries.
-    - Components: `StrategicDiagnosis.tsx`, `InactionProjection.tsx`, `DecisionJournal.tsx`. Enhanced: `DecisionCard.tsx`.
-    - Layout order: Strategic Diagnosis -> Inaction Projection -> Comparison Bar -> Decision Cards -> Decision Journal -> Charts.
+28. **Narrative Strategic Briefing (Decisions Page Redesign v2)**: Complete redesign of the Decisions page into a text-based, narrative-driven "founder's briefing document." No charts, bar graphs, percentage badges, or KPI cards. The page reads like a strategic memo from an advisor. Three sections:
+    - **Section 1 "The Situation"**: AI-generated 3-5 sentence paragraph describing current financial state using real data (MRR, burn rate, runway, growth rate).
+    - **Section 2 "What We Recommend"**: Bold action headline + 2-3 paragraphs of written rationale (WHY this action, WHY now, trade-offs, consequences of waiting) + urgency text indicator.
+    - **Section 3 "What Happens If You Do Nothing"**: 2-3 paragraph narrative projection of inaction consequences with specific numbers.
+    - Backend: `POST /api/companies/{id}/strategic-diagnosis` updated with narrative-format LLM prompt returning `situation_narrative`, `recommendation_headline`, `recommendation_narrative`, `urgency_text`, `inaction_narrative`.
+    - Frontend: `decisions.tsx` rewritten as clean prose document (max-w-3xl, article markup, no widget imports). Old widget components (StrategicDiagnosis.tsx, InactionProjection.tsx, DecisionJournal.tsx, ComparisonBar) still exist for use by other pages but are no longer used on the Decisions page.
 
 ### User Roles
 -   **Platform Admin**: Application owner.
