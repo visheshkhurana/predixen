@@ -253,7 +253,7 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
     return playbook
 
 
-@router.post("/companies/{company_id}/strategic-diagnosis")
+@router.get("/companies/{company_id}/strategic-diagnosis")
 def generate_strategic_diagnosis(
     company_id: int,
     db: Session = Depends(get_db),

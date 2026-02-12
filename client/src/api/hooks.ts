@@ -186,8 +186,18 @@ export function useStrategicDiagnosis() {
   return useMutation({
     mutationFn: (companyId: number) => api.decisions.strategicDiagnosis(companyId),
     onSuccess: (_, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'strategic-diagnosis'] });
     },
+  });
+}
+
+export function useStrategicDiagnosisQuery(companyId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['/api/companies', companyId, 'strategic-diagnosis'],
+    enabled: !!companyId && enabled,
+    retry: 1,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 

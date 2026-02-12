@@ -1,15 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RefreshCw, ArrowRight, Brain } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosis } from '@/api/hooks';
+import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosisQuery } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function DecisionsPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const latestScenarioId = scenarios?.[0]?.id;
   const { data: decisions, isLoading, refetch } = useDecisions(currentCompany?.id || null);
@@ -17,11 +19,8 @@ export default function DecisionsPage() {
   const createScenarioMutation = useCreateScenario();
   const runSimulationMutation = useRunSimulation();
   const generateDecisionsMutation = useGenerateDecisions();
-  const strategicDiagnosisMutation = useStrategicDiagnosis();
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [diagnosisData, setDiagnosisData] = useState<any>(null);
-  const hasInitialized = useRef(false);
 
   const recommendationsData = decisions?.recommendations;
   const rawRecommendations = Array.isArray(recommendationsData)
@@ -30,48 +29,16 @@ export default function DecisionsPage() {
       ? recommendationsData.recommendations
       : [];
 
-  useEffect(() => {
-    if (currentCompany && !hasInitialized.current) {
-      hasInitialized.current = true;
-    }
-  }, [currentCompany]);
+  const hasBriefing = rawRecommendations.length > 0;
 
-  const [diagnosisError, setDiagnosisError] = useState(false);
-  const diagnosisFetchedRef = useRef(false);
-  const lastCompanyIdRef = useRef<number | null>(null);
+  const {
+    data: diagnosisData,
+    isLoading: isDiagnosisLoading,
+    isError: diagnosisError,
+    refetch: refetchDiagnosis,
+  } = useStrategicDiagnosisQuery(currentCompany?.id || null, true);
 
-  useEffect(() => {
-    const companyId = currentCompany?.id || null;
-    if (companyId !== lastCompanyIdRef.current) {
-      lastCompanyIdRef.current = companyId;
-      diagnosisFetchedRef.current = false;
-      setDiagnosisData(null);
-      setDiagnosisError(false);
-    }
-  }, [currentCompany]);
-
-  useEffect(() => {
-    if (
-      currentCompany &&
-      rawRecommendations.length > 0 &&
-      !diagnosisData &&
-      !diagnosisError &&
-      !diagnosisFetchedRef.current &&
-      !strategicDiagnosisMutation.isPending
-    ) {
-      diagnosisFetchedRef.current = true;
-      strategicDiagnosisMutation.mutate(currentCompany.id, {
-        onSuccess: (data) => {
-          setDiagnosisData(data);
-          setDiagnosisError(false);
-        },
-        onError: () => {
-          diagnosisFetchedRef.current = false;
-          setDiagnosisError(true);
-        },
-      });
-    }
-  }, [currentCompany, rawRecommendations.length, diagnosisData, diagnosisError]);
+  console.error('[DIAG-DEBUG] companyId:', currentCompany?.id, 'diagnosisData:', !!diagnosisData, 'isLoading:', isDiagnosisLoading, 'isError:', diagnosisError);
 
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
@@ -91,20 +58,8 @@ export default function DecisionsPage() {
       const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
       await generateDecisionsMutation.mutateAsync(simResult.id);
 
-      setDiagnosisError(false);
-      diagnosisFetchedRef.current = true;
-      strategicDiagnosisMutation.mutate(currentCompany.id, {
-        onSuccess: (data) => {
-          setDiagnosisData(data);
-          setDiagnosisError(false);
-        },
-        onError: () => {
-          diagnosisFetchedRef.current = false;
-          setDiagnosisError(true);
-        },
-      });
-
       await refetch();
+      queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id, 'strategic-diagnosis'] });
       setCurrentStep('decision');
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
@@ -125,18 +80,8 @@ export default function DecisionsPage() {
 
   const handleRefreshDiagnosis = () => {
     if (!currentCompany) return;
-    setDiagnosisError(false);
-    diagnosisFetchedRef.current = true;
-    strategicDiagnosisMutation.mutate(currentCompany.id, {
-      onSuccess: (data) => {
-        setDiagnosisData(data);
-        setDiagnosisError(false);
-      },
-      onError: () => {
-        diagnosisFetchedRef.current = false;
-        setDiagnosisError(true);
-      },
-    });
+    queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id, 'strategic-diagnosis'] });
+    refetchDiagnosis();
   };
 
   if (!currentCompany) {
@@ -151,8 +96,7 @@ export default function DecisionsPage() {
     );
   }
 
-  const hasBriefing = rawRecommendations.length > 0;
-  const isAnalyzing = strategicDiagnosisMutation.isPending;
+  const isAnalyzing = isDiagnosisLoading;
 
   const situationNarrative = diagnosisData?.situation_narrative || diagnosisData?.diagnosis_narrative || null;
   const recommendationHeadline = diagnosisData?.recommendation_headline || null;
@@ -180,7 +124,7 @@ export default function DecisionsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {hasBriefing && (
+            {(diagnosisData || hasBriefing) && (
               <Button
                 variant="outline"
                 onClick={handleRefreshDiagnosis}
@@ -219,7 +163,7 @@ export default function DecisionsPage() {
             </Button>
           </div>
         </div>
-        {hasBriefing && (
+        {(diagnosisData || hasBriefing) && (
           <div className="mt-6 border-b border-border" />
         )}
       </header>
@@ -241,7 +185,7 @@ export default function DecisionsPage() {
             <Skeleton className="h-4 w-3/4" />
           </div>
         </div>
-      ) : hasBriefing ? (
+      ) : (diagnosisData || hasBriefing || isAnalyzing) ? (
         <article className="space-y-10" data-testid="article-briefing">
 
           {diagnosisError && !isAnalyzing && !diagnosisData && (
@@ -364,7 +308,7 @@ export default function DecisionsPage() {
             </section>
           )}
 
-          {hasBriefing && (executionPlaybook || isAnalyzing) && (
+          {(executionPlaybook || isAnalyzing) && (
             <section data-testid="section-playbook">
               <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-4-title">
                 Execution Playbook
