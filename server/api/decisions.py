@@ -213,20 +213,24 @@ Data Confidence: {confidence}%"""
     if survival_prob is not None:
         company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
     
-    system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You provide brutally honest, data-backed strategic diagnosis for startup founders. Your analysis is structured, opinionated, and actionable.
+    system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You write brutally honest, data-backed strategic briefing memos for startup founders. Write in plain prose — no bullet points, no dashboards, no charts. This is a document the founder will read top-to-bottom and forward to their team.
 
 Respond in valid JSON with this exact structure:
 {
-  "diagnosis_narrative": "A 3-4 paragraph strategic diagnosis written directly to the founder. Start with the single most important truth about their business right now. Include specific numbers. Be direct and honest - founders need truth, not comfort.",
+  "situation_narrative": "A 3-5 sentence paragraph in plain English describing the company's current financial state. Use specific numbers from the data (MRR, burn rate, runway, growth rate). Example tone: 'TechFlow Analytics is currently burning $143K/month against $15.4K in MRR. At this rate, you have approximately 2.9 months of runway remaining. Revenue growth has stalled at 0%, which means the gap between what you earn and what you spend is not closing. This puts you in a critical position where decisive action in the next 2-4 weeks will significantly impact your outcomes.'",
+  "recommendation_headline": "A bold, specific action statement — e.g. 'Cut Monthly Burn by 30% and Launch Emergency Revenue Sprint'",
+  "recommendation_narrative": "2-3 paragraphs of WRITTEN RATIONALE. Not a one-liner. Explain WHY this action, WHY now, what happens if the founder waits, and what the trade-offs are. Use the company's specific numbers. Write as if you are advising a founder in person. Be specific about the mechanics — what to cut, who to talk to, what to prioritize.",
+  "urgency_text": "A plain-English urgency statement — e.g. 'Act within the next 2 weeks' or 'This decision becomes less effective after 30 days'",
+  "inaction_narrative": "A 2-3 paragraph written projection of what happens if the founder does nothing. Paint the specific picture: when cash runs out, what triggers the crisis, what options disappear. Use real numbers. Write it as a cautionary narrative, not a data table.",
   "company_stage_label": "One of: Pre-Revenue, Early Revenue, Growth, Scale, or Distressed",
-  "health_score": 1-100 integer rating overall company health,
+  "health_score": 1-100,
   "health_label": "One of: Critical, Concerning, Stable, Healthy, Strong",
   "inaction_projection": {
-    "months_to_crisis": integer months until a critical event if no action taken,
-    "crisis_description": "What specifically happens if the founder does nothing",
-    "probability": 0-100 percent chance this scenario materializes,
-    "cash_at_crisis": estimated cash remaining at crisis point,
-    "key_trigger": "The single metric or event that triggers the crisis"
+    "months_to_crisis": integer,
+    "crisis_description": "One-sentence summary",
+    "probability": 0-100,
+    "cash_at_crisis": number,
+    "key_trigger": "Single trigger"
   },
   "top_3_priorities": [
     {
@@ -235,7 +239,7 @@ Respond in valid JSON with this exact structure:
       "expected_impact": "Quantified expected outcome"
     }
   ],
-  "blind_spots": ["2-3 things the founder probably isn't thinking about but should be"]
+  "blind_spots": ["2-3 things the founder probably isn't thinking about"]
 }"""
     
     try:
@@ -271,13 +275,20 @@ Respond in valid JSON with this exact structure:
     except Exception as e:
         import traceback
         logger.error(f"Strategic diagnosis failed: {traceback.format_exc()}")
+        growth_text = "Revenue growth is positive, which is encouraging, but it is not yet enough to close the gap between what you earn and what you spend." if growth > 0 else f"Revenue growth is at {growth:.1f}%, which means the gap between what you earn and what you spend is not closing."
+        crisis_months = max(1, int(runway_months - 2))
         return {
-            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of ${burn:,.0f}/month. {'Revenue growth is positive which is encouraging.' if growth > 0 else 'Revenue growth needs attention.'} Focus on extending runway while pursuing growth opportunities.",
+            "situation_narrative": f"{company.name} is currently burning ${burn:,.0f}/month against ${revenue:,.0f} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
+            "recommendation_headline": "Cut Monthly Burn by 25% and Launch an Emergency Revenue Sprint" if runway_months < 12 else "Accelerate Revenue Growth While Maintaining Capital Efficiency",
+            "recommendation_narrative": f"Your most urgent priority is {'survival' if runway_months < 12 else 'sustainable growth'}. With ${cash:,.0f} in the bank and a monthly burn of ${burn:,.0f}, every week of delay narrows your options. The single highest-leverage action right now is to {'reduce burn immediately — audit every vendor contract, pause non-essential hiring, and consolidate overlapping tools' if runway_months < 12 else 'increase revenue velocity while keeping costs disciplined'}.\n\n{'If you wait even 30 days to act, you will have consumed another $' + f'{burn:,.0f}' + ' and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development, but the alternative — running out of cash — is worse.' if runway_months < 12 else 'The trade-off is clear: investing in growth now means accepting higher short-term burn, but the compounding effect of revenue growth will extend your effective runway and strengthen your position for future fundraising.'}",
+            "urgency_text": f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. {'Every day of delay costs you $' + f'{burn/30:,.0f}' + ' and reduces your options.' if runway_months < 12 else 'This window of opportunity will not remain open indefinitely.'}",
+            "inaction_narrative": f"If you change nothing about how {company.name} operates today, here is what happens: In approximately {crisis_months} months, your cash reserves will drop below a safe operating threshold. At that point, you will be forced into emergency fundraising — which means accepting worse terms, higher dilution, and potentially losing control of key decisions.\n\nThe trigger is straightforward: your monthly burn of ${burn:,.0f} continues to outpace your revenue of ${revenue:,.0f}. Without intervention, this math does not change. By month {crisis_months}, you will have approximately ${max(0, cash - burn * crisis_months):,.0f} remaining — not enough to operate with confidence or negotiate from strength.",
+            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of ${burn:,.0f}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
             "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
             "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
             "health_label": "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"),
             "inaction_projection": {
-                "months_to_crisis": max(1, int(runway_months - 2)),
+                "months_to_crisis": crisis_months,
                 "crisis_description": f"Cash reserves depleted at current burn rate of ${burn:,.0f}/month",
                 "probability": 70 if runway_months < 12 else 40,
                 "cash_at_crisis": 0,
