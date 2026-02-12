@@ -165,38 +165,38 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
             "definition_of_done": f"Infrastructure audit complete, unused resources terminated, projected savings of ${burn * 0.04:,.0f}-${burn * 0.06:,.0f}/month confirmed in next billing cycle"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Identify your top 3 revenue-generating channels by conversion rate. Reallocate 80% of sales and marketing effort to those channels only. Pause all experimental campaigns.",
             "owner": "Head of Sales / Head of Marketing",
             "timeline": "Week 3",
             "definition_of_done": f"Channel performance report shared with leadership, budget reallocated, experimental campaigns paused with target of ${revenue * 0.2:,.0f}/month incremental revenue within 60 days"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Contact your top 10 customers and offer annual prepay discounts (15-20% off) in exchange for upfront cash. Prioritize accounts with monthly contracts over $1,000.",
             "owner": "Head of Sales / Account Management",
             "timeline": "Week 3-4",
             "definition_of_done": f"All 10 customers contacted, at least 3 prepay proposals sent, target ${cash * 0.05:,.0f}-${cash * 0.1:,.0f} in committed upfront cash"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Renegotiate payment terms with your 5 largest vendors to Net-60 or Net-90. Offer early payment discounts on future invoices as leverage.",
             "owner": "Head of Finance",
             "timeline": "Week 3",
             "definition_of_done": f"Renegotiation conversations initiated with all 5 vendors, at least 2 signed amendments in hand freeing ${burn * 0.1:,.0f}-${burn * 0.15:,.0f} in near-term cash"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Schedule a board/advisor call to discuss bridge financing options. Prepare a 90-day operating plan showing path to ${burn * 0.75:,.0f}/month burn rate.",
             "owner": "CEO",
-            "timeline": "Week 4",
+            "timeline": "Week 4-5",
             "definition_of_done": "Board call completed, 90-day plan presented, bridge commitment or term sheet timeline agreed upon"
         })
         playbook.append({
-            "phase": "Phase 3: Optimization (Week 5-8)",
+            "phase": "Phase 3: Optimization (Week 7-8)",
             "action": f"Track weekly burn against the new target of ${burn * 0.75:,.0f}/month. Review progress every Friday with the leadership team and adjust levers as needed.",
             "owner": "CEO / Head of Finance",
-            "timeline": "Week 5-8",
+            "timeline": "Week 7-8",
             "definition_of_done": f"4 consecutive weekly reviews completed, actual burn within 10% of ${burn * 0.75:,.0f}/month target, course corrections documented"
         })
     else:
@@ -222,28 +222,28 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
             "definition_of_done": "Dashboard live and shared with leadership team, first weekly review completed with actual vs. projected comparison"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Launch a pricing experiment: test a 15-20% price increase on new customers while grandfathering existing accounts. Measure impact on conversion over 30 days.",
             "owner": "Head of Product / CEO",
             "timeline": "Week 3",
             "definition_of_done": f"New pricing live for new signups, A/B test instrumented, 30-day measurement window started with target of ${revenue * 0.15:,.0f}-${revenue * 0.2:,.0f}/month incremental revenue if conversion holds"
         })
         playbook.append({
-            "phase": "Phase 2: Execution (Week 3-4)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Identify your 5 highest-value customers and schedule executive-level check-ins. Understand their expansion needs and propose upsell packages.",
             "owner": "Head of Sales / CEO",
-            "timeline": "Week 3-4",
+            "timeline": "Week 3-5",
             "definition_of_done": f"All 5 meetings completed, expansion proposals sent to at least 3 accounts, target ${revenue * 0.06:,.0f}-${revenue * 0.1:,.0f}/month in expansion revenue"
         })
         playbook.append({
-            "phase": "Phase 3: Optimization (Week 5-8)",
+            "phase": "Phase 2: Execution (Week 3-6)",
             "action": f"Build a 6-month financial model with three scenarios (base, optimistic, downside). Present to the board with specific asks for each scenario.",
             "owner": "CEO / Head of Finance",
             "timeline": "Week 5-6",
             "definition_of_done": "Model complete with all three scenarios, board presentation delivered, strategic alignment confirmed and next steps agreed"
         })
         playbook.append({
-            "phase": "Phase 3: Optimization (Week 5-8)",
+            "phase": "Phase 3: Optimization (Week 7-8)",
             "action": f"Review funnel fix results and pricing experiment data. Double down on what worked, kill what didn't. Set revised growth targets for the next quarter.",
             "owner": "Head of Growth / CEO",
             "timeline": "Week 7-8",
@@ -373,7 +373,7 @@ Respond in valid JSON with this exact structure:
   },
   "execution_playbook": [
     {
-      "phase": "Phase name — one of: 'Phase 1: Preparation (Week 1-2)', 'Phase 2: Execution (Week 3-4)', 'Phase 3: Optimization (Week 5-8)'",
+      "phase": "Phase name — one of: 'Phase 1: Preparation (Week 1-2)', 'Phase 2: Execution (Week 3-6)', 'Phase 3: Optimization (Week 7-8)'",
       "action": "A specific, concrete instruction written as a clear directive — e.g. 'Update the pitch deck to include Q4 metrics and a clear use-of-funds breakdown'",
       "owner": "The role responsible — e.g. 'CEO', 'Head of Finance', 'CTO', 'VP Engineering'",
       "timeline": "A specific deadline within the phase — e.g. 'Week 1', 'By end of Week 2', 'Within 48 hours'",
@@ -392,8 +392,8 @@ Respond in valid JSON with this exact structure:
 
 CRITICAL INSTRUCTION FOR execution_playbook: Generate 6-10 SPECIFIC action items that the founder can forward directly to their team. Group them into phases:
 - Phase 1: Preparation (Week 1-2) — what to get ready, audits, analysis, team alignment
-- Phase 2: Execution (Week 3-4) — the core actions, launches, negotiations, outreach
-- Phase 3: Optimization (Week 5-8) — measure results, iterate, course-correct
+- Phase 2: Execution (Week 3-6) — the core actions, launches, negotiations, outreach
+- Phase 3: Optimization (Week 7-8) — measure results, iterate, course-correct
 Each action must be a clear instruction — not vague advice like 'improve sales'. Write them as if you are handing a to-do list to an operator. Use the company's actual numbers to set targets. The playbook should be so specific that a team member could execute it without asking clarifying questions. Each item MUST include a 'definition_of_done' field describing the verifiable completion criteria."""
     
     try:
