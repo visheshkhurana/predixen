@@ -240,53 +240,72 @@ def generate_strategic_diagnosis(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    truth_scan = db.query(TruthScan).filter(
-        TruthScan.company_id == company.id
-    ).order_by(TruthScan.created_at.desc()).first()
-    
-    metrics = {}
+    revenue = 0.0
+    burn = 0.0
+    cash = 0.0
+    growth = 0.0
+    runway_months = 24.0
+    net_burn = 0.0
+    exhaustion_date = "beyond 24 months"
+    breakeven_growth_needed = 0.0
     confidence = 50
-    if truth_scan:
-        metrics = truth_scan.outputs_json.get("metrics", {})
-        confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
-    
-    latest_record = (
-        db.query(FinancialRecord)
-        .filter(FinancialRecord.company_id == company.id)
-        .order_by(FinancialRecord.period_start.desc())
-        .first()
-    )
-    
-    revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
-    if not revenue and latest_record and latest_record.revenue:
-        revenue = float(latest_record.revenue)
-    burn = extract_metric_value(metrics.get("monthly_burn"), 0)
-    if not burn and latest_record:
-        opex = float(latest_record.opex or 0)
-        payroll = float(latest_record.payroll or 0)
-        burn = opex + payroll
-    cash = extract_metric_value(metrics.get("cash_balance"), 0)
-    if not cash and latest_record and latest_record.cash_balance:
-        cash = float(latest_record.cash_balance)
-    growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
-    runway_months = cash / burn if burn > 0 else 24
-    
-    from server.models.scenario import Scenario
-    scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
-    sim_data = None
-    if scenarios:
-        for scenario in scenarios:
-            sim_run = db.query(SimulationRun).filter(
-                SimulationRun.scenario_id == scenario.id
-            ).order_by(SimulationRun.created_at.desc()).first()
-            if sim_run and sim_run.results_json:
-                sim_data = sim_run.results_json
-                break
-    
     survival_prob = None
-    if sim_data:
-        survival = sim_data.get("survival", {})
-        survival_prob = survival.get("probability_18m") or survival.get("probability_12m")
+    
+    try:
+        truth_scan = db.query(TruthScan).filter(
+            TruthScan.company_id == company.id
+        ).order_by(TruthScan.created_at.desc()).first()
+        
+        metrics = {}
+        confidence = 50
+        if truth_scan and truth_scan.outputs_json:
+            metrics = truth_scan.outputs_json.get("metrics", {})
+            confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
+        
+        latest_record = (
+            db.query(FinancialRecord)
+            .filter(FinancialRecord.company_id == company.id)
+            .order_by(FinancialRecord.period_start.desc())
+            .first()
+        )
+        
+        revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+        if not revenue and latest_record and latest_record.revenue:
+            revenue = float(latest_record.revenue)
+        burn = extract_metric_value(metrics.get("monthly_burn"), 0)
+        if not burn and latest_record:
+            opex = float(latest_record.opex or 0)
+            payroll = float(latest_record.payroll or 0)
+            burn = opex + payroll
+        cash = extract_metric_value(metrics.get("cash_balance"), 0)
+        if not cash and latest_record and latest_record.cash_balance:
+            cash = float(latest_record.cash_balance)
+        growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+        runway_months = cash / burn if burn > 0 else 24
+        
+        from server.models.scenario import Scenario
+        scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
+        sim_data = None
+        if scenarios:
+            for scenario in scenarios:
+                sim_run = db.query(SimulationRun).filter(
+                    SimulationRun.scenario_id == scenario.id
+                ).order_by(SimulationRun.created_at.desc()).first()
+                if sim_run and sim_run.outputs_json:
+                    sim_data = sim_run.outputs_json
+                    break
+        
+        survival_prob = None
+        if sim_data:
+            survival = sim_data.get("survival", {})
+            survival_prob = survival.get("probability_18m") or survival.get("probability_12m")
+        
+        net_burn = burn - revenue
+        months_to_zero = cash / net_burn if net_burn > 0 else 99
+        exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"
+        breakeven_growth_needed = ((burn / revenue) - 1) * 100 if revenue > 0 else 0
+    except Exception as data_err:
+        logger.warning(f"Error gathering financial data for diagnosis: {data_err}")
     
     company_context = f"""Company: {company.name}
 Industry: {getattr(company, 'industry', 'Technology')}
@@ -301,11 +320,6 @@ Data Confidence: {confidence}%"""
     if survival_prob is not None:
         company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
     
-    net_burn = burn - revenue
-    months_to_zero = cash / net_burn if net_burn > 0 else 99
-    exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"
-    breakeven_growth_needed = ((burn / revenue) - 1) * 100 if revenue > 0 else 0
-
     company_context += f"\nNet Monthly Burn (burn minus revenue): ${net_burn:,.0f}"
     company_context += f"\nProjected Cash Exhaustion: {exhaustion_date}"
     if revenue > 0:
