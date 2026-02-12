@@ -473,11 +473,10 @@ export default function DecisionsPage() {
                   ))}
                 </div>
               ) : keyRisks && keyRisks.length > 0 ? (
-                <ol className="space-y-6 list-none p-0 m-0">
+                <ol className="space-y-8 list-none p-0 m-0">
                   {keyRisks.map((item, i) => {
                     const risk = item?.risk || '';
                     const likelihood = item?.likelihood || '';
-                    const impact = item?.impact || '';
                     const contingency = item?.contingency || '';
                     if (!risk) return null;
                     return (
@@ -489,24 +488,17 @@ export default function DecisionsPage() {
                         <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
                           {i + 1}.
                         </span>
-                        <p className="text-sm font-medium text-foreground leading-relaxed mb-1">
+                        <p className="text-sm leading-relaxed text-muted-foreground mb-2" data-testid={`risk-scenario-${i}`}>
                           {risk}
                         </p>
-                        <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
-                          {likelihood && (
-                            <span data-testid={`risk-likelihood-${i}`}>
-                              <span className="font-medium text-foreground/70">Likelihood:</span> {likelihood}
-                            </span>
-                          )}
-                        </div>
-                        {impact && (
-                          <p className="text-xs text-muted-foreground mb-1" data-testid={`risk-impact-${i}`}>
-                            <span className="font-medium text-foreground/70">Impact:</span> {impact}
+                        {likelihood && (
+                          <p className="text-xs text-muted-foreground mb-2" data-testid={`risk-likelihood-${i}`}>
+                            <span className="font-medium text-foreground/70">Likelihood:</span> {likelihood}
                           </p>
                         )}
                         {contingency && (
-                          <p className="text-xs text-muted-foreground" data-testid={`risk-contingency-${i}`}>
-                            <span className="font-medium text-foreground/70">Contingency:</span> {contingency}
+                          <p className="text-sm leading-relaxed text-muted-foreground" data-testid={`risk-contingency-${i}`}>
+                            <span className="font-medium text-foreground/70">If this happens:</span> {contingency}
                           </p>
                         )}
                       </li>
