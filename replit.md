@@ -55,9 +55,10 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 28. **Narrative Strategic Briefing (Decisions Page Redesign v2)**: Complete redesign of the Decisions page into a text-based, narrative-driven "founder's briefing document." No charts, bar graphs, percentage badges, or KPI cards. The page reads like a strategic memo from an advisor. Three sections:
     - **Section 1 "The Situation"**: AI-generated 3-5 sentence paragraph describing current financial state using real data (MRR, burn rate, runway, growth rate).
     - **Section 2 "What We Recommend"**: Bold action headline + 2-3 paragraphs of written rationale (WHY this action, WHY now, trade-offs, consequences of waiting) + urgency text indicator.
-    - **Section 3 "What Happens If You Do Nothing"**: 2-3 paragraph narrative projection of inaction consequences with specific numbers.
-    - Backend: `POST /api/companies/{id}/strategic-diagnosis` updated with narrative-format LLM prompt returning `situation_narrative`, `recommendation_headline`, `recommendation_narrative`, `urgency_text`, `inaction_narrative`.
-    - Frontend: `decisions.tsx` rewritten as clean prose document (max-w-3xl, article markup, no widget imports). Old widget components (StrategicDiagnosis.tsx, InactionProjection.tsx, DecisionJournal.tsx, ComparisonBar) still exist for use by other pages but are no longer used on the Decisions page.
+    - **Section 3 "What Happens If You Do Nothing"**: 2-3 paragraph narrative projection of inaction consequences with specific numbers, exhaustion date, and break-even growth requirements.
+    - **Section 4 "Execution Playbook"** (THE MOST IMPORTANT SECTION): 5-8 specific, team-ready action items the founder can forward directly. Each item has: action (clear directive), owner (role responsible), timeline (specific deadline), expected_outcome (quantified result). Different playbooks generated for survival (<12mo runway) vs growth (>12mo runway) scenarios. Backend helper `_build_fallback_playbook()` generates data-driven items using actual company numbers.
+    - Backend: `POST /api/companies/{id}/strategic-diagnosis` returns `situation_narrative`, `recommendation_headline`, `recommendation_narrative`, `urgency_text`, `inaction_narrative`, `execution_playbook[]`. LLM prompt includes net burn, exhaustion date, and break-even growth data.
+    - Frontend: `decisions.tsx` renders as clean prose document (max-w-3xl, article markup). Playbook renders as numbered action items with owner/deadline/outcome metadata. Defensive guards handle malformed LLM output.
 
 ### User Roles
 -   **Platform Admin**: Application owner.
