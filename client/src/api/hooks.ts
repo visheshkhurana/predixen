@@ -180,6 +180,17 @@ export function useDecisions(companyId: number | null) {
   });
 }
 
+export function useStrategicDiagnosis() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (companyId: number) => api.decisions.strategicDiagnosis(companyId),
+    onSuccess: (_, companyId) => {
+      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', companyId] });
+    },
+  });
+}
+
 export function useContext(companyId: number | null) {
   return useQuery({
     queryKey: ['context', companyId],

@@ -337,6 +337,8 @@ export const api = {
       request<any>(`/simulation/${runId}/decisions/generate`, { method: 'POST' }),
     latest: (companyId: number) =>
       request<any>(`/companies/${companyId}/decisions/latest`),
+    strategicDiagnosis: (companyId: number) =>
+      request<any>(`/companies/${companyId}/strategic-diagnosis`, { method: 'POST' }),
   },
   
   copilot: {

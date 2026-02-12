@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid as uuid_lib
+import logging
+
+logger = logging.getLogger(__name__)
 
 from server.core.db import get_db
 from server.core.security import get_current_user
@@ -134,6 +137,168 @@ def generate_decisions(
         "simulation_run_id": run_id,
         "recommendations": recommendations
     }
+
+@router.post("/companies/{company_id}/strategic-diagnosis")
+def generate_strategic_diagnosis(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company.id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    metrics = {}
+    confidence = 50
+    if truth_scan:
+        metrics = truth_scan.outputs_json.get("metrics", {})
+        confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
+    
+    latest_record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company.id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+    
+    revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+    if not revenue and latest_record and latest_record.revenue:
+        revenue = float(latest_record.revenue)
+    burn = extract_metric_value(metrics.get("monthly_burn"), 0)
+    if not burn and latest_record:
+        opex = float(latest_record.opex or 0)
+        payroll = float(latest_record.payroll or 0)
+        burn = opex + payroll
+    cash = extract_metric_value(metrics.get("cash_balance"), 0)
+    if not cash and latest_record and latest_record.cash_balance:
+        cash = float(latest_record.cash_balance)
+    growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    runway_months = cash / burn if burn > 0 else 24
+    
+    from server.models.scenario import Scenario
+    scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
+    sim_data = None
+    if scenarios:
+        for scenario in scenarios:
+            sim_run = db.query(SimulationRun).filter(
+                SimulationRun.scenario_id == scenario.id
+            ).order_by(SimulationRun.created_at.desc()).first()
+            if sim_run and sim_run.results_json:
+                sim_data = sim_run.results_json
+                break
+    
+    survival_prob = None
+    if sim_data:
+        survival = sim_data.get("survival", {})
+        survival_prob = survival.get("probability_18m") or survival.get("probability_12m")
+    
+    company_context = f"""Company: {company.name}
+Industry: {getattr(company, 'industry', 'Technology')}
+Stage: {getattr(company, 'stage', 'Seed/Series A')}
+Monthly Revenue: ${revenue:,.0f}
+Monthly Burn: ${burn:,.0f}
+Cash Balance: ${cash:,.0f}
+Revenue Growth (MoM): {growth:.1f}%
+Runway: {runway_months:.1f} months
+Data Confidence: {confidence}%"""
+    
+    if survival_prob is not None:
+        company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
+    
+    system_prompt = """You are a McKinsey senior partner and a16z venture partner combined. You provide brutally honest, data-backed strategic diagnosis for startup founders. Your analysis is structured, opinionated, and actionable.
+
+Respond in valid JSON with this exact structure:
+{
+  "diagnosis_narrative": "A 3-4 paragraph strategic diagnosis written directly to the founder. Start with the single most important truth about their business right now. Include specific numbers. Be direct and honest - founders need truth, not comfort.",
+  "company_stage_label": "One of: Pre-Revenue, Early Revenue, Growth, Scale, or Distressed",
+  "health_score": 1-100 integer rating overall company health,
+  "health_label": "One of: Critical, Concerning, Stable, Healthy, Strong",
+  "inaction_projection": {
+    "months_to_crisis": integer months until a critical event if no action taken,
+    "crisis_description": "What specifically happens if the founder does nothing",
+    "probability": 0-100 percent chance this scenario materializes,
+    "cash_at_crisis": estimated cash remaining at crisis point,
+    "key_trigger": "The single metric or event that triggers the crisis"
+  },
+  "top_3_priorities": [
+    {
+      "priority": "Short action label",
+      "why_now": "One sentence on urgency",
+      "expected_impact": "Quantified expected outcome"
+    }
+  ],
+  "blind_spots": ["2-3 things the founder probably isn't thinking about but should be"]
+}"""
+    
+    try:
+        from server.lib.llm.llm_router import get_llm_router, TaskType
+        llm_router = get_llm_router(
+            db_session=db,
+            company_id=company_id,
+            user_id=current_user.id
+        )
+        
+        result = llm_router.chat(
+            messages=[{"role": "user", "content": f"Provide a strategic diagnosis for this company:\n\n{company_context}"}],
+            task_type=TaskType.STRATEGY,
+            system=system_prompt,
+            temperature=0.6,
+            max_tokens=4096,
+        )
+        
+        import json
+        content = result.get("content", "{}")
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        diagnosis = json.loads(content)
+        diagnosis["company_name"] = company.name
+        diagnosis["generated_at"] = datetime.utcnow().isoformat()
+        diagnosis["model_used"] = result.get("model", "unknown")
+        
+        return diagnosis
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"Strategic diagnosis failed: {traceback.format_exc()}")
+        return {
+            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of ${burn:,.0f}/month. {'Revenue growth is positive which is encouraging.' if growth > 0 else 'Revenue growth needs attention.'} Focus on extending runway while pursuing growth opportunities.",
+            "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
+            "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
+            "health_label": "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"),
+            "inaction_projection": {
+                "months_to_crisis": max(1, int(runway_months - 2)),
+                "crisis_description": f"Cash reserves depleted at current burn rate of ${burn:,.0f}/month",
+                "probability": 70 if runway_months < 12 else 40,
+                "cash_at_crisis": 0,
+                "key_trigger": "Cash balance drops below 2 months of operating expenses"
+            },
+            "top_3_priorities": [
+                {"priority": "Extend runway", "why_now": "Current runway is limited", "expected_impact": "Add 3-6 months of operating time"},
+                {"priority": "Accelerate revenue", "why_now": "Revenue growth compounds over time", "expected_impact": "Reduce dependency on external funding"},
+                {"priority": "Optimize burn", "why_now": "Every dollar saved extends runway", "expected_impact": "10-20% burn reduction possible"}
+            ],
+            "blind_spots": [
+                "Customer concentration risk if relying on few large accounts",
+                "Team capacity constraints that could limit growth execution",
+                "Market timing risk as conditions may shift"
+            ],
+            "company_name": company.name,
+            "generated_at": datetime.utcnow().isoformat(),
+            "model_used": "fallback",
+            "error": str(e)
+        }
+
 
 @router.get("/companies/{company_id}/decisions/latest", response_model=Dict[str, Any])
 def get_latest_decisions(
