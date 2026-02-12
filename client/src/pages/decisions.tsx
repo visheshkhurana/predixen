@@ -37,20 +37,41 @@ export default function DecisionsPage() {
   }, [currentCompany]);
 
   const [diagnosisError, setDiagnosisError] = useState(false);
+  const diagnosisFetchedRef = useRef(false);
+  const lastCompanyIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (currentCompany && rawRecommendations.length > 0 && !diagnosisData && !diagnosisError && !strategicDiagnosisMutation.isPending) {
+    const companyId = currentCompany?.id || null;
+    if (companyId !== lastCompanyIdRef.current) {
+      lastCompanyIdRef.current = companyId;
+      diagnosisFetchedRef.current = false;
+      setDiagnosisData(null);
+      setDiagnosisError(false);
+    }
+  }, [currentCompany]);
+
+  useEffect(() => {
+    if (
+      currentCompany &&
+      rawRecommendations.length > 0 &&
+      !diagnosisData &&
+      !diagnosisError &&
+      !diagnosisFetchedRef.current &&
+      !strategicDiagnosisMutation.isPending
+    ) {
+      diagnosisFetchedRef.current = true;
       strategicDiagnosisMutation.mutate(currentCompany.id, {
         onSuccess: (data) => {
           setDiagnosisData(data);
           setDiagnosisError(false);
         },
         onError: () => {
+          diagnosisFetchedRef.current = false;
           setDiagnosisError(true);
         },
       });
     }
-  }, [currentCompany, rawRecommendations.length]);
+  }, [currentCompany, rawRecommendations.length, diagnosisData, diagnosisError]);
 
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
@@ -71,12 +92,16 @@ export default function DecisionsPage() {
       await generateDecisionsMutation.mutateAsync(simResult.id);
 
       setDiagnosisError(false);
+      diagnosisFetchedRef.current = true;
       strategicDiagnosisMutation.mutate(currentCompany.id, {
         onSuccess: (data) => {
           setDiagnosisData(data);
           setDiagnosisError(false);
         },
-        onError: () => setDiagnosisError(true),
+        onError: () => {
+          diagnosisFetchedRef.current = false;
+          setDiagnosisError(true);
+        },
       });
 
       await refetch();
@@ -101,12 +126,16 @@ export default function DecisionsPage() {
   const handleRefreshDiagnosis = () => {
     if (!currentCompany) return;
     setDiagnosisError(false);
+    diagnosisFetchedRef.current = true;
     strategicDiagnosisMutation.mutate(currentCompany.id, {
       onSuccess: (data) => {
         setDiagnosisData(data);
         setDiagnosisError(false);
       },
-      onError: () => setDiagnosisError(true),
+      onError: () => {
+        diagnosisFetchedRef.current = false;
+        setDiagnosisError(true);
+      },
     });
   };
 
