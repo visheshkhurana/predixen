@@ -478,6 +478,7 @@ export default function DecisionsPage() {
                     const risk = item?.risk || '';
                     const likelihood = item?.likelihood || '';
                     const contingency = item?.contingency || '';
+                    const pivotDeadline = item?.pivot_deadline || '';
                     if (!risk) return null;
                     return (
                       <li
@@ -497,8 +498,13 @@ export default function DecisionsPage() {
                           </p>
                         )}
                         {contingency && (
-                          <p className="text-sm leading-relaxed text-muted-foreground" data-testid={`risk-contingency-${i}`}>
+                          <p className="text-sm leading-relaxed text-muted-foreground mb-2" data-testid={`risk-contingency-${i}`}>
                             <span className="font-medium text-foreground/70">If this happens:</span> {contingency}
+                          </p>
+                        )}
+                        {pivotDeadline && (
+                          <p className="text-sm leading-relaxed text-muted-foreground" data-testid={`risk-pivot-${i}`}>
+                            <span className="font-medium text-foreground/70">When to pivot:</span> {pivotDeadline}
                           </p>
                         )}
                       </li>
