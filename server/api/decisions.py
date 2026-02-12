@@ -460,7 +460,8 @@ Each action must be a clear instruction — not vague advice like 'improve sales
         
         result = llm_router.chat(
             messages=[{"role": "user", "content": f"Provide a strategic diagnosis for this company:\n\n{company_context}"}],
-            task_type=TaskType.STRATEGY,
+            task_type=TaskType.FINANCIAL_ANALYSIS,
+            model="gpt-4o",
             system=system_prompt,
             temperature=0.6,
             max_tokens=6000,
