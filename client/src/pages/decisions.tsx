@@ -1,13 +1,18 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, ArrowUpRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosisQuery } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 3000 },
@@ -24,6 +29,12 @@ const TOC_SECTIONS = [
   { id: 'section-key-risks', label: 'Key Risks', num: 5 },
   { id: 'section-alt-paths', label: 'Alternative Paths', num: 6 },
 ];
+
+interface ShareModalData {
+  contentType: 'playbook_item' | 'risk' | 'recommendation' | 'full_briefing' | 'custom';
+  subject: string;
+  contentData: Record<string, any>;
+}
 
 function LoadingProgress() {
   const [activeStep, setActiveStep] = useState(0);
@@ -114,6 +125,156 @@ function LikelihoodBadge({ likelihood }: { likelihood: string }) {
   return <Badge variant="secondary" className="text-[10px] bg-green-500/15 text-green-400 border-green-500/30" data-testid="badge-likelihood-low">Low</Badge>;
 }
 
+function ShareModal({
+  open,
+  onOpenChange,
+  data,
+  companyId,
+  companyName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  data: ShareModalData | null;
+  companyId: number;
+  companyName: string;
+}) {
+  const { toast } = useToast();
+  const [toEmail, setToEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [personalNote, setPersonalNote] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setSubject(data.subject);
+      setToEmail('');
+      setPersonalNote('');
+    }
+  }, [data]);
+
+  const handleSend = async () => {
+    if (!toEmail.trim()) {
+      toast({ title: 'Email required', description: 'Please enter a recipient email address.', variant: 'destructive' });
+      return;
+    }
+    setIsSending(true);
+    try {
+      await apiRequest('POST', `/api/companies/${companyId}/share-action-item`, {
+        to_email: toEmail.trim(),
+        subject: subject || undefined,
+        content_type: data?.contentType || 'custom',
+        content_data: data?.contentData || {},
+        personal_note: personalNote.trim() || undefined,
+      });
+      toast({ title: 'Sent', description: `Email sent to ${toEmail.trim()}` });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to send', description: err.message || 'Something went wrong.', variant: 'destructive' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const typeLabels: Record<string, string> = {
+    playbook_item: 'Action Item',
+    risk: 'Risk Alert',
+    recommendation: 'Recommendation',
+    full_briefing: 'Full Briefing',
+    custom: 'Shared Item',
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" data-testid="share-modal">
+        <DialogHeader>
+          <DialogTitle data-testid="share-modal-title">
+            Share {typeLabels[data?.contentType || 'custom']}
+          </DialogTitle>
+          <DialogDescription>
+            Send this as a professional email via Predixen.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="share-email">Recipient email</Label>
+            <Input
+              id="share-email"
+              type="email"
+              placeholder="team@company.com"
+              value={toEmail}
+              onChange={(e) => setToEmail(e.target.value)}
+              data-testid="input-share-email"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="share-subject">Subject</Label>
+            <Input
+              id="share-subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              data-testid="input-share-subject"
+            />
+          </div>
+          {data?.contentType === 'playbook_item' && data.contentData.action && (
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs text-muted-foreground mb-1 font-medium">Action item being shared:</p>
+              <p className="text-sm text-foreground">{data.contentData.action}</p>
+              {data.contentData.owner && <p className="text-xs text-muted-foreground mt-1">Owner: {data.contentData.owner}</p>}
+            </div>
+          )}
+          {data?.contentType === 'risk' && data.contentData.risk && (
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs text-muted-foreground mb-1 font-medium">Risk being shared:</p>
+              <p className="text-sm text-foreground">{data.contentData.risk}</p>
+            </div>
+          )}
+          {data?.contentType === 'recommendation' && data.contentData.headline && (
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs text-muted-foreground mb-1 font-medium">Recommendation being shared:</p>
+              <p className="text-sm text-foreground">{data.contentData.headline}</p>
+            </div>
+          )}
+          {data?.contentType === 'full_briefing' && (
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs text-muted-foreground font-medium">The full strategic briefing will be sent.</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="share-note">Personal note (optional)</Label>
+            <Textarea
+              id="share-note"
+              placeholder="Add a message for the recipient..."
+              value={personalNote}
+              onChange={(e) => setPersonalNote(e.target.value)}
+              className="resize-none"
+              rows={3}
+              data-testid="input-share-note"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-share-cancel">
+            Cancel
+          </Button>
+          <Button onClick={handleSend} disabled={isSending} data-testid="button-share-send">
+            {isSending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 mr-2" />
+                Send Email
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function usePlaybookChecks(companyId: number | null) {
   const storageKey = companyId ? `predixen-playbook-checks-${companyId}` : null;
 
@@ -155,6 +316,8 @@ export default function DecisionsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeSection, setActiveSection] = useState('section-situation');
   const [copied, setCopied] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareModalData, setShareModalData] = useState<ShareModalData | null>(null);
 
   const recommendationsData = decisions?.recommendations;
   const rawRecommendations = Array.isArray(recommendationsData)
@@ -203,6 +366,98 @@ export default function DecisionsPage() {
       observer.disconnect();
     };
   }, [diagnosisData]);
+
+  const openShareModal = (data: ShareModalData) => {
+    setShareModalData(data);
+    setShareModalOpen(true);
+  };
+
+  const handleSharePlaybookItem = (item: any) => {
+    openShareModal({
+      contentType: 'playbook_item',
+      subject: `Action Item from ${currentCompany?.name || 'Your Company'}`,
+      contentData: {
+        action: item.action || item.description || '',
+        owner: item.owner || item.responsible || '',
+        timeline: item.timeline || item.deadline || '',
+        done_when: item.definition_of_done || '',
+        phase: item.phase || '',
+      },
+    });
+  };
+
+  const handleShareRisk = (item: any) => {
+    openShareModal({
+      contentType: 'risk',
+      subject: `Risk Alert from ${currentCompany?.name || 'Your Company'}`,
+      contentData: {
+        risk: item.risk || '',
+        likelihood: item.likelihood || '',
+        contingency: item.contingency || '',
+        pivot_deadline: item.pivot_deadline || '',
+      },
+    });
+  };
+
+  const handleShareRecommendation = () => {
+    if (!diagnosisData) return;
+    openShareModal({
+      contentType: 'recommendation',
+      subject: `Strategic Recommendation from ${currentCompany?.name || 'Your Company'}`,
+      contentData: {
+        headline: diagnosisData.recommendation_headline || '',
+        narrative: diagnosisData.recommendation_narrative || '',
+        urgency: diagnosisData.urgency_text || '',
+      },
+    });
+  };
+
+  const handleEmailFullBriefing = () => {
+    if (!diagnosisData) return;
+    const sections: Array<{title: string; text: string}> = [];
+    if (diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative) {
+      sections.push({ title: 'Section 1: The Situation', text: diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative });
+    }
+    if (diagnosisData.recommendation_headline) {
+      let recText = diagnosisData.recommendation_headline;
+      if (diagnosisData.recommendation_narrative) recText += '\n\n' + diagnosisData.recommendation_narrative;
+      if (diagnosisData.urgency_text) recText += '\n\nUrgency: ' + diagnosisData.urgency_text;
+      sections.push({ title: 'Section 2: What We Recommend', text: recText });
+    }
+    if (diagnosisData.inaction_narrative) {
+      sections.push({ title: 'Section 3: What Happens If You Do Nothing', text: diagnosisData.inaction_narrative });
+    }
+    if (diagnosisData.execution_playbook?.length) {
+      const pbText = diagnosisData.execution_playbook.map((item: any, i: number) => {
+        let line = `${i + 1}. ${item.action || item.description || ''}`;
+        if (item.owner) line += ` (Owner: ${item.owner})`;
+        if (item.timeline) line += ` - ${item.timeline}`;
+        if (item.definition_of_done) line += ` | Done when: ${item.definition_of_done}`;
+        return line;
+      }).join('\n');
+      sections.push({ title: 'Section 4: Execution Playbook', text: pbText });
+    }
+    if (diagnosisData.key_risks?.length) {
+      const riskText = diagnosisData.key_risks.map((item: any, i: number) => {
+        let line = `${i + 1}. [${item.likelihood}] ${item.risk}`;
+        if (item.contingency) line += `\n   If this happens: ${item.contingency}`;
+        if (item.pivot_deadline) line += `\n   When to pivot: ${item.pivot_deadline}`;
+        return line;
+      }).join('\n\n');
+      sections.push({ title: 'Section 5: Key Risks', text: riskText });
+    }
+    if (diagnosisData.alternative_paths?.length) {
+      const altText = diagnosisData.alternative_paths.map((item: any, i: number) => {
+        return `${i + 1}. ${item.strategy}\n   Why not now: ${item.why_rejected}\n   Revisit if: ${item.when_it_might_work}`;
+      }).join('\n\n');
+      sections.push({ title: 'Section 6: Alternative Paths', text: altText });
+    }
+    openShareModal({
+      contentType: 'full_briefing',
+      subject: `Strategic Briefing - ${currentCompany?.name || 'Your Company'}`,
+      contentData: { sections },
+    });
+  };
 
   const handleGenerateDecisions = async () => {
     if (!currentCompany) return;
@@ -330,6 +585,14 @@ export default function DecisionsPage() {
     <div className="p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
       {diagnosisData && <StickyTOC activeSection={activeSection} />}
 
+      <ShareModal
+        open={shareModalOpen}
+        onOpenChange={setShareModalOpen}
+        data={shareModalData}
+        companyId={currentCompany.id}
+        companyName={currentCompany.name}
+      />
+
       <header className="mb-10">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -350,24 +613,34 @@ export default function DecisionsPage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {diagnosisData && (
-              <Button
-                variant="outline"
-                onClick={handleCopyBrief}
-                disabled={copied}
-                data-testid="button-copy-brief"
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-4 w-4 mr-2" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Brief
-                  </>
-                )}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleCopyBrief}
+                  disabled={copied}
+                  data-testid="button-copy-brief"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy Brief
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleEmailFullBriefing}
+                  data-testid="button-email-briefing"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email Briefing
+                </Button>
+              </>
             )}
             <Button
               onClick={handleGenerateDecisions}
@@ -439,9 +712,20 @@ export default function DecisionsPage() {
           {(recommendationHeadline || recommendationNarrative) && (
             <section id="section-recommendation" data-testid="section-recommendation">
               <SectionDivider num={2} label="What We Recommend" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-2-title">
-                What We Recommend
-              </h2>
+              <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+                <h2 className="text-lg font-semibold tracking-tight" data-testid="text-section-2-title">
+                  What We Recommend
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleShareRecommendation}
+                  data-testid="button-share-recommendation"
+                >
+                  <Send className="h-3 w-3 mr-1.5" />
+                  Share
+                </Button>
+              </div>
               <div className="space-y-4">
                 {recommendationHeadline && (
                   <p
@@ -551,7 +835,7 @@ export default function DecisionsPage() {
                               return (
                                 <li
                                   key={idx}
-                                  className={`relative pl-10 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
+                                  className={`relative pl-10 pr-8 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
                                   data-testid={`playbook-item-${idx}`}
                                 >
                                   <div className="absolute left-0 top-0.5">
@@ -561,6 +845,14 @@ export default function DecisionsPage() {
                                       data-testid={`playbook-check-${idx}`}
                                     />
                                   </div>
+                                  <button
+                                    onClick={() => handleSharePlaybookItem(item)}
+                                    className="absolute right-0 top-0 text-muted-foreground/40 hover:text-foreground transition-colors"
+                                    title="Share this action item"
+                                    data-testid={`button-share-playbook-${idx}`}
+                                  >
+                                    <Send className="h-3.5 w-3.5" />
+                                  </button>
                                   <p className={`text-sm font-medium text-foreground leading-relaxed mb-2 ${isChecked ? 'line-through' : ''}`}>
                                     {action}
                                   </p>
@@ -598,7 +890,7 @@ export default function DecisionsPage() {
                       return (
                         <li
                           key={i}
-                          className={`relative pl-10 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
+                          className={`relative pl-10 pr-8 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
                           data-testid={`playbook-item-${i}`}
                         >
                           <div className="absolute left-0 top-0.5">
@@ -608,6 +900,14 @@ export default function DecisionsPage() {
                               data-testid={`playbook-check-${i}`}
                             />
                           </div>
+                          <button
+                            onClick={() => handleSharePlaybookItem(item)}
+                            className="absolute right-0 top-0 text-muted-foreground/40 hover:text-foreground transition-colors"
+                            title="Share this action item"
+                            data-testid={`button-share-playbook-${i}`}
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                          </button>
                           <p className={`text-sm font-medium text-foreground leading-relaxed mb-2 ${isChecked ? 'line-through' : ''}`}>
                             {action}
                           </p>
@@ -652,12 +952,20 @@ export default function DecisionsPage() {
                   return (
                     <li
                       key={i}
-                      className="relative pl-8"
+                      className="relative pl-8 pr-8"
                       data-testid={`risk-item-${i}`}
                     >
                       <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
                         {i + 1}.
                       </span>
+                      <button
+                        onClick={() => handleShareRisk(item)}
+                        className="absolute right-0 top-0 text-muted-foreground/40 hover:text-foreground transition-colors"
+                        title="Share this risk"
+                        data-testid={`button-share-risk-${i}`}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </button>
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         {likelihood && <LikelihoodBadge likelihood={likelihood} />}
                       </div>
