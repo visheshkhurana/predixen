@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -17,7 +17,7 @@ import { apiRequest } from '@/lib/queryClient';
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 3000 },
   { label: 'Evaluating growth trajectory', duration: 4000 },
-  { label: 'Building execution playbook', duration: 5000 },
+  { label: 'Identifying key risks', duration: 5000 },
   { label: 'Assessing risks & alternatives', duration: 4000 },
 ];
 
@@ -25,13 +25,12 @@ const TOC_SECTIONS = [
   { id: 'section-situation', label: 'The Situation', num: 1 },
   { id: 'section-recommendation', label: 'What We Recommend', num: 2 },
   { id: 'section-inaction', label: 'If You Do Nothing', num: 3 },
-  { id: 'section-playbook', label: 'Execution Playbook', num: 4 },
-  { id: 'section-key-risks', label: 'Key Risks', num: 5 },
-  { id: 'section-alt-paths', label: 'Alternative Paths', num: 6 },
+  { id: 'section-key-risks', label: 'Key Risks', num: 4 },
+  { id: 'section-alt-paths', label: 'Alternative Paths', num: 5 },
 ];
 
 interface ShareModalData {
-  contentType: 'playbook_item' | 'risk' | 'recommendation' | 'full_briefing' | 'custom';
+  contentType: 'risk' | 'recommendation' | 'full_briefing' | 'custom';
   subject: string;
   contentData: Record<string, any>;
 }
@@ -176,7 +175,6 @@ function ShareModal({
   };
 
   const typeLabels: Record<string, string> = {
-    playbook_item: 'Action Item',
     risk: 'Risk Alert',
     recommendation: 'Recommendation',
     full_briefing: 'Full Briefing',
@@ -215,13 +213,6 @@ function ShareModal({
               data-testid="input-share-subject"
             />
           </div>
-          {data?.contentType === 'playbook_item' && data.contentData.action && (
-            <div className="rounded-md bg-muted p-3">
-              <p className="text-xs text-muted-foreground mb-1 font-medium">Action item being shared:</p>
-              <p className="text-sm text-foreground">{data.contentData.action}</p>
-              {data.contentData.owner && <p className="text-xs text-muted-foreground mt-1">Owner: {data.contentData.owner}</p>}
-            </div>
-          )}
           {data?.contentType === 'risk' && data.contentData.risk && (
             <div className="rounded-md bg-muted p-3">
               <p className="text-xs text-muted-foreground mb-1 font-medium">Risk being shared:</p>
@@ -275,32 +266,6 @@ function ShareModal({
   );
 }
 
-function usePlaybookChecks(companyId: number | null) {
-  const storageKey = companyId ? `predixen-playbook-checks-${companyId}` : null;
-
-  const [checked, setChecked] = useState<Record<number, boolean>>(() => {
-    if (!storageKey) return {};
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : {};
-    } catch { return {}; }
-  });
-
-  useEffect(() => {
-    if (storageKey) {
-      localStorage.setItem(storageKey, JSON.stringify(checked));
-    }
-  }, [checked, storageKey]);
-
-  const toggle = useCallback((idx: number) => {
-    setChecked((prev) => ({ ...prev, [idx]: !prev[idx] }));
-  }, []);
-
-  const count = Object.values(checked).filter(Boolean).length;
-
-  return { checked, toggle, count };
-}
-
 export default function DecisionsPage() {
   const { currentCompany, setCurrentStep } = useFounderStore();
   const { toast } = useToast();
@@ -339,8 +304,6 @@ export default function DecisionsPage() {
   const isAnalyzing = isDiagnosisLoading && !diagnosisData;
   const isUpdating = isDiagnosisFetching && !!diagnosisData;
 
-  const { checked, toggle, count: checkedCount } = usePlaybookChecks(currentCompany?.id || null);
-
   useEffect(() => {
     const sectionIds = TOC_SECTIONS.map((s) => s.id);
     const observer = new IntersectionObserver(
@@ -370,20 +333,6 @@ export default function DecisionsPage() {
   const openShareModal = (data: ShareModalData) => {
     setShareModalData(data);
     setShareModalOpen(true);
-  };
-
-  const handleSharePlaybookItem = (item: any) => {
-    openShareModal({
-      contentType: 'playbook_item',
-      subject: `Action Item from ${currentCompany?.name || 'Your Company'}`,
-      contentData: {
-        action: item.action || item.description || '',
-        owner: item.owner || item.responsible || '',
-        timeline: item.timeline || item.deadline || '',
-        done_when: item.definition_of_done || '',
-        phase: item.phase || '',
-      },
-    });
   };
 
   const handleShareRisk = (item: any) => {
@@ -427,16 +376,6 @@ export default function DecisionsPage() {
     if (diagnosisData.inaction_narrative) {
       sections.push({ title: 'Section 3: What Happens If You Do Nothing', text: diagnosisData.inaction_narrative });
     }
-    if (diagnosisData.execution_playbook?.length) {
-      const pbText = diagnosisData.execution_playbook.map((item: any, i: number) => {
-        let line = `${i + 1}. ${item.action || item.description || ''}`;
-        if (item.owner) line += ` (Owner: ${item.owner})`;
-        if (item.timeline) line += ` - ${item.timeline}`;
-        if (item.definition_of_done) line += ` | Done when: ${item.definition_of_done}`;
-        return line;
-      }).join('\n');
-      sections.push({ title: 'Section 4: Execution Playbook', text: pbText });
-    }
     if (diagnosisData.key_risks?.length) {
       const riskText = diagnosisData.key_risks.map((item: any, i: number) => {
         let line = `${i + 1}. [${item.likelihood}] ${item.risk}`;
@@ -444,13 +383,13 @@ export default function DecisionsPage() {
         if (item.pivot_deadline) line += `\n   When to pivot: ${item.pivot_deadline}`;
         return line;
       }).join('\n\n');
-      sections.push({ title: 'Section 5: Key Risks', text: riskText });
+      sections.push({ title: 'Section 4: Key Risks', text: riskText });
     }
     if (diagnosisData.alternative_paths?.length) {
       const altText = diagnosisData.alternative_paths.map((item: any, i: number) => {
         return `${i + 1}. ${item.strategy}\n   Why not now: ${item.why_rejected}\n   Revisit if: ${item.when_it_might_work}`;
       }).join('\n\n');
-      sections.push({ title: 'Section 6: Alternative Paths', text: altText });
+      sections.push({ title: 'Section 5: Alternative Paths', text: altText });
     }
     openShareModal({
       contentType: 'full_briefing',
@@ -521,17 +460,8 @@ export default function DecisionsPage() {
       parts.push(diagnosisData.inaction_narrative);
       parts.push('');
     }
-    if (diagnosisData.execution_playbook?.length) {
-      parts.push('4. EXECUTION PLAYBOOK');
-      diagnosisData.execution_playbook.forEach((item: any, i: number) => {
-        parts.push(`${i + 1}. ${item.action || item.description || ''}`);
-        parts.push(`   Owner: ${item.owner || 'TBD'} | Timeline: ${item.timeline || 'TBD'}`);
-        if (item.definition_of_done) parts.push(`   Done when: ${item.definition_of_done}`);
-      });
-      parts.push('');
-    }
     if (diagnosisData.key_risks?.length) {
-      parts.push('5. KEY RISKS & CONTINGENCY PLANS');
+      parts.push('4. KEY RISKS & CONTINGENCY PLANS');
       diagnosisData.key_risks.forEach((item: any, i: number) => {
         parts.push(`${i + 1}. [${item.likelihood}] ${item.risk}`);
         if (item.contingency) parts.push(`   If this happens: ${item.contingency}`);
@@ -540,7 +470,7 @@ export default function DecisionsPage() {
       parts.push('');
     }
     if (diagnosisData.alternative_paths?.length) {
-      parts.push('6. ALTERNATIVE PATHS CONSIDERED');
+      parts.push('5. ALTERNATIVE PATHS CONSIDERED');
       diagnosisData.alternative_paths.forEach((item: any, i: number) => {
         parts.push(`${i + 1}. ${item.strategy}`);
         parts.push(`   Why rejected: ${item.why_rejected}`);
@@ -575,11 +505,8 @@ export default function DecisionsPage() {
   const recommendationNarrative = diagnosisData?.recommendation_narrative || null;
   const urgencyText = diagnosisData?.urgency_text || null;
   const inactionNarrative = diagnosisData?.inaction_narrative || null;
-  const executionPlaybook: Array<{phase?: string; action: string; owner: string; timeline: string; definition_of_done?: string; expected_outcome?: string}> | null = diagnosisData?.execution_playbook || null;
   const keyRisks: Array<{risk: string; likelihood: string; impact: string; contingency: string; pivot_deadline?: string}> | null = diagnosisData?.key_risks || null;
   const alternativePaths: Array<{strategy: string; why_rejected: string; when_it_might_work: string}> | null = diagnosisData?.alternative_paths || null;
-
-  const totalPlaybookItems = executionPlaybook?.length || 0;
 
   return (
     <div className="p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
@@ -781,162 +708,10 @@ export default function DecisionsPage() {
             </section>
           )}
 
-          {executionPlaybook && executionPlaybook.length > 0 && (
-            <section id="section-playbook" data-testid="section-playbook">
-              <SectionDivider num={4} label="Execution Playbook" />
-              <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-                <h2 className="text-lg font-semibold tracking-tight" data-testid="text-section-4-title">
-                  Execution Playbook
-                </h2>
-                {totalPlaybookItems > 0 && (
-                  <span className="text-xs text-muted-foreground" data-testid="text-playbook-progress">
-                    {checkedCount} of {totalPlaybookItems} completed
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mb-6">
-                Forward this to your team. Check off items as they are completed.
-              </p>
-              {(() => {
-                const hasPhases = executionPlaybook.some(item => item?.phase);
-                if (hasPhases) {
-                  const phases: Record<string, typeof executionPlaybook> = {};
-                  const phaseOrder: string[] = [];
-                  executionPlaybook.forEach(item => {
-                    const phase = item?.phase || 'Actions';
-                    if (!phases[phase]) {
-                      phases[phase] = [];
-                      phaseOrder.push(phase);
-                    }
-                    phases[phase].push(item);
-                  });
-                  let globalIndex = 0;
-                  const phaseSort = (a: string, b: string) => {
-                    const num = (s: string) => { const m = s.match(/Phase\s*(\d+)/i); return m ? parseInt(m[1]) : 99; };
-                    return num(a) - num(b);
-                  };
-                  phaseOrder.sort(phaseSort);
-                  return (
-                    <div className="space-y-8">
-                      {phaseOrder.map((phase, phaseIdx) => (
-                        <div key={phase} data-testid={`playbook-phase-${phaseIdx}`}>
-                          <h3 className="text-sm font-semibold text-foreground mb-4 tracking-tight">
-                            {phase}
-                          </h3>
-                          <ol className="space-y-5 list-none p-0 m-0">
-                            {phases[phase].map((item) => {
-                              const idx = globalIndex++;
-                              const action = (item as any)?.action || (item as any)?.description || '';
-                              const owner = (item as any)?.owner || (item as any)?.responsible || 'Team Lead';
-                              const timeline = (item as any)?.timeline || (item as any)?.deadline || 'This week';
-                              const dod = (item as any)?.definition_of_done || '';
-                              const isChecked = !!checked[idx];
-                              if (!action) return null;
-                              return (
-                                <li
-                                  key={idx}
-                                  className={`relative pl-10 pr-8 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
-                                  data-testid={`playbook-item-${idx}`}
-                                >
-                                  <div className="absolute left-0 top-0.5">
-                                    <Checkbox
-                                      checked={isChecked}
-                                      onCheckedChange={() => toggle(idx)}
-                                      data-testid={`playbook-check-${idx}`}
-                                    />
-                                  </div>
-                                  <button
-                                    onClick={() => handleSharePlaybookItem(item)}
-                                    className="absolute right-0 top-0 text-muted-foreground/40 hover:text-foreground transition-colors"
-                                    title="Share this action item"
-                                    data-testid={`button-share-playbook-${idx}`}
-                                  >
-                                    <Send className="h-3.5 w-3.5" />
-                                  </button>
-                                  <p className={`text-sm font-medium text-foreground leading-relaxed mb-2 ${isChecked ? 'line-through' : ''}`}>
-                                    {action}
-                                  </p>
-                                  <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
-                                    <span data-testid={`playbook-owner-${idx}`}>
-                                      <span className="font-medium text-foreground/70">Owner:</span> {owner}
-                                    </span>
-                                    <span data-testid={`playbook-timeline-${idx}`}>
-                                      <span className="font-medium text-foreground/70">Timeline:</span> {timeline}
-                                    </span>
-                                  </div>
-                                  {dod && (
-                                    <p className={`text-xs text-muted-foreground mt-1 ${isChecked ? 'line-through' : ''}`} data-testid={`playbook-dod-${idx}`}>
-                                      <span className="font-medium text-foreground/70">Done when:</span> {dod}
-                                    </p>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ol>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                }
-                return (
-                  <ol className="space-y-6 list-none p-0 m-0">
-                    {executionPlaybook.map((item, i) => {
-                      const action = (item as any)?.action || (item as any)?.description || '';
-                      const owner = (item as any)?.owner || (item as any)?.responsible || 'Team Lead';
-                      const timeline = (item as any)?.timeline || (item as any)?.deadline || 'This week';
-                      const dod = (item as any)?.definition_of_done || '';
-                      const isChecked = !!checked[i];
-                      if (!action) return null;
-                      return (
-                        <li
-                          key={i}
-                          className={`relative pl-10 pr-8 transition-opacity ${isChecked ? 'opacity-50' : ''}`}
-                          data-testid={`playbook-item-${i}`}
-                        >
-                          <div className="absolute left-0 top-0.5">
-                            <Checkbox
-                              checked={isChecked}
-                              onCheckedChange={() => toggle(i)}
-                              data-testid={`playbook-check-${i}`}
-                            />
-                          </div>
-                          <button
-                            onClick={() => handleSharePlaybookItem(item)}
-                            className="absolute right-0 top-0 text-muted-foreground/40 hover:text-foreground transition-colors"
-                            title="Share this action item"
-                            data-testid={`button-share-playbook-${i}`}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                          </button>
-                          <p className={`text-sm font-medium text-foreground leading-relaxed mb-2 ${isChecked ? 'line-through' : ''}`}>
-                            {action}
-                          </p>
-                          <div className="flex gap-4 flex-wrap text-xs text-muted-foreground mb-1">
-                            <span data-testid={`playbook-owner-${i}`}>
-                              <span className="font-medium text-foreground/70">Owner:</span> {owner}
-                            </span>
-                            <span data-testid={`playbook-timeline-${i}`}>
-                              <span className="font-medium text-foreground/70">Timeline:</span> {timeline}
-                            </span>
-                          </div>
-                          {dod && (
-                            <p className={`text-xs text-muted-foreground mt-1 ${isChecked ? 'line-through' : ''}`} data-testid={`playbook-dod-${i}`}>
-                              <span className="font-medium text-foreground/70">Done when:</span> {dod}
-                            </p>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                );
-              })()}
-            </section>
-          )}
-
           {keyRisks && keyRisks.length > 0 && (
             <section id="section-key-risks" data-testid="section-key-risks">
-              <SectionDivider num={5} label="Key Risks & Contingency Plans" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-5-title">
+              <SectionDivider num={4} label="Key Risks & Contingency Plans" />
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-4-title">
                 Key Risks & Contingency Plans
               </h2>
               <p className="text-xs text-muted-foreground mb-6">
@@ -991,8 +766,8 @@ export default function DecisionsPage() {
 
           {alternativePaths && alternativePaths.length > 0 && (
             <section id="section-alt-paths" data-testid="section-alt-paths">
-              <SectionDivider num={6} label="Alternative Paths Considered" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-6-title">
+              <SectionDivider num={5} label="Alternative Paths Considered" />
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-5-title">
                 Alternative Paths Considered
               </h2>
               <p className="text-xs text-muted-foreground mb-6">
