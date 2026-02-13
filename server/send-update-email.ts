@@ -46,7 +46,7 @@ async function sendUpdateEmails() {
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'Predixen <new1@update.predixen.me>';
+  const senderEmail = 'Predixen <new1@predixen.app>';
   const subject = 'Predixen v1.0.0 Update: Critical Bug Fixes & New Features Shipped Based on Your Feedback';
   const htmlContent = `
 <!DOCTYPE html>
