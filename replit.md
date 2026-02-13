@@ -61,6 +61,11 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
     - Backend: `GET /api/companies/{id}/strategic-diagnosis` returns `situation_narrative`, `recommendation_headline`, `recommendation_narrative`, `urgency_text`, `inaction_narrative`, `execution_playbook[]`, `key_risks[]`. Uses `useStrategicDiagnosisQuery` hook for auto-fetch via TanStack Query. LLM prompt includes net burn, exhaustion date, and break-even growth data.
     - Frontend: `decisions.tsx` renders as clean prose document (max-w-3xl, article markup). Playbook renders as numbered action items with owner/deadline/outcome metadata. Risks render as numbered items with likelihood/impact/contingency labels. Defensive guards handle malformed LLM output.
 
+29. **Centralized Financial Metrics Hook** (`useFinancialMetrics`): Single source of truth for all financial metrics across pages. Merges data from computed metrics API, truth scan, and financial baseline. Tracks metric source provenance (`reported`/`computed`/`estimated`) for AI Estimated badges. Fields: mrr, arr, cashOnHand, burnRate, netBurn, runway, cac, ltv, ltvCacRatio, grossMargin, churnRate, totalCustomers, headcount, arpu, paybackPeriod, burnMultiple, revenuePerEmployee, monthlyGrowthRate, ndr, sources.
+30. **Multi-Currency Support**: `useCurrency` hook provides company-specific currency formatting. Currency auto-detected from website TLD during onboarding (25+ TLD mappings). Currency selector in onboarding with 20 currencies. `formatCurrencyAbbrev` and `formatCurrencyFull` in `lib/utils.ts` accept currency parameter.
+31. **Industry-Adaptive Terminology**: `useIndustryTerms` hook maps industry-specific terms (customer→patient for healthcare, customer→learner for edtech, etc.). Applied to overview page KPI labels. Covers 11 industry verticals.
+32. **Extended Onboarding Options**: 15 industry categories (SaaS, Fintech, E-commerce, D2C, Marketplace, Healthcare, EdTech, AgriTech, DeepTech, Climate, Media, Logistics, Real Estate, Food, Other) and 8 company stages (Pre-seed, Seed, Pre-Series A, Series A, Series B+, Growth, Pre-IPO, Public).
+
 ### User Roles
 -   **Platform Admin**: Application owner.
 -   **Company Level Roles**: `owner`, `admin`, `analyst`, `viewer` with varying access levels.

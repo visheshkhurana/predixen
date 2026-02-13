@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useQuery } from '@tanstack/react-query';
 
+export type MetricSource = 'reported' | 'computed' | 'estimated';
+
 export interface FinancialMetrics {
   mrr: number;
   arr: number;
@@ -23,8 +25,11 @@ export interface FinancialMetrics {
   paybackPeriod: number;
   burnMultiple: number;
   revenuePerEmployee: number;
+  monthlyGrowthRate: number;
+  ndr: number;
   isProfitable: boolean;
   hasData: boolean;
+  sources: Record<string, MetricSource>;
 }
 
 const EMPTY_METRICS: FinancialMetrics = {
@@ -35,7 +40,9 @@ const EMPTY_METRICS: FinancialMetrics = {
   churnRate: 0, churnRatePct: 0,
   totalCustomers: 0, headcount: 0, arpu: 0,
   paybackPeriod: 0, burnMultiple: 0, revenuePerEmployee: 0,
+  monthlyGrowthRate: 0, ndr: 0,
   isProfitable: false, hasData: false,
+  sources: {},
 };
 
 function getToken(): string | null {
@@ -197,9 +204,39 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const burnMultiple = v(c.burnMultiple, ext?.burnMultiple, tsVal('burn_multiple'));
     const revenuePerEmployee = headcount > 0 ? mrr / headcount : 0;
 
+    const monthlyGrowthRate = v(c.momGrowth, tsVal('revenue_growth_mom'), fb?.monthlyGrowthRate);
+    const ndr = v(c.ndr, tsVal('net_revenue_retention'));
+
     const totalExpenses = c.totalExpenses || effectiveExpenses || 0;
     const isProfitable = totalExpenses > 0 && mrr >= totalExpenses;
     const hasData = mrr > 0 || cashOnHand > 0 || netBurn > 0;
+
+    const sources: Record<string, MetricSource> = {};
+    const mark = (key: string, directValue: any, computedValue: number) => {
+      if (directValue && Number(directValue) > 0) {
+        sources[key] = 'reported';
+      } else if (computedValue > 0) {
+        sources[key] = 'computed';
+      }
+    };
+    mark('mrr', c.mrr || bb?.monthlyRevenue || fb?.monthlyRevenue, mrr);
+    sources['arr'] = (c.arr || ext?.arr) ? 'reported' : (mrr > 0 ? 'computed' : 'estimated');
+    mark('cashOnHand', c.cashOnHand || bb?.cashOnHand || fb?.cashOnHand, cashOnHand);
+    mark('netBurn', c.netBurn, netBurn);
+    sources['runway'] = (netBurn > 0 && cashOnHand > 0) ? 'computed' : 'estimated';
+    mark('cac', c.cac || ext?.cac, cac);
+    mark('ltv', c.ltv || ext?.ltv, ltv);
+    sources['ltvCacRatio'] = (c.ltvCacRatio || ext?.ltvCacRatio) ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
+    mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct);
+    mark('churnRate', c.churnRatePct, churnRatePct);
+    mark('totalCustomers', c.totalCustomers || ext?.customers, totalCustomers);
+    mark('headcount', c.headcount || ext?.headcount, headcount);
+    sources['arpu'] = c.arpu ? 'reported' : (totalCustomers > 0 && mrr > 0 ? 'computed' : 'estimated');
+    sources['paybackPeriod'] = c.paybackPeriod ? 'reported' : (cac > 0 && arpu > 0 ? 'computed' : 'estimated');
+    sources['burnMultiple'] = (c.burnMultiple || ext?.burnMultiple) ? 'reported' : 'computed';
+    sources['revenuePerEmployee'] = headcount > 0 ? 'computed' : 'estimated';
+    sources['monthlyGrowthRate'] = (c.momGrowth || tsVal('revenue_growth_mom') > 0) ? 'reported' : (fb?.monthlyGrowthRate ? 'estimated' : 'estimated');
+    sources['ndr'] = (c.ndr || tsVal('net_revenue_retention') > 0) ? 'reported' : 'estimated';
 
     return {
       mrr, arr, cashOnHand, burnRate, netBurn, runway, runwayDisplay,
@@ -207,7 +244,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       grossMargin: grossMarginDecimal, grossMarginPct,
       churnRate: churnRateDecimal, churnRatePct,
       totalCustomers, headcount, arpu, paybackPeriod,
-      burnMultiple, revenuePerEmployee, isProfitable, hasData,
+      burnMultiple, revenuePerEmployee, monthlyGrowthRate, ndr,
+      isProfitable, hasData, sources,
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 

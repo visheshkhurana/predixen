@@ -56,6 +56,67 @@ const CATEGORY_ICONS: Record<string, typeof Database> = {
 
 const CATEGORY_ORDER = ['Finance', 'Banking', 'Payroll', 'CRM', 'Analytics', 'ERP', 'Files'];
 
+const CURRENCY_MAP: Record<string, { currency: string; label: string }> = {
+  '.in': { currency: 'INR', label: 'Indian Rupee (INR)' },
+  '.uk': { currency: 'GBP', label: 'British Pound (GBP)' },
+  '.co.uk': { currency: 'GBP', label: 'British Pound (GBP)' },
+  '.eu': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.de': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.fr': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.es': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.it': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.nl': { currency: 'EUR', label: 'Euro (EUR)' },
+  '.sg': { currency: 'SGD', label: 'Singapore Dollar (SGD)' },
+  '.au': { currency: 'AUD', label: 'Australian Dollar (AUD)' },
+  '.ca': { currency: 'CAD', label: 'Canadian Dollar (CAD)' },
+  '.jp': { currency: 'JPY', label: 'Japanese Yen (JPY)' },
+  '.br': { currency: 'BRL', label: 'Brazilian Real (BRL)' },
+  '.ng': { currency: 'NGN', label: 'Nigerian Naira (NGN)' },
+  '.ke': { currency: 'KES', label: 'Kenyan Shilling (KES)' },
+  '.za': { currency: 'ZAR', label: 'South African Rand (ZAR)' },
+  '.ae': { currency: 'AED', label: 'UAE Dirham (AED)' },
+  '.se': { currency: 'SEK', label: 'Swedish Krona (SEK)' },
+  '.ch': { currency: 'CHF', label: 'Swiss Franc (CHF)' },
+  '.kr': { currency: 'KRW', label: 'South Korean Won (KRW)' },
+  '.cn': { currency: 'CNY', label: 'Chinese Yuan (CNY)' },
+  '.hk': { currency: 'HKD', label: 'Hong Kong Dollar (HKD)' },
+  '.mx': { currency: 'MXN', label: 'Mexican Peso (MXN)' },
+  '.il': { currency: 'ILS', label: 'Israeli Shekel (ILS)' },
+};
+
+const ALL_CURRENCIES = [
+  { value: 'USD', label: 'US Dollar (USD)' },
+  { value: 'EUR', label: 'Euro (EUR)' },
+  { value: 'GBP', label: 'British Pound (GBP)' },
+  { value: 'INR', label: 'Indian Rupee (INR)' },
+  { value: 'SGD', label: 'Singapore Dollar (SGD)' },
+  { value: 'AUD', label: 'Australian Dollar (AUD)' },
+  { value: 'CAD', label: 'Canadian Dollar (CAD)' },
+  { value: 'JPY', label: 'Japanese Yen (JPY)' },
+  { value: 'BRL', label: 'Brazilian Real (BRL)' },
+  { value: 'CHF', label: 'Swiss Franc (CHF)' },
+  { value: 'SEK', label: 'Swedish Krona (SEK)' },
+  { value: 'AED', label: 'UAE Dirham (AED)' },
+  { value: 'HKD', label: 'Hong Kong Dollar (HKD)' },
+  { value: 'KRW', label: 'South Korean Won (KRW)' },
+  { value: 'CNY', label: 'Chinese Yuan (CNY)' },
+  { value: 'ILS', label: 'Israeli Shekel (ILS)' },
+  { value: 'MXN', label: 'Mexican Peso (MXN)' },
+  { value: 'NGN', label: 'Nigerian Naira (NGN)' },
+  { value: 'KES', label: 'Kenyan Shilling (KES)' },
+  { value: 'ZAR', label: 'South African Rand (ZAR)' },
+];
+
+function detectCurrencyFromWebsite(url: string): string | null {
+  try {
+    const hostname = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.toLowerCase();
+    for (const [tld, info] of Object.entries(CURRENCY_MAP)) {
+      if (hostname.endsWith(tld)) return info.currency;
+    }
+  } catch {}
+  return null;
+}
+
 const SAMPLE_COMPANY = {
   name: 'TechFlow AI',
   website: 'https://techflow.ai',
@@ -982,6 +1043,12 @@ export default function OnboardingPage() {
                       id="company-website"
                       value={companyData.website}
                       onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
+                      onBlur={(e) => {
+                        const detected = detectCurrencyFromWebsite(e.target.value);
+                        if (detected && companyData.currency === 'USD') {
+                          setCompanyData(prev => ({ ...prev, currency: detected }));
+                        }
+                      }}
                       placeholder="https://yourcompany.com"
                       data-testid="input-company-website"
                       className={extractedData?.company_info?.website ? 'border-green-500/50' : ''}
@@ -1034,7 +1101,17 @@ export default function OnboardingPage() {
                         <SelectItem value="general_saas">SaaS</SelectItem>
                         <SelectItem value="fintech">Fintech</SelectItem>
                         <SelectItem value="ecommerce">E-commerce</SelectItem>
+                        <SelectItem value="d2c">D2C / Consumer</SelectItem>
                         <SelectItem value="marketplace">Marketplace</SelectItem>
+                        <SelectItem value="healthcare">Healthcare / BioTech</SelectItem>
+                        <SelectItem value="edtech">EdTech</SelectItem>
+                        <SelectItem value="agritech">AgriTech</SelectItem>
+                        <SelectItem value="deeptech">DeepTech / Hardware</SelectItem>
+                        <SelectItem value="climate">Climate / CleanTech</SelectItem>
+                        <SelectItem value="media">Media / Entertainment</SelectItem>
+                        <SelectItem value="logistics">Logistics / Supply Chain</SelectItem>
+                        <SelectItem value="real_estate">Real Estate / PropTech</SelectItem>
+                        <SelectItem value="food">Food / CPG</SelectItem>
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1055,11 +1132,37 @@ export default function OnboardingPage() {
                       <SelectContent>
                         <SelectItem value="pre_seed">Pre-seed</SelectItem>
                         <SelectItem value="seed">Seed</SelectItem>
+                        <SelectItem value="pre_series_a">Pre-Series A</SelectItem>
                         <SelectItem value="series_a">Series A</SelectItem>
                         <SelectItem value="series_b">Series B+</SelectItem>
+                        <SelectItem value="growth">Growth Stage</SelectItem>
+                        <SelectItem value="pre_ipo">Pre-IPO</SelectItem>
+                        <SelectItem value="public">Public / Listed</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Currency</Label>
+                  <Select
+                    value={companyData.currency}
+                    onValueChange={(v) => setCompanyData({ ...companyData, currency: v })}
+                  >
+                    <SelectTrigger data-testid="select-currency">
+                      <SelectValue placeholder="Select currency..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_CURRENCIES.map(c => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {companyData.currency !== 'USD' && (
+                    <p className="text-xs text-muted-foreground">
+                      All financial values will be displayed in {companyData.currency}
+                    </p>
+                  )}
                 </div>
                 
                 {/* Show validation message if form is incomplete */}

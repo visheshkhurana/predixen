@@ -51,6 +51,7 @@ import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { api } from '@/api/client';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -91,12 +92,6 @@ function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: num
   return { p10: [], p50: [], p90: [] };
 }
 
-function formatCurrency(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
 const SUGGESTION_CHIPS = [
   { label: 'Cut marketing 30%', icon: TrendingUp },
   { label: 'Raise prices 20%', icon: DollarSign },
@@ -108,6 +103,8 @@ const SUGGESTION_CHIPS = [
 
 export default function ScenariosPage() {
   const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun, financialBaseline } = useFounderStore();
+  const companyCurrency = (currentCompany as any)?.currency || 'USD';
+  const formatCurrency = useCallback((value: number) => formatCurrencyAbbrev(value, companyCurrency), [companyCurrency]);
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
@@ -216,10 +213,7 @@ export default function ScenariosPage() {
     const monthlyRevenue = sharedMetrics.mrr;
     const monthlyExpenses = sharedMetrics.netBurn + monthlyRevenue;
     const grossMargin = sharedMetrics.grossMarginPct;
-    const truthScanGrowth = truthScan?.metrics?.revenue_growth_mom ?? truthScan?.outputs_json?.metrics?.revenue_growth_mom;
-    const truthGrowthVal = typeof truthScanGrowth === 'object' && truthScanGrowth !== null
-      ? truthScanGrowth.value : truthScanGrowth;
-    const growthRate = Number(financialBaseline?.monthlyGrowthRate ?? truthGrowthVal ?? 10);
+    const growthRate = sharedMetrics.monthlyGrowthRate > 0 ? sharedMetrics.monthlyGrowthRate : (Number(financialBaseline?.monthlyGrowthRate) || 0);
     const churnRate = sharedMetrics.churnRatePct;
     const currentRunway = sharedMetrics.runway === Infinity ? 999 : sharedMetrics.runway;
     return {
