@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2 } from 'lucide-react';
+import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosisQuery } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
@@ -38,12 +38,18 @@ interface ShareModalData {
 function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRetry?: () => void }) {
   const [activeStep, setActiveStep] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
+  const [progressPct, setProgressPct] = useState(0);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
+    const totalDuration = LOADING_STEPS.reduce((s, step) => s + step.duration, 0);
+    let elapsed = 0;
     const advance = (step: number) => {
       if (step < LOADING_STEPS.length) {
         timeout = setTimeout(() => {
+          elapsed += LOADING_STEPS[step].duration;
+          const pct = step + 1 >= LOADING_STEPS.length ? 100 : Math.min((elapsed / totalDuration) * 95, 95);
+          setProgressPct(pct);
           setActiveStep(step + 1);
           advance(step + 1);
         }, LOADING_STEPS[step].duration);
@@ -63,12 +69,16 @@ function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRet
 
   if (timedOut) {
     return (
-      <div className="py-16 flex flex-col items-center gap-6" data-testid="loading-timeout">
-        <XCircle className="h-8 w-8 text-destructive" />
-        <p className="text-sm font-medium text-foreground">Analysis is taking longer than expected</p>
-        <p className="text-xs text-muted-foreground max-w-sm text-center">
-          The AI analysis timed out after 30 seconds. This can happen when the system is under heavy load.
-        </p>
+      <div className="py-16 flex flex-col items-center gap-6 animate-in fade-in duration-500" data-testid="loading-timeout">
+        <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center">
+          <XCircle className="h-7 w-7 text-destructive" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-foreground mb-1">Analysis is taking longer than expected</p>
+          <p className="text-xs text-muted-foreground max-w-sm">
+            The AI analysis timed out after 30 seconds. This can happen when the system is under heavy load.
+          </p>
+        </div>
         {onRetry && (
           <Button variant="outline" onClick={onRetry} data-testid="button-retry-timeout">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -80,27 +90,61 @@ function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRet
   }
 
   return (
-    <div className="py-16 flex flex-col items-center gap-6" data-testid="loading-progress">
-      <Brain className="h-8 w-8 text-muted-foreground animate-pulse" />
-      <p className="text-sm font-medium text-foreground">Generating your strategic briefing</p>
-      <div className="w-full max-w-sm space-y-3">
-        {LOADING_STEPS.map((step, i) => {
-          const isActive = i === activeStep;
-          const isDone = i < activeStep;
-          return (
-            <div
-              key={i}
-              className={`flex items-center gap-3 transition-opacity duration-500 ${isDone ? 'opacity-100' : isActive ? 'opacity-100' : 'opacity-30'}`}
-              data-testid={`loading-step-${i}`}
-            >
-              <div className={`h-2 w-2 rounded-full flex-shrink-0 transition-colors duration-300 ${isDone ? 'bg-green-500' : isActive ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground/30'}`} />
-              <span className={`text-xs ${isDone ? 'text-muted-foreground' : isActive ? 'text-foreground font-medium' : 'text-muted-foreground/50'}`}>
-                {step.label}
-                {isDone && <Check className="inline h-3 w-3 ml-1 text-green-500" />}
-              </span>
-            </div>
-          );
-        })}
+    <div className="py-16 flex flex-col items-center gap-8 animate-in fade-in duration-500" data-testid="loading-progress">
+      <div className="relative">
+        <div className="h-16 w-16 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05))' }}>
+          <Brain className="h-7 w-7 text-primary animate-pulse" />
+        </div>
+        <div className="absolute -inset-1 rounded-full border border-primary/20 animate-ping" style={{ animationDuration: '2s' }} />
+      </div>
+
+      <div className="text-center">
+        <p className="text-sm font-semibold text-foreground mb-1">Generating your strategic briefing</p>
+        <p className="text-xs text-muted-foreground">Analyzing your financial data with AI</p>
+      </div>
+
+      <div className="w-full max-w-xs">
+        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-6">
+          <div
+            className="h-full rounded-full transition-all duration-1000 ease-out"
+            style={{
+              width: `${progressPct}%`,
+              background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))',
+            }}
+            data-testid="loading-progress-bar"
+          />
+        </div>
+
+        <div className="space-y-2.5">
+          {LOADING_STEPS.map((step, i) => {
+            const isActive = i === activeStep;
+            const isDone = i < activeStep;
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-3 transition-all duration-500"
+                style={{
+                  opacity: isDone ? 1 : isActive ? 1 : 0.3,
+                  transform: isActive ? 'translateX(4px)' : 'translateX(0)',
+                }}
+                data-testid={`loading-step-${i}`}
+              >
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                  {isDone ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500 animate-in zoom-in duration-300" />
+                  ) : isActive ? (
+                    <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-muted-foreground/20" />
+                  )}
+                </div>
+                <span className={`text-xs transition-colors duration-300 ${isDone ? 'text-muted-foreground line-through' : isActive ? 'text-foreground font-medium' : 'text-muted-foreground/40'}`}>
+                  {step.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -112,30 +156,50 @@ function StickyTOC({ activeSection }: { activeSection: string }) {
   };
 
   return (
-    <nav className="hidden xl:block fixed right-8 top-32 w-48 space-y-1" data-testid="toc-sidebar">
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-3 font-medium">Contents</p>
-      {TOC_SECTIONS.map((s) => (
-        <button
-          key={s.id}
-          onClick={() => scrollTo(s.id)}
-          className={`block w-full text-left text-xs py-1.5 px-2 rounded-md transition-colors ${activeSection === s.id ? 'text-foreground bg-muted font-medium' : 'text-muted-foreground/70 hover:text-foreground'}`}
-          data-testid={`toc-link-${s.id}`}
-        >
-          <span className="text-muted-foreground/50 mr-1.5">{s.num}.</span>
-          {s.label}
-        </button>
-      ))}
+    <nav className="hidden xl:block fixed right-8 top-32 w-52 z-50" data-testid="toc-sidebar">
+      <div className="rounded-md border border-border/50 bg-card/80 p-4" style={{ backdropFilter: 'blur(8px)' }}>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-4 font-semibold">Contents</p>
+        <div className="relative pl-[7px]">
+          <div className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
+          <div className="space-y-0">
+            {TOC_SECTIONS.map((s) => {
+              const isActive = activeSection === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => scrollTo(s.id)}
+                  className="relative flex items-center gap-3 w-full text-left py-1.5 hover-elevate rounded-md"
+                  data-testid={`toc-link-${s.id}`}
+                >
+                  {isActive && (
+                    <div className="absolute left-0 top-1 bottom-1 w-px bg-primary transition-all duration-300" />
+                  )}
+                  <div className={`h-[13px] w-[13px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${isActive ? 'border-primary bg-primary' : 'border-muted-foreground/30 bg-card'}`}>
+                    {isActive && <div className="h-1 w-1 rounded-full bg-primary-foreground" />}
+                  </div>
+                  <span className={`text-xs transition-colors duration-300 ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground/60'}`}>
+                    {s.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </nav>
   );
 }
 
 function SectionDivider({ num, label }: { num: number; label: string }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50 font-medium whitespace-nowrap">
-        Section {num}
+    <div className="flex items-center gap-3 mb-5">
+      <div className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 bg-primary/10 border border-primary/20">
+        <span className="text-[10px] font-bold text-primary">{num}</span>
+      </div>
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold whitespace-nowrap">
+        {label}
       </span>
-      <div className="flex-1 border-b border-border" />
+      <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, hsl(var(--border)), transparent)' }} />
     </div>
   );
 }
@@ -687,7 +751,7 @@ export default function DecisionsPage() {
           </CardContent>
         </Card>
       ) : (diagnosisData || hasBriefing) ? (
-        <article className="space-y-10" data-testid="article-briefing">
+        <article className="space-y-12" data-testid="article-briefing">
 
           {situationNarrative && (
             <section id="section-situation" data-testid="section-situation">
@@ -712,7 +776,7 @@ export default function DecisionsPage() {
           {(recommendationHeadline || recommendationNarrative) && (
             <section id="section-recommendation" data-testid="section-recommendation">
               <SectionDivider num={2} label="What We Recommend" />
-              <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h2 className="text-lg font-semibold tracking-tight" data-testid="text-section-2-title">
                   What We Recommend
                 </h2>
