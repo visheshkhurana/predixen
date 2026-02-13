@@ -35,8 +35,9 @@ interface ShareModalData {
   contentData: Record<string, any>;
 }
 
-function LoadingProgress() {
+function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRetry?: () => void }) {
   const [activeStep, setActiveStep] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
@@ -51,6 +52,32 @@ function LoadingProgress() {
     advance(0);
     return () => clearTimeout(timeout);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTimedOut(true);
+      onTimeout?.();
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, [onTimeout]);
+
+  if (timedOut) {
+    return (
+      <div className="py-16 flex flex-col items-center gap-6" data-testid="loading-timeout">
+        <XCircle className="h-8 w-8 text-destructive" />
+        <p className="text-sm font-medium text-foreground">Analysis is taking longer than expected</p>
+        <p className="text-xs text-muted-foreground max-w-sm text-center">
+          The AI analysis timed out after 30 seconds. This can happen when the system is under heavy load.
+        </p>
+        {onRetry && (
+          <Button variant="outline" onClick={onRetry} data-testid="button-retry-timeout">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="py-16 flex flex-col items-center gap-6" data-testid="loading-progress">
@@ -279,6 +306,7 @@ export default function DecisionsPage() {
   const generateDecisionsMutation = useGenerateDecisions();
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState('section-situation');
   const [copied, setCopied] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -398,9 +426,18 @@ export default function DecisionsPage() {
     });
   };
 
-  const handleGenerateDecisions = async () => {
+  const handleGenerateDecisions = useCallback(async () => {
     if (!currentCompany) return;
     setIsGenerating(true);
+    setGenerationError(null);
+
+    const timeoutMs = 30000;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      setIsGenerating(false);
+      setGenerationError('The analysis timed out after 30 seconds. The AI service may be under heavy load.');
+    }, timeoutMs);
 
     try {
       let scenarioId = latestScenarioId;
@@ -413,14 +450,22 @@ export default function DecisionsPage() {
         scenarioId = scenario.id;
       }
 
+      if (timedOut) return;
+
       const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
+
+      if (timedOut) return;
+
       await generateDecisionsMutation.mutateAsync(simResult.id);
+
+      if (timedOut) return;
 
       await refetch();
       queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', currentCompany.id] });
       setCurrentStep('decision');
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
+      if (timedOut) return;
       const message = err.message || 'Something went wrong';
       if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
         toast({
@@ -429,12 +474,16 @@ export default function DecisionsPage() {
           variant: 'destructive'
         });
       } else {
-        toast({ title: 'Error', description: message, variant: 'destructive' });
+        setGenerationError(message);
+        toast({ title: 'Generation failed', description: message, variant: 'destructive' });
       }
     } finally {
-      setIsGenerating(false);
+      clearTimeout(timeoutId);
+      if (!timedOut) {
+        setIsGenerating(false);
+      }
     }
-  };
+  }, [currentCompany, latestScenarioId, createScenarioMutation, runSimulationMutation, generateDecisionsMutation, refetch, queryClient, setCurrentStep, toast]);
 
   const handleCopyBrief = async () => {
     if (!diagnosisData) return;
@@ -593,8 +642,32 @@ export default function DecisionsPage() {
         )}
       </header>
 
-      {isLoading || isAnalyzing ? (
-        <LoadingProgress />
+      {generationError ? (
+        <Card className="border-destructive/30" data-testid="section-generation-error">
+          <CardContent className="py-8 text-center">
+            <XCircle className="h-8 w-8 text-destructive mx-auto mb-3" />
+            <p className="text-sm font-medium text-foreground mb-1">Briefing generation failed</p>
+            <p className="text-xs text-muted-foreground mb-4 max-w-sm mx-auto">
+              {generationError}
+            </p>
+            <Button
+              onClick={handleGenerateDecisions}
+              disabled={isGenerating}
+              data-testid="button-retry-generation"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : isLoading || isAnalyzing || isGenerating ? (
+        <LoadingProgress
+          onTimeout={() => {
+            setIsGenerating(false);
+            setGenerationError('The analysis timed out after 30 seconds. The AI service may be under heavy load.');
+          }}
+          onRetry={handleGenerateDecisions}
+        />
       ) : diagnosisError && !diagnosisData ? (
         <Card className="border-destructive/30" data-testid="section-diagnosis-error">
           <CardContent className="py-8 text-center">

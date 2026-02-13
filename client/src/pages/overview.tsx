@@ -72,6 +72,7 @@ import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
+import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useToast } from '@/hooks/use-toast';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
@@ -480,12 +481,14 @@ export default function OverviewPage() {
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
+  const terms = useIndustryTerms();
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
   const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
     ...DEFAULT_ASSUMPTIONS,
     growthRate: Number(financialBaseline?.monthlyGrowthRate) || DEFAULT_ASSUMPTIONS.growthRate,
+    churnRate: DEFAULT_ASSUMPTIONS.churnRate,
   });
   const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('');
@@ -504,10 +507,19 @@ export default function OverviewPage() {
   const { data: benchmarkOptions } = useBenchmarkIndustries();
 
   useEffect(() => {
-    if (financialBaseline?.monthlyGrowthRate != null) {
-      setAssumptions(prev => ({ ...prev, growthRate: Number(financialBaseline.monthlyGrowthRate) }));
+    const updates: Partial<ScenarioAssumptions> = {};
+    if (sharedMetrics.monthlyGrowthRate > 0) {
+      updates.growthRate = sharedMetrics.monthlyGrowthRate;
+    } else if (financialBaseline?.monthlyGrowthRate != null) {
+      updates.growthRate = Number(financialBaseline.monthlyGrowthRate);
     }
-  }, [financialBaseline?.monthlyGrowthRate]);
+    if (sharedMetrics.churnRatePct > 0) {
+      updates.churnRate = sharedMetrics.churnRatePct;
+    }
+    if (Object.keys(updates).length > 0) {
+      setAssumptions(prev => ({ ...prev, ...updates }));
+    }
+  }, [sharedMetrics.monthlyGrowthRate, sharedMetrics.churnRatePct, financialBaseline?.monthlyGrowthRate]);
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -987,9 +999,9 @@ export default function OverviewPage() {
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
-    { name: 'Churn Rate', value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: 'Lost Customers / Total Customers', goodRange: '< 3%', badRange: '> 7%' } },
+    { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
-    { name: 'Growth Rate', value: assumptions.growthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
+    { name: 'Growth Rate', value: sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
@@ -1462,6 +1474,11 @@ export default function OverviewPage() {
           <CardContent className="pt-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">ARPU</span>
+              {sharedMetrics.sources['arpu'] && sharedMetrics.sources['arpu'] !== 'reported' && (
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-arpu">
+                  {sharedMetrics.sources['arpu'] === 'computed' ? 'Derived' : 'AI Est.'}
+                </Badge>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-arpu">
@@ -1476,7 +1493,7 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <p className="text-2xl font-bold font-mono" data-testid="metric-arpu">
-              {formatCurrency(projectedMetrics.mrr / Math.max(projectedMetrics.totalCustomers, 1))}
+              {formatCurrency(sharedMetrics.arpu)}
             </p>
             <p className="text-xs text-muted-foreground">/user/month</p>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-arpu">
@@ -1488,7 +1505,12 @@ export default function OverviewPage() {
         <Card className="overflow-visible">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Active Users</span>
+              <span className="text-sm text-muted-foreground">Active {terms.customers.charAt(0).toUpperCase() + terms.customers.slice(1)}</span>
+              {sharedMetrics.sources['totalCustomers'] && sharedMetrics.sources['totalCustomers'] !== 'reported' && (
+                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-users">
+                  {sharedMetrics.sources['totalCustomers'] === 'computed' ? 'Derived' : 'AI Est.'}
+                </Badge>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-users">
@@ -1502,9 +1524,9 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <p className="text-2xl font-bold font-mono" data-testid="metric-active-users">
-              {projectedMetrics.totalCustomers.toLocaleString()}
+              {sharedMetrics.totalCustomers.toLocaleString()}
             </p>
-            <p className="text-xs text-muted-foreground">paying customers</p>
+            <p className="text-xs text-muted-foreground">paying {terms.customers}</p>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-users">
               <BarChart3 className="h-3 w-3 mr-1" /> Above median
             </Badge>
@@ -1694,11 +1716,19 @@ export default function OverviewPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-              {kpiHealthData.map((item) => (
+              {kpiHealthData.map((item) => {
+                const metricKey = item.metric === 'ltv_cac' ? 'ltvCacRatio' : item.metric;
+                const source = sharedMetrics.sources[metricKey];
+                return (
                 <div key={item.metric} className="flex flex-col space-y-2 p-4 rounded-lg border bg-card hover-elevate transition-all">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
+                      {source && source !== 'reported' && (
+                        <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid={`badge-source-${item.metric}`}>
+                          {source === 'computed' ? 'Derived' : 'AI Est.'}
+                        </Badge>
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`info-${item.metric}`}>
@@ -1736,7 +1766,8 @@ export default function OverviewPage() {
                     />
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -1862,7 +1893,17 @@ export default function OverviewPage() {
                       <SelectItem value="saas">SaaS / Software</SelectItem>
                       <SelectItem value="fintech">Fintech</SelectItem>
                       <SelectItem value="ecommerce">E-commerce</SelectItem>
+                      <SelectItem value="d2c">D2C / Consumer</SelectItem>
                       <SelectItem value="marketplace">Marketplace</SelectItem>
+                      <SelectItem value="healthcare">Healthcare / BioTech</SelectItem>
+                      <SelectItem value="edtech">EdTech</SelectItem>
+                      <SelectItem value="agritech">AgriTech</SelectItem>
+                      <SelectItem value="deeptech">DeepTech / Hardware</SelectItem>
+                      <SelectItem value="climate">Climate / CleanTech</SelectItem>
+                      <SelectItem value="media">Media / Entertainment</SelectItem>
+                      <SelectItem value="logistics">Logistics / Supply Chain</SelectItem>
+                      <SelectItem value="real_estate">Real Estate / PropTech</SelectItem>
+                      <SelectItem value="food">Food / CPG</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -1876,9 +1917,14 @@ export default function OverviewPage() {
                     <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
                   )) || (
                     <>
+                      <SelectItem value="pre_seed">Pre-seed</SelectItem>
                       <SelectItem value="seed">Seed</SelectItem>
+                      <SelectItem value="pre_series_a">Pre-Series A</SelectItem>
                       <SelectItem value="series_a">Series A</SelectItem>
-                      <SelectItem value="series_b">Series B</SelectItem>
+                      <SelectItem value="series_b">Series B+</SelectItem>
+                      <SelectItem value="growth">Growth Stage</SelectItem>
+                      <SelectItem value="pre_ipo">Pre-IPO</SelectItem>
+                      <SelectItem value="public">Public / Listed</SelectItem>
                     </>
                   )}
                 </SelectContent>
