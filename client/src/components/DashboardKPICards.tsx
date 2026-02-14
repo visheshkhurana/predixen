@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/tooltip';
 import { KPIConfigWizard, useKPIConfig } from './KPIConfigWizard';
 import { useWebSocket } from '@/lib/websocket';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface KPICardProps {
   title: string;
@@ -167,15 +168,10 @@ function getBurnMultipleStatus(multiple: number): 'healthy' | 'warning' | 'criti
   return 'critical';
 }
 
-function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
 export function DashboardKPICards({ simulation, metrics, previousMetrics, companyId, showConfig = true, testId = 'dashboard-kpis' }: DashboardKPICardsProps) {
   const { configs, handleConfigChange } = useKPIConfig();
   const { isConnected, metrics: wsMetrics, subscribe } = useWebSocket(companyId || null);
+  const { format: formatCurrency } = useCurrency();
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 

@@ -293,13 +293,49 @@ def calculate_total_expenses(rows: List[Dict[str, Any]], period: str) -> float:
 
 
 def calculate_growth_rate(current_revenue: float, previous_revenue: float) -> Optional[float]:
-    """Calculate month-over-month growth rate."""
+    """Calculate month-over-month growth rate.
+    
+    Returns rate as a decimal (e.g., 0.10 for 10% growth).
+    Capped at +/- 2.0 (200%) to prevent nonsensical projections.
+    """
     if previous_revenue == 0:
         if current_revenue > 0:
             return 1.0
         return 0.0
     
-    return (current_revenue - previous_revenue) / previous_revenue
+    rate = (current_revenue - previous_revenue) / previous_revenue
+    return max(-2.0, min(2.0, rate))
+
+
+MAX_MONTHLY_GROWTH_RATE_PCT = 50.0
+
+
+def safe_growth_rate_from_series(
+    revenue_values: list,
+) -> Optional[float]:
+    """Compute growth rate from a list of revenue values.
+    
+    Returns None if fewer than 2 data points (cannot compute growth).
+    Returns the average MoM growth rate as a percentage (e.g., 10.0 for 10%).
+    Capped at MAX_MONTHLY_GROWTH_RATE_PCT to prevent projection overflow.
+    """
+    if len(revenue_values) < 2:
+        return None
+    
+    rates = []
+    for i in range(1, len(revenue_values)):
+        prev = revenue_values[i - 1]
+        curr = revenue_values[i]
+        if prev and prev > 0:
+            rate = (curr - prev) / prev
+            rates.append(rate)
+    
+    if not rates:
+        return None
+    
+    avg_rate = sum(rates) / len(rates)
+    avg_pct = avg_rate * 100
+    return max(-MAX_MONTHLY_GROWTH_RATE_PCT, min(MAX_MONTHLY_GROWTH_RATE_PCT, avg_pct))
 
 
 def compute_3_month_average(rows: List[Dict[str, Any]], periods: List[str]) -> Dict[str, float]:

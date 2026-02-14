@@ -875,13 +875,13 @@ export default function OverviewPage() {
     
     const data = [
       ['Metric', 'Value', 'Unit'],
-      ['MRR', baseData.mrr.toFixed(0), 'USD'],
-      ['ARR', baseData.arr.toFixed(0), 'USD'],
-      ['Cash on Hand', baseData.cash.toFixed(0), 'USD'],
-      ['Burn Rate', baseData.burnRate.toFixed(0), 'USD/month'],
+      ['MRR', baseData.mrr.toFixed(0), currentCompany?.currency || 'USD'],
+      ['ARR', baseData.arr.toFixed(0), currentCompany?.currency || 'USD'],
+      ['Cash on Hand', baseData.cash.toFixed(0), currentCompany?.currency || 'USD'],
+      ['Burn Rate', baseData.burnRate.toFixed(0), `${currentCompany?.currency || 'USD'}/month`],
       ['Runway', formatRunway(baseData.runway), ''],
-      ['CAC', baseData.cac.toFixed(0), 'USD'],
-      ['LTV', baseData.ltv.toFixed(0), 'USD'],
+      ['CAC', baseData.cac.toFixed(0), currentCompany?.currency || 'USD'],
+      ['LTV', baseData.ltv.toFixed(0), currentCompany?.currency || 'USD'],
       ['LTV:CAC Ratio', baseData.ltvCacRatio.toFixed(2), 'x'],
       ['Gross Margin', baseData.grossMargin.toFixed(1), '%'],
       ['Churn Rate', baseData.churnRate.toFixed(1), '%'],
@@ -1104,12 +1104,12 @@ export default function OverviewPage() {
           <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach $100K MRR</p>
+                <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')} MRR</p>
                 <Badge variant={baseData.mrr >= 100000 ? "secondary" : baseData.mrr >= 50000 ? "secondary" : "destructive"} className={baseData.mrr >= 50000 ? "bg-emerald-500/10 text-emerald-500 shrink-0" : "shrink-0"} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</Badge>
               </div>
               <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / $100K</span>
+                <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')}</span>
                 <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
               </div>
             </CardContent>
@@ -2182,11 +2182,7 @@ export default function OverviewPage() {
                     <YAxis 
                       className="text-xs"
                       tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                      tickFormatter={(value) => {
-                        if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-                        if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-                        return `$${value}`;
-                      }}
+                      tickFormatter={(value) => formatCurrencyAbbrev(value, currentCompany?.currency || 'USD')}
                     />
                     <RechartsTooltip
                       contentStyle={{

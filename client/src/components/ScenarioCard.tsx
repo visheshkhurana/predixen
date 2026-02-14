@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { RiskGauge } from '@/components/RiskGauge';
-import { cn, formatCurrencyAbbrev } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   ChevronDown,
   ChevronUp,
@@ -80,7 +81,7 @@ export function ScenarioCard({
 }: ScenarioCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  const formatCurrency = (value: number | undefined) => formatCurrencyAbbrev(value);
+  const { format: formatCurrency } = useCurrency();
   
   const miniChartData = cashProjection?.map((cash, index) => ({
     month: index + 1,

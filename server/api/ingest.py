@@ -829,8 +829,11 @@ async def save_financial_baseline(
     if cogs_entered is not None and cogs_entered > 0:
         cogs = float(cogs_entered)
     else:
-        estimated_gross_margin = 0.65
-        cogs = revenue * (1 - estimated_gross_margin) if revenue > 0 else 0.0
+        gm_for_cogs = baseline.grossMargin
+        if gm_for_cogs is not None and 0 < gm_for_cogs <= 1:
+            gm_for_cogs = gm_for_cogs * 100
+        estimated_gross_margin_dec = (gm_for_cogs / 100) if gm_for_cogs is not None else 0.65
+        cogs = revenue * (1 - estimated_gross_margin_dec) if revenue > 0 else 0.0
     
     opex = float(operating) if operating is not None else 0.0
     payroll_val = float(payroll) if payroll is not None else 0.0
@@ -863,6 +866,8 @@ async def save_financial_baseline(
     ).first()
     
     gross_margin_pct = baseline.grossMargin
+    if gross_margin_pct is not None and 0 < gross_margin_pct <= 1:
+        gross_margin_pct = gross_margin_pct * 100
     if gross_margin_pct is None and revenue > 0:
         gross_margin_pct = ((revenue - cogs) / revenue) * 100
     elif gross_margin_pct is None:

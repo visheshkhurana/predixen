@@ -13,35 +13,39 @@ from server.services.truth_scan import (
 
 
 class TestNetBurnComputation:
-    """Tests for net burn calculation."""
+    """Tests for net burn calculation.
     
-    def test_net_burn_basic(self):
-        """Net burn = revenue - total_expenses"""
+    Canonical convention: net_burn = total_expenses - revenue
+    Positive = burning cash, Negative = profitable
+    """
+    
+    def test_net_burn_burning(self):
+        """Positive net burn when expenses > revenue (burning cash)"""
         revenue = 100000
-        total_expenses = 150000
-        net_burn = compute_net_burn(revenue, total_expenses)
-        assert net_burn == -50000
-    
-    def test_net_burn_positive_cash_flow(self):
-        """Positive net burn when revenue > expenses"""
-        revenue = 200000
         total_expenses = 150000
         net_burn = compute_net_burn(revenue, total_expenses)
         assert net_burn == 50000
     
+    def test_net_burn_profitable(self):
+        """Negative net burn when revenue > expenses (profitable)"""
+        revenue = 200000
+        total_expenses = 150000
+        net_burn = compute_net_burn(revenue, total_expenses)
+        assert net_burn == -50000
+    
     def test_net_burn_zero_expenses(self):
-        """Net burn with zero expenses"""
+        """Net burn with zero expenses = negative (profitable)"""
         revenue = 100000
         total_expenses = 0
         net_burn = compute_net_burn(revenue, total_expenses)
-        assert net_burn == 100000
+        assert net_burn == -100000
     
     def test_net_burn_zero_revenue(self):
-        """Net burn with zero revenue"""
+        """Net burn with zero revenue = positive (burning)"""
         revenue = 0
         total_expenses = 150000
         net_burn = compute_net_burn(revenue, total_expenses)
-        assert net_burn == -150000
+        assert net_burn == 150000
     
     def test_net_burn_none_values(self):
         """Net burn with None values returns None"""
@@ -51,46 +55,51 @@ class TestNetBurnComputation:
 
 
 class TestRunwayComputation:
-    """Tests for runway calculation."""
+    """Tests for runway calculation.
     
-    def test_runway_basic(self):
-        """Runway = cash_balance / |monthly_burn|"""
+    Canonical convention: net_burn positive = burning cash.
+    Runway = cash / net_burn when burning.
+    Returns None when profitable/breakeven (sustainable).
+    """
+    
+    def test_runway_burning(self):
+        """Runway = cash_balance / net_burn when burning"""
         cash_balance = 1000000
-        monthly_burn = -100000
-        runway = compute_runway_months(cash_balance, monthly_burn)
+        net_burn = 100000
+        runway = compute_runway_months(cash_balance, net_burn)
         assert runway == 10.0
     
-    def test_runway_positive_cash_flow(self):
-        """Runway is infinite (999) when cash flow positive"""
+    def test_runway_profitable(self):
+        """Runway is None (sustainable) when profitable"""
         cash_balance = 1000000
-        monthly_burn = 50000
-        runway = compute_runway_months(cash_balance, monthly_burn)
-        assert runway == 999
+        net_burn = -50000
+        runway = compute_runway_months(cash_balance, net_burn)
+        assert runway is None
     
     def test_runway_zero_burn(self):
-        """Runway is infinite (999) when burn is zero"""
+        """Runway is None (sustainable) when burn is zero"""
         cash_balance = 1000000
-        monthly_burn = 0
-        runway = compute_runway_months(cash_balance, monthly_burn)
-        assert runway == 999
+        net_burn = 0
+        runway = compute_runway_months(cash_balance, net_burn)
+        assert runway is None
     
     def test_runway_zero_cash(self):
-        """Runway is 0 when no cash"""
+        """Runway is 0 when no cash but burning"""
         cash_balance = 0
-        monthly_burn = -100000
-        runway = compute_runway_months(cash_balance, monthly_burn)
+        net_burn = 100000
+        runway = compute_runway_months(cash_balance, net_burn)
         assert runway == 0.0
     
     def test_runway_negative_cash(self):
-        """Runway handles negative cash balance"""
+        """Runway is 0 when negative cash balance"""
         cash_balance = -50000
-        monthly_burn = -100000
-        runway = compute_runway_months(cash_balance, monthly_burn)
-        assert runway < 0
+        net_burn = 100000
+        runway = compute_runway_months(cash_balance, net_burn)
+        assert runway == 0.0
     
     def test_runway_none_values(self):
         """Runway with None values returns None"""
-        assert compute_runway_months(None, -100000) is None
+        assert compute_runway_months(None, 100000) is None
         assert compute_runway_months(1000000, None) is None
         assert compute_runway_months(None, None) is None
 
