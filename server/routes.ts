@@ -3,7 +3,6 @@ import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
 import { registerAiGovernanceRoutes } from "./ai-governance/routes";
-
 export async function registerRoutes(
   httpServer: Server,
   app: Express
