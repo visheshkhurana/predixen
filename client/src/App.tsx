@@ -523,13 +523,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <AppSidebar />
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <header className="no-print flex items-center justify-between gap-2 p-3 border-b bg-background sticky top-0 z-50">
-            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background sticky top-0 z-50">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="hidden lg:block min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="hidden lg:block min-w-0 overflow-hidden shrink">
                 <ContextBar 
                   scenarioName={currentScenario?.name}
                   scenarioId={currentScenario?.id}
