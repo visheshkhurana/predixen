@@ -1,0 +1,57 @@
+{
+  "testCase": "LeadSquared (CRM SaaS)",
+  "version": "1.0.0",
+  "createdAt": "2026-02-14T22:00:00Z",
+  "companySetup": {
+    "name": "LeadSquared (Synthetic Test)",
+    "category": "B2B SaaS (CRM + Marketing Automation)",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "fyEnd": "Mar 31",
+    "stage": "Growth Stage (Late-growth / pre-IPO)"
+  },
+  "publicAnchors": {
+    "customers": "1600+ businesses (leadsquared.com)",
+    "pricingRef": "$40-$60/user/mo billed annually (leadsquared.com/sales-crm-pricing)",
+    "fy24Revenue": "₹260.6 Cr+ (Inc42 third-party reported, not audited)",
+    "seriesCFunding": "$153M at $1B valuation (WestBridge Capital)",
+    "totalFunding": "$188M"
+  },
+  "syntheticBaseline": {
+    "note": "ALL VALUES BELOW ARE SYNTHETIC ASSUMPTIONS - NOT REAL FINANCIALS",
+    "monthlyRevenue": 217.2,
+    "grossMarginPct": 82,
+    "opex": 95.0,
+    "payroll": 105.0,
+    "otherCosts": 18.0,
+    "cashBalance": 1500.0,
+    "employees": 1150,
+    "unit": "₹M (Indian Rupees in Millions)"
+  },
+  "expectedOutputs": {
+    "cogs": 39.096,
+    "totalExpenses": 257.096,
+    "netBurn": 39.896,
+    "runwayMonths": 37.6,
+    "grossProfit": 178.104,
+    "formula": {
+      "cogs": "revenue * (1 - grossMarginPct/100) = 217.2 * 0.18 = 39.096",
+      "totalExpenses": "opex + payroll + otherCosts + cogs = 95 + 105 + 18 + 39.096 = 257.096",
+      "netBurn": "totalExpenses - revenue = 257.096 - 217.2 = 39.896",
+      "runwayMonths": "cashBalance / netBurn = 1500 / 39.896 = 37.6"
+    }
+  },
+  "advancedSaaSMetrics": {
+    "note": "ALL SYNTHETIC - clearly labeled",
+    "customers": 1650,
+    "arpaMonthly": 131636,
+    "grossChurnMonthly": 0.009,
+    "netRevenueRetentionAnnual": 1.15,
+    "cacPaybackMonths": 14,
+    "pipelineCoverage": 3.2,
+    "salesCycleDays": 45,
+    "nps": 42,
+    "supportTicketsPer100Customers": 28
+  }
+}
