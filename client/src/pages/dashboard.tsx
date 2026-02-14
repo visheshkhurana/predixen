@@ -785,16 +785,16 @@ export default function Dashboard() {
             />
             <KPITile
               title="Gross Margin"
-              value={formatPercent(liveMetrics.gross_margin)}
+              value={financialMetrics.sources['grossMargin'] === 'estimated' ? 'N/A' : formatPercent(liveMetrics.gross_margin)}
               icon={<Percent className="h-4 w-4" />}
-              trend={liveMetrics.gross_margin >= 0.7 ? 'up' : 'neutral'}
+              trend={financialMetrics.sources['grossMargin'] === 'estimated' ? 'neutral' : (liveMetrics.gross_margin >= 0.7 ? 'up' : 'neutral')}
               isLive={isConnected}
             />
             <KPITile
               title="Churn Rate"
-              value={formatPercent(liveMetrics.churn_rate)}
+              value={financialMetrics.sources['churnRate'] === 'estimated' || (!financialMetrics.sources['churnRate'] && financialMetrics.churnRatePct === 0) ? 'N/A' : formatPercent(liveMetrics.churn_rate)}
               icon={<Activity className="h-4 w-4" />}
-              trend={liveMetrics.churn_rate <= 0.03 ? 'up' : 'down'}
+              trend={financialMetrics.sources['churnRate'] === 'estimated' ? 'neutral' : (liveMetrics.churn_rate <= 0.03 ? 'up' : 'down')}
               isLive={isConnected}
             />
             <KPITile

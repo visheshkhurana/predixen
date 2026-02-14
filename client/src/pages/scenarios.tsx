@@ -520,7 +520,7 @@ export default function ScenariosPage() {
             { name: 'Baseline', description: 'Current trajectory' },
             { name: 'Cost Cutting', description: 'Reduce expenses by 20%', events: [{ event_type: 'cost_cut', start_month: 1, params: { opex_reduction_pct: 20, payroll_reduction_pct: 15 } }] },
             { name: 'Growth Investment', description: 'Increase marketing spend', events: [{ event_type: 'marketing_spend_change', start_month: 1, params: { change_pct: 30 } }] },
-            { name: 'Fundraise', description: 'Raise $1M bridge round', events: [{ event_type: 'fundraise', start_month: 3, params: { amount: 1000000 } }] },
+            { name: 'Fundraise', description: `Raise ${currencySymbol}1M bridge round`, events: [{ event_type: 'fundraise', start_month: 3, params: { amount: 1000000 } }] },
           ]
         }
       });
@@ -1606,7 +1606,16 @@ export default function ScenariosPage() {
 
               {(() => {
                 const selectedScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
-                return selectedScenario ? (
+                if (!selectedScenario) return null;
+                const inp = selectedScenario.inputs || selectedScenario.overrides_json || selectedScenario.overrides || {};
+                const pricingPct = inp.pricing_change_pct || 0;
+                const growthPct = inp.growth_uplift_pct || 0;
+                const burnPct = inp.burn_reduction_pct || 0;
+                const gmPct = inp.gross_margin_delta_pct || 0;
+                const churnPct = inp.churn_change_pct || 0;
+                const fundraise = inp.fundraise_amount || 0;
+                const hasChanges = pricingPct !== 0 || growthPct !== 0 || burnPct !== 0 || gmPct !== 0 || churnPct !== 0 || fundraise > 0;
+                return (
                   <Card className="overflow-visible" data-testid="card-input-changes">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-3">
@@ -1614,45 +1623,43 @@ export default function ScenariosPage() {
                         <span className="text-sm font-medium">Scenario Inputs vs Baseline</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {selectedScenario.pricing_change_pct !== 0 && (
+                        {pricingPct !== 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Pricing: {selectedScenario.pricing_change_pct > 0 ? '+' : ''}{selectedScenario.pricing_change_pct}%
+                            Pricing: {pricingPct > 0 ? '+' : ''}{pricingPct}%
                           </Badge>
                         )}
-                        {selectedScenario.growth_uplift_pct !== 0 && (
+                        {growthPct !== 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Growth: {selectedScenario.growth_uplift_pct > 0 ? '+' : ''}{selectedScenario.growth_uplift_pct}%
+                            Growth: {growthPct > 0 ? '+' : ''}{growthPct}%
                           </Badge>
                         )}
-                        {selectedScenario.burn_reduction_pct !== 0 && (
+                        {burnPct !== 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Burn Cut: {selectedScenario.burn_reduction_pct}%
+                            Burn Cut: {burnPct}%
                           </Badge>
                         )}
-                        {selectedScenario.gross_margin_delta_pct !== 0 && (
+                        {gmPct !== 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            GM: {selectedScenario.gross_margin_delta_pct > 0 ? '+' : ''}{selectedScenario.gross_margin_delta_pct}pp
+                            GM: {gmPct > 0 ? '+' : ''}{gmPct}pp
                           </Badge>
                         )}
-                        {selectedScenario.churn_change_pct !== 0 && (
+                        {churnPct !== 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Churn: {selectedScenario.churn_change_pct > 0 ? '+' : ''}{selectedScenario.churn_change_pct}%
+                            Churn: {churnPct > 0 ? '+' : ''}{churnPct}%
                           </Badge>
                         )}
-                        {selectedScenario.fundraise_amount > 0 && (
+                        {fundraise > 0 && (
                           <Badge variant="outline" className="font-mono text-xs">
-                            Fundraise: ${(selectedScenario.fundraise_amount / 1000).toFixed(0)}K
+                            Fundraise: {currencySymbol}{(fundraise / 1000).toFixed(0)}K
                           </Badge>
                         )}
-                        {!selectedScenario.pricing_change_pct && !selectedScenario.growth_uplift_pct && 
-                         !selectedScenario.burn_reduction_pct && !selectedScenario.gross_margin_delta_pct &&
-                         !selectedScenario.churn_change_pct && !selectedScenario.fundraise_amount && (
+                        {!hasChanges && (
                           <span className="text-xs text-muted-foreground">No changes from baseline</span>
                         )}
                       </div>
                     </CardContent>
                   </Card>
-                ) : null;
+                );
               })()}
 
               {baselineComparison.simulation && (

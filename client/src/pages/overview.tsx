@@ -73,6 +73,7 @@ import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBen
 import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
@@ -482,6 +483,7 @@ export default function OverviewPage() {
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const terms = useIndustryTerms();
+  const { scaleMultiplier, scale: companyScale, scaleLabel: companyScaleLabel } = useCurrency();
   const runTruthScanMutation = useRunTruthScan();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
@@ -955,7 +957,9 @@ export default function OverviewPage() {
   const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
   
   const formatCurrency = (value: number | null | undefined) => {
-    return formatCurrencyAbbrev(value, currentCompany?.currency || 'USD');
+    if (value == null || isNaN(value)) return 'N/A';
+    const rawValue = value * scaleMultiplier;
+    return formatCurrencyAbbrev(rawValue, currentCompany?.currency || 'USD');
   };
   
   const formatPercent = (value: number | null | undefined) => {
@@ -999,7 +1003,7 @@ export default function OverviewPage() {
   const kpiHealthData = [
     { name: 'Runway', value: baseData.runway, metric: 'runway', tooltip: { formula: 'Cash / Monthly Burn', goodRange: '18+ months', badRange: '< 6 months' } },
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
-    { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
+    { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
     { name: 'Growth Rate', value: sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
@@ -1133,11 +1137,11 @@ export default function OverviewPage() {
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
-                <Badge variant={baseData.churnRate <= 2 ? "secondary" : "destructive"} className={baseData.churnRate <= 2 ? "bg-emerald-500/20 text-emerald-400 shrink-0" : "shrink-0"} data-testid="badge-goal-churn-status">{baseData.churnRate <= 2 ? 'On Track' : 'Off Track'}</Badge>
+                <Badge variant={sharedMetrics.sources['churnRate'] === 'estimated' ? "secondary" : (baseData.churnRate <= 2 ? "secondary" : "destructive")} className={sharedMetrics.sources['churnRate'] === 'estimated' ? "shrink-0" : (baseData.churnRate <= 2 ? "bg-emerald-500/20 text-emerald-400 shrink-0" : "shrink-0")} data-testid="badge-goal-churn-status">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'No Data' : (baseData.churnRate <= 2 ? 'On Track' : 'Off Track')}</Badge>
               </div>
-              <Progress value={Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
+              <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-churn-progress">Current: {baseData.churnRate.toFixed(1)}%</span>
+                <span data-testid="text-goal-churn-progress">Current: {sharedMetrics.sources['churnRate'] === 'estimated' ? 'N/A' : `${baseData.churnRate.toFixed(1)}%`}</span>
                 <span data-testid="text-goal-churn-target">Target: 2.0%</span>
               </div>
             </CardContent>
@@ -1536,7 +1540,7 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <p className="text-2xl font-bold font-mono" data-testid="metric-active-users">
-              {sharedMetrics.totalCustomers.toLocaleString()}
+              {sharedMetrics.sources['totalCustomers'] === 'estimated' || (!sharedMetrics.sources['totalCustomers'] && sharedMetrics.totalCustomers === 0) ? 'N/A' : sharedMetrics.totalCustomers.toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground">paying {terms.customers}</p>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-users">
@@ -1565,10 +1569,11 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <p className={`text-2xl font-bold font-mono ${
+              sharedMetrics.sources['ndr'] === 'estimated' ? 'text-muted-foreground' :
               100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
               100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
             }`} data-testid="metric-nrr">
-              {safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
+              {sharedMetrics.sources['ndr'] === 'estimated' ? 'N/A' : safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
             </p>
             <p className="text-xs text-muted-foreground">net revenue retention</p>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-nrr">
