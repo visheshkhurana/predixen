@@ -1,0 +1,362 @@
+[
+  {
+    "id": "DS01",
+    "companyName": "FlowForge",
+    "category": "Seed SaaS",
+    "founderPersona": "First-time technical founder, ex-Google engineer",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 75000,
+      "grossMarginPct": 85,
+      "opex": 45000,
+      "payroll": 60000,
+      "otherCosts": 10000,
+      "cashBalance": 600000,
+      "employees": 38
+    },
+    "expectedBaseline": {
+      "cogs": 11250,
+      "totalExpenses": 126250,
+      "netBurn": 51250,
+      "runway": 11.71
+    }
+  },
+  {
+    "id": "DS02",
+    "companyName": "CloudLedger",
+    "category": "Profitable SaaS",
+    "founderPersona": "Serial entrepreneur, 3rd company, finance background",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 400000,
+      "grossMarginPct": 88,
+      "opex": 120000,
+      "payroll": 180000,
+      "otherCosts": 40000,
+      "cashBalance": 2500000,
+      "employees": 120
+    },
+    "expectedBaseline": {
+      "cogs": 48000,
+      "totalExpenses": 388000,
+      "netBurn": -12000,
+      "runway": "Infinity"
+    }
+  },
+  {
+    "id": "DS03",
+    "companyName": "GlowCart",
+    "category": "D2C E-commerce",
+    "founderPersona": "Brand-first founder, ex-Nykaa marketing lead",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 2500,
+      "grossMarginPct": 40,
+      "opex": 900,
+      "payroll": 250,
+      "otherCosts": 150,
+      "cashBalance": 2000,
+      "employees": 410
+    },
+    "expectedBaseline": {
+      "cogs": 1500,
+      "totalExpenses": 2800,
+      "netBurn": 300,
+      "runway": 6.67
+    }
+  },
+  {
+    "id": "DS04",
+    "companyName": "BazaarBridge",
+    "category": "Marketplace",
+    "founderPersona": "Ops-heavy founder, ex-Flipkart supply chain",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 1200,
+      "grossMarginPct": 25,
+      "opex": 500,
+      "payroll": 200,
+      "otherCosts": 150,
+      "cashBalance": 3000,
+      "employees": 260
+    },
+    "expectedBaseline": {
+      "cogs": 900,
+      "totalExpenses": 1750,
+      "netBurn": 550,
+      "runway": 5.45
+    }
+  },
+  {
+    "id": "DS05",
+    "companyName": "Shadowbox Logistics",
+    "category": "Logistics / Supply Chain",
+    "founderPersona": "Industry veteran, 15yr logistics experience",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 2071,
+      "grossMarginPct": 8,
+      "opex": 100,
+      "payroll": 40,
+      "otherCosts": 20,
+      "cashBalance": 1715,
+      "employees": 3000
+    },
+    "expectedBaseline": {
+      "cogs": 1905.32,
+      "totalExpenses": 2065.32,
+      "netBurn": -5.68,
+      "runway": "Infinity"
+    }
+  },
+  {
+    "id": "DS06",
+    "companyName": "CredPulse",
+    "category": "Fintech",
+    "founderPersona": "Ex-banker, regulatory expertise, risk-averse",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 350,
+      "grossMarginPct": 65,
+      "opex": 200,
+      "payroll": 120,
+      "otherCosts": 80,
+      "cashBalance": 900,
+      "employees": 520
+    },
+    "expectedBaseline": {
+      "cogs": 122.5,
+      "totalExpenses": 522.5,
+      "netBurn": 172.5,
+      "runway": 5.22
+    }
+  },
+  {
+    "id": "DS07",
+    "companyName": "ProtoFab",
+    "category": "Manufacturing",
+    "founderPersona": "Hardware engineer, capital-intensive mindset",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 800,
+      "grossMarginPct": 30,
+      "opex": 120,
+      "payroll": 90,
+      "otherCosts": 50,
+      "cashBalance": 500,
+      "employees": 900
+    },
+    "expectedBaseline": {
+      "cogs": 560,
+      "totalExpenses": 820,
+      "netBurn": 20,
+      "runway": 25.0
+    }
+  },
+  {
+    "id": "DS08",
+    "companyName": "StudioSprint",
+    "category": "Agency / Services",
+    "founderPersona": "Creative director turned founder, people-heavy cost structure",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 90,
+      "grossMarginPct": 55,
+      "opex": 20,
+      "payroll": 60,
+      "otherCosts": 10,
+      "cashBalance": 120,
+      "employees": 75
+    },
+    "expectedBaseline": {
+      "cogs": 40.5,
+      "totalExpenses": 130.5,
+      "netBurn": 40.5,
+      "runway": 2.96
+    }
+  },
+  {
+    "id": "DS09",
+    "companyName": "ArenaNova",
+    "category": "Gaming",
+    "founderPersona": "Ex-Riot Games developer, product-obsessed",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 150000,
+      "grossMarginPct": 70,
+      "opex": 30000,
+      "payroll": 120000,
+      "otherCosts": 20000,
+      "cashBalance": 1200000,
+      "employees": 55
+    },
+    "expectedBaseline": {
+      "cogs": 45000,
+      "totalExpenses": 215000,
+      "netBurn": 65000,
+      "runway": 18.46
+    }
+  },
+  {
+    "id": "DS10",
+    "companyName": "CareArc Clinics",
+    "category": "Healthcare",
+    "founderPersona": "Doctor-turned-entrepreneur, patient outcomes focused",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 500,
+      "grossMarginPct": 60,
+      "opex": 120,
+      "payroll": 220,
+      "otherCosts": 80,
+      "cashBalance": 600,
+      "employees": 1200
+    },
+    "expectedBaseline": {
+      "cogs": 200,
+      "totalExpenses": 620,
+      "netBurn": 120,
+      "runway": 5.0
+    }
+  },
+  {
+    "id": "DS11",
+    "companyName": "TutorLoop",
+    "category": "Edtech",
+    "founderPersona": "Teacher-turned-founder, mission-driven",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 180,
+      "grossMarginPct": 50,
+      "opex": 140,
+      "payroll": 80,
+      "otherCosts": 30,
+      "cashBalance": 1000,
+      "employees": 160
+    },
+    "expectedBaseline": {
+      "cogs": 90,
+      "totalExpenses": 340,
+      "netBurn": 160,
+      "runway": 6.25
+    }
+  },
+  {
+    "id": "DS12",
+    "companyName": "ApexExchange",
+    "category": "Crypto / Web3",
+    "founderPersona": "Quant trader, high-risk tolerance",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amountScale": "MILLIONS",
+    "baselineInputs": {
+      "monthlyRevenue": 1000,
+      "grossMarginPct": 90,
+      "opex": 350,
+      "payroll": 250,
+      "otherCosts": 100,
+      "cashBalance": 6000,
+      "employees": 700
+    },
+    "expectedBaseline": {
+      "cogs": 100,
+      "totalExpenses": 800,
+      "netBurn": -200,
+      "runway": "Infinity"
+    }
+  },
+  {
+    "id": "DS13",
+    "companyName": "ZeroRev Labs",
+    "category": "Pre-revenue / Deep Tech",
+    "founderPersona": "PhD researcher, zero revenue edge case",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 0,
+      "grossMarginPct": 50,
+      "opex": 5000,
+      "payroll": 10000,
+      "otherCosts": 2000,
+      "cashBalance": 80000,
+      "employees": 12
+    },
+    "expectedBaseline": {
+      "cogs": 0,
+      "totalExpenses": 17000,
+      "netBurn": 17000,
+      "runway": 4.71
+    }
+  },
+  {
+    "id": "DS14",
+    "companyName": "MaxGM Co",
+    "category": "Edge Case — 100% GM",
+    "founderPersona": "Pure software, zero COGS test case",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 50000,
+      "grossMarginPct": 100,
+      "opex": 10000,
+      "payroll": 25000,
+      "otherCosts": 5000,
+      "cashBalance": 300000,
+      "employees": 18
+    },
+    "expectedBaseline": {
+      "cogs": 0,
+      "totalExpenses": 40000,
+      "netBurn": -10000,
+      "runway": "Infinity"
+    }
+  },
+  {
+    "id": "DS15",
+    "companyName": "MinGM Co",
+    "category": "Edge Case — 0% GM",
+    "founderPersona": "Hardware-only, all revenue = COGS test case",
+    "currency": "USD",
+    "locale": "en-US",
+    "amountScale": "UNITS",
+    "baselineInputs": {
+      "monthlyRevenue": 50000,
+      "grossMarginPct": 0,
+      "opex": 10000,
+      "payroll": 25000,
+      "otherCosts": 5000,
+      "cashBalance": 300000,
+      "employees": 18
+    },
+    "expectedBaseline": {
+      "cogs": 50000,
+      "totalExpenses": 90000,
+      "netBurn": 40000,
+      "runway": 7.5
+    }
+  }
+]

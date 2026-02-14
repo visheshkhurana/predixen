@@ -1,0 +1,74 @@
+[
+  {
+    "id": "S0",
+    "name": "Baseline (identity)",
+    "description": "No changes applied — outputs must exactly match dataset expectedBaseline",
+    "changes": [],
+    "expected": "IDENTITY: all outputs must match expectedBaseline exactly"
+  },
+  {
+    "id": "S1",
+    "name": "Pricing Lift (+5% Revenue)",
+    "description": "Uniform 5% increase in monthly revenue",
+    "changes": [
+      { "field": "monthlyRevenue", "changeType": "PCT", "value": 5 }
+    ],
+    "expected": "Revenue increases 5%, COGS recalculated on new revenue, burn decreases, runway extends"
+  },
+  {
+    "id": "S2",
+    "name": "Demand Shock (-15% Revenue, months 1-3, revert)",
+    "description": "Revenue drops 15% for first 3 months then reverts to baseline",
+    "changes": [
+      { "field": "monthlyRevenue", "changeType": "PCT", "value": -15, "startMonth": 1, "endMonth": 3 }
+    ],
+    "expected": "Temporary revenue drop M1-M3, full revert M4+, runway impact proportional to 3-month burn increase"
+  },
+  {
+    "id": "S3",
+    "name": "Cost Optimization (GM +3pp, capped at 100%)",
+    "description": "Gross margin improves by 3 percentage points (absolute), capped at 100%",
+    "changes": [
+      { "field": "grossMarginPct", "changeType": "ABS", "value": 3 }
+    ],
+    "expected": "GM increases by 3pp (e.g. 8%->11%), COGS decreases, burn decreases. If GM was 100%, stays 100%"
+  },
+  {
+    "id": "S4",
+    "name": "Hiring Wave (Payroll +10%)",
+    "description": "Payroll costs increase 10%",
+    "changes": [
+      { "field": "payroll", "changeType": "PCT", "value": 10 }
+    ],
+    "expected": "Total expenses increase, burn increases, runway decreases"
+  },
+  {
+    "id": "S5",
+    "name": "Marketing Push (Opex +20%)",
+    "description": "Operating expenses increase 20%",
+    "changes": [
+      { "field": "opex", "changeType": "PCT", "value": 20 }
+    ],
+    "expected": "Total expenses increase, burn increases, runway decreases"
+  },
+  {
+    "id": "S6",
+    "name": "Cash Event (Cash -30%)",
+    "description": "Cash balance drops 30% (simulate distribution, repayment, or unexpected cost)",
+    "changes": [
+      { "field": "cashBalance", "changeType": "PCT", "value": -30 }
+    ],
+    "expected": "Runway decreases proportionally (30% less cash, same burn = 30% less runway)"
+  },
+  {
+    "id": "S7",
+    "name": "Mixed Stack (S1+S4+S5 → then Reset)",
+    "description": "Apply S1 (+5% rev) + S4 (+10% payroll) + S5 (+20% opex) simultaneously, verify combined effect, then reset and confirm exact baseline return",
+    "changes": [
+      { "field": "monthlyRevenue", "changeType": "PCT", "value": 5 },
+      { "field": "payroll", "changeType": "PCT", "value": 10 },
+      { "field": "opex", "changeType": "PCT", "value": 20 }
+    ],
+    "expected": "Combined effect of all three changes. After reset, ALL values must return to exact baseline (identity test)"
+  }
+]
