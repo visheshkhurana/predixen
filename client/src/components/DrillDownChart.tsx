@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -81,21 +81,21 @@ export function DrillDownChart({
       label: 'Cash Balance',
       icon: DollarSign,
       color: 'hsl(var(--primary))',
-      format: (v: number) => `$${(v / 1000).toFixed(0)}K`,
+      format: (v: number) => formatCurrencyAbbrev(v),
       suffix: '',
     },
     revenue: {
       label: 'Monthly Revenue',
       icon: TrendingUp,
       color: 'hsl(142, 76%, 36%)',
-      format: (v: number) => `$${(v / 1000).toFixed(0)}K`,
+      format: (v: number) => formatCurrencyAbbrev(v),
       suffix: '/mo',
     },
     burn: {
       label: 'Monthly Burn',
       icon: Flame,
       color: 'hsl(0, 84%, 60%)',
-      format: (v: number) => `$${(v / 1000).toFixed(0)}K`,
+      format: (v: number) => formatCurrencyAbbrev(v),
       suffix: '/mo',
     },
     runway: {

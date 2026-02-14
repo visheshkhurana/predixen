@@ -59,7 +59,7 @@ import {
   Legend,
 } from "recharts";
 import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
-import { formatCurrencyAbbrev } from "@/lib/utils";
+import { formatCurrencyAbbrev, formatRunway } from "@/lib/utils";
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
@@ -618,7 +618,7 @@ export default function Dashboard() {
                 <span className="text-sm font-medium text-muted-foreground">Runway</span>
                 <div className="mt-2">
                   <span className="text-2xl font-semibold font-mono">
-                    {latestResult.summary.runwayMonths ? `${latestResult.summary.runwayMonths} mo` : "Profitable"}
+                    {formatRunway(latestResult.summary.runwayMonths)}
                   </span>
                 </div>
               </CardContent>
@@ -767,7 +767,7 @@ export default function Dashboard() {
             />
             <KPITile
               title="Runway"
-              value={`${liveMetrics.runway_months.toFixed(1)} mo`}
+              value={formatRunway(liveMetrics.runway_months)}
               icon={<Clock className="h-4 w-4" />}
               trend={liveMetrics.runway_months < 6 ? 'down' : 'neutral'}
               subtitle={liveMetrics.runway_months < 6 ? 'Low runway' : ''}

@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { HelpCircle, Upload, FileText, Sparkles, Check, AlertCircle, Loader2, Eye, MessageSquare, Download, Info, Search, Globe, History, Database, CreditCard, BarChart3, Users, Building2, Link2, ArrowRight, ExternalLink, ChevronRight, SkipForward } from 'lucide-react';
+import type { AmountScale } from '@/lib/utils';
+import { SCALE_LABELS } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const STEPS = [
@@ -175,15 +177,16 @@ export default function OnboardingPage() {
     industry: '',
     stage: '',
     currency: 'USD',
+    amount_scale: 'UNITS' as AmountScale,
   });
   const [baselineData, setBaselineData] = useState({
-    monthly_revenue: 50000,
-    gross_margin_pct: 70,
-    opex: 20000,
-    payroll: 30000,
-    other_costs: 5000,
-    cash_balance: 500000,
-    headcount: 10,
+    monthly_revenue: 0,
+    gross_margin_pct: 0,
+    opex: 0,
+    payroll: 0,
+    other_costs: 0,
+    cash_balance: 0,
+    headcount: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSampleMode, setIsSampleMode] = useState(false);
@@ -555,6 +558,7 @@ export default function OnboardingPage() {
   };
   
   const validateBaseline = (): string | null => {
+    if (baselineData.monthly_revenue <= 0 && baselineData.cash_balance <= 0) return 'Please enter at least monthly revenue or cash balance';
     if (baselineData.monthly_revenue < 0) return 'Monthly revenue cannot be negative';
     if (baselineData.gross_margin_pct < 0 || baselineData.gross_margin_pct > 100) return 'Gross margin must be between 0 and 100%';
     if (baselineData.opex < 0) return 'Operating expenses cannot be negative';
@@ -1164,6 +1168,29 @@ export default function OnboardingPage() {
                     </p>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Values entered in</Label>
+                  <Select
+                    value={companyData.amount_scale}
+                    onValueChange={(v) => setCompanyData({ ...companyData, amount_scale: v as AmountScale })}
+                  >
+                    <SelectTrigger data-testid="select-amount-scale">
+                      <SelectValue placeholder="Select scale..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UNITS">Units</SelectItem>
+                      <SelectItem value="THOUSANDS">Thousands</SelectItem>
+                      <SelectItem value="MILLIONS">Millions</SelectItem>
+                      <SelectItem value="CRORES">Crores</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {companyData.amount_scale !== 'UNITS' && (
+                    <p className="text-xs text-muted-foreground">
+                      Monetary values will be entered in {companyData.amount_scale.toLowerCase()}
+                    </p>
+                  )}
+                </div>
                 
                 {/* Show validation message if form is incomplete */}
                 {(!companyData.name.trim() || !companyData.industry || !companyData.stage) && (
@@ -1284,6 +1311,15 @@ export default function OnboardingPage() {
                 </div>
               </div>
               
+              {companyData.amount_scale !== 'UNITS' && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md flex items-center gap-2">
+                  <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    All monetary values in {companyData.amount_scale.charAt(0) + companyData.amount_scale.slice(1).toLowerCase()}
+                  </p>
+                </div>
+              )}
+
               {scanError && (
                 <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start gap-2">
                   <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />

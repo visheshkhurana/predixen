@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { SlidersHorizontal, TrendingUp, TrendingDown, Percent, DollarSign, Flame, RotateCcw, Play } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface SliderConfig {
   key: string;
@@ -34,14 +34,6 @@ interface WhatIfExplorerProps {
   testId?: string;
 }
 
-const sliderConfigs: SliderConfig[] = [
-  { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: 10, unit: '%' },
-  { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: 5.5, unit: '%' },
-  { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: 70, unit: '%' },
-  { key: 'burnChange', label: 'Burn Rate Change', icon: Flame, min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
-  { key: 'fundraising', label: 'Fundraising Amount', icon: DollarSign, min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => v >= 1000000 ? `$${(v/1000000).toFixed(1)}M` : `$${(v/1000).toFixed(0)}K` },
-];
-
 export function WhatIfExplorer({ 
   baselineState, 
   baselineResults,
@@ -49,6 +41,14 @@ export function WhatIfExplorer({
   calculateQuickImpact,
   testId = 'what-if-explorer'
 }: WhatIfExplorerProps) {
+  const sliderConfigs: SliderConfig[] = useMemo(() => [
+    { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: baselineState?.monthlyGrowthRate || baselineState?.growthRate || 0, unit: '%' },
+    { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: baselineState?.churnRate ? baselineState.churnRate * 100 : 5, unit: '%' },
+    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: baselineState?.grossMargin ? baselineState.grossMargin * 100 : 70, unit: '%' },
+    { key: 'burnChange', label: 'Burn Rate Change', icon: Flame, min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
+    { key: 'fundraising', label: 'Fundraising Amount', icon: DollarSign, min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => formatCurrencyAbbrev(v) },
+  ], [baselineState]);
+
   const [values, setValues] = useState<Record<string, number>>(() => 
     Object.fromEntries(sliderConfigs.map(s => [s.key, s.defaultValue]))
   );
@@ -177,10 +177,10 @@ export function WhatIfExplorer({
                 'border-border bg-muted/30'
               )}>
                 <div className="text-muted-foreground text-xs mb-1">Cash at 18mo</div>
-                <div className="text-xl font-bold font-mono">${(results.cashAt18m / 1000).toFixed(0)}K</div>
+                <div className="text-xl font-bold font-mono">{formatCurrencyAbbrev(results.cashAt18m)}</div>
                 <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.cashChange))}>
                   {getChangeIcon(results.cashChange)}
-                  {results.cashChange > 0 ? '+' : ''}${(results.cashChange / 1000).toFixed(0)}K
+                  {results.cashChange > 0 ? '+' : ''}{formatCurrencyAbbrev(results.cashChange)}
                 </div>
               </div>
             </div>

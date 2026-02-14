@@ -874,6 +874,19 @@ def ensure_team_members_table(engine: Engine) -> None:
             logger.debug(f"Team members table may already exist: {e}")
 
 
+def ensure_company_amount_scale(engine: Engine) -> None:
+    """Ensure the amount_scale column exists in companies table for denomination scaling."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS amount_scale VARCHAR DEFAULT 'UNITS'"
+            ))
+            conn.commit()
+            logger.info("Companies amount_scale column migration complete")
+        except Exception as e:
+            logger.debug(f"amount_scale column may already exist: {e}")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -902,6 +915,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_metric_values_columns(engine)
     ensure_team_members_table(engine)
     ensure_currency_tables(engine)
+    ensure_company_amount_scale(engine)
     logger.info("Database migrations completed successfully")
 
 

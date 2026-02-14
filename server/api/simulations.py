@@ -86,7 +86,7 @@ class ScenarioCreate(BaseModel):
         return v
 
 class SimulateRequest(BaseModel):
-    n_sims: int = 1000
+    n_sims: int = 500
     seed: Optional[int] = None
 
 @router.post("/companies/{company_id}/scenarios", response_model=Dict[str, Any])
@@ -405,23 +405,28 @@ def run_simulation(
     
     ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
     fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
-    baseline_growth = ts_growth if ts_growth != 0 else (fr_growth if fr_growth != 0 else 5)
+    baseline_growth = ts_growth if ts_growth != 0 else fr_growth
     
     ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
     fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-    baseline_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    baseline_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
     
     ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
     fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-    baseline_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+    baseline_cash = ts_cash if ts_cash > 0 else fr_cash
+    
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
     
     enhanced_inputs = EnhancedSimulationInputs(
         baseline_revenue=baseline_revenue,
         baseline_growth_rate=baseline_growth,
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
         cash_balance=baseline_cash,
         pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
         growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
@@ -488,13 +493,18 @@ def run_simulation(
 def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, overrides: Dict = None) -> EnhancedSimulationInputs:
     ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
     fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
-    baseline_growth = ts_growth if ts_growth != 0 else (fr_growth if fr_growth != 0 else 5)
+    baseline_growth = ts_growth if ts_growth != 0 else fr_growth
     ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
     fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-    baseline_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    baseline_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
     ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
     fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-    baseline_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+    baseline_cash = ts_cash if ts_cash > 0 else fr_cash
+
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
 
     si = scenario.inputs_json or {}
     if overrides:
@@ -503,10 +513,10 @@ def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, ove
     return EnhancedSimulationInputs(
         baseline_revenue=baseline_revenue,
         baseline_growth_rate=baseline_growth,
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
         cash_balance=baseline_cash,
         pricing_change_pct=si.get("pricing_change_pct", 0),
         growth_uplift_pct=si.get("growth_uplift_pct", 0),
@@ -535,16 +545,21 @@ def _compute_fundraising_metrics(
     
     ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
     fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-    current_cash = ts_cash if ts_cash > 0 else (fr_cash if fr_cash > 0 else 500000)
+    current_cash = ts_cash if ts_cash > 0 else fr_cash
     
     ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
     fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-    monthly_revenue = ts_revenue if ts_revenue > 0 else (fr_revenue if fr_revenue > 0 else 50000)
+    monthly_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
     
-    opex = extract_metric_value(metrics.get("opex"), 20000)
-    payroll = extract_metric_value(metrics.get("payroll"), 30000)
-    other_costs = extract_metric_value(metrics.get("other_costs"), 5000)
-    gross_margin_pct = extract_metric_value(metrics.get("gross_margin"), 70) / 100
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    
+    opex = extract_metric_value(metrics.get("opex"), fr_opex)
+    payroll = extract_metric_value(metrics.get("payroll"), fr_payroll)
+    other_costs = extract_metric_value(metrics.get("other_costs"), fr_other)
+    gross_margin_pct = extract_metric_value(metrics.get("gross_margin"), fr_gm) / 100
     
     gross_profit = monthly_revenue * gross_margin_pct
     monthly_burn = max(0, opex + payroll + other_costs - gross_profit)
@@ -976,14 +991,26 @@ def simulate_multiple_scenarios(
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+    
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    
     base_inputs = SimulationInputs(
-        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        baseline_revenue=extract_metric_value(metrics.get("monthly_revenue"), fr_revenue),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), fr_growth),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), fr_cash),
         n_simulations=request.n_sims,
         horizon_months=request.horizon_months
     )
@@ -1006,7 +1033,7 @@ def simulate_multiple_scenarios(
 
 
 class EnhancedSimulationRequest(BaseModel):
-    n_sims: int = 1000
+    n_sims: int = 500
     horizon_months: int = 24
     starting_regime: str = "base"
     enable_regime_transitions: bool = True
@@ -1038,7 +1065,7 @@ class EnhancedScenarioInput(BaseModel):
 
 
 class EnhancedMultiScenarioRequest(BaseModel):
-    n_sims: int = 1000
+    n_sims: int = 500
     horizon_months: int = 24
     starting_regime: str = "base"
     enable_regime_transitions: bool = True
@@ -1078,14 +1105,26 @@ def simulate_enhanced(
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+    
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    
     inputs = EnrichedSimulationInputs(
-        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), fr_revenue),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), fr_growth),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), fr_cash),
         churn_rate=request.churn_rate,
         cac=request.cac,
         dso=request.dso,
@@ -1145,14 +1184,26 @@ def simulate_scenarios_enhanced(
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+    
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    
     base_inputs = EnrichedSimulationInputs(
-        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), fr_revenue),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), fr_growth),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), fr_cash),
         churn_rate=request.churn_rate,
         cac=request.cac,
         dso=request.dso,
@@ -1293,14 +1344,26 @@ def run_sensitivity_analysis(
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
+    latest_record = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_end.desc()).first()
+    
+    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+    
     inputs = EnrichedSimulationInputs(
-        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), 50000),
-        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), 5),
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), 70),
-        opex=extract_metric_value(metrics.get("opex"), 20000),
-        payroll=extract_metric_value(metrics.get("payroll"), 30000),
-        other_costs=extract_metric_value(metrics.get("other_costs"), 5000),
-        cash_balance=extract_metric_value(metrics.get("cash_balance"), 500000),
+        baseline_mrr=extract_metric_value(metrics.get("monthly_revenue"), fr_revenue),
+        baseline_growth_rate=extract_metric_value(metrics.get("revenue_growth_mom"), fr_growth),
+        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+        opex=extract_metric_value(metrics.get("opex"), fr_opex),
+        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+        cash_balance=extract_metric_value(metrics.get("cash_balance"), fr_cash),
         n_simulations=500,
         horizon_months=24
     )

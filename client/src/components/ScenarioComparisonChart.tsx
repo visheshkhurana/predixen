@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import {
   LineChart,
   Line,
@@ -69,10 +70,7 @@ export function ScenarioComparisonChart({
     if (metric === 'survival_rate') {
       return `${(value * 100).toFixed(0)}%`;
     }
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    return `$${(value / 1000).toFixed(0)}K`;
+    return formatCurrencyAbbrev(value);
   };
 
   const metricLabels: Record<MetricKey, string> = {

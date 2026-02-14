@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from server.core.db import get_db
 from server.core.security import get_current_user
@@ -171,6 +171,225 @@ async def create_metric(
     db.commit()
     
     return metric.to_dict()
+
+
+INDUSTRY_TEMPLATES = {
+    "logistics": {
+        "name": "Logistics & Supply Chain",
+        "metrics": [
+            {"key": "delivery_volume", "name": "Monthly Delivery Volume", "unit": "count", "grain": "monthly", "format_type": "number", "description": "Total shipments/deliveries completed per month"},
+            {"key": "cost_per_delivery", "name": "Cost Per Delivery", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average cost to complete a single delivery"},
+            {"key": "revenue_per_delivery", "name": "Revenue Per Delivery", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average revenue earned per delivery"},
+            {"key": "fuel_cost", "name": "Fuel & Energy Cost", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Total fuel/energy costs per month"},
+            {"key": "fleet_utilization", "name": "Fleet Utilization Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of fleet capacity being utilized"},
+            {"key": "on_time_delivery_rate", "name": "On-Time Delivery Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of deliveries completed on schedule"},
+            {"key": "warehouse_cost", "name": "Warehouse & Storage Cost", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Monthly warehousing and storage expenses"},
+            {"key": "route_efficiency", "name": "Route Efficiency Score", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Ratio of optimal vs actual route distance/time"},
+            {"key": "driver_cost", "name": "Driver & Labor Cost", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Total driver/labor costs per month"},
+            {"key": "damage_loss_rate", "name": "Damage & Loss Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of shipments with damage or loss claims"},
+        ]
+    },
+    "saas": {
+        "name": "SaaS & Software",
+        "metrics": [
+            {"key": "mrr", "name": "Monthly Recurring Revenue", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Total monthly recurring revenue from subscriptions"},
+            {"key": "arr", "name": "Annual Recurring Revenue", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "MRR x 12"},
+            {"key": "churn_rate", "name": "Monthly Churn Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of customers lost per month"},
+            {"key": "ndr", "name": "Net Dollar Retention", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Revenue retained from existing customers including expansion"},
+            {"key": "cac", "name": "Customer Acquisition Cost", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average cost to acquire a new customer"},
+            {"key": "ltv", "name": "Customer Lifetime Value", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Expected total revenue from a customer"},
+            {"key": "arpu", "name": "Average Revenue Per User", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average monthly revenue per active user"},
+            {"key": "dau_mau_ratio", "name": "DAU/MAU Ratio", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Daily active users as percentage of monthly active users"},
+        ]
+    },
+    "ecommerce": {
+        "name": "E-Commerce & D2C",
+        "metrics": [
+            {"key": "gmv", "name": "Gross Merchandise Value", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Total value of goods sold"},
+            {"key": "aov", "name": "Average Order Value", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average revenue per order"},
+            {"key": "conversion_rate", "name": "Conversion Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of visitors who make a purchase"},
+            {"key": "return_rate", "name": "Return Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of orders returned"},
+            {"key": "cac", "name": "Customer Acquisition Cost", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average cost to acquire a new customer"},
+            {"key": "repeat_purchase_rate", "name": "Repeat Purchase Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of customers who purchase again"},
+        ]
+    },
+    "healthcare": {
+        "name": "HealthTech",
+        "metrics": [
+            {"key": "patient_volume", "name": "Monthly Patient Volume", "unit": "count", "grain": "monthly", "format_type": "number", "description": "Total patients served per month"},
+            {"key": "revenue_per_patient", "name": "Revenue Per Patient", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Average revenue per patient visit/interaction"},
+            {"key": "patient_retention", "name": "Patient Retention Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of patients returning for follow-up"},
+            {"key": "claim_success_rate", "name": "Insurance Claim Success Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of insurance claims approved"},
+        ]
+    },
+    "fintech": {
+        "name": "FinTech",
+        "metrics": [
+            {"key": "tpv", "name": "Total Payment Volume", "unit": "currency", "grain": "monthly", "format_type": "currency", "description": "Total value of payments processed"},
+            {"key": "take_rate", "name": "Take Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Revenue as percentage of payment volume"},
+            {"key": "transaction_count", "name": "Monthly Transactions", "unit": "count", "grain": "monthly", "format_type": "number", "description": "Total transactions processed per month"},
+            {"key": "default_rate", "name": "Default Rate", "unit": "percent", "grain": "monthly", "format_type": "percent", "description": "Percentage of loans/credits in default"},
+        ]
+    },
+}
+
+
+@router.get("/templates/industries")
+async def list_industry_templates():
+    """List available industry metric template packs."""
+    return {
+        industry: {"name": pack["name"], "metric_count": len(pack["metrics"])}
+        for industry, pack in INDUSTRY_TEMPLATES.items()
+    }
+
+
+@router.get("/templates/industries/{industry}")
+async def get_industry_template(industry: str):
+    """Get metric templates for a specific industry."""
+    if industry not in INDUSTRY_TEMPLATES:
+        raise HTTPException(status_code=404, detail=f"No template pack for industry: {industry}")
+    return INDUSTRY_TEMPLATES[industry]
+
+
+@router.post("/templates/industries/{industry}/apply")
+async def apply_industry_template(
+    industry: str,
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply an industry template pack, creating metric definitions for the company."""
+    _get_company_or_404(company_id, current_user, db)
+
+    if industry not in INDUSTRY_TEMPLATES:
+        raise HTTPException(status_code=404, detail=f"No template pack for industry: {industry}")
+
+    template = INDUSTRY_TEMPLATES[industry]
+    created = []
+    skipped = []
+
+    for metric_tmpl in template["metrics"]:
+        existing = db.query(MetricDefinition).filter(
+            MetricDefinition.company_id == company_id,
+            MetricDefinition.key == metric_tmpl["key"]
+        ).first()
+
+        if existing:
+            skipped.append(metric_tmpl["key"])
+            continue
+
+        metric = MetricDefinition(
+            company_id=company_id,
+            key=metric_tmpl["key"],
+            name=metric_tmpl["name"],
+            description=metric_tmpl.get("description"),
+            grain=metric_tmpl.get("grain", "monthly"),
+            unit=metric_tmpl.get("unit"),
+            format_type=metric_tmpl.get("format_type", "number"),
+            status="draft",
+            version=1,
+            is_system=False,
+            tags=[industry, "template"],
+        )
+        db.add(metric)
+        created.append(metric_tmpl["key"])
+
+    db.commit()
+
+    return {
+        "success": True,
+        "industry": industry,
+        "created": created,
+        "skipped": skipped,
+        "created_count": len(created),
+    }
+
+
+class BulkMetricValueItem(BaseModel):
+    metric_key: str
+    value: float
+    period_start: str
+    period_end: Optional[str] = None
+
+
+class BulkMetricValueRequest(BaseModel):
+    values: List[BulkMetricValueItem]
+
+
+@router.post("/values/bulk")
+async def bulk_upload_metric_values(
+    company_id: int,
+    request: BulkMetricValueRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Bulk upload metric values for manual data entry."""
+    _get_company_or_404(company_id, current_user, db)
+
+    try:
+        from dateutil.relativedelta import relativedelta
+        use_relativedelta = True
+    except ImportError:
+        use_relativedelta = False
+
+    created_count = 0
+    updated_count = 0
+    errors = []
+
+    for item in request.values:
+        metric = db.query(MetricDefinition).filter(
+            MetricDefinition.company_id == company_id,
+            MetricDefinition.key == item.metric_key
+        ).first()
+
+        if not metric:
+            errors.append({"metric_key": item.metric_key, "error": "Metric not found"})
+            continue
+
+        try:
+            period_start = datetime.fromisoformat(item.period_start)
+            if item.period_end:
+                period_end = datetime.fromisoformat(item.period_end)
+            else:
+                if use_relativedelta:
+                    period_end = period_start + relativedelta(months=1)
+                else:
+                    period_end = period_start + timedelta(days=30)
+        except ValueError as e:
+            errors.append({"metric_key": item.metric_key, "error": f"Invalid date: {e}"})
+            continue
+
+        existing = db.query(MetricValue).filter(
+            MetricValue.metric_id == metric.id,
+            MetricValue.period_start == period_start
+        ).first()
+
+        if existing:
+            existing.value = item.value
+            existing.computed_at = datetime.utcnow()
+            updated_count += 1
+        else:
+            mv = MetricValue(
+                metric_id=metric.id,
+                company_id=company_id,
+                value=item.value,
+                period_start=period_start,
+                period_end=period_end,
+                metric_version=metric.version,
+                raw_event_count=0,
+                contributing_connectors=["manual_entry"],
+            )
+            db.add(mv)
+            created_count += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "created": created_count,
+        "updated": updated_count,
+        "errors": errors,
+    }
 
 
 @router.get("/{metric_key}")

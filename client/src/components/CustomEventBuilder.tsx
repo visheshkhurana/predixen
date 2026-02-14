@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, Trash2, HelpCircle, Calendar, Percent, DollarSign, TrendingUp, TrendingDown, Users, Scissors, Megaphone, RefreshCw } from 'lucide-react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 
 export interface ScenarioEvent {
   id: string;
@@ -139,7 +140,7 @@ export function CustomEventBuilder({ events, onChange, horizonMonths = 24 }: Cus
 
   const formatParamValue = (type: string, value: number) => {
     if (type === 'currency') {
-      return value >= 1000000 ? `$${(value / 1000000).toFixed(1)}M` : `$${(value / 1000).toFixed(0)}K`;
+      return formatCurrencyAbbrev(value);
     }
     if (type === 'percent') {
       return `${value}%`;

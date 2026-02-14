@@ -13,6 +13,7 @@ class Company(Base):
     industry = Column(String, nullable=True)
     stage = Column(String, nullable=True)
     currency = Column(String, default="USD")
+    amount_scale = Column(String, default="UNITS")
     description = Column(String, nullable=True)
     metadata_json = Column(JSON, nullable=True, default=dict)
     latest_truth_dataset_id = Column(String(36), nullable=True, index=True)

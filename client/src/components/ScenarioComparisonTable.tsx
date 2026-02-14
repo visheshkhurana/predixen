@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 
 interface ScenarioData {
   id: number;
@@ -30,13 +31,7 @@ export function ScenarioComparisonTable({
 
   const baseline = scenarios.find(s => s.id === baselineId) || scenarios[0];
 
-  const formatCurrency = (value: number | undefined) => {
-    if (value === undefined || value === null) return 'N/A';
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    return `$${(value / 1000).toFixed(0)}K`;
-  };
+  const formatCurrency = (value: number | undefined) => formatCurrencyAbbrev(value);
 
   const getDelta = (current: number | undefined, base: number | undefined) => {
     if (current === undefined || base === undefined) return null;

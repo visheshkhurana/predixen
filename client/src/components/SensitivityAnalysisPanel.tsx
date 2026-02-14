@@ -25,6 +25,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 
 interface SensitivityDriver {
   driver: string;
@@ -95,7 +96,7 @@ const DRIVER_DESCRIPTIONS: Record<string, string> = {
 const GAP_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 function formatDriverValue(driver: string, value: number): string {
-  if (driver === 'cac') return `$${value.toFixed(0)}`;
+  if (driver === 'cac') return formatCurrencyAbbrev(value);
   if (driver === 'dso') return `${value.toFixed(0)} days`;
   return `${value.toFixed(1)}%`;
 }

@@ -3,6 +3,8 @@ export function formatPercent(value: number | null | undefined, decimals = 1): s
   return `${Number(value).toFixed(decimals)}%`;
 }
 
+export { formatCurrencyAbbrev } from '@/lib/utils';
+
 export function formatCurrency(value: number | null | undefined, prefix = '$'): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
   const absValue = Math.abs(value);

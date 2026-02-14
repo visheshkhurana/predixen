@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, DollarSign, Clock, Users, Target, AlertTriangle } from 'lucide-react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 
 export interface MonthlyDataPoint {
   month: number;
@@ -17,15 +18,7 @@ interface ProjectionSummaryProps {
   testId?: string;
 }
 
-const formatCurrency = (value: number): string => {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(2)}M`;
-  }
-  if (value >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`;
-  }
-  return `$${value.toFixed(0)}`;
-};
+const formatCurrency = (value: number): string => formatCurrencyAbbrev(value);
 
 interface StatCardProps {
   label: string;

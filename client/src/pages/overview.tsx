@@ -70,7 +70,7 @@ import {
 } from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
 import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries } from '@/api/hooks';
-import { formatCurrencyAbbrev, formatPercent as formatPct } from '@/lib/utils';
+import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useToast } from '@/hooks/use-toast';
@@ -151,7 +151,7 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
       id: 'runway-critical',
       type: 'critical',
       title: 'Cash Runway Critical',
-      description: `Only ${metrics.runway.toFixed(1)} months of runway remaining. Immediate action required.`,
+      description: `Only ${formatRunway(metrics.runway)} of runway remaining. Immediate action required.`,
       metric: 'runway',
       threshold: '< 6 months',
     });
@@ -160,7 +160,7 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
       id: 'runway-warning',
       type: 'warning',
       title: 'Low Runway Warning',
-      description: `${metrics.runway.toFixed(1)} months of runway. Consider fundraising or reducing burn.`,
+      description: `${formatRunway(metrics.runway)} of runway. Consider fundraising or reducing burn.`,
       metric: 'runway',
       threshold: '< 12 months',
     });
@@ -879,7 +879,7 @@ export default function OverviewPage() {
       ['ARR', baseData.arr.toFixed(0), 'USD'],
       ['Cash on Hand', baseData.cash.toFixed(0), 'USD'],
       ['Burn Rate', baseData.burnRate.toFixed(0), 'USD/month'],
-      ['Runway', baseData.runway.toFixed(1), 'months'],
+      ['Runway', formatRunway(baseData.runway), ''],
       ['CAC', baseData.cac.toFixed(0), 'USD'],
       ['LTV', baseData.ltv.toFixed(0), 'USD'],
       ['LTV:CAC Ratio', baseData.ltvCacRatio.toFixed(2), 'x'],
@@ -1023,7 +1023,7 @@ export default function OverviewPage() {
   const briefingWarningCount = riskAlerts.filter(a => a.type === 'warning').length;
 
   const briefingAiSuggestion = baseData.runway < 12
-    ? `Your runway is ${safeToFixed(baseData.runway, 1)} months. Try simulating "What if we reduce burn by 20%?" to find an optimal path.`
+    ? `Your runway is ${formatRunway(baseData.runway)}. Try simulating "What if we reduce burn by 20%?" to find an optimal path.`
     : baseData.burnRate > baseData.mrr * 2
     ? `Burn multiple is high at ${(baseData.burnRate / Math.max(baseData.mrr, 1)).toFixed(1)}x. Simulate "What if we cut hiring by 30%?" to see the impact.`
     : baseData.ltvCacRatio > 0 && baseData.ltvCacRatio < 3
@@ -1056,7 +1056,7 @@ export default function OverviewPage() {
               Burn is {briefingBurnStatus} at{' '}
               <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
               Runway is {briefingRunwayShift} at{' '}
-              <span className="font-medium text-foreground">{safeToFixed(baseData.runway, 1)} months</span>.
+              <span className="font-medium text-foreground">{formatRunway(baseData.runway)}</span>.
               {briefingCriticalCount > 0 && (
                 <span className="text-red-500 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
               )}
@@ -1123,7 +1123,7 @@ export default function OverviewPage() {
               </div>
               <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-runway-progress">{baseData.runway.toFixed(1)} / 36.0 months</span>
+                <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 months</span>
                 <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}% complete</span>
               </div>
             </CardContent>
@@ -1366,7 +1366,7 @@ export default function OverviewPage() {
         <MetricCard
           title="Cash on Hand"
           value={formatCurrency(baseData.cash)}
-          subtitle={`Runway: ${safeToFixed(baseData.runway)} mo`}
+          subtitle={`Runway: ${formatRunway(baseData.runway)}`}
           variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
           testId="metric-cash"
           onClick={() => setSelectedDrillDownMetric('cash')}

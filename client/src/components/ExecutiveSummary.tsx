@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { RiskGauge, TrafficLight } from '@/components/RiskGauge';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 import {
   Trophy,
   TrendingUp,
@@ -83,9 +83,7 @@ export function ExecutiveSummary({
       recommendations.push(`Accelerate growth by ${best.assumptions.growth_uplift_pct}%`);
     }
     if (best.assumptions?.fundraise_amount) {
-      const amount = best.assumptions.fundraise_amount >= 1000000
-        ? `$${(best.assumptions.fundraise_amount / 1000000).toFixed(1)}M`
-        : `$${(best.assumptions.fundraise_amount / 1000).toFixed(0)}K`;
+      const amount = formatCurrencyAbbrev(best.assumptions.fundraise_amount);
       recommendations.push(`Raise ${amount} by month ${best.assumptions.fundraise_month || 'TBD'}`);
     }
     
@@ -108,11 +106,7 @@ export function ExecutiveSummary({
     return null;
   }
   
-  const formatCurrency = (value: number | undefined) => {
-    if (!value) return 'N/A';
-    if (Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    return `$${(value / 1000).toFixed(0)}K`;
-  };
+  const formatCurrency = (value: number | undefined) => formatCurrencyAbbrev(value);
   
   return (
     <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent" data-testid={testId}>

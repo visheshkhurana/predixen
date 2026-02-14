@@ -95,8 +95,9 @@ function calculateIndustryEstimates(metrics: Record<string, number | undefined>)
   }
   
   if (!metrics.gross_margin && metrics.gross_margin !== 0 && monthlyRevenue > 0) {
+    // Fallback estimate: typical SaaS gross margin when no data is available
     estimates.gross_margin = 70;
-    explanations.gross_margin = "Typical SaaS gross margin (70%)";
+    explanations.gross_margin = "Fallback estimate: typical SaaS gross margin (70%) - please verify with actual data";
   }
   
   return { estimates, explanations };

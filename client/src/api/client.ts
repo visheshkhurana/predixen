@@ -221,10 +221,10 @@ export const api = {
   },
   
   simulations: {
-    run: (scenarioId: number, nSims = 1000) =>
+    run: (scenarioId: number, nSims = 500, seed?: number) =>
       request<any>(`/scenarios/${scenarioId}/simulate`, {
         method: 'POST',
-        body: JSON.stringify({ n_sims: nSims }),
+        body: JSON.stringify({ n_sims: nSims, ...(seed !== undefined ? { seed } : {}) }),
       }),
     latest: (scenarioId: number) =>
       request<any>(`/scenarios/${scenarioId}/simulation/latest`),

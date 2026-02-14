@@ -19,15 +19,15 @@ interface SensitivityParameter {
 }
 
 const DEFAULT_PARAMETERS: SensitivityParameter[] = [
-  { name: "baseline_growth_rate", label: "Growth Rate (%)", baselineValue: 5, minValue: 0, maxValue: 15, enabled: true },
-  { name: "gross_margin", label: "Gross Margin (%)", baselineValue: 70, minValue: 50, maxValue: 90, enabled: true },
-  { name: "churn_rate", label: "Churn Rate (%)", baselineValue: 5, minValue: 2, maxValue: 10, enabled: true },
-  { name: "opex", label: "OpEx ($)", baselineValue: 20000, minValue: 10000, maxValue: 40000, enabled: true },
-  { name: "payroll", label: "Payroll ($)", baselineValue: 50000, minValue: 30000, maxValue: 80000, enabled: true },
+  { name: "baseline_growth_rate", label: "Growth Rate (%)", baselineValue: 0, minValue: 0, maxValue: 15, enabled: true },
+  { name: "gross_margin", label: "Gross Margin (%)", baselineValue: 0, minValue: 50, maxValue: 90, enabled: true },
+  { name: "churn_rate", label: "Churn Rate (%)", baselineValue: 0, minValue: 2, maxValue: 10, enabled: true },
+  { name: "opex", label: "OpEx ($)", baselineValue: 0, minValue: 10000, maxValue: 40000, enabled: true },
+  { name: "payroll", label: "Payroll ($)", baselineValue: 0, minValue: 30000, maxValue: 80000, enabled: true },
   { name: "pricing_change_pct", label: "Pricing Change (%)", baselineValue: 0, minValue: -20, maxValue: 20, enabled: false },
   { name: "burn_reduction_pct", label: "Burn Reduction (%)", baselineValue: 0, minValue: 0, maxValue: 30, enabled: false },
   { name: "fundraise_amount", label: "Fundraise ($)", baselineValue: 0, minValue: 0, maxValue: 1000000, enabled: false },
-  { name: "cash_balance", label: "Cash Balance ($)", baselineValue: 500000, minValue: 200000, maxValue: 1000000, enabled: true },
+  { name: "cash_balance", label: "Cash Balance ($)", baselineValue: 0, minValue: 200000, maxValue: 1000000, enabled: true },
 ];
 
 interface SensitivityPanelProps {

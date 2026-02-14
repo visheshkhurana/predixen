@@ -15,7 +15,7 @@ import {
   GitCompare, Trophy, TrendingUp, TrendingDown,
   Minus, ArrowRight, X, Shield, DollarSign, Timer, Target
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface SimData {
   runway?: { p10?: number; p50?: number; p90?: number };
@@ -51,9 +51,7 @@ function getMetricAtMonth(metrics: Array<Record<string, number>> | undefined, mo
 }
 
 function fmt(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatCurrencyAbbrev(value);
 }
 
 function DeltaIndicator({ value, baseline, unit, higherIsBetter = true }: { value: number; baseline: number; unit: string; higherIsBetter?: boolean }) {
@@ -65,7 +63,7 @@ function DeltaIndicator({ value, baseline, unit, higherIsBetter = true }: { valu
   return (
     <span className={cn("flex items-center gap-0.5 text-[10px] font-medium", color)}>
       <Icon className="h-3 w-3" />
-      {delta > 0 ? '+' : ''}{unit === 'mo' ? `${delta.toFixed(1)} mo` : unit === '%' ? `${delta.toFixed(0)}pp` : fmt(delta)}
+      {delta > 0 ? '+' : ''}{unit === 'mo' ? `${delta.toFixed(1)} mo` : unit === '%' ? `${delta.toFixed(0)}pp` : unit === 'currency' ? fmt(delta) : fmt(delta)}
     </span>
   );
 }
@@ -257,10 +255,10 @@ export function ScenarioCompareMode({ scenarios, selectedIds, onClose, onSelectS
     { label: '18-Month Survival', key: 'survival_18m', unit: '%', higherIsBetter: true },
     { label: '12-Month Survival', key: 'survival_12m', unit: '%', higherIsBetter: true },
     { label: 'Break-Even (P50)', key: 'breakeven', unit: 'mo', higherIsBetter: false },
-    { label: 'Revenue @12m', key: 'rev_12', unit: '$', higherIsBetter: true },
-    { label: 'Revenue @24m', key: 'rev_24', unit: '$', higherIsBetter: true },
-    { label: 'Cash @24m', key: 'cash_24', unit: '$', higherIsBetter: true },
-    { label: 'Burn @6m', key: 'burn_6', unit: '$', higherIsBetter: false },
+    { label: 'Revenue @12m', key: 'rev_12', unit: 'currency', higherIsBetter: true },
+    { label: 'Revenue @24m', key: 'rev_24', unit: 'currency', higherIsBetter: true },
+    { label: 'Cash @24m', key: 'cash_24', unit: 'currency', higherIsBetter: true },
+    { label: 'Burn @6m', key: 'burn_6', unit: 'currency', higherIsBetter: false },
   ];
 
   function getMetricValue(sim: SimData, key: string): number {
@@ -282,6 +280,7 @@ export function ScenarioCompareMode({ scenarios, selectedIds, onClose, onSelectS
   function formatVal(v: number, unit: string): string {
     if (unit === 'mo') return `${v.toFixed(1)} mo`;
     if (unit === '%') return `${v.toFixed(0)}%`;
+    if (unit === 'currency') return fmt(v);
     return fmt(v);
   }
 

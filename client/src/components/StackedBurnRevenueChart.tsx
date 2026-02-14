@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -49,10 +50,7 @@ export function StackedBurnRevenueChart({
   const totalBurn = chartData.reduce((sum, d) => sum + Math.max(0, d.burn - d.revenue), 0);
   const endingRevenue = chartData[chartData.length - 1]?.revenue || 0;
   
-  const formatCurrency = (value: number) => {
-    if (Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    return `$${(value / 1000).toFixed(0)}K`;
-  };
+  const formatCurrency = (value: number) => formatCurrencyAbbrev(value);
   
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {

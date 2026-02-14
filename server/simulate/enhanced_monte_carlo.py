@@ -21,28 +21,30 @@ class DistributionParams:
     values: Optional[List[Dict[str, float]]] = None
 
 
-def sample_distribution(params: DistributionParams, size: int = 1) -> np.ndarray:
+def sample_distribution(params: DistributionParams, size: int = 1, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+    if rng is None:
+        rng = np.random.default_rng()
     if params.type == "fixed":
         return np.full(size, params.value or 0)
     elif params.type == "normal":
-        return np.random.normal(params.mean or 0, params.std_dev or 1, size)
+        return rng.normal(params.mean or 0, params.std_dev or 1, size)
     elif params.type == "lognormal":
         mu = np.log((params.mean or 1) ** 2 / np.sqrt((params.std_dev or 0.1) ** 2 + (params.mean or 1) ** 2))
         sigma = np.sqrt(np.log(1 + (params.std_dev or 0.1) ** 2 / (params.mean or 1) ** 2))
-        return np.random.lognormal(mu, sigma, size)
+        return rng.lognormal(mu, sigma, size)
     elif params.type == "uniform":
-        return np.random.uniform(params.min_val or 0, params.max_val or 1, size)
+        return rng.uniform(params.min_val or 0, params.max_val or 1, size)
     elif params.type == "triangular":
         min_v = params.min_val if params.min_val is not None else 0
         max_v = params.max_val if params.max_val is not None else 1
         mode_v = params.mode if params.mode is not None else (min_v + max_v) / 2
-        return np.random.triangular(min_v, mode_v, max_v, size)
+        return rng.triangular(min_v, mode_v, max_v, size)
     elif params.type == "discrete":
         if params.values:
             vals = [v["value"] for v in params.values]
             probs = [v["probability"] for v in params.values]
             probs = np.array(probs) / sum(probs)
-            return np.random.choice(vals, size=size, p=probs)
+            return rng.choice(vals, size=size, p=probs)
         return np.zeros(size)
     else:
         return np.full(size, params.value or 0)
@@ -105,8 +107,7 @@ def run_enhanced_monte_carlo(
 ) -> Dict[str, Any]:
     start_time = datetime.utcnow()
     
-    if config.seed is not None:
-        np.random.seed(config.seed)
+    rng = np.random.default_rng(config.seed)
     
     n = config.iterations
     horizon = config.horizon_months
@@ -146,25 +147,25 @@ def run_enhanced_monte_carlo(
         base_runway_estimate = 0
         
         for month in range(horizon):
-            growth_rate = np.random.normal(current_growth, inputs.growth_sigma) / 100
+            growth_rate = rng.normal(current_growth, inputs.growth_sigma) / 100
             margin = np.clip(
-                np.random.normal(current_margin, inputs.margin_sigma),
+                rng.normal(current_margin, inputs.margin_sigma),
                 10, 95
             ) / 100
             churn = np.clip(
-                np.random.normal(current_churn, inputs.churn_sigma),
+                rng.normal(current_churn, inputs.churn_sigma),
                 0, 50
             ) / 100
             
             for event in inputs.events:
                 if month + 1 == event.month:
-                    if np.random.random() < event.probability:
+                    if rng.random() < event.probability:
                         event_occurrences[event.id] += 1
                         pre_event_cash = cash
                         
                         duration = 1
                         if event.duration:
-                            duration = int(sample_distribution(event.duration, 1)[0])
+                            duration = int(sample_distribution(event.duration, 1, rng=rng)[0])
                         
                         active_events[event.id] = {
                             "remaining": duration,
@@ -173,38 +174,38 @@ def run_enhanced_monte_carlo(
                         
                         cash_dist = event.impact.get("cash")
                         if cash_dist is not None:
-                            cash_impact = sample_distribution(cash_dist, 1)[0]
+                            cash_impact = sample_distribution(cash_dist, 1, rng=rng)[0]
                             cash += cash_impact
                             event_cash_impacts[event.id].append(cash_impact)
                         
                         rev_dist = event.impact.get("revenue")
                         if rev_dist is not None:
-                            rev_impact = sample_distribution(rev_dist, 1)[0]
+                            rev_impact = sample_distribution(rev_dist, 1, rng=rng)[0]
                             revenue *= (1 + rev_impact / 100)
                         
                         growth_dist = event.impact.get("growth")
                         if growth_dist is not None:
-                            growth_impact = sample_distribution(growth_dist, 1)[0]
+                            growth_impact = sample_distribution(growth_dist, 1, rng=rng)[0]
                             current_growth += growth_impact
                         
                         margin_dist = event.impact.get("margin")
                         if margin_dist is not None:
-                            margin_impact = sample_distribution(margin_dist, 1)[0]
+                            margin_impact = sample_distribution(margin_dist, 1, rng=rng)[0]
                             current_margin += margin_impact
                         
                         churn_dist = event.impact.get("churn")
                         if churn_dist is not None:
-                            churn_impact = sample_distribution(churn_dist, 1)[0]
+                            churn_impact = sample_distribution(churn_dist, 1, rng=rng)[0]
                             current_churn += churn_impact
                         
                         headcount_dist = event.impact.get("headcount")
                         if headcount_dist is not None:
-                            headcount_impact = sample_distribution(headcount_dist, 1)[0]
+                            headcount_impact = sample_distribution(headcount_dist, 1, rng=rng)[0]
                             payroll *= (1 + headcount_impact / 100)
                         
                         costs_dist = event.impact.get("costs")
                         if costs_dist is not None:
-                            cost_impact = sample_distribution(costs_dist, 1)[0]
+                            cost_impact = sample_distribution(costs_dist, 1, rng=rng)[0]
                             payroll *= (1 + cost_impact / 100)
             
             to_remove = []

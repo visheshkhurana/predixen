@@ -67,7 +67,7 @@ export function ScenarioForm({ onSubmit, isLoading, defaultValues, currency = 'U
       cashOnHand: 500000,
       monthlyRevenue: 50000,
       monthlyExpenses: 80000,
-      growthRate: 10,
+      growthRate: 0,
       avgCostPerHire: 10000,
       priceChangePercent: 0,
       newHires: 0,
