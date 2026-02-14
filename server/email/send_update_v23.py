@@ -1,6 +1,6 @@
 """
 Send update email v23 - P1/P2 Bug Fixes: Metrics, Currency, Scale & Scenarios.
-Sender: 9jrpplvv@predixen.app
+Sender: kavibe8@predixen.app
 """
 import os, sys, time, uuid
 
@@ -217,7 +217,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Nikita from Predixen <9jrpplvv@predixen.app>"
+    sender = "Nikita from Predixen <kavibe8@predixen.app>"
 
     print(f"Sending P1/P2 Bug Fixes update v23 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -234,7 +234,7 @@ def send_all():
 
         headers = {
             "X-Entity-Ref-ID": str(uuid.uuid4()),
-            "List-Unsubscribe": "<mailto:9jrpplvv@predixen.app?subject=unsubscribe>",
+            "List-Unsubscribe": "<mailto:kavibe8@predixen.app?subject=unsubscribe>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             "Precedence": "bulk",
         }

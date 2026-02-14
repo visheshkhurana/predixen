@@ -101,7 +101,7 @@ def get_resend_api_key() -> Optional[str]:
 
 def get_from_email() -> str:
     """Get the default from email address for marketing/updates."""
-    return "Predixen <newchanges23@predixen.app>"
+    return "Predixen <kavibe8@predixen.app>"
 
 
 def get_transactional_from_email() -> str:
@@ -140,7 +140,7 @@ def _send_email_sync(
         }
     
     resend.api_key = creds["api_key"]
-    sender_email = from_email or "Predixen <newchanges23@predixen.app>"
+    sender_email = from_email or "Predixen <kavibe8@predixen.app>"
     
     try:
         params = {
