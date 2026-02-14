@@ -1,0 +1,102 @@
+You are a senior full-stack engineer + product QA lead working inside Predixen (Replit-hosted). Build a “QA LAB” system that generates synthetic companies & founders across business types, imports them into Predixen, runs repeatable scenario tests, and outputs: (1) PASS/FAIL math & UI consistency report, (2) bug list with repro steps, (3) feature ideas + UI/UX improvements.
+
+NON-NEGOTIABLES
+- Tests must be reproducible: seeded Monte Carlo RNG + fixed iterations and snapshot outputs.
+- Must cover multiple currencies (INR + USD) and “Values In” scales (UNITS/THOUSANDS/MILLIONS/CRORES).
+- Must validate cross-page consistency: Dashboard vs Financials vs Simulate must match for runway/burn/GM/currency.
+- Must export a single markdown report: qa-lab/latest-report.md
+
+PART 1 — CREATE QA LAB MODULE
+1) Add /qa-lab directory with:
+   - datasets/ (JSON files)
+   - scenarios/ (scenario definitions)
+   - runner/ (CLI + optional UI page)
+2) Implement dataset schema:
+   Dataset {
+     id, companyName, category, founderPersona, currency, locale, amountScale,
+     baselineInputs: { monthlyRevenue, grossMarginPct, opex, payroll, otherCosts, cashBalance, employees },
+     advancedMetrics?: { ... optional KPIs ... },
+     expectedBaseline?: computed fields (cogs, totalExpenses, netBurn, runwayMonths | "Infinity"),
+     notes
+   }
+   IMPORTANT: Store money internally in base units; display using scale.
+
+3) Implement scenario schema:
+   Scenario {
+     id, name, changes: [{ field OR metric_key, changeType: "PCT|ABS|DELTA", value, startMonth?, endMonth? }],
+     expected: computed by harness using the same canonical formulas as the product
+   }
+
+PART 2 — ADD 15 DATASETS (CREATE JSON FILES)
+Create these 15 datasets (exact values):
+(Use INR packs as amountScale=MILLIONS; USD packs as UNITS)
+
+1 FlowForge (Seed SaaS, USD): Rev 75000 GM 85 Opex 45000 Payroll 60000 Other 10000 Cash 600000 Emp 38
+2 CloudLedger (Profitable SaaS, USD): Rev 400000 GM 88 Opex 120000 Payroll 180000 Other 40000 Cash 2500000 Emp 120
+3 GlowCart (D2C, INR M): Rev 2500 GM 40 Opex 900 Payroll 250 Other 150 Cash 2000 Emp 410
+4 BazaarBridge (Marketplace, INR M): Rev 1200 GM 25 Opex 500 Payroll 200 Other 150 Cash 3000 Emp 260
+5 Shadowbox Logistics (INR M): Rev 2071 GM 8 Opex 100 Payroll 40 Other 20 Cash 1715 Emp 3000
+6 CredPulse (Fintech, INR M): Rev 350 GM 65 Opex 200 Payroll 120 Other 80 Cash 900 Emp 520
+7 ProtoFab (Manufacturing, INR M): Rev 800 GM 30 Opex 120 Payroll 90 Other 50 Cash 500 Emp 900
+8 StudioSprint (Agency, INR M): Rev 90 GM 55 Opex 20 Payroll 60 Other 10 Cash 120 Emp 75
+9 ArenaNova (Gaming, USD): Rev 150000 GM 70 Opex 30000 Payroll 120000 Other 20000 Cash 1200000 Emp 55
+10 CareArc Clinics (INR M): Rev 500 GM 60 Opex 120 Payroll 220 Other 80 Cash 600 Emp 1200
+11 TutorLoop (Edtech, INR M): Rev 180 GM 50 Opex 140 Payroll 80 Other 30 Cash 1000 Emp 160
+12 ApexExchange (Crypto, INR M): Rev 1000 GM 90 Opex 350 Payroll 250 Other 100 Cash 6000 Emp 700
+13 ZeroRev Labs (Edge, USD): Rev 0 GM 50 Opex 5000 Payroll 10000 Other 2000 Cash 80000 Emp 12
+14 MaxGM Co (Edge, USD): Rev 50000 GM 100 Opex 10000 Payroll 25000 Other 5000 Cash 300000 Emp 18
+15 MinGM Co (Edge, USD): Rev 50000 GM 0 Opex 10000 Payroll 25000 Other 5000 Cash 300000 Emp 18
+
+Compute expectedBaseline for each using the canonical formula:
+cogs = revenue*(1-gm)
+totalExpenses = cogs + opex + payroll + other
+netBurn = totalExpenses - revenue
+if netBurn <= 0 => runway = Infinity else runway = cash/netBurn
+
+PART 3 — SCENARIO SUITE (APPLY TO ALL DATASETS)
+Implement these scenarios:
+S0 Baseline
+S1 Pricing lift: revenue +5%
+S2 Demand shock (time-phased): revenue -15% for months 1–3 then revert
+S3 Cost optimization: gm +3 percentage points (cap at 100)
+S4 Hiring wave: payroll +10%
+S5 Marketing push: opex +20%
+S6 Cash event: cash -30%
+S7 Mixed stacked: apply S1+S4+S5 then Reset -> confirm returns exactly to Baseline state
+
+PART 4 — QA RUNNER (CLI + OPTIONAL UI)
+1) Implement CLI: `npm run qa:lab`
+   It should:
+   - Seed companies into DB (or call internal API) using dataset values
+   - Set currency + scale + locale
+   - Navigate/compute baseline outputs for Dashboard/Financials/Simulate via code (preferred) or API responses
+   - Assert cross-page equality for runway/burn/gm/currency symbol/scale rendering
+   - Apply each scenario, recompute expected, compare to actual
+   - Run Monte Carlo with seed + iterations fixed (e.g., seed="qa-lab", iterations=1000)
+   - Repeat run twice and confirm identical P10/P50/P90 when seed is same
+   - Output qa-lab/latest-report.md with:
+     - Summary counts (pass/fail)
+     - A table per dataset with baseline + scenario diffs
+     - Bug list with repro steps
+     - UI/UX improvement ideas categorized by: Trust, Onboarding, Scenario Builder, Outputs, Explainability
+     - “Founder Takeaways” per persona
+
+2) Optional: add /admin/qa-lab page listing datasets and “Run Suite” button, showing results.
+
+PART 5 — FEATURE + UI/UX INSIGHTS (AUTO-GENERATE)
+From failures + friction points detected:
+- Generate top 15 product improvements with:
+  - Problem
+  - Evidence from tests (which dataset/scenario)
+  - Suggested UX copy
+  - Suggested data model changes
+  - Engineering estimate in t-shirt size (S/M/L)
+- Prioritize P0 trust issues first.
+
+DONE CONDITION
+- All datasets can be created without demo leakage.
+- Currency symbol + formatting match selection.
+- Values-in scale works (INR MILLIONS don’t display as “K” wrongly).
+- Runway is identical across all pages for every dataset/scenario.
+- Monte Carlo is deterministic with seed + iterations.
+- latest-report.md is produced and easy to paste into Notion/Jira.
