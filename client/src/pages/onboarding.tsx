@@ -1185,11 +1185,32 @@ export default function OnboardingPage() {
                       <SelectItem value="CRORES">Crores</SelectItem>
                     </SelectContent>
                   </Select>
-                  {companyData.amount_scale !== 'UNITS' && (
-                    <p className="text-xs text-muted-foreground">
-                      Monetary values will be entered in {companyData.amount_scale.toLowerCase()}
-                    </p>
-                  )}
+                  {companyData.amount_scale !== 'UNITS' && (() => {
+                    const symbols: Record<string, string> = {
+                      USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥',
+                      CNY: '¥', KRW: '₩', BRL: 'R$', CHF: 'CHF', SEK: 'kr',
+                      AED: 'AED', HKD: 'HK$', MXN: 'MX$', ILS: '₪', NGN: '₦',
+                      KES: 'KSh', ZAR: 'R', SGD: 'S$', AUD: 'A$', CAD: 'C$',
+                    };
+                    const sym = symbols[companyData.currency] || companyData.currency;
+                    const multipliers: Record<string, number> = {
+                      UNITS: 1, THOUSANDS: 1000, MILLIONS: 1000000, CRORES: 10000000,
+                    };
+                    const mult = multipliers[companyData.amount_scale] || 1;
+                    const exampleInput = 25;
+                    const exampleOutput = exampleInput * mult;
+                    const formatted = exampleOutput.toLocaleString();
+                    return (
+                      <div className="p-2.5 bg-muted/50 rounded-md space-y-1" data-testid="scale-preview">
+                        <p className="text-xs font-medium text-muted-foreground">Live Preview</p>
+                        <p className="text-sm">
+                          You enter <span className="font-mono font-semibold">{sym}{exampleInput}</span>
+                          {' → '}
+                          Predixen reads it as <span className="font-mono font-semibold">{sym}{formatted}</span>
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
                 
                 {/* Show validation message if form is incomplete */}
@@ -1353,6 +1374,38 @@ export default function OnboardingPage() {
                       min={0}
                       data-testid="input-revenue"
                     />
+                    {baselineData.monthly_revenue === 0 && (
+                      <Card className="overflow-visible border-blue-500/30 bg-blue-500/5" data-testid="card-pre-revenue-guidance">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <Info className="h-5 w-5 text-blue-400 mt-0.5" />
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-medium text-sm">Pre-Revenue Company</h4>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  No revenue? No problem. Predixen will optimize for runway extension and milestone tracking instead of growth metrics.
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-xs font-medium text-muted-foreground">Key Milestones to Track:</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {[
+                                    { label: 'First Customer', icon: 'Users' },
+                                    { label: 'Product Launch', icon: 'Zap' },
+                                    { label: 'First Revenue', icon: 'DollarSign' },
+                                    { label: 'Break Even', icon: 'Target' },
+                                  ].map(m => (
+                                    <div key={m.label} className="flex items-center gap-2 p-2 rounded-md bg-muted/30 text-xs">
+                                      <span>{m.label}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                   
                   <div className="space-y-2">

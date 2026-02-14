@@ -189,3 +189,41 @@ export function formatScaledAmount(
   const suffix = SCALE_LABELS[scale];
   return suffix ? `${formatted} ${suffix}` : formatted;
 }
+
+export function normalizeAmountForDisplay(
+  value: number | null | undefined,
+  currency: string = 'USD',
+  scale: AmountScale = 'UNITS'
+): string {
+  if (value == null || !isFinite(value)) return '$0';
+
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$', EUR: '\u20AC', GBP: '\u00A3', INR: '\u20B9', JPY: '\u00A5',
+    CNY: '\u00A5', KRW: '\u20A9', BRL: 'R$', CHF: 'CHF', SEK: 'kr',
+    AED: 'AED', HKD: 'HK$', MXN: 'MX$', ILS: '\u20AA', NGN: '\u20A6',
+    KES: 'KSh', ZAR: 'R', SGD: 'S$', AUD: 'A$', CAD: 'C$',
+  };
+  const sym = CURRENCY_SYMBOLS[currency] || '$';
+
+  const scaledValue = value / (SCALE_MULTIPLIERS[scale] || 1);
+
+  if (scale === 'UNITS') {
+    return formatCurrencyAbbrev(value, currency);
+  }
+
+  const scaleShort: Record<string, string> = {
+    THOUSANDS: 'K',
+    MILLIONS: 'M',
+    CRORES: 'Cr',
+  };
+
+  const label = scaleShort[scale] || '';
+  if (Math.abs(scaledValue) >= 1000) {
+    return `${sym}${(scaledValue / 1000).toFixed(1)}K ${label}`;
+  }
+  return `${sym}${scaledValue.toFixed(scaledValue % 1 === 0 ? 0 : 1)} ${label}`;
+}
+
+export function applyScale(value: number, scale: AmountScale): number {
+  return value * (SCALE_MULTIPLIERS[scale] || 1);
+}

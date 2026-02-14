@@ -286,3 +286,9 @@
     inset: -1px;
   }
 }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; color: black !important; }
+  main { overflow: visible !important; }
+}

@@ -46,7 +46,8 @@ import {
   ChevronRight, FlaskConical, TrendingUp, DollarSign,
   Clock, Percent, ArrowRight, Users, FileText, MessageSquare,
   ChevronDown, ChevronUp, Search, Flame, ArrowUpRight,
-  RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare, Eye, EyeOff
+  RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare, Eye, EyeOff,
+  SlidersHorizontal, Layers, X
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
@@ -73,6 +74,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 function getCashBands(simulation: any): { p10: number[]; p50: number[]; p90: number[] } {
   if (simulation.bands?.cash) return simulation.bands.cash;
@@ -107,6 +119,13 @@ const SUGGESTION_CHIPS = [
 export default function ScenariosPage() {
   const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun, financialBaseline } = useFounderStore();
   const companyCurrency = (currentCompany as any)?.currency || 'USD';
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$', EUR: '\u20AC', GBP: '\u00A3', INR: '\u20B9', JPY: '\u00A5',
+    CNY: '\u00A5', KRW: '\u20A9', BRL: 'R$', CHF: 'CHF', SEK: 'kr',
+    AED: 'AED', HKD: 'HK$', MXN: 'MX$', ILS: '\u20AA', NGN: '\u20A6',
+    KES: 'KSh', ZAR: 'R', SGD: 'S$', AUD: 'A$', CAD: 'C$',
+  };
+  const currencySymbol = CURRENCY_SYMBOLS[companyCurrency] || '$';
   const formatCurrency = useCallback((value: number) => formatCurrencyAbbrev(value, companyCurrency), [companyCurrency]);
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
@@ -162,9 +181,11 @@ export default function ScenariosPage() {
   const [copied, setCopied] = useState(false);
   const [comparePickerOpen, setComparePickerOpen] = useState(false);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const [founderMode, setFounderMode] = useState(false);
   const [founderDetailOpen, setFounderDetailOpen] = useState(false);
   const [dualPathMode, setDualPathMode] = useState<{ active: boolean; pathA?: { name: string; scenarioId?: number }; pathB?: { name: string; scenarioId?: number }; originalQuery?: string }>({ active: false });
+  const [scenarioStack, setScenarioStack] = useState<number[]>([]);
 
   const handleShareScenario = async () => {
     if (!simulation || !currentCompany) return;
@@ -1054,6 +1075,36 @@ export default function ScenariosPage() {
             {simSeed !== null && (
               <Badge variant="outline" className="text-[10px]" data-testid="badge-reproducible">Reproducible</Badge>
             )}
+            {selectedScenarioId && (
+              <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-reset-baseline">
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    Reset
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Reset to Baseline?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will clear your current scenario selections and simulation results. Your saved scenarios will not be affected.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => {
+                      setSelectedScenarioId(null);
+                      setMultiSimResults(null);
+                      setEnhancedResults(null);
+                      setSensitivityResults(null);
+                      setShowResetDialog(false);
+                    }}>
+                      Reset
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
 
@@ -1286,6 +1337,10 @@ export default function ScenariosPage() {
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => window.print()} data-testid="button-print-results">
+                  <Download className="h-4 w-4 mr-2" />
+                  Print / PDF
+                </Button>
                 <ExportButton
                   data={formatSimulationForExport(simulation)}
                   filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-simulation`}
@@ -1450,12 +1505,86 @@ export default function ScenariosPage() {
                 />
               )}
 
+              {(() => {
+                const selectedScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
+                return selectedScenario ? (
+                  <Card className="overflow-visible" data-testid="card-input-changes">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Scenario Inputs vs Baseline</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedScenario.pricing_change_pct !== 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Pricing: {selectedScenario.pricing_change_pct > 0 ? '+' : ''}{selectedScenario.pricing_change_pct}%
+                          </Badge>
+                        )}
+                        {selectedScenario.growth_uplift_pct !== 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Growth: {selectedScenario.growth_uplift_pct > 0 ? '+' : ''}{selectedScenario.growth_uplift_pct}%
+                          </Badge>
+                        )}
+                        {selectedScenario.burn_reduction_pct !== 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Burn Cut: {selectedScenario.burn_reduction_pct}%
+                          </Badge>
+                        )}
+                        {selectedScenario.gross_margin_delta_pct !== 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            GM: {selectedScenario.gross_margin_delta_pct > 0 ? '+' : ''}{selectedScenario.gross_margin_delta_pct}pp
+                          </Badge>
+                        )}
+                        {selectedScenario.churn_change_pct !== 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Churn: {selectedScenario.churn_change_pct > 0 ? '+' : ''}{selectedScenario.churn_change_pct}%
+                          </Badge>
+                        )}
+                        {selectedScenario.fundraise_amount > 0 && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            Fundraise: ${(selectedScenario.fundraise_amount / 1000).toFixed(0)}K
+                          </Badge>
+                        )}
+                        {!selectedScenario.pricing_change_pct && !selectedScenario.growth_uplift_pct && 
+                         !selectedScenario.burn_reduction_pct && !selectedScenario.gross_margin_delta_pct &&
+                         !selectedScenario.churn_change_pct && !selectedScenario.fundraise_amount && (
+                          <span className="text-xs text-muted-foreground">No changes from baseline</span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null;
+              })()}
+
               {baselineComparison.simulation && (
                 <BeforeAfterDeltaCards
                   baselineSimulation={baselineComparison.simulation}
                   scenarioSimulation={simulation}
                   baselineName={baselineComparison.name}
                   scenarioName={currentScenarioName}
+                  currencySymbol={currencySymbol}
+                />
+              )}
+
+              {scenarios && scenarios.length > 1 && (
+                <ScenarioComparisonView
+                  scenarios={scenarios.map((s: any) => ({
+                    name: s.name,
+                    runway_p50: s.latest_simulation?.runway?.p50 ?? 0,
+                    runway_p10: s.latest_simulation?.runway?.p10,
+                    runway_p90: s.latest_simulation?.runway?.p90,
+                    survival_18m: s.latest_simulation?.survival?.['18m'] ?? s.latest_simulation?.survivalProbability?.['18m'] ?? 0,
+                    survival_12m: s.latest_simulation?.survival?.['12m'] ?? s.latest_simulation?.survivalProbability?.['12m'],
+                    end_cash: s.latest_simulation?.summary?.end_cash_p50 ?? s.latest_simulation?.summary?.end_cash,
+                    avg_burn: s.latest_simulation?.summary?.monthly_burn_p50,
+                    score: s.latest_simulation?.score,
+                  }))}
+                  selectedScenario={currentScenarioName}
+                  onSelectScenario={(name) => {
+                    const target = scenarios.find((s: any) => s.name === name);
+                    if (target) setSelectedScenarioId(target.id);
+                  }}
+                  testId="scenario-comparison-single"
                 />
               )}
 
@@ -1499,6 +1628,7 @@ export default function ScenariosPage() {
                 hasFailed={false}
                 onRetry={() => {}}
                 onApply={handleApplyCounterMove}
+                currencySymbol={currencySymbol}
               />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1621,7 +1751,7 @@ export default function ScenariosPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <PaybackClock simulation={simulation} />
+                <PaybackClock simulation={simulation} currencySymbol={currencySymbol} />
                 <Card data-testid="card-survival-chart">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">Survival Probability</CardTitle>
@@ -1641,7 +1771,7 @@ export default function ScenariosPage() {
 
               {simulation?.fundraising_intelligence && (
                 <>
-                  <FundraisingIntelligence data={simulation.fundraising_intelligence} />
+                  <FundraisingIntelligence data={simulation.fundraising_intelligence} currencySymbol={currencySymbol} />
                   <FundraiseDilutionModel data={{
                     fundraiseAmount: simulation.fundraising_intelligence.fundraise_amount,
                     valuationRange: simulation.fundraising_intelligence.valuation_range,
@@ -1653,7 +1783,7 @@ export default function ScenariosPage() {
                     growthRate: baseMetrics?.growthRate ? baseMetrics.growthRate / 100 : 0.3,
                     currentCash: baseMetrics?.cashOnHand,
                     survivalLift: simulation.fundraising_intelligence.survival_lift_pct,
-                  }} />
+                  }} currencySymbol={currencySymbol} />
                 </>
               )}
             </>)}
@@ -1754,9 +1884,14 @@ export default function ScenariosPage() {
                                   </div>
                                 )}
                               </div>
-                              <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
-                                <Play className="h-4 w-4 mr-2" />Run
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => setScenarioStack(prev => [...prev, s.id])} disabled={scenarioStack.includes(s.id)} data-testid={`button-add-stack-${s.id}`}>
+                                  <Layers className="h-4 w-4" />
+                                </Button>
+                                <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
+                                  <Play className="h-4 w-4 mr-2" />Run
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1764,6 +1899,59 @@ export default function ScenariosPage() {
                     )}
                   </CardContent>
                 </Card>
+                {scenarioStack.length > 0 && (
+                  <Card className="overflow-visible mt-4" data-testid="card-scenario-stack">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Scenario Stack</span>
+                          <Badge variant="secondary">{scenarioStack.length}</Badge>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => setScenarioStack([])} data-testid="button-clear-stack">
+                          Clear
+                        </Button>
+                      </div>
+                      <div className="space-y-1">
+                        {scenarioStack.map((id, idx) => {
+                          const sc = scenarios?.find((s: any) => s.id === id);
+                          if (!sc) return null;
+                          return (
+                            <div key={id} className="flex items-center gap-2 p-2 rounded-md bg-muted/30" data-testid={`stack-item-${id}`}>
+                              <span className="text-xs font-mono text-muted-foreground w-5">{idx + 1}.</span>
+                              <span className="text-sm flex-1 truncate">{sc.name}</span>
+                              <div className="flex items-center gap-0.5">
+                                <Button variant="ghost" size="icon" disabled={idx === 0}
+                                  onClick={() => {
+                                    const newStack = [...scenarioStack];
+                                    [newStack[idx - 1], newStack[idx]] = [newStack[idx], newStack[idx - 1]];
+                                    setScenarioStack(newStack);
+                                  }}
+                                  data-testid={`button-move-up-${id}`}>
+                                  <ChevronUp className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" disabled={idx === scenarioStack.length - 1}
+                                  onClick={() => {
+                                    const newStack = [...scenarioStack];
+                                    [newStack[idx], newStack[idx + 1]] = [newStack[idx + 1], newStack[idx]];
+                                    setScenarioStack(newStack);
+                                  }}
+                                  data-testid={`button-move-down-${id}`}>
+                                  <ChevronDown className="h-3 w-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon"
+                                  onClick={() => setScenarioStack(scenarioStack.filter(sid => sid !== id))}
+                                  data-testid={`button-remove-stack-${id}`}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="compare" className="mt-6 space-y-6">
@@ -1863,7 +2051,7 @@ export default function ScenariosPage() {
                 {simLoading ? <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card> : simulation ? (
                   <>
                     <DashboardKPICards simulation={simulation} metrics={dashboardMetrics} companyId={currentCompany?.id} testId="dashboard-kpis-results" />
-                    <SimulationSummaryBanner runwayP50={simulation.runway?.p50 || 0} survival18m={simulation.survival?.['18m'] || 0} survival12m={simulation.survival?.['12m'] || 0} endCash={simulation.summary?.end_cash} monthlyBurn={simulation.summary?.monthly_burn} monthlyRevenue={simulation.summary?.monthly_revenue} scenarioName={currentScenarioName} />
+                    <SimulationSummaryBanner runwayP50={simulation.runway?.p50 || 0} survival18m={simulation.survival?.['18m'] || 0} survival12m={simulation.survival?.['12m'] || 0} endCash={simulation.summary?.end_cash} monthlyBurn={simulation.summary?.monthly_burn} monthlyRevenue={simulation.summary?.monthly_revenue} scenarioName={currentScenarioName} seed={(simulation as any).seed} iterations={(simulation as any).n_sims || (simulation as any).iterations || simIterations} horizonMonths={(simulation as any).horizon_months || 24} />
                     <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
                       <div className="flex items-center gap-3"><span className="text-sm font-medium">Risk Assessment:</span><RiskGauge survivalProbability={(simulation.survival?.['18m'] || 0) / 100} size="sm" /></div>
                       <GlossaryModal />

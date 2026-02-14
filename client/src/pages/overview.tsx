@@ -1339,6 +1339,8 @@ export default function OverviewPage() {
           subtitle="Monthly Recurring Revenue"
           trend="up"
           trendValue={`+${assumptions.growthRate}%`}
+          metricSource={sharedMetrics.sources['mrr']}
+          lastUpdated={truthScan?.computed_at}
           testId="metric-mrr"
           onClick={() => setSelectedDrillDownMetric('mrr')}
           provenance={{
@@ -1353,6 +1355,8 @@ export default function OverviewPage() {
           value={formatCurrency(baseData.arr)}
           subtitle="Annual Recurring Revenue"
           trend="up"
+          metricSource={sharedMetrics.sources['arr']}
+          lastUpdated={truthScan?.computed_at}
           testId="metric-arr"
           onClick={() => setSelectedDrillDownMetric('arr')}
           provenance={{
@@ -1368,6 +1372,8 @@ export default function OverviewPage() {
           value={formatCurrency(baseData.cash)}
           subtitle={`Runway: ${formatRunway(baseData.runway)}`}
           variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
+          metricSource={sharedMetrics.sources['cashOnHand']}
+          lastUpdated={truthScan?.computed_at}
           testId="metric-cash"
           onClick={() => setSelectedDrillDownMetric('cash')}
           provenance={{
@@ -1381,6 +1387,8 @@ export default function OverviewPage() {
           title="Burn Rate"
           value={formatCurrency(baseData.burnRate)}
           subtitle="/month"
+          metricSource={sharedMetrics.sources['netBurn']}
+          lastUpdated={truthScan?.computed_at}
           onClick={() => setSelectedDrillDownMetric('burnRate')}
           testId="metric-burn-rate"
           provenance={{
@@ -1395,6 +1403,8 @@ export default function OverviewPage() {
           title="CAC"
           value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
           subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
+          metricSource={sharedMetrics.sources['cac']}
+          lastUpdated={truthScan?.computed_at}
           testId="metric-cac"
           onClick={() => setSelectedDrillDownMetric('cac')}
           provenance={{
@@ -1410,6 +1420,8 @@ export default function OverviewPage() {
           value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
           subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
           variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
+          metricSource={sharedMetrics.sources['ltv']}
+          lastUpdated={truthScan?.computed_at}
           testId="metric-ltv"
           onClick={() => setSelectedDrillDownMetric('ltv')}
           provenance={{
