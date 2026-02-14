@@ -148,6 +148,7 @@ def run_enhanced_monte_carlo(
         
         for month in range(horizon):
             growth_rate = rng.normal(current_growth, inputs.growth_sigma) / 100
+            growth_rate = np.clip(growth_rate, -0.5, 0.5)
             margin = np.clip(
                 rng.normal(current_margin, inputs.margin_sigma),
                 10, 95
@@ -218,6 +219,7 @@ def run_enhanced_monte_carlo(
             
             revenue = revenue * (1 + growth_rate)
             revenue = revenue * (1 - churn)
+            revenue = min(revenue, inputs.baseline_revenue * 1000)
             
             if fundraise_month and month + 1 == fundraise_month:
                 cash += fundraise_amount

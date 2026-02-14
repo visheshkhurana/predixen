@@ -275,7 +275,15 @@ async def get_dashboard_kpis(
         
         runway_value = metrics.get("runway_p50") if isinstance(metrics.get("runway_p50"), (int, float)) else (metrics.get("runway_months", {}).get("value") if isinstance(metrics.get("runway_months"), dict) else 16.5)
         net_burn_value = metrics.get("net_burn") if isinstance(metrics.get("net_burn"), (int, float)) else (metrics.get("net_burn", {}).get("value") if isinstance(metrics.get("net_burn"), dict) else 45000)
-        gross_margin_value = metrics.get("gross_margin") if isinstance(metrics.get("gross_margin"), (int, float)) else (metrics.get("gross_margin", {}).get("value") if isinstance(metrics.get("gross_margin"), dict) else 72)
+        raw_gm = metrics.get("gross_margin")
+        if isinstance(raw_gm, (int, float)):
+            gross_margin_value = raw_gm
+        elif isinstance(raw_gm, dict):
+            gross_margin_value = raw_gm.get("value")
+        else:
+            gross_margin_value = 72
+        if gross_margin_value is not None and 0 < gross_margin_value <= 1:
+            gross_margin_value = gross_margin_value * 100
         revenue_growth_value = metrics.get("revenue_growth_yoy") if isinstance(metrics.get("revenue_growth_yoy"), (int, float)) else (metrics.get("revenue_growth_yoy", {}).get("value") if isinstance(metrics.get("revenue_growth_yoy"), dict) else 85)
         burn_multiple_value = metrics.get("burn_multiple") if isinstance(metrics.get("burn_multiple"), (int, float)) else (metrics.get("burn_multiple", {}).get("value") if isinstance(metrics.get("burn_multiple"), dict) else 1.8)
         mrr_value = metrics.get("monthly_revenue") if isinstance(metrics.get("monthly_revenue"), (int, float)) else (metrics.get("mrr", {}).get("value") if isinstance(metrics.get("mrr"), dict) else 125000)

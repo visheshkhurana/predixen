@@ -47,9 +47,10 @@ interface ProjectionChartProps {
   targetRevenue?: number;
   onBenchmarkChange?: (benchmarks: { targetRunway?: number; targetRevenue?: number }) => void;
   testId?: string;
+  currency?: string;
 }
 
-const formatCurrency = (value: number): string => formatCurrencyAbbrev(value);
+const formatCurrency = (value: number, currency = 'USD'): string => formatCurrencyAbbrev(value, currency);
 
 const formatMonthLabel = (month: number, startDate?: Date): string => {
   const date = startDate || new Date();
@@ -63,9 +64,10 @@ interface CustomTooltipProps {
   payload?: any[];
   label?: string | number;
   visibleSeries: Record<string, boolean>;
+  currency?: string;
 }
 
-const CustomTooltip = ({ active, payload, label, visibleSeries }: CustomTooltipProps) => {
+const CustomTooltip = ({ active, payload, label, visibleSeries, currency = 'USD' }: CustomTooltipProps) => {
   if (!active || !payload || !payload.length) return null;
 
   const monthNum = typeof label === 'number' ? label : parseInt(label as string);
@@ -84,7 +86,7 @@ const CustomTooltip = ({ active, payload, label, visibleSeries }: CustomTooltipP
             <div className="w-3 h-3 rounded-full bg-blue-500" />
             <span className="text-muted-foreground">Cash Balance:</span>
             <span className="font-mono font-medium">
-              {formatCurrency(payload.find(p => p.dataKey === 'cashBalance')?.value || 0)}
+              {formatCurrency(payload.find(p => p.dataKey === 'cashBalance')?.value || 0, currency)}
             </span>
           </div>
         )}
@@ -93,7 +95,7 @@ const CustomTooltip = ({ active, payload, label, visibleSeries }: CustomTooltipP
             <div className="w-3 h-3 rounded-full bg-emerald-500" />
             <span className="text-muted-foreground">Monthly Revenue:</span>
             <span className="font-mono font-medium">
-              {formatCurrency(payload.find(p => p.dataKey === 'monthlyRevenue')?.value || 0)}
+              {formatCurrency(payload.find(p => p.dataKey === 'monthlyRevenue')?.value || 0, currency)}
             </span>
           </div>
         )}
@@ -102,7 +104,7 @@ const CustomTooltip = ({ active, payload, label, visibleSeries }: CustomTooltipP
             <div className="w-3 h-3 rounded-full bg-red-400" />
             <span className="text-muted-foreground">Monthly Burn:</span>
             <span className="font-mono font-medium">
-              {formatCurrency(payload.find(p => p.dataKey === 'monthlyBurn')?.value || 0)}
+              {formatCurrency(payload.find(p => p.dataKey === 'monthlyBurn')?.value || 0, currency)}
             </span>
           </div>
         )}
@@ -138,6 +140,7 @@ export function ProjectionChart({
   targetRevenue: initialTargetRevenue,
   onBenchmarkChange,
   testId = 'projection-chart',
+  currency = 'USD',
 }: ProjectionChartProps) {
   const [visibleSeries, setVisibleSeries] = useState({
     cashBalance: true,
@@ -358,10 +361,10 @@ export function ProjectionChart({
               />
               <YAxis
                 yAxisId="left"
-                tickFormatter={formatCurrency}
+                tickFormatter={(v) => formatCurrency(v, currency)}
                 tick={{ fontSize: 12 }}
                 className="text-muted-foreground"
-                label={{ value: 'Amount ($)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                label={{ value: `Amount (${currency})`, angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
               />
               <YAxis
                 yAxisId="right"
@@ -370,7 +373,7 @@ export function ProjectionChart({
                 className="text-muted-foreground"
                 label={{ value: 'Months / Count', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' } }}
               />
-              <Tooltip content={<CustomTooltip visibleSeries={visibleSeries} />} />
+              <Tooltip content={<CustomTooltip visibleSeries={visibleSeries} currency={currency} />} />
               
               {showBenchmarks && targetCashLevel > 0 && (
                 <ReferenceLine
@@ -380,7 +383,7 @@ export function ProjectionChart({
                   strokeDasharray="5 5"
                   strokeWidth={2}
                   label={{
-                    value: `Target Runway Cash: ${formatCurrency(targetCashLevel)}`,
+                    value: `Target Runway Cash: ${formatCurrency(targetCashLevel, currency)}`,
                     position: 'top',
                     fill: 'hsl(var(--primary))',
                     fontSize: 11,
@@ -396,7 +399,7 @@ export function ProjectionChart({
                   strokeDasharray="5 5"
                   strokeWidth={2}
                   label={{
-                    value: `Target Revenue: ${formatCurrency(localTargetRevenue)}`,
+                    value: `Target Revenue: ${formatCurrency(localTargetRevenue, currency)}`,
                     position: 'top',
                     fill: 'hsl(var(--chart-2))',
                     fontSize: 11,
@@ -412,7 +415,7 @@ export function ProjectionChart({
                   stroke="hsl(var(--chart-3))"
                   strokeWidth={2}
                   label={{
-                    value: event.label || `+${formatCurrency(event.amount)}`,
+                    value: event.label || `+${formatCurrency(event.amount, currency)}`,
                     position: 'top',
                     fill: 'hsl(var(--chart-3))',
                     fontSize: 11,

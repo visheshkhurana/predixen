@@ -529,14 +529,7 @@ export default function OnboardingPage() {
     try {
       let company;
       
-      // If existing company, update it; otherwise create new
-      if (existingCompanies && existingCompanies.length > 0) {
-        const existingId = existingCompanies[0].id;
-        const updateResponse = await apiRequest('PUT', `/api/companies/${existingId}`, companyData);
-        company = await updateResponse.json();
-      } else {
-        company = await createCompanyMutation.mutateAsync(companyData);
-      }
+      company = await createCompanyMutation.mutateAsync(companyData);
       
       setCurrentCompany(company);
       setStep(2);

@@ -101,12 +101,14 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
         
         for month in range(horizon):
             growth_rate = rng.normal(adjusted_growth, inputs.growth_sigma) / 100
+            growth_rate = np.clip(growth_rate, -0.5, 0.5)
             margin = np.clip(
                 rng.normal(adjusted_margin, inputs.margin_sigma),
                 10, 95
             ) / 100
             
             revenue = revenue * (1 + growth_rate)
+            revenue = min(revenue, inputs.baseline_revenue * 1000)
             
             if inputs.hiring_plan:
                 for hire in inputs.hiring_plan:

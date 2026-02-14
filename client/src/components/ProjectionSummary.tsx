@@ -16,9 +16,10 @@ interface ProjectionSummaryProps {
   timeseries: MonthlyDataPoint[];
   targetRunway?: number;
   testId?: string;
+  currency?: string;
 }
 
-const formatCurrency = (value: number): string => formatCurrencyAbbrev(value);
+const formatCurrency = (value: number, currency = 'USD'): string => formatCurrencyAbbrev(value, currency);
 
 interface StatCardProps {
   label: string;
@@ -74,6 +75,7 @@ export function ProjectionSummary({
   timeseries,
   targetRunway = 18,
   testId = 'projection-summary',
+  currency = 'USD',
 }: ProjectionSummaryProps) {
   const stats = useMemo(() => {
     if (!timeseries || timeseries.length === 0) {
@@ -154,7 +156,7 @@ export function ProjectionSummary({
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <StatCard
             label="Peak Cash Balance"
-            value={formatCurrency(stats.peakCash.value)}
+            value={formatCurrency(stats.peakCash.value, currency)}
             subLabel={`Month ${stats.peakCash.month}`}
             icon={<TrendingUp className="h-5 w-5" />}
             variant="success"
@@ -162,7 +164,7 @@ export function ProjectionSummary({
           
           <StatCard
             label="Lowest Cash"
-            value={formatCurrency(stats.lowestCash.value)}
+            value={formatCurrency(stats.lowestCash.value, currency)}
             subLabel={`Month ${stats.lowestCash.month}`}
             icon={<TrendingDown className="h-5 w-5" />}
             variant={stats.lowestCash.value < stats.avgBurn * 3 ? 'danger' : 'warning'}
@@ -170,7 +172,7 @@ export function ProjectionSummary({
           
           <StatCard
             label="Total Revenue"
-            value={formatCurrency(stats.totalRevenue)}
+            value={formatCurrency(stats.totalRevenue, currency)}
             subLabel="Over projection period"
             icon={<DollarSign className="h-5 w-5" />}
             variant="success"
@@ -178,15 +180,15 @@ export function ProjectionSummary({
           
           <StatCard
             label="Avg Monthly Burn"
-            value={formatCurrency(stats.avgBurn)}
-            subLabel={`Net: ${formatCurrency(stats.avgBurn - stats.avgRevenue)}/mo`}
+            value={formatCurrency(stats.avgBurn, currency)}
+            subLabel={`Net: ${formatCurrency(stats.avgBurn - stats.avgRevenue, currency)}/mo`}
             icon={<TrendingDown className="h-5 w-5" />}
             variant="default"
           />
           
           <StatCard
             label="Avg Monthly Revenue"
-            value={formatCurrency(stats.avgRevenue)}
+            value={formatCurrency(stats.avgRevenue, currency)}
             subLabel={`${((stats.avgRevenue / stats.avgBurn) * 100).toFixed(0)}% of burn`}
             icon={<TrendingUp className="h-5 w-5" />}
             variant={stats.avgRevenue >= stats.avgBurn ? 'success' : 'default'}

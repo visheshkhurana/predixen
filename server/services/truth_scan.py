@@ -58,31 +58,37 @@ CANONICAL_METRIC_MAP = {
 def compute_net_burn(revenue: Optional[float], total_expenses: Optional[float]) -> Optional[float]:
     """Calculate net burn rate.
     
-    Net burn = revenue - total_expenses
-    Positive value = net positive cash flow
-    Negative value = burning cash
+    CANONICAL CONVENTION (aligned with ingest/calculations.py):
+    Net burn = total_expenses - revenue
+    Positive value = burning cash
+    Negative value = profitable / surplus
+    Zero = breakeven
     """
     if revenue is None or total_expenses is None:
         return None
-    return revenue - total_expenses
+    return total_expenses - revenue
 
 
-def compute_runway_months(cash_balance: Optional[float], monthly_burn: Optional[float]) -> Optional[float]:
+def compute_runway_months(cash_balance: Optional[float], net_burn: Optional[float]) -> Optional[float]:
     """Calculate runway in months.
     
-    Runway = cash_balance / |monthly_burn|
-    Returns 999 if positive cash flow or zero burn.
+    CANONICAL CONVENTION (aligned with ingest/calculations.py):
+    net_burn uses positive-means-burning convention.
+    
+    - net_burn <= 0: Sustainable (return None for infinite runway)
+    - net_burn > 0 and cash > 0: runway = cash / net_burn
+    - cash <= 0: return 0
     """
-    if cash_balance is None or monthly_burn is None:
+    if cash_balance is None or net_burn is None:
         return None
     
-    if monthly_burn >= 0:
-        return 999
+    if net_burn <= 0:
+        return None
     
-    if cash_balance == 0:
+    if cash_balance <= 0:
         return 0.0
     
-    return cash_balance / abs(monthly_burn)
+    return cash_balance / net_burn
 
 
 def create_truth_scan_upload(

@@ -801,7 +801,7 @@ export default function Dashboard() {
               title="Headcount"
               value={liveMetrics.headcount}
               icon={<Users className="h-4 w-4" />}
-              subtitle={`$${(liveMetrics.revenue_per_employee / 1000).toFixed(0)}K/emp`}
+              subtitle={`${formatCurrency(liveMetrics.revenue_per_employee)}/emp`}
               isLive={isConnected}
             />
           </div>
@@ -840,7 +840,7 @@ export default function Dashboard() {
                     <AreaChart data={historicalData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="time" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                      <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 12 }} />
                       <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                       <Area 
                         type="monotone" 
@@ -869,7 +869,7 @@ export default function Dashboard() {
                     <LineChart data={historicalData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                      <YAxis yAxisId="left" tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="left" tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 12 }} />
                       <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v}mo`} tick={{ fontSize: 12 }} />
                       <RechartsTooltip />
                       <Legend />
@@ -911,7 +911,7 @@ export default function Dashboard() {
                     <LineChart data={historicalData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-                      <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                      <YAxis tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 12 }} />
                       <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                       <Legend />
                       <Line 
