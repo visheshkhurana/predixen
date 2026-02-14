@@ -1,0 +1,266 @@
+## PREDIXEN QA REPORT — Critical Bug Fixes + Feature Improvements
+
+I ran a full QA test using "LeadSquared (Synthetic Test)" (Company ID 24, Currency: INR, Scale: MILLIONS) with these baseline inputs:
+- monthlyRevenue: 217.2 (₹M), grossMarginPct: 82, opex: 95, payroll: 105, otherCosts: 18, cashBalance: 1500, employees: 1150
+
+Below are ALL bugs found, organized by severity, followed by feature ideas and UI/UX improvements. Please fix every P0 and P1 bug in this session.
+
+---
+
+### P0 BUGS (Data integrity / trust-breaking — fix ALL of these)
+
+**P0-1: Gross Margin displays as 8.0% instead of 82%**
+- WHERE: Dashboard KPI Health Status card, Milestones section, Health Check page Insights ("At 8%...")
+- EXPECTED: 82% (user entered 82 in onboarding)
+- ROOT CAUSE LIKELY: The gross_margin_pct value "82" is being divided by 10 or parsed as "8.2" then truncated to "8.0", OR the decimal point is being misplaced. Check how `grossMarginPct` is stored vs displayed. The onboarding form sends 82, but somewhere it's being interpreted as 0.08 or 8.0 instead of 0.82 or 82%.
+- FILES TO CHECK: The server-side calculation that derives COGS from gross margin, the dashboard component that displays Gross Margin in KPI Health Status, and the Health Check page's `/truth` route rendering.
+
+**P0-2: Revenue @24MO shows ₹20,463,846,352,755,867,6480.0M (integer overflow / exponential growth bug)**
+- WHERE: Simulate page → Before/After Comparison → "REVENUE @24MO" card
+- EXPECTED: Something like ₹5,200-6,000M (reasonable 24-month revenue projection)
+- ROOT CAUSE LIKELY: The revenue projection formula is compounding growth at the "Growth Rate" of 853.5% monthly, causing exponential blowup. Either the growth rate calculation is broken (see P0-4) or the projection formula doesn't cap/validate the growth rate.
+- FILES TO CHECK: Simulation engine's revenue projection logic, Monte Carlo monthly projection loop.
+
+**P0-3: Month 12 Cash Balance shows ₹1,306,593,988.4M on Health Check page (overflow)**
+- WHERE: Health Check (`/truth`) → 12-Month Cash Flow Forecast → "Month 12 Balance"
+- EXPECTED: ~₹1,000-2,000M (cash grows modestly or shrinks based on burn)
+- ROOT CAUSE: Same compounding bug as P0-2. The forecast model uses the broken growth rate, causing cash to explode.
+- FIX: Fix the growth rate calculation (P0-4) and add a sanity-check cap on projected values (e.g., no single metric should exceed 1000x its starting value over 24 months).
+
+**P0-4: Growth Rate shows 853.5% — completely nonsensical for a company with only 1 month of data**
+- WHERE: Dashboard KPI Health Status, Health Check page
+- EXPECTED: 0% or "N/A" (only one data point exists — no prior month to compare against)
+- ROOT CAUSE: The growth rate calculation likely compares current MRR against some default/zero value, producing a division artifact. With a single baseline entry, growth rate should be "N/A — insufficient data" or 0%.
+- FIX: If there's only 1 data point, display "N/A" with tooltip "Need at least 2 months of data". Never let growth rate exceed a reasonable bound (e.g., ±200%) without flagging it.
+
+**P0-5: Currency symbol shows $ instead of ₹ in multiple places**
+- WHERE: (a) Health Check → Scenario-Based Runway card: "Monthly Burn $-6" (b) Simulate → Scenario Comparison table: "Cash @24m: $4.4M" (c) Dashboard → Goal Tracker: "Reach $100K MRR" (d) Risk Alerts: "Threshold: < $100K" and alert text "$45K to $55K" (e) Fundraising → Cap Table header shows "USD"
+- EXPECTED: ₹ everywhere (company currency is INR)
+- ROOT CAUSE: Hardcoded "$" or "USD" fallback instead of reading `company.currency`. The alert thresholds were inherited from TechFlow (previous occupant of company ID 24) and use $.
+- FIX: Create a single `formatCurrency(amount, companyCurrency, amountScale)` utility used by ALL components. Replace every hardcoded "$" / "USD" with this utility. Ensure alerts, goals, and cap table all read from `company.currency`.
+
+**P0-6: COGS shown as ₹1.9K (92%) on Health Check — completely wrong**
+- WHERE: Health Check → Monthly Burn Breakdown pie chart
+- EXPECTED: COGS = 217.2 × (1 - 0.82) = ₹39.1M (18% of revenue)
+- ACTUAL: Shows ₹1.9K which is 92% of total burn — this is orders of magnitude wrong AND the percentage is inverted
+- ROOT CAUSE: Related to P0-1 (gross margin being read as 8% instead of 82%), so COGS = 217.2 × 0.92 = ~200M but then displayed as ₹1.9K due to additional scale conversion error. Double bug: wrong margin AND wrong scale.
+- FIX: Fix GM interpretation (P0-1), then verify COGS = revenue × (1 - grossMarginPct/100).
+
+**P0-7: Onboarding overwrites existing company instead of creating new one**
+- WHAT: When running /onboarding while logged into an account that already has a company (TechFlow Analytics, ID 24), it overwrote TechFlow's name/industry/stage/currency but kept its old description, alerts, cap table, goals, and other data.
+- EXPECTED: Onboarding should CREATE a new company (ID 25+), not UPDATE the existing one.
+- FIX: In the onboarding API endpoint, if user already has a company, either (a) create a new company and switch active context, or (b) show a warning "You already have a company — do you want to create a new one or edit the existing one?"
+- ALSO: When company data IS updated, purge or migrate all child entities (alerts, goals, cap table entries) so stale data doesn't leak through.
+
+**P0-8: Runway inconsistency across pages**
+- Dashboard: 37.6 mo
+- Health Check Scenario-Based Runway: "Sustainable, 0 mo" 
+- Simulate Before/After: "48.0 → 48.0" (baseline) 
+- Health Check KPI Health Status: 37.6 mo
+- These should ALL show the same value. "Sustainable, 0 mo" is self-contradictory. Simulate baseline of 48.0 differs from Dashboard's 37.6.
+- FIX: Ensure a single `calculateRunway(cashBalance, monthlyBurn)` function is used everywhere. Runway = cashBalance / netBurn. For our data: netBurn = (opex + payroll + otherCosts + COGS) - revenue. If company is cash-flow positive (revenue > expenses), show "Sustainable (cash-flow positive)" not "0 mo".
+
+---
+
+### P1 BUGS (Significant issues, fix after P0)
+
+**P1-1: Employees shows 3000 on Health Check page — entered 1150**
+- WHERE: Health Check → Headcount & Hiring → "Current: 3000 employees"
+- EXPECTED: 1150
+- ROOT CAUSE: Stale data from TechFlow (company ID 24 was overwritten but headcount data wasn't purged). See P0-7.
+
+**P1-2: NRR (Net Revenue Retention) shows 526.7% — no NRR data was entered**
+- WHERE: Dashboard → metrics section
+- EXPECTED: "N/A" (no NRR data provided during onboarding)
+- FIX: If a SaaS metric has no user-provided data point, display "N/A" not a hallucinated value. The system should never fabricate metrics the user didn't input.
+
+**P1-3: Active Customers shows 20 — no customer count was entered**  
+- WHERE: Dashboard → "Active Customers: 20 paying customers"
+- EXPECTED: "N/A" or empty
+- ROOT CAUSE: Either a default value or stale TechFlow data.
+
+**P1-4: Rev/Emp shows ₹0.69 on Health Check — should be ₹217.2M / 1150 = ₹0.189M per employee**
+- WHERE: Health Check → Headcount & Hiring
+- EXPECTED: ₹0.19M/month or ₹189K/month  
+- ROOT CAUSE: Using wrong employee count (3000 instead of 1150) AND possibly wrong revenue scale.
+
+**P1-5: AI "Fetch using AI" overwrites user-typed company name**
+- WHERE: Onboarding Step 1 — after user types "LeadSquared (Synthetic Test)" and clicks "Fetch using AI", the AI response overwrites the company name field with "LeadSquared"
+- FIX: AI fetch should populate only empty fields (description, industry, stage). Never overwrite the company name field if it already has user-entered content.
+
+**P1-6: Company description is stale TechFlow text after onboarding overwrite**
+- WHERE: API response for company 24 still shows "TechFlow Analytics" description
+- FIX: When onboarding updates a company, also update (or clear) the description. If AI fetch retrieves a new description, use it. Otherwise clear the old one.
+
+**P1-7: Stale alerts from previous company persist after onboarding**
+- WHERE: Dashboard Risk Alerts: "Cash Balance Critical, Threshold < $100K", alert messages referencing "$45K to $55K" burn rates
+- FIX: When onboarding overwrites a company, delete all old alerts and let the alert engine re-evaluate based on new financials.
+
+**P1-8: Payback Period shows 115.1 months — wildly off**
+- WHERE: Dashboard KPI Health Status
+- EXPECTED: ~14 months (per SaaS benchmarks for a mature company with LTV:CAC of 5.0x)
+- ROOT CAUSE: The payback calculation likely uses the broken COGS/margin values, leading to inflated CAC or wrong unit economics.
+
+**P1-9: "Scenario Inputs vs Baseline" shows "No changes from baseline" for the pricing lift scenario**
+- WHERE: Simulate results → Scenario Inputs vs Baseline section
+- EXPECTED: Should show "Pricing: +6%" tag highlighted, since the query was "raise prices by 6%"
+- FIX: Parse the scenario query's extracted parameters and display which inputs changed. The pills (Pricing %, Growth %, Burn Cut %, GM pp, Churn %) should reflect actual changes.
+
+**P1-10: Burn Rate shows ₹0.80/month on Dashboard briefing — should be ~₹40M/month**
+- WHERE: Daily Briefing popup: "you are burning efficiently at ₹0.80/mo"
+- EXPECTED: ₹40M/month (total expenses 257.1M - revenue 217.2M = 39.9M ≈ ₹40M)
+- ROOT CAUSE: Scale conversion error — the value is stored in millions but displayed as if it were in units, OR the burn rate computation uses wrong inputs.
+
+---
+
+### P2 BUGS (Polish / cosmetic — fix when time permits)
+
+**P2-1: Quick scenario buttons on Simulate page show $ amounts ("$1M", "$500K")**
+- WHERE: Simulate → Quick scenario suggestion buttons
+- FIX: Use company currency symbol.
+
+**P2-2: ARR displays as "₹2.6K" — confusing scale suffix**
+- WHERE: Dashboard ARR card
+- EXPECTED: "₹2,606M" or "₹2.6B" — showing "K" when values are in millions is misleading (₹2.6K millions = ₹2.6 billion, but users will read "₹2.6K" as ₹2,600)
+- FIX: When amount_scale is MILLIONS, format large numbers properly: if value > 1000M, show as "₹2.6B" or "₹2,606M". Don't use "K" suffix on top of the millions scale.
+
+**P2-3: Cash Flow Forecast chart y-axis shows "000000.0M" (broken number formatting)**
+- WHERE: Health Check → 12-Month Cash Flow Forecast chart
+- FIX: The y-axis labels are not formatting correctly. Likely the values are too large (due to P0-3 overflow) and the formatter can't handle them. Fix the underlying data (P0-3) and add a number formatter that gracefully handles large values.
+
+**P2-4: Churn shows 0.0% — no churn data entered, should show N/A**
+- WHERE: Dashboard KPI Health Status
+- FIX: Display "N/A" for metrics without user data, not "0.0%". Zero churn is a meaningful claim; N/A means "not measured".
+
+**P2-5: Scenario Comparison table shows all scenarios as "Quick simulation" with no distinguishing names**
+- WHERE: Simulate → Scenario Comparison table
+- FIX: Use the scenario query text (or a truncated version) as the scenario name, not "Quick simulation" for all of them.
+
+**P2-6: Cap Table on Fundraising page shows dummy founder names from TechFlow**
+- WHERE: Fundraising → Cap Table → "Founder 1 - Nikita Luther", "Founder 2 - Vyshesh K"
+- FIX: Related to P0-7. Cap table should be cleared/migrated when company is overwritten.
+
+---
+
+### TOP 15 FEATURE IDEAS (prioritized)
+
+**F1 [P0, Size: M] — Single Source of Truth for Derived Metrics**
+Create a shared `MetricsEngine` class (server-side) that ALL pages call for runway, burn, COGS, growth rate, etc. Currently each page seems to compute these independently, causing cross-page inconsistencies. Every derived metric should have exactly ONE canonical calculation.
+
+**F2 [P0, Size: M] — Currency/Scale Formatting Utility**
+Build `formatAmount(value, currency, scale)` and `getCurrencySymbol(currency)` utilities. Use them in every component. Support: USD ($), INR (₹), EUR (€), GBP (£). Scale options: Units, Thousands (K), Millions (M), Billions (B), Crores (Cr). Never hardcode "$".
+
+**F3 [P1, Size: L] — Onboarding: Create New Company vs Edit Existing**
+When a user already has companies, onboarding should show a choice: "Create new company" or "Edit [existing company name]". If creating new, generate a fresh company ID. If editing, show current values pre-filled and allow changes. Never silently overwrite.
+
+**F4 [P1, Size: M] — Assumptions Ledger / Audit Trail**
+Add a page (or modal) that shows every assumption the system makes: "Gross Margin = 82% (user-entered)", "Growth Rate = N/A (insufficient data, defaulting to 0%)", "COGS = ₹39.1M (derived: revenue x (1 - GM/100))". This builds trust. If I can't see WHERE a number comes from, I can't trust Predixen with real decisions.
+
+**F5 [P1, Size: S] — Metric Source Badges Everywhere**
+Every displayed metric should show a badge: "User-Entered", "Derived", "AI-Estimated", "Stale", or "N/A". Currently some cards show "Verified" / "Computed" which is good — extend this to ALL metrics including Growth Rate, NRR, Churn, Active Customers, ARPU, Payback.
+
+**F6 [P1, Size: L] — Scenario Timeline / Gantt View**  
+Allow users to define WHEN scenario effects start and end (e.g., "Pricing +6% from month 2 to month 12"). Show a visual timeline of stacked scenarios. The current natural-language input is great for quick what-ifs, but power users need precise temporal control.
+
+**F7 [P1, Size: M] — Scenario Naming and Versioning**
+Let users name scenarios (not just "Quick simulation"). Show scenario history with timestamps. Allow cloning/editing a previous scenario. Enable tagging (e.g., "board-meeting", "fundraise-prep").
+
+**F8 [P1, Size: M] — Export Scenario Comparison as PDF/XLSX**
+The "Export" button exists but should produce a well-formatted PDF with: scenario query, decision score breakdown, before/after comparison, key risks/opportunities, and the full P10/P50/P90 distribution. Also support XLSX for founders who want to model further in Excel.
+
+**F9 [P2, Size: L] — Data Connectors (QuickBooks, Stripe, Xero, Razorpay)**
+For Indian SaaS companies: Razorpay, Cashfree, Zoho Books integrations. For global: Stripe, QuickBooks, Xero. Auto-import MRR, churn, revenue, expenses monthly. This is the #1 feature that would make me (as a founder) pay for Predixen long-term.
+
+**F10 [P2, Size: M] — Multi-Scenario Stacking with Reset Verification**
+Allow stacking S1+S4+S6 as a combined scenario. After unstacking, verify baseline returns EXACTLY to original values (state leakage test). Show a visual diff of "stacked scenario" vs "sum of individual scenarios" to reveal interaction effects.
+
+**F11 [P2, Size: S] — Confidence Intervals on Dashboard KPIs**
+Show P10/P50/P90 bands on key metrics (runway, burn, cash). Currently the Monte Carlo only runs during simulation. Run a lightweight baseline Monte Carlo on page load and show confidence bands on the dashboard cards.
+
+**F12 [P2, Size: M] — What-If Natural Language Parser Transparency**
+When user types "raise prices 6% from month 2", show the parsed parameters BEFORE running: {"pricing_change": +6%, "start_month": 2, "duration": "permanent"}. Let user confirm or adjust. Currently, "Scenario Inputs vs Baseline" shows "No changes from baseline" which means the parser didn't extract the parameters visibly.
+
+**F13 [P2, Size: S] — Seed Input Should Accept Strings**
+Currently the seed field only accepts numbers. Allow string seeds (e.g., "leadsquared-s1-v1") for human-readable reproducibility tags.
+
+**F14 [P2, Size: M] — Anomaly Detection on Computed Values**
+If any computed metric exceeds a sanity threshold (e.g., growth rate > 200%, revenue projection > 100x baseline, cash > 1000x starting balance), flag it with a warning: "This value looks anomalous. Check your inputs." This would have caught P0-2, P0-3, P0-4 before they reached the UI.
+
+**F15 [P2, Size: S] — Empty State Handling for Metrics**
+Never display 0 or a fabricated number for metrics the user hasn't provided. Show "—" or "N/A" with a CTA: "Add this metric". Applies to: Active Customers, NRR, Churn, ARPU, CAC, LTV.
+
+---
+
+### TOP 15 UI/UX IMPROVEMENTS
+
+**U1 [P0, Size: S] — Fix all hardcoded $ to use company currency**
+(Same as P0-5 fix — listed here for completeness. Grep the entire codebase for "$" and replace with dynamic currency.)
+
+**U2 [P1, Size: S] — Scale suffix on KPI cards**
+Dashboard cards show "₹217" — user doesn't know if that's ₹217 units or ₹217M. Add scale suffix: "₹217M" or show "₹217 (in Millions)" subtitle. This applies to MRR, ARR, Cash, Burn Rate cards.
+
+**U3 [P1, Size: S] — "N/A — insufficient data" instead of fake zeroes or hallucinated values**
+Growth Rate, Churn, NRR, Active Customers — if no data provided, show "N/A" with info tooltip explaining what data is needed.
+
+**U4 [P1, Size: M] — Daily Briefing should respect currency and scale**
+The briefing says "₹0.80/mo" burn. It should say "₹40M/mo" and include the scale. Also: "1 critical alert detected" links to an alert from the old company. Briefing content should be regenerated when company data changes.
+
+**U5 [P1, Size: S] — Goal Tracker uses $ — should use company currency**
+"Reach $100K MRR" should be "Reach ₹100M MRR" (or whatever the actual goal is in the user's currency).
+
+**U6 [P1, Size: S] — Before/After Comparison: format large numbers**
+Revenue @24MO shows ₹20463846352755586... — if the value exceeds display width, truncate with engineering notation or show "Overflow — check inputs". Never let a 25-digit number render as-is.
+
+**U7 [P2, Size: S] — Scenario Comparison table: use scenario names, not "Quick simulation"**
+Each row should show a meaningful name (first 50 chars of the query, or a user-assigned name).
+
+**U8 [P2, Size: S] — Cash @24m column in Scenario Comparison shows "$4.4M" — use ₹**
+Same currency bug but specifically in the comparison table.
+
+**U9 [P2, Size: S] — Onboarding Step 4 missing**
+After Step 3 (Data Sources → Skip), user lands directly on Dashboard. There's no Step 4 confirmation/summary. Add a review step showing: "Here's what we'll set up: Company: X, Currency: Y, Revenue: Z... Confirm?"
+
+**U10 [P2, Size: M] — Health Check Cash Flow chart y-axis formatting**
+Labels show "000000.0M" — needs proper number formatting. Use SI suffixes (K, M, B) and limit decimal places.
+
+**U11 [P2, Size: S] — Monthly Burn Breakdown should show actual amounts, not just %**
+The pie chart shows COGS ₹1.9K (92%), Operating ₹100 (5%). Should show ₹39.1M (18%), ₹95M (44%), ₹105M (48%), ₹18M (8%) with a clear total.
+
+**U12 [P2, Size: S] — Simulation "Reproducible" badge — add info tooltip**
+When seed is set and "Reproducible" badge appears, add tooltip: "This simulation used seed 42. Re-running with the same seed and inputs will produce identical results."
+
+**U13 [P2, Size: S] — Scenario Comparison: highlight the "Selected" row more prominently**
+Currently the selected scenario has a small "Selected" badge. Use a distinct background color or border to make it visually pop.
+
+**U14 [P2, Size: S] — Add "Copy to Clipboard" on scenario results**
+Quick way to copy the decision score, key risks, and recommendation to paste into Slack/Notion/email.
+
+**U15 [P2, Size: S] — Dark mode contrast on Burn Rate card**
+The Burn Rate value "₹0.80" in red on dark background has low contrast. Use a brighter red or add a subtle background.
+
+---
+
+### IMPLEMENTATION ORDER (suggested)
+
+**Phase 1 — Trust (fix P0s, ~2-3 days):**
+1. Fix gross margin storage/interpretation (P0-1 → fixes P0-6)
+2. Fix growth rate for single-data-point companies (P0-4 → fixes P0-2, P0-3)
+3. Build & deploy `formatCurrency()` utility, replace all hardcoded $ (P0-5)
+4. Fix runway calculation consistency (P0-8)
+5. Fix onboarding to create new company, not overwrite (P0-7)
+
+**Phase 2 — Accuracy (fix P1s, ~2-3 days):**
+6. Purge stale data on company change (P1-1, P1-6, P1-7)
+7. Show N/A for un-entered metrics (P1-2, P1-3, P2-4, F15)
+8. Fix burn rate display in briefing (P1-10)
+9. Fix scenario input display (P1-9)
+10. Fix AI fetch not overwriting name (P1-5)
+
+**Phase 3 — Polish (P2s + features, ~1 week):**
+11. Scale suffixes on all KPI cards (U2)
+12. Scenario naming (F7)
+13. Assumptions ledger (F4)
+14. Anomaly detection guards (F14)
+15. Number overflow formatting (U6, U10)
+
+Start with Phase 1. For each fix, run the LeadSquared test case to verify: create company with INR/MILLIONS, enter revenue=217.2, GM=82%, opex=95, payroll=105, other=18, cash=1500, employees=1150. Verify: GM shows 82%, COGS=39.1M, burn≈40M, runway≈37.6mo, growth=N/A, currency=₹ everywhere.
