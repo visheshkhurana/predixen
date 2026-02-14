@@ -3,16 +3,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, useCreateScenario, useStrategicDiagnosisQuery } from '@/api/hooks';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 3000 },
@@ -28,12 +25,6 @@ const TOC_SECTIONS = [
   { id: 'section-key-risks', label: 'Key Risks', num: 4 },
   { id: 'section-alt-paths', label: 'Alternative Paths', num: 5 },
 ];
-
-interface ShareModalData {
-  contentType: 'risk' | 'recommendation' | 'full_briefing' | 'custom';
-  subject: string;
-  contentData: Record<string, any>;
-}
 
 function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRetry?: () => void }) {
   const [activeStep, setActiveStep] = useState(0);
@@ -213,148 +204,6 @@ function LikelihoodBadge({ likelihood }: { likelihood: string }) {
     return <Badge className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30" data-testid="badge-likelihood-medium">Medium</Badge>;
   }
   return <Badge variant="secondary" className="text-[10px] bg-green-500/15 text-green-400 border-green-500/30" data-testid="badge-likelihood-low">Low</Badge>;
-}
-
-function ShareModal({
-  open,
-  onOpenChange,
-  data,
-  companyId,
-  companyName,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  data: ShareModalData | null;
-  companyId: number;
-  companyName: string;
-}) {
-  const { toast } = useToast();
-  const [toEmail, setToEmail] = useState('');
-  const [subject, setSubject] = useState('');
-  const [personalNote, setPersonalNote] = useState('');
-  const [isSending, setIsSending] = useState(false);
-
-  useEffect(() => {
-    if (data) {
-      setSubject(data.subject);
-      setToEmail('');
-      setPersonalNote('');
-    }
-  }, [data]);
-
-  const handleSend = async () => {
-    if (!toEmail.trim()) {
-      toast({ title: 'Email required', description: 'Please enter a recipient email address.', variant: 'destructive' });
-      return;
-    }
-    setIsSending(true);
-    try {
-      await apiRequest('POST', `/api/companies/${companyId}/share-action-item`, {
-        to_email: toEmail.trim(),
-        subject: subject || undefined,
-        content_type: data?.contentType || 'custom',
-        content_data: data?.contentData || {},
-        personal_note: personalNote.trim() || undefined,
-      });
-      toast({ title: 'Sent', description: `Email sent to ${toEmail.trim()}` });
-      onOpenChange(false);
-    } catch (err: any) {
-      toast({ title: 'Failed to send', description: err.message || 'Something went wrong.', variant: 'destructive' });
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const typeLabels: Record<string, string> = {
-    risk: 'Risk Alert',
-    recommendation: 'Recommendation',
-    full_briefing: 'Full Briefing',
-    custom: 'Shared Item',
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" data-testid="share-modal">
-        <DialogHeader>
-          <DialogTitle data-testid="share-modal-title">
-            Share {typeLabels[data?.contentType || 'custom']}
-          </DialogTitle>
-          <DialogDescription>
-            Send this as a professional email via Predixen.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="share-email">Recipient email</Label>
-            <Input
-              id="share-email"
-              type="email"
-              placeholder="team@company.com"
-              value={toEmail}
-              onChange={(e) => setToEmail(e.target.value)}
-              data-testid="input-share-email"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="share-subject">Subject</Label>
-            <Input
-              id="share-subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              data-testid="input-share-subject"
-            />
-          </div>
-          {data?.contentType === 'risk' && data.contentData.risk && (
-            <div className="rounded-md bg-muted p-3">
-              <p className="text-xs text-muted-foreground mb-1 font-medium">Risk being shared:</p>
-              <p className="text-sm text-foreground">{data.contentData.risk}</p>
-            </div>
-          )}
-          {data?.contentType === 'recommendation' && data.contentData.headline && (
-            <div className="rounded-md bg-muted p-3">
-              <p className="text-xs text-muted-foreground mb-1 font-medium">Recommendation being shared:</p>
-              <p className="text-sm text-foreground">{data.contentData.headline}</p>
-            </div>
-          )}
-          {data?.contentType === 'full_briefing' && (
-            <div className="rounded-md bg-muted p-3">
-              <p className="text-xs text-muted-foreground font-medium">The full strategic briefing will be sent.</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="share-note">Personal note (optional)</Label>
-            <Textarea
-              id="share-note"
-              placeholder="Add a message for the recipient..."
-              value={personalNote}
-              onChange={(e) => setPersonalNote(e.target.value)}
-              className="resize-none"
-              rows={3}
-              data-testid="input-share-note"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-share-cancel">
-            Cancel
-          </Button>
-          <Button onClick={handleSend} disabled={isSending} data-testid="button-share-send">
-            {isSending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4 mr-2" />
-                Send Email
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 export default function DecisionsPage() {
