@@ -1,0 +1,143 @@
+## Feature & UI/UX Improvement Ideas
+
+### Trust (P0)
+
+### # | Problem | Evidence | Suggested Fix | Size
+
+#: 1 | Problem: Runway mismatch across pages if financial record has stale data | Evidence: Baseline tests with multiple periods | Suggested Fix: Add "last updated" badge + auto-recalc trigger | Size: M
+
+#: 2 | Problem: No visual indicator when simulation uses 0 for missing metrics | Evidence: ZeroRev Labs baseline test | Suggested Fix: Show "estimated" badge next to metrics sourced from fallback | Size: S
+
+#: 3 | Problem: Currency symbol not shown in simulation output charts | Evidence: INR datasets display validation | Suggested Fix: Thread company.currency through all chart formatters | Size: M
+
+### Onboarding
+
+### # | Problem | Evidence | Suggested Fix | Size
+
+#: 4 | Problem: No guided path for pre-revenue companies | Evidence: ZeroRev Labs (DS13) edge case | Suggested Fix: Add pre-revenue onboarding flow with milestone tracking | Size: L
+
+#: 5 | Problem: Amount scale selection lacks visual preview | Evidence: INR MILLIONS datasets | Suggested Fix: Show example: '₹25M displays as ₹25' with live preview | Size: S
+
+### Scenario Builder
+
+### # | Problem | Evidence | Suggested Fix | Size
+
+#: 6 | Problem: No time-phased scenario support in UI | Evidence: S2 demand shock (months 1-3) | Suggested Fix: Add start/end month pickers for each scenario lever | Size: M
+
+#: 7 | Problem: Cannot stack multiple scenarios visually | Evidence: S7 mixed stack test | Suggested Fix: Add scenario composition builder with drag-and-drop | Size: L
+
+#: 8 | Problem: No 'Reset to Baseline' button after applying scenarios | Evidence: S7 reset verification | Suggested Fix: Add prominent reset button with confirmation | Size: S
+
+### Outputs & Explainability
+
+### # | Problem | Evidence | Suggested Fix | Size
+
+#: 9 | Problem: Simulation results don't show which inputs changed from baseline | Evidence: All scenario tests | Suggested Fix: Add delta indicators showing input changes vs baseline | Size: M
+
+#: 10 | Problem: No export of simulation results for board decks | Evidence: All datasets | Suggested Fix: Add PDF/PNG export of simulation summary cards | Size: L
+
+#: 11 | Problem: Monte Carlo seed/iterations not visible in results | Evidence: Reproducibility tests | Suggested Fix: Display seed + iteration count in results footer | Size: S
+
+#: 12 | Problem: No comparison view for before/after scenario application | Evidence: S1-S6 tests | Suggested Fix: Side-by-side baseline vs scenario output cards | Size: M
+
+### Data Quality
+
+### # | Problem | Evidence | Suggested Fix | Size
+
+#: 13 | Problem: COGS computation may drift with floating point in edge cases | Evidence: MinGM/MaxGM tests | Suggested Fix: Use Decimal for financial calculations in critical paths | Size: M
+
+#: 14 | Problem: No validation that GM stays 0-100 after scenario application | Evidence: S3 cost optimization | Suggested Fix: Add server-side clamp + UI warning for out-of-range GM | Size: S
+
+#: 15 | Problem: Scale multiplier not applied consistently in all API responses | Evidence: INR MILLIONS datasets | Suggested Fix: Centralize scale conversion in response serializer | Size: M
+
+## Founder Takeaways by Persona
+
+### FlowForge (Seed SaaS)
+
+- Persona: First-time technical founder, ex-Google engineer
+- Runway: 11.7 months (moderate)
+- Key Insight: Start fundraising conversations now, optimize burn
+
+### CloudLedger (Profitable SaaS)
+
+- Persona: Serial entrepreneur, 3rd company, finance background
+- Runway: Infinite (profitable)
+- Key Insight: Focus on growth investment - burn is covered by revenue
+
+### GlowCart (D2C E-commerce)
+
+- Persona: Brand-first founder, ex-Nykaa marketing lead
+- Runway: 6.7 months (moderate)
+- Key Insight: Start fundraising conversations now, optimize burn
+
+### BazaarBridge (Marketplace)
+
+- Persona: Ops-heavy founder, ex-Flipkart supply chain
+- Runway: 5.5 months (critical)
+- Key Insight: Immediate action needed - consider fundraising or cost cuts
+
+### Shadowbox Logistics (Logistics / Supply Chain)
+
+- Persona: Industry veteran, 15yr logistics experience
+- Runway: Infinite (profitable)
+- Key Insight: Focus on growth investment - burn is covered by revenue
+
+### CredPulse (Fintech)
+
+- Persona: Ex-banker, regulatory expertise, risk-averse
+- Runway: 5.2 months (critical)
+- Key Insight: Immediate action needed - consider fundraising or cost cuts
+
+### ProtoFab (Manufacturing)
+
+- Persona: Hardware engineer, capital-intensive mindset
+- Runway: 25.0 months (healthy)
+- Key Insight: Good position to invest in growth while maintaining discipline
+
+### StudioSprint (Agency / Services)
+
+- Persona: Creative director turned founder, people-heavy cost structure
+- Runway: 3.0 months (critical)
+- Key Insight: Immediate action needed - consider fundraising or cost cuts
+
+### ArenaNova (Gaming)
+
+- Persona: Ex-Riot Games developer, product-obsessed
+- Runway: 18.5 months (healthy)
+- Key Insight: Good position to invest in growth while maintaining discipline
+
+### CareArc Clinics (Healthcare)
+
+- Persona: Doctor-turned-entrepreneur, patient outcomes focused
+- Runway: 5.0 months (critical)
+- Key Insight: Immediate action needed - consider fundraising or cost cuts
+
+### TutorLoop (Edtech)
+
+- Persona: Teacher-turned-founder, mission-driven
+- Runway: 6.2 months (moderate)
+- Key Insight: Start fundraising conversations now, optimize burn
+
+### ApexExchange (Crypto / Web3)
+
+- Persona: Quant trader, high-risk tolerance
+- Runway: Infinite (profitable)
+- Key Insight: Focus on growth investment - burn is covered by revenue
+
+### ZeroRev Labs (Pre-revenue / Deep Tech)
+
+- Persona: PhD researcher, zero revenue edge case
+- Runway: 4.7 months (critical)
+- Key Insight: Immediate action needed - consider fundraising or cost cuts
+
+### MaxGM Co (Edge Case — 100% GM)
+
+- Persona: Pure software, zero COGS test case
+- Runway: Infinite (profitable)
+- Key Insight: Focus on growth investment - burn is covered by revenue
+
+### MinGM Co (Edge Case — 0% GM)
+
+- Persona: Hardware-only, all revenue = COGS test case
+- Runway: 7.5 months (moderate)
+- Key Insight: Start fundraising conversations now, optimize burn
