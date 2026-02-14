@@ -47,7 +47,7 @@ import {
   Clock, Percent, ArrowRight, Users, FileText, MessageSquare,
   ChevronDown, ChevronUp, Search, Flame, ArrowUpRight,
   RotateCcw, Download, Shield, Share2, Copy, Check, GitCompare, Eye, EyeOff,
-  SlidersHorizontal, Layers, X
+  SlidersHorizontal, Layers, X, Mail
 } from 'lucide-react';
 import { EmptyState, EmptyStateCard } from '@/components/ui/empty-state';
 import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from '@/components/simulation';
@@ -62,6 +62,7 @@ import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
 import { useToast } from '@/hooks/use-toast';
+import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 import { formatSimulationForExport, downloadSimulationPDF, type SimulationPDFData } from '@/lib/exportUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -186,6 +187,70 @@ export default function ScenariosPage() {
   const [founderDetailOpen, setFounderDetailOpen] = useState(false);
   const [dualPathMode, setDualPathMode] = useState<{ active: boolean; pathA?: { name: string; scenarioId?: number }; pathB?: { name: string; scenarioId?: number }; originalQuery?: string }>({ active: false });
   const [scenarioStack, setScenarioStack] = useState<number[]>([]);
+  const [emailShareOpen, setEmailShareOpen] = useState(false);
+  const [emailShareData, setEmailShareData] = useState<ShareModalData | null>(null);
+
+  const openEmailShare = (data: ShareModalData) => {
+    setEmailShareData(data);
+    setEmailShareOpen(true);
+  };
+
+  const handleShareSimulationResults = () => {
+    if (!simulation || !currentCompany) return;
+    const s18 = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+    const s12 = simulation.survivalProbability?.['12m'] ?? simulation.survival?.['12m'] ?? 0;
+    openEmailShare({
+      contentType: 'simulation_summary',
+      subject: `Simulation Results: ${currentScenarioName} - ${currentCompany.name}`,
+      contentData: {
+        scenario_name: currentScenarioName,
+        runway_p50: simulation.runway?.p50 || 0,
+        survival_18m: s18,
+        end_cash: simulation.summary?.end_cash,
+        monthly_burn: simulation.summary?.monthly_burn,
+        end_cash_formatted: formatCurrency(simulation.summary?.end_cash || 0),
+        monthly_burn_formatted: formatCurrency(simulation.summary?.monthly_burn || 0),
+        survival_12m: s12,
+        runway_p10: simulation.runway?.p10,
+        runway_p90: simulation.runway?.p90,
+      },
+    });
+  };
+
+  const handleShareAIDecision = (analysis: any) => {
+    if (!currentCompany) return;
+    openEmailShare({
+      contentType: 'ai_decision',
+      subject: `AI Decision Summary: ${currentScenarioName} - ${currentCompany.name}`,
+      contentData: {
+        scenario_name: currentScenarioName,
+        recommendation: analysis.recommendation,
+        verdict: analysis.verdictLabel,
+        score: analysis.score,
+        bullets: analysis.bullets,
+      },
+    });
+  };
+
+  const handleShareCounterMove = (move: any) => {
+    if (!currentCompany || !simulation) return;
+    const cmRunway = move.runway?.p50 ?? 0;
+    const cmSurvival = move.survivalProbability?.['18m'] ?? move.survival?.['18m'] ?? 0;
+    const baseRunway = simulation.runway?.p50 ?? 0;
+    const baseSurvival = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+    openEmailShare({
+      contentType: 'counter_move',
+      subject: `Counter-Move: ${move.name} - ${currentCompany.name}`,
+      contentData: {
+        name: move.name,
+        runway_p50: cmRunway,
+        survival_18m: cmSurvival,
+        runway_delta: cmRunway - baseRunway,
+        survival_delta: cmSurvival - baseSurvival,
+        scenario_name: currentScenarioName,
+      },
+    });
+  };
 
   const handleShareScenario = async () => {
     if (!simulation || !currentCompany) return;
@@ -1335,7 +1400,11 @@ export default function ScenariosPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" onClick={handleShareScenario} data-testid="button-share-scenario">
                   <Share2 className="h-4 w-4 mr-2" />
-                  Share
+                  Share Link
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareSimulationResults} data-testid="button-email-results">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Email Results
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => window.print()} data-testid="button-print-results">
                   <Download className="h-4 w-4 mr-2" />
@@ -1349,13 +1418,43 @@ export default function ScenariosPage() {
               </div>
             </div>
 
-            <AIDecisionSummary
-              simulation={simulation}
-              scenarioName={currentScenarioName}
-              baselineSimulation={baselineComparison.simulation}
-              counterMoves={simulation.counter_moves}
-              className="mb-4"
-            />
+            <div className="relative mb-4">
+              <AIDecisionSummary
+                simulation={simulation}
+                scenarioName={currentScenarioName}
+                baselineSimulation={baselineComparison.simulation}
+                counterMoves={simulation.counter_moves}
+              />
+              <div className="absolute top-3 right-3 no-print">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => {
+                    const s18 = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+                    const rp50 = simulation.runway?.p50 ?? 0;
+                    let vLabel = 'CONDITIONAL GO';
+                    if (s18 >= 75 && rp50 >= 14) vLabel = 'GO';
+                    else if (s18 < 40 || rp50 < 8) vLabel = 'NO-GO';
+                    let score = 5;
+                    if (s18 >= 90) score = 9; else if (s18 >= 75) score = 8; else if (s18 >= 60) score = 7; else if (s18 >= 50) score = 6; else if (s18 >= 40) score = 5; else if (s18 >= 30) score = 4; else score = 3;
+                    handleShareAIDecision({
+                      recommendation: `${currentScenarioName}: ${rp50.toFixed(1)} months runway, ${s18.toFixed(0)}% survival at 18 months`,
+                      verdictLabel: vLabel,
+                      score,
+                      bullets: [
+                        `Runway P50: ${rp50.toFixed(1)} months`,
+                        `18-month survival: ${s18.toFixed(0)}%`,
+                        simulation.summary?.monthly_burn ? `Monthly burn: ${formatCurrency(simulation.summary.monthly_burn)}` : null,
+                      ].filter(Boolean),
+                    });
+                  }}
+                  title="Share via email"
+                  data-testid="button-share-ai-decision"
+                >
+                  <Mail className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
 
             {founderMode && (() => {
               const survival18m = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
@@ -1628,6 +1727,7 @@ export default function ScenariosPage() {
                 hasFailed={false}
                 onRetry={() => {}}
                 onApply={handleApplyCounterMove}
+                onShare={handleShareCounterMove}
                 currencySymbol={currencySymbol}
               />
 
@@ -2253,6 +2353,16 @@ export default function ScenariosPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {currentCompany && (
+        <ShareModal
+          open={emailShareOpen}
+          onOpenChange={setEmailShareOpen}
+          data={emailShareData}
+          companyId={currentCompany.id}
+          companyName={currentCompany.name}
+        />
+      )}
     </div>
   );
 }

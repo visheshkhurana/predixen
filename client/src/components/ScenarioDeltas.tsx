@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowUp, ArrowDown, Minus, AlertTriangle,
   TrendingUp, TrendingDown, Timer, ArrowRight,
-  DollarSign, PieChart, Fuel, Shield, Target
+  DollarSign, PieChart, Fuel, Shield, Target, Mail
 } from 'lucide-react';
 import { formatCurrencyAbbrev } from '@/lib/utils';
 
@@ -883,10 +883,12 @@ function CounterMoveCard({
   move,
   currentSimulation,
   onApply,
+  onShare,
 }: {
   move: CounterMoveResult;
   currentSimulation: SimulationData;
   onApply?: (move: CounterMoveResult) => void;
+  onShare?: (move: CounterMoveResult) => void;
 }) {
   const currentRunway = currentSimulation.runway?.p50 ?? 0;
   const currentSurvival = getSurvival(currentSimulation, '18m') ?? 0;
@@ -951,15 +953,27 @@ function CounterMoveCard({
             </div>
           </div>
         </div>
-        {onApply && (
-          <div className="mt-3 pt-2 border-t">
-            <button
-              onClick={() => onApply(move)}
-              className="w-full text-xs font-medium text-primary hover:underline text-center py-1"
-              data-testid={`button-apply-counter-move-${move.id}`}
-            >
-              Apply this counter-move
-            </button>
+        {(onApply || onShare) && (
+          <div className="mt-3 pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
+            {onApply && (
+              <button
+                onClick={() => onApply(move)}
+                className="text-xs font-medium text-primary hover:underline py-1"
+                data-testid={`button-apply-counter-move-${move.id}`}
+              >
+                Apply this counter-move
+              </button>
+            )}
+            {onShare && (
+              <button
+                onClick={() => onShare(move)}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground py-1 flex items-center gap-1"
+                data-testid={`button-share-counter-move-${move.id}`}
+              >
+                <Mail className="h-3 w-3" />
+                Share
+              </button>
+            )}
           </div>
         )}
       </CardContent>
@@ -974,6 +988,7 @@ export function CounterMoveCards({
   hasFailed,
   onRetry,
   onApply,
+  onShare,
   currencySymbol = '$',
 }: {
   counterMoves: CounterMoveResult[] | null;
@@ -982,6 +997,7 @@ export function CounterMoveCards({
   hasFailed?: boolean;
   onRetry?: () => void;
   onApply?: (move: CounterMoveResult) => void;
+  onShare?: (move: CounterMoveResult) => void;
   currencySymbol?: string;
 }) {
   if (!counterMoves && !isLoading && !hasFailed) {
@@ -1058,6 +1074,7 @@ export function CounterMoveCards({
               move={move}
               currentSimulation={currentSimulation}
               onApply={onApply}
+              onShare={onShare}
             />
           ))}
         </div>

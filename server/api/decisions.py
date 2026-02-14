@@ -864,6 +864,9 @@ def _build_share_email_html(company_name: str, content_type: str, content_data: 
         "risk": "Risk Alert",
         "recommendation": "Strategic Recommendation",
         "full_briefing": "Full Strategic Briefing",
+        "simulation_summary": "Simulation Results",
+        "ai_decision": "AI Decision Summary",
+        "counter_move": "Counter-Move Analysis",
         "custom": "Shared Item",
     }
     header_label = header_labels.get(content_type, "Shared Item")
@@ -884,6 +887,94 @@ def _build_share_email_html(company_name: str, content_type: str, content_data: 
         {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Timeline</td><td style='padding:3px 0;'>" + timeline + "</td></tr>" if timeline else ""}
         {"<tr><td style='padding:3px 12px 3px 0;font-weight:600;color:#a5b4fc;'>Done when</td><td style='padding:3px 0;'>" + done_when + "</td></tr>" if done_when else ""}
         </table>"""
+
+    elif content_type == "simulation_summary":
+        scenario_name = _escape_html(content_data.get("scenario_name", "Scenario"))
+        runway_p50 = content_data.get("runway_p50", 0)
+        survival_18m = content_data.get("survival_18m", 0)
+        end_cash = content_data.get("end_cash_formatted", "")
+        monthly_burn = content_data.get("monthly_burn_formatted", "")
+        survival_12m = content_data.get("survival_12m", 0)
+        runway_p10 = content_data.get("runway_p10")
+        runway_p90 = content_data.get("runway_p90")
+        runway_range = f"P10: {runway_p10:.1f} &ndash; P90: {runway_p90:.1f}" if runway_p10 is not None and runway_p90 is not None else ""
+        body_html = f"""
+        <p style="font-size:15px;font-weight:600;color:#e2e8f0;margin:0 0 14px;">{scenario_name}</p>
+        <table cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:13px;color:#94a3b8;">
+        <tr>
+            <td style="padding:8px 12px;border:1px solid #1e293b;border-radius:6px 0 0 0;background:#1e293b;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Runway (P50)</p>
+                <p style="margin:0;font-size:18px;font-weight:700;color:#e2e8f0;font-family:monospace;">{runway_p50:.1f} mo</p>
+            </td>
+            <td style="padding:8px 12px;border:1px solid #1e293b;border-radius:0 6px 0 0;background:#1e293b;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Survival (18m)</p>
+                <p style="margin:0;font-size:18px;font-weight:700;color:{'#22c55e' if survival_18m >= 70 else '#f59e0b' if survival_18m >= 40 else '#ef4444'};font-family:monospace;">{survival_18m:.0f}%</p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding:8px 12px;border:1px solid #1e293b;border-radius:0 0 0 6px;background:#1e293b;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">End Cash</p>
+                <p style="margin:0;font-size:14px;font-weight:600;color:#e2e8f0;font-family:monospace;">{_escape_html(end_cash)}</p>
+            </td>
+            <td style="padding:8px 12px;border:1px solid #1e293b;border-radius:0 0 6px 0;background:#1e293b;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Monthly Burn</p>
+                <p style="margin:0;font-size:14px;font-weight:600;color:#e2e8f0;font-family:monospace;">{_escape_html(monthly_burn)}</p>
+            </td>
+        </tr>
+        </table>
+        {"<p style='margin-top:8px;font-size:12px;color:#64748b;'>" + _escape_html(runway_range) + "</p>" if runway_range else ""}"""
+
+    elif content_type == "ai_decision":
+        scenario_name = _escape_html(content_data.get("scenario_name", ""))
+        recommendation = _escape_html(content_data.get("recommendation", ""))
+        verdict = content_data.get("verdict", "CONDITIONAL GO")
+        score = content_data.get("score", 5)
+        bullets = content_data.get("bullets", [])
+        verdict_colors = {"GO": "#22c55e", "NO-GO": "#ef4444", "CONDITIONAL GO": "#f59e0b"}
+        vc = verdict_colors.get(verdict, "#f59e0b")
+        bullets_html = ""
+        for b in bullets:
+            if b:
+                bullets_html += f"<li style='margin:4px 0;color:#94a3b8;font-size:13px;'>{_escape_html(str(b))}</li>"
+        body_html = f"""
+        <div style="padding:16px;border-radius:8px;border:1px solid {vc}40;background:{vc}10;margin-bottom:14px;">
+            <div style="display:flex;align-items:center;margin-bottom:8px;">
+                <span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;color:#fff;background:{vc};margin-right:10px;">{_escape_html(verdict)}</span>
+                <span style="font-size:12px;color:#94a3b8;">Score: {score}/10</span>
+            </div>
+            <p style="font-size:15px;font-weight:600;color:#e2e8f0;margin:0 0 8px;">{recommendation}</p>
+            {"<ul style='margin:8px 0 0 16px;padding:0;'>" + bullets_html + "</ul>" if bullets_html else ""}
+        </div>
+        {"<p style='font-size:12px;color:#64748b;margin:0;'>Scenario: " + scenario_name + "</p>" if scenario_name else ""}"""
+
+    elif content_type == "counter_move":
+        name = _escape_html(content_data.get("name", "Counter-Move"))
+        scenario_name = _escape_html(content_data.get("scenario_name", ""))
+        runway_p50 = content_data.get("runway_p50", 0)
+        survival_18m = content_data.get("survival_18m", 0)
+        runway_delta = content_data.get("runway_delta", 0)
+        survival_delta = content_data.get("survival_delta", 0)
+        rd_color = "#22c55e" if runway_delta >= 0 else "#ef4444"
+        sd_color = "#22c55e" if survival_delta >= 0 else "#ef4444"
+        rd_sign = "+" if runway_delta >= 0 else ""
+        sd_sign = "+" if survival_delta >= 0 else ""
+        body_html = f"""
+        <p style="font-size:17px;font-weight:700;color:#e2e8f0;margin:0 0 14px;">{name}</p>
+        <table cellpadding="0" cellspacing="0" border="0" style="width:100%;font-size:13px;">
+        <tr>
+            <td style="padding:10px 12px;border:1px solid #1e293b;border-radius:6px 0 0 6px;background:#1e293b;width:50%;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Runway Impact</p>
+                <p style="margin:0;font-size:16px;font-weight:700;color:{rd_color};font-family:monospace;">{rd_sign}{runway_delta:.1f} months</p>
+                <p style="margin:2px 0 0;font-size:11px;color:#94a3b8;">Total: {runway_p50:.1f} mo</p>
+            </td>
+            <td style="padding:10px 12px;border:1px solid #1e293b;border-radius:0 6px 6px 0;background:#1e293b;width:50%;">
+                <p style="margin:0 0 2px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Survival Impact</p>
+                <p style="margin:0;font-size:16px;font-weight:700;color:{sd_color};font-family:monospace;">{sd_sign}{survival_delta:.0f}%</p>
+                <p style="margin:2px 0 0;font-size:11px;color:#94a3b8;">Total: {survival_18m:.0f}%</p>
+            </td>
+        </tr>
+        </table>
+        {"<p style='margin-top:10px;font-size:12px;color:#64748b;'>vs. scenario: " + scenario_name + "</p>" if scenario_name else ""}"""
 
     elif content_type == "risk":
         risk = _escape_html(content_data.get("risk", content_data.get("title", "")))
