@@ -79,3 +79,18 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **PostgreSQL**: Primary relational database.
 -   **Google Fonts**: Inter, IBM Plex Mono.
 -   **Resend**: Email delivery service.
+
+## Recent Changes (Feb 2026)
+
+### P0 Bug Fixes
+1. **P0-7 Onboarding**: Fixed to always create new companies via POST (no more overwriting existing companies).
+2. **P0-8 Runway Consistency**: Unified net burn sign convention: `net_burn = expenses - revenue` (positive = burning cash, negative = profitable). Runway = cash/net_burn when burning, None when sustainable.
+3. **P0-1/P0-6 Gross Margin**: Normalized to always store as 0-100 percentage. Auto-detects and converts decimal inputs (0-1 range). Guards on both write (ingest.py) and read (dashboard_kpis.py).
+4. **P0-4/P0-2/P0-3 Growth Rate Overflow**: Added `safe_growth_rate_from_series()` guard for <2 data points. Monthly growth capped at ±50% in simulations. Revenue capped at baseline*1000 in both simulation_engine.py and enhanced_monte_carlo.py.
+5. **P0-5 Currency Formatting**: Replaced all hardcoded "$" with dynamic currency from company settings. Uses `useCurrency` hook and `formatCurrencyAbbrev(value, currency)` across DashboardKPICards, ProjectionChart, ProjectionSummary, ScenarioCard, dashboard.tsx, and overview.tsx.
+
+### Key Conventions
+- **Net burn**: `net_burn = total_expenses - revenue` (positive = burning, negative = profitable)
+- **Gross margin**: Always stored as 0-100 (percentage), never as decimal 0-1
+- **Currency**: All UI currency display uses company's `currency` field; never hardcode "$"
+- **Simulation caps**: Revenue ≤ baseline*1000; growth ≤ ±50%/month; growth rate returns None for <2 data points
