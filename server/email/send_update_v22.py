@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_notion_autopush_feb2026_v22"
+CAMPAIGN = "predixen_notion_autopush_feb2026_v22b"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
@@ -205,9 +205,9 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <f5987291@predixen.app>"
+    sender = "Nikita from Predixen <updates@predixen.app>"
 
-    print(f"Sending Notion Auto-Push update v22 to {len(RECIPIENTS)} recipients...")
+    print(f"Sending Notion Auto-Push update v22b to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
     print(f"Campaign: {CAMPAIGN}")
     print(f"Timestamp: {datetime.now().isoformat()}")
@@ -222,7 +222,9 @@ def send_all():
 
         headers = {
             "X-Entity-Ref-ID": str(uuid.uuid4()),
-            "X-PM-Message-Stream": "outbound",
+            "List-Unsubscribe": "<mailto:updates@predixen.app?subject=unsubscribe>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            "Precedence": "bulk",
         }
 
         utm_params = {
@@ -234,7 +236,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen: QA Reports Now Auto-Publish to Notion",
+            subject="QA Reports Now Auto-Publish to Notion",
             html_content=html,
             text_content=text,
             from_email=sender,
