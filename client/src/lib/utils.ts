@@ -22,6 +22,10 @@ export function formatCurrencyAbbrev(value: number | null | undefined, currency 
     maximumFractionDigits: 0,
   }).format(0).replace(/[0-9]/g, '').trim();
   
+  if (absValue >= 1000000000) {
+    const billions = absValue / 1000000000;
+    return `${sign}${symbol}${billions >= 10 ? billions.toFixed(1) : billions.toFixed(2)}B`;
+  }
   if (absValue >= 1000000) {
     const millions = absValue / 1000000;
     return `${sign}${symbol}${millions >= 10 ? millions.toFixed(1) : millions.toFixed(2)}M`;

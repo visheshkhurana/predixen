@@ -25,6 +25,7 @@ class SimulateDeltas(BaseModel):
     fundraise_month: Optional[int] = None
     fundraise_amount: float = 0
     gross_margin_delta_pct: float = 0
+    scenario_name: Optional[str] = None
 
 class CompareRequest(BaseModel):
     action_ids: List[str]
@@ -70,9 +71,12 @@ def quick_simulate(
     
     metrics = truth_scan.outputs_json.get("metrics", {})
     
+    scenario_label = deltas.scenario_name or "Quick simulation"
+    if len(scenario_label) > 80:
+        scenario_label = scenario_label[:77] + "..."
     scenario = Scenario(
         company_id=company_id,
-        name=f"Quick simulation",
+        name=scenario_label,
         inputs_json=deltas.model_dump()
     )
     db.add(scenario)

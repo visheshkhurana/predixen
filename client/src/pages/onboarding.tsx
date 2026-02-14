@@ -416,9 +416,9 @@ export default function OnboardingPage() {
         const company = data.company;
         setCompanyData(prev => ({
           ...prev,
-          name: company.name || prev.name,
-          industry: company.industry || prev.industry,
-          stage: company.stage || prev.stage,
+          name: prev.name.trim() ? prev.name : (company.name || prev.name),
+          industry: prev.industry ? prev.industry : (company.industry || prev.industry),
+          stage: prev.stage ? prev.stage : (company.stage || prev.stage),
         }));
         
         setAiLookupSummary(data.summary || company.description);
