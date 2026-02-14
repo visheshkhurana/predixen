@@ -74,8 +74,7 @@ class SimulationInputs:
     margin_sigma: float = 3.5
 
 def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dict[str, Any]:
-    if seed is not None:
-        np.random.seed(seed)
+    rng = np.random.default_rng(seed)
     
     n = inputs.n_simulations
     horizon = inputs.horizon_months
@@ -101,9 +100,9 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
         payroll = adjusted_payroll
         
         for month in range(horizon):
-            growth_rate = np.random.normal(adjusted_growth, inputs.growth_sigma) / 100
+            growth_rate = rng.normal(adjusted_growth, inputs.growth_sigma) / 100
             margin = np.clip(
-                np.random.normal(adjusted_margin, inputs.margin_sigma),
+                rng.normal(adjusted_margin, inputs.margin_sigma),
                 10, 95
             ) / 100
             

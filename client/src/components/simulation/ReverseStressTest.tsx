@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Target, Check, AlertTriangle, AlertCircle } from 'lucide-react';
 import { calculateRunway, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface BreakingPoint {
   variable: string;
@@ -50,7 +50,7 @@ export function ReverseStressTest({ currentState, testId = 'reverse-stress-test'
     const variables = [
       { key: 'churnRate', displayName: 'Churn Rate', unit: '%', direction: 'increase' as const },
       { key: 'growthRate', displayName: 'Revenue Growth', unit: '%', direction: 'decrease' as const },
-      { key: 'opex', displayName: 'Operating Expenses', unit: '$', direction: 'increase' as const },
+      { key: 'opex', displayName: 'Operating Expenses', unit: 'currency', direction: 'increase' as const },
       { key: 'grossMargin', displayName: 'Gross Margin', unit: '%', direction: 'decrease' as const },
     ];
 
@@ -97,8 +97,8 @@ export function ReverseStressTest({ currentState, testId = 'reverse-stress-test'
   }, [currentState, targetMonths]);
 
   const formatValue = (value: number, unit: string) => {
-    if (unit === '$') {
-      return `$${(value / 1000).toFixed(0)}K`;
+    if (unit === 'currency') {
+      return formatCurrencyAbbrev(value);
     }
     return `${value.toFixed(1)}${unit}`;
   };

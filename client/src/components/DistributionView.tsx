@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { BarChart3, TrendingUp, TrendingDown, HelpCircle, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ReferenceLine } from 'recharts';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface DistributionData {
   value: number;
@@ -120,9 +120,7 @@ export function DistributionView({
   const formatValue = (value: number) => {
     if (unit === 'months') return `${value.toFixed(1)} mo`;
     if (unit === '%') return `${value.toFixed(1)}%`;
-    if (unit === '$') return value >= 1000000 
-      ? `$${(value / 1000000).toFixed(1)}M` 
-      : `$${(value / 1000).toFixed(0)}K`;
+    if (unit === '$' || unit === 'currency') return formatCurrencyAbbrev(value);
     return value.toFixed(1);
   };
 

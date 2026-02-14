@@ -147,3 +147,45 @@ export function formatChartTooltip(
       return String(value);
   }
 }
+
+export type AmountScale = 'UNITS' | 'THOUSANDS' | 'MILLIONS' | 'CRORES';
+
+export const SCALE_MULTIPLIERS: Record<AmountScale, number> = {
+  UNITS: 1,
+  THOUSANDS: 1e3,
+  MILLIONS: 1e6,
+  CRORES: 1e7,
+};
+
+export const SCALE_LABELS: Record<AmountScale, string> = {
+  UNITS: '',
+  THOUSANDS: 'K',
+  MILLIONS: 'M',
+  CRORES: 'Cr',
+};
+
+export function parseScaledAmount(inputNumber: number, scale: AmountScale): number {
+  return inputNumber * SCALE_MULTIPLIERS[scale];
+}
+
+export function formatScaledAmount(
+  baseAmount: number | null | undefined,
+  currency: string,
+  scale: AmountScale,
+  options?: { compact?: boolean; decimals?: number }
+): string {
+  if (baseAmount == null || isNaN(baseAmount)) return 'N/A';
+  const displayValue = baseAmount / SCALE_MULTIPLIERS[scale];
+  const locale = currency === 'INR' ? 'en-IN' : currency === 'JPY' ? 'ja-JP' : currency === 'EUR' ? 'de-DE' : currency === 'GBP' ? 'en-GB' : 'en-US';
+  const decimals = options?.decimals ?? (displayValue >= 100 ? 0 : displayValue >= 1 ? 1 : 2);
+
+  const formatted = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  }).format(displayValue);
+
+  const suffix = SCALE_LABELS[scale];
+  return suffix ? `${formatted} ${suffix}` : formatted;
+}

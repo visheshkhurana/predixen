@@ -39,11 +39,11 @@ export function calculateSensitivity(
   
   const variables = [
     { name: 'churnRate', displayName: 'Churn Rate', key: 'churnRate', unit: '%', invert: true },
-    { name: 'cac', displayName: 'Customer Acquisition Cost', key: 'cac', unit: '$', invert: true },
+    { name: 'cac', displayName: 'Customer Acquisition Cost', key: 'cac', unit: 'currency', invert: true },
     { name: 'growthRate', displayName: 'Revenue Growth Rate', key: 'growthRate', unit: '%', invert: false },
     { name: 'grossMargin', displayName: 'Gross Margin', key: 'grossMargin', unit: '%', invert: false },
-    { name: 'payroll', displayName: 'Payroll Costs', key: 'payroll', unit: '$', invert: true },
-    { name: 'opex', displayName: 'Operating Expenses', key: 'opex', unit: '$', invert: true },
+    { name: 'payroll', displayName: 'Payroll Costs', key: 'payroll', unit: 'currency', invert: true },
+    { name: 'opex', displayName: 'Operating Expenses', key: 'opex', unit: 'currency', invert: true },
   ];
 
   return variables.map(v => {

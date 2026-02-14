@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Trophy, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrencyAbbrev } from '@/lib/utils';
 
 interface ScenarioSummary {
   key: string;
@@ -21,12 +21,7 @@ export function MultiScenarioSummary({ comparison, testId = 'multi-scenario-summ
   const bestScenario = sortedByRunway[0];
   const worstScenario = sortedByRunway[sortedByRunway.length - 1];
 
-  const formatCurrency = (value: number) => {
-    if (Math.abs(value) >= 1000000) {
-      return `$${(value / 1000000).toFixed(1)}M`;
-    }
-    return `$${(value / 1000).toFixed(0)}K`;
-  };
+  const formatCurrency = (value: number) => formatCurrencyAbbrev(value);
 
   const getRunwayColor = (months: number) => {
     if (months <= 6) return 'text-red-600 dark:text-red-400';

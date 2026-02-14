@@ -427,12 +427,12 @@ async def run_sensitivity_analysis(
     
     truth_scan = run_truth_scan(company.id, db)
     baseline_metrics = {
-        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 100000),
-        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 50000),
-        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 60000),
-        "runway_months": truth_scan.get("raw_values", {}).get("runway_months", 12),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0.70),
-        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0.05)
+        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
+        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
+        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
+        "runway_months": truth_scan.get("raw_values", {}).get("runway_months", 0),
+        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
     results = run_analysis(
@@ -536,9 +536,9 @@ async def generate_recommendations(
         
         truth_scan = run_truth_scan(company.id, db)
         baseline = {
-            "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 100000),
-            "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 50000),
-            "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 60000),
+            "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
+            "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
+            "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
         }
         
         inputs = transform_assumptions_to_inputs(assumption.assumptions_json or {}, baseline)
@@ -546,11 +546,11 @@ async def generate_recommendations(
     
     truth_scan = run_truth_scan(company.id, db)
     baseline_metrics = {
-        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 100000),
-        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 50000),
-        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 60000),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0.70),
-        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0.05)
+        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
+        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
+        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
+        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
     recommendations_result = gen_recommendations(
@@ -709,11 +709,11 @@ async def run_constrained_optimization(
     
     truth_scan = run_truth_scan(company.id, db)
     baseline_metrics = {
-        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 100000),
-        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 50000),
-        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 60000),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0.70),
-        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0.05)
+        "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
+        "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
+        "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
+        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
     constraints = [

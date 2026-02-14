@@ -29,6 +29,7 @@ class CompanyCreate(BaseModel):
     industry: Optional[str] = None
     stage: Optional[str] = None
     currency: str = "USD"
+    amount_scale: str = "UNITS"
 
 class CompanyResponse(BaseModel):
     id: int
@@ -37,6 +38,7 @@ class CompanyResponse(BaseModel):
     industry: Optional[str]
     stage: Optional[str]
     currency: str
+    amount_scale: str
     description: Optional[str] = None
     
     class Config:
@@ -61,7 +63,8 @@ def create_company(
         website=request.website,
         industry=request.industry,
         stage=request.stage,
-        currency=request.currency
+        currency=request.currency,
+        amount_scale=request.amount_scale
     )
     db.add(company)
     db.commit()
@@ -82,6 +85,7 @@ class CompanyUpdate(BaseModel):
     industry: Optional[str] = None
     stage: Optional[str] = None
     currency: Optional[str] = None
+    amount_scale: Optional[str] = None
     description: Optional[str] = None  # Business summary
 
 
@@ -135,6 +139,8 @@ def update_company(
         company.currency = request.currency
     if request.description is not None:
         company.description = request.description
+    if request.amount_scale is not None:
+        company.amount_scale = request.amount_scale
     
     db.commit()
     db.refresh(company)

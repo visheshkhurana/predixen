@@ -1,0 +1,219 @@
+You are a senior full-stack engineer. You are inside the Predixen codebase (Replit-hosted dev preview). Your mission is to implement the fixes and upgrades described in the QA report below so Predixen can onboard a real pre-IPO logistics company (Shadowfax) and produce correct, trustworthy simulator outputs.
+
+CONTEXT (QA FINDINGS YOU MUST FIX)
+P0s observed:
+- Units/denomination are broken: user enters “₹M” values (e.g., revenue 2071 meaning ₹2,071M) but UI treats as raw ₹2,071 and abbreviates as “2.1K”. No “values in” concept.
+- Currency symbol is hardcoded as “$” across dashboard, alerts, and simulator even when INR selected.
+- Runway is inconsistent across pages: Dashboard shows 60mo, Simulator shows 999mo, Financials says “Profitable/Sustainable”.
+- What-If Explorer Gross Margin displays 70% even when stored GM = 8% (hardcoded default / not bound to stored data).
+- Monthly growth rate is auto-set to 10% without user input.
+- Company description inherited from demo company (TechFlow) instead of the created company.
+
+Architecture blockers:
+- Only 7 monthly financial fields exist; no multi-year model, no segment revenue/cost, no orders, no logistics KPIs. Cannot run “real world” logistics strategies.
+
+Your output must be: (a) code changes, (b) DB migrations, (c) tests, (d) a short CHANGELOG + QA steps. Do not ask me questions—inspect the repo and implement.
+
+------------------------------------------------------------
+GOALS (IN ORDER)
+1) TRUST FIXES (P0): units/denomination, currency formatting propagation, runway single source of truth, GM binding, remove auto growth, remove demo leakage.
+2) MODEL UPGRADE (MVP): add a multi-period + industry-extensible metric schema so Shadowfax logistics KPIs can be represented without breaking SaaS onboarding.
+3) SIMULATOR UPGRADES (MVP): enable parameter-level scenarios + time-phased shocks + segment/mix levers (minimal, but real).
+4) MONTE CARLO REPRODUCIBILITY: seed control + iteration control + re-run determinism.
+
+------------------------------------------------------------
+PART A — IMPLEMENT P0 TRUST FIXES
+
+A1) Add “Values In” / denomination support (Units, Thousands, Millions, Crores)
+- Add a company-level setting: amount_scale = {UNITS, THOUSANDS, MILLIONS, CRORES}
+- Add UI selector during onboarding + company settings to choose scale.
+- Persist the scale and use it for:
+  - Parsing all numeric inputs
+  - Formatting all outputs
+  - Risk alert thresholds
+- Storage approach:
+  - Store all monetary values in BASE UNITS (e.g., INR rupees) in DB as integers/decimals.
+  - Convert display ↔ stored by scale:
+    UNITS=1, THOUSANDS=1e3, MILLIONS=1e6, CRORES=1e7
+- Add helper: parseScaledAmount(inputNumber, scale) -> baseAmount
+- Add helper: formatScaledAmount(baseAmount, currency, locale, scale, options) -> string
+- Ensure onboarding “Monthly Revenue 2071 with scale=MILLIONS” is stored as 2,071,000,000 (₹).
+
+A2) Currency formatting must propagate everywhere (no hardcoded “$”)
+- Single source of truth for formatting:
+  - money.ts (or similar): formatMoney({ amountBase, currencyCode, locale, scale, compact? })
+  - Use Intl.NumberFormat with:
+    - locale = company.locale OR fallback:
+      - INR -> 'en-IN'
+      - USD -> 'en-US'
+  - Ensure “₹” shows after selecting INR.
+- Replace ALL string concatenation like `$${value}`.
+- Update:
+  - Dashboard cards
+  - Simulator output panels
+  - Risk alerts thresholds and labels
+  - Before/After comparisons
+  - Any exported summaries/templates
+
+A3) Runway single source of truth (fix 60 / 999 / sustainable mismatch)
+- Create computeRunway.ts used by:
+  - Dashboard runway card
+  - Financials summary
+  - Simulator engine
+- Canonical logic (monthly model):
+  revenue = monthlyRevenue
+  cogs = monthlyRevenue * (1 - grossMarginPct)
+  totalExpenses = cogs + opex + payroll + otherCosts
+  netBurn = totalExpenses - revenue
+  IF netBurn <= 0:
+    runwayMonths = Infinity
+    runwayLabel = "Sustainable"
+  ELSE:
+    runwayMonths = cashBalance / netBurn
+    runwayLabel = `${runwayMonths.toFixed(1)} mo`
+- Remove any caps like 60 or 999. If you must cap for UI charts, cap visually but keep computed value and show “60+” consistently.
+- Ensure ALL pages show the same runway for the same inputs.
+
+A4) Fix What-If Explorer Gross Margin bug
+- The GM slider/value MUST initialize from stored company.grossMarginPct (8% in the QA repro).
+- On opening Simulate/What-If Explorer:
+  - setState(gm) = companyFinancials.grossMarginPct
+  - no hardcoded 70% defaults
+- Ensure any sliders (growth rate, opex) also initialize from stored values.
+- Ensure changes persist only when user clicks “Apply”, and “Reset” restores to stored baseline.
+
+A5) Remove auto-set 10% MoM growth and demo company leakage
+- Growth:
+  - Default to 0% unless user explicitly sets a growth assumption.
+  - If the simulator requires growth, show a blocking callout “Set growth assumptions” with a default of 0.
+- Demo leakage:
+  - On new company creation, ensure description, industry, and baseline assumptions are NOT copied from demo.
+  - Fix any seed data / default company selection bug.
+
+------------------------------------------------------------
+PART B — MODEL UPGRADE (MVP, MUST SHIP THIS)
+Goal: Support pre-IPO logistics companies without breaking SaaS onboarding.
+
+B1) Add Multi-Period Financials + Generic Metrics
+- Introduce DB entities (Prisma/SQL—match repo stack):
+  Company
+  MetricDefinition: { id, companyId, key, label, unitType (MONEY/COUNT/PCT), currencyCode?, scale?, description, category }
+  MetricTimeSeriesPoint: { id, metricDefinitionId, periodType (MONTH/QUARTER/FY), periodStart, periodEnd, valueBase, sourceNote, createdAt }
+- Keep existing 7-field monthly onboarding for backward compatibility:
+  - Map those into MetricDefinitions under the hood.
+- Add “FY end date” to Company settings (needed for FY modeling).
+
+B2) Add Logistics Schema Pack (first industry pack)
+Add a predefined “Logistics Pack” that creates these MetricDefinitions:
+- Orders: total_orders, express_orders, hyperlocal_orders (COUNT)
+- Revenue by segment: express_rev, hyperlocal_rev, other_logistics_rev (MONEY)
+- Network KPIs: pin_codes (COUNT), touchpoints (COUNT)
+- Workforce: delivery_partners_unique (COUNT), employees (COUNT)
+- Borrowings (MONEY)
+- Adjusted EBITDA (MONEY) + Adjusted EBITDA definition note field
+- Profit/Loss (MONEY)
+- Cash & Cash Equivalents (MONEY)
+
+B3) Data Input UI (minimal but real)
+- Add a “Data Model” toggle on onboarding:
+  - “Simple (Monthly)” vs “Advanced (Multi-period & KPIs)”
+- For Advanced:
+  - Allow adding FY rows (FY2023, FY2024, FY2025) + 6M period types
+  - Allow segment revenue and orders input
+  - Allow importing a CSV/XLSX template:
+    columns: metric_key, period_type, period_start, period_end, value, currency(optional), scale(optional), note(optional)
+- Add field mapping + preview + validation errors.
+
+------------------------------------------------------------
+PART C — SIMULATOR UPGRADES (MVP)
+C1) Scenario Model (parameter-level, time-phased)
+- Add Scenario entity:
+  Scenario { id, companyId, name, description, seed?, iterations?, createdAt }
+  ScenarioChange { id, scenarioId, metric_key, changeType (ABS, PCT, DELTA), value, startPeriod, endPeriod, appliesToSegment? }
+- Support:
+  - Segment-level adjustments (e.g., express_rev +5%)
+  - Mix shift (express_orders -x%, hyperlocal_orders +y%)
+  - Time-phased shocks (start/end periods)
+
+C2) Engine: unify baseline computation
+- Baseline should derive:
+  - monthlyRevenue from either:
+    - monthly metric or computed from FY / 12 if only FY exists and user chooses to project monthly
+  - expenses from the 7-field model OR advanced metrics if provided
+- Ensure the engine never silently overwrites user GM (no random GM jump to 70%).
+
+C3) Logistics “real world” levers (minimum)
+Enable these scenario templates:
+1) Pricing lift: revenue_per_order +2/5/8% (derive revenue per order if orders exist)
+2) Cost per order reduction: cost_per_order -2/4/6% (derive if orders exist; else apply to COGS proxy)
+3) Demand shock: orders -15% for 2 quarters then recovery
+4) Network expansion: pin_codes +1000, touchpoints +300 with a fixed opex increase
+5) Working capital (if you implement in MVP): DSO +10/+20 affecting cash timing (optional)
+If orders don’t exist, block scenario with “Add Orders metrics to use this lever” (do NOT fake it).
+
+------------------------------------------------------------
+PART D — MONTE CARLO REPRODUCIBILITY (MVP)
+D1) Seeded RNG
+- Implement deterministic RNG for simulation runs using a seeded PRNG (e.g., seedrandom).
+- Store seed on Scenario; show it in UI; allow “re-run with same seed”.
+- Do NOT use Math.random directly inside the simulation engine.
+- Ensure two runs with same inputs + same seed produce identical P10/P50/P90.
+
+D2) Iteration control
+- Add UI control: 1k / 5k / 10k iterations; persist on scenario.
+- Add a “Stability” panel:
+  - show P50 delta between last run and current run
+  - warn if instability > threshold
+
+------------------------------------------------------------
+TESTS / QA (MUST ADD)
+1) Unit tests for:
+- parseScaledAmount / formatScaledAmount
+- computeRunway (including profitable => Infinity)
+- GM slider initialization reads stored value
+- currency formatting respects INR locale & symbol
+
+2) E2E / integration smoke checks (write simple Playwright/Cypress if repo has it, else add lightweight integration tests):
+- Create company INR + scale=MILLIONS, enter:
+  Revenue=2071, GM=8, Opex=100, Payroll=40, Other=20, Cash=1715
+  Expect:
+    COGS = 1905.32 (in MILLIONS display)
+    Total Expenses = 2065.32
+    NetBurn = -5.68 (profitable)
+    Runway = Sustainable AND identical across Dashboard/Financials/Simulator
+    No “$” anywhere; shows “₹”
+    What-If Explorer GM shows 8% baseline (not 70%)
+
+3) Add a “QA Minimal Dataset” page or script:
+- Dataset A:
+  Revenue=1000, GM=50%, Opex=200, Payroll=100, Other=50, Cash=5000
+  Expect:
+    COGS=500, TotalExp=850, NetBurn=-150, Runway=Sustainable
+- Dataset B:
+  GM=20%
+  Expect:
+    COGS=800, TotalExp=1150, NetBurn=150, Runway=33.3 months
+- Confirm all pages match.
+
+------------------------------------------------------------
+DELIVERABLES
+- Code + DB migration(s)
+- Updated onboarding UI (scale + advanced metrics)
+- Unified money formatting + unified runway compute
+- Simulator scenario model + seeded Monte Carlo + iteration control
+- Tests + QA script/page
+- CHANGELOG.md summarizing fixes (P0/P1/P2)
+- A short “How to verify Shadowfax onboarding now works” checklist
+
+IMPLEMENTATION NOTES
+- Keep backward compatibility: existing SaaS companies should still work.
+- Prefer a “single source of truth” utilities module for money and runway.
+- If you find multiple formatting functions, delete/replace them with the canonical one.
+- Be explicit in code comments about scale and currency.
+
+NOW DO IT:
+1) Inspect the repo, identify stack (Next.js/React + Node/Prisma, etc.).
+2) Implement Part A fully first (P0 trust fixes).
+3) Then Part B + Part C minimal MVP.
+4) Then Part D.
+5) Run tests and ensure the QA repro steps PASS.

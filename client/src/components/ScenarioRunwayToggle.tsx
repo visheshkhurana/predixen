@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Calculator, TrendingUp, TrendingDown, Target } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatRunway } from '@/lib/utils';
 
 interface ScenarioRunwayToggleProps {
   currentRunway: number | null;
@@ -65,10 +65,8 @@ export function ScenarioRunwayToggle({
     return cashBalance / adjustedBurn;
   };
 
-  const formatRunway = (months: number | null): string => {
-    if (months == null) return 'N/A';
-    if (months > 36) return '36+ mo';
-    return `${months.toFixed(1)} mo`;
+  const formatRunwayLocal = (months: number | null): string => {
+    return formatRunway(months, 36);
   };
 
   const formatCurrency = (value: number | null): string => {
@@ -149,7 +147,7 @@ export function ScenarioRunwayToggle({
                   data-scenario={activeScenario}
                   data-runway-value={calculatedRunway}
                 >
-                  {formatRunway(calculatedRunway)}
+                  {formatRunwayLocal(calculatedRunway)}
                 </p>
                 {calculatedRunway !== currentRunway && currentRunway && (
                   <Badge variant="secondary" className="mt-1 text-xs">

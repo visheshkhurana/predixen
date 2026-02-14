@@ -69,6 +69,7 @@ import {
 import { queryClient } from "@/lib/queryClient";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
+import { MetricTimeSeriesEditor } from "@/components/MetricTimeSeriesEditor";
 
 const dataInputSchema = z.object({
   companyName: z.string().min(1, "Company name is required").or(z.literal("")).default(""),
@@ -204,6 +205,7 @@ export default function DataInput() {
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvRawRows, setCsvRawRows] = useState<Record<string, string>[]>([]);
   const [lastLoadedCompanyId, setLastLoadedCompanyId] = useState<number | null>(null);
+  const [inputMode, setInputMode] = useState<'simple' | 'advanced'>('simple');
   const [, navigate] = useLocation();
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -230,7 +232,7 @@ export default function DataInput() {
       operatingExpenses: 0,
       cogsExpenses: 0,
       otherOpexExpenses: 0,
-      growthRate: 10,
+      growthRate: 0,
       burnRate: 0,
       employees: 1,
       targetRunway: 18,
@@ -299,7 +301,7 @@ export default function DataInput() {
       form.setValue('cashOnHand', b.cashOnHand || 0);
       form.setValue('monthlyRevenue', b.monthlyRevenue || 0);
       form.setValue('monthlyExpenses', b.totalMonthlyExpenses || 0);
-      form.setValue('growthRate', b.monthlyGrowthRate || 10);
+      form.setValue('growthRate', b.monthlyGrowthRate || 0);
       
       if (b.expenseBreakdown) {
         form.setValue('payrollExpenses', b.expenseBreakdown.payroll || 0);
@@ -1327,6 +1329,28 @@ export default function DataInput() {
               )}
             </TabsContent>
 
+            <div className="flex items-center gap-2 mb-4 mt-6" data-testid="toggle-input-mode">
+              <Button
+                variant={inputMode === 'simple' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setInputMode('simple')}
+                data-testid="button-simple-mode"
+              >
+                Simple
+              </Button>
+              <Button
+                variant={inputMode === 'advanced' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setInputMode('advanced')}
+                data-testid="button-advanced-mode"
+              >
+                Advanced
+              </Button>
+            </div>
+
+            {inputMode === 'advanced' && <MetricTimeSeriesEditor />}
+
+            {inputMode === 'simple' && (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(handleSave, (errors) => {
                 const errorFields = Object.keys(errors);
@@ -2143,6 +2167,7 @@ export default function DataInput() {
                 </div>
               </form>
             </Form>
+            )}
           </Tabs>
         </div>
 

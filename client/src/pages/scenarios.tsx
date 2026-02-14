@@ -2,6 +2,9 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
@@ -51,7 +54,7 @@ import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
-import { formatCurrencyAbbrev } from '@/lib/utils';
+import { formatCurrencyAbbrev, formatRunway } from '@/lib/utils';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { api } from '@/api/client';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -144,6 +147,8 @@ export default function ScenariosPage() {
   const [isCreatingBaseline, setIsCreatingBaseline] = useState(false);
   const [customEvents, setCustomEvents] = useState<ScenarioEvent[]>([]);
   const [truthScanModal, setTruthScanModal] = useState<{ open: boolean; uploadId?: string }>({ open: false });
+  const [simIterations, setSimIterations] = useState(500);
+  const [simSeed, setSimSeed] = useState<number | null>(null);
 
   const { data: comments = [], isLoading: commentsLoading } = useScenarioComments(selectedScenarioId || 0);
   const addCommentMutation = useAddComment();
@@ -324,7 +329,7 @@ export default function ScenariosPage() {
       });
       setSelectedScenarioId(scenario.id);
       setIsRunning(true);
-      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: 1000 });
+      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: simIterations, seed: simSeed ?? undefined });
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -349,7 +354,7 @@ export default function ScenariosPage() {
     setSelectedScenarioId(scenarioId);
     setIsRunning(true);
     try {
-      await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
+      await runSimulationMutation.mutateAsync({ scenarioId, nSims: simIterations, seed: simSeed ?? undefined });
       setCurrentStep('simulation');
       toast({ title: 'Simulation complete!' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -385,7 +390,7 @@ export default function ScenariosPage() {
   const handleRunMultiScenario = async () => {
     if (!currentCompany) return;
     try {
-      const result = await multiSimMutation.mutateAsync({ companyId: currentCompany.id, options: { n_sims: 500, horizon_months: 24 } });
+      const result = await multiSimMutation.mutateAsync({ companyId: currentCompany.id, options: { n_sims: simIterations, horizon_months: 24 } });
       setMultiSimResults(result);
       toast({ title: 'All scenarios simulated successfully!' });
     } catch (err: any) {
@@ -424,7 +429,7 @@ export default function ScenariosPage() {
       const result = await enhancedMultiMutation.mutateAsync({
         companyId: currentCompany.id,
         options: {
-          n_sims: 500, horizon_months: 24, include_sensitivity: true,
+          n_sims: simIterations, horizon_months: 24, include_sensitivity: true,
           scenarios: [
             { name: 'Baseline', description: 'Current trajectory' },
             { name: 'Cost Cutting', description: 'Reduce expenses by 20%', events: [{ event_type: 'cost_cut', start_month: 1, params: { opex_reduction_pct: 20, payroll_reduction_pct: 15 } }] },
@@ -463,7 +468,7 @@ export default function ScenariosPage() {
       };
       const scenario = await createScenarioMutation.mutateAsync({ companyId: currentCompany.id, data: scenarioData });
       setSelectedScenarioId(scenario.id);
-      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: 1000 });
+      await runSimulationMutation.mutateAsync({ scenarioId: scenario.id, nSims: simIterations, seed: simSeed ?? undefined });
       setCurrentStep('simulation');
       toast({ title: 'Baseline scenario created!', description: 'Your baseline simulation is ready to view.' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
@@ -624,8 +629,8 @@ export default function ScenariosPage() {
 
       setIsRunning(true);
       const simResults = await Promise.allSettled([
-        runSimulationMutation.mutateAsync({ scenarioId: scenarioA.id, nSims: 1000 }),
-        runSimulationMutation.mutateAsync({ scenarioId: scenarioB.id, nSims: 1000 }),
+        runSimulationMutation.mutateAsync({ scenarioId: scenarioA.id, nSims: simIterations, seed: simSeed ?? undefined }),
+        runSimulationMutation.mutateAsync({ scenarioId: scenarioB.id, nSims: simIterations, seed: simSeed ? simSeed + 1 : undefined }),
       ]);
 
       const aOk = simResults[0].status === 'fulfilled';
@@ -759,7 +764,7 @@ export default function ScenariosPage() {
   const scenarioP90 = useMemo(() => {
     if (hasSimData) {
       return {
-        runway: simulation.runway.p90?.toFixed(1) || '?',
+        runway: simulation.runway.p90 != null ? formatRunway(simulation.runway.p90) : '?',
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p90'),
         cash12m: getMetricAtMonth(simCash, 11, 'p90'),
         breakeven: getBreakevenMonth('p10'),
@@ -769,7 +774,7 @@ export default function ScenariosPage() {
     if (!baseMetrics) return null;
     const runway = baseMetrics.currentRunway * 1.3;
     return {
-      runway: runway.toFixed(1),
+      runway: formatRunway(runway),
       revenue18m: projectedRevenue(18, 1.5),
       cash12m: projectedCash(12, 1.5),
       breakeven: '18+',
@@ -780,7 +785,7 @@ export default function ScenariosPage() {
   const scenarioP50 = useMemo(() => {
     if (hasSimData) {
       return {
-        runway: simulation.runway.p50?.toFixed(1) || '?',
+        runway: simulation.runway.p50 != null ? formatRunway(simulation.runway.p50) : '?',
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p50'),
         cash12m: getMetricAtMonth(simCash, 11, 'p50'),
         breakeven: getBreakevenMonth('p50'),
@@ -789,7 +794,7 @@ export default function ScenariosPage() {
     }
     if (!baseMetrics) return null;
     return {
-      runway: Number(baseMetrics.currentRunway).toFixed(1),
+      runway: formatRunway(Number(baseMetrics.currentRunway)),
       revenue18m: projectedRevenue(18, 1.0),
       cash12m: projectedCash(12, 1.0),
       breakeven: '24+',
@@ -802,7 +807,7 @@ export default function ScenariosPage() {
       const v = getSurvivalPct('24m');
       const p10Survival = v != null ? v.toFixed(0) : '?';
       return {
-        runway: simulation.runway.p10?.toFixed(1) || '?',
+        runway: simulation.runway.p10 != null ? formatRunway(simulation.runway.p10) : '?',
         revenue18m: getMetricAtMonth(simRevenue, 17, 'p10'),
         cash12m: getMetricAtMonth(simCash, 11, 'p10'),
         breakeven: getBreakevenMonth('p90'),
@@ -812,7 +817,7 @@ export default function ScenariosPage() {
     if (!baseMetrics) return null;
     const runway = baseMetrics.currentRunway * 0.7;
     return {
-      runway: runway.toFixed(1),
+      runway: formatRunway(runway),
       revenue18m: projectedRevenue(18, 0.5),
       cash12m: projectedCash(12, 0.5),
       breakeven: '24+',
@@ -1018,6 +1023,38 @@ export default function ScenariosPage() {
               </div>
             );
           })()}
+          <div className="flex items-center gap-3 mt-2 flex-wrap" data-testid="simulation-settings">
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">Iterations:</Label>
+              <Select value={String(simIterations)} onValueChange={(v) => setSimIterations(Number(v))}>
+                <SelectTrigger className="h-7 w-[90px] text-xs" data-testid="select-iterations">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="250">250</SelectItem>
+                  <SelectItem value="500">500</SelectItem>
+                  <SelectItem value="1000">1,000</SelectItem>
+                  <SelectItem value="2000">2,000</SelectItem>
+                  <SelectItem value="5000">5,000</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">Seed:</Label>
+              <Input
+                type="number"
+                placeholder="Random"
+                value={simSeed ?? ''}
+                onChange={(e) => setSimSeed(e.target.value ? Number(e.target.value) : null)}
+                className="h-7 w-[90px] text-xs"
+                data-testid="input-seed"
+              />
+            </div>
+            {simSeed !== null && (
+              <Badge variant="outline" className="text-[10px]" data-testid="badge-reproducible">Reproducible</Badge>
+            )}
+          </div>
         </div>
 
         {dualPathMode.active && (isCreating || isRunning) && (

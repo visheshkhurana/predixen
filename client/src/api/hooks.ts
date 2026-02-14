@@ -118,8 +118,8 @@ export function useRunSimulation() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ scenarioId, nSims }: { scenarioId: number; nSims?: number }) =>
-      api.simulations.run(scenarioId, nSims),
+    mutationFn: ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) =>
+      api.simulations.run(scenarioId, nSims, seed),
     onSuccess: (_, { scenarioId }) => {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });

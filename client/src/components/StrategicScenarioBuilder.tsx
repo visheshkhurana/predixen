@@ -64,7 +64,7 @@ const DEFAULT_BASE_METRICS: BaseMetrics = {
   monthlyExpenses: 80000,
   monthlyRevenue: 50000,
   currentRunway: 16.7,
-  growthRate: 10,
+  growthRate: 0,
 };
 
 function estimateProjectedRunway(

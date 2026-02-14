@@ -196,7 +196,7 @@ export function DecisionCard({
 }: DecisionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [assumptions, setAssumptions] = useState<Record<string, number>>({
-    growth_rate: 10,
+    growth_rate: 0,
     cost_reduction: 0,
     fundraise_amount: 0,
   });
@@ -212,7 +212,7 @@ export function DecisionCard({
     }
     if (lowerTitle.includes('growth') || lowerTitle.includes('revenue')) {
       return [
-        { key: 'growth_rate', label: 'Monthly Growth Rate', value: assumptions.growth_rate ?? 10, min: 0, max: 30, step: 1, unit: '%' },
+        { key: 'growth_rate', label: 'Monthly Growth Rate', value: assumptions.growth_rate ?? 0, min: 0, max: 30, step: 1, unit: '%' },
         { key: 'marketing_spend', label: 'Marketing Spend', value: assumptions.marketing_spend ?? 50000, min: 10000, max: 200000, step: 5000, unit: '' },
       ];
     }
@@ -224,7 +224,7 @@ export function DecisionCard({
     }
     
     return [
-      { key: 'growth_rate', label: 'Growth Rate', value: assumptions.growth_rate ?? 10, min: 0, max: 30, step: 1, unit: '%' },
+      { key: 'growth_rate', label: 'Growth Rate', value: assumptions.growth_rate ?? 0, min: 0, max: 30, step: 1, unit: '%' },
     ];
   }, [title, assumptions]);
 
