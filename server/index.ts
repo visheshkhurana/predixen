@@ -187,6 +187,40 @@ messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
 app.use("/api/messaging", messagingRouter);
 
+// Register Notion routes before the API proxy (handled by Express, not FastAPI)
+import { getNotionClient, listPages, listDatabases } from "./notion/client";
+app.get("/api/notion/pages", async (req, res) => {
+  try {
+    const pages = await listPages();
+    const simplified = pages.map((p: any) => ({
+      id: p.id,
+      title: p.properties?.title?.title?.[0]?.plain_text
+        || p.properties?.Name?.title?.[0]?.plain_text
+        || "Untitled",
+      url: p.url,
+      created_time: p.created_time,
+      last_edited_time: p.last_edited_time,
+    }));
+    res.json({ pages: simplified });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/notion/databases", async (req, res) => {
+  try {
+    const dbs = await listDatabases();
+    const simplified = dbs.map((d: any) => ({
+      id: d.id,
+      title: d.title?.[0]?.plain_text || "Untitled",
+      url: d.url,
+    }));
+    res.json({ databases: simplified });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(
   "/api",
   createProxyMiddleware({
