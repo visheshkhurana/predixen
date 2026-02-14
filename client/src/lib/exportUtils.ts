@@ -1,3 +1,7 @@
+export function printSimulationResults(): void {
+  window.print();
+}
+
 export function downloadCSV(data: Record<string, any>[], filename: string) {
   if (data.length === 0) return;
   

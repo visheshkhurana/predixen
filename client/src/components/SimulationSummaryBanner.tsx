@@ -12,6 +12,9 @@ interface SimulationSummaryBannerProps {
   monthlyRevenue?: number;
   scenarioName: string;
   testId?: string;
+  seed?: number | null;
+  iterations?: number | null;
+  horizonMonths?: number | null;
 }
 
 export function SimulationSummaryBanner({
@@ -24,6 +27,9 @@ export function SimulationSummaryBanner({
   monthlyRevenue,
   scenarioName,
   testId = 'summary-banner',
+  seed,
+  iterations,
+  horizonMonths,
 }: SimulationSummaryBannerProps) {
   const isSustainable = runwayP50 >= 36 || (monthlyRevenue !== undefined && monthlyBurn !== undefined && monthlyRevenue > monthlyBurn);
   const cappedRunway = Math.min(runwayP50, 60);
@@ -115,6 +121,21 @@ export function SimulationSummaryBanner({
             )}
           </div>
         </div>
+        {(seed !== undefined && seed !== null) || iterations || horizonMonths ? (
+          <div className="flex items-center gap-4 mt-2 pt-2 border-t border-current/10">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              {seed !== undefined && seed !== null && (
+                <span className="font-mono">Seed: {seed}</span>
+              )}
+              {iterations && (
+                <span className="font-mono">Iterations: {iterations}</span>
+              )}
+              {horizonMonths && (
+                <span className="font-mono">Horizon: {horizonMonths} months</span>
+              )}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -19,7 +19,10 @@ import {
   TrendingUp,
   TrendingDown,
   Info,
+  Calendar,
 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 type BuilderStep = 'goal' | 'strategy' | 'customize' | 'results';
@@ -30,6 +33,7 @@ interface BaseMetrics {
   monthlyRevenue: number;
   currentRunway: number;
   growthRate: number;
+  grossMargin?: number;
 }
 
 interface StrategicScenarioBuilderProps {
@@ -51,6 +55,8 @@ interface SimulationParams {
   fundraise_month: number | null;
   fundraise_amount: number;
   tags: string[];
+  start_month?: number;
+  end_month?: number;
 }
 
 interface SimulationResult {
@@ -137,7 +143,7 @@ export function StrategicScenarioBuilder({
       survivalProbability: simulation.survival?.['18m'] || 70,
       burnRate: baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue,
       revenueGrowth: baseMetrics.growthRate + (currentParams.growth_uplift_pct || 0),
-      grossMargin: 60 + (currentParams.gross_margin_delta_pct || 0),
+      grossMargin: (baseMetrics.grossMargin ?? 60) + (currentParams.gross_margin_delta_pct || 0),
       cashBalance: baseMetrics.cashOnHand,
     });
   }, [simulation, projectedRunway, baseMetrics, currentParams]);
@@ -168,17 +174,22 @@ export function StrategicScenarioBuilder({
   };
   
   const handleRunSimulation = async () => {
+    const baseGM = baseMetrics.grossMargin ?? 60;
+    const rawGMDelta = currentParams.gross_margin_delta_pct || 0;
+    const clampedGMDelta = Math.max(-baseGM, Math.min(100 - baseGM, rawGMDelta));
     const params: SimulationParams = {
       name: selectedStrategy?.name || 'Custom Scenario',
       pricing_change_pct: currentParams.pricing_change_pct || 0,
       growth_uplift_pct: currentParams.growth_uplift_pct || 0,
       burn_reduction_pct: currentParams.burn_reduction_pct || 0,
-      gross_margin_delta_pct: currentParams.gross_margin_delta_pct || 0,
+      gross_margin_delta_pct: clampedGMDelta,
       churn_change_pct: currentParams.churn_change_pct || 0,
       cac_change_pct: 0,
       fundraise_month: currentParams.fundraise_amount ? 3 : null,
       fundraise_amount: currentParams.fundraise_amount || 0,
       tags: selectedGoal ? [selectedGoal] : [],
+      start_month: currentParams.start_month || 1,
+      end_month: currentParams.end_month || 24,
     };
     
     await onRunSimulation(params);
@@ -188,17 +199,22 @@ export function StrategicScenarioBuilder({
   const handleSaveScenario = async () => {
     setIsSaving(true);
     try {
+      const baseGMSave = baseMetrics.grossMargin ?? 60;
+      const rawGMDeltaSave = currentParams.gross_margin_delta_pct || 0;
+      const clampedGMDeltaSave = Math.max(-baseGMSave, Math.min(100 - baseGMSave, rawGMDeltaSave));
       const params: SimulationParams = {
         name: selectedStrategy?.name || 'Custom Scenario',
         pricing_change_pct: currentParams.pricing_change_pct || 0,
         growth_uplift_pct: currentParams.growth_uplift_pct || 0,
         burn_reduction_pct: currentParams.burn_reduction_pct || 0,
-        gross_margin_delta_pct: currentParams.gross_margin_delta_pct || 0,
+        gross_margin_delta_pct: clampedGMDeltaSave,
         churn_change_pct: currentParams.churn_change_pct || 0,
         cac_change_pct: 0,
         fundraise_month: currentParams.fundraise_amount ? 3 : null,
         fundraise_amount: currentParams.fundraise_amount || 0,
         tags: selectedGoal ? [selectedGoal] : [],
+        start_month: currentParams.start_month || 1,
+        end_month: currentParams.end_month || 24,
       };
       await onSaveScenario(params);
     } finally {
@@ -389,7 +405,70 @@ export function StrategicScenarioBuilder({
                   unit="$"
                 />
               </div>
+
+              <div className="space-y-3 border-t pt-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-muted-foreground" />
+                  <Label className="font-medium text-sm">Time Range</Label>
+                  <span className="text-xs text-muted-foreground">When do these changes take effect?</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Start Month</Label>
+                    <Select
+                      value={String(currentParams.start_month || 1)}
+                      onValueChange={(v) => handleParamChange('start_month', Number(v))}
+                    >
+                      <SelectTrigger className="h-9" data-testid="select-start-month">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => i + 1).map((m) => (
+                          <SelectItem key={m} value={String(m)}>Month {m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">End Month</Label>
+                    <Select
+                      value={String(currentParams.end_month || 24)}
+                      onValueChange={(v) => handleParamChange('end_month', Number(v))}
+                    >
+                      <SelectTrigger className="h-9" data-testid="select-end-month">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => i + 1)
+                          .filter((m) => m >= (currentParams.start_month || 1))
+                          .map((m) => (
+                            <SelectItem key={m} value={String(m)}>Month {m}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Scenario changes will be applied from month {currentParams.start_month || 1} to month {currentParams.end_month || 24} of the simulation horizon.
+                </p>
+              </div>
               
+              {(() => {
+                const baseGM = baseMetrics.grossMargin ?? 60;
+                const effectiveGM = baseGM + (currentParams.gross_margin_delta_pct || 0);
+                if (baseMetrics.monthlyRevenue > 0 && (effectiveGM < 0 || effectiveGM > 100)) {
+                  return (
+                    <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-start gap-3" data-testid="gm-warning">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Gross margin would be outside valid range (0-100%). Results may be unreliable.
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
                 <div className="flex items-start gap-3">
                   <Sparkles className="w-5 h-5 text-primary mt-0.5" />

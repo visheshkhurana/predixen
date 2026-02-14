@@ -36,11 +36,19 @@ interface MetricCardProps {
     direction: 'higher_is_better' | 'lower_is_better';
   };
   variant?: 'default' | 'warning' | 'danger' | 'success';
+  metricSource?: 'reported' | 'computed' | 'estimated';
+  lastUpdated?: string;
   testId?: string;
   tooltip?: string;
   provenance?: MetricProvenance;
   onClick?: () => void;
 }
+
+const metricSourceConfig = {
+  estimated: { label: 'AI Estimated', className: 'bg-amber-500/20 text-amber-400' },
+  computed: { label: 'Computed', className: 'bg-purple-500/20 text-purple-400' },
+  reported: { label: 'Verified', className: 'bg-emerald-500/20 text-emerald-400' },
+};
 
 export function MetricCard({
   title,
@@ -51,6 +59,8 @@ export function MetricCard({
   trendData,
   benchmark,
   variant = 'default',
+  metricSource,
+  lastUpdated,
   testId = 'metric-card',
   tooltip,
   provenance,
@@ -213,6 +223,15 @@ export function MetricCard({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {metricSource && (
+              <Badge
+                variant="secondary"
+                className={cn('text-xs', metricSourceConfig[metricSource].className)}
+                data-testid={`${testId}-source-badge`}
+              >
+                {metricSourceConfig[metricSource].label}
+              </Badge>
+            )}
             {getVariantBadge()}
             {getBenchmarkBadge()}
           </div>
@@ -227,6 +246,11 @@ export function MetricCard({
             </span>
             {subtitle && (
               <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+            )}
+            {lastUpdated && (
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5" data-testid={`${testId}-last-updated`}>
+                Updated {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
+              </p>
             )}
           </div>
           {trendData && trendData.length > 1 && (

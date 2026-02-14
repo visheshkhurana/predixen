@@ -133,6 +133,21 @@ export function SimulationSummary({ result, currency = 'USD' }: SimulationSummar
           </ul>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground px-1" data-testid="simulation-footer-meta">
+        <div className="flex items-center gap-4">
+          {(result as any).seed !== undefined && (result as any).seed !== null && (
+            <span className="font-mono">Seed: {(result as any).seed}</span>
+          )}
+          {((result as any).iterations || (result as any).n_sims) && (
+            <span className="font-mono">Iterations: {(result as any).iterations || (result as any).n_sims}</span>
+          )}
+          {result.projections?.length > 0 && (
+            <span className="font-mono">Horizon: {result.projections.length} months</span>
+          )}
+        </div>
+        <span className="font-mono">Monte Carlo Simulation</span>
+      </div>
     </div>
   );
 }

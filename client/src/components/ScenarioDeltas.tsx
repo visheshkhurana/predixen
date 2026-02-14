@@ -6,6 +6,7 @@ import {
   TrendingUp, TrendingDown, Timer, ArrowRight,
   DollarSign, PieChart, Fuel, Shield, Target
 } from 'lucide-react';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 
 interface SimulationData {
   runway?: { p10?: number; p50?: number; p90?: number };
@@ -38,17 +39,17 @@ function getMetricAtMonth(metrics: Array<Record<string, number>> | undefined, mo
   return metrics[metrics.length - 1]?.[percentile] || 0;
 }
 
-function formatCurrency(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+function formatCurrency(value: number, currencySymbol: string = '$'): string {
+  if (Math.abs(value) >= 1_000_000) return `${currencySymbol}${(value / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1_000) return `${currencySymbol}${(value / 1_000).toFixed(0)}K`;
+  return `${currencySymbol}${value.toFixed(0)}`;
 }
 
-function formatDelta(value: number, suffix: string = '', isPercent: boolean = false): string {
+function formatDelta(value: number, suffix: string = '', isPercent: boolean = false, currencySymbol: string = '$'): string {
   const sign = value > 0 ? '+' : '';
   if (isPercent) return `${sign}${value.toFixed(0)}pp`;
   if (suffix === 'mo') return `${sign}${value.toFixed(1)} mo`;
-  return `${sign}${formatCurrency(value)}`;
+  return `${sign}${formatCurrency(value, currencySymbol)}`;
 }
 
 interface DeltaMetric {
@@ -146,11 +147,13 @@ export function BeforeAfterDeltaCards({
   scenarioSimulation,
   baselineName = 'Baseline',
   scenarioName = 'Scenario',
+  currencySymbol = '$',
 }: {
   baselineSimulation: SimulationData;
   scenarioSimulation: SimulationData;
   baselineName?: string;
   scenarioName?: string;
+  currencySymbol?: string;
 }) {
   const deltas = useMemo(
     () => computeDeltas(baselineSimulation, scenarioSimulation),
@@ -176,17 +179,17 @@ export function BeforeAfterDeltaCards({
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">{d.label}</p>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground font-mono line-through">
-                  {d.isPercent ? `${d.baseline.toFixed(0)}%` : d.suffix === 'mo' ? `${d.baseline.toFixed(1)}` : formatCurrency(d.baseline)}
+                  {d.isPercent ? `${d.baseline.toFixed(0)}%` : d.suffix === 'mo' ? `${d.baseline.toFixed(1)}` : formatCurrency(d.baseline, currencySymbol)}
                 </span>
                 <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                 <span className="text-sm font-semibold font-mono">
-                  {d.isPercent ? `${d.scenario.toFixed(0)}%` : d.suffix === 'mo' ? `${d.scenario.toFixed(1)}` : formatCurrency(d.scenario)}
+                  {d.isPercent ? `${d.scenario.toFixed(0)}%` : d.suffix === 'mo' ? `${d.scenario.toFixed(1)}` : formatCurrency(d.scenario, currencySymbol)}
                 </span>
               </div>
               <div className="flex items-center gap-1">
                 <DeltaIcon delta={d.delta} higherIsBetter={d.higherIsBetter} />
                 <span className={`text-xs font-semibold font-mono ${deltaColor(d.delta, d.higherIsBetter)}`}>
-                  {formatDelta(d.delta, d.suffix, d.isPercent)}
+                  {formatDelta(d.delta, d.suffix, d.isPercent, currencySymbol)}
                 </span>
               </div>
             </div>
@@ -209,8 +212,10 @@ export function BeforeAfterDeltaCards({
 
 export function PaybackClock({
   simulation,
+  currencySymbol = '$',
 }: {
   simulation: SimulationData;
+  currencySymbol?: string;
 }) {
   const breakeven = useMemo(() => {
     const be = simulation.breakEvenMonth;
@@ -535,8 +540,10 @@ interface FundraisingData {
 
 export function FundraisingIntelligence({
   data,
+  currencySymbol = '$',
 }: {
   data: FundraisingData;
+  currencySymbol?: string;
 }) {
   const efficiencyLabel = data.capital_efficiency >= 18 ? 'Excellent' : data.capital_efficiency >= 12 ? 'Good' : data.capital_efficiency >= 6 ? 'Fair' : 'Low';
   const efficiencyColor = data.capital_efficiency >= 18
@@ -556,7 +563,7 @@ export function FundraisingIntelligence({
             Fundraising Intelligence
           </span>
           <Badge variant="outline" className="text-[10px]">
-            {formatCurrency(data.fundraise_amount)} raise
+            {formatCurrency(data.fundraise_amount, currencySymbol)} raise
           </Badge>
           {data.fundraise_month && (
             <Badge variant="outline" className="text-[10px]">
@@ -614,7 +621,7 @@ export function FundraisingIntelligence({
               {data.capital_efficiency.toFixed(1)}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              mo / $1M &middot; {efficiencyLabel}
+              mo / {currencySymbol}1M &middot; {efficiencyLabel}
             </p>
           </div>
         </div>
@@ -633,17 +640,17 @@ export function FundraisingIntelligence({
           <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-valuation">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Implied Valuation</p>
             <p className="text-sm font-semibold font-mono">
-              {formatCurrency(data.valuation_range.mid)}
+              {formatCurrency(data.valuation_range.mid, currencySymbol)}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              {formatCurrency(data.valuation_range.low)} &ndash; {formatCurrency(data.valuation_range.high)}
+              {formatCurrency(data.valuation_range.low, currencySymbol)} &ndash; {formatCurrency(data.valuation_range.high, currencySymbol)}
             </p>
           </div>
         </div>
 
         <div className="mt-3 pt-2 border-t border-dashed">
           <p className="text-[10px] text-muted-foreground">
-            Monthly burn: {formatCurrency(data.monthly_burn)} &middot; Runway lift from raise: +{data.runway_lift_months.toFixed(1)} months (simulated)
+            Monthly burn: {formatCurrency(data.monthly_burn, currencySymbol)} &middot; Runway lift from raise: +{data.runway_lift_months.toFixed(1)} months (simulated)
           </p>
         </div>
       </CardContent>
@@ -693,7 +700,7 @@ function generateValuationTrajectory(
   return points;
 }
 
-export function FundraiseDilutionModel({ data }: { data: DilutionModelProps }) {
+export function FundraiseDilutionModel({ data, currencySymbol = '$' }: { data: DilutionModelProps; currencySymbol?: string }) {
   const preMoneyLow = data.valuationRange.low;
   const preMoneyMid = data.valuationRange.mid;
   const preMoneyHigh = data.valuationRange.high;
@@ -726,20 +733,20 @@ export function FundraiseDilutionModel({ data }: { data: DilutionModelProps }) {
             Dilution Model
           </span>
           <Badge variant="outline" className="text-[10px]">
-            {formatCurrency(data.fundraiseAmount)} round
+            {formatCurrency(data.fundraiseAmount, currencySymbol)} round
           </Badge>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-pre-money">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pre-Money Valuation</p>
-            <p className="text-sm font-bold font-mono" data-testid="text-pre-money-mid">{formatCurrency(preMoneyMid)}</p>
-            <p className="text-[10px] text-muted-foreground">{formatCurrency(preMoneyLow)} &ndash; {formatCurrency(preMoneyHigh)}</p>
+            <p className="text-sm font-bold font-mono" data-testid="text-pre-money-mid">{formatCurrency(preMoneyMid, currencySymbol)}</p>
+            <p className="text-[10px] text-muted-foreground">{formatCurrency(preMoneyLow, currencySymbol)} &ndash; {formatCurrency(preMoneyHigh, currencySymbol)}</p>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40 space-y-1" data-testid="metric-post-money">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Post-Money Valuation</p>
-            <p className="text-sm font-bold font-mono" data-testid="text-post-money-mid">{formatCurrency(postMoneyMid)}</p>
-            <p className="text-[10px] text-muted-foreground">{formatCurrency(postMoneyLow)} &ndash; {formatCurrency(postMoneyHigh)}</p>
+            <p className="text-sm font-bold font-mono" data-testid="text-post-money-mid">{formatCurrency(postMoneyMid, currencySymbol)}</p>
+            <p className="text-[10px] text-muted-foreground">{formatCurrency(postMoneyLow, currencySymbol)} &ndash; {formatCurrency(postMoneyHigh, currencySymbol)}</p>
           </div>
         </div>
 
@@ -831,7 +838,7 @@ export function FundraiseDilutionModel({ data }: { data: DilutionModelProps }) {
 
         <div className="mt-3 pt-2 border-t border-dashed">
           <p className="text-[10px] text-muted-foreground">
-            Dilution assumes {formatCurrency(preMoneyMid)} pre-money. IRR based on {(growthRate * 100).toFixed(0)}% annual growth. Trajectory is illustrative.
+            Dilution assumes {formatCurrency(preMoneyMid, currencySymbol)} pre-money. IRR based on {(growthRate * 100).toFixed(0)}% annual growth. Trajectory is illustrative.
           </p>
         </div>
       </CardContent>
@@ -967,6 +974,7 @@ export function CounterMoveCards({
   hasFailed,
   onRetry,
   onApply,
+  currencySymbol = '$',
 }: {
   counterMoves: CounterMoveResult[] | null;
   currentSimulation: SimulationData;
@@ -974,6 +982,7 @@ export function CounterMoveCards({
   hasFailed?: boolean;
   onRetry?: () => void;
   onApply?: (move: CounterMoveResult) => void;
+  currencySymbol?: string;
 }) {
   if (!counterMoves && !isLoading && !hasFailed) {
     return null;
