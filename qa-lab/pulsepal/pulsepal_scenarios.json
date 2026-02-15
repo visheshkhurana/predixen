@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "company": "PulsePal",
+    "baseline_ref": "pulsepal_dataset.json",
+    "generated": "2026-02-15",
+    "predixen_version": "observed during QA session"
+  },
+  "scenarios": [
+    {
+      "id": "S0",
+      "name": "Baseline (Status Quo)",
+      "description": "No changes from baseline. PulsePal continues at current trajectory.",
+      "changes": {},
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Runway ~11.8 months. Cash depletes around month 12. No growth assumed.",
+      "predixen_actual": {
+        "dashboard_runway": "11.8 months",
+        "simulate_runway_p50": "16.0 months",
+        "decisions_runway": "236.8 months",
+        "healthcheck_month12_balance": "$24187813607.2M (exponential bug)"
+      },
+      "ux_friction": "Runway shows 3 different values across Dashboard (11.8), Simulate (16.0), and Decisions (236.8). Trust-destroying inconsistency."
+    },
+    {
+      "id": "S1",
+      "name": "Paywall Redesign (Better Trial Starts)",
+      "description": "trial_start_rate_install_pct: 7.0% -> 9.0% starting month 2. Proxy: revenue +6% from month 3.",
+      "changes": {
+        "trial_start_rate_install_pct": {"from": 7.0, "to": 9.0, "start_month": 2},
+        "revenue_proxy": {"change": "+6%", "start_month": 3}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "More trial starts -> more paid subs -> revenue increases ~6% from month 3. Runway extends. Net burn decreases.",
+      "predixen_actual": {
+        "query_used": "What if we increase revenue by 6% starting month 3 due to a paywall redesign improving trial starts from 7% to 9%?",
+        "decision_score": "9/10",
+        "runway_p50": "48.0 months",
+        "survival_18mo": "100%",
+        "scenario_inputs_display": "No changes from baseline (BUG: should show revenue +6%)"
+      },
+      "ux_friction": "Cannot express 'conversion funnel change' directly  no trial starts input. Had to proxy as revenue increase. Scenario Inputs section showed 'No changes from baseline' despite AI interpreting the natural language query. Disconnect between NL understanding and parameter transparency."
+    },
+    {
+      "id": "S2",
+      "name": "Trial Conversion Improvement",
+      "description": "trial_to_paid_conversion_pct: 40% -> 46% starting month 2. Proxy: revenue +4% from month 3.",
+      "changes": {
+        "trial_to_paid_conversion_pct": {"from": 40, "to": 46, "start_month": 2},
+        "revenue_proxy": {"change": "+4%", "start_month": 3}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "More trials convert -> higher paid subs -> revenue +4%. Moderate improvement.",
+      "predixen_actual": {
+        "note": "Not separately tested due to same proxy mechanism as S1. Predixen lacks trial/conversion inputs."
+      },
+      "ux_friction": "Same limitation: no first-class trial conversion input. Must proxy through generic revenue change."
+    },
+    {
+      "id": "S3",
+      "name": "Price Test  Annual Default",
+      "description": "ARPPU effective +8% from month 2, churn_monthly -0.5pp from month 2.",
+      "changes": {
+        "ARPPU_effective": {"change": "+8%", "start_month": 2},
+        "paid_churn_monthly_pct": {"from": 5.5, "to": 5.0, "start_month": 2}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Higher ARPPU increases MRR. Lower churn improves retention. Combined: revenue +8%, slight burn reduction.",
+      "predixen_actual": {
+        "note": "Tested via 'Raise prices 20%' quick chip (closest available). Sensitivity slider 'Price Increase' available but no churn slider coupling."
+      },
+      "ux_friction": "Cannot set pricing + churn in one scenario without confusion. Price Increase slider and Churn Rate slider are independent with no way to express 'annual plan shift = higher price + lower churn'. Missing ARPPU concept entirely."
+    },
+    {
+      "id": "S4",
+      "name": "Growth Push (UA Spend Up)",
+      "description": "opex +25% months 1-3, then +10% ongoing. installs_month +20% months 2-6.",
+      "changes": {
+        "opex": {"phase1": "+25% months 1-3", "phase2": "+10% months 4-6"},
+        "installs_month": {"change": "+20%", "start_month": 2}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Higher burn in months 1-3, install growth in months 2-6, revenue lift from month 4+ (delayed effect).",
+      "predixen_actual": {
+        "closest_chip": "Aggressive Growth scenario showed 14.0 mo runway, 58% survival",
+        "note": "Cannot model 'spend now, benefit later' with time-phased inputs. No phased opex ramp."
+      },
+      "ux_friction": "Critical gap: Cannot model time-phased expense changes. No way to say 'opex +25% for 3 months then +10%'. Sliders are static, single-value. No 'delayed effect' modeling for UA spend -> install -> conversion -> revenue pipeline."
+    },
+    {
+      "id": "S5",
+      "name": "Retention Initiative (Habit Loops)",
+      "description": "D7 retention +3pp (or churn -1.0pp) starting month 3.",
+      "changes": {
+        "D7_retention_pct": {"from": 18, "to": 21, "start_month": 3},
+        "paid_churn_monthly_pct_proxy": {"from": 5.5, "to": 4.5, "start_month": 3}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Lower churn -> higher LTV -> more retained subscribers -> revenue improves gradually from month 4+.",
+      "predixen_actual": {
+        "note": "Churn Rate slider available (0-10%) but no D1/D7/W1 retention inputs. No cohort retention UI found."
+      },
+      "ux_friction": "Retention lives only in the Churn Rate slider (0-10%). No dedicated retention/cohort page. No D1/D7/D30 retention curve input. Discoverable only via 'Adjust Variables Manually' -> sensitivity sliders. A founder looking for 'retention' in the nav would not find it."
+    },
+    {
+      "id": "S6",
+      "name": "Store Policy Shock",
+      "description": "installs -10% months 1-2, trial starts -10% months 1-2 (e.g., ATT enforcement, policy change).",
+      "changes": {
+        "installs_month": {"change": "-10%", "months": "1-2"},
+        "trial_starts_month": {"change": "-10%", "months": "1-2"}
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Temporary install/trial drop -> revenue dip months 2-4 -> recovery if organic holds.",
+      "predixen_actual": {
+        "note": "Cannot model install/trial metrics. No time-bounded shock input. Closest: generic revenue decrease scenario."
+      },
+      "ux_friction": "No way to express 'external shock for 2 months only'. No install/trial metrics. Time-phased shock completely unsupported. This is a common consumer app scenario (IDFA changes, store policy shifts) that Predixen cannot model."
+    },
+    {
+      "id": "S7",
+      "name": "Mixed Stacked + Reset",
+      "description": "Apply S1 + S4 + S5 stacked, then Reset to baseline.",
+      "changes": {
+        "stacked": ["S1 (revenue +6%)", "S4 (opex +25%)", "S5 (churn -1pp)"]
+      },
+      "timeline_months": "1-6",
+      "expected_directional_outcome": "Combined: higher revenue, higher costs, lower churn. Net effect depends on timing. Reset must restore exact baseline.",
+      "predixen_actual": {
+        "note": "Scenario stacking not tested  Predixen uses natural language query per simulation, not stackable parameter layers. Reset button available but no 'apply multiple scenarios' UI."
+      },
+      "ux_friction": "No scenario stacking/layering. Each simulation is a single NL query or single slider adjustment. Cannot compose S1+S4+S5 into one combined scenario. Reset button exists on sliders but no 'Reset to baseline' across all pages. No change log showing from->to and timestamp."
+    }
+  ],
+  "monte_carlo_notes": {
+    "iterations_available": [500, 1000, 5000, 10000],
+    "seed_control": "Seed field shows 'Random'  can type a custom seed string but no guarantee of reproducibility verified",
+    "reproducibility_tested": false,
+    "note": "Could not verify identical P10/P50/P90 across re-runs with same seed due to 'Random' default and no seed echo in results"
+  }
+}

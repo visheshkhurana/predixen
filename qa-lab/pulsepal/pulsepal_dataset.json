@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "company": "PulsePal",
+    "product": "AI habit coach + journaling app (freemium  trial  subscription)",
+    "stage": "Series A",
+    "industry": "D2C / Consumer",
+    "currency": "USD",
+    "values_in": "THOUSANDS",
+    "fy_end": "Dec 31",
+    "locale": "en-US",
+    "generated": "2026-02-15",
+    "purpose": "Synthetic QA test data for Predixen UI/UX audit"
+  },
+  "baseline_monthly": {
+    "note": "All monetary values expressed in THOUSANDS (e.g., 520 = $520,000)",
+    "monthlyRevenue": 520,
+    "grossMarginPct": 90,
+    "opex": 350,
+    "payroll": 420,
+    "otherCosts": 80,
+    "cashBalance": 4500,
+    "employees": 45
+  },
+  "derived_baseline": {
+    "cogs": 52,
+    "cogs_formula": "monthlyRevenue * (1 - grossMarginPct/100) = 520 * 0.10 = 52",
+    "totalExpenses": 902,
+    "totalExpenses_formula": "opex + payroll + otherCosts + cogs = 350 + 420 + 80 + 52 = 902",
+    "netBurn": 382,
+    "netBurn_formula": "totalExpenses - monthlyRevenue = 902 - 520 = 382",
+    "runwayMonths": 11.78,
+    "runwayMonths_formula": "cashBalance / netBurn = 4500 / 382 = 11.78",
+    "grossProfit": 468,
+    "grossProfit_formula": "monthlyRevenue * (grossMarginPct/100) = 520 * 0.90 = 468",
+    "arr": 6240,
+    "arr_formula": "monthlyRevenue * 12 = 520 * 12 = 6240 ($6.24M)"
+  },
+  "consumer_subscription_kpis": {
+    "note": "ALL SYNTHETIC  clearly labeled as assumptions. These cannot be entered into Predixen's current UI but represent what a consumer subscription founder needs.",
+    "acquisition_activation": {
+      "installs_month": 600000,
+      "signups_month": 270000,
+      "onboarding_completion_pct": 62
+    },
+    "engagement": {
+      "MAU": 320000,
+      "DAU": 96000,
+      "DAU_MAU": 0.30
+    },
+    "paywall_trials": {
+      "paywall_views_month": 180000,
+      "trial_start_rate_install_pct": 7.0,
+      "trial_starts_month": 42000,
+      "trial_starts_formula": "installs_month * trial_start_rate_install_pct/100 = 600000 * 0.07 = 42000",
+      "trial_to_paid_conversion_pct": 40,
+      "new_paid_subs_month": 16800,
+      "new_paid_subs_formula": "trial_starts_month * trial_to_paid_conversion_pct/100 = 42000 * 0.40 = 16800"
+    },
+    "subscriptions": {
+      "active_paid_subscribers": 52000,
+      "ARPPU_monthly_usd": 9.99,
+      "paid_churn_monthly_pct": 5.5
+    },
+    "marketing_efficiency": {
+      "UA_spend_month_usd": 240000,
+      "blended_CAC_usd": 14.29,
+      "blended_CAC_formula": "UA_spend_month_usd / new_paid_subs_month = 240000 / 16800 = 14.29",
+      "LTV_usd_simple": 181.64,
+      "LTV_formula": "ARPPU_monthly_usd / (paid_churn_monthly_pct/100) = 9.99 / 0.055 = 181.64",
+      "LTV_CAC_ratio": 12.71,
+      "LTV_CAC_formula": "LTV / CAC = 181.64 / 14.29 = 12.71"
+    },
+    "retention": {
+      "D1_retention_pct": 36,
+      "D7_retention_pct": 18,
+      "W1_retention_pct": 28,
+      "benchmark_note": "Mixpanel 2023 average first-week retention ~28%; RevenueCat 2025 median trial start rate ~6.2%"
+    }
+  },
+  "sanity_datasets": {
+    "dataset_A": {
+      "note": "Values in THOUSANDS  sustainable business",
+      "revenue": 1000,
+      "grossMarginPct": 50,
+      "opex": 200,
+      "payroll": 100,
+      "otherCosts": 50,
+      "cashBalance": 5000,
+      "expected": {
+        "cogs": 500,
+        "totalExpenses": 850,
+        "netBurn": -150,
+        "runway": "Sustainable (revenue exceeds expenses)"
+      }
+    },
+    "dataset_B": {
+      "note": "Values in THOUSANDS  low margin business",
+      "revenue": 1000,
+      "grossMarginPct": 20,
+      "opex": 200,
+      "payroll": 100,
+      "otherCosts": 50,
+      "cashBalance": 5000,
+      "expected": {
+        "cogs": 800,
+        "totalExpenses": 1150,
+        "netBurn": 150,
+        "runwayMonths": 33.33
+      }
+    }
+  }
+}
