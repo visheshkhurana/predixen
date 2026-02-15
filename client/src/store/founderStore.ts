@@ -154,7 +154,15 @@ export const useFounderStore = create<FounderState>()(
       
       setToken: (token) => set({ token }),
       setUser: (user) => set({ user }),
-      setCurrentCompany: (company) => set({ currentCompany: company }),
+      setCurrentCompany: (company) => set({ 
+        currentCompany: company,
+        financialBaseline: null,
+        truthScan: null,
+        currentScenario: null,
+        latestRun: null,
+        lastExtraction: null,
+        currentStep: 'truth',
+      }),
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),
       setCurrentStep: (step) => set({ currentStep: step }),
