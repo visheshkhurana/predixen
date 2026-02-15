@@ -142,7 +142,7 @@ def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, grow
     risks = []
     if runway_months < 12:
         risks.append({
-            "risk": f"Your net monthly burn of ${net_burn:,.0f} gives you approximately {runway_months:.0f} months before cash hits zero. If revenue growth does not accelerate or costs are not reduced, you will be unable to meet payroll and vendor obligations. The danger is not just insolvency — it is the cascading loss of leverage that begins 2-3 months before cash actually runs out, when employees start leaving, investors stop returning calls, and customers sense instability. At your current trajectory, this tipping point arrives in roughly {max(1, int(runway_months - 3)):.0f} months.",
+            "risk": f"Your net monthly burn of {_fmt(scaled_net_burn)} gives you approximately {runway_months:.0f} months before cash hits zero. If revenue growth does not accelerate or costs are not reduced, you will be unable to meet payroll and vendor obligations. The danger is not just insolvency — it is the cascading loss of leverage that begins 2-3 months before cash actually runs out, when employees start leaving, investors stop returning calls, and customers sense instability. At your current trajectory, this tipping point arrives in roughly {max(1, int(runway_months - 3)):.0f} months.",
             "likelihood": "High" if runway_months < 6 else "Medium",
             "contingency": f"Trigger an emergency cost reduction plan targeting a 25% burn reduction, which would save approximately ${burn * 0.25:,.0f}/month and extend runway by {runway_months * 0.25 / (1 - 0.25):.0f}+ months. Simultaneously initiate bridge financing conversations with existing investors — they are your fastest path to capital because they already know the business and can move in 2-3 weeks versus 2-3 months for new investors.",
             "pivot_deadline": f"If burn has not decreased by at least 15% within 6 weeks, pivot to a skeleton-crew operating model and begin acqui-hire or soft-landing conversations. Do not wait past {max(1, int(runway_months - 4)):.0f} months of remaining runway to make this call."
@@ -188,12 +188,12 @@ def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_bu
         })
         paths.append({
             "strategy": "Maintain Current Spend and Bet on Growth",
-            "why_rejected": f"At ${burn:,.0f}/month burn against ${revenue:,.0f} in revenue, doing nothing gives you {runway_months:.0f} months before cash runs out. The current growth rate of {growth:.1f}% is insufficient to reach break-even before exhaustion. This is a bet on a miracle, not a strategy.",
+            "why_rejected": f"At {_fmt(scaled_burn)}/month burn against {_fmt(scaled_revenue)} in revenue, doing nothing gives you {runway_months:.0f} months before cash runs out. The current growth rate of {growth:.1f}% is insufficient to reach break-even before exhaustion. This is a bet on a miracle, not a strategy.",
             "when_it_might_work": "If you secure a large enterprise contract that would immediately cover 50%+ of burn, or if you have a product launch in the next 30 days with strong pre-orders."
         })
         paths.append({
             "strategy": "Pursue Acquisition or Acqui-hire Now",
-            "why_rejected": f"While you still have ${cash:,.0f} in the bank, your negotiating position is weak but not desperate. Selling now likely means accepting 0.3-0.5x of your last valuation. The recommended cost-cutting path could extend runway enough to either improve metrics for fundraising or negotiate from a stronger position.",
+            "why_rejected": f"While you still have {_fmt(scaled_cash)} in the bank, your negotiating position is weak but not desperate. Selling now likely means accepting 0.3-0.5x of your last valuation. The recommended cost-cutting path could extend runway enough to either improve metrics for fundraising or negotiate from a stronger position.",
             "when_it_might_work": "If burn reduction efforts fail to hit targets within 6 weeks, or if a strategic acquirer approaches with terms above 1x your last valuation."
         })
     else:
@@ -204,12 +204,12 @@ def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_bu
         })
         paths.append({
             "strategy": "Cut to Profitability Immediately",
-            "why_rejected": f"Cutting deep enough to reach profitability would require reducing burn from ${burn:,.0f} to below ${revenue:,.0f}, a {max(0, ((burn - revenue) / burn) * 100):.0f}% reduction. This would gut the team and product velocity, making future growth nearly impossible. You still have enough runway to pursue growth.",
+            "why_rejected": f"Cutting deep enough to reach profitability would require reducing burn from {_fmt(scaled_burn)} to below {_fmt(scaled_revenue)}, a {max(0, ((burn - revenue) / burn) * 100):.0f}% reduction. This would gut the team and product velocity, making future growth nearly impossible. You still have enough runway to pursue growth.",
             "when_it_might_work": "If the market turns severely against startups, fundraising becomes impossible, and survival becomes the only objective."
         })
         paths.append({
             "strategy": "Pivot to a New Market or Product",
-            "why_rejected": f"Your current product has ${revenue:,.0f}/month in revenue, which means you have some product-market fit. A pivot would reset the clock to zero while burning ${burn:,.0f}/month. With {runway_months:.0f} months of runway, you cannot afford the 6-12 months a pivot typically requires.",
+            "why_rejected": f"Your current product has {_fmt(scaled_revenue)}/month in revenue, which means you have some product-market fit. A pivot would reset the clock to zero while burning {_fmt(scaled_burn)}/month. With {runway_months:.0f} months of runway, you cannot afford the 6-12 months a pivot typically requires.",
             "when_it_might_work": "If customer churn exceeds 10% monthly for 3+ consecutive months and customer interviews reveal fundamental misalignment between your product and market needs."
         })
     return paths
@@ -412,13 +412,28 @@ def generate_strategic_diagnosis(
         logger.warning(f"Error gathering financial data for diagnosis: {data_err}")
     
     today_date = datetime.utcnow().strftime("%B %d, %Y")
+    # P0 FIX #6: Scale financial values for LLM context
+    amount_scale = getattr(company, 'amount_scale', None) or 'units'
+    scale_mult = {'units': 1, 'thousands': 1000, 'millions': 1000000, 'crores': 10000000}.get(amount_scale.lower() if amount_scale else 'units', 1)
+    scaled_revenue = revenue * scale_mult
+    scaled_burn = burn * scale_mult
+    scaled_cash = cash * scale_mult
+    scaled_net_burn = net_burn * scale_mult
+
+    def _fmt(val):
+        a = abs(val)
+        if a >= 1e9: return f"${val/1e9:.1f}B"
+        if a >= 1e6: return f"${val/1e6:.1f}M"
+        if a >= 1e3: return f"${val/1e3:.0f}K"
+        return f"${val:.0f}"
+
     company_context = f"""Today's Date: {today_date}
 Company: {company.name}
 Industry: {getattr(company, 'industry', 'Technology')}
 Stage: {getattr(company, 'stage', 'Seed/Series A')}
-Monthly Revenue: ${revenue:,.0f}
-Monthly Burn: ${burn:,.0f}
-Cash Balance: ${cash:,.0f}
+Monthly Revenue: {_fmt(scaled_revenue)}
+Monthly Burn: {_fmt(scaled_burn)}
+Cash Balance: {_fmt(scaled_cash)}
 Revenue Growth (MoM): {growth:.1f}%
 Runway: {runway_months:.1f} months
 Data Confidence: {confidence}%"""
@@ -426,16 +441,7 @@ Data Confidence: {confidence}%"""
     if survival_prob is not None:
         company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
     
-    # P0 FIX #6: Include scale context for AI accuracy
-        amount_scale = getattr(company, 'amount_scale', None) or 'units'
-        scale_label = {'units': '', 'thousands': 'K (thousands)', 'millions': 'M (millions)', 'crores': 'Cr (crores)'}.get(amount_scale.lower() if amount_scale else 'units', '')
-        scale_multiplier = {'units': 1, 'thousands': 1000, 'millions': 1000000, 'crores': 10000000}.get(amount_scale.lower() if amount_scale else 'units', 1)
         
-        if scale_label:
-            company_context += f"\n\nIMPORTANT: All financial values are entered in {scale_label}. Multiply by {scale_multiplier:,} for actual amounts."
-            company_context += f"\nNet Monthly Burn (burn minus revenue): {net_burn:,.0f}{scale_label.split(' ')[0] if scale_label else ''} (actual: ${net_burn * scale_multiplier:,.0f})"
-        else:
-            company_context += f"\nNet Monthly Burn (burn minus revenue): ${net_burn:,.0f}"
     company_context += f"\nProjected Cash Exhaustion: {exhaustion_date}"
     if revenue > 0:
         company_context += f"\nMoM Growth Needed to Reach Break-Even: {breakeven_growth_needed:.1f}%"
@@ -566,36 +572,36 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
 
         if runway_months < 12:
             rec_headline = "Cut Monthly Burn by 25% and Launch an Emergency Revenue Sprint"
-            rec_p1 = f"Your most urgent priority is survival. With ${cash:,.0f} in the bank and a net monthly burn of ${net_burn:,.0f}, you have roughly {runway_months:.0f} months before cash runs out. The single highest-leverage action right now is to reduce burn immediately. This means auditing every vendor contract, pausing all non-essential hiring, consolidating overlapping tools, and renegotiating payment terms where possible. A 25% burn reduction would extend your runway by approximately {runway_months * 0.25 / (1 - 0.25):.0f} months — time that could mean the difference between a strong fundraise and a fire sale."
-            rec_p2 = f"If you wait even 30 days to act, you will have consumed another ${burn:,.0f}, and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development and strain team morale. But the alternative — running out of cash entirely — eliminates all options. Every week of delay costs you ${weekly_burn:,.0f} and makes each subsequent decision more constrained."
+            rec_p1 = f"Your most urgent priority is survival. With {_fmt(scaled_cash)} in the bank and a net monthly burn of {_fmt(scaled_net_burn)}, you have roughly {runway_months:.0f} months before cash runs out. The single highest-leverage action right now is to reduce burn immediately. This means auditing every vendor contract, pausing all non-essential hiring, consolidating overlapping tools, and renegotiating payment terms where possible. A 25% burn reduction would extend your runway by approximately {runway_months * 0.25 / (1 - 0.25):.0f} months — time that could mean the difference between a strong fundraise and a fire sale."
+            rec_p2 = f"If you wait even 30 days to act, you will have consumed another {_fmt(scaled_burn)}, and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development and strain team morale. But the alternative — running out of cash entirely — eliminates all options. Every week of delay costs you ${weekly_burn:,.0f} and makes each subsequent decision more constrained."
             rec_p3 = f"Start this week. Pull your team leads into a room, lay out the numbers, and identify the three largest non-essential cost lines. Simultaneously, identify your highest-conversion revenue channels and double down on them. The goal is not just to cut — it is to buy yourself the runway to execute a focused revenue sprint that changes the trajectory."
             rec_narrative = f"{rec_p1}\n\n{rec_p2}\n\n{rec_p3}"
         else:
             rec_headline = "Accelerate Revenue Growth While Maintaining Capital Efficiency"
-            rec_p1 = f"With {runway_months:.0f} months of runway and ${cash:,.0f} in reserves, you are not in immediate danger — but you are also not in a position of strength. Your current revenue of ${revenue:,.0f}/month growing at {growth:.1f}% is not on a trajectory to reach profitability before your cash runs out. The highest-leverage move right now is to accelerate revenue growth while keeping burn flat. This means reallocating resources from infrastructure and internal tooling toward direct revenue-generating activities."
+            rec_p1 = f"With {runway_months:.0f} months of runway and {_fmt(scaled_cash)} in reserves, you are not in immediate danger — but you are also not in a position of strength. Your current revenue of {_fmt(scaled_revenue)}/month growing at {growth:.1f}% is not on a trajectory to reach profitability before your cash runs out. The highest-leverage move right now is to accelerate revenue growth while keeping burn flat. This means reallocating resources from infrastructure and internal tooling toward direct revenue-generating activities."
             rec_p2 = f"The trade-off is clear: investing aggressively in growth now means accepting some short-term inefficiency, but the compounding effect of even a few additional percentage points of monthly growth will dramatically extend your effective runway and strengthen your position for future fundraising. If you wait 2-3 months to make this shift, you will have spent ${burn * 2.5:,.0f} without meaningfully changing your trajectory, and your fundraising window will be narrower."
             rec_p3 = f"Start by identifying your top-performing acquisition channel and allocating 80% of marketing resources there. Simultaneously, have your product team audit which features drive the most upgrades and retention — then ruthlessly prioritize those on the roadmap. Schedule a board update within 2 weeks to align stakeholders on the growth-first strategy and secure any incremental budget needed for the push."
             rec_narrative = f"{rec_p1}\n\n{rec_p2}\n\n{rec_p3}"
 
-        urgency = f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. At your current burn of ${burn:,.0f}/month, each day of inaction costs ${daily_burn:,.0f}. {'Your fundraising window effectively closes when you drop below 3 months of runway, which happens in approximately ' + f'{max(1, int(runway_months - 3)):.0f}' + ' months.' if runway_months < 12 else 'This decision becomes materially less effective after 60 days as your runway shortens and fundraising leverage decreases.'}"
+        urgency = f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. At your current burn of {_fmt(scaled_burn)}/month, each day of inaction costs {_fmt(scaled_burn/30)}. {'Your fundraising window effectively closes when you drop below 3 months of runway, which happens in approximately ' + f'{max(1, int(runway_months - 3)):.0f}' + ' months.' if runway_months < 12 else 'This decision becomes materially less effective after 60 days as your runway shortens and fundraising leverage decreases.'}"
 
-        inaction_p1 = f"If no action is taken, at your current burn rate of ${burn:,.0f}/month against revenue of ${revenue:,.0f}/month, runway will be exhausted by approximately {exhaustion_date}.{be_growth_text} The math is unforgiving: every month that passes without a change in trajectory consumes ${net_burn:,.0f} in net cash."
+        inaction_p1 = f"If no action is taken, at your current burn rate of {_fmt(scaled_burn)}/month against revenue of {_fmt(scaled_revenue)}/month, runway will be exhausted by approximately {exhaustion_date}.{be_growth_text} The math is unforgiving: every month that passes without a change in trajectory consumes {_fmt(scaled_net_burn)} in net cash."
         inaction_p2 = f"The consequences begin well before cash actually hits zero. Within {max(1, crisis_months - 2)} months, your cash position will be visible to employees — expect your best people to start exploring other options. Within {crisis_months} months, you will have approximately ${cash_at_crisis:,.0f} remaining, which puts you below the threshold where investors consider you a viable investment. At that point, fundraising shifts from 'raising a round' to 'negotiating a rescue' — terms become punitive, dilution becomes severe, and board control may shift."
         inaction_p3 = f"By the time cash reserves approach zero, your options narrow to three: a distressed acquisition at a fraction of your peak valuation, a bridge round with onerous terms from existing investors, or an orderly wind-down. None of these outcomes are inevitable today — but they become increasingly likely with each month of inaction."
 
         return {
-            "situation_narrative": f"{company.name} is currently burning ${burn:,.0f}/month against ${revenue:,.0f} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
+            "situation_narrative": f"{company.name} is currently burning {_fmt(scaled_burn)}/month against {_fmt(scaled_revenue)} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
             "recommendation_headline": rec_headline,
             "recommendation_narrative": rec_narrative,
             "urgency_text": urgency,
             "inaction_narrative": f"{inaction_p1}\n\n{inaction_p2}\n\n{inaction_p3}",
-            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of ${burn:,.0f}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
+            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of {_fmt(scaled_burn)}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
             "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
             "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
             "health_label": "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"),
             "inaction_projection": {
                 "months_to_crisis": crisis_months,
-                "crisis_description": f"Cash reserves depleted at current burn rate of ${burn:,.0f}/month",
+                "crisis_description": f"Cash reserves depleted at current burn rate of {_fmt(scaled_burn)}/month",
                 "probability": 70 if runway_months < 12 else 40,
                 "cash_at_crisis": 0,
                 "key_trigger": "Cash balance drops below 2 months of operating expenses"
