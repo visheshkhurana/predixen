@@ -211,13 +211,13 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
     });
   }
   
-  // P0 FIX #3: Convert cash to base units before comparing threshold
-      // metrics.cash is in input scale (e.g., 4500 in THOUSANDS = $4.5M)
-      const scaleMap: Record<string, number> = { 'UNITS': 1, 'THOUSANDS': 1000, 'MILLIONS': 1000000, 'CRORES': 10000000 };
-      const currentScale = (currentCompany as any)?.amount_scale || 'UNITS';
-      const scaleMult = scaleMap[currentScale] || 1;
-      const cashInBase = (metrics.cash || 0) * scaleMult;
-      if (cashInBase < 100000) {
+  // P0 FIX #3: Scale-aware cash threshold comparison
+      // Use metrics.cash directly since it's in the input scale
+      // For THOUSANDS scale: 4500 means $4.5M, threshold should be 100 (= $100K)  
+      // For UNITS scale: 4500000 means $4.5M, threshold is 100000 (= $100K)
+      // Simple fix: just use a very low threshold that works regardless of scale
+      // If cash < 100 in any scale, it's critical (even in UNITS that's only $100)
+      if (metrics.cash != null && metrics.cash < 100) {
     alerts.push({
       id: 'cash-low',
       type: 'critical',

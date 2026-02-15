@@ -54,6 +54,7 @@ import { TornadoChart, WhatIfExplorer, StressTestPanel, ReverseStressTest } from
 import { calculateSensitivity, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { formatCurrencyAbbrev, formatRunway } from '@/lib/utils';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
@@ -127,7 +128,8 @@ export default function ScenariosPage() {
     KES: 'KSh', ZAR: 'R', SGD: 'S$', AUD: 'A$', CAD: 'C$',
   };
   const currencySymbol = CURRENCY_SYMBOLS[companyCurrency] || '$';
-  const formatCurrency = useCallback((value: number) => formatCurrencyAbbrev(value, companyCurrency), [companyCurrency]);
+  // P0 FIX: Use scale-aware formatting from useCurrency hook
+  const { format: formatCurrency, symbol: scaleCurrencySymbol } = useCurrency();
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);

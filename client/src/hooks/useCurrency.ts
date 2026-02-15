@@ -19,11 +19,10 @@ export function useCurrency() {
 
   const format = useCallback(
     (value: number | null | undefined) => {
-      // P0 FIX #3: Add scale suffix to displayed values
-      const formatted = formatCurrencyAbbrev(value, currency);
-      if (formatted === 'N/A' || formatted === '$0') return formatted;
-      const suffix = scale === 'UNITS' ? '' : scale === 'THOUSANDS' ? 'K' : scale === 'MILLIONS' ? 'M' : scale === 'CRORES' ? 'Cr' : '';
-      return suffix ? `${formatted}${suffix}` : formatted;
+      // P0 FIX #3: Convert input-scale value to base, then abbreviate
+      if (value == null || isNaN(value)) return 'N/A';
+      const baseValue = value * scaleMultiplier;
+      return formatCurrencyAbbrev(baseValue, currency);
     },
     [currency, scale]
   );
