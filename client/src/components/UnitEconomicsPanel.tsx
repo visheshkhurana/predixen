@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpCircle, TrendingUp, TrendingDown, Users, DollarSign, Clock, Repeat, Target, UserMinus } from 'lucide-react';
 import { formatCurrencyAbbrev, formatPercent } from '@/lib/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface UnitEconomicsMetrics {
   cac?: number | null;
@@ -95,10 +96,8 @@ export function UnitEconomicsPanel({ metrics, currency = 'USD' }: UnitEconomicsP
     return value != null && typeof value === 'number' && !isNaN(value) && isFinite(value);
   };
 
-  const formatCurrency = (value: number | null | undefined) => {
-    if (!isValidNumber(value)) return 'N/A';
-    return formatCurrencyAbbrev(value, currency);
-  };
+  // P0 FIX: Use scale-aware formatting
+  const { format: formatCurrency } = useCurrency();
 
   const formatRatio = (value: number | null | undefined) => {
     if (!isValidNumber(value)) return 'N/A';

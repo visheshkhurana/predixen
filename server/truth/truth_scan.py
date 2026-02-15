@@ -436,7 +436,7 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         # P0 FIX: Clamp growth rate to prevent exponential explosion
         raw_growth = (metrics.get("revenue_growth_mom", 5) or 5)
         # If growth rate > 100%, it's likely a data error - clamp to 100% max
-        clamped_growth = max(-50, min(100, raw_growth))
+        clamped_growth = max(-50, min(50, raw_growth))
         growth_rate = clamped_growth / 100
         
         # Include marketing_expense in total monthly expenses
@@ -447,11 +447,11 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         current_cash = latest.cash_balance
         for month in range(1, 13):
             projected_revenue = monthly_rev * ((1 + growth_rate) ** month)
-                # P0 FIX: Clamp to prevent astronomical values
-                projected_revenue = min(projected_revenue, 1e12)
+            # P0 FIX: Clamp to prevent astronomical values
+            projected_revenue = min(projected_revenue, 1e12)
             projected_expenses = base_expenses * 1.02 ** month
-                # P0 FIX: Clamp expenses too
-                projected_expenses = min(projected_expenses, 1e12)
+            # P0 FIX: Clamp expenses too
+            projected_expenses = min(projected_expenses, 1e12)
             net_flow = projected_revenue - projected_expenses
             current_cash += net_flow
             cash_flow_forecast.append({

@@ -15,6 +15,7 @@ import { CashFlowForecast } from '@/components/CashFlowForecast';
 import { HeadcountPanel } from '@/components/HeadcountPanel';
 import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check, Globe, Loader2, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useTruthScan, useRunTruthScan } from '@/api/hooks';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { METRIC_DEFINITIONS, getMetricDefinition, MetricDefinition } from '@/lib/metricDefinitions';
@@ -206,6 +207,7 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
 
 export default function TruthScanPage() {
   const { currentCompany, setCurrentCompany, financialBaseline } = useFounderStore();
+  const { format: formatCurrencyScaled } = useCurrency();
   const { data: truthScan, isLoading } = useTruthScan(currentCompany?.id || null);
   const { metrics: sharedMetrics } = useFinancialMetrics();
   const runTruthScanMutation = useRunTruthScan();
@@ -367,7 +369,8 @@ export default function TruthScanPage() {
   
   const formatCurrency = (value: any) => {
     const numValue = extractValue(value);
-    return formatCurrencyAbbrev(numValue, currentCompany?.currency || 'USD');
+    // P0 FIX: Use scale-aware formatting
+    return formatCurrencyScaled(numValue);
   };
   
   const formatPercent = (value: any) => {
