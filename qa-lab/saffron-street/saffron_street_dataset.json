@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "company_name": "Saffron Street Kitchens",
+    "synthetic": true,
+    "industry": "Multi-location Fast-Casual / QSR",
+    "stage": "Series A",
+    "currency": "INR",
+    "locale": "en-IN",
+    "amount_scale": "MILLIONS",
+    "fy_end": "Mar 31",
+    "created": "2026-02-14",
+    "author": "QA Stress Test  Restaurant Industry Pack"
+  },
+  "baseline_monthly": {
+    "monthlyRevenue": 38.0,
+    "grossMarginPct": 68,
+    "payroll": 11.4,
+    "opex": 7.6,
+    "otherCosts": 2.0,
+    "cashBalance": 60.0,
+    "employees": 720
+  },
+  "expected_derived": {
+    "cogs": 12.16,
+    "cogs_formula": "revenue * (1 - grossMarginPct/100) = 38 * 0.32",
+    "totalExpenses": 33.16,
+    "totalExpenses_formula": "cogs + payroll + opex + otherCosts = 12.16 + 11.4 + 7.6 + 2.0",
+    "netBurn": -4.84,
+    "netBurn_formula": "totalExpenses - revenue = 33.16 - 38.0 (NEGATIVE = cash-flow positive)",
+    "runway": "Sustainable",
+    "runway_note": "Company is cash-flow positive. Cash grows each month. Runway is effectively infinite."
+  },
+  "advanced_restaurant_kpis": {
+    "stores_live": 18,
+    "expansion_target_12mo": 30,
+    "transactions_month": 380000,
+    "avg_check_inr": 100.0,
+    "avg_check_formula": "monthlyRevenue * 1e6 / transactions_month = 38000000 / 380000",
+    "delivery_share_pct": 22,
+    "dinein_share_pct": 58,
+    "takeaway_share_pct": 20,
+    "food_cost_pct": 32,
+    "food_cost_note": "= 1 - grossMarginPct/100 = 0.32 (within 28-35% benchmark)",
+    "labor_cost_pct": 30.0,
+    "labor_cost_formula": "payroll / revenue = 11.4 / 38.0",
+    "prime_cost_pct": 62.0,
+    "prime_cost_formula": "(cogs + payroll) / revenue = (12.16 + 11.4) / 38.0",
+    "prime_cost_note": "62% is within QSR target of 55-65%",
+    "waste_pct": 2.1,
+    "refund_rate_pct": 0.4,
+    "same_store_sales_growth_mom_pct": 1.2,
+    "customer_repeat_rate_pct": 28
+  },
+  "public_benchmarks": {
+    "food_cost_benchmark": "28-35% of revenue",
+    "food_cost_source": "https://restaurant.eatapp.co/blog/how-to-calculate-restaurant-food-cost",
+    "labor_cost_benchmark": "28-32% for QSR",
+    "labor_cost_source": "https://www.restaurant365.com/blog/how-to-calculate-labor-cost-percentage/",
+    "prime_cost_benchmark": "55-60% QSR, 60-65% full service",
+    "prime_cost_source": "https://www.restaurant365.com/blog/how-to-calculate-prime-cost-in-a-restaurant/"
+  }
+}

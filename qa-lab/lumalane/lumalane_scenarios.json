@@ -1,0 +1,238 @@
+{
+  "meta": {
+    "company": "LumaLane",
+    "label": "SYNTHETIC SCENARIO SUITE  UI/UX STRESS TEST",
+    "baseline_ref": "lumalane_dataset.json",
+    "currency": "INR",
+    "valuesIn": "Crores"
+  },
+  "scenarios": [
+    {
+      "id": "S0",
+      "name": "Baseline",
+      "description": "No changes. Validate all derived metrics match baseline.",
+      "months": [],
+      "changes": {},
+      "expected": {
+        "cogs": 10.56,
+        "totalExpenses": 21.36,
+        "netBurn": -0.64,
+        "runway": "Sustainable",
+        "grossMarginPct": 52
+      },
+      "decisionBrief": "Steady state. LumaLane is marginally profitable at 2.9% operating margin. 55Cr cash provides ample buffer.",
+      "uxFriction": [
+        "Dashboard shows MRR/ARR labels instead of Monthly/Annual Revenue",
+        "Runway shows 999.0mo on Simulate page vs Sustainable on Health Check",
+        "Burn shows 0 instead of negative burn (surplus)",
+        "Cash Balance Critical alert fires despite 55Cr cash (threshold: <$100K)"
+      ]
+    },
+    {
+      "id": "S1",
+      "name": "Discounting Push (Promo Month)",
+      "description": "Month 2 only: revenue +8% BUT grossMarginPct -4pp due to heavy discounting",
+      "months": [2],
+      "changes": {
+        "month_2": {
+          "monthlyRevenue": 23.76,
+          "grossMarginPct": 48,
+          "revenue_formula": "22 * 1.08 = 23.76",
+          "gm_change": "52 - 4 = 48"
+        }
+      },
+      "expected": {
+        "month_2_cogs": 12.3548,
+        "month_2_totalExp": 23.1548,
+        "month_2_netBurn": -0.6052,
+        "month_2_runway": "Sustainable (still profitable despite margin compression)"
+      },
+      "decisionBrief": "One-month promotional discount. Revenue lifts 8% but GM drops 4pp. Net impact: still profitable but margin thin. Risk: discounting becomes habitual.",
+      "uxFriction": [
+        "Cannot model one-month shocks in Predixen  no month-specific override UI",
+        "No discount rate lever in sensitivity sliders",
+        "NLP simulation does not support time-bounded changes (Month 2 only)",
+        "Simulation treated a -4pp GM change as catastrophic (NO-GO, 5.7mo runway)  math error"
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "Returns Spike (Post-Holiday)",
+      "description": "Months 1-2: return_rate_pct +6pp. Since returns not directly supported, proxy: GM -3pp and otherCosts +0.5 for reverse logistics.",
+      "months": [1, 2],
+      "changes": {
+        "months_1_2": {
+          "grossMarginPct": 49,
+          "otherCosts": 1.6,
+          "gm_change": "52 - 3 = 49 (returns eating into margin)",
+          "otherCosts_change": "1.1 + 0.5 = 1.6 (reverse logistics cost)"
+        }
+      },
+      "expected": {
+        "cogs_months_1_2": 11.22,
+        "totalExp_months_1_2": 22.52,
+        "netBurn_months_1_2": 0.52,
+        "runway_months_1_2": "55 / 0.52 = 105.8 months"
+      },
+      "decisionBrief": "Post-holiday returns spike causes margin compression and reverse logistics costs. Company flips from profitable to slight burn of 0.52Cr/mo. Runway remains comfortable at 105+ months.",
+      "uxFriction": [
+        "No returns rate field or lever anywhere in Predixen",
+        "No reverse logistics cost category",
+        "Cannot model return_rate_pct  fundamental gap for retail",
+        "No way to express restockable vs. write-off return split",
+        "Must use proxy (GM reduction + OtherCosts increase) which loses decision context"
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "Inventory Stockout (Growth Constrained)",
+      "description": "Months 3-4: revenue -10% due to stockouts",
+      "months": [3, 4],
+      "changes": {
+        "months_3_4": {
+          "monthlyRevenue": 19.8,
+          "revenue_formula": "22 * 0.90 = 19.8"
+        }
+      },
+      "expected": {
+        "cogs_months_3_4": 9.504,
+        "totalExp_months_3_4": 20.304,
+        "netBurn_months_3_4": 0.504,
+        "runway_months_3_4": "55 / 0.504 = 109.1 months"
+      },
+      "decisionBrief": "Stockouts constrain growth. Revenue drops 10% while fixed costs remain. Company becomes slightly unprofitable. Stockout-driven revenue loss reveals need for inventory management KPIs.",
+      "uxFriction": [
+        "No stockout_rate_pct field",
+        "No fill_rate_pct field",
+        "No inventory on hand tracking",
+        "Cannot express 'revenue loss due to stockouts'  only raw revenue change",
+        "No causal chain visualization (stockout  lost sales  revenue drop)"
+      ]
+    },
+    {
+      "id": "S4",
+      "name": "Supply Cost Inflation",
+      "description": "Months 1-3: GM -3pp due to COGS inflation from supplier price increases",
+      "months": [1, 2, 3],
+      "changes": {
+        "months_1_3": {
+          "grossMarginPct": 49,
+          "gm_change": "52 - 3 = 49"
+        }
+      },
+      "expected": {
+        "cogs_months_1_3": 11.22,
+        "totalExp_months_1_3": 22.02,
+        "netBurn_months_1_3": 0.02,
+        "runway_months_1_3": "55 / 0.02 = 2750 months (effectively sustainable)"
+      },
+      "decisionBrief": "Supplier inflation compresses margins by 3pp. Company breaks roughly even. Critical to renegotiate supplier terms or pass costs to consumers.",
+      "uxFriction": [
+        "Predixen does not explain causal chains (inflation  COGS  GM  burn)",
+        "No COGS breakdown by category (raw materials, packaging, freight)",
+        "AI briefing doesn't reference retail-specific cost drivers",
+        "Simulation overreacts to moderate GM changes"
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "New Store Expansion (Capex + Ramp)",
+      "description": "Multi-phase: Months 1-2 capex deposits (-6.0 Cr total cash), Months 3-6 payroll +0.4 opex +0.6, Month 6+ revenue +1.5",
+      "months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "changes": {
+        "months_1_2": {
+          "cashBalance_delta": -3.0,
+          "note": "3Cr per month fit-out deposits (6Cr total)"
+        },
+        "months_3_6": {
+          "payroll": 3.6,
+          "opex": 7.1,
+          "payroll_change": "3.2 + 0.4 = 3.6",
+          "opex_change": "6.5 + 0.6 = 7.1"
+        },
+        "months_6_plus": {
+          "monthlyRevenue": 23.5,
+          "revenue_change": "22.0 + 1.5 = 23.5"
+        }
+      },
+      "expected": {
+        "month_2_cash": 49.0,
+        "month_6_revenue": 23.5,
+        "month_6_totalExp": 22.36,
+        "month_6_netBurn": -1.14,
+        "verdict": "Expansion is NPV positive by month 8-10"
+      },
+      "decisionBrief": "Two new stores require 6Cr capex upfront, add 1Cr/mo in opex/payroll during ramp, but generate 1.5Cr/mo incremental revenue by month 6. Payback within 6 months of opening.",
+      "uxFriction": [
+        "CRITICAL: Cannot model multi-step, multi-month scenarios in Predixen",
+        "No cash flow delta (capex) input  only total cash balance",
+        "No phased timeline (Month 1-2: capex, Month 3-6: ramp, Month 6+: steady state)",
+        "No capex vs opex distinction",
+        "User would need to run 3 separate simulations and mentally stitch them together",
+        "No store-level P&L or unit economics for expansion planning"
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "Marketing Efficiency Improvement",
+      "description": "Month 2 onward: opex -10% (better ad efficiency) AND revenue +3% (improved ROAS)",
+      "months": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "changes": {
+        "month_2_plus": {
+          "opex": 5.85,
+          "monthlyRevenue": 22.66,
+          "opex_formula": "6.5 * 0.90 = 5.85",
+          "revenue_formula": "22 * 1.03 = 22.66"
+        }
+      },
+      "expected": {
+        "cogs": 10.877,
+        "totalExp": 21.027,
+        "netBurn": -1.633,
+        "runway": "Sustainable (surplus grows to 1.63Cr/mo)"
+      },
+      "decisionBrief": "Marketing optimization reduces ad spend while improving conversion. Monthly surplus nearly triples from 0.64Cr to 1.63Cr. Strong signal to double down on winning channels.",
+      "uxFriction": [
+        "No ROAS metric or ad spend efficiency tracking",
+        "Cannot see marketing spend separately from total opex",
+        "Scenario stacking behavior untested  unclear if S6 can layer on top of S1/S4/S5",
+        "No attribution model (which channel drives the efficiency gain?)"
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "Mixed Stacked + Reset Test",
+      "description": "Apply S1 + S4 + S5 simultaneously, then Reset to baseline. Verify exact restoration.",
+      "months": [1, 2, 3, 4, 5, 6],
+      "changes": {
+        "note": "Combined effect of S1 (promo month 2) + S4 (COGS inflation months 1-3) + S5 (store expansion)",
+        "combined_month_2": {
+          "monthlyRevenue": 23.76,
+          "grossMarginPct": 45,
+          "opex": 7.1,
+          "payroll": 3.6,
+          "cashBalance_delta_from_capex": -3.0
+        }
+      },
+      "expected_after_reset": {
+        "monthlyRevenue": 22.0,
+        "grossMarginPct": 52,
+        "opex": 6.5,
+        "payroll": 3.2,
+        "otherCosts": 1.1,
+        "cashBalance": 55.0,
+        "employees": 980,
+        "allPagesConsistent": true,
+        "noStateLeakage": true
+      },
+      "decisionBrief": "Stress test for scenario stacking and reset. After applying 3 concurrent changes and resetting, all values must return to exact baseline across Dashboard, Health Check, Simulate, and Data Input pages.",
+      "uxFriction": [
+        "Predixen has no explicit scenario stacking mechanism",
+        "No 'what changed' log or assumption ledger",
+        "Reset button exists on sensitivity sliders but unclear if it resets NLP simulations",
+        "No version history or undo stack for baseline changes",
+        "Cannot verify cross-page consistency without manually checking each page"
+      ]
+    }
+  ]
+}

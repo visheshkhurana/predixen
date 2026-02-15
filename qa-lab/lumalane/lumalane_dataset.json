@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "company": "LumaLane",
+    "label": "SYNTHETIC TEST DATA  NOT REAL FINANCIALS",
+    "industry": "Omnichannel Fashion & Lifestyle Retail (D2C + Marketplaces + 8 Stores)",
+    "stage": "Series B",
+    "currency": "INR",
+    "locale": "en-IN",
+    "valuesIn": "Crores",
+    "fyEnd": "Mar 31",
+    "generatedBy": "QA stress test v2026-02-15",
+    "purpose": "UI/UX audit of Predixen for retail vertical"
+  },
+  "baseline": {
+    "month": 0,
+    "monthlyRevenue": 22.0,
+    "grossMarginPct": 52,
+    "opex": 6.5,
+    "payroll": 3.2,
+    "otherCosts": 1.1,
+    "cashBalance": 55.0,
+    "employees": 980,
+    "_derived": {
+      "cogs": 10.56,
+      "cogs_formula": "revenue * (1 - grossMarginPct/100) = 22 * 0.48",
+      "totalExpenses": 21.36,
+      "totalExpenses_formula": "cogs + opex + payroll + otherCosts = 10.56 + 6.5 + 3.2 + 1.1",
+      "netBurn": -0.64,
+      "netBurn_formula": "totalExpenses - revenue = 21.36 - 22.0",
+      "runway": "Sustainable (Infinite)",
+      "runway_explanation": "netBurn <= 0, company is profitable",
+      "grossProfit": 11.44,
+      "operatingMarginPct": 2.91,
+      "operatingMargin_formula": "(revenue - totalExpenses) / revenue * 100"
+    }
+  },
+  "advancedRetailKPIs": {
+    "_note": "These KPIs are expected by retail founders but NOT supported by Predixen. Logged as UI/UX model gaps.",
+    "channelsMixPct": { "d2c": 42, "marketplaces": 35, "stores": 23 },
+    "ordersPerMonth": 310000,
+    "aov_inr": 709.68,
+    "aov_formula": "(monthlyRevenue_in_INR) / orders = (22 * 10000000) / 310000",
+    "returnRatePct": 16.9,
+    "returnRateBenchmark": "NRF 2024: 16.9% of annual sales returned",
+    "returnRestockablePct": 62,
+    "discountRatePct": 18,
+    "adSpend": 3.1,
+    "cac_inr": 364.71,
+    "cac_formula": "(adSpend_in_INR) / newCustomers = (3.1 * 10000000) / 85000",
+    "newCustomersPerMonth": 85000,
+    "inventoryOnHand": 75.0,
+    "avgInventory": 70.0,
+    "inventoryTurnsAnnual": 1.81,
+    "inventoryTurns_formula": "(cogs_month * 12) / avgInventory = (10.56 * 12) / 70.0",
+    "inventoryTurnsBenchmark": "Shopify cites ~10.86 for retailers; 1.81 indicates overstocking",
+    "stockoutRatePct": 5.2,
+    "fillRatePct": 92.0,
+    "shrinkPct": 0.8,
+    "deliveryCostPerOrder_inr": 38,
+    "contributionMarginPct": 12.5,
+    "supportedByPredixen": false,
+    "gaps": [
+      "No channel mix input or breakdown",
+      "No returns rate lever or field",
+      "No inventory KPIs (turns, stockout, fill rate)",
+      "No discount rate or promo calendar",
+      "No AOV or order count fields",
+      "No contribution margin waterfall",
+      "No delivery/logistics cost fields",
+      "No shrinkage tracking"
+    ]
+  },
+  "sanityTests": {
+    "datasetA": {
+      "revenue": 10.0, "grossMarginPct": 50, "opex": 2.0, "payroll": 1.0,
+      "otherCosts": 0.5, "cashBalance": 20.0,
+      "expected_cogs": 5.0, "expected_totalExp": 8.5, "expected_netBurn": -1.5,
+      "expected_runway": "Sustainable"
+    },
+    "datasetB": {
+      "revenue": 10.0, "grossMarginPct": 20, "opex": 2.0, "payroll": 1.0,
+      "otherCosts": 0.5, "cashBalance": 20.0,
+      "expected_cogs": 8.0, "expected_totalExp": 11.5, "expected_netBurn": 1.5,
+      "expected_runway_months": 13.33
+    }
+  }
+}
