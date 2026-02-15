@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "company": "Saffron Street Kitchens",
+    "baseline_ref": "saffron_street_dataset.json",
+    "seed": 42,
+    "iterations": 1000,
+    "created": "2026-02-14"
+  },
+  "scenarios": [
+    {
+      "id": "S0",
+      "name": "Baseline (Status Quo)",
+      "query": "Current trajectory with no changes",
+      "changes": {},
+      "expected": { "runway": "Sustainable", "netBurn": -4.84 }
+    },
+    {
+      "id": "S1",
+      "name": "Menu Price Increase +3%, Volume -1%",
+      "query": "What if we raise menu prices by 3% starting month 2 but lose 1% of transaction volume?",
+      "changes": { "revenue_pct_change": 1.97, "start_month": 2 },
+      "expected_note": "Net revenue effect ~+2% (3% price - 1% volume). GM stays ~68%."
+    },
+    {
+      "id": "S2",
+      "name": "Food Inflation Shock (3 months)",
+      "query": "Food costs increase by 4 percentage points (GM drops from 68% to 64%) for months 1 through 3 due to inflation, then revert to normal",
+      "changes": { "grossMarginPct": 64, "months": "1-3", "revert": true },
+      "expected_note": "Temporary COGS spike: 12.16M -> 13.68M for 3 months. Cash impact ~-4.56M."
+    },
+    {
+      "id": "S3",
+      "name": "Wage Increase +6%",
+      "query": "What if payroll increases by 6% from month 1 onward due to minimum wage hike?",
+      "changes": { "payroll_pct_change": 6, "start_month": 1 },
+      "expected_note": "Payroll 11.4M -> 12.08M. Still cash-flow positive but margin compressed."
+    },
+    {
+      "id": "S4",
+      "name": "New Store Openings (+3 stores)",
+      "query": "We open 3 new stores over 6 months: upfront capex of 18M spread across months 1-3, opex increases by 1.2M starting month 2, revenue ramp of +1M by month 6",
+      "changes": { "cash_impact": -18, "opex_increase": 1.2, "revenue_ramp": 1.0 },
+      "expected_note": "Cash-negative initially due to capex, but should breakeven by month 8-10."
+    },
+    {
+      "id": "S5",
+      "name": "Delivery Aggregator Push",
+      "query": "What if delivery share increases by 8 percentage points, GM drops by 2pp due to aggregator commissions, but revenue increases by 2% from more orders?",
+      "changes": { "grossMarginPct": 66, "revenue_pct_change": 2 },
+      "expected_note": "Revenue 38.76M but COGS rises. Net effect depends on commission vs volume."
+    },
+    {
+      "id": "S6",
+      "name": "Bad Month Stress Test",
+      "query": "Revenue drops 12% for 1 month and waste increases (GM drops 1 percentage point to 67%)",
+      "changes": { "revenue_pct_change": -12, "grossMarginPct": 67, "months": "1" },
+      "expected_note": "Revenue 33.44M for 1 month. Tests cash buffer resilience."
+    }
+  ]
+}
