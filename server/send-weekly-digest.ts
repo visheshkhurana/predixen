@@ -45,7 +45,7 @@ async function sendWeeklyDigest() {
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'Predixen Weekly <weekly@predixen.app>';
+  const senderEmail = 'Predixen Weekly <kavibe8@predixen.app>';
   const subject = 'Predixen Weekly Digest — Feb 8-14, 2026: 5 Bug Fixes, 4 New Features, 3 UI Upgrades';
   const htmlContent = `
 <!DOCTYPE html>
