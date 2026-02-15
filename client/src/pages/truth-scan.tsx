@@ -296,6 +296,7 @@ export default function TruthScanPage() {
       }
       if (revenue > 0 && !getMetricValue(m.gross_margin)) {
         m.gross_margin = ((revenue - cogs) / revenue) * 100;
+        // P0 FIX #5: Ensure GM is always 0-100 percentage
       }
       if (revenue > 0 && !getMetricValue(m.mrr)) {
         m.mrr = revenue;
@@ -307,6 +308,10 @@ export default function TruthScanPage() {
         m.revenue_growth_mom = Number(financialBaseline.monthlyGrowthRate);
       }
     }
+      // P0 FIX #5: Normalize gross_margin from backend (decimal -> percentage)
+      if (m.gross_margin != null && typeof m.gross_margin === "number" && m.gross_margin > 0 && m.gross_margin < 1) {
+        m.gross_margin = m.gross_margin * 100;
+      }
     return m;
   }, [rawMetrics, financialBaseline]);
   const metrics = enhancedMetrics;
@@ -328,7 +333,12 @@ export default function TruthScanPage() {
       monthly_revenue: generateMockTrendData(getValue(m.monthly_revenue) || 100000, 6, 0.08),
       net_burn: generateMockTrendData(Math.abs(getValue(m.net_burn) || 50000), 6, 0.12),
       cash_balance: generateMockTrendData(getValue(m.cash_balance) || 500000, 6, 0.05),
-      gross_margin: generateMockTrendData((getValue(m.gross_margin) || 0.65) * 100, 6, 0.03),
+      gross_margin: generateMockTrendData((() => {
+            const gm = getValue(m.gross_margin);
+            // P0 FIX #5: Normalize GM - if > 1, it is already a percentage; if <= 1, multiply by 100
+            if (gm == null) return 65;
+            return gm > 1 ? gm : gm * 100;
+          })(), 6, 0.03),
       revenue_growth: generateMockTrendData((getValue(m.revenue_growth_mom) || 0.1) * 100, 6, 0.15),
       burn_multiple: generateMockTrendData(getValue(m.burn_multiple) || 2, 6, 0.1),
       operating_margin: generateMockTrendData((getValue(m.operating_margin) || -0.2) * 100 + 50, 6, 0.08),

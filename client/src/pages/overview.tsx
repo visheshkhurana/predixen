@@ -211,7 +211,13 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
     });
   }
   
-  if (metrics.cash < 100000) {
+  // P0 FIX #3: Convert cash to base units before comparing threshold
+      // metrics.cash is in input scale (e.g., 4500 in THOUSANDS = $4.5M)
+      const scaleMap: Record<string, number> = { 'UNITS': 1, 'THOUSANDS': 1000, 'MILLIONS': 1000000, 'CRORES': 10000000 };
+      const currentScale = (currentCompany as any)?.amount_scale || 'UNITS';
+      const scaleMult = scaleMap[currentScale] || 1;
+      const cashInBase = (metrics.cash || 0) * scaleMult;
+      if (cashInBase < 100000) {
     alerts.push({
       id: 'cash-low',
       type: 'critical',

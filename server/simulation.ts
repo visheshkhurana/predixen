@@ -58,7 +58,9 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   
   // Use new growth rate if specified
   const effectiveGrowthRate = newGrowthRate !== undefined ? newGrowthRate : growthRate;
-  const monthlyGrowthMultiplier = 1 + effectiveGrowthRate / 100;
+  // P0 FIX: Clamp growth rate to prevent exponential explosion (max 100% monthly)
+    const clampedGrowthRate = Math.max(-50, Math.min(100, effectiveGrowthRate));
+    const monthlyGrowthMultiplier = 1 + clampedGrowthRate / 100;
   
   let currentCash = cashOnHand;
   let runwayMonth: number | null = null;

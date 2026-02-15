@@ -426,7 +426,16 @@ Data Confidence: {confidence}%"""
     if survival_prob is not None:
         company_context += f"\n18-Month Survival Probability: {survival_prob:.1f}%"
     
-    company_context += f"\nNet Monthly Burn (burn minus revenue): ${net_burn:,.0f}"
+    # P0 FIX #6: Include scale context for AI accuracy
+        amount_scale = getattr(company, 'amount_scale', None) or 'units'
+        scale_label = {'units': '', 'thousands': 'K (thousands)', 'millions': 'M (millions)', 'crores': 'Cr (crores)'}.get(amount_scale.lower() if amount_scale else 'units', '')
+        scale_multiplier = {'units': 1, 'thousands': 1000, 'millions': 1000000, 'crores': 10000000}.get(amount_scale.lower() if amount_scale else 'units', 1)
+        
+        if scale_label:
+            company_context += f"\n\nIMPORTANT: All financial values are entered in {scale_label}. Multiply by {scale_multiplier:,} for actual amounts."
+            company_context += f"\nNet Monthly Burn (burn minus revenue): {net_burn:,.0f}{scale_label.split(' ')[0] if scale_label else ''} (actual: ${net_burn * scale_multiplier:,.0f})"
+        else:
+            company_context += f"\nNet Monthly Burn (burn minus revenue): ${net_burn:,.0f}"
     company_context += f"\nProjected Cash Exhaustion: {exhaustion_date}"
     if revenue > 0:
         company_context += f"\nMoM Growth Needed to Reach Break-Even: {breakeven_growth_needed:.1f}%"

@@ -18,8 +18,14 @@ export function useCurrency() {
   const scaleMultiplier = SCALE_MULTIPLIERS[scale];
 
   const format = useCallback(
-    (value: number | null | undefined) => formatCurrencyAbbrev(value, currency),
-    [currency]
+    (value: number | null | undefined) => {
+      // P0 FIX #3: Add scale suffix to displayed values
+      const formatted = formatCurrencyAbbrev(value, currency);
+      if (formatted === 'N/A' || formatted === '$0') return formatted;
+      const suffix = scale === 'UNITS' ? '' : scale === 'THOUSANDS' ? 'K' : scale === 'MILLIONS' ? 'M' : scale === 'CRORES' ? 'Cr' : '';
+      return suffix ? `${formatted}${suffix}` : formatted;
+    },
+    [currency, scale]
   );
 
   const formatFull = useCallback(

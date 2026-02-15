@@ -100,14 +100,14 @@ def get_resend_api_key() -> Optional[str]:
 
 
 def get_from_email() -> str:
-    """Get the default from email address for marketing/updates."""
-    return "Predixen <kavibe8@predixen.app>"
+    """Get the default from email address for updates and notifications."""
+    return "Nikita from Predixen <nikita@predixen.app>"
 
 
 def get_transactional_from_email() -> str:
     """Get the transactional from email address for user-triggered emails (invites, shares, resets)."""
     env_override = os.getenv("RESEND_TRANSACTIONAL_FROM")
-    return env_override or "Predixen <breifing@updates.predixen.me>"
+    return env_override or "Nikita from Predixen <nikita@predixen.app>"
 
 
 def is_email_configured() -> bool:
