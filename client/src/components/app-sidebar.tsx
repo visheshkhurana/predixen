@@ -232,6 +232,19 @@ function SettingsDrawer() {
                     <span>{item.title}</span>
                   </Button>
                 ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleNavigate("/qa")}
+                  className={cn(
+                    "w-full justify-start gap-2.5",
+                    isActive("/qa") && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  )}
+                  data-testid="settings-nav-admin-qa-front"
+                >
+                  <Activity className="h-4 w-4 shrink-0" />
+                  <span>QA Front</span>
+                </Button>
               </div>
             </div>
           )}

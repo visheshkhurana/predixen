@@ -1,0 +1,242 @@
+You are a senior full-stack engineer. You have full access to this codebase (frontend + backend). 
+Your job is to build a NEW “QA Front” inside the app to validate the recent fixes based on the QA report, 
+and then run an end-to-end test as a brand-new founder profile to ensure all P0/P1 issues are resolved.
+
+Do NOT respond with general advice. Make actual code changes and provide a PR-style summary + test checklist + screenshots (if possible).
+
+========================================================
+CONTEXT / WHAT WAS WRONG (FROM QA REPORT)
+========================================================
+Previously observed issues:
+P0:
+- Tenant isolation missing (new users see demo TechFlow data)
+- RBAC leak (viewer users access admin console)
+- Scenario NLP inverted logic (“cut marketing 25%” -> “growth +25%”)
+- Baseline comparison wrong (before values incorrect; status quo compares against itself)
+- KPI trust-breakers (NRR 734%, Growth 1268%)
+Regression:
+- Decision + Health tabs disappeared suddenly
+
+P1:
+- Business Health + Confidence inconsistent across pages
+- /simulate route broken
+- Scenario rerun stale/not triggering
+- Strategic briefing timeout
+- No doc upload UI
+
+========================================================
+PRIMARY OBJECTIVE
+========================================================
+A) BUILD A NEW FRONTEND SECTION: “QA Front”
+B) USE IT TO TEST THE FIXES AS A NEW FOUNDER SIGNUP (FRESH TENANT)
+C) ENSURE NO REGRESSIONS AND THAT DECISION + HEALTH TABS ARE BACK
+
+========================================================
+STEP 1 — CREATE “QA FRONT” (NEW FRONTEND AREA)
+========================================================
+Create a new route group, visible only in non-production (or behind admin role):
+- Route: /qa
+- Nav label: “QA Front”
+- Gate it behind:
+   - NODE_ENV !== 'production' OR user role 'admin'
+(choose simplest; must not be visible to regular users in production)
+
+The QA Front must have these pages (tabs inside /qa):
+1) /qa/smoke
+2) /qa/rbac
+3) /qa/tenant
+4) /qa/kpis
+5) /qa/scenarios
+6) /qa/routes
+7) /qa/health
+8) /qa/briefing
+9) /qa/regression (Decision/Health tabs check)
+
+Each page should:
+- Run a set of “assertions” (client-side checks + API calls)
+- Display PASS/FAIL with reasons
+- Provide a “Copy debug report” button that outputs JSON + human text
+- Provide the exact endpoints called + responses (redacted secrets)
+
+UI Requirements:
+- Simple, minimal, fast.
+- Use a table/list of checks with:
+  Check Name | Status | Details | Fix Hint
+
+========================================================
+STEP 2 — ADD SERVER ENDPOINTS (IF NEEDED) TO SUPPORT QA FRONT
+========================================================
+If backend does not already expose the necessary details safely, add these read-only endpoints:
+- GET /api/qa/whoami  -> { user_id, role, tenant_id/company_id }
+- GET /api/qa/tenant-scope-check -> returns counts scoped to tenant for key tables
+- GET /api/qa/routes-health -> list of key routes and server/client status
+- GET /api/qa/health-summary -> canonical health + confidence with inputs_used, last_updated
+- GET /api/qa/kpi-sanity -> returns computed KPI set with formula metadata (NRR window, growth window)
+
+These endpoints must be:
+- secured (admin only OR non-prod only)
+- tenant safe (no leaking other tenants)
+
+========================================================
+STEP 3 — QA FRONT TESTS (EACH TAB MUST TEST SPECIFIC ITEMS)
+========================================================
+
+A) /qa/smoke — Basic system check
+- App loads
+- API reachable
+- Session created
+- No console errors
+- No 404 route errors
+
+B) /qa/rbac — RBAC validation (CRITICAL)
+- As non-admin user, attempt:
+   - GET /api/admin/users
+   - GET /api/admin/companies
+   - Navigate to /admin
+Expect:
+   - 403 and/or redirect + “Not authorized”
+Must show PASS only if blocked.
+
+C) /qa/tenant — Tenant isolation validation (CRITICAL)
+- Create a fresh test user (instructions below)
+- Verify:
+   - user has a tenant/company created or forced onboarding
+   - user cannot see demo data
+   - all “company_id” scoped queries return only 1 tenant’s data
+- Add a test that detects demo company leakage:
+   - If any dataset contains “TechFlow Analytics” for this user => FAIL
+
+D) /qa/kpis — KPI sanity checks (CRITICAL)
+- Fetch canonical KPI payload from ONE endpoint
+- Validate:
+  - NRR within plausible range OR N/A if baseline too small
+  - Growth rate not absurd (guard rails if baseline near zero)
+  - Runway = cash/burn (with tolerance)
+  - ARR = MRR*12 (with tolerance)
+- Show formula metadata:
+  - NRR period
+  - Growth window
+  - Baseline thresholds
+
+E) /qa/scenarios — Scenario + baseline correctness (CRITICAL)
+- Run:
+  - Status Quo: expect delta = 0
+  - Cut marketing 25%: expect marketing down and growth down (or pipeline down), runway effect plausible
+  - Hire 15 engineers: burn up immediately
+  - Revenue down 35% MoM: runway down
+- Validate baseline “Before” equals current KPI state (runway matches dashboard)
+- Validate rerun:
+  - Update scenario text -> simulate -> results must change
+- Detect stale caching:
+  - If results identical across materially different scenario inputs => FAIL
+
+F) /qa/routes — Route health
+- Visit:
+  - /dashboard
+  - /decisions
+  - /health (or equivalent)
+  - /scenarios
+  - /simulate (should redirect or not exist)
+Expect:
+  - no “forgot to add page to router”
+  - /simulate either removed or redirects properly
+
+G) /qa/health — Health/Confidence consistency
+- Compare health/confidence numbers across:
+  - dashboard
+  - scenarios
+  - decisions
+Expect:
+  - same values OR explicitly labeled difference
+- This tab should identify which endpoint each page uses and fail if not canonical.
+
+H) /qa/briefing — AI briefing reliability
+- Trigger briefing
+- Must return in <10s OR show “AI not configured” with actionable message
+- Must not spin for 30s.
+- Should log server error code and reason.
+
+I) /qa/regression — Decision + Health tabs regression
+- Verify nav items exist:
+  - Decision tab
+  - Health tab
+- Verify routes load
+- Verify visible for normal founder users (not just admin)
+- If hidden because of role gating, FAIL.
+
+========================================================
+STEP 4 — BUILD A NEW FOUNDER PROFILE TEST (FRESH ACCOUNT)
+========================================================
+Create a dedicated “New Founder Test” flow in QA Front:
+- Button: “Create Fresh Founder Test Account”
+- This should:
+  - generate a unique email alias and create a user via UI flow OR via safe test endpoint (non-prod only)
+  - log in as that user
+  - walk through onboarding/company creation
+  - land on empty state or onboarding (not demo)
+
+Founder persona for testing (use this exact profile):
+Name: Maya Lim
+Email: maya.lim+founderconsole.qa2@gmail.com (or auto-generate unique + timestamp)
+Password: SeaStack@2026!
+Company: ReefOps AI (SEA B2B SaaS for logistics)
+Country: Singapore
+Stage: Seed → Series A transition
+MRR: $180,000
+Cash: $1,250,000
+Burn: $160,000/mo
+Team: 28
+Main problems:
+- CAC rising 35% in 60 days
+- runway < 8 months
+- deciding: cut marketing vs raise bridge vs price increase
+
+The QA Front should then automatically run:
+- Tenant checks
+- RBAC checks
+- KPI sanity checks
+- Scenario sanity checks
+- Route checks
+- Regression checks
+
+Output:
+- A downloadable report JSON and a human-readable report.
+
+========================================================
+STEP 5 — IMPLEMENTATION REQUIREMENTS
+========================================================
+- Keep QA Front isolated and safe (admin/non-prod only).
+- Do not break main UI.
+- Use the existing design system components if present; otherwise simple Tailwind.
+- Add a small “QA telemetry” logger:
+  - records failed checks with timestamp, user_id, tenant_id
+  - stored tenant-scoped and non-sensitive
+
+========================================================
+DELIVERABLES REQUIRED
+========================================================
+1) Code changes implementing QA Front + required endpoints
+2) PR-style summary:
+   - files changed
+   - new routes added
+   - new endpoints added
+3) Test checklist:
+   - how to run QA Front
+   - expected PASS states
+4) Confirm regression fix:
+   - Decision & Health tabs restored and visible for normal founders
+5) Confirm fixes:
+   - tenant isolation enforced
+   - RBAC enforced
+   - KPI sanity fixed
+   - baseline fixed
+   - scenario rerun fixed
+   - /simulate route handled
+
+========================================================
+DO IT NOW
+========================================================
+Start by:
+1) Restoring Decision/Health tabs (regression)
+2) Ensuring RBAC + tenant isolation are correct
+3) Then build QA Front to validate everything consistently

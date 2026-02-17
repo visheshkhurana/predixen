@@ -116,9 +116,9 @@ PARAMETER_PATTERNS = {
         (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:all\s+)?(?:new\s+)?hir(ing|es?)', None),
     ],
     'headcount': [
-        (r'(hire|add)\s*(\d+)\s*(people|employees?|heads?|staff)', 2),
-        (r'(reduce|cut|lay\s*off)\s*(\d+)\s*(people|employees?|heads?|staff)', 2, -1),
-        (r'(\d+)\s*(new\s*)?(hires?|employees?)', 1),
+        (r'(hire|add)\s*(\d+)\s*(people|employees?|heads?|staff|engineers?|developers?|devs?|designers?|salespeople|reps?)', 2),
+        (r'(reduce|cut|lay\s*off)\s*(\d+)\s*(people|employees?|heads?|staff|engineers?|developers?)', 2, -1),
+        (r'(\d+)\s*(new\s*)?(hires?|employees?|engineers?|developers?)', 1),
     ],
     'fundraise': [
         (r'(raise|fundraise|get)\s*\$?(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?', 2, 3),

@@ -79,6 +79,7 @@ import MessagingPage from "@/pages/messaging";
 import JournalPage from "@/pages/journal";
 import GoalsPage from "@/pages/goals";
 import SharedScenarioPage from "@/pages/shared-scenario";
+import QAFrontPage from "@/pages/qa";
 
 function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
   const token = useFounderStore((s) => s.token);
@@ -298,6 +299,9 @@ function Router() {
                 </Route>
       <Route path="/admin/team">
         {() => <AdminRoute component={AdminTeam} />}
+      </Route>
+      <Route path="/qa">
+        {() => <AdminRoute component={QAFrontPage} />}
       </Route>
       <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
       <Route path="/owner-console" component={OwnerConsole} />

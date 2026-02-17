@@ -41,6 +41,7 @@ from server.api import metric_trends as metric_trends_api
 from server.api import digest as digest_api
 from server.api import csv_import as csv_import_api
 from server.api import currency as currency_api
+from server.api import qa as qa_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -178,6 +179,7 @@ app.include_router(metric_trends_api.router)
 app.include_router(digest_api.router)
 app.include_router(csv_import_api.router)
 app.include_router(currency_api.router)
+app.include_router(qa_api.router)
 
 @app.get("/")
 def root():
