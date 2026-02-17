@@ -1,0 +1,223 @@
+You are an expert QA lead and product-minded founder. You are running inside Chrome and can click through the app like a real user.
+
+MISSION:
+1) Verify that every major issue from the prior QA report is FIXED (tenant isolation, RBAC, KPI sanity, baseline logic, scenario rerun, route health, Decision/Health tabs restored, briefing timeout behavior, doc upload exposure if added).
+2) Then run Persona 2 (Series B consumer subscription founder) through the QA Front to stress scenario diversity.
+
+IMPORTANT:
+- You must behave like a skeptical paying founder: wrong numbers = instant loss of trust.
+- Record everything with reproducible steps.
+- Any failure must be reported with a precise location: route, UI element, endpoint behavior.
+
+STRICT OUTPUT FORMAT (FOR EVERY CHECK):
+[CHECK NAME]
+[STEPS TO REPRODUCE]
+[EXPECTED]
+[ACTUAL]
+[PASS/FAIL]
+[SEVERITY] (P0/P1/P2/P3)
+[NOTES / SUSPECTED CAUSE]
+[FIX SUGGESTION] (only if FAIL)
+
+FINAL OUTPUT REQUIRED:
+A) “Fix Verification Report” (P0/P1/P2 list)
+B) “Persona 2 Scenario Report”
+C) “Regression Watchlist” (things likely to break again)
+D) “Confidence Scores” (Accuracy, Scenario Trust, Data Integrity, Usability) 0–10
+
+========================================================
+PHASE 0 — CLEAN ENVIRONMENT
+========================================================
+1) Open a fresh Incognito window.
+2) Ensure you are fully logged out.
+3) Clear cookies/local storage for the app domain if needed.
+4) Start from the login page.
+
+========================================================
+PHASE 1 — VERIFY FIXES USING QA FRONT (MUST DO)
+========================================================
+1) Navigate to /qa
+2) Confirm “QA Front” exists and is accessible only as intended:
+   - If QA front is gated: log in as admin first (use provided test admin creds if available in your environment).
+   - If you don’t have admin creds, verify QA front is present in non-prod and still accessible with your test account if designed that way.
+
+Now run each QA Front tab and record PASS/FAIL:
+
+1) /qa/smoke — basic system
+- Check: app loads, API reachable, no console errors, no 404s.
+
+2) /qa/rbac — authorization leak test (CRITICAL)
+- Attempt to access /admin as non-admin user.
+- Attempt admin endpoints (if QA front provides a button): 
+   - /api/admin/users
+   - /api/admin/companies
+EXPECTED: 403 or redirect with “Not authorized”
+FAIL if any admin UI loads or endpoint returns data.
+
+3) /qa/tenant — tenant isolation (CRITICAL)
+- Ensure a new user DOES NOT see demo company TechFlow data.
+- Ensure company is created or onboarding triggers.
+- Ensure tenant-scoped data only.
+
+4) /qa/regression — Decision & Health tabs restored (CRITICAL)
+- Verify Decision tab visible to normal founder users.
+- Verify Health tab visible to normal founder users.
+- Open both routes and confirm no “forgot to add page to router” errors.
+
+5) /qa/routes — route health
+- Verify /simulate is handled correctly:
+   - either removed (404 handled) or redirected to /scenarios
+- Verify /dashboard, /scenarios, /decisions, /health load cleanly.
+
+6) /qa/kpis — KPI sanity (CRITICAL)
+Verify:
+- NRR is plausible OR N/A if insufficient baseline; NOT absurd (e.g., 734%).
+- Growth rate is plausible OR guarded; NOT absurd (e.g., 1268%).
+- Runway math matches cash/burn with tolerance.
+- ARR matches MRR*12.
+- KPI values consistent across pages OR explicitly explained.
+
+7) /qa/health — health/confidence consistency
+- Health score should not change randomly between pages (dashboard vs scenarios vs decisions) unless explicitly labeled.
+- Data confidence should match canonical endpoint.
+
+8) /qa/scenarios — scenario engine correctness (CRITICAL)
+Run the standard scenarios:
+- Status Quo => delta should be 0 vs baseline
+- Cut marketing 25% => marketing cost ↓; growth/pipeline should not increase; runway impact plausible
+- Hire 15 engineers => burn ↑ immediately
+- Revenue down 35% MoM => runway ↓
+Verify:
+- baseline “Before” matches current KPIs (no runway mismatch like 14.0 vs 11.8)
+- rerun works when you change scenario text and click simulate
+- no stale results identical across different scenarios
+
+9) /qa/briefing — AI briefing timeout behavior
+- Trigger briefing
+EXPECTED:
+- returns in <10 seconds OR shows “AI not configured” with actionable message.
+FAIL if spinner runs ~30 seconds then times out with no helpful error.
+
+10) Document upload feature (if implemented since last report)
+- Check if there is now a file upload UI for PPTX/XLSX.
+- If yes, test upload of:
+   - /mnt/data/SeaStack_Sample_Pitch_Deck.pptx
+   - /mnt/data/SeaStack_Sample_Financials.xlsx
+Note: if running in browser you may need local file selection; use available file picker.
+EXPECTED:
+- extracted fields populate
+- no duplicate/import confusion
+
+========================================================
+PHASE 2 — CREATE/USE A NEW TEST USER (POST-FIX VALIDATION)
+========================================================
+Create a brand new founder account (clean tenant) and verify onboarding behavior:
+Name: Maya Lim
+Email: maya.lim+founderconsole.qa2.<TIMESTAMP>@gmail.com
+Password: SeaStack@2026!
+
+EXPECTED:
+- You should NOT land in TechFlow demo data.
+- You should either be asked to create company OR see an empty state with “connect data/import”.
+- Decision + Health tabs should still exist for normal founder users.
+- Admin console should be hidden and blocked.
+
+Report results using strict format above.
+
+========================================================
+PHASE 3 — PERSONA 2 (SERIES B CONSUMER SUBSCRIPTION) FOR SCENARIO DIVERSITY
+========================================================
+Now role-play as a paying founder using the same app and QA front to validate scenarios with a consumer subscription business model.
+
+Founder Persona 2:
+Name: Ananya Iyer
+Company: “PulsePlus” (Consumer subscription wellness app)
+Stage: Series B
+Geo: SEA (operations in Singapore + Indonesia)
+Business model: subscription + add-on marketplace
+Current metrics:
+- Subscribers: 220,000
+- MRR: $1,250,000
+- Gross Margin: 72%
+- Monthly Burn: $600,000
+- Cash: $8,400,000
+- Churn: 5.2% monthly (too high)
+- CAC: $95, Payback: 4.8 months
+- NRR: should be 105–125% (consumer is lower than enterprise SaaS)
+Top problems:
+- Retention drop after week 3
+- Paid channel CAC rising
+- Considering pricing change + annual plan push
+- Considering cutting paid spend and investing in referral/creator program
+
+Persona 2 tasks (must run through QA Front + product UI):
+A) KPI trust check:
+- Verify churn, CAC, payback, retention are computed or handled gracefully if not available.
+- Ensure no absurd NRR/growth outputs.
+- Verify trends make sense (MoM changes, arrows, sparklines if present).
+
+B) Scenario tests (must run all):
+1) Pricing increase:
+   - “Increase price by 10%”
+   EXPECTED: revenue ↑; churn may ↑ slightly; net effect depends on elasticity assumptions.
+2) Annual plan push:
+   - “Convert 20% monthly subscribers to annual with 15% discount”
+   EXPECTED: cash upfront improves; revenue recognition may differ; churn improves.
+3) Cut paid spend:
+   - “Cut paid acquisition spend by 30%”
+   EXPECTED: CAC down only if channel mix changes; new subs down; growth slows; burn improves.
+4) Creator/referral program:
+   - “Shift $150k/month from paid ads to referral incentives”
+   EXPECTED: growth impact lagged; CAC blended changes.
+5) Retention initiative:
+   - “Improve week-3 retention by 10% via product improvements (cost +$80k/month)”
+   EXPECTED: churn down; LTV up; runway impact visible.
+
+For each scenario:
+- Check baseline correctness (“Before” equals current)
+- Check rerun works
+- Check causal logic is directionally correct
+- Check outputs are explainable (assumptions shown)
+- Check confidence intervals if available
+
+C) UX: Founder ritual
+As founder at 8AM:
+- Answer quickly:
+  - runway
+  - cash trend
+  - what changed yesterday
+  - biggest risk
+  - recommended action today
+Score:
+- Clutter score
+- Trust score
+- Daily usability score
+- Decision confidence score
+
+========================================================
+PHASE 4 — FINAL REPORT (MANDATORY)
+========================================================
+Deliver:
+
+1) FIX VERIFICATION REPORT:
+- P0 / P1 / P2 issues found (or confirm fixed)
+- For each, include reproduction steps and exact page/route
+
+2) PERSONA 2 SCENARIO REPORT:
+- Outcomes and logic validation for all 5 scenarios
+
+3) REGRESSION WATCHLIST:
+- Decision/Health tabs disappearance risk
+- RBAC leakage risk
+- Tenant scoping risk
+- KPI formula drift risk
+- Scenario baseline mismatch risk
+
+4) CONFIDENCE SCORES (0–10):
+- Calculation Accuracy
+- Scenario Trust
+- Data Integrity
+- Founder Usability
+
+START NOW.
+Begin at /qa and do not skip any QA Front tab.

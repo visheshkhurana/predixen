@@ -10,9 +10,10 @@ from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.config import settings
-from server.models import User, Company, Scenario, TeamMember
+from server.models import User, Company, Scenario
 from server.models.truth_scan import TruthScan
 from server.models.financial import FinancialRecord
+from server.models.workspace import WorkspaceMember
 
 router = APIRouter(prefix="/qa", tags=["qa"])
 
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/qa", tags=["qa"])
 def require_qa_access(current_user: User = Depends(get_current_user)):
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     user_email = getattr(current_user, 'email', '').lower().strip()
-    if user_email != admin_email:
+    if not admin_email or user_email != admin_email:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="QA endpoints require admin access"
@@ -30,14 +31,20 @@ def require_qa_access(current_user: User = Depends(get_current_user)):
 
 @router.get("/whoami")
 def qa_whoami(current_user: User = Depends(require_qa_access), db: Session = Depends(get_db)):
-    teams = db.query(TeamMember).filter(TeamMember.user_id == current_user.id).all()
-    company_ids = [t.company_id for t in teams]
+    owned_companies = db.query(Company).filter(Company.user_id == current_user.id).all()
+    owned_ids = [c.id for c in owned_companies]
+
+    member_rows = db.query(WorkspaceMember).filter(WorkspaceMember.user_id == current_user.id).all()
+    member_ids = [m.company_id for m in member_rows]
+
+    all_company_ids = list(set(owned_ids + member_ids))
+
     return {
         "user_id": current_user.id,
         "email": current_user.email,
         "role": getattr(current_user, 'role', None),
-        "company_ids": company_ids,
-        "company_count": len(company_ids),
+        "company_ids": all_company_ids,
+        "company_count": len(all_company_ids),
         "is_admin": True,
         "timestamp": datetime.utcnow().isoformat()
     }
@@ -56,7 +63,7 @@ def qa_tenant_scope(
     scenario_count = db.query(func.count(Scenario.id)).filter(Scenario.company_id == company_id).scalar() or 0
     financial_count = db.query(func.count(FinancialRecord.id)).filter(FinancialRecord.company_id == company_id).scalar() or 0
     truth_scan_count = db.query(func.count(TruthScan.id)).filter(TruthScan.company_id == company_id).scalar() or 0
-    team_count = db.query(func.count(TeamMember.id)).filter(TeamMember.company_id == company_id).scalar() or 0
+    workspace_members = db.query(func.count(WorkspaceMember.id)).filter(WorkspaceMember.company_id == company_id).scalar() or 0
 
     all_companies = db.query(Company.id, Company.name).all()
     demo_companies = [{"id": c.id, "name": c.name} for c in all_companies if "techflow" in (c.name or "").lower() or "demo" in (c.name or "").lower()]
@@ -71,7 +78,7 @@ def qa_tenant_scope(
             "scenarios": scenario_count,
             "financial_records": financial_count,
             "truth_scans": truth_scan_count,
-            "team_members": team_count,
+            "workspace_members": workspace_members,
         },
         "demo_companies_in_system": demo_companies,
         "timestamp": datetime.utcnow().isoformat()
@@ -93,7 +100,7 @@ def qa_routes_health(current_user: User = Depends(require_qa_access)):
         {"path": "/admin", "name": "Admin Dashboard", "type": "frontend", "admin_only": True},
     ]
     api_routes = [
-        {"path": "/api/auth/me", "name": "Auth Me", "type": "api"},
+        {"path": "/api/admin/me", "name": "Admin Me", "type": "api"},
         {"path": "/api/companies", "name": "Companies List", "type": "api"},
         {"path": "/api/dashboard/kpis", "name": "Dashboard KPIs", "type": "api"},
         {"path": "/api/admin/users", "name": "Admin Users", "type": "api", "admin_only": True},
@@ -122,8 +129,9 @@ def qa_health_summary(
 
     if latest_scan and latest_scan.outputs_json:
         scan_data = latest_scan.outputs_json if isinstance(latest_scan.outputs_json, dict) else {}
-        health_score = scan_data.get("health_score")
-        confidence_score = scan_data.get("confidence_score") or scan_data.get("data_confidence")
+        metrics = scan_data.get("metrics", {}) if isinstance(scan_data.get("metrics"), dict) else {}
+        health_score = scan_data.get("quality_of_growth_index") or scan_data.get("health_score")
+        confidence_score = scan_data.get("data_confidence_score") or scan_data.get("confidence_score") or scan_data.get("data_confidence")
         last_updated = latest_scan.created_at.isoformat() if latest_scan.created_at else None
 
     return {
@@ -148,22 +156,34 @@ def qa_kpi_sanity(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
+    latest_records = db.query(FinancialRecord).filter(
+        FinancialRecord.company_id == company_id
+    ).order_by(FinancialRecord.period_start.desc()).limit(12).all()
+
     latest_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
     ).order_by(TruthScan.created_at.desc()).first()
 
     scan_data = {}
+    metrics = {}
     if latest_scan and latest_scan.outputs_json:
         scan_data = latest_scan.outputs_json if isinstance(latest_scan.outputs_json, dict) else {}
+        metrics = scan_data.get("metrics", {}) if isinstance(scan_data.get("metrics"), dict) else scan_data
 
-    mrr = scan_data.get("mrr")
-    arr = scan_data.get("arr")
-    burn_rate = scan_data.get("burn_rate") or scan_data.get("monthly_burn")
-    cash = scan_data.get("cash_on_hand") or scan_data.get("cash")
-    runway = scan_data.get("runway_months") or scan_data.get("runway")
-    nrr = scan_data.get("nrr") or scan_data.get("net_revenue_retention")
-    growth_rate = scan_data.get("monthly_growth_rate") or scan_data.get("growth_rate")
-    gross_margin = scan_data.get("gross_margin")
+    mrr = metrics.get("mrr")
+    arr = metrics.get("arr")
+    burn_rate = metrics.get("net_burn") or metrics.get("burn_rate") or metrics.get("monthly_burn")
+    cash = metrics.get("cash_balance") or metrics.get("cash_on_hand") or metrics.get("cash")
+    runway = metrics.get("runway_months") or metrics.get("runway")
+    nrr = metrics.get("net_revenue_retention") or metrics.get("nrr")
+    growth_rate = metrics.get("revenue_growth_mom") or metrics.get("monthly_growth_rate") or metrics.get("growth_rate")
+    gross_margin = metrics.get("gross_margin")
+
+    if not scan_data and latest_records:
+        latest = latest_records[0]
+        mrr = getattr(latest, 'revenue', None)
+        burn_rate = getattr(latest, 'total_expenses', None)
+        cash = getattr(latest, 'cash_on_hand', None)
 
     checks = []
 
@@ -234,6 +254,8 @@ def qa_kpi_sanity(
             "cash": cash, "runway": runway, "nrr": nrr,
             "growth_rate": growth_rate, "gross_margin": gross_margin
         },
+        "financial_record_count": len(latest_records),
+        "has_truth_scan": latest_scan is not None,
         "has_data": len(checks) > 0,
         "all_pass": all(c["pass"] for c in checks) if checks else None,
         "timestamp": datetime.utcnow().isoformat()
@@ -249,7 +271,7 @@ def qa_parse_nlp(
         from server.copilot.intent_parser import extract_parameters
         params = extract_parameters(text)
         params_dict = {}
-        for field in ['burn_reduction_pct', 'revenue_growth_pct', 'price_change_pct', 'headcount_change', 'fundraise_amount']:
+        for field in ['burn_reduction_pct', 'revenue_growth_pct', 'price_change_pct', 'headcount_change', 'fundraise_amount', 'churn_reduction_pct']:
             val = getattr(params, field, None)
             if val is not None:
                 params_dict[field] = val
@@ -275,7 +297,7 @@ def qa_create_test_founder(
     from server.core.security import get_password_hash
 
     unique_id = uuid.uuid4().hex[:8]
-    email = f"qa.founder.{unique_id}@founderconsole.test"
+    email = f"qa.founder.{unique_id}@founderconsole.dev"
     password = "QaTest@2026!"
 
     existing = db.query(User).filter(User.email == email).first()
@@ -286,28 +308,27 @@ def qa_create_test_founder(
         email=email,
         password_hash=get_password_hash(password),
         role="user",
-        name=f"QA Founder {unique_id}",
     )
     db.add(user)
     db.flush()
 
     company = Company(
         name=f"ReefOps AI {unique_id}",
+        user_id=user.id,
         industry="SaaS",
         stage="Seed",
-        country="Singapore",
         currency="SGD",
         website=f"reefops-{unique_id}.ai",
     )
     db.add(company)
     db.flush()
 
-    team_member = TeamMember(
+    workspace_member = WorkspaceMember(
         user_id=user.id,
         company_id=company.id,
         role="owner",
     )
-    db.add(team_member)
+    db.add(workspace_member)
     db.commit()
 
     return {

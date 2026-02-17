@@ -226,21 +226,21 @@ async function runSmokeChecks(): Promise<CheckResult[]> {
   });
 
   try {
-    const res = await apiFetch("/auth/me");
+    const res = await apiFetch("/admin/me");
     results.push({
-      name: "Auth /me endpoint",
+      name: "Auth /admin/me endpoint",
       status: res.ok ? "pass" : "fail",
       details: res.ok
-        ? `User: ${res.data?.email || "ok"}`
+        ? `User: ${res.data?.email || "ok"}, Admin: ${res.data?.is_admin}`
         : `Auth failed: ${res.status}`,
-      endpoint: "/api/auth/me",
+      endpoint: "/api/admin/me",
     });
   } catch {
     results.push({
-      name: "Auth /me endpoint",
+      name: "Auth /admin/me endpoint",
       status: "fail",
       details: "Auth endpoint unreachable",
-      endpoint: "/api/auth/me",
+      endpoint: "/api/admin/me",
     });
   }
 
@@ -502,22 +502,22 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
     });
   }
 
-  const nlpTestCases = [
-    {
-      input: "cut marketing 25%",
-      expectBurnReduction: true,
-      label: "NLP: Cut marketing 25%",
-    },
-    {
-      input: "hire 15 engineers",
-      expectHeadcount: true,
-      label: "NLP: Hire 15 engineers",
-    },
-    {
-      input: "reduce revenue 35%",
-      expectRevenueDown: true,
-      label: "NLP: Reduce revenue 35%",
-    },
+  interface NlpTestCase {
+    input: string;
+    label: string;
+    expectField?: string;
+    expectPositive?: boolean;
+    expectNegative?: boolean;
+  }
+
+  const nlpTestCases: NlpTestCase[] = [
+    { input: "cut marketing 25%", label: "NLP: Cut marketing 25%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "hire 15 engineers", label: "NLP: Hire 15 engineers", expectField: "headcount_change", expectPositive: true },
+    { input: "reduce revenue 35%", label: "NLP: Reduce revenue 35%", expectField: "revenue_growth_pct", expectNegative: true },
+    { input: "increase price by 10%", label: "NLP: Price increase 10%", expectField: "price_change_pct", expectPositive: true },
+    { input: "cut paid acquisition spend by 30%", label: "NLP: Cut paid spend 30%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "reduce churn by 10%", label: "NLP: Reduce churn 10%", expectField: "churn_reduction_pct", expectPositive: true },
+    { input: "hire 5 designers", label: "NLP: Hire 5 designers", expectField: "headcount_change", expectPositive: true },
   ];
 
   for (const tc of nlpTestCases) {
@@ -530,34 +530,17 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
         let passed = true;
         let detail = JSON.stringify(params);
 
-        if (tc.expectBurnReduction) {
-          const br = params.burn_reduction_pct;
-          if (br === undefined || br === null) {
+        if (tc.expectField) {
+          const val = params[tc.expectField];
+          if (val === undefined || val === null) {
             passed = false;
-            detail = "Missing burn_reduction_pct";
-          } else if (br < 0) {
+            detail = `Missing ${tc.expectField}`;
+          } else if (tc.expectPositive && val <= 0) {
             passed = false;
-            detail = `burn_reduction_pct is negative (${br}) - should be positive for reductions`;
-          }
-        }
-        if ((tc as any).expectHeadcount) {
-          const hc = params.headcount_change;
-          if (hc === undefined || hc === null) {
+            detail = `${tc.expectField} is ${val} - should be positive`;
+          } else if (tc.expectNegative && val >= 0) {
             passed = false;
-            detail = "Missing headcount_change";
-          } else if (hc <= 0) {
-            passed = false;
-            detail = `headcount_change is ${hc} - should be positive for hiring`;
-          }
-        }
-        if (tc.expectRevenueDown) {
-          const rg = params.revenue_growth_pct;
-          if (rg === undefined || rg === null) {
-            passed = false;
-            detail = "Missing revenue_growth_pct";
-          } else if (rg > 0) {
-            passed = false;
-            detail = `revenue_growth_pct is positive (${rg}) - should be negative for reductions`;
+            detail = `${tc.expectField} is ${val} - should be negative`;
           }
         }
 
@@ -565,19 +548,14 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
           name: tc.label,
           status: passed ? "pass" : "fail",
           details: detail,
-          fixHint: passed
-            ? undefined
-            : "Check intent_parser.py NLP patterns",
+          fixHint: passed ? undefined : "Check intent_parser.py NLP patterns",
           endpoint: "/api/qa/parse-nlp-test",
         });
       } else {
         results.push({
           name: tc.label,
           status: res.status === 404 ? "warn" : "fail",
-          details:
-            res.status === 404
-              ? "NLP parse endpoint not found"
-              : `API returned ${res.status}`,
+          details: res.status === 404 ? "NLP parse endpoint not found" : `API returned ${res.status}`,
           endpoint: "/api/qa/parse-nlp-test",
         });
       }

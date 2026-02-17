@@ -100,7 +100,7 @@ PARAMETER_PATTERNS = {
         (r'(\d+(?:\.\d+)?)\s*%\s*(?:burn|cost|expense|spending)\s*(reduction|cut|decrease)', 1),
         (r'(?:burn|cost|expense)\s*(reduction|cut)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'(reduc\w*|cut\w*|lower\w*|slash\w*)\s+(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?(?:the\s+)?(?:burn|costs?|expenses?|spending)', 2),
-        (r'(reduc\w*|cut\w*|lower\w*|decrease\w*|slash\w*)\s*(?:the\s+)?(?:marketing|payroll|salaries|rent|infra|infrastructure|cloud|aws|server)\s*(?:spend(?:ing)?|budget|costs?)?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduc\w*|cut\w*|lower\w*|decrease\w*|slash\w*)\s*(?:the\s+)?(?:marketing|payroll|salaries|rent|infra|infrastructure|cloud|aws|server|paid(?:\s+acquisition)?|acquisition|advertising|ads?|ad\s*spend)\s*(?:spend(?:ing)?|budget|costs?)?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
     ],
     'price_change': [
         (r'(increas\w*|rais\w*|bump\w*|grow\w*)\s*(?:the\s+)?price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
