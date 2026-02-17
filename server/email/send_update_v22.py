@@ -1,6 +1,6 @@
 """
 Send update email v22 - Notion Auto-Push: QA Reports Now Publish Automatically.
-Sender: f5987291@predixen.app
+Sender: f5987291@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_notion_autopush_feb2026_v22b"
+CAMPAIGN = "founderconsole_notion_autopush_feb2026_v22b"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -31,7 +31,7 @@ WHAT CHANGED
 
 1. AUTOMATIC NOTION PUBLISHING
 
-Every time you run bash qa-lab/run.sh, the QA report is automatically pushed to a "Predixen QA Reports" Notion database. Each run creates a new page with:
+Every time you run bash qa-lab/run.sh, the QA report is automatically pushed to a "FounderConsole QA Reports" Notion database. Each run creates a new page with:
 
 - Status: "All Passed" or "Has Failures"
 - Pass Rate: e.g., "100.0%"
@@ -75,7 +75,7 @@ CURRENT STATE
 - Dashboard header alignment fixed
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -111,7 +111,7 @@ def build_html(rcpt: dict) -> str:
 <tr>
 <td style="padding:12px 16px;background:#f8f7ff;border-left:3px solid #6366f1;border-radius:0 6px 6px 0;">
 <p style="margin:0 0 4px;font-weight:700;font-size:14px;color:#4338ca;">1. Auto-Creates Database</p>
-<p style="margin:0;font-size:13px;color:#4b5563;">On first run, creates a &ldquo;Predixen QA Reports&rdquo; database in your Notion workspace with columns for Status, Pass Rate, Tests, Passed, Failed, Duration, and Run Date. Subsequent runs reuse the same database.</p>
+<p style="margin:0;font-size:13px;color:#4b5563;">On first run, creates a &ldquo;FounderConsole QA Reports&rdquo; database in your Notion workspace with columns for Status, Pass Rate, Tests, Passed, Failed, Duration, and Run Date. Subsequent runs reuse the same database.</p>
 </td>
 </tr>
 <tr><td style="height:8px;"></td></tr>
@@ -196,7 +196,7 @@ def build_html(rcpt: dict) -> str:
 </table>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -205,7 +205,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Nikita from Predixen <updates@predixen.app>"
+    sender = "Nikita from FounderConsole <updates@founderconsole.ai>"
 
     print(f"Sending Notion Auto-Push update v22b to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -222,7 +222,7 @@ def send_all():
 
         headers = {
             "X-Entity-Ref-ID": str(uuid.uuid4()),
-            "List-Unsubscribe": "<mailto:updates@predixen.app?subject=unsubscribe>",
+            "List-Unsubscribe": "<mailto:updates@founderconsole.ai?subject=unsubscribe>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             "Precedence": "bulk",
         }

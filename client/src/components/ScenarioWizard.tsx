@@ -281,7 +281,7 @@ function getSliderFeedback(
   }
 }
 
-const TUTORIAL_STORAGE_KEY = 'predixen_scenario_tutorial_dismissed';
+const TUTORIAL_STORAGE_KEY = 'founderconsole_scenario_tutorial_dismissed';
 
 function getValidationWarnings(params: ScenarioParams): { field: string; message: string }[] {
   const warnings: { field: string; message: string }[] = [];

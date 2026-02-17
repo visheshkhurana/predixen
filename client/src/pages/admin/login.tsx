@@ -40,8 +40,8 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.adminLogin(form.email, form.password);
-      localStorage.setItem('predixen-token', result.access_token);
-      localStorage.setItem('predixen-admin-session', 'true');
+      localStorage.setItem('founderconsole-token', result.access_token);
+      localStorage.setItem('founderconsole-admin-session', 'true');
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
       toast({ title: 'Welcome, Administrator' });
@@ -65,7 +65,7 @@ export default function AdminLoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Admin Console</CardTitle>
           <CardDescription className="text-muted-foreground">
-            Predixen Intelligence OS Administration
+            FounderConsole Administration
           </CardDescription>
         </CardHeader>
         

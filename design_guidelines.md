@@ -1,4 +1,4 @@
-# Design Guidelines: Predixen Intelligence OS
+# Design Guidelines: FounderConsole
 
 ## Design Approach
 
@@ -96,7 +96,7 @@
 - Main content area with max-w-7xl
 
 **Sidebar**:
-- Logo at top (Predixen)
+- Logo at top (FounderConsole)
 - Company switcher dropdown
 - Navigation menu with icons
 - Investor items hidden when FEATURE_INVESTOR_MODE=false

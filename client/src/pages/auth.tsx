@@ -64,7 +64,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.login(loginForm.email, loginForm.password);
-      localStorage.setItem('predixen-token', result.access_token);
+      localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
           identifyUser(result.user_id, result.email);
@@ -117,7 +117,7 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.register(registerForm.email, registerForm.password);
-      localStorage.setItem('predixen-token', result.access_token);
+      localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
           identifyUser(result.user_id, result.email);
@@ -134,8 +134,8 @@ export default function AuthPage() {
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     try {
-      const result = await api.auth.login('demo@predixen.ai', 'demo123');
-      localStorage.setItem('predixen-token', result.access_token);
+      const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
+      localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
           identifyUser(result.user_id, result.email);
@@ -192,7 +192,7 @@ export default function AuthPage() {
               <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-primary" />
               </div>
-              <span className="text-2xl font-bold">Predixen</span>
+              <span className="text-2xl font-bold">FounderConsole</span>
             </div>
             <h1 className="text-4xl font-bold mb-4 leading-tight">
               AI Decision Simulator<br />
@@ -222,7 +222,7 @@ export default function AuthPage() {
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">Built for High-Stakes Decisions</span>
               <br />
-              Predixen is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies.
+              FounderConsole is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies.
             </p>
           </div>
         </div>
@@ -236,7 +236,7 @@ export default function AuthPage() {
                 <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
-                <span className="text-xl font-bold">Predixen</span>
+                <span className="text-xl font-bold">FounderConsole</span>
               </div>
               <h2 className="text-2xl font-bold mb-2">
                 {activeTab === 'login' ? 'Welcome back' : 'Create your account'}

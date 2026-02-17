@@ -46,15 +46,15 @@ const EMPTY_METRICS: FinancialMetrics = {
 };
 
 function getToken(): string | null {
-  let token = localStorage.getItem('predixen-token');
+  let token = localStorage.getItem('founderconsole-token');
   if (!token) {
     try {
-      const raw = localStorage.getItem('predixen-founder-storage');
+      const raw = localStorage.getItem('founderconsole-founder-storage');
       if (raw) {
         const parsed = JSON.parse(raw);
         token = parsed?.state?.token || null;
         if (token) {
-          localStorage.setItem('predixen-token', token);
+          localStorage.setItem('founderconsole-token', token);
         }
       }
     } catch {}

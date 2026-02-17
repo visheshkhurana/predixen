@@ -104,7 +104,7 @@ export default function SharedScenarioPage() {
           </div>
           <Badge className="bg-blue-500/20 text-blue-400">
             <BarChart3 className="h-3 w-3 mr-1" />
-            Predixen Simulation
+            FounderConsole Simulation
           </Badge>
         </div>
 
@@ -174,7 +174,7 @@ export default function SharedScenarioPage() {
 
         <div className="text-center py-4">
           <p className="text-xs text-muted-foreground">
-            Powered by <a href="https://predixen.app" className="text-primary hover:underline">Predixen Intelligence OS</a> &mdash; AI-powered financial simulation
+            Powered by <a href="https://founderconsole.ai" className="text-primary hover:underline">FounderConsole</a> &mdash; AI-powered financial simulation
           </p>
         </div>
       </div>

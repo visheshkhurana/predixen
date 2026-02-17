@@ -45,7 +45,7 @@ class NotificationResponse(BaseModel):
 async def notify_feature_update(request: FeatureNotificationRequest):
     """
     Send email notification about a new feature or platform change.
-    Sends to configured recipients: nikita@predixen.ai and vysheshk@gmail.com
+    Sends to configured recipients: nikita@founderconsole.ai and vysheshk@gmail.com
     """
     kwargs = {
         "feature_name": request.feature_name,

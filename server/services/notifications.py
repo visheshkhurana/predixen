@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 NOTIFICATION_RECIPIENTS = [
-    "nikita@predixen.ai",
+    "nikita@founderconsole.ai",
     "vysheshk@gmail.com",
     "nikita.luther@gmail.com",
     "nikitafl2024@gmail.com"
@@ -26,7 +26,7 @@ _sender_counter = {"value": 0}
 def get_next_sender_email() -> str:
     """Get the next sender email in rotation (new1@, new2@, new3@, etc.)."""
     _sender_counter["value"] += 1
-    return f"Predixen <new{_sender_counter['value']}@predixen.app>"
+    return f"FounderConsole <new{_sender_counter['value']}@founderconsole.ai>"
 
 
 def get_current_sender_count() -> int:
@@ -66,7 +66,7 @@ async def get_resend_credentials() -> dict:
     
     return {
         "api_key": connection["settings"]["api_key"],
-        "from_email": connection["settings"].get("from_email", "noreply@predixen.ai")
+        "from_email": connection["settings"].get("from_email", "noreply@founderconsole.ai")
     }
 
 
@@ -76,7 +76,7 @@ async def send_feature_notification(
     changes: List[str],
     category: str = "Feature Update",
     author: Optional[str] = None,
-    from_email: str = "Predixen Updates <new2@predixen.app>"
+    from_email: str = "FounderConsole Updates <new2@founderconsole.ai>"
 ) -> bool:
     """
     Send email notification about a new feature or change.
@@ -108,7 +108,7 @@ async def send_feature_notification(
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
         <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Predixen Intelligence OS</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">FounderConsole</h1>
             <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">{category}</p>
         </div>
         
@@ -131,8 +131,8 @@ async def send_feature_notification(
         
         <div style="background-color: #f9fafb; padding: 20px 32px; border-top: 1px solid #e5e7eb;">
             <p style="color: #6b7280; font-size: 12px; margin: 0; text-align: center;">
-                This is an automated notification from Predixen Intelligence OS.<br>
-                <a href="https://predixen.ai" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
+                This is an automated notification from FounderConsole.<br>
+                <a href="https://founderconsole.ai" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
             </p>
         </div>
     </div>
@@ -153,7 +153,7 @@ Changes Made:
 {f'Author: {author}' if author else ''}
 
 ---
-This is an automated notification from Predixen Intelligence OS.
+This is an automated notification from FounderConsole.
 """
         
         async with httpx.AsyncClient() as client:
@@ -166,7 +166,7 @@ This is an automated notification from Predixen Intelligence OS.
                 json={
                     "from": from_email,
                     "to": NOTIFICATION_RECIPIENTS,
-                    "subject": f"[Predixen] {category}: {feature_name}",
+                    "subject": f"[FounderConsole] {category}: {feature_name}",
                     "html": html_content,
                     "text": text_content
                 }
@@ -200,7 +200,7 @@ async def send_deployment_notification(
 
 async def send_ai_copilot_feature_update(
     to_emails: Optional[List[str]] = None,
-    author: str = "Predixen Team"
+    author: str = "FounderConsole Team"
 ) -> dict:
     """
     Send feature update email about the new AI Copilot features with click-to-test button.
@@ -219,7 +219,7 @@ async def send_ai_copilot_feature_update(
     
     try:
         credentials = await get_resend_credentials()
-        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
         timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p")
         
         html_content = f"""
@@ -304,7 +304,7 @@ async def send_ai_copilot_feature_update(
         
         <div style="text-align: center; margin-top: 24px;">
             <p style="color: #475569; font-size: 11px; margin: 0;">
-                Predixen Intelligence OS • Automated Feature Update
+                FounderConsole • Automated Feature Update
             </p>
         </div>
     </div>
@@ -342,7 +342,7 @@ Questions or feedback? Reply directly to this email.
 — {author}
 
 ---
-Predixen Intelligence OS • Automated Feature Update
+FounderConsole • Automated Feature Update
 """
         
         sent = []
@@ -357,9 +357,9 @@ Predixen Intelligence OS • Automated Feature Update
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": "Predixen Updates <updates@predixen.app>",
+                        "from": "FounderConsole Updates <updates@founderconsole.ai>",
                         "to": [email],
-                        "subject": "[Predixen] New Feature: Real-Time AI Simulation Copilot",
+                        "subject": "[FounderConsole] New Feature: Real-Time AI Simulation Copilot",
                         "html": html_content,
                         "text": text_content
                     }
@@ -391,7 +391,7 @@ Predixen Intelligence OS • Automated Feature Update
 
 async def send_beta_invite_email(
     to_emails: List[str],
-    invited_by: str = "Predixen Team"
+    invited_by: str = "FounderConsole Team"
 ) -> dict:
     """
     Send beta test invitation emails with click-to-join functionality.
@@ -407,7 +407,7 @@ async def send_beta_invite_email(
     
     try:
         credentials = await get_resend_credentials()
-        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
         timestamp = datetime.now().strftime("%B %d, %Y")
         
         html_content = f"""
@@ -421,7 +421,7 @@ async def send_beta_invite_email(
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); overflow: hidden;">
         <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px; text-align: center;">
             <div style="display: inline-block; width: 48px; height: 48px; background-color: #0ea5e9; border-radius: 12px; text-align: center; line-height: 48px; color: #ffffff; font-weight: 700; font-size: 24px; margin-bottom: 16px;">P</div>
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">Predixen Intelligence OS</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">FounderConsole</h1>
             <p style="color: #94a3b8; margin: 8px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Beta Test Invitation</p>
         </div>
         
@@ -430,7 +430,7 @@ async def send_beta_invite_email(
                 <span style="display: inline-block; background-color: #fef3c7; color: #b45309; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Exclusive Access</span>
             </div>
             
-            <h2 style="color: #0f172a; margin: 0 0 16px 0; font-size: 24px; font-weight: 600; text-align: center;">You're Invited to Test Predixen</h2>
+            <h2 style="color: #0f172a; margin: 0 0 16px 0; font-size: 24px; font-weight: 600; text-align: center;">You're Invited to Test FounderConsole</h2>
             
             <p style="font-size: 16px; color: #475569; line-height: 1.7; margin: 0 0 24px 0; text-align: center;">
                 <strong style="color: #0ea5e9;">{invited_by}</strong> has invited you to experience the future of startup financial intelligence.
@@ -457,7 +457,7 @@ async def send_beta_invite_email(
         </div>
         
         <div style="background-color: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
-            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">Predixen</p>
+            <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #0f172a;">FounderConsole</p>
             <p style="margin: 0; font-size: 12px; color: #64748b;">AI-Powered Financial Intelligence for Startups</p>
             <p style="margin: 12px 0 0 0; font-size: 11px; color: #94a3b8;">Sent on {timestamp}</p>
         </div>
@@ -478,9 +478,9 @@ async def send_beta_invite_email(
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": "Predixen <hello@predixen.app>",
+                        "from": "FounderConsole <hello@founderconsole.ai>",
                         "to": [email],
-                        "subject": "You're Invited to Test Predixen Intelligence OS",
+                        "subject": "You're Invited to Test FounderConsole",
                         "html": html_content
                     }
                 )
@@ -528,7 +528,7 @@ async def send_early_member_invite(
     
     try:
         credentials = await get_resend_credentials()
-        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
         timestamp = datetime.now().strftime("%B %d, %Y")
         
         html_content = f"""
@@ -553,7 +553,7 @@ async def send_early_member_invite(
                 <h1 style="color: #ffffff; margin: 0 0 16px 0; font-size: 32px; font-weight: 700; line-height: 1.2;">You're One of the First</h1>
                 
                 <p style="color: #94a3b8; font-size: 18px; line-height: 1.6; margin: 0 0 16px 0;">
-                    Welcome to the founding circle of <span style="color: #a5b4fc;">Predixen Intelligence OS</span>
+                    Welcome to the founding circle of <span style="color: #a5b4fc;">FounderConsole</span>
                 </p>
                 
                 <p style="color: #e2e8f0; font-size: 16px; line-height: 1.6; margin: 0 0 32px 0;">
@@ -651,7 +651,7 @@ async def send_early_member_invite(
             
             <div style="background-color: #0f172a; padding: 24px 32px; border-top: 1px solid #334155;">
                 <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0; text-align: center;">
-                    "We built Predixen so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
+                    "We built FounderConsole so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
                 </p>
                 <p style="color: #6366f1; font-size: 14px; font-weight: 600; margin: 16px 0 0 0; text-align: center;">
                     — {invited_by}
@@ -661,7 +661,7 @@ async def send_early_member_invite(
         
         <div style="text-align: center; margin-top: 32px;">
             <p style="color: #475569; font-size: 12px; margin: 0;">
-                Predixen Intelligence OS • {timestamp}
+                FounderConsole • {timestamp}
             </p>
             <p style="color: #334155; font-size: 11px; margin: 8px 0 0 0;">
                 You received this because you were invited to early access.
@@ -675,7 +675,7 @@ async def send_early_member_invite(
         text_content = f"""
 You're One of the First
 
-Welcome to the founding circle of Predixen Intelligence OS
+Welcome to the founding circle of FounderConsole
 
 The AI-powered decision simulator that helps startup founders make better choices by running thousands of "what-if" scenarios in seconds.
 
@@ -708,12 +708,12 @@ No credit card required. Just sign up and start exploring.
 
 ---
 
-"We built Predixen so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
+"We built FounderConsole so every founder can see the future before making critical decisions. No more guessing — just simulate, compare, and act with confidence."
 
 — {invited_by}
 
 ---
-Predixen Intelligence OS • {timestamp}
+FounderConsole • {timestamp}
 """
         
         sent = []
@@ -730,13 +730,13 @@ Predixen Intelligence OS • {timestamp}
                     json={
                         "from": get_next_sender_email(),
                         "to": [email],
-                        "subject": "You're One of the First - Early Access to Predixen",
+                        "subject": "You're One of the First - Early Access to FounderConsole",
                         "html": html_content,
                         "text": text_content
                     }
                 )
                 
-                sender_used = f"new{get_current_sender_count()}@predixen.app"
+                sender_used = f"new{get_current_sender_count()}@founderconsole.ai"
                 if response.status_code in (200, 201):
                     sent.append(email)
                     print(f"Early member invite sent to: {email} (from: {sender_used})")
@@ -892,7 +892,7 @@ async def send_publish_notification() -> Dict[str, Any]:
         description=description,
         changes=all_changes,
         category="New Release",
-        author="Predixen Team"
+        author="FounderConsole Team"
     )
     
     if success:
@@ -925,9 +925,9 @@ async def check_and_send_publish_notification() -> None:
 
 async def send_platform_update(
     to_emails: Optional[List[str]] = None,
-    subject: str = "Predixen v14: AI Copilot Now Thinks Like a McKinsey Partner",
-    author: str = "Predixen Team",
-    from_email: str = "Predixen <notifications@predixen.app>"
+    subject: str = "FounderConsole v14: AI Copilot Now Thinks Like a McKinsey Partner",
+    author: str = "FounderConsole Team",
+    from_email: str = "FounderConsole <notifications@founderconsole.ai>"
 ) -> dict:
     """
     Send a multipart (HTML + text) platform update email to all specified recipients individually.
@@ -959,7 +959,7 @@ async def send_platform_update(
         credentials = await get_resend_credentials()
         timestamp = datetime.now().strftime("%B %d, %Y")
         
-        text_content = f"""PREDIXEN INTELLIGENCE OS v14 - MAJOR COPILOT UPGRADE
+        text_content = f"""FOUNDERCONSOLE v14 - MAJOR COPILOT UPGRADE
 {timestamp}
 
 Hi there,
@@ -1012,11 +1012,11 @@ Questions or feedback? Reply directly to this email.
 
 Best,
 {author}
-Predixen Intelligence OS
+FounderConsole
 
 ---
-This is an automated notification from Predixen Intelligence OS.
-Visit: https://predixen.app
+This is an automated notification from FounderConsole.
+Visit: https://founderconsole.ai
 """
         
         html_content = f"""<!DOCTYPE html>
@@ -1092,22 +1092,22 @@ Visit: https://predixen.app
                 </div>
                 
                 <div style="text-align: center; margin: 32px 0 16px;">
-                    <a href="https://predixen.app" style="display: inline-block; padding: 14px 40px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Try the Upgraded Copilot</a>
+                    <a href="https://founderconsole.ai" style="display: inline-block; padding: 14px 40px; font-size: 15px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Try the Upgraded Copilot</a>
                 </div>
                 
                 <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 24px 0 0;">Questions or feedback? Reply directly to this email.</p>
-                <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin: 16px 0 0;">Best,<br><strong style="color: #e2e8f0;">{author}</strong><br><span style="color: #6366f1;">Predixen Intelligence OS</span></p>
+                <p style="color: #cbd5e1; font-size: 14px; line-height: 1.6; margin: 16px 0 0;">Best,<br><strong style="color: #e2e8f0;">{author}</strong><br><span style="color: #6366f1;">FounderConsole</span></p>
             </div>
             
             <div style="padding: 20px 32px; border-top: 1px solid #334155; text-align: center;">
                 <p style="color: #64748b; font-size: 12px; margin: 0;">
-                    This is an automated notification from Predixen Intelligence OS.<br>
-                    <a href="https://predixen.app" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
+                    This is an automated notification from FounderConsole.<br>
+                    <a href="https://founderconsole.ai" style="color: #6366f1; text-decoration: none;">Visit Dashboard</a>
                 </p>
             </div>
         </div>
         <div style="text-align: center; margin-top: 24px;">
-            <p style="color: #475569; font-size: 11px; margin: 0;">Predixen Intelligence OS v14 &bull; {timestamp}</p>
+            <p style="color: #475569; font-size: 11px; margin: 0;">FounderConsole v14 &bull; {timestamp}</p>
         </div>
     </div>
 </body>
@@ -1169,8 +1169,8 @@ Visit: https://predixen.app
 
 async def send_hybrid_feature_announcement(
     to_emails: Optional[List[str]] = None,
-    author: str = "Predixen Team",
-    from_email: str = "Predixen Updates <updates@predixen.app>"
+    author: str = "FounderConsole Team",
+    from_email: str = "FounderConsole Updates <updates@founderconsole.ai>"
 ) -> dict:
     """
     Send announcement email about the upcoming Hybrid Feature build.
@@ -1196,7 +1196,7 @@ async def send_hybrid_feature_announcement(
     try:
         credentials = await get_resend_credentials()
         timestamp = datetime.now().strftime("%B %d, %Y")
-        base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+        base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
         
         html_content = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -1210,7 +1210,7 @@ async def send_hybrid_feature_announcement(
 <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 6px 16px; border-radius: 20px; margin-bottom: 16px;">
 <span style="color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">Coming Soon</span>
 </div>
-<h1 style="color: #fff; margin: 0; font-size: 28px; font-weight: 700;">Predixen Hybrid Feature</h1>
+<h1 style="color: #fff; margin: 0; font-size: 28px; font-weight: 700;">FounderConsole Hybrid Feature</h1>
 <p style="color: rgba(255,255,255,0.9); margin: 12px 0 0; font-size: 14px;">Major Platform Upgrade Announcement</p>
 </div>
 <div style="padding: 32px;">
@@ -1241,7 +1241,7 @@ We're building a comprehensive <strong style="color: #fbbf24;">Hybrid Feature</s
 </div>
 </div>
 <div style="text-align: center; margin: 32px 0;">
-<a href="{base_url}" style="display: inline-block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Visit Predixen</a>
+<a href="{base_url}" style="display: inline-block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; text-decoration: none;">Visit FounderConsole</a>
 </div>
 </div>
 <div style="padding: 20px 32px; border-top: 1px solid #334155; text-align: center;">
@@ -1249,12 +1249,12 @@ We're building a comprehensive <strong style="color: #fbbf24;">Hybrid Feature</s
 </div>
 </div>
 <div style="text-align: center; margin-top: 24px;">
-<p style="color: #475569; font-size: 11px; margin: 0;">Predixen Intelligence OS • {timestamp}</p>
+<p style="color: #475569; font-size: 11px; margin: 0;">FounderConsole • {timestamp}</p>
 </div>
 </div>
 </body></html>"""
         
-        text_content = f"""PREDIXEN HYBRID FEATURE - COMING SOON
+        text_content = f"""FOUNDERCONSOLE HYBRID FEATURE - COMING SOON
 {timestamp}
 
 We're building a comprehensive Hybrid Feature combining real-time KPI tracking, predictive simulations, and actionable recommendations.
@@ -1269,7 +1269,7 @@ WHAT'S COMING:
 Visit: {base_url}
 
 — {author}
-Predixen Intelligence OS"""
+FounderConsole"""
         
         sent = []
         failed = []
@@ -1288,7 +1288,7 @@ Predixen Intelligence OS"""
                         json={
                             "from": from_email,
                             "to": [email],
-                            "subject": "[Predixen] Coming Soon: Major Hybrid Feature Update",
+                            "subject": "[FounderConsole] Coming Soon: Major Hybrid Feature Update",
                             "html": html_content,
                             "text": text_content
                         },
@@ -1322,7 +1322,7 @@ async def send_weekly_digest(
     metrics: Dict[str, Any],
     alerts: List[Dict[str, Any]],
     recommendations: List[str],
-    from_email: str = "Predixen <digest@predixen.app>"
+    from_email: str = "FounderConsole <digest@founderconsole.ai>"
 ) -> bool:
     """
     Send weekly KPI digest email to a user.
@@ -1454,14 +1454,14 @@ async def send_weekly_digest(
                 {"<h3 style='color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 16px 0;'>Recommendations</h3>" + recommendations_html if recommendations else ""}
                 
                 <div style="text-align: center; margin: 32px 0 16px 0;">
-                    <a href="https://predixen.app/dashboard" style="display: inline-block; padding: 14px 32px; font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 10px;">View Full Dashboard</a>
+                    <a href="https://founderconsole.ai/dashboard" style="display: inline-block; padding: 14px 32px; font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border-radius: 10px;">View Full Dashboard</a>
                 </div>
             </div>
             
             <div style="padding: 16px 32px; border-top: 1px solid #334155; text-align: center;">
                 <p style="color: #64748b; font-size: 12px; margin: 0;">
                     You're receiving this because you're subscribed to weekly digests.<br>
-                    <a href="https://predixen.app/settings/notifications" style="color: #6366f1; text-decoration: none;">Manage preferences</a>
+                    <a href="https://founderconsole.ai/settings/notifications" style="color: #6366f1; text-decoration: none;">Manage preferences</a>
                 </p>
             </div>
         </div>
@@ -1487,7 +1487,7 @@ Survival Probability: {survival_prob:.0f}%
 
 {"RECOMMENDATIONS" + chr(10) + chr(10).join([f"{i}. {r}" for i, r in enumerate(recommendations, 1)]) if recommendations else ""}
 
-View your full dashboard: https://predixen.app/dashboard
+View your full dashboard: https://founderconsole.ai/dashboard
 """
         
         async with httpx.AsyncClient() as client:
@@ -1500,7 +1500,7 @@ View your full dashboard: https://predixen.app/dashboard
                 json={
                     "from": from_email,
                     "to": [to_email],
-                    "subject": f"[Predixen] Weekly Digest - {company_name}",
+                    "subject": f"[FounderConsole] Weekly Digest - {company_name}",
                     "html": html_content,
                     "text": text_content
                 },

@@ -54,7 +54,7 @@ def get_all_user_emails():
 async def send_update_to_specified_users(
     emails: list,
     updates: list,
-    from_email: str = "Predixen Updates <newchanges5@predixen.app>",
+    from_email: str = "FounderConsole Updates <newchanges5@founderconsole.ai>",
     use_text_only: bool = False
 ):
     """Send platform update email to specified users."""
@@ -62,7 +62,7 @@ async def send_update_to_specified_users(
         print("Email service not configured. Please set up Resend integration.")
         return {"success": 0, "failed": len(emails)}
     
-    app_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+    app_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     
     template_type = "text-only with tracking pixel" if use_text_only else "HTML"
     print(f"Sending {template_type} updates to {len(emails)} addresses using sender: {from_email}")
@@ -71,7 +71,7 @@ async def send_update_to_specified_users(
     fail_count = 0
     failed_emails = []
     
-    subject = "Predixen Intelligence OS - AI Copilot Upgrades & New Features"
+    subject = "FounderConsole - AI Copilot Upgrades & New Features"
     db = SessionLocal()
     
     try:
@@ -174,7 +174,7 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Predixen Intelligence OS</title>
+    <title>FounderConsole</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f1f5f9;">
@@ -186,7 +186,7 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
                     <tr>
                         <td style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px; text-align: center;">
                             <div style="display: inline-block; width: 48px; height: 48px; background-color: #0ea5e9; border-radius: 12px; text-align: center; line-height: 48px; color: #ffffff; font-weight: 700; font-size: 24px; margin-bottom: 16px;">P</div>
-                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Predixen Intelligence OS</h1>
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">FounderConsole</h1>
                             <p style="margin: 12px 0 0 0; color: #94a3b8; font-size: 14px; text-transform: uppercase; letter-spacing: 2px;">AI-Powered Financial Intelligence for Startups</p>
                         </td>
                     </tr>
@@ -203,7 +203,7 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
                                     <td style="background-color: #0ea5e9; border-radius: 10px;">
-                                        <a href="{app_url}" target="_blank" style="display: inline-block; padding: 16px 32px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">Explore Predixen</a>
+                                        <a href="{app_url}" target="_blank" style="display: inline-block; padding: 16px 32px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;">Explore FounderConsole</a>
                                     </td>
                                 </tr>
                             </table>
@@ -321,7 +321,7 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
                     <!-- Why Choose Section -->
                     <tr>
                         <td style="padding: 0 40px 40px 40px;">
-                            <p style="margin: 0 0 20px 0; color: #0f172a; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Why Founders Choose Predixen</p>
+                            <p style="margin: 0 0 20px 0; color: #0f172a; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;">Why Founders Choose FounderConsole</p>
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                                 <tr>
                                     <td width="50%" valign="top" style="padding-right: 10px;">
@@ -381,7 +381,7 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
                     <!-- Footer -->
                     <tr>
                         <td style="background-color: #f8fafc; padding: 24px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
-                            <p style="margin: 0 0 4px 0; color: #0f172a; font-size: 16px; font-weight: 600;">Predixen</p>
+                            <p style="margin: 0 0 4px 0; color: #0f172a; font-size: 16px; font-weight: 600;">FounderConsole</p>
                             <p style="margin: 0; color: #64748b; font-size: 13px;">AI-Powered Financial Intelligence</p>
                         </td>
                     </tr>
@@ -399,14 +399,14 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
 
 async def send_pitch_emails(
     emails: list,
-    from_email: str = "Predixen <new@predixen.in>"
+    from_email: str = "FounderConsole <new@founderconsole.ai>"
 ):
     """Send pitch emails to specified users."""
     if not is_email_configured():
         print("Email service not configured. Please set up Resend integration.")
         return {"success": 0, "failed": len(emails)}
     
-    app_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+    app_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     
     print(f"Sending pitch emails to {len(emails)} addresses using sender: {from_email}")
     
@@ -470,11 +470,11 @@ async def main():
         emails = [
             "nikita.luther@gmail.com",
             "nikitafl2024@gmail.com",
-            "nikita@predixen.ai",
+            "nikita@founderconsole.ai",
             "vysheshk@gmail.com"
         ]
     
-    from_email = "Predixen Updates <newchanges23@predixen.app>"
+    from_email = "FounderConsole Updates <newchanges23@founderconsole.ai>"
     
     return await send_update_to_specified_users(
         emails=emails,

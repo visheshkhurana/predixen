@@ -42,14 +42,14 @@ async function sendEmail() {
   const resend = new Resend(apiKey);
 
   const recipients = [
-    'nikita@predixen.ai',
+    'nikita@founderconsole.ai',
     'nikita.luther@gmail.com',
     'nikitafl2024@gmail.com',
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'Predixen <nfl10@predixen.app>';
-  const subject = 'Founder Feedback Session - Key Insights & Product Direction for Predixen';
+  const senderEmail = 'FounderConsole <nfl10@founderconsole.ai>';
+  const subject = 'Founder Feedback Session - Key Insights & Product Direction for FounderConsole';
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -66,7 +66,7 @@ async function sendEmail() {
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:40px 40px 30px;">
-              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">Predixen Intelligence OS</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">FounderConsole</h1>
               <p style="margin:8px 0 0;color:#c7d2fe;font-size:13px;letter-spacing:1px;">FOUNDER FEEDBACK SESSION SUMMARY</p>
             </td>
           </tr>
@@ -91,7 +91,7 @@ async function sendEmail() {
                 After raising significant capital, a company might face 3 possible growth paths &mdash; backward integration, forward integration, or international expansion. Realistically, you can't pursue all three. Traditionally, founders test each with small pilots, but that's slow, expensive, and often reactive.
               </p>
               <p style="margin:0 0 8px;color:#c7d2fe;font-size:14px;font-weight:600;">
-                This is the gap Predixen is solving.
+                This is the gap FounderConsole is solving.
               </p>
             </td>
           </tr>
@@ -401,7 +401,7 @@ async function sendEmail() {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="https://predixen-intelligence-os.replit.app" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                    <a href="https://founderconsole.ai" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
                       Explore the Platform
                     </a>
                   </td>
@@ -409,7 +409,7 @@ async function sendEmail() {
                 <tr>
                   <td align="center" style="padding-top:12px;">
                     <p style="margin:0;color:#64748b;font-size:12px;">
-                      Demo: demo@predixen.ai / demo123
+                      Demo: demo@founderconsole.ai / demo123
                     </p>
                   </td>
                 </tr>
@@ -421,7 +421,7 @@ async function sendEmail() {
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #334155;">
               <p style="margin:0;color:#475569;font-size:11px;text-align:center;">
-                Predixen Intelligence OS &mdash; Investor-grade financial intelligence for startups.
+                FounderConsole &mdash; Investor-grade financial intelligence for startups.
               </p>
             </td>
           </tr>

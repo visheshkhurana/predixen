@@ -39,7 +39,7 @@ def _fetch_resend_credentials_sync() -> Optional[dict]:
     if direct_api_key:
         return {
             "api_key": direct_api_key,
-            "from_email": os.getenv("RESEND_FROM_EMAIL", "noreply@predixen.ai")
+            "from_email": os.getenv("RESEND_FROM_EMAIL", "noreply@founderconsole.ai")
         }
     
     # Try Replit Connectors API
@@ -72,7 +72,7 @@ def _fetch_resend_credentials_sync() -> Optional[dict]:
         connection = items[0]
         settings = connection.get("settings", {})
         api_key = settings.get("api_key")
-        from_email = settings.get("from_email", "noreply@predixen.ai")
+        from_email = settings.get("from_email", "noreply@founderconsole.ai")
         
         if not api_key:
             return None
@@ -101,13 +101,13 @@ def get_resend_api_key() -> Optional[str]:
 
 def get_from_email() -> str:
     """Get the default from email address for updates and notifications."""
-    return "Predixen <hello@predixen.app>"
+    return "FounderConsole <hello@founderconsole.ai>"
 
 
 def get_transactional_from_email() -> str:
     """Get the transactional from email address for user-triggered emails (invites, shares, resets)."""
     env_override = os.getenv("RESEND_TRANSACTIONAL_FROM")
-    return env_override or "Predixen <hello@predixen.app>"
+    return env_override or "FounderConsole <hello@founderconsole.ai>"
 
 
 def is_email_configured() -> bool:
@@ -140,7 +140,7 @@ def _send_email_sync(
         }
     
     resend.api_key = creds["api_key"]
-    sender_email = from_email or "Predixen <kavibe8@predixen.app>"
+    sender_email = from_email or "FounderConsole <kavibe8@founderconsole.ai>"
     
     try:
         params = {
@@ -246,7 +246,7 @@ async def send_invite_email(
     """
     from server.email.templates import render_invite_template
     
-    base_url = os.getenv("APP_BASE_URL", "https://predixen.app")
+    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     invite_url = f"{base_url}/auth?invite={invite_token}"
     
     html_content = template_html or render_invite_template(
@@ -257,7 +257,7 @@ async def send_invite_email(
         early_access=early_access
     )
     
-    subject = "You're invited to Predixen Early Access" if early_access else "You've been invited to join Predixen Intelligence OS"
+    subject = "You're invited to FounderConsole Early Access" if early_access else "You've been invited to join FounderConsole"
     
     return await send_email(to_email, subject, html_content)
 
@@ -280,14 +280,14 @@ async def send_welcome_email(
     """
     from server.email.templates import render_welcome_template
     
-    base_url = os.getenv("APP_BASE_URL", "https://predixen.ai")
+    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     
     html_content = template_html or render_welcome_template(
         user_name=user_name,
         login_url=f"{base_url}/login"
     )
     
-    subject = "Welcome to Predixen Intelligence OS"
+    subject = "Welcome to FounderConsole"
     
     return await send_email(to_email, subject, html_content)
 
@@ -310,14 +310,14 @@ async def send_password_reset_email(
     """
     from server.email.templates import render_password_reset_template
     
-    base_url = os.getenv("APP_BASE_URL", "https://predixen.ai")
+    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     reset_url = f"{base_url}/reset-password?token={reset_token}"
     
     html_content = template_html or render_password_reset_template(
         reset_url=reset_url
     )
     
-    subject = "Reset Your Predixen Password"
+    subject = "Reset Your FounderConsole Password"
     
     return await send_email(to_email, subject, html_content)
 
@@ -347,6 +347,6 @@ async def send_platform_update_email(
         app_url=app_url
     )
     
-    subject = "Predixen Intelligence OS - New Features & Updates"
+    subject = "FounderConsole - New Features & Updates"
     
     return await send_email(to_email, subject, html_content)

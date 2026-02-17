@@ -56,7 +56,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useFounderStore } from "@/store/founderStore";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
-import predixenLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
+import founderconsoleLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 
@@ -255,7 +255,7 @@ function SettingsDrawer() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  localStorage.removeItem('predixen-token');
+                  localStorage.removeItem('founderconsole-token');
                   logout();
                   window.location.href = '/auth';
                 }}
@@ -287,7 +287,7 @@ export function AppSidebar() {
     queryFn: async () => {
       if (!currentCompany?.id) return [];
       const res = await fetch(`/api/companies/${currentCompany.id}/decisions`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('predixen-token')}` },
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('founderconsole-token')}` },
       });
       if (!res.ok) return [];
       const data = await res.json();
@@ -304,12 +304,12 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <img
-            src={predixenLogo}
-            alt="Predixen"
+            src={founderconsoleLogo}
+            alt="FounderConsole"
             className="h-9 w-9 rounded-md"
           />
           <div>
-            <h1 className="font-semibold text-sm">Predixen</h1>
+            <h1 className="font-semibold text-sm">FounderConsole</h1>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>
           </div>
         </div>
@@ -506,7 +506,7 @@ export function AppSidebar() {
           size="sm"
           className="w-full justify-start"
           onClick={() => {
-            localStorage.removeItem('predixen-token');
+            localStorage.removeItem('founderconsole-token');
             useFounderStore.getState().logout();
             window.location.href = '/auth';
           }}

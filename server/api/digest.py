@@ -122,7 +122,7 @@ def send_monthly_digest(
     try:
         from server.email.service import _send_email_sync
         result = _send_email_sync(
-            sender="Predixen Digest <digest@predixen.app>",
+            sender="FounderConsole Digest <digest@founderconsole.ai>",
             to=email,
             subject=f"Monthly Digest — {company.name} | {datetime.utcnow().strftime('%b %Y')}",
             html=html,
@@ -173,7 +173,7 @@ def _build_digest_html(company_name, mrr, cash, burn, runway, risks):
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:12px;overflow:hidden;">
   <tr><td style="background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:32px 40px;">
-    <h1 style="margin:0;color:#fff;font-size:24px;">Predixen Monthly Digest</h1>
+    <h1 style="margin:0;color:#fff;font-size:24px;">FounderConsole Monthly Digest</h1>
     <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">{company_name} &mdash; {datetime.utcnow().strftime('%B %Y')}</p>
   </td></tr>
   <tr><td style="padding:32px 40px;">
@@ -203,11 +203,11 @@ def _build_digest_html(company_name, mrr, cash, burn, runway, risks):
       {risk_items}
     </table>
     <div style="margin-top:32px;text-align:center;">
-      <a href="https://predixen.app" style="display:inline-block;padding:12px 32px;background:#0ea5e9;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;">View Full Dashboard</a>
+      <a href="https://founderconsole.ai" style="display:inline-block;padding:12px 32px;background:#0ea5e9;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:14px;">View Full Dashboard</a>
     </div>
   </td></tr>
   <tr><td style="padding:20px 40px;border-top:1px solid #334155;">
-    <p style="margin:0;color:#64748b;font-size:12px;text-align:center;">Predixen Intelligence OS &mdash; AI-powered financial simulation for startups</p>
+    <p style="margin:0;color:#64748b;font-size:12px;text-align:center;">FounderConsole &mdash; AI-powered financial simulation for startups</p>
   </td></tr>
 </table>
 </td></tr>

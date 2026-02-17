@@ -1,4 +1,4 @@
-# Predixen Intelligence OS - Email Pitch Template
+# FounderConsole - Email Pitch Template
 
 ---
 
@@ -21,9 +21,9 @@ Hi [First Name],
 
 Running a startup means making critical financial decisions with incomplete data. What if you could see exactly how every choice impacts your survival—before you make it?
 
-**Introducing Predixen Intelligence OS** — the AI-powered financial intelligence platform built specifically for founders and CXOs.
+**Introducing FounderConsole** — the AI-powered financial intelligence platform built specifically for founders and CXOs.
 
-### What Predixen Does
+### What FounderConsole Does
 
 **Truth Engine** — Upload your financials (CSV, Excel, or PDF) and instantly get 24 validated metrics with industry benchmarks. No more spreadsheet nightmares.
 
@@ -39,7 +39,7 @@ Running a startup means making critical financial decisions with incomplete data
 - **Investor Room** — Auto-generate data rooms, KPI snapshots, and investor memos
 - **Pipeline Tracking** — Manage investor relationships from first contact to term sheet
 
-### Why Founders Choose Predixen
+### Why Founders Choose FounderConsole
 
 - **Investor-Grade Analysis** in minutes, not weeks
 - **Probabilistic Forecasting** that accounts for uncertainty
@@ -48,14 +48,14 @@ Running a startup means making critical financial decisions with incomplete data
 
 ### See It In Action
 
-I'd love to show you how Predixen can transform your financial decision-making. Would you have 15 minutes this week for a quick demo?
+I'd love to show you how FounderConsole can transform your financial decision-making. Would you have 15 minutes this week for a quick demo?
 
 [Schedule Demo Button / Link]
 
 Best,
 [Your Name]
 [Your Title]
-Predixen Intelligence OS
+FounderConsole
 
 P.S. — Our users typically discover 3-6 months of hidden runway through optimization opportunities they never knew existed.
 
@@ -69,14 +69,14 @@ Hi [First Name],
 
 Most founders think they know their runway. Few actually do.
 
-Predixen Intelligence OS runs Monte Carlo simulations on your financials to show you:
+FounderConsole runs Monte Carlo simulations on your financials to show you:
 - Your probabilistic runway (P10/P50/P90)
 - Survival probability at key milestones
 - The 3 decisions that would extend it the most
 
 It takes 5 minutes to upload your data. The insights last for your company's lifetime.
 
-Want to see your real numbers? [Try Predixen free]
+Want to see your real numbers? [Try FounderConsole free]
 
 Best,
 [Your Name]
@@ -89,14 +89,14 @@ Best,
 
 Hi [First Name],
 
-Following up on my note about Predixen. I noticed [Company Name] recently [raised a round / launched a new product / hit a growth milestone].
+Following up on my note about FounderConsole. I noticed [Company Name] recently [raised a round / launched a new product / hit a growth milestone].
 
 When companies hit that stage, they often face questions like:
 - "How long is our actual runway with this burn rate?"
 - "What happens if our next fundraise slips 3 months?"
 - "Which hires should we prioritize to maximize growth vs. burn?"
 
-Predixen answers these in seconds with probabilistic modeling—not guesswork.
+FounderConsole answers these in seconds with probabilistic modeling—not guesswork.
 
 Would a 15-minute demo be helpful?
 
@@ -149,11 +149,11 @@ Best,
 
 ## Testimonial Placeholders
 
-> "Predixen showed us we had 4 more months of runway than we thought—by identifying $15K/month in optimization opportunities."
+> "FounderConsole showed us we had 4 more months of runway than we thought—by identifying $15K/month in optimization opportunities."
 > — [Founder Name], [Company]
 
 > "We used to spend 2 weeks preparing board materials. Now it takes 20 minutes."
 > — [CFO Name], [Company]
 
-> "The fundraise slip scenario saved us. We started our bridge round 2 months early because of what Predixen showed us."
+> "The fundraise slip scenario saved us. We started our bridge round 2 months early because of what FounderConsole showed us."
 > — [CEO Name], [Company]

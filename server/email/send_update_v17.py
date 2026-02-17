@@ -1,6 +1,6 @@
 """
 Send detailed simulation changes update email v17.
-Sender: wlk2qbda@predixen.app
+Sender: wlk2qbda@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_simulation_deep_dive_feb2026_v17"
+CAMPAIGN = "founderconsole_simulation_deep_dive_feb2026_v17"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -21,7 +21,7 @@ RECIPIENTS = [
 def build_plain_text(rcpt: dict) -> str:
     return f"""Hi {rcpt['name']},
 
-Detailed breakdown of the simulation engine changes in Predixen Intelligence OS:
+Detailed breakdown of the simulation engine changes in FounderConsole:
 
 ---
 
@@ -119,7 +119,7 @@ These were previously the primary navigation but are now secondary to the inline
 All changes are live. The simulation page is designed so that the most actionable intelligence appears first, and deeper analysis tools are always accessible without switching views.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -135,7 +135,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {rcpt['name']},</p>
 
-<p>Detailed breakdown of the simulation engine changes in Predixen Intelligence OS:</p>
+<p>Detailed breakdown of the simulation engine changes in FounderConsole:</p>
 
 <!-- Section: Results Hierarchy -->
 <h2 style="font-size:17px;color:#1e1b4b;margin:28px 0 12px;padding-bottom:6px;border-bottom:2px solid #6366f1;">Results Hierarchy &mdash; Decision-Intelligence-First Order</h2>
@@ -236,7 +236,7 @@ def build_html(rcpt: dict) -> str:
 <p style="margin-top:24px;">All changes are live. The simulation page is designed so the most actionable intelligence appears first, and deeper analysis tools are always accessible without switching views.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -245,7 +245,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <wlk2qbda@predixen.app>"
+    sender = "FounderConsole <wlk2qbda@founderconsole.ai>"
 
     print(f"Sending simulation deep-dive update v17 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -274,7 +274,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen Simulation Engine - Detailed Changes & New Intelligence Layer",
+            subject="FounderConsole Simulation Engine - Detailed Changes & New Intelligence Layer",
             html_content=html,
             text_content=text,
             from_email=sender,

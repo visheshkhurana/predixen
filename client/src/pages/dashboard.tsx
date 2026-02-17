@@ -193,7 +193,7 @@ export default function Dashboard() {
   const { data: trendData } = useQuery<{ days: number; data: Array<{ date: string; runway_p50?: number; runway_p10?: number; runway_p90?: number }> }>({
     queryKey: ["/api/companies", selectedCompany?.id, "trends"],
     queryFn: async () => {
-      const token = localStorage.getItem('predixen-token');
+      const token = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${selectedCompany?.id}/trends?days=90`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -208,7 +208,7 @@ export default function Dashboard() {
   const { data: digestPrefs } = useQuery<{ monthly_digest: boolean }>({
     queryKey: ["/api/companies", selectedCompany?.id, "digest/preferences"],
     queryFn: async () => {
-      const t = localStorage.getItem('predixen-token');
+      const t = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${selectedCompany?.id}/digest/preferences`, {
         headers: { 'Authorization': `Bearer ${t}` },
       });
@@ -698,7 +698,7 @@ export default function Dashboard() {
                   onCheckedChange={async (checked) => {
                     if (!selectedCompany) return;
                     try {
-                      const t = localStorage.getItem('predixen-token');
+                      const t = localStorage.getItem('founderconsole-token');
                       const res = await fetch(`/api/companies/${selectedCompany.id}/digest/preferences`, {
                         method: 'PUT',
                         headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' },
@@ -721,7 +721,7 @@ export default function Dashboard() {
                   onClick={async () => {
                     if (!selectedCompany) return;
                     setDigestSending(true);
-                    const t = localStorage.getItem('predixen-token');
+                    const t = localStorage.getItem('founderconsole-token');
                     try {
                       await fetch(`/api/companies/${selectedCompany.id}/digest/send`, {
                         method: 'POST',

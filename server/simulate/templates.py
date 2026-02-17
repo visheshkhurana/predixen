@@ -1,5 +1,5 @@
 """
-Strategy Templates Registry for Predixen Simulator.
+Strategy Templates Registry for FounderConsole Simulator.
 
 Pre-defined assumption sets that map to common startup strategies.
 Users can select a template and override specific parameters.

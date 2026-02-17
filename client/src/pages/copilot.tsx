@@ -1515,9 +1515,9 @@ Type **help** for a full list of what I can do.`,
     setInput('');
     setIsTyping(true);
     
-    const effectiveToken = token || localStorage.getItem('predixen-token') || (() => {
+    const effectiveToken = token || localStorage.getItem('founderconsole-token') || (() => {
       try {
-        const raw = localStorage.getItem('predixen-founder-storage');
+        const raw = localStorage.getItem('founderconsole-founder-storage');
         if (raw) { const p = JSON.parse(raw); return p?.state?.token || null; }
       } catch { }
       return null;

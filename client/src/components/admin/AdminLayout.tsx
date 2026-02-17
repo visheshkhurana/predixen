@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
-import predixenLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
+import founderconsoleLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
 
 interface NavItem {
   title: string;
@@ -41,7 +41,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleLogout = () => {
-    localStorage.removeItem('predixen-admin-session');
+    localStorage.removeItem('founderconsole-admin-session');
     logout();
     setLocation('/admin/login');
   };
@@ -55,8 +55,8 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           {sidebarOpen && (
             <div className="flex items-center gap-2">
               <img 
-                src={predixenLogo} 
-                alt="Predixen" 
+                src={founderconsoleLogo} 
+                alt="FounderConsole" 
                 className="h-8 w-8 rounded-lg"
               />
               <span className="font-semibold text-sm">Admin Console</span>
@@ -138,7 +138,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 border-b border-border flex items-center justify-between px-6 bg-card">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold">Predixen Admin</h1>
+            <h1 className="text-lg font-semibold">FounderConsole Admin</h1>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

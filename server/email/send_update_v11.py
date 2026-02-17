@@ -2,7 +2,7 @@
 Send data connectors expansion update email v11 to 4 recipients.
 Transactional-style: minimal HTML, plain-text companion.
 Content: All 37 connectors now fully production-ready with real API integration.
-Sender: nfl9@predixen.app
+Sender: nfl9@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -11,12 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_connectors_full_catalog_feb2026_v11"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_connectors_full_catalog_feb2026_v11"
+BASE_URL = "https://founderconsole.ai"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -91,7 +91,7 @@ HOW TO CONNECT
 ---------------
 
 1. Log in: {BASE_URL}/auth
-   Demo: demo@predixen.ai / demo123
+   Demo: demo@founderconsole.ai / demo123
 
 2. Go to the Integrations page (sidebar)
 
@@ -106,7 +106,7 @@ Each connector handles authentication, data sync, and error recovery. You can di
 Let me know if you have questions or run into any issues with a specific connector.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -199,7 +199,7 @@ def build_html(rcpt: dict) -> str:
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">How to Connect</h3>
 
 <ol style="padding-left:20px;color:#333;">
-<li style="margin-bottom:6px;">Log in: <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>Demo: demo@predixen.ai / demo123</li>
+<li style="margin-bottom:6px;">Log in: <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>Demo: demo@founderconsole.ai / demo123</li>
 <li style="margin-bottom:6px;">Go to the <strong>Integrations</strong> page (sidebar)</li>
 <li style="margin-bottom:6px;">Pick any connector, click <strong>Connect</strong></li>
 <li style="margin-bottom:6px;">Enter your API credentials in the form</li>
@@ -211,7 +211,7 @@ def build_html(rcpt: dict) -> str:
 <p>Let me know if you have questions or run into any issues with a specific connector.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -220,7 +220,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <nfl9@predixen.app>"
+    sender = "FounderConsole <nfl9@founderconsole.ai>"
 
     print(f"Sending full connector catalog update emails to {len(RECIPIENTS)} recipients...")
     print(f"Campaign: {CAMPAIGN}")

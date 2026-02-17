@@ -11,7 +11,7 @@ export default function DocsPage() {
           <Badge variant="secondary" className="mb-2">Documentation</Badge>
           <h1 className="text-3xl font-bold">Help & Documentation</h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            We're building comprehensive documentation to help you get the most out of Predixen.
+            We're building comprehensive documentation to help you get the most out of FounderConsole.
           </p>
         </div>
 
@@ -23,7 +23,7 @@ export default function DocsPage() {
                 Getting Started
               </CardTitle>
               <CardDescription>
-                Learn the basics of Predixen
+                Learn the basics of FounderConsole
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -67,7 +67,7 @@ export default function DocsPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-4">
             <Button variant="outline" asChild data-testid="button-email-support">
-              <a href="mailto:support@predixen.app">
+              <a href="mailto:support@founderconsole.ai">
                 <Mail className="h-4 w-4 mr-2" />
                 Email Support
               </a>

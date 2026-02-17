@@ -97,7 +97,7 @@ export default function AdminEmailTracking() {
   const { data, isLoading, refetch, isFetching } = useQuery<AnalyticsData>({
     queryKey: ['/api/email-tracking/analytics', campaign, days],
     queryFn: async () => {
-      const params = new URLSearchParams({ days: String(days), token: 'predixen-analytics-2026' });
+      const params = new URLSearchParams({ days: String(days), token: 'founderconsole-analytics-2026' });
       if (campaign && campaign !== 'all') params.set('campaign', campaign);
       const res = await apiRequest('GET', `/api/email-tracking/analytics?${params}`);
       return res.json();
@@ -108,7 +108,7 @@ export default function AdminEmailTracking() {
   const allCampaignsQuery = useQuery<AnalyticsData>({
     queryKey: ['/api/email-tracking/analytics', 'all-campaigns', 365],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/email-tracking/analytics?days=365&token=predixen-analytics-2026');
+      const res = await apiRequest('GET', '/api/email-tracking/analytics?days=365&token=founderconsole-analytics-2026');
       return res.json();
     },
   });

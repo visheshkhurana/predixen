@@ -74,7 +74,7 @@ def send_sms(to_number: str, message: str):
     return msg.sid
 
 
-SMS_TEXT = """Predixen Intelligence OS - New Update
+SMS_TEXT = """FounderConsole - New Update
 
 The Decisions page has been completely redesigned as a narrative strategic briefing:
 
@@ -88,7 +88,7 @@ All sections use your real financial data. No charts, just clear prose.
 
 Check your email for screenshots and full details.
 
-- Predixen"""
+- FounderConsole"""
 
 
 if __name__ == "__main__":

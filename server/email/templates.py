@@ -1,5 +1,5 @@
 """
-Email templates for Predixen Intelligence OS.
+Email templates for FounderConsole.
 Professional HTML templates using table-based layouts for email client compatibility.
 All icons use text/Unicode for universal rendering (no SVG data URIs).
 """
@@ -39,7 +39,7 @@ def get_email_wrapper(content: str) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="x-apple-disable-message-reformatting">
-    <title>Predixen</title>
+    <title>FounderConsole</title>
     <!--[if mso]>
     <noscript>
         <xml>
@@ -99,7 +99,7 @@ def get_header_html(subtitle: str) -> str:
                                     <!--<![endif]-->
                                 </td>
                                 <td style="vertical-align: middle;">
-                                    <span style="font-size: 24px; font-weight: 700; color: {COLORS['white']}; letter-spacing: -0.5px; font-family: {FONT_STACK};">Predixen</span>
+                                    <span style="font-size: 24px; font-weight: 700; color: {COLORS['white']}; letter-spacing: -0.5px; font-family: {FONT_STACK};">FounderConsole</span>
                                 </td>
                             </tr>
                         </table>
@@ -121,7 +121,7 @@ def get_footer_html() -> str:
     return f"""
     <tr>
         <td style="background-color: {COLORS['off_white']}; padding: 24px 40px; text-align: center; border-top: 1px solid {COLORS['gray_100']};">
-            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">Predixen</p>
+            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">FounderConsole</p>
             <p style="margin: 0; font-size: 13px; color: {COLORS['gray_500']}; font-family: {FONT_STACK};">AI-Powered Financial Intelligence</p>
         </td>
     </tr>
@@ -260,7 +260,7 @@ def render_invite_template(
     if early_access:
         intro_text = f"""
         <p style="font-size: 16px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
-            You've been selected for <span style="color: {COLORS['primary']}; font-weight: 600;">exclusive early access</span> to Predixen Intelligence OS.
+            You've been selected for <span style="color: {COLORS['primary']}; font-weight: 600;">exclusive early access</span> to FounderConsole.
         </p>
         <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
             <span style="color: {COLORS['primary']}; font-weight: 600;">{invited_by_email}</span> has personally invited you to join as a {role_badge}
@@ -276,10 +276,10 @@ def render_invite_template(
     else:
         intro_text = f"""
         <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
-            <span style="color: {COLORS['primary']}; font-weight: 600;">{invited_by_email}</span> has invited you to join Predixen Intelligence OS as a {role_badge}
+            <span style="color: {COLORS['primary']}; font-weight: 600;">{invited_by_email}</span> has invited you to join FounderConsole as a {role_badge}
         </p>
         <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">
-            Predixen helps startups make data-driven financial decisions with AI-powered analysis and probabilistic forecasting.
+            FounderConsole helps startups make data-driven financial decisions with AI-powered analysis and probabilistic forecasting.
         </p>
         """
         features = [
@@ -325,7 +325,7 @@ def render_invite_template(
 
 def render_welcome_template(
     user_name: Optional[str] = None,
-    login_url: str = "https://predixen.app/auth"
+    login_url: str = "https://founderconsole.ai/auth"
 ) -> str:
     """Render the welcome email template."""
     greeting = f"Welcome aboard, {user_name}!" if user_name else "Welcome aboard!"
@@ -340,7 +340,7 @@ def render_welcome_template(
     steps_html = "".join([get_numbered_step(num, title, desc) for num, title, desc in steps])
     
     content = f"""
-    {get_header_html("WELCOME TO PREDIXEN")}
+    {get_header_html("WELCOME TO FOUNDERCONSOLE")}
     <tr>
         <td class="body-content" style="padding: 40px;">
             <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">{greeting}</h2>
@@ -414,7 +414,7 @@ def get_stat_box(value: str, label: str) -> str:
 
 def render_app_overview_template(
     user_name: str = None,
-    login_url: str = "https://predixen.app/dashboard",
+    login_url: str = "https://founderconsole.ai/dashboard",
     dashboard_screenshot_url: str = None,
     truth_scan_screenshot_url: str = None,
     simulation_screenshot_url: str = None,
@@ -430,7 +430,7 @@ def render_app_overview_template(
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0;">
             <tr>
                 <td>
-                    <img src="{dashboard_screenshot_url}" alt="Predixen Dashboard" width="100%" style="border-radius: 12px; border: 1px solid {COLORS['gray_100']}; display: block;" />
+                    <img src="{dashboard_screenshot_url}" alt="FounderConsole Dashboard" width="100%" style="border-radius: 12px; border: 1px solid {COLORS['gray_100']}; display: block;" />
                 </td>
             </tr>
         </table>
@@ -474,7 +474,7 @@ def render_app_overview_template(
             <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 8px 0; font-family: {FONT_STACK};">{greeting}</p>
             <h2 style="margin: 0 0 16px 0; font-size: 26px; font-weight: 700; color: {COLORS['navy']}; letter-spacing: -0.5px; line-height: 1.3; font-family: {FONT_STACK};">Your AI-Powered Financial Command Center</h2>
             <p style="font-size: 16px; color: {COLORS['gray_600']}; margin: 0 0 8px 0; line-height: 1.7; font-family: {FONT_STACK};">
-                Predixen Intelligence OS gives startups <span style="color: {COLORS['primary']}; font-weight: 600;">investor-grade financial analysis</span> in minutes, not weeks.
+                FounderConsole gives startups <span style="color: {COLORS['primary']}; font-weight: 600;">investor-grade financial analysis</span> in minutes, not weeks.
             </p>
             <p style="font-size: 15px; color: {COLORS['gray_500']}; margin: 0 0 24px 0; line-height: 1.6; font-family: {FONT_STACK};">
                 Upload your financials, run simulations, and get ranked recommendations to maximize survival and growth.
@@ -542,7 +542,7 @@ def render_password_reset_template(
     <tr>
         <td class="body-content" style="padding: 40px;">
             <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">Reset Your Password</h2>
-            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">We received a request to reset the password for your Predixen account. Click the button below to create a new password.</p>
+            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">We received a request to reset the password for your FounderConsole account. Click the button below to create a new password.</p>
             
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
                 <tr>
@@ -562,7 +562,7 @@ def render_password_reset_template(
             
             {get_divider()}
             
-            <p style="color: {COLORS['gray_500']}; font-size: 13px; margin: 0; font-family: {FONT_STACK};">For security reasons, never share this link with anyone. Predixen will never ask for your password via email.</p>
+            <p style="color: {COLORS['gray_500']}; font-size: 13px; margin: 0; font-family: {FONT_STACK};">For security reasons, never share this link with anyone. FounderConsole will never ask for your password via email.</p>
         </td>
     </tr>
     {get_footer_html()}
@@ -572,7 +572,7 @@ def render_password_reset_template(
 
 def render_copilot_pitch_template(
     recipient_name: Optional[str] = None,
-    cta_url: str = "https://predixen.app"
+    cta_url: str = "https://founderconsole.ai"
 ) -> str:
     """Render the AI Copilot sales pitch email template."""
     greeting = f"Hi {recipient_name}," if recipient_name else "Hi there,"
@@ -588,7 +588,7 @@ def render_copilot_pitch_template(
                 What if you could ask a seasoned CFO any question about your business and get an instant, data-backed answer?
             </p>
             <p style="color: {COLORS['gray_700']}; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-                <strong style="color: {COLORS['navy']};">Introducing Predixen AI Copilot</strong> - your always-available financial intelligence partner.
+                <strong style="color: {COLORS['navy']};">Introducing FounderConsole AI Copilot</strong> - your always-available financial intelligence partner.
             </p>
             
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 24px 0; background-color: {COLORS['gray_50']}; border-radius: 12px;">
@@ -656,28 +656,28 @@ TEMPLATE_CONFIGS = {
         "name": "Early Access Invitation",
         "description": "Sent to early users with exclusive access messaging",
         "variables": ["invite_url", "role", "invited_by_email", "expires_at", "early_access"],
-        "subject": "You're invited to Predixen Early Access",
+        "subject": "You're invited to FounderConsole Early Access",
         "render_fn": "render_invite_template"
     },
     "welcome": {
         "name": "Welcome Email",
         "description": "Sent after a user completes registration",
         "variables": ["user_name", "login_url"],
-        "subject": "Welcome to Predixen Intelligence OS",
+        "subject": "Welcome to FounderConsole",
         "render_fn": "render_welcome_template"
     },
     "password_reset": {
         "name": "Password Reset Email",
         "description": "Sent when a user requests a password reset",
         "variables": ["reset_url"],
-        "subject": "Reset Your Predixen Password",
+        "subject": "Reset Your FounderConsole Password",
         "render_fn": "render_password_reset_template"
     },
     "app_overview": {
         "name": "App Overview",
         "description": "Product showcase email with screenshots explaining key features",
         "variables": ["user_name", "login_url", "dashboard_screenshot_url", "truth_scan_screenshot_url", "simulation_screenshot_url", "decision_screenshot_url"],
-        "subject": "Discover Predixen Intelligence OS - Your AI Financial Command Center",
+        "subject": "Discover FounderConsole - Your AI Financial Command Center",
         "render_fn": "render_app_overview_template"
     },
     "copilot_pitch": {
@@ -702,7 +702,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
     """
     sample_data = {
         "invite": {
-            "invite_url": "https://predixen.app/auth?invite=sample_token_abc123",
+            "invite_url": "https://founderconsole.ai/auth?invite=sample_token_abc123",
             "role": "analyst",
             "invited_by_email": "admin@company.com",
             "expires_at": datetime.now(),
@@ -710,14 +710,14 @@ def get_template_preview(template_type: str) -> Optional[str]:
         },
         "welcome": {
             "user_name": "John Doe",
-            "login_url": "https://predixen.app/auth"
+            "login_url": "https://founderconsole.ai/auth"
         },
         "password_reset": {
-            "reset_url": "https://predixen.app/reset-password?token=sample_reset_token"
+            "reset_url": "https://founderconsole.ai/reset-password?token=sample_reset_token"
         },
         "app_overview": {
             "user_name": "John",
-            "login_url": "https://predixen.app/dashboard",
+            "login_url": "https://founderconsole.ai/dashboard",
             "dashboard_screenshot_url": None,
             "truth_scan_screenshot_url": None,
             "simulation_screenshot_url": None,
@@ -725,7 +725,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
         },
         "copilot_pitch": {
             "recipient_name": "Nikita",
-            "cta_url": "https://predixen.app/copilot"
+            "cta_url": "https://founderconsole.ai/copilot"
         }
     }
     
@@ -744,7 +744,7 @@ def get_template_preview(template_type: str) -> Optional[str]:
             updates=[
                 {"title": "Sample Feature", "description": "This is a sample update."}
             ],
-            app_url="https://predixen.app"
+            app_url="https://founderconsole.ai"
         )
     
     return None
@@ -792,7 +792,7 @@ def render_platform_update_template(
         <td class="body-content" style="padding: 40px;">
             <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: {COLORS['navy']}; font-family: {FONT_STACK};">New Features & Updates</h1>
             <p style="margin: 0 0 24px 0; font-size: 16px; color: {COLORS['gray_600']}; line-height: 1.6; font-family: {FONT_STACK};">
-                We've been busy improving Predixen Intelligence OS! Here's what's new in the last 24 hours:
+                We've been busy improving FounderConsole! Here's what's new in the last 24 hours:
             </p>
             
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
@@ -857,17 +857,17 @@ def render_text_only_update_template(
 </head>
 <body style="margin: 0; padding: 32px; background-color: {COLORS['white']}; font-family: {FONT_STACK};">
     <p style="margin: 0 0 24px 0; font-size: 16px; color: {COLORS['navy']}; font-weight: 600;">
-        Predixen Intelligence OS - Latest Updates
+        FounderConsole - Latest Updates
     </p>
     
     {update_lines}
     
     <p style="margin: 24px 0 0 0; font-size: 14px; color: {COLORS['gray_500']};">
-        <a href="{app_url}" style="color: {COLORS['primary']}; text-decoration: none;">Open Predixen</a> to try these features.
+        <a href="{app_url}" style="color: {COLORS['primary']}; text-decoration: none;">Open FounderConsole</a> to try these features.
     </p>
     
     <p style="margin: 32px 0 0 0; font-size: 13px; color: {COLORS['gray_400']};">
-        - The Predixen Team
+        - The FounderConsole Team
     </p>
     {tracking_pixel}
 </body>

@@ -1,6 +1,6 @@
 """
 Send personal update email v15 to Nikita recipients.
-Sender: wlk2qbda@predixen.app
+Sender: wlk2qbda@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_founder_calls_feb2026_v15"
+CAMPAIGN = "founderconsole_founder_calls_feb2026_v15"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -26,7 +26,7 @@ Started doing founder calls to understand what kind of decision-making confusion
 Hope you are doing well.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -47,7 +47,7 @@ def build_html(rcpt: dict) -> str:
 <p>Hope you are doing well.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -56,7 +56,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <wlk2qbda@predixen.app>"
+    sender = "FounderConsole <wlk2qbda@founderconsole.ai>"
 
     print(f"Sending founder calls update to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")

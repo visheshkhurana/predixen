@@ -9,7 +9,7 @@
     "fy_end": "Dec 31",
     "locale": "en-US",
     "generated": "2026-02-15",
-    "purpose": "Synthetic QA test data for Predixen UI/UX audit"
+    "purpose": "Synthetic QA test data for FounderConsole UI/UX audit"
   },
   "baseline_monthly": {
     "note": "All monetary values expressed in THOUSANDS (e.g., 520 = $520,000)",
@@ -36,7 +36,7 @@
     "arr_formula": "monthlyRevenue * 12 = 520 * 12 = 6240 ($6.24M)"
   },
   "consumer_subscription_kpis": {
-    "note": "ALL SYNTHETIC  clearly labeled as assumptions. These cannot be entered into Predixen's current UI but represent what a consumer subscription founder needs.",
+    "note": "ALL SYNTHETIC  clearly labeled as assumptions. These cannot be entered into FounderConsole's current UI but represent what a consumer subscription founder needs.",
     "acquisition_activation": {
       "installs_month": 600000,
       "signups_month": 270000,

@@ -17,8 +17,8 @@ def parse_optional_bool(env_var: str) -> Optional[bool]:
     return val.lower() == "true"
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./predixen.db")
-    SECRET_KEY: str = os.getenv("SESSION_SECRET", "predixen-secret-key-change-in-production")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
+    SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     

@@ -1,4 +1,4 @@
-## PREDIXEN QA REPORT — Critical Bug Fixes + Feature Improvements
+## FOUNDERCONSOLE QA REPORT — Critical Bug Fixes + Feature Improvements
 
 I ran a full QA test using "LeadSquared (Synthetic Test)" (Company ID 24, Currency: INR, Scale: MILLIONS) with these baseline inputs:
 - monthlyRevenue: 217.2 (₹M), grossMarginPct: 82, opex: 95, payroll: 105, otherCosts: 18, cashBalance: 1500, employees: 1150
@@ -154,7 +154,7 @@ Build `formatAmount(value, currency, scale)` and `getCurrencySymbol(currency)` u
 When a user already has companies, onboarding should show a choice: "Create new company" or "Edit [existing company name]". If creating new, generate a fresh company ID. If editing, show current values pre-filled and allow changes. Never silently overwrite.
 
 **F4 [P1, Size: M] — Assumptions Ledger / Audit Trail**
-Add a page (or modal) that shows every assumption the system makes: "Gross Margin = 82% (user-entered)", "Growth Rate = N/A (insufficient data, defaulting to 0%)", "COGS = ₹39.1M (derived: revenue x (1 - GM/100))". This builds trust. If I can't see WHERE a number comes from, I can't trust Predixen with real decisions.
+Add a page (or modal) that shows every assumption the system makes: "Gross Margin = 82% (user-entered)", "Growth Rate = N/A (insufficient data, defaulting to 0%)", "COGS = ₹39.1M (derived: revenue x (1 - GM/100))". This builds trust. If I can't see WHERE a number comes from, I can't trust FounderConsole with real decisions.
 
 **F5 [P1, Size: S] — Metric Source Badges Everywhere**
 Every displayed metric should show a badge: "User-Entered", "Derived", "AI-Estimated", "Stale", or "N/A". Currently some cards show "Verified" / "Computed" which is good — extend this to ALL metrics including Growth Rate, NRR, Churn, Active Customers, ARPU, Payback.
@@ -169,7 +169,7 @@ Let users name scenarios (not just "Quick simulation"). Show scenario history wi
 The "Export" button exists but should produce a well-formatted PDF with: scenario query, decision score breakdown, before/after comparison, key risks/opportunities, and the full P10/P50/P90 distribution. Also support XLSX for founders who want to model further in Excel.
 
 **F9 [P2, Size: L] — Data Connectors (QuickBooks, Stripe, Xero, Razorpay)**
-For Indian SaaS companies: Razorpay, Cashfree, Zoho Books integrations. For global: Stripe, QuickBooks, Xero. Auto-import MRR, churn, revenue, expenses monthly. This is the #1 feature that would make me (as a founder) pay for Predixen long-term.
+For Indian SaaS companies: Razorpay, Cashfree, Zoho Books integrations. For global: Stripe, QuickBooks, Xero. Auto-import MRR, churn, revenue, expenses monthly. This is the #1 feature that would make me (as a founder) pay for FounderConsole long-term.
 
 **F10 [P2, Size: M] — Multi-Scenario Stacking with Reset Verification**
 Allow stacking S1+S4+S6 as a combined scenario. After unstacking, verify baseline returns EXACTLY to original values (state leakage test). Show a visual diff of "stacked scenario" vs "sum of individual scenarios" to reveal interaction effects.

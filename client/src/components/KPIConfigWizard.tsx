@@ -40,7 +40,7 @@ export const DEFAULT_KPI_CONFIGS: KPIConfig[] = [
   { id: 'nrr', name: 'Net Revenue Retention', description: 'Revenue retention including expansion', icon: <Percent className="h-4 w-4" />, category: 'revenue', enabled: false, order: 10 },
 ];
 
-const STORAGE_KEY = 'predixen_kpi_config';
+const STORAGE_KEY = 'founderconsole_kpi_config';
 
 export function loadKPIConfig(): KPIConfig[] {
   try {

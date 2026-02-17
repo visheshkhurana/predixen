@@ -45,7 +45,7 @@ async function sendSMS() {
 
   const toNumber = '+919818540514';
 
-  const messageBody = `Predixen Intelligence OS - Simulation Engine Update
+  const messageBody = `FounderConsole - Simulation Engine Update
 
 New changes live:
 
@@ -64,7 +64,7 @@ New changes live:
 7. Founder Mode - Toggle for executive summary view
 
 All live now.
-- Predixen`;
+- FounderConsole`;
 
   console.log(`Sending SMS to ${toNumber} from ${phoneNumber}...`);
 

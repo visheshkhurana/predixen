@@ -115,7 +115,7 @@ export default function ConnectorMarketplace() {
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-page-title">Connect Your Data</h1>
             <p className="text-muted-foreground">
-              Connect Predixen to the tools you already use
+              Connect FounderConsole to the tools you already use
             </p>
           </div>
         </div>

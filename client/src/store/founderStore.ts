@@ -224,7 +224,7 @@ export const useFounderStore = create<FounderState>()(
       },
     }),
     {
-      name: 'predixen-founder-storage',
+      name: 'founderconsole-founder-storage',
       partialize: (state) => ({
         token: state.token,
         user: state.user,

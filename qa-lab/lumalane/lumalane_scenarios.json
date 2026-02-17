@@ -49,7 +49,7 @@
       },
       "decisionBrief": "One-month promotional discount. Revenue lifts 8% but GM drops 4pp. Net impact: still profitable but margin thin. Risk: discounting becomes habitual.",
       "uxFriction": [
-        "Cannot model one-month shocks in Predixen  no month-specific override UI",
+        "Cannot model one-month shocks in FounderConsole  no month-specific override UI",
         "No discount rate lever in sensitivity sliders",
         "NLP simulation does not support time-bounded changes (Month 2 only)",
         "Simulation treated a -4pp GM change as catastrophic (NO-GO, 5.7mo runway)  math error"
@@ -76,7 +76,7 @@
       },
       "decisionBrief": "Post-holiday returns spike causes margin compression and reverse logistics costs. Company flips from profitable to slight burn of 0.52Cr/mo. Runway remains comfortable at 105+ months.",
       "uxFriction": [
-        "No returns rate field or lever anywhere in Predixen",
+        "No returns rate field or lever anywhere in FounderConsole",
         "No reverse logistics cost category",
         "Cannot model return_rate_pct  fundamental gap for retail",
         "No way to express restockable vs. write-off return split",
@@ -128,7 +128,7 @@
       },
       "decisionBrief": "Supplier inflation compresses margins by 3pp. Company breaks roughly even. Critical to renegotiate supplier terms or pass costs to consumers.",
       "uxFriction": [
-        "Predixen does not explain causal chains (inflation  COGS  GM  burn)",
+        "FounderConsole does not explain causal chains (inflation  COGS  GM  burn)",
         "No COGS breakdown by category (raw materials, packaging, freight)",
         "AI briefing doesn't reference retail-specific cost drivers",
         "Simulation overreacts to moderate GM changes"
@@ -164,7 +164,7 @@
       },
       "decisionBrief": "Two new stores require 6Cr capex upfront, add 1Cr/mo in opex/payroll during ramp, but generate 1.5Cr/mo incremental revenue by month 6. Payback within 6 months of opening.",
       "uxFriction": [
-        "CRITICAL: Cannot model multi-step, multi-month scenarios in Predixen",
+        "CRITICAL: Cannot model multi-step, multi-month scenarios in FounderConsole",
         "No cash flow delta (capex) input  only total cash balance",
         "No phased timeline (Month 1-2: capex, Month 3-6: ramp, Month 6+: steady state)",
         "No capex vs opex distinction",
@@ -227,7 +227,7 @@
       },
       "decisionBrief": "Stress test for scenario stacking and reset. After applying 3 concurrent changes and resetting, all values must return to exact baseline across Dashboard, Health Check, Simulate, and Data Input pages.",
       "uxFriction": [
-        "Predixen has no explicit scenario stacking mechanism",
+        "FounderConsole has no explicit scenario stacking mechanism",
         "No 'what changed' log or assumption ledger",
         "Reset button exists on sensitivity sliders but unclear if it resets NLP simulations",
         "No version history or undo stack for baseline changes",

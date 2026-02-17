@@ -1199,7 +1199,7 @@ export default function OnboardingPage() {
                         <p className="text-sm">
                           You enter <span className="font-mono font-semibold">{sym}{exampleInput}</span>
                           {' → '}
-                          Predixen reads it as <span className="font-mono font-semibold">{sym}{formatted}</span>
+                          FounderConsole reads it as <span className="font-mono font-semibold">{sym}{formatted}</span>
                         </p>
                       </div>
                     );
@@ -1376,7 +1376,7 @@ export default function OnboardingPage() {
                               <div>
                                 <h4 className="font-medium text-sm">Pre-Revenue Company</h4>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  No revenue? No problem. Predixen will optimize for runway extension and milestone tracking instead of growth metrics.
+                                  No revenue? No problem. FounderConsole will optimize for runway extension and milestone tracking instead of growth metrics.
                                 </p>
                               </div>
                               <div className="space-y-2">
@@ -1606,7 +1606,7 @@ export default function OnboardingPage() {
                 Connect Your Data Sources
               </CardTitle>
               <CardDescription>
-                Link the tools you already use so Predixen can pull live data automatically. You can also skip this and connect later.
+                Link the tools you already use so FounderConsole can pull live data automatically. You can also skip this and connect later.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

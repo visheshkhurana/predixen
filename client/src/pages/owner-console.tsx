@@ -259,7 +259,7 @@ export default function OwnerConsole() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Owner Console</h1>
-              <p className="text-sm text-muted-foreground">Predixen Intelligence OS</p>
+              <p className="text-sm text-muted-foreground">FounderConsole</p>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -840,7 +840,7 @@ export default function OwnerConsole() {
       </main>
 
       <footer className="border-t mt-8 py-6 text-center text-sm text-muted-foreground">
-        Predixen Intelligence OS - Owner Console v1.0
+        FounderConsole - Owner Console v1.0
       </footer>
     </div>
   );

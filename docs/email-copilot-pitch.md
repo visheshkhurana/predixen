@@ -1,4 +1,4 @@
-# Predixen AI Copilot - Email Pitch Template
+# FounderConsole AI Copilot - Email Pitch Template
 
 ---
 
@@ -21,7 +21,7 @@ Hi [First Name],
 
 What if you could ask a seasoned CFO any question about your business—and get an instant, data-backed answer?
 
-**Introducing Predixen AI Copilot** — your always-available financial intelligence partner.
+**Introducing FounderConsole AI Copilot** — your always-available financial intelligence partner.
 
 ### How It Works
 
@@ -76,7 +76,7 @@ Upload your financials once. Ask unlimited questions forever.
 
 Best,
 [Your Name]
-Predixen Intelligence OS
+FounderConsole
 
 ---
 
@@ -88,7 +88,7 @@ Hi [First Name],
 
 Most founders can't afford a full-time CFO. But every founder needs CFO-level insights.
 
-Predixen AI Copilot lets you ask any financial question and get instant, data-backed answers:
+FounderConsole AI Copilot lets you ask any financial question and get instant, data-backed answers:
 
 - "What's my real runway?"
 - "What if our fundraise slips?"
@@ -113,7 +113,7 @@ Quick thought: When was the last time you asked "What happens if our next round 
 
 Most founders don't—because the answer is scary and hard to calculate.
 
-Predixen AI Copilot runs that scenario in seconds and shows you exactly what to do about it.
+FounderConsole AI Copilot runs that scenario in seconds and shows you exactly what to do about it.
 
 Want to see what it says for [Company Name]?
 

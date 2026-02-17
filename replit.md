@@ -1,7 +1,7 @@
-# Predixen Intelligence OS
+# FounderConsole
 
 ## Overview
-Predixen Intelligence OS is an AI-powered financial intelligence platform for startups. Its purpose is to maximize survival and growth while minimizing risk and dilution. It provides investor-grade diligence, probabilistic simulation, and ranked decision recommendations to guide financial planning. The platform helps startups understand their financial health, predict future outcomes, and make informed strategic decisions.
+FounderConsole is an AI-powered financial intelligence platform for startups. Its purpose is to maximize survival and growth while minimizing risk and dilution. It provides investor-grade diligence, probabilistic simulation, and ranked decision recommendations to guide financial planning. The platform helps startups understand their financial health, predict future outcomes, and make informed strategic decisions.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

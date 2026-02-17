@@ -176,7 +176,7 @@ export default function ScenariosPage() {
   const addCommentMutation = useAddComment();
   const editCommentMutation = useEditComment();
   const deleteCommentMutation = useDeleteComment();
-  const currentUserEmail = currentCompany ? `demo@predixen.ai` : 'user@example.com';
+  const currentUserEmail = currentCompany ? `demo@founderconsole.ai` : 'user@example.com';
 
   const [questionInput, setQuestionInput] = useState('');
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -259,7 +259,7 @@ export default function ScenariosPage() {
     const currentScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
     setShareModal({ open: true, url: '', loading: true });
     try {
-      const token = localStorage.getItem('predixen-token');
+      const token = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${currentCompany.id}/scenarios/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

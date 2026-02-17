@@ -68,7 +68,7 @@ export async function fetchConnectorCatalog(params?: {
   if (params?.companyId) searchParams.set("company_id", String(params.companyId));
   
   const url = `/api/connectors/catalog${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-  const token = localStorage.getItem("predixen-token");
+  const token = localStorage.getItem("founderconsole-token");
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const response = await fetch(url, { headers });
@@ -78,7 +78,7 @@ export async function fetchConnectorCatalog(params?: {
 }
 
 export async function fetchConnectorDetail(connectorId: string): Promise<CatalogConnector> {
-  const token = localStorage.getItem("predixen-token");
+  const token = localStorage.getItem("founderconsole-token");
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const response = await fetch(`/api/connectors/catalog/${connectorId}`, { headers });
@@ -88,7 +88,7 @@ export async function fetchConnectorDetail(connectorId: string): Promise<Catalog
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  const token = localStorage.getItem("predixen-token");
+  const token = localStorage.getItem("founderconsole-token");
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const response = await fetch("/api/connectors/categories", { headers });

@@ -40,14 +40,14 @@ async function sendUpdateEmails() {
   const resend = new Resend(apiKey);
 
   const recipients = [
-    'nikita@predixen.ai',
+    'nikita@founderconsole.ai',
     'nikita.luther@gmail.com',
     'nikitafl2024@gmail.com',
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'Predixen Updates <new1@predixen.app>';
-  const subject = 'Predixen v1.0.1: Decisions Page UI Enhancements — Why We Made These Changes';
+  const senderEmail = 'FounderConsole Updates <new1@founderconsole.ai>';
+  const subject = 'FounderConsole v1.0.1: Decisions Page UI Enhancements — Why We Made These Changes';
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -64,7 +64,7 @@ async function sendUpdateEmails() {
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:40px 40px 30px;">
-              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">Predixen Intelligence OS</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">FounderConsole</h1>
               <p style="margin:8px 0 0;color:#c7d2fe;font-size:13px;letter-spacing:1px;">v1.0.1 UI ENHANCEMENT UPDATE &mdash; FEBRUARY 2026</p>
             </td>
           </tr>
@@ -76,7 +76,7 @@ async function sendUpdateEmails() {
                 What changed &amp; why we did it
               </p>
               <p style="margin:0 0 20px;color:#94a3b8;font-size:15px;line-height:1.7;">
-                The Decisions page is the most important screen in Predixen &mdash; it's the founder's strategic briefing document. After shipping v1.0.0 with the core narrative structure, we focused this sprint on making the reading experience feel as polished and professional as the content itself. Here's what we improved and the reasoning behind each change.
+                The Decisions page is the most important screen in FounderConsole &mdash; it's the founder's strategic briefing document. After shipping v1.0.0 with the core narrative structure, we focused this sprint on making the reading experience feel as polished and professional as the content itself. Here's what we improved and the reasoning behind each change.
               </p>
             </td>
           </tr>
@@ -201,7 +201,7 @@ async function sendUpdateEmails() {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="https://predixen-intelligence-os.replit.app" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                    <a href="https://founderconsole.ai" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
                       See It Live
                     </a>
                   </td>
@@ -214,7 +214,7 @@ async function sendUpdateEmails() {
           <tr>
             <td style="background-color:#0f172a;padding:24px 40px;">
               <p style="margin:0;color:#475569;font-size:11px;text-align:center;line-height:1.6;">
-                Predixen Intelligence OS &mdash; AI-Powered Financial Intelligence for Startups<br/>
+                FounderConsole &mdash; AI-Powered Financial Intelligence for Startups<br/>
                 This is an automated product update. Reply to share feedback.
               </p>
             </td>

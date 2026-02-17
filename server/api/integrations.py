@@ -40,7 +40,7 @@ def get_integration_status(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    demo_user = db.query(User).filter(User.id == company.user_id, User.email == "demo@predixen.ai").first()
+    demo_user = db.query(User).filter(User.id == company.user_id, User.email == "demo@founderconsole.ai").first()
     if demo_user:
         from datetime import datetime, timedelta
         last_sync_time = (datetime.utcnow() - timedelta(hours=2)).isoformat()

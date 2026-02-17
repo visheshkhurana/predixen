@@ -73,7 +73,7 @@ def _ensure_connector_metadata(db: Session, company):
 
 def seed_demo_data(db: Session):
     logger.info("Starting demo data seeding...")
-    existing = db.query(User).filter(User.email == "demo@predixen.ai").first()
+    existing = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
     if existing:
         demo_user = existing
         if demo_user.role != "owner":
@@ -119,7 +119,7 @@ def seed_demo_data(db: Session):
             db.refresh(demo_company)
     else:
         demo_user = User(
-            email="demo@predixen.ai",
+            email="demo@founderconsole.ai",
             password_hash=get_password_hash("demo123"),
             role="owner"
         )
@@ -1668,31 +1668,31 @@ def seed_team_members(db: Session):
         return
     team_members = [
         TeamMember(
-            name="Sarah Chen", email="sarah.chen@predixen.ai", role="Senior Frontend Engineer",
+            name="Sarah Chen", email="sarah.chen@founderconsole.ai", role="Senior Frontend Engineer",
             type="full_time", department="Engineering", status="active", start_date="2024-03-15",
             skills=["React", "TypeScript", "Next.js", "Tailwind CSS", "GraphQL"],
             github_url="https://github.com/sarahchen", linkedin_url="https://linkedin.com/in/sarahchen"
         ),
         TeamMember(
-            name="Marcus Johnson", email="marcus.j@predixen.ai", role="Backend Developer",
+            name="Marcus Johnson", email="marcus.j@founderconsole.ai", role="Backend Developer",
             type="full_time", department="Engineering", status="active", start_date="2024-01-10",
             skills=["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"],
             github_url="https://github.com/marcusj", linkedin_url="https://linkedin.com/in/marcusjohnson"
         ),
         TeamMember(
-            name="Priya Patel", email="priya.p@predixen.ai", role="DevOps Engineer",
+            name="Priya Patel", email="priya.p@founderconsole.ai", role="DevOps Engineer",
             type="contractor", department="Engineering", status="active", start_date="2024-06-01",
             skills=["AWS", "Terraform", "Kubernetes", "CI/CD", "Monitoring"],
             github_url="https://github.com/priyap"
         ),
         TeamMember(
-            name="Alex Rivera", email="alex.r@predixen.ai", role="QA Engineer",
+            name="Alex Rivera", email="alex.r@founderconsole.ai", role="QA Engineer",
             type="full_time", department="QA", status="active", start_date="2024-04-20",
             skills=["Playwright", "Cypress", "Test Automation", "API Testing", "Performance Testing"],
             linkedin_url="https://linkedin.com/in/alexrivera"
         ),
         TeamMember(
-            name="Jordan Kim", email="jordan.k@predixen.ai", role="UI/UX Designer",
+            name="Jordan Kim", email="jordan.k@founderconsole.ai", role="UI/UX Designer",
             type="contractor", department="Design", status="interviewing",
             skills=["Figma", "User Research", "Prototyping", "Design Systems", "Accessibility"],
             linkedin_url="https://linkedin.com/in/jordankim"

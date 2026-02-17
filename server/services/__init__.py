@@ -1,4 +1,4 @@
-"""Services module for Predixen Intelligence OS."""
+"""Services module for FounderConsole."""
 
 from .notifications import (
     send_feature_notification,

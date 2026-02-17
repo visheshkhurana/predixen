@@ -1049,7 +1049,7 @@ def _build_share_email_html(company_name: str, content_type: str, content_data: 
 <div style="max-width:600px;margin:0 auto;padding:32px 24px;">
 
 <div style="margin-bottom:28px;">
-    <p style="font-size:18px;font-weight:700;color:#a5b4fc;margin:0 0 4px;">Predixen</p>
+    <p style="font-size:18px;font-weight:700;color:#a5b4fc;margin:0 0 4px;">FounderConsole</p>
     <p style="font-size:12px;color:#64748b;margin:0;">Intelligence OS</p>
 </div>
 
@@ -1065,11 +1065,11 @@ def _build_share_email_html(company_name: str, content_type: str, content_data: 
 {note_html}
 
 <div style="margin-top:28px;text-align:center;">
-    <a href="https://predixen.app/decisions" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">View in Predixen</a>
+    <a href="https://founderconsole.ai/decisions" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">View in FounderConsole</a>
 </div>
 
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1e293b;text-align:center;">
-    <p style="font-size:12px;color:#475569;margin:0;">Sent via Predixen Intelligence OS</p>
+    <p style="font-size:12px;color:#475569;margin:0;">Sent via FounderConsole</p>
 </div>
 
 </div>

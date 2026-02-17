@@ -1,6 +1,6 @@
 """
 Send update email v23 - P1/P2 Bug Fixes: Metrics, Currency, Scale & Scenarios.
-Sender: kavibe8@predixen.app
+Sender: kavibe8@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_p1p2_bugfixes_feb2026_v23"
+CAMPAIGN = "founderconsole_p1p2_bugfixes_feb2026_v23"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -83,7 +83,7 @@ CURRENT STATE
 - 150/150 QA tests passing
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -208,7 +208,7 @@ def build_html(rcpt: dict) -> str:
 </table>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -217,7 +217,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Nikita from Predixen <kavibe8@predixen.app>"
+    sender = "Nikita from FounderConsole <kavibe8@founderconsole.ai>"
 
     print(f"Sending P1/P2 Bug Fixes update v23 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -234,7 +234,7 @@ def send_all():
 
         headers = {
             "X-Entity-Ref-ID": str(uuid.uuid4()),
-            "List-Unsubscribe": "<mailto:kavibe8@predixen.app?subject=unsubscribe>",
+            "List-Unsubscribe": "<mailto:kavibe8@founderconsole.ai?subject=unsubscribe>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             "Precedence": "bulk",
         }

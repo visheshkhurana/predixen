@@ -310,7 +310,7 @@ export default function SuggestedMetrics() {
     queryFn: async () => {
       const params = new URLSearchParams({ company_id: String(companyId) });
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
-      const token = localStorage.getItem('predixen-token');
+      const token = localStorage.getItem('founderconsole-token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`/api/suggestions?${params}`, { headers, credentials: 'include' });
@@ -323,7 +323,7 @@ export default function SuggestedMetrics() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error("No company selected");
-      const token = localStorage.getItem('predixen-token');
+      const token = localStorage.getItem('founderconsole-token');
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
       headers['Content-Type'] = 'application/json';

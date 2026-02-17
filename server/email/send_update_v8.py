@@ -1,7 +1,7 @@
 """
 Send detailed simulation explainer email v8 to 4 recipients.
 Transactional-style: minimal HTML, plain-text companion, personal sender.
-Content: How Predixen Monte Carlo simulations work, with concrete examples.
+Content: How FounderConsole Monte Carlo simulations work, with concrete examples.
 """
 import os, sys, time, uuid
 
@@ -10,12 +10,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_simulation_explainer_feb2026_v8"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_simulation_explainer_feb2026_v8"
+BASE_URL = "https://founderconsole.ai"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -25,7 +25,7 @@ def build_plain_text(rcpt: dict) -> str:
     name = rcpt["name"]
     return f"""Hi {name},
 
-I wanted to walk through how the Predixen simulation engine actually works under the hood -- since it's the core of every projection, runway estimate, and decision recommendation on the platform.
+I wanted to walk through how the FounderConsole simulation engine actually works under the hood -- since it's the core of every projection, runway estimate, and decision recommendation on the platform.
 
 HOW MONTE CARLO SIMULATIONS WORK
 ---------------------------------
@@ -112,18 +112,18 @@ When you compare scenarios side by side, the Decision Ranking page scores each o
   - Runway length
   - Revenue trajectory
 
-This is how Predixen tells you "Scenario A is 23% better than Scenario B" -- it's comparing thousands of simulated futures, not a single spreadsheet row.
+This is how FounderConsole tells you "Scenario A is 23% better than Scenario B" -- it's comparing thousands of simulated futures, not a single spreadsheet row.
 
 You can try all of this in the demo account:
 {BASE_URL}/auth
-Login: demo@predixen.ai / demo123
+Login: demo@founderconsole.ai / demo123
 
 Go to Scenarios, create two scenarios with different parameters, run simulations on both, then check the Decision Ranking page.
 
 Let me know if you have questions about any of this.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -140,7 +140,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {name},</p>
 
-<p>I wanted to walk through how the Predixen simulation engine actually works under the hood &mdash; since it&rsquo;s the core of every projection, runway estimate, and decision recommendation on the platform.</p>
+<p>I wanted to walk through how the FounderConsole simulation engine actually works under the hood &mdash; since it&rsquo;s the core of every projection, runway estimate, and decision recommendation on the platform.</p>
 
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">How Monte Carlo Simulations Work</h3>
 
@@ -231,18 +231,18 @@ MRR: $43,949 &nbsp;|&nbsp; Cash: $513,746 &nbsp;|&nbsp; Growth: 10% &nbsp;|&nbsp
 
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">What This Means for Decisions</h3>
 
-<p>When you compare scenarios side by side, the Decision Ranking page scores each one on survival probability, expected cash position (P50), runway length, and revenue trajectory. This is how Predixen tells you &ldquo;Scenario A is 23% better than Scenario B&rdquo; &mdash; it&rsquo;s comparing thousands of simulated futures, not a single spreadsheet row.</p>
+<p>When you compare scenarios side by side, the Decision Ranking page scores each one on survival probability, expected cash position (P50), runway length, and revenue trajectory. This is how FounderConsole tells you &ldquo;Scenario A is 23% better than Scenario B&rdquo; &mdash; it&rsquo;s comparing thousands of simulated futures, not a single spreadsheet row.</p>
 
 <p>You can try all of this in the demo account:<br>
 <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>
-Login: demo@predixen.ai / demo123</p>
+Login: demo@founderconsole.ai / demo123</p>
 
 <p>Go to Scenarios, create two scenarios with different parameters, run simulations on both, then check the Decision Ranking page.</p>
 
 <p>Let me know if you have questions about any of this.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -251,7 +251,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Nikita at Predixen <nikita@predixen.app>"
+    sender = "Nikita at FounderConsole <nikita@founderconsole.ai>"
 
     print(f"Sending simulation explainer emails to {len(RECIPIENTS)} recipients...")
     print(f"Campaign: {CAMPAIGN}")
@@ -280,7 +280,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="How Predixen simulations work (with examples)",
+            subject="How FounderConsole simulations work (with examples)",
             html_content=html,
             text_content=text,
             from_email=sender,

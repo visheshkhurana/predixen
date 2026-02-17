@@ -212,7 +212,7 @@ export function ConnectorDetailDrawer({ connector, open, onOpenChange, onConnect
                 <div>
                   <p className="font-medium text-sm">Your data is read-only</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Predixen only reads your data. We never modify, delete, or write to your connected systems.
+                    FounderConsole only reads your data. We never modify, delete, or write to your connected systems.
                   </p>
                 </div>
               </div>

@@ -6,18 +6,18 @@ const API_BASE = '/api';
 // Helper to get token from localStorage or Zustand persisted storage
 function getAuthToken(): string | null {
   // First try direct localStorage key
-  let token = localStorage.getItem('predixen-token');
+  let token = localStorage.getItem('founderconsole-token');
   
   // Fallback: try to get from Zustand persisted storage
   if (!token) {
     try {
-      const zustandStorage = localStorage.getItem('predixen-founder-storage');
+      const zustandStorage = localStorage.getItem('founderconsole-founder-storage');
       if (zustandStorage) {
         const parsed = JSON.parse(zustandStorage);
         token = parsed?.state?.token || null;
         // Sync back to direct key if found
         if (token) {
-          localStorage.setItem('predixen-token', token);
+          localStorage.setItem('founderconsole-token', token);
         }
       }
     } catch {
