@@ -49,8 +49,8 @@ integrations = ["javascript_openai_ai_integrations:2.0.0", "resend:1.0.0", "java
 [userenv]
 
 [userenv.shared]
-APP_BASE_URL = "https://predixen.app"
-ADMIN_MASTER_EMAIL = "demo@predixen.ai"
+APP_BASE_URL = "https://founderconsole.ai"
+ADMIN_MASTER_EMAIL = "demo@founderconsole.ai"
 
 [userenv.production]
-CORS_ORIGINS = "https://predixen.app,https://predixen-intelligence-os.replit.app"
+CORS_ORIGINS = "https://founderconsole.ai,https://predixen-intelligence-os.replit.app"
