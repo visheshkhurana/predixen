@@ -1,0 +1,226 @@
+You are a senior engineer + QA. Your task is to create a CALCULATION-ONLY stress test suite for the app.
+
+Goal:
+Detect and prevent calculation errors across KPI, forecasting, scenarios, and baseline comparisons.
+Focus only on INPUT → OUTPUT correctness, formula correctness, rounding, edge cases, and consistency across pages.
+
+DO NOT change UI first. First create a canonical calculation layer + tests that reproduce real founder errors:
+- absurd NRR (e.g. 734%)
+- absurd growth (e.g. 1268%)
+- runway mismatches (11.8 vs 14.0)
+- baseline “status quo” not zero delta
+- negative/zero baseline divide bugs
+
+========================================================
+DELIVERABLES
+========================================================
+1) Create a “Calculation Test Harness” (can be unit tests or a /api/qa/calc endpoint in non-prod).
+2) Implement canonical formulas in one shared module (single source of truth).
+3) Add at least 25 deterministic test cases (fixtures) with expected outputs and tolerances.
+4) Add a “Consistency Checker” that calls the KPI endpoint used by Dashboard/Scenarios/Decisions and asserts identical values.
+5) Output:
+   - list of tests
+   - pass/fail
+   - what formula failed
+   - suggested fix
+
+========================================================
+CANONICAL KPI FORMULAS (IMPLEMENT EXACTLY)
+========================================================
+
+GENERAL RULES:
+- Use Decimal (or equivalent) for currency math to avoid float drift.
+- Always define time window and frequency explicitly.
+- All percent outputs are decimals internally (0.12) and formatted to percent in UI.
+- Guardrails: if denominator < MIN_BASELINE (default $1,000 for MRR metrics), return null/"N/A" + reason.
+
+CONSTANTS:
+MIN_BASELINE_MRR = 1000
+MIN_BASELINE_REV = 1000
+EPS = 1e-9
+
+(1) ARR
+ARR = MRR * 12
+
+(2) Gross Margin %
+GrossMarginPct = (Revenue - COGS) / Revenue
+Guard: if Revenue <= 0 => null
+
+(3) Burn
+Burn = max(0, OpEx + COGS - Revenue)
+Alternative if EBITDA available:
+Burn = max(0, -EBITDA)
+
+(4) Runway (months)
+RunwayMonths = Cash / Burn
+Guard: if Burn <= 0 => Infinity OR null with label “Cash-flow positive”
+(Decide one standard and apply everywhere. Prefer: return null + “Cash-flow positive”)
+
+(5) MoM Growth (Revenue or MRR)
+MoMGrowth = (Current - Previous) / Previous
+Guard: if Previous < MIN_BASELINE => null (avoid insane %)
+
+(6) CAGR (if needed) for monthly series:
+CAGR = (End/Start)^(12/NumMonths) - 1
+Guard: Start < MIN_BASELINE => null
+
+(7) NRR (Net Revenue Retention) over monthly cohorts:
+NRR = (StartingMRR + ExpansionMRR - ContractionMRR - ChurnedMRR) / StartingMRR
+Guard: if StartingMRR < MIN_BASELINE_MRR => null
+Hard sanity clamp only for display (do not change internal):
+If NRR > 3.0 (300%) => flag “OUTLIER” and attach warning (likely mapping bug)
+
+(8) CAC, LTV (if present)
+CAC = SalesMarketingSpend / NewCustomers
+Guard: NewCustomers <= 0 => null
+LTV (simple):
+LTV = ARPA * GrossMarginPct / MonthlyChurnRate
+Guard: churn <= 0 => null
+LTV:CAC = LTV / CAC (guard CAC <= 0)
+
+(9) Payback (months)
+Payback = CAC / (ARPA * GrossMarginPct)
+Guard: ARPA <=0 or GM<=0 => null
+
+(10) Scenario Baseline Delta
+Delta = ScenarioValue - BaselineValue
+%Delta = Delta / BaselineValue
+Guard: if BaselineValue < MIN_BASELINE => null
+
+STATUS QUO rule:
+If scenario inputs are identical to baseline, all deltas must be 0 (within tolerance).
+
+========================================================
+FORECAST / SIMULATION RULES (FOR TESTING)
+========================================================
+We will NOT test model sophistication yet. We test basic invariants:
+
+Invariant A: Cash trajectory must not “jump” unless a scenario explicitly changes it.
+Invariant B: EndingCash_t+1 = EndingCash_t + NetCashFlow_t (or EBITDA_t if simplified)
+Invariant C: If you cut costs with no revenue change, runway should not decrease.
+Invariant D: If revenue drops significantly and costs constant, runway should not increase.
+Invariant E: Baseline “before” values must match current KPI endpoint exactly.
+
+Scenario interpretation rules (for NLP mapping tests):
+- “cut marketing 25%” => marketing_multiplier = 0.75
+- “increase price 10%” => price_multiplier = 1.10
+- “hire 15 engineers” => payroll_delta = +15 * avg_engineer_cost
+- If action verb is cut/reduce/decrease => negative delta; increase/add => positive delta
+
+========================================================
+TEST CASES (DETERMINISTIC FIXTURES)
+========================================================
+Create a file: tests/fixtures/calc_cases.json (or similar) containing cases.
+Each case must define inputs and expected outputs.
+
+FORMAT FOR EACH CASE:
+{
+  "id": "TC01_RUNWAY_BASIC",
+  "inputs": {...},
+  "expected": {...},
+  "tolerance": {...},
+  "notes": "..."
+}
+
+MINIMUM REQUIRED CASES (ADD MORE):
+TC01_RUNWAY_BASIC:
+- Cash=4,500,000 Burn=382,000 => runway=11.78 months (round to 11.8 display)
+TC02_RUNWAY_BURN_ZERO:
+- Cash=2,000,000 Burn=0 => runway null + label cash-flow positive
+TC03_ARR_BASIC:
+- MRR=520,000 => ARR=6,240,000
+TC04_GROSS_MARGIN_BASIC:
+- Revenue=1,000,000 COGS=200,000 => GM=0.8
+TC05_GM_REVENUE_ZERO:
+- Revenue=0 => GM null
+TC06_MOMGROWTH_NORMAL:
+- Prev=100,000 Curr=110,000 => 10%
+TC07_MOMGROWTH_DENOM_TOO_SMALL:
+- Prev=50 Curr=5000 => null (avoid insane percent)
+TC08_NRR_NORMAL:
+- Start=100,000 Expansion=20,000 Contraction=5,000 Churn=10,000 => NRR=1.05
+TC09_NRR_DENOM_TOO_SMALL:
+- Start=500 => null
+TC10_NRR_OUTLIER_FLAG:
+- Start=10,000 Expansion=50,000 Contraction=0 Churn=0 => NRR=6.0 (return 6.0 + OUTLIER warning)
+TC11_CAC_BASIC:
+- Spend=200,000 NewCustomers=1000 => CAC=200
+TC12_CAC_NEW_CUSTOMERS_ZERO:
+- Spend=200,000 NewCustomers=0 => null
+TC13_LTV_BASIC:
+- ARPA=50 GM=0.7 churn=0.05 => LTV=700
+TC14_PAYBACK_BASIC:
+- CAC=200 ARPA=50 GM=0.7 => 5.71 months
+TC15_BASELINE_DELTA_STATUS_QUO:
+- baseline runway=11.8 scenario runway computed with no change => delta=0
+TC16_COST_CUT_RUNWAY:
+- baseline burn=400k cash=4M => runway=10.0
+- scenario burn=300k cash unchanged => runway=13.33 (must increase)
+TC17_REV_DROP_RUNWAY:
+- baseline revenue=1M costs=1.2M => burn=200k runway=20 (cash=4M)
+- scenario revenue=700k costs constant => burn=500k runway=8 (must decrease)
+TC18_PRICE_UP_REVENUE_UP:
+- baseline price=100 units sold=1000 => rev=100k
+- scenario price=110 units sold same => rev=110k
+TC19_SCENARIO_TEXT_PARSE_CUT_MARKETING:
+- input text “Cut marketing 25%” => expect marketing_multiplier=0.75 AND growth not increased
+TC20_SCENARIO_TEXT_PARSE_INCREASE_MARKETING:
+- “Increase marketing 20%” => multiplier=1.2
+TC21_ROUNDING_DISPLAY:
+- runway=11.777 => display 11.8 (but stored 11.777)
+TC22_CONSISTENCY_CROSS_PAGES:
+- call KPI endpoint used by dashboard/scenarios/decisions => values must match exactly for health_score and confidence
+TC23_BASELINE_BEFORE_MATCH:
+- baseline before values in scenario compare must equal KPI endpoint
+TC24_NEGATIVE_REVENUE_GUARD:
+- revenue=-100 => GM null, growth null, etc.
+TC25_NULL_PROPAGATION:
+- if a component metric is null due to guard, derived metrics should be null + reason (not zero)
+
+========================================================
+IMPLEMENTATION DETAILS
+========================================================
+1) Create a module: /server/services/kpi_calculations.(ts|py)
+- Export pure functions: computeARR, computeRunway, computeNRR, computeMoMGrowth, etc.
+- No DB calls inside functions.
+
+2) Update all KPI endpoints to use this module (no duplicate math scattered).
+- Dashboard, Scenarios, Decisions must call same canonical function outputs.
+
+3) Add tests:
+- If JS/TS: use Jest/Vitest
+- If Python: use pytest
+Tests must load fixtures file and validate outputs.
+
+4) Add a QA-only endpoint (optional but recommended):
+GET /api/qa/calc/run
+- runs fixtures and returns pass/fail summary
+- non-prod/admin only
+
+5) Add “Warnings” mechanism:
+If outlier or guard triggered, return:
+{ value: null, reason: "baseline_too_small" }
+or
+{ value: 6.0, warning: "OUTLIER" }
+Ensure UI displays warning badge and does NOT silently show absurd numbers without warning.
+
+========================================================
+ACCEPTANCE CRITERIA
+========================================================
+- All 25+ fixture tests pass.
+- NRR and Growth never show absurd values without guard/warning.
+- Runway identical across Dashboard/Scenarios/Decisions.
+- Scenario “before” baseline matches KPI endpoint.
+- Status quo scenario produces 0 deltas.
+- Any divide-by-zero produces null + reason, never Infinity/NaN shown to users.
+
+========================================================
+DO IT NOW
+========================================================
+Start by creating the canonical calculation module and fixture tests.
+Then refactor KPI endpoints to use it.
+Then add consistency checker tests.
+Return:
+- list of files changed
+- test command to run
+- sample output for /api/qa/calc/run

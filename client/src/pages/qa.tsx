@@ -875,6 +875,7 @@ export default function QAFrontPage() {
     health: { results: [], running: false },
     briefing: { results: [], running: false },
     regression: { results: [], running: false },
+    calctests: { results: [], running: false },
   });
 
   const runTab = useCallback(
@@ -927,6 +928,7 @@ export default function QAFrontPage() {
       ["health", runHealthConsistencyChecks],
       ["briefing", runBriefingChecks],
       ["regression", runRegressionChecks],
+      ["calctests", runCalcTestChecks],
     ];
     for (const [key, runner] of runners) {
       await runTab(key, runner);
@@ -964,6 +966,67 @@ export default function QAFrontPage() {
     }
   }, [toast]);
 
+  async function runCalcTestChecks(): Promise<CheckResult[]> {
+    const results: CheckResult[] = [];
+    try {
+      const res = await apiFetch("/qa/calc/run");
+      if (!res.ok) {
+        results.push({
+          name: "Calc Test Runner",
+          status: "fail",
+          details: `API error: ${res.data?.detail || res.status}`,
+          endpoint: "/api/qa/calc/run",
+        });
+        return results;
+      }
+      const data = res.data;
+      results.push({
+        name: `Calc Fixtures Summary: ${data.passed}/${data.total} passed`,
+        status: data.failed === 0 ? "pass" : "fail",
+        details: `${data.passed} passed, ${data.failed} failed out of ${data.total} total test cases`,
+        endpoint: "/api/qa/calc/run",
+      });
+      for (const r of (data.results || [])) {
+        const detailParts: string[] = [];
+        for (const d of (r.details || [])) {
+          if (!d.pass) {
+            detailParts.push(`${d.field}: expected ${JSON.stringify(d.expected)}, got ${JSON.stringify(d.actual)}`);
+          }
+        }
+        results.push({
+          name: `${r.id}${r.notes ? ` — ${r.notes}` : ""}`,
+          status: r.pass ? "pass" : "fail",
+          details: r.pass
+            ? `${r.function}: all assertions passed`
+            : `${r.function}: ${detailParts.join("; ") || r.error || "failed"}`,
+          fixHint: r.pass ? undefined : `Check canonical formula in kpi_calculations.py → ${r.function}`,
+          endpoint: "/api/qa/calc/run",
+        });
+      }
+    } catch (err: any) {
+      results.push({
+        name: "Calc Test Runner",
+        status: "fail",
+        details: `Network error: ${err.message}`,
+      });
+    }
+    try {
+      const cRes = await apiFetch("/qa/calc/consistency?company_id=24");
+      if (cRes.ok) {
+        const cData = cRes.data;
+        for (const ch of (cData.checks || [])) {
+          results.push({
+            name: `Consistency: ${ch.metric}`,
+            status: ch.status === "PASS" ? "pass" : ch.status === "SKIP" ? "warn" : "fail",
+            details: `Canonical=${JSON.stringify(ch.canonical)}, Existing=${JSON.stringify(ch.existing)}${ch.diff !== null ? `, diff=${ch.diff}` : ""}${ch.warning ? ` [${ch.warning}]` : ""}${ch.reason ? ` (${ch.reason})` : ""}`,
+            endpoint: "/api/qa/calc/consistency",
+          });
+        }
+      }
+    } catch {}
+    return results;
+  }
+
   const downloadFullReport = useCallback(() => {
     const report = {
       generated_at: new Date().toISOString(),
@@ -999,6 +1062,7 @@ export default function QAFrontPage() {
     { key: "health", label: "Health", runner: runHealthConsistencyChecks },
     { key: "briefing", label: "Briefing", runner: runBriefingChecks },
     { key: "regression", label: "Regression", runner: runRegressionChecks },
+    { key: "calctests", label: "Calc Tests", runner: runCalcTestChecks },
   ];
 
   const totalResults = Object.values(tabs).flatMap((t) => t.results);

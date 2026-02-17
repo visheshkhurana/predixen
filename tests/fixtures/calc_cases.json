@@ -1,0 +1,322 @@
+[
+  {
+    "id": "TC01_RUNWAY_BASIC",
+    "function": "compute_runway",
+    "inputs": {"cash": 4500000, "burn": 382000},
+    "expected": {"value": 11.78},
+    "tolerance": {"value": 0.01},
+    "notes": "Basic runway: 4.5M / 382K = 11.78 months"
+  },
+  {
+    "id": "TC02_RUNWAY_BURN_ZERO",
+    "function": "compute_runway",
+    "inputs": {"cash": 2000000, "burn": 0},
+    "expected": {"value": null, "reason": "cash_flow_positive"},
+    "tolerance": {},
+    "notes": "Burn=0 => null with cash-flow positive label"
+  },
+  {
+    "id": "TC03_ARR_BASIC",
+    "function": "compute_arr",
+    "inputs": {"mrr": 520000},
+    "expected": {"value": 6240000},
+    "tolerance": {"value": 0.01},
+    "notes": "ARR = MRR * 12"
+  },
+  {
+    "id": "TC04_GROSS_MARGIN_BASIC",
+    "function": "compute_gross_margin",
+    "inputs": {"revenue": 1000000, "cogs": 200000},
+    "expected": {"value": 0.8},
+    "tolerance": {"value": 0.001},
+    "notes": "GM = (1M - 200K) / 1M = 0.8"
+  },
+  {
+    "id": "TC05_GM_REVENUE_ZERO",
+    "function": "compute_gross_margin",
+    "inputs": {"revenue": 0, "cogs": 50000},
+    "expected": {"value": null, "reason": "revenue_lte_zero"},
+    "tolerance": {},
+    "notes": "Revenue=0 => null"
+  },
+  {
+    "id": "TC06_MOMGROWTH_NORMAL",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 110000, "previous": 100000},
+    "expected": {"value": 0.10},
+    "tolerance": {"value": 0.001},
+    "notes": "10% MoM growth"
+  },
+  {
+    "id": "TC07_MOMGROWTH_DENOM_TOO_SMALL",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 5000, "previous": 50},
+    "expected": {"value": null, "reason": "baseline_too_small"},
+    "tolerance": {},
+    "notes": "Previous < MIN_BASELINE => null to avoid insane 9900%"
+  },
+  {
+    "id": "TC08_NRR_NORMAL",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 100000, "expansion_mrr": 20000, "contraction_mrr": 5000, "churned_mrr": 10000},
+    "expected": {"value": 1.05},
+    "tolerance": {"value": 0.001},
+    "notes": "NRR = (100K + 20K - 5K - 10K) / 100K = 1.05"
+  },
+  {
+    "id": "TC09_NRR_DENOM_TOO_SMALL",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 500},
+    "expected": {"value": null, "reason": "baseline_too_small"},
+    "tolerance": {},
+    "notes": "Starting MRR < 1000 => null"
+  },
+  {
+    "id": "TC10_NRR_OUTLIER_FLAG",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 10000, "expansion_mrr": 50000, "contraction_mrr": 0, "churned_mrr": 0},
+    "expected": {"value": 6.0, "warning": "OUTLIER"},
+    "tolerance": {"value": 0.01},
+    "notes": "NRR=6.0 (600%) flagged as OUTLIER"
+  },
+  {
+    "id": "TC11_CAC_BASIC",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 200000, "new_customers": 1000},
+    "expected": {"value": 200.0},
+    "tolerance": {"value": 0.01},
+    "notes": "CAC = 200K / 1000 = 200"
+  },
+  {
+    "id": "TC12_CAC_NEW_CUSTOMERS_ZERO",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 200000, "new_customers": 0},
+    "expected": {"value": null, "reason": "new_customers_lte_zero"},
+    "tolerance": {},
+    "notes": "NewCustomers=0 => null"
+  },
+  {
+    "id": "TC13_LTV_BASIC",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 50, "gross_margin_pct": 0.7, "monthly_churn_rate": 0.05},
+    "expected": {"value": 700.0},
+    "tolerance": {"value": 0.01},
+    "notes": "LTV = 50 * 0.7 / 0.05 = 700"
+  },
+  {
+    "id": "TC14_PAYBACK_BASIC",
+    "function": "compute_payback",
+    "inputs": {"cac": 200, "arpa": 50, "gross_margin_pct": 0.7},
+    "expected": {"value": 5.714},
+    "tolerance": {"value": 0.01},
+    "notes": "Payback = 200 / (50 * 0.7) = 5.714 months"
+  },
+  {
+    "id": "TC15_BASELINE_DELTA_STATUS_QUO",
+    "function": "compute_baseline_delta",
+    "inputs": {"scenario_value": 11.8, "baseline_value": 11.8, "min_baseline": 0},
+    "expected": {"absolute": 0.0, "percent": 0.0},
+    "tolerance": {"absolute": 0.001, "percent": 0.001},
+    "notes": "Status quo: identical => delta=0 (min_baseline=0 for non-revenue comparisons)"
+  },
+  {
+    "id": "TC16_COST_CUT_RUNWAY_INCREASE",
+    "function": "compute_runway",
+    "inputs": {"cash": 4000000, "burn": 300000},
+    "expected": {"value": 13.333},
+    "tolerance": {"value": 0.01},
+    "notes": "After cost cut: 4M / 300K = 13.33 months (must be > baseline 10.0)"
+  },
+  {
+    "id": "TC17_REV_DROP_BURN_INCREASE",
+    "function": "compute_burn",
+    "inputs": {"opex": 1200000, "cogs": 0, "revenue": 700000},
+    "expected": {"value": 500000.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Revenue drops to 700K with 1.2M costs => burn=500K"
+  },
+  {
+    "id": "TC18_PRICE_UP_REVENUE",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 110000, "previous": 100000},
+    "expected": {"value": 0.10},
+    "tolerance": {"value": 0.001},
+    "notes": "Price up 10% => revenue 100K to 110K => 10% growth"
+  },
+  {
+    "id": "TC19_ROUNDING_DISPLAY",
+    "function": "format_runway_display",
+    "inputs": {"runway_months": 11.777},
+    "expected": {"value": "11.8"},
+    "tolerance": {},
+    "notes": "11.777 rounds to 11.8 for display"
+  },
+  {
+    "id": "TC20_NEGATIVE_REVENUE_GUARD",
+    "function": "compute_gross_margin",
+    "inputs": {"revenue": -100, "cogs": 50},
+    "expected": {"value": null, "reason": "revenue_lte_zero"},
+    "tolerance": {},
+    "notes": "Negative revenue => null GM"
+  },
+  {
+    "id": "TC21_NULL_PROPAGATION_PAYBACK",
+    "function": "compute_payback",
+    "inputs": {"cac": 200, "arpa": 0, "gross_margin_pct": 0.7},
+    "expected": {"value": null, "reason": "arpa_or_gm_lte_zero"},
+    "tolerance": {},
+    "notes": "ARPA=0 => null payback with reason"
+  },
+  {
+    "id": "TC22_BURN_NEGATIVE_EBITDA",
+    "function": "compute_burn_from_ebitda",
+    "inputs": {"ebitda": -150000},
+    "expected": {"value": 150000.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Negative EBITDA => positive burn"
+  },
+  {
+    "id": "TC23_BURN_POSITIVE_EBITDA",
+    "function": "compute_burn_from_ebitda",
+    "inputs": {"ebitda": 50000},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Positive EBITDA => burn is 0 (profitable)"
+  },
+  {
+    "id": "TC24_RUNWAY_NEGATIVE_BURN",
+    "function": "compute_runway",
+    "inputs": {"cash": 3000000, "burn": -50000},
+    "expected": {"value": null, "reason": "cash_flow_positive"},
+    "tolerance": {},
+    "notes": "Negative burn (profitable) => null + cash-flow positive"
+  },
+  {
+    "id": "TC25_CAGR_BASIC",
+    "function": "compute_cagr",
+    "inputs": {"start": 100000, "end": 200000, "num_months": 12},
+    "expected": {"value": 1.0},
+    "tolerance": {"value": 0.01},
+    "notes": "CAGR for doubling in 12 months = 100%"
+  },
+  {
+    "id": "TC26_CAGR_SMALL_BASE",
+    "function": "compute_cagr",
+    "inputs": {"start": 500, "end": 50000, "num_months": 6},
+    "expected": {"value": null, "reason": "baseline_too_small"},
+    "tolerance": {},
+    "notes": "Start < MIN_BASELINE => null"
+  },
+  {
+    "id": "TC27_LTV_CHURN_ZERO",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 100, "gross_margin_pct": 0.8, "monthly_churn_rate": 0},
+    "expected": {"value": null, "reason": "churn_lte_zero"},
+    "tolerance": {},
+    "notes": "Zero churn => null LTV (infinite)"
+  },
+  {
+    "id": "TC28_BASELINE_DELTA_LARGE",
+    "function": "compute_baseline_delta",
+    "inputs": {"scenario_value": 20.0, "baseline_value": 10.0, "min_baseline": 0},
+    "expected": {"absolute": 10.0, "percent": 1.0},
+    "tolerance": {"absolute": 0.01, "percent": 0.01},
+    "notes": "Scenario doubles baseline => 100% delta (non-revenue comparison)"
+  },
+  {
+    "id": "TC29_BASELINE_DELTA_SMALL_DENOM",
+    "function": "compute_baseline_delta",
+    "inputs": {"scenario_value": 500, "baseline_value": 100},
+    "expected": {"absolute": 400.0, "percent": null},
+    "tolerance": {"absolute": 0.01},
+    "notes": "Baseline < MIN_BASELINE => percent is null"
+  },
+  {
+    "id": "TC30_ARR_NULL",
+    "function": "compute_arr",
+    "inputs": {"mrr": null},
+    "expected": {"value": null, "reason": "mrr_is_null"},
+    "tolerance": {},
+    "notes": "Null MRR propagates to null ARR"
+  },
+  {
+    "id": "TC31_GROSS_MARGIN_HIGH",
+    "function": "compute_gross_margin",
+    "inputs": {"revenue": 5000000, "cogs": 250000},
+    "expected": {"value": 0.95},
+    "tolerance": {"value": 0.001},
+    "notes": "95% gross margin (SaaS-like)"
+  },
+  {
+    "id": "TC32_BURN_REVENUE_EXCEEDS_COSTS",
+    "function": "compute_burn",
+    "inputs": {"opex": 300000, "cogs": 100000, "revenue": 500000},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Revenue > OpEx + COGS => burn clamped to 0"
+  },
+  {
+    "id": "TC33_NRR_EXACTLY_100",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 50000, "expansion_mrr": 5000, "contraction_mrr": 3000, "churned_mrr": 2000},
+    "expected": {"value": 1.0},
+    "tolerance": {"value": 0.001},
+    "notes": "NRR exactly 100% (flat retention)"
+  },
+  {
+    "id": "TC34_LTV_CAC_RATIO",
+    "function": "compute_ltv_cac_ratio",
+    "inputs": {"ltv": 700, "cac": 200},
+    "expected": {"value": 3.5},
+    "tolerance": {"value": 0.01},
+    "notes": "LTV:CAC = 700/200 = 3.5x"
+  },
+  {
+    "id": "TC35_MOMGROWTH_DECLINE",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 80000, "previous": 100000},
+    "expected": {"value": -0.20},
+    "tolerance": {"value": 0.001},
+    "notes": "20% decline in revenue MoM"
+  },
+  {
+    "id": "TC36_RUNWAY_LARGE_BURN",
+    "function": "compute_runway",
+    "inputs": {"cash": 500000, "burn": 250000},
+    "expected": {"value": 2.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Only 2 months of runway - critical"
+  },
+  {
+    "id": "TC37_ROUNDING_DISPLAY_EXACT",
+    "function": "format_runway_display",
+    "inputs": {"runway_months": 12.0},
+    "expected": {"value": "12.0"},
+    "tolerance": {},
+    "notes": "Exact integer displays as X.0"
+  },
+  {
+    "id": "TC38_CAC_NEGATIVE_CUSTOMERS",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 100000, "new_customers": -5},
+    "expected": {"value": null, "reason": "new_customers_lte_zero"},
+    "tolerance": {},
+    "notes": "Negative customers => null CAC"
+  },
+  {
+    "id": "TC39_PAYBACK_NEGATIVE_GM",
+    "function": "compute_payback",
+    "inputs": {"cac": 200, "arpa": 50, "gross_margin_pct": -0.1},
+    "expected": {"value": null, "reason": "arpa_or_gm_lte_zero"},
+    "tolerance": {},
+    "notes": "Negative GM => null payback"
+  },
+  {
+    "id": "TC40_BASELINE_DELTA_NEGATIVE",
+    "function": "compute_baseline_delta",
+    "inputs": {"scenario_value": 5.0, "baseline_value": 10.0, "min_baseline": 0},
+    "expected": {"absolute": -5.0, "percent": -0.5},
+    "tolerance": {"absolute": 0.01, "percent": 0.01},
+    "notes": "Scenario worse than baseline => negative delta (non-revenue comparison)"
+  }
+]

@@ -342,3 +342,120 @@ def qa_create_test_founder(
         "message": "Test founder created. Login with these credentials to test.",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+@router.get("/calc/run")
+def qa_calc_run(current_user: User = Depends(require_qa_access)):
+    import json, os
+    from server.services.kpi_calculations import run_all_fixtures
+
+    fixtures_path = os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "calc_cases.json")
+    fixtures_path = os.path.abspath(fixtures_path)
+
+    if not os.path.exists(fixtures_path):
+        raise HTTPException(status_code=500, detail=f"Fixtures file not found: {fixtures_path}")
+
+    with open(fixtures_path, "r") as f:
+        cases = json.load(f)
+
+    results = run_all_fixtures(cases)
+    results["timestamp"] = datetime.utcnow().isoformat()
+    return results
+
+
+@router.get("/calc/consistency")
+def qa_calc_consistency(
+    company_id: int,
+    current_user: User = Depends(require_qa_access),
+    db: Session = Depends(get_db)
+):
+    from server.services.kpi_calculations import (
+        compute_arr, compute_gross_margin, compute_burn,
+        compute_runway, compute_nrr,
+    )
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    latest_record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+
+    if not latest_record:
+        return {
+            "company_id": company_id,
+            "company_name": company.name,
+            "checks": [],
+            "all_pass": True,
+            "data_sources": {"financial_record_id": None},
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "No financial records found"
+        }
+
+    revenue = float(latest_record.revenue or 0)
+    cogs = float(latest_record.cogs or 0)
+    opex = float(latest_record.opex or 0)
+    payroll = float(latest_record.payroll or 0)
+    other_costs = float(latest_record.other_costs or 0)
+    total_opex = opex + payroll + other_costs
+    cash = float(latest_record.cash_balance or 0)
+    mrr = float(latest_record.mrr or 0) if latest_record.mrr else revenue
+
+    canonical_arr = compute_arr(mrr)
+    canonical_gm = compute_gross_margin(revenue, cogs)
+    canonical_burn = compute_burn(total_opex, cogs, revenue)
+    canonical_runway = compute_runway(cash, canonical_burn["value"])
+
+    checks = []
+
+    def check(name, canonical_result, existing_val, tol=0.05):
+        c_val = canonical_result.get("value") if isinstance(canonical_result, dict) else canonical_result
+        status = "SKIP"
+        diff = None
+        if c_val is not None and existing_val is not None:
+            try:
+                diff = abs(float(c_val) - float(existing_val))
+                max_val = max(abs(float(c_val)), abs(float(existing_val)), 1)
+                rel_diff = diff / max_val if max_val > 0 else 0
+                status = "PASS" if rel_diff <= tol else "FAIL"
+            except (TypeError, ValueError):
+                status = "SKIP"
+        elif c_val is None and existing_val is None:
+            status = "PASS"
+        elif c_val is None:
+            status = "SKIP"
+            diff = None
+        else:
+            status = "WARN"
+
+        checks.append({
+            "metric": name,
+            "canonical": c_val,
+            "existing": existing_val,
+            "diff": diff,
+            "status": status,
+            "warning": canonical_result.get("warning") if isinstance(canonical_result, dict) else None,
+            "reason": canonical_result.get("reason") if isinstance(canonical_result, dict) else None,
+        })
+
+    check("ARR", canonical_arr, latest_record.arr)
+    check("Gross Margin", canonical_gm, latest_record.gross_margin)
+    check("Burn", canonical_burn, latest_record.net_burn)
+    check("Runway", canonical_runway, latest_record.runway_months)
+
+    all_pass = all(c["status"] in ("PASS", "SKIP") for c in checks)
+
+    return {
+        "company_id": company_id,
+        "company_name": company.name,
+        "checks": checks,
+        "all_pass": all_pass,
+        "data_sources": {
+            "financial_record_id": latest_record.id,
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
