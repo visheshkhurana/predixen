@@ -73,6 +73,15 @@ def _ensure_connector_metadata(db: Session, company):
 
 def seed_demo_data(db: Session):
     logger.info("Starting demo data seeding...")
+    old_demo = db.query(User).filter(User.email == "demo@predixen.ai").first()
+    if old_demo:
+        dup = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
+        if dup and dup.id != old_demo.id:
+            dup.email = f"demo-dup-{dup.id}@founderconsole.ai"
+            db.commit()
+        old_demo.email = "demo@founderconsole.ai"
+        db.commit()
+        logger.info("Migrated demo user email from predixen.ai to founderconsole.ai")
     existing = db.query(User).filter(User.email == "demo@founderconsole.ai").first()
     if existing:
         demo_user = existing
