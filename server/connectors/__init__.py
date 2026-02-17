@@ -2,7 +2,7 @@
 Payroll and ERP Connector Framework
 
 This module provides a unified interface for connecting to various payroll 
-and ERP providers to sync financial data into the Predixen platform.
+and ERP providers to sync financial data into the FounderConsole platform.
 """
 
 from .base import BaseConnector, ConnectorConfig, SyncResult

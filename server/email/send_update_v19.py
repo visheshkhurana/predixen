@@ -1,6 +1,6 @@
 """
 Send update email v19 - Enhanced Decisions Page UX (Sticky TOC, Checkboxes, Loading, Alt Paths).
-Sender: ivl58oxz@predixen.app
+Sender: ivl58oxz@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_decisions_ux_feb2026_v19"
+CAMPAIGN = "founderconsole_decisions_ux_feb2026_v19"
 
-BASE_URL = "https://predixen.app"
+BASE_URL = "https://founderconsole.ai"
 IMG_AI_SUMMARY = f"{BASE_URL}/email-assets/sim-ai-summary.png"
 IMG_SENSITIVITY = f"{BASE_URL}/email-assets/sim-sensitivity.png"
 IMG_STRESS_TESTS = f"{BASE_URL}/email-assets/sim-stress-tests.png"
@@ -20,7 +20,7 @@ IMG_METRICS = f"{BASE_URL}/email-assets/sim-metrics.png"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -113,7 +113,7 @@ All AI-generated dates (pivot deadlines, exhaustion projections, timeline refere
 These changes make the Decisions page more interactive, easier to navigate, and genuinely useful as a working document for your team.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -211,7 +211,7 @@ def build_html(rcpt: dict) -> str:
 <p style="font-size:14px;color:#4b5563;margin-top:20px;">These changes make the Decisions page more interactive, easier to navigate, and genuinely useful as a working document for your team.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -220,7 +220,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <ivl58oxz@predixen.app>"
+    sender = "FounderConsole <ivl58oxz@founderconsole.ai>"
 
     print(f"Sending Decisions UX upgrade update v19 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -249,7 +249,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen Decisions Page - Enhanced UX: Sticky TOC, Playbook Checkboxes, Alt Paths",
+            subject="FounderConsole Decisions Page - Enhanced UX: Sticky TOC, Playbook Checkboxes, Alt Paths",
             html_content=html,
             text_content=text,
             from_email=sender,

@@ -2,7 +2,7 @@
 Send data connectors update email v10 to 4 recipients.
 Transactional-style: minimal HTML, plain-text companion.
 Content: 4 new production-ready data connectors (Plaid, HubSpot, Gusto, Xero).
-Sender: nfl9@predixen.app
+Sender: nfl9@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -11,12 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_connectors_update_feb2026_v10"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_connectors_update_feb2026_v10"
+BASE_URL = "https://founderconsole.ai"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -26,7 +26,7 @@ def build_plain_text(rcpt: dict) -> str:
     name = rcpt["name"]
     return f"""Hi {name},
 
-We just shipped live data connectors -- Predixen can now pull real financial data directly from your tools instead of relying on manual CSV uploads.
+We just shipped live data connectors -- FounderConsole can now pull real financial data directly from your tools instead of relying on manual CSV uploads.
 
 4 CONNECTORS NOW LIVE
 ----------------------
@@ -63,7 +63,7 @@ We just shipped live data connectors -- Predixen can now pull real financial dat
 WHY THIS MATTERS
 -----------------
 
-Until now, getting data into Predixen meant uploading CSVs or typing numbers manually. That's fine for a demo, but real startups need their actual data flowing in automatically.
+Until now, getting data into FounderConsole meant uploading CSVs or typing numbers manually. That's fine for a demo, but real startups need their actual data flowing in automatically.
 
 With these connectors:
 - Your financial baseline updates itself -- no more stale spreadsheets
@@ -77,7 +77,7 @@ HOW TO CONNECT
 ---------------
 
 1. Log in: {BASE_URL}/auth
-   Demo: demo@predixen.ai / demo123
+   Demo: demo@founderconsole.ai / demo123
 
 2. Go to the Integrations page (sidebar)
 
@@ -92,7 +92,7 @@ Each connector handles authentication, data sync, and error recovery. You can di
 Let me know if you have questions or want to prioritize a specific connector.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -109,7 +109,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {name},</p>
 
-<p>We just shipped live data connectors &mdash; Predixen can now pull real financial data directly from your tools instead of relying on manual CSV uploads.</p>
+<p>We just shipped live data connectors &mdash; FounderConsole can now pull real financial data directly from your tools instead of relying on manual CSV uploads.</p>
 
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">4 Connectors Now Live</h3>
 
@@ -152,7 +152,7 @@ def build_html(rcpt: dict) -> str:
 
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">Why This Matters</h3>
 
-<p>Until now, getting data into Predixen meant uploading CSVs or typing numbers manually. That&rsquo;s fine for a demo, but real startups need their actual data flowing in automatically.</p>
+<p>Until now, getting data into FounderConsole meant uploading CSVs or typing numbers manually. That&rsquo;s fine for a demo, but real startups need their actual data flowing in automatically.</p>
 
 <p>With these connectors:</p>
 <ul style="padding-left:20px;color:#333;">
@@ -167,7 +167,7 @@ def build_html(rcpt: dict) -> str:
 <h3 style="font-size:16px;color:#111;margin:28px 0 12px;">How to Connect</h3>
 
 <ol style="padding-left:20px;color:#333;">
-<li style="margin-bottom:6px;">Log in: <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>Demo: demo@predixen.ai / demo123</li>
+<li style="margin-bottom:6px;">Log in: <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>Demo: demo@founderconsole.ai / demo123</li>
 <li style="margin-bottom:6px;">Go to the <strong>Integrations</strong> page (sidebar)</li>
 <li style="margin-bottom:6px;">Pick a connector (e.g. Plaid), click <strong>Connect</strong></li>
 <li style="margin-bottom:6px;">Enter your API credentials in the form</li>
@@ -179,7 +179,7 @@ def build_html(rcpt: dict) -> str:
 <p>Let me know if you have questions or want to prioritize a specific connector.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -188,7 +188,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <nfl9@predixen.app>"
+    sender = "FounderConsole <nfl9@founderconsole.ai>"
 
     print(f"Sending data connectors update emails to {len(RECIPIENTS)} recipients...")
     print(f"Campaign: {CAMPAIGN}")

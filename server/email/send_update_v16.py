@@ -1,6 +1,6 @@
 """
 Send platform update email v16 - New Features & Intelligence Upgrades.
-Sender: wlk2qbda@predixen.app
+Sender: wlk2qbda@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_platform_update_feb2026_v16"
+CAMPAIGN = "founderconsole_platform_update_feb2026_v16"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -21,7 +21,7 @@ RECIPIENTS = [
 def build_plain_text(rcpt: dict) -> str:
     return f"""Hi {rcpt['name']},
 
-Here's what's new in Predixen Intelligence OS:
+Here's what's new in FounderConsole:
 
 1. AI Decision Summary
 Consultant-grade recommendation card at the top of every simulation. Includes a Decision Score (1-10), GO / CONDITIONAL / NO-GO verdict, and 3 supporting bullet points covering key risk, opportunity, and the metric to watch.
@@ -47,7 +47,7 @@ Interactive sliders to stress-test individual variables and instantly see how th
 All of these are live now. Let me know if you have any questions.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -63,7 +63,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {rcpt['name']},</p>
 
-<p>Here's what's new in Predixen Intelligence OS:</p>
+<p>Here's what's new in FounderConsole:</p>
 
 <div style="margin:20px 0;padding:16px 20px;border-left:3px solid #6366f1;background:#f8f7ff;border-radius:0 6px 6px 0;">
 <p style="margin:0 0 4px;font-weight:600;color:#4338ca;">AI Decision Summary</p>
@@ -103,7 +103,7 @@ def build_html(rcpt: dict) -> str:
 <p style="margin-top:24px;">All of these are live now. Let me know if you have any questions.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -112,7 +112,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <wlk2qbda@predixen.app>"
+    sender = "FounderConsole <wlk2qbda@founderconsole.ai>"
 
     print(f"Sending platform update v16 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -141,7 +141,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen Intelligence OS - New Features & Intelligence Upgrades",
+            subject="FounderConsole - New Features & Intelligence Upgrades",
             html_content=html,
             text_content=text,
             from_email=sender,

@@ -47,9 +47,9 @@ async function sendSMS() {
   const client = twilio(accountSid, apiKeySecret, { accountSid: realAccountSid });
 
   const message = await client.messages.create({
-    body: `Predixen Intelligence OS - New Feature Update
+    body: `FounderConsole - New Feature Update
 
-Hi! Here's what's new in Predixen v1.0:
+Hi! Here's what's new in FounderConsole v1.0:
 
 - AI Virtual Boardroom with 14-agent copilot system
 - Enhanced Monte Carlo simulations with regime-aware modeling
@@ -60,9 +60,9 @@ Hi! Here's what's new in Predixen v1.0:
 - Connector Marketplace for payroll/ERP integrations
 - Admin Dashboard with platform-wide analytics
 
-Log in at your Predixen dashboard to explore these features.
+Log in at your FounderConsole dashboard to explore these features.
 
-— Predixen Intelligence OS Team`,
+— FounderConsole Team`,
     from: phoneNumber,
     to: '+919818540514'
   });

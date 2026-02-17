@@ -1330,14 +1330,14 @@ function ToggleButton({ active, onClick, testId }: { active: boolean; onClick: (
 function SettingsView({ data }: { data: GovernanceState }) {
   const [settings, setSettings] = useState<SettingsType>(() => {
     try {
-      const stored = localStorage.getItem('predixen_gov_settings');
+      const stored = localStorage.getItem('founderconsole_gov_settings');
       if (stored) return JSON.parse(stored);
     } catch {}
     return DEFAULT_SETTINGS;
   });
 
   useEffect(() => {
-    localStorage.setItem('predixen_gov_settings', JSON.stringify(settings));
+    localStorage.setItem('founderconsole_gov_settings', JSON.stringify(settings));
   }, [settings]);
 
   const update = <K extends keyof SettingsType>(section: K, value: SettingsType[K]) => {
@@ -1984,7 +1984,7 @@ interface FounderOverride {
 function AuditTrailView({ data }: { data: GovernanceState }) {
   const [overrides, setOverrides] = useState<FounderOverride[]>(() => {
     try {
-      const stored = localStorage.getItem('predixen_gov_overrides');
+      const stored = localStorage.getItem('founderconsole_gov_overrides');
       if (stored) return JSON.parse(stored);
     } catch {}
     return [];
@@ -2005,7 +2005,7 @@ function AuditTrailView({ data }: { data: GovernanceState }) {
     };
     const updated = [...overrides, newOverride];
     setOverrides(updated);
-    localStorage.setItem('predixen_gov_overrides', JSON.stringify(updated));
+    localStorage.setItem('founderconsole_gov_overrides', JSON.stringify(updated));
     setSelectedDecisionId('');
     setOverrideReason('');
   };

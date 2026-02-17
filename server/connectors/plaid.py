@@ -330,7 +330,7 @@ class PlaidConnector(BaseConnector):
             payload = {
                 **self._auth_payload(),
                 "user": {"client_user_id": user_id},
-                "client_name": "Predixen Intelligence OS",
+                "client_name": "FounderConsole",
                 "products": ["transactions"],
                 "country_codes": ["US"],
                 "language": "en",

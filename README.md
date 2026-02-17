@@ -1,4 +1,4 @@
-# Predixen Intelligence OS
+# FounderConsole
 
 AI-powered financial intelligence platform for startups. Provides investor-grade diligence, probabilistic simulation, and ranked decision recommendations.
 
@@ -73,7 +73,7 @@ The Node server spawns uvicorn as a child process and manages its lifecycle with
 
 Example:
 ```bash
-CORS_ORIGINS="https://app.predixen.io,https://staging.predixen.io"
+CORS_ORIGINS="https://app.founderconsole.ai,https://staging.founderconsole.ai"
 ```
 
 ### Database Initialization Flags

@@ -50,10 +50,10 @@ export function useRealtimeKPI(
   }, []);
 
   const getToken = useCallback(() => {
-    let token = localStorage.getItem('predixen-token');
+    let token = localStorage.getItem('founderconsole-token');
     if (!token) {
       try {
-        const zustandStorage = localStorage.getItem('predixen-founder-storage');
+        const zustandStorage = localStorage.getItem('founderconsole-founder-storage');
         if (zustandStorage) {
           const parsed = JSON.parse(zustandStorage);
           token = parsed?.state?.token || null;

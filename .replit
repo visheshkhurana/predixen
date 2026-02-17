@@ -8,11 +8,11 @@ packages = ["cargo", "freetype", "gcc-unwrapped", "glibcLocales", "lcms2", "libi
 
 [[ports]]
 localPort = 5000
-externalPort = 80
+externalPort = 5000
 
 [[ports]]
 localPort = 8001
-externalPort = 3000
+externalPort = 80
 
 [env]
 PORT = "5000"

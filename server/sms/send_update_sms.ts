@@ -1,11 +1,11 @@
-// Predixen Intelligence OS - SMS Update via Twilio Replit Connector
+// FounderConsole - SMS Update via Twilio Replit Connector
 import twilio from 'twilio';
 
 const RECIPIENTS = [
   { phone: "+919818540514", name: "Nikita" },
 ];
 
-const MESSAGE = `Predixen — Multi-Currency Support Live
+const MESSAGE = `FounderConsole — Multi-Currency Support Live
 
 33 global currencies now supported across the entire platform:
 
@@ -16,10 +16,10 @@ const MESSAGE = `Predixen — Multi-Currency Support Live
 
 To set: Sidebar → Edit Company → Currency dropdown
 
-Try it: demo@predixen.ai / demo123
-https://predixen-intelligence-os.replit.app
+Try it: demo@founderconsole.ai / demo123
+https://founderconsole.ai
 
-— Predixen Team`;
+— FounderConsole Team`;
 
 async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -64,7 +64,7 @@ async function getCredentials() {
 }
 
 async function sendUpdateSMS() {
-  console.log("=== Predixen SMS Update ===\n");
+  console.log("=== FounderConsole SMS Update ===\n");
 
   const creds = await getCredentials();
   const client = twilio(creds.apiKey, creds.apiKeySecret, {

@@ -12,7 +12,7 @@ import {
 } from "../../shared/models/aiGovernance";
 
 const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_BASE || "https://vysheshk.app.n8n.cloud/webhook";
-const SHARED_SECRET = process.env.AI_GOVERNANCE_SECRET || "predixen-ai-governance-secret-change-me";
+const SHARED_SECRET = process.env.AI_GOVERNANCE_SECRET || "founderconsole-ai-governance-secret-change-me";
 const CALLBACK_TOLERANCE_MS = 5 * 60 * 1000; // 5 min replay protection
 
 function signPayload(body: string): string {
@@ -52,7 +52,7 @@ async function forwardToN8n(endpoint: string, payload: any): Promise<boolean> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-PREDIXEN-SIGNATURE": signature,
+        "X-FOUNDERCONSOLE-SIGNATURE": signature,
       },
       body,
     });
@@ -124,7 +124,7 @@ export function registerAiGovernanceRoutes(app: Express) {
 
       const [request] = await db.insert(aiRequests).values({
         requestId,
-        companyId: "predixen",
+        companyId: "founderconsole",
         initiator: "founder",
         type: type || "decision",
         question,
@@ -137,7 +137,7 @@ export function registerAiGovernanceRoutes(app: Express) {
       // Forward to n8n
       const n8nPayload = {
         request_id: requestId,
-        company_id: "predixen",
+        company_id: "founderconsole",
         initiator: "founder",
         type: type || "decision",
         question,
@@ -329,7 +329,7 @@ export function registerAiGovernanceRoutes(app: Express) {
     try {
       // Verify n8n signature
       const rawBody = JSON.stringify(req.body);
-      const signature = req.headers["x-predixen-signature"] as string;
+      const signature = req.headers["x-founderconsole-signature"] as string;
 
       if (signature && !verifySignature(rawBody, signature)) {
         console.warn("[AI-GOV] Invalid callback signature");

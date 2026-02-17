@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email-tracking", tags=["email-tracking"])
 
 WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
-ANALYTICS_TOKEN = os.getenv("ANALYTICS_ACCESS_TOKEN", "predixen-analytics-2026")
+ANALYTICS_TOKEN = os.getenv("ANALYTICS_ACCESS_TOKEN", "founderconsole-analytics-2026")
 
 
 def _verify_resend_signature(payload: bytes, signature: Optional[str]) -> bool:
@@ -159,7 +159,7 @@ async def track_link_click(tracking_id: str, request: Request):
     try:
         link = db.query(EmailLinkClick).filter(EmailLinkClick.tracking_id == tracking_id).first()
         if not link:
-            return RedirectResponse(url="https://predixen.app", status_code=302)
+            return RedirectResponse(url="https://founderconsole.ai", status_code=302)
 
         link.clicked = True
         link.click_count = (link.click_count or 0) + 1
@@ -186,7 +186,7 @@ async def track_link_click(tracking_id: str, request: Request):
     except Exception as e:
         db.rollback()
         logger.error(f"Link tracking error: {e}")
-        return RedirectResponse(url="https://predixen.app", status_code=302)
+        return RedirectResponse(url="https://founderconsole.ai", status_code=302)
     finally:
         db.close()
 
@@ -223,16 +223,16 @@ async def email_feedback_page(
 
     if submitted:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-        <title>Thank You - Predixen</title>
+        <title>Thank You - FounderConsole</title>
         <style>body{{margin:0;padding:40px 20px;background:#f4f4f5;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;}}
         .card{{background:#fff;border-radius:12px;padding:48px;max-width:480px;width:100%;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);}}
         h2{{color:#1e293b;margin:0 0 12px;}} p{{color:#64748b;font-size:15px;line-height:1.6;}}
         .check{{font-size:48px;margin-bottom:16px;color:#22c55e;}}</style></head>
         <body><div class="card"><div class="check">&#10003;</div><h2>Thank you for your feedback!</h2>
-        <p>Your response helps us improve Predixen for you.</p></div></body></html>"""
+        <p>Your response helps us improve FounderConsole for you.</p></div></body></html>"""
     else:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-        <title>Feedback - Predixen</title>
+        <title>Feedback - FounderConsole</title>
         <style>body{{margin:0;padding:40px 20px;background:#f4f4f5;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;}}
         .card{{background:#fff;border-radius:12px;padding:48px;max-width:480px;width:100%;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);}}
         h2{{color:#1e293b;margin:0 0 8px;}} p{{color:#64748b;font-size:15px;margin:0 0 32px;}}
@@ -419,7 +419,7 @@ async def welcome_redirect(
     request: Request,
     ref: Optional[str] = None,
     uid: Optional[str] = None,
-    dest: str = Query(default="https://predixen.app")
+    dest: str = Query(default="https://founderconsole.ai")
 ):
     db = next(get_db())
     try:
@@ -460,7 +460,7 @@ def create_tracked_link(
     recipient_email: Optional[str] = None,
     recipient_id: Optional[str] = None,
     link_label: Optional[str] = None,
-    base_url: str = "https://predixen.app"
+    base_url: str = "https://founderconsole.ai"
 ) -> str:
     tracking_id = uuid.uuid4().hex[:16]
     try:

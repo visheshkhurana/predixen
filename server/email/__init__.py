@@ -1,1 +1,1 @@
-# Email service module for Predixen Intelligence OS
+# Email service module for FounderConsole

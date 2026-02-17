@@ -9,7 +9,7 @@
     "valuesIn": "Crores",
     "fyEnd": "Mar 31",
     "generatedBy": "QA stress test v2026-02-15",
-    "purpose": "UI/UX audit of Predixen for retail vertical"
+    "purpose": "UI/UX audit of FounderConsole for retail vertical"
   },
   "baseline": {
     "month": 0,
@@ -35,7 +35,7 @@
     }
   },
   "advancedRetailKPIs": {
-    "_note": "These KPIs are expected by retail founders but NOT supported by Predixen. Logged as UI/UX model gaps.",
+    "_note": "These KPIs are expected by retail founders but NOT supported by FounderConsole. Logged as UI/UX model gaps.",
     "channelsMixPct": { "d2c": 42, "marketplaces": 35, "stores": 23 },
     "ordersPerMonth": 310000,
     "aov_inr": 709.68,
@@ -58,7 +58,7 @@
     "shrinkPct": 0.8,
     "deliveryCostPerOrder_inr": 38,
     "contributionMarginPct": 12.5,
-    "supportedByPredixen": false,
+    "supportedByFounderConsole": false,
     "gaps": [
       "No channel mix input or breakdown",
       "No returns rate lever or field",

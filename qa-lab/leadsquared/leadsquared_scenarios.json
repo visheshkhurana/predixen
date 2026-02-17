@@ -17,8 +17,8 @@
       "description": "Revenue +6% time-phased starting month 2",
       "changes": {"monthlyRevenue": "+6% from month 2"},
       "expectedDirection": "runway increase, burn decrease",
-      "predixenQuery": "What if we raise prices by 6% starting month 2?",
-      "predixenResult": {
+      "founderconsoleQuery": "What if we raise prices by 6% starting month 2?",
+      "founderconsoleResult": {
         "score": "8/10 GO",
         "answer": "100% survival and 48 months of runway",
         "vsBaseline": "+10% survival"
@@ -30,7 +30,7 @@
       "description": "Revenue -5% for months 1-3, then recovers",
       "changes": {"monthlyRevenue": "-5% months 1-3"},
       "expectedDirection": "runway decrease months 1-3, recovery after",
-      "predixenQuery": "What if revenue drops 5% for 3 months due to churn then recovers?"
+      "founderconsoleQuery": "What if revenue drops 5% for 3 months due to churn then recovers?"
     },
     {
       "id": "S3",
@@ -38,7 +38,7 @@
       "description": "ARPA +12%, opex +15%, revenue ramp delayed 2 months",
       "changes": {"monthlyRevenue": "+12% from month 3", "opex": "+15% from month 1"},
       "expectedDirection": "short-term burn increase, long-term revenue lift",
-      "predixenQuery": "What if we shift to enterprise with 12% higher prices but 15% more sales cost and 2 month delay?"
+      "founderconsoleQuery": "What if we shift to enterprise with 12% higher prices but 15% more sales cost and 2 month delay?"
     },
     {
       "id": "S4",
@@ -46,7 +46,7 @@
       "description": "Revenue +4% from month 4, Payroll +6% from month 1",
       "changes": {"monthlyRevenue": "+4% from month 4", "payroll": "+6% from month 1"},
       "expectedDirection": "initial burn increase, revenue lift later",
-      "predixenQuery": "What if we launch an AI add-on: payroll +6% immediately, revenue +4% starting month 4?"
+      "founderconsoleQuery": "What if we launch an AI add-on: payroll +6% immediately, revenue +4% starting month 4?"
     },
     {
       "id": "S5",
@@ -54,7 +54,7 @@
       "description": "Payroll -5% starting month 2",
       "changes": {"payroll": "-5% from month 2"},
       "expectedDirection": "burn decrease, runway increase",
-      "predixenQuery": "What if we cut payroll by 5% starting month 2?"
+      "founderconsoleQuery": "What if we cut payroll by 5% starting month 2?"
     },
     {
       "id": "S6",
@@ -62,7 +62,7 @@
       "description": "Opex +20% months 1-6, Revenue +10% starting month 7",
       "changes": {"opex": "+20% months 1-6", "monthlyRevenue": "+10% from month 7"},
       "expectedDirection": "burn spike then recovery with higher revenue",
-      "predixenQuery": "What if we expand to US/APAC: opex +20% for 6 months, then revenue +10% from month 7?"
+      "founderconsoleQuery": "What if we expand to US/APAC: opex +20% for 6 months, then revenue +10% from month 7?"
     },
     {
       "id": "S7",
@@ -70,7 +70,7 @@
       "description": "Apply S1+S4+S6, then reset and verify baseline returns",
       "changes": {"combined": "S1+S4+S6"},
       "expectedDirection": "complex interaction, then exact baseline restoration",
-      "predixenQuery": "What if we raise prices 6%, launch AI add-on, and expand geographically?"
+      "founderconsoleQuery": "What if we raise prices 6%, launch AI add-on, and expand geographically?"
     }
   ]
 }

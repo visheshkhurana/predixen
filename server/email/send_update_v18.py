@@ -1,6 +1,6 @@
 """
 Send update email v18 - Narrative Strategic Briefing (Decisions Page Redesign).
-Sender: wlk2qbda@predixen.app
+Sender: wlk2qbda@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_decisions_briefing_feb2026_v18b"
+CAMPAIGN = "founderconsole_decisions_briefing_feb2026_v18b"
 
-BASE_URL = "https://predixen.app"
+BASE_URL = "https://founderconsole.ai"
 IMG_AI_SUMMARY = f"{BASE_URL}/email-assets/sim-ai-summary.png"
 IMG_SENSITIVITY = f"{BASE_URL}/email-assets/sim-sensitivity.png"
 IMG_STRESS_TESTS = f"{BASE_URL}/email-assets/sim-stress-tests.png"
@@ -20,7 +20,7 @@ IMG_METRICS = f"{BASE_URL}/email-assets/sim-metrics.png"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -28,7 +28,7 @@ RECIPIENTS = [
 def build_plain_text(rcpt: dict) -> str:
     return f"""Hi {rcpt['name']},
 
-The Decisions page in Predixen Intelligence OS has been completely redesigned. It now reads like a strategic briefing document from a senior advisor -- no charts, no dashboards, just clear prose that tells you what to do and why.
+The Decisions page in FounderConsole has been completely redesigned. It now reads like a strategic briefing document from a senior advisor -- no charts, no dashboards, just clear prose that tells you what to do and why.
 
 ---
 
@@ -98,7 +98,7 @@ These are not generic risks. They reference your actual burn rate, runway, reven
 All five sections are generated using your real financial data and AI analysis. The page is designed so a founder can read it in 5 minutes and know exactly what to do, why, and by when.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -114,7 +114,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {rcpt['name']},</p>
 
-<p>The Decisions page in Predixen Intelligence OS has been completely redesigned. It now reads like a strategic briefing document from a senior advisor &mdash; no charts, no dashboards, just clear prose that tells you what to do and why.</p>
+<p>The Decisions page in FounderConsole has been completely redesigned. It now reads like a strategic briefing document from a senior advisor &mdash; no charts, no dashboards, just clear prose that tells you what to do and why.</p>
 
 <p style="font-size:14px;color:#4b5563;">Below are screenshots of the platform in action, followed by a breakdown of the new Decisions page.</p>
 
@@ -212,7 +212,7 @@ def build_html(rcpt: dict) -> str:
 <p style="font-size:14px;color:#4b5563;margin-top:20px;">All five sections are generated using your real financial data and AI analysis. The page is designed so a founder can read it in 5 minutes and know exactly what to do, why, and by when.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -221,7 +221,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <wlk2qbda@predixen.app>"
+    sender = "FounderConsole <wlk2qbda@founderconsole.ai>"
 
     print(f"Sending Decisions page redesign update v18 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -250,7 +250,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen Decisions Page - Narrative Strategic Briefing Redesign",
+            subject="FounderConsole Decisions Page - Narrative Strategic Briefing Redesign",
             html_content=html,
             text_content=text,
             from_email=sender,

@@ -669,7 +669,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="predixen-theme">
+      <ThemeProvider defaultTheme="dark" storageKey="founderconsole-theme">
         <TooltipProvider delayDuration={0}>
           <AppLayout>
             <Router />

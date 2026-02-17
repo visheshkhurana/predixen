@@ -1,16 +1,16 @@
-# PulsePal QA Lab  Predixen UI/UX Audit Report
+# PulsePal QA Lab  FounderConsole UI/UX Audit Report
 
 **Company:** PulsePal (Synthetic)  AI habit coach + journaling app  
 **Stage:** Series A | **Currency:** USD | **Values-in:** THOUSANDS  
 **Tester Role:** Founder/CEO + Ruthless UI/UX QA Tester  
 **Date:** February 15, 2026  
-**Predixen Version:** Production (observed via live app)
+**FounderConsole Version:** Production (observed via live app)
 
 ---
 
 ## Executive Summary  Founder Verdict
 
-**Would I pay? Not yet.** Predixen has a compelling vision  natural-language scenario simulation with Monte Carlo analysis is genuinely powerful. The onboarding flow is smooth, the AI copilot is promising, and the decision-scoring framework (Risk/Reward/Capital Efficiency/Survival) is exactly what a Series A founder needs. However, **three trust-breaking bugs would cause me to cancel within the first session:**
+**Would I pay? Not yet.** FounderConsole has a compelling vision  natural-language scenario simulation with Monte Carlo analysis is genuinely powerful. The onboarding flow is smooth, the AI copilot is promising, and the decision-scoring framework (Risk/Reward/Capital Efficiency/Survival) is exactly what a Series A founder needs. However, **three trust-breaking bugs would cause me to cancel within the first session:**
 
 1. **Runway shows 3 different values** across Dashboard (11.8 mo), Simulate (16.0 mo), and Decisions (236.8 mo) for the same baseline data.
 2. **Health Check cash flow forecast shows $24 quintillion** at month 12 (exponential calculation bug).
@@ -74,7 +74,7 @@ Until these P0 issues are fixed, I cannot trust any output from the platform. Th
 
 | Issue | Severity | Fix |
 |-------|----------|-----|
-| "Live Preview" on onboarding ("$25  Predixen reads as $25,000")  excellent | PASS |  |
+| "Live Preview" on onboarding ("$25  FounderConsole reads as $25,000")  excellent | PASS |  |
 | "All monetary values in Thousands" banner on data entry  good but insufficient | P1 | Add inline unit hint per field: "Monthly Revenue ($K)" not "Monthly Revenue ($)" |
 | No warning when entering 4.5 for cash balance (possibly meant 4500 for $4.5M) | P1 | Smart detection: "You entered 4.5. With Values-in=Thousands, that's $4,500. Did you mean $4.5M (enter 4500)?" |
 | No validation for GM > 100% | P1 | Reject with: "Gross margin cannot exceed 100%. Current: [value]%" |
@@ -157,11 +157,11 @@ Until these P0 issues are fixed, I cannot trust any output from the platform. Th
 
 **Dataset A (Sustainable):** Revenue=1000, GM=50%, Opex=200, Payroll=100, Other=50, Cash=5000
 - Expected: COGS=500, TotalExp=850, NetBurn=-150 (revenue > expenses), Runway=Sustainable
-- **Not tested in Predixen**  would require creating second company. Based on observed bugs, prediction: runway calculation would be wrong if netBurn is negative.
+- **Not tested in FounderConsole**  would require creating second company. Based on observed bugs, prediction: runway calculation would be wrong if netBurn is negative.
 
 **Dataset B (Low Margin):** Revenue=1000, GM=20%, Opex=200, Payroll=100, Other=50, Cash=5000
 - Expected: COGS=800, TotalExp=1150, NetBurn=150, Runway=33.33 months
-- **Not tested in Predixen**  same concern about cross-page inconsistency.
+- **Not tested in FounderConsole**  same concern about cross-page inconsistency.
 
 ---
 
@@ -283,7 +283,7 @@ Until these P0 issues are fixed, I cannot trust any output from the platform. Th
 - Created company "PulsePal"  smooth, 2 clicks
 - Selected D2C / Consumer, Series A, USD, Thousands  all dropdowns worked
 - Entered all 7 baseline values  no issues
-- "Live Preview" ($25  Predixen reads as $25,000)  EXCELLENT trust builder
+- "Live Preview" ($25  FounderConsole reads as $25,000)  EXCELLENT trust builder
 - "All monetary values in Thousands" banner  present in onboarding, MISSING on all other pages
 - Field labels show ($) not ($K)  unit suffix missing
 - Intentional test: entering 4.5 for cash balance  NO WARNING shown. System silently accepted it as $4,500 (not $4.5M). FAIL.
@@ -357,5 +357,5 @@ Until these P0 issues are fixed, I cannot trust any output from the platform. Th
 
 ---
 
-*Report generated from live QA session on Predixen, February 15, 2026.*
+*Report generated from live QA session on FounderConsole, February 15, 2026.*
 *All data is synthetic (PulsePal does not exist). Benchmarks cited are from publicly available industry reports.*

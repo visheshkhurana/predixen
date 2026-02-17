@@ -26,7 +26,7 @@ export function SimulationLearnMoreModal({ testId = 'learn-more-modal' }: Simula
         <DialogHeader>
           <DialogTitle>Understanding Monte Carlo Simulations</DialogTitle>
           <DialogDescription>
-            How Predixen projects your company's financial future
+            How FounderConsole projects your company's financial future
           </DialogDescription>
         </DialogHeader>
         

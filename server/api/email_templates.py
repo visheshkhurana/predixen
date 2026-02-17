@@ -158,14 +158,14 @@ async def send_test_email(
 
 class FeatureUpdateRequest(BaseModel):
     emails: Optional[List[str]] = None
-    author: str = "Predixen Team"
+    author: str = "FounderConsole Team"
 
 
 class PlatformUpdateRequest(BaseModel):
     emails: Optional[List[str]] = None
-    subject: str = "Predixen Platform Update - February 2026"
-    author: str = "Predixen Team"
-    from_email: str = "Predixen Updates <updates@predixen.app>"
+    subject: str = "FounderConsole Platform Update - February 2026"
+    author: str = "FounderConsole Team"
+    from_email: str = "FounderConsole Updates <updates@founderconsole.ai>"
 
 
 @router.post("/send-platform-update")
@@ -231,7 +231,7 @@ async def send_ai_copilot_update_emails(
 
 class HybridFeatureRequest(BaseModel):
     emails: Optional[List[str]] = None
-    author: str = "Predixen Team"
+    author: str = "FounderConsole Team"
 
 
 @router.post("/send-hybrid-feature-announcement")

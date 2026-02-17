@@ -10,17 +10,17 @@ from datetime import datetime
 from server.email.service import _send_email_sync
 from server.api.email_tracking import create_tracked_link
 
-CAMPAIGN = "predixen_simulation_update_feb2026_v6"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_simulation_update_feb2026_v6"
+BASE_URL = "https://founderconsole.ai"
 
 SENDERS = [
-    "Predixen Updates <update05@predixen.app>",
-    "Predixen <NFL@predixen.in>",
+    "FounderConsole Updates <update05@founderconsole.ai>",
+    "FounderConsole <NFL@founderconsole.ai>",
 ]
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -33,7 +33,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Predixen - Simulation Engine Hardened</title>
+<title>FounderConsole - Simulation Engine Hardened</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0f;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e0e0e0;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0f;">
@@ -42,7 +42,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 
 <!-- Header -->
 <tr><td style="background:linear-gradient(135deg,#059669 0%,#10b981 50%,#34d399 100%);padding:40px 40px 30px;text-align:center;">
-<h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">Predixen Intelligence OS</h1>
+<h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">FounderConsole</h1>
 <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.9);letter-spacing:1px;text-transform:uppercase;">Simulation Engine Hardened &middot; February 2026</p>
 </td></tr>
 
@@ -58,7 +58,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#064e3b,#065f46);border-radius:10px;border:1px solid #059669;">
 <tr><td style="padding:25px 30px;text-align:center;">
 <p style="margin:0 0 6px;font-size:13px;color:#6ee7b7;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Try It Now</p>
-<p style="margin:0 0 16px;font-size:15px;color:#a7f3d0;">Login with <strong style="color:#ecfdf5;">demo@predixen.ai</strong> / <strong style="color:#ecfdf5;">demo123</strong></p>
+<p style="margin:0 0 16px;font-size:15px;color:#a7f3d0;">Login with <strong style="color:#ecfdf5;">demo@founderconsole.ai</strong> / <strong style="color:#ecfdf5;">demo123</strong></p>
 <a href="{tracked_links['demo']}" style="display:inline-block;background:#059669;color:#fff;padding:12px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Run a Simulation</a>
 </td></tr>
 </table>
@@ -172,7 +172,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <tr><td style="padding:5px 40px 20px;">
 <table width="100%" cellpadding="0" cellspacing="0">
 <tr><td style="padding:8px 0;">
-<p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#059669;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">1</span><strong style="color:#e0e7ff;">Login</strong> &mdash; demo@predixen.ai / demo123 &mdash; check the metrics header stays consistent</p>
+<p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#059669;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">1</span><strong style="color:#e0e7ff;">Login</strong> &mdash; demo@founderconsole.ai / demo123 &mdash; check the metrics header stays consistent</p>
 </td></tr>
 <tr><td style="padding:8px 0;">
 <p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#059669;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">2</span><strong style="color:#e0e7ff;">Navigate to Simulate</strong> &mdash; open the scenario simulator and check existing simulation results</p>
@@ -196,7 +196,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 
 <!-- Footer -->
 <tr><td style="padding:20px 40px 30px;border-top:1px solid #1e1e2e;text-align:center;">
-<p style="margin:0;font-size:12px;color:#6b7280;">Predixen Intelligence OS &middot; AI-powered financial intelligence for startups</p>
+<p style="margin:0;font-size:12px;color:#6b7280;">FounderConsole &middot; AI-powered financial intelligence for startups</p>
 <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">
 <a href="{tracked_links['feedback']}" style="color:#34d399;text-decoration:none;">Share Feedback on Simulation Accuracy</a>
 </p>
@@ -248,7 +248,7 @@ def send_all():
 
             result = _send_email_sync(
                 to=email,
-                subject="Predixen - Simulation Engine Hardened: 16 Critical Fixes Shipped",
+                subject="FounderConsole - Simulation Engine Hardened: 16 Critical Fixes Shipped",
                 html_content=html,
                 from_email=sender,
                 recipient_id=rid,
@@ -265,7 +265,7 @@ def send_all():
         print()
 
     print("Done! Track results at:")
-    print(f"  {BASE_URL}/email-tracking/analytics?token=predixen-analytics-2026&campaign={CAMPAIGN}")
+    print(f"  {BASE_URL}/email-tracking/analytics?token=founderconsole-analytics-2026&campaign={CAMPAIGN}")
 
 
 if __name__ == "__main__":

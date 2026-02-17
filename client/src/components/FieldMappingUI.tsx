@@ -196,7 +196,7 @@ export function FieldMappingUI({
           <div>
             <CardTitle className="text-lg">Field Mapping</CardTitle>
             <CardDescription>
-              Map your imported fields to Predixen metrics
+              Map your imported fields to FounderConsole metrics
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export function FieldMappingUI({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px]">Predixen Field</TableHead>
+                    <TableHead className="w-[200px]">FounderConsole Field</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                     <TableHead>Your Data Field</TableHead>
                     <TableHead className="w-[100px]">Status</TableHead>

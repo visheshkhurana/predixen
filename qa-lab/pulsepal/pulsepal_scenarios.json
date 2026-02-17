@@ -3,7 +3,7 @@
     "company": "PulsePal",
     "baseline_ref": "pulsepal_dataset.json",
     "generated": "2026-02-15",
-    "predixen_version": "observed during QA session"
+    "founderconsole_version": "observed during QA session"
   },
   "scenarios": [
     {
@@ -13,7 +13,7 @@
       "changes": {},
       "timeline_months": "1-6",
       "expected_directional_outcome": "Runway ~11.8 months. Cash depletes around month 12. No growth assumed.",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "dashboard_runway": "11.8 months",
         "simulate_runway_p50": "16.0 months",
         "decisions_runway": "236.8 months",
@@ -31,7 +31,7 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "More trial starts -> more paid subs -> revenue increases ~6% from month 3. Runway extends. Net burn decreases.",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "query_used": "What if we increase revenue by 6% starting month 3 due to a paywall redesign improving trial starts from 7% to 9%?",
         "decision_score": "9/10",
         "runway_p50": "48.0 months",
@@ -50,8 +50,8 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "More trials convert -> higher paid subs -> revenue +4%. Moderate improvement.",
-      "predixen_actual": {
-        "note": "Not separately tested due to same proxy mechanism as S1. Predixen lacks trial/conversion inputs."
+      "founderconsole_actual": {
+        "note": "Not separately tested due to same proxy mechanism as S1. FounderConsole lacks trial/conversion inputs."
       },
       "ux_friction": "Same limitation: no first-class trial conversion input. Must proxy through generic revenue change."
     },
@@ -65,7 +65,7 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "Higher ARPPU increases MRR. Lower churn improves retention. Combined: revenue +8%, slight burn reduction.",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "note": "Tested via 'Raise prices 20%' quick chip (closest available). Sensitivity slider 'Price Increase' available but no churn slider coupling."
       },
       "ux_friction": "Cannot set pricing + churn in one scenario without confusion. Price Increase slider and Churn Rate slider are independent with no way to express 'annual plan shift = higher price + lower churn'. Missing ARPPU concept entirely."
@@ -80,7 +80,7 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "Higher burn in months 1-3, install growth in months 2-6, revenue lift from month 4+ (delayed effect).",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "closest_chip": "Aggressive Growth scenario showed 14.0 mo runway, 58% survival",
         "note": "Cannot model 'spend now, benefit later' with time-phased inputs. No phased opex ramp."
       },
@@ -96,7 +96,7 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "Lower churn -> higher LTV -> more retained subscribers -> revenue improves gradually from month 4+.",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "note": "Churn Rate slider available (0-10%) but no D1/D7/W1 retention inputs. No cohort retention UI found."
       },
       "ux_friction": "Retention lives only in the Churn Rate slider (0-10%). No dedicated retention/cohort page. No D1/D7/D30 retention curve input. Discoverable only via 'Adjust Variables Manually' -> sensitivity sliders. A founder looking for 'retention' in the nav would not find it."
@@ -111,10 +111,10 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "Temporary install/trial drop -> revenue dip months 2-4 -> recovery if organic holds.",
-      "predixen_actual": {
+      "founderconsole_actual": {
         "note": "Cannot model install/trial metrics. No time-bounded shock input. Closest: generic revenue decrease scenario."
       },
-      "ux_friction": "No way to express 'external shock for 2 months only'. No install/trial metrics. Time-phased shock completely unsupported. This is a common consumer app scenario (IDFA changes, store policy shifts) that Predixen cannot model."
+      "ux_friction": "No way to express 'external shock for 2 months only'. No install/trial metrics. Time-phased shock completely unsupported. This is a common consumer app scenario (IDFA changes, store policy shifts) that FounderConsole cannot model."
     },
     {
       "id": "S7",
@@ -125,8 +125,8 @@
       },
       "timeline_months": "1-6",
       "expected_directional_outcome": "Combined: higher revenue, higher costs, lower churn. Net effect depends on timing. Reset must restore exact baseline.",
-      "predixen_actual": {
-        "note": "Scenario stacking not tested  Predixen uses natural language query per simulation, not stackable parameter layers. Reset button available but no 'apply multiple scenarios' UI."
+      "founderconsole_actual": {
+        "note": "Scenario stacking not tested  FounderConsole uses natural language query per simulation, not stackable parameter layers. Reset button available but no 'apply multiple scenarios' UI."
       },
       "ux_friction": "No scenario stacking/layering. Each simulation is a single NL query or single slider adjustment. Cannot compose S1+S4+S5 into one combined scenario. Reset button exists on sliders but no 'Reset to baseline' across all pages. No change log showing from->to and timestamp."
     }

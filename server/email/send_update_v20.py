@@ -1,6 +1,6 @@
 """
 Send update email v20 - QA v1.0.2+ Trust & Simulation Accuracy Fixes.
-Sender: ivl58oxz@predixen.app
+Sender: ivl58oxz@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_qa_trust_fixes_feb2026_v20"
+CAMPAIGN = "founderconsole_qa_trust_fixes_feb2026_v20"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -74,10 +74,10 @@ The simulation engine now computes its baseline entirely from your FinancialReco
 
 ---
 
-These fixes ensure that every number you see in Predixen comes from your actual data, displayed in your currency, and is reproducible on demand.
+These fixes ensure that every number you see in FounderConsole comes from your actual data, displayed in your currency, and is reproducible on demand.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -148,10 +148,10 @@ def build_html(rcpt: dict) -> str:
 
 </table>
 
-<p style="font-size:14px;color:#4b5563;margin-top:20px;">These fixes ensure that every number you see in Predixen comes from your actual data, displayed in your currency, and is reproducible on demand.</p>
+<p style="font-size:14px;color:#4b5563;margin-top:20px;">These fixes ensure that every number you see in FounderConsole comes from your actual data, displayed in your currency, and is reproducible on demand.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -160,7 +160,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <ivl58oxz@predixen.app>"
+    sender = "FounderConsole <ivl58oxz@founderconsole.ai>"
 
     print(f"Sending QA Trust & Simulation Accuracy update v20 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -189,7 +189,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen QA v1.0.2+ - Trust & Simulation Accuracy Fixes: No More Fabricated Defaults",
+            subject="FounderConsole QA v1.0.2+ - Trust & Simulation Accuracy Fixes: No More Fabricated Defaults",
             html_content=html,
             text_content=text,
             from_email=sender,

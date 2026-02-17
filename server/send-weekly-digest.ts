@@ -39,14 +39,14 @@ async function sendWeeklyDigest() {
   const resend = new Resend(apiKey);
 
   const recipients = [
-    'nikita@predixen.ai',
+    'nikita@founderconsole.ai',
     'nikita.luther@gmail.com',
     'nikitafl2024@gmail.com',
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'Predixen Weekly <kavibe8@predixen.app>';
-  const subject = 'Predixen Weekly Digest — Feb 8-14, 2026: 5 Bug Fixes, 4 New Features, 3 UI Upgrades';
+  const senderEmail = 'FounderConsole Weekly <kavibe8@founderconsole.ai>';
+  const subject = 'FounderConsole Weekly Digest — Feb 8-14, 2026: 5 Bug Fixes, 4 New Features, 3 UI Upgrades';
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -64,7 +64,7 @@ async function sendWeeklyDigest() {
           <tr>
             <td style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#a855f7);padding:40px 40px 30px;">
               <p style="margin:0 0 4px;color:#c7d2fe;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">Weekly Digest</p>
-              <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;">Predixen Intelligence OS</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:28px;font-weight:700;">FounderConsole</h1>
               <p style="margin:10px 0 0;color:#e0e7ff;font-size:14px;">Week of February 8&ndash;14, 2026</p>
             </td>
           </tr>
@@ -532,7 +532,7 @@ async function sendWeeklyDigest() {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="https://predixen-intelligence-os.replit.app" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
+                    <a href="https://founderconsole.ai" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 36px;border-radius:8px;">
                       Explore the Platform
                     </a>
                   </td>
@@ -550,7 +550,7 @@ async function sendWeeklyDigest() {
           <tr>
             <td style="background-color:#0f172a;padding:24px 40px;">
               <p style="margin:0;color:#475569;font-size:11px;text-align:center;line-height:1.6;">
-                Predixen Intelligence OS &mdash; AI-Powered Financial Intelligence for Startups<br/>
+                FounderConsole &mdash; AI-Powered Financial Intelligence for Startups<br/>
                 Weekly Digest &bull; Week of Feb 8&ndash;14, 2026
               </p>
             </td>

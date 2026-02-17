@@ -279,7 +279,7 @@ export default function AddDataSourceWizard() {
                   <div className="p-4 border rounded-lg bg-muted/50">
                     <p className="text-sm font-medium mb-2">Your Webhook Endpoint</p>
                     <code className="text-xs bg-background p-2 rounded block">
-                      https://api.predixen.io/webhooks/{connectorId}/ingest
+                      https://api.founderconsole.ai/webhooks/{connectorId}/ingest
                     </code>
                   </div>
                   <p className="text-sm text-muted-foreground">

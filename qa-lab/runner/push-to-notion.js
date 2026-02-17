@@ -271,12 +271,12 @@ function buildTableBlocks(tableLines) {
 
 async function findOrCreateQADatabase(notion) {
   const searchRes = await notion.search({
-    query: 'Predixen QA Reports',
+    query: 'FounderConsole QA Reports',
     filter: { property: 'object', value: 'database' }
   });
 
   const existing = searchRes.results.find(r =>
-    r.object === 'database' && r.title?.some(t => t.plain_text?.includes('Predixen QA Reports'))
+    r.object === 'database' && r.title?.some(t => t.plain_text?.includes('FounderConsole QA Reports'))
   );
 
   if (existing) {
@@ -302,14 +302,14 @@ async function findOrCreateQADatabase(notion) {
   }
 
   if (!parentPageId) {
-    throw new Error('No accessible Notion pages found. Please share at least one page with the Predixen integration.');
+    throw new Error('No accessible Notion pages found. Please share at least one page with the FounderConsole integration.');
   }
 
   console.log(`Creating QA Reports database under page ${parentPageId}...`);
 
   const db = await notion.databases.create({
     parent: { type: 'page_id', page_id: parentPageId },
-    title: [{ type: 'text', text: { content: 'Predixen QA Reports' } }],
+    title: [{ type: 'text', text: { content: 'FounderConsole QA Reports' } }],
     properties: {
       'Report': { title: {} },
       'Status': {

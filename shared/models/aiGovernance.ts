@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 export const aiRequests = pgTable("ai_requests", {
   id: serial("id").primaryKey(),
   requestId: text("request_id").notNull().unique(),
-  companyId: text("company_id").notNull().default("predixen"),
+  companyId: text("company_id").notNull().default("founderconsole"),
   initiator: text("initiator").notNull().default("founder"),
   type: text("type").notNull().default("decision"),
   question: text("question").notNull(),

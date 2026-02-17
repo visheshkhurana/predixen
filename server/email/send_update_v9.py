@@ -10,12 +10,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_scenario_update_feb2026_v9"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_scenario_update_feb2026_v9"
+BASE_URL = "https://founderconsole.ai"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -81,14 +81,14 @@ TRY IT
 
 Log in to the demo account:
 {BASE_URL}/auth
-Login: demo@predixen.ai / demo123
+Login: demo@founderconsole.ai / demo123
 
 Go to Scenarios, run all five, and compare the results on the Decision Ranking page. You'll see real differences now.
 
 Let me know what you think.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -167,14 +167,14 @@ def build_html(rcpt: dict) -> str:
 
 <p>Log in to the demo account:<br>
 <a href="{BASE_URL}/auth" style="color:#4f46e5;">{BASE_URL}/auth</a><br>
-Login: demo@predixen.ai / demo123</p>
+Login: demo@founderconsole.ai / demo123</p>
 
 <p>Go to Scenarios, run all five, and compare the results on the Decision Ranking page. You&rsquo;ll see real differences now.</p>
 
 <p>Let me know what you think.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -183,7 +183,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen Product <product@predixen.app>"
+    sender = "FounderConsole Product <product@founderconsole.ai>"
 
     print(f"Sending scenario update emails to {len(RECIPIENTS)} recipients...")
     print(f"Campaign: {CAMPAIGN}")

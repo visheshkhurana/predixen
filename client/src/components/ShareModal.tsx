@@ -308,7 +308,7 @@ export function ShareModal({ open, onOpenChange, data, companyId, companyName }:
             Share {TYPE_LABELS[data?.contentType || 'custom']}
           </DialogTitle>
           <DialogDescription>
-            Send this as a professional email via Predixen.
+            Send this as a professional email via FounderConsole.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">

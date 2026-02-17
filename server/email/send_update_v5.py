@@ -10,17 +10,17 @@ from datetime import datetime
 from server.email.service import _send_email_sync
 from server.api.email_tracking import create_tracked_link
 
-CAMPAIGN = "predixen_redesign_feb2026_v5"
-BASE_URL = "https://predixen.app"
+CAMPAIGN = "founderconsole_redesign_feb2026_v5"
+BASE_URL = "https://founderconsole.ai"
 
 SENDERS = [
-    "Predixen Updates <update05@predixen.app>",
-    "Predixen <NFL@predixen.in>",
+    "FounderConsole Updates <update05@founderconsole.ai>",
+    "FounderConsole <NFL@founderconsole.ai>",
 ]
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
@@ -33,7 +33,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Predixen Intelligence OS - Major UX Redesign</title>
+<title>FounderConsole - Major UX Redesign</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0a0a0f;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e0e0e0;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0f;">
@@ -42,14 +42,14 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 
 <!-- Header -->
 <tr><td style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);padding:40px 40px 30px;text-align:center;">
-<h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">Predixen Intelligence OS</h1>
+<h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">FounderConsole</h1>
 <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);letter-spacing:1px;text-transform:uppercase;">Major UX Redesign &middot; February 2026</p>
 </td></tr>
 
 <!-- Greeting -->
 <tr><td style="padding:35px 40px 10px;">
 <p style="margin:0;font-size:16px;line-height:1.6;color:#c4c4d4;">Hi {name},</p>
-<p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:#c4c4d4;">We just shipped a major redesign of the Predixen experience. This isn't a cosmetic refresh &mdash; it's a fundamental rethink of how founders interact with the platform, informed by a deep review from a poker decision theorist, an AI/ML engineer, and a world-class UX designer.</p>
+<p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:#c4c4d4;">We just shipped a major redesign of the FounderConsole experience. This isn't a cosmetic refresh &mdash; it's a fundamental rethink of how founders interact with the platform, informed by a deep review from a poker decision theorist, an AI/ML engineer, and a world-class UX designer.</p>
 <p style="margin:14px 0 0;font-size:16px;line-height:1.6;color:#c4c4d4;">Here's what changed and <strong style="color:#e0e7ff;">why</strong>.</p>
 </td></tr>
 
@@ -58,7 +58,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:10px;border:1px solid #4338ca;">
 <tr><td style="padding:25px 30px;text-align:center;">
 <p style="margin:0 0 6px;font-size:13px;color:#a5b4fc;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">See It Live</p>
-<p style="margin:0 0 16px;font-size:15px;color:#c7d2fe;">Login with <strong style="color:#e0e7ff;">demo@predixen.ai</strong> / <strong style="color:#e0e7ff;">demo123</strong></p>
+<p style="margin:0 0 16px;font-size:15px;color:#c7d2fe;">Login with <strong style="color:#e0e7ff;">demo@founderconsole.ai</strong> / <strong style="color:#e0e7ff;">demo123</strong></p>
 <a href="{tracked_links['demo']}" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Launch Demo Account</a>
 </td></tr>
 </table>
@@ -73,7 +73,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <tr><td style="padding:20px;">
 <p style="margin:0;font-size:14px;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">The Poker Principle</p>
 <p style="margin:0;font-size:15px;color:#c4c4d4;line-height:1.7;font-style:italic;">"In poker, your edge comes from one thing &mdash; making better decisions with incomplete information. You don't need every stat on your HUD. You need the 4&ndash;5 numbers that actually change your action."</p>
-<p style="margin:12px 0 0;font-size:14px;color:#9ca3af;line-height:1.6;">Predixen had 22+ navigation items across 7 sections. A founder opening it for the first time felt like they walked into a cockpit. The value proposition &mdash; <strong style="color:#e0e7ff;">"test your decisions before you make them"</strong> &mdash; was buried under metric catalogs, marketplace connectors, and admin settings.</p>
+<p style="margin:12px 0 0;font-size:14px;color:#9ca3af;line-height:1.6;">FounderConsole had 22+ navigation items across 7 sections. A founder opening it for the first time felt like they walked into a cockpit. The value proposition &mdash; <strong style="color:#e0e7ff;">"test your decisions before you make them"</strong> &mdash; was buried under metric catalogs, marketplace connectors, and admin settings.</p>
 </td></tr>
 </table>
 </td></tr>
@@ -96,7 +96,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <tr><td style="padding:12px 0;border-bottom:1px solid #1a1a2e;">
 <p style="margin:0;font-size:15px;font-weight:600;color:#a78bfa;">2. Morning Briefing</p>
 <p style="margin:6px 0 0;font-size:14px;color:#9ca3af;line-height:1.6;">When you open the app, you get a personalized 30-second summary: "Your MRR is $43,949. Cash: $513,746. Runway: 21.3 months." Plus an AI-generated simulation suggestion based on your current metrics.</p>
-<p style="margin:6px 0 0;font-size:13px;color:#6366f1;font-style:italic;">Why: This is the daily hook. It turns Predixen from a tool founders use during board prep into something they check every morning &mdash; like checking their financial newspaper.</p>
+<p style="margin:6px 0 0;font-size:13px;color:#6366f1;font-style:italic;">Why: This is the daily hook. It turns FounderConsole from a tool founders use during board prep into something they check every morning &mdash; like checking their financial newspaper.</p>
 </td></tr>
 
 <!-- Item 3: Goal Tracker -->
@@ -171,7 +171,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 <tr><td style="padding:5px 40px 20px;">
 <table width="100%" cellpadding="0" cellspacing="0">
 <tr><td style="padding:8px 0;">
-<p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#6366f1;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">1</span><strong style="color:#e0e7ff;">Login</strong> &mdash; demo@predixen.ai / demo123 &mdash; notice the Morning Briefing banner at the top</p>
+<p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#6366f1;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">1</span><strong style="color:#e0e7ff;">Login</strong> &mdash; demo@founderconsole.ai / demo123 &mdash; notice the Morning Briefing banner at the top</p>
 </td></tr>
 <tr><td style="padding:8px 0;">
 <p style="margin:0;font-size:14px;color:#9ca3af;"><span style="display:inline-block;background:#6366f1;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:12px;font-weight:700;margin-right:8px;">2</span><strong style="color:#e0e7ff;">Check the Header</strong> &mdash; see the workflow stepper, alert bell, Briefing button, and Confidence badge</p>
@@ -195,7 +195,7 @@ def build_html(rcpt: dict, tracked_links: dict) -> str:
 
 <!-- Footer -->
 <tr><td style="padding:20px 40px 30px;border-top:1px solid #1e1e2e;text-align:center;">
-<p style="margin:0;font-size:12px;color:#6b7280;">Predixen Intelligence OS &middot; AI-powered financial intelligence for startups</p>
+<p style="margin:0;font-size:12px;color:#6b7280;">FounderConsole &middot; AI-powered financial intelligence for startups</p>
 <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">
 <a href="{tracked_links['feedback']}" style="color:#818cf8;text-decoration:none;">Share Feedback on the Redesign</a>
 </p>
@@ -247,7 +247,7 @@ def send_all():
 
             result = _send_email_sync(
                 to=email,
-                subject="Predixen Intelligence OS - Major UX Redesign: The Thinking Behind It (Feb 2026)",
+                subject="FounderConsole - Major UX Redesign: The Thinking Behind It (Feb 2026)",
                 html_content=html,
                 from_email=sender,
                 recipient_id=rid,
@@ -264,7 +264,7 @@ def send_all():
         print()
 
     print("Done! Track results at:")
-    print(f"  {BASE_URL}/email-tracking/analytics?token=predixen-analytics-2026&campaign={CAMPAIGN}")
+    print(f"  {BASE_URL}/email-tracking/analytics?token=founderconsole-analytics-2026&campaign={CAMPAIGN}")
 
 
 if __name__ == "__main__":

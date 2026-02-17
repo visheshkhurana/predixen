@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Log startup configuration (without secrets)
-    logger.info(f"Starting Predixen Intelligence OS v1.0.0")
+    logger.info(f"Starting FounderConsole v1.0.0")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
     logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
@@ -115,7 +115,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down FastAPI server...")
 
 app = FastAPI(
-    title="Predixen Intelligence OS",
+    title="FounderConsole",
     description="AI-powered financial simulation and decision engine for startups",
     version="1.0.0",
     lifespan=lifespan
@@ -181,7 +181,7 @@ app.include_router(currency_api.router)
 
 @app.get("/")
 def root():
-    return {"message": "Predixen Intelligence OS API", "version": "1.0.0"}
+    return {"message": "FounderConsole API", "version": "1.0.0"}
 
 @app.get("/health")
 def health():

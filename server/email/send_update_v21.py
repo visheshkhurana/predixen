@@ -1,6 +1,6 @@
 """
 Send update email v21 - QA Lab: Automated Testing Infrastructure & 150/150 Report.
-Sender: f5987291@predixen.app
+Sender: f5987291@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -9,11 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from datetime import datetime
 from server.email.service import _send_email_sync
 
-CAMPAIGN = "predixen_qa_lab_report_feb2026_v21"
+CAMPAIGN = "founderconsole_qa_lab_report_feb2026_v21"
 
 RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
-    {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
+    {"email": "nikita@founderconsole.ai", "id": "nikita_founderconsole", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
 ]
 
@@ -21,7 +21,7 @@ RECIPIENTS = [
 def build_plain_text(rcpt: dict) -> str:
     return f"""Hi {rcpt['name']},
 
-We've built a fully automated QA Lab for Predixen's simulation engine. Here's what it does and the latest results.
+We've built a fully automated QA Lab for FounderConsole's simulation engine. Here's what it does and the latest results.
 
 ---
 
@@ -31,7 +31,7 @@ QA LAB v1.0 - AUTOMATED TESTING INFRASTRUCTURE
 
 WHAT IS THE QA LAB?
 
-The QA Lab is an automated testing system that validates every financial calculation in Predixen. It creates synthetic companies, seeds them with financial data, runs simulations, and checks the results against canonical formulas. You can run it anytime with a single command: bash qa-lab/run.sh
+The QA Lab is an automated testing system that validates every financial calculation in FounderConsole. It creates synthetic companies, seeds them with financial data, runs simulations, and checks the results against canonical formulas. You can run it anytime with a single command: bash qa-lab/run.sh
 
 It generates a full markdown report at qa-lab/latest-report.md that's ready to paste into Notion or Jira.
 
@@ -141,7 +141,7 @@ The report includes persona-based insights for each test company. For example:
 The full report is at qa-lab/latest-report.md and can be re-generated anytime with bash qa-lab/run.sh.
 
 --
-Predixen Intelligence OS
+FounderConsole
 """
 
 
@@ -157,7 +157,7 @@ def build_html(rcpt: dict) -> str:
 
 <p>Hi {rcpt['name']},</p>
 
-<p>We've built a fully automated QA Lab for Predixen's simulation engine. Here's what it does and the latest results.</p>
+<p>We've built a fully automated QA Lab for FounderConsole's simulation engine. Here's what it does and the latest results.</p>
 
 <h2 style="font-size:17px;color:#1e1b4b;margin:28px 0 12px;padding-bottom:6px;border-bottom:2px solid #6366f1;">QA Lab v1.0 &mdash; Automated Testing Infrastructure</h2>
 
@@ -283,7 +283,7 @@ def build_html(rcpt: dict) -> str:
 <p style="font-size:14px;color:#4b5563;margin-top:20px;">The full report is Notion/Jira-ready markdown with summary tables, pass/fail for every test, and a prioritized improvement backlog.</p>
 
 <p style="margin-top:30px;padding-top:15px;border-top:1px solid #e5e5e5;font-size:13px;color:#888;">
-Predixen Intelligence OS
+FounderConsole
 </p>
 
 </div>
@@ -292,7 +292,7 @@ Predixen Intelligence OS
 
 
 def send_all():
-    sender = "Predixen <f5987291@predixen.app>"
+    sender = "FounderConsole <f5987291@founderconsole.ai>"
 
     print(f"Sending QA Lab Report update v21 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -321,7 +321,7 @@ def send_all():
 
         result = _send_email_sync(
             to=email,
-            subject="Predixen QA Lab v1.0 - 150/150 Tests Passing: Automated Testing Infrastructure Live",
+            subject="FounderConsole QA Lab v1.0 - 150/150 Tests Passing: Automated Testing Infrastructure Live",
             html_content=html,
             text_content=text,
             from_email=sender,
