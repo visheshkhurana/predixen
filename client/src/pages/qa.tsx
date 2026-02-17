@@ -518,6 +518,10 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
     { input: "cut paid acquisition spend by 30%", label: "NLP: Cut paid spend 30%", expectField: "burn_reduction_pct", expectPositive: true },
     { input: "reduce churn by 10%", label: "NLP: Reduce churn 10%", expectField: "churn_reduction_pct", expectPositive: true },
     { input: "hire 5 designers", label: "NLP: Hire 5 designers", expectField: "headcount_change", expectPositive: true },
+    { input: "raise series B 15M", label: "NLP: Raise Series B $15M", expectField: "fundraise_amount", expectPositive: true },
+    { input: "convert 20% monthly subscribers to annual with 15% discount", label: "NLP: Annual plan conversion", expectField: "churn_reduction_pct", expectPositive: true },
+    { input: "shift 150k from paid ads to referral incentives", label: "NLP: Spend reallocation $150k", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "improve week-3 retention by 10%", label: "NLP: Retention improvement 10%", expectField: "churn_reduction_pct", expectPositive: true },
   ];
 
   for (const tc of nlpTestCases) {

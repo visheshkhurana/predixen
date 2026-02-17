@@ -8,6 +8,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _fmt_currency(val):
+    a = abs(val)
+    if a >= 1e9: return f"${val/1e9:.1f}B"
+    if a >= 1e6: return f"${val/1e6:.1f}M"
+    if a >= 1e3: return f"${val/1e3:.0f}K"
+    return f"${val:.0f}"
+
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.user import User
@@ -138,7 +145,9 @@ def generate_decisions(
         "recommendations": recommendations
     }
 
-def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth):
+def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
+    _fmt = _fmt_currency
+    scaled_net_burn = net_burn * scale_mult
     risks = []
     if runway_months < 12:
         risks.append({
@@ -178,7 +187,11 @@ def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, grow
     return risks[:5]
 
 
-def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth):
+def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
+    _fmt = _fmt_currency
+    scaled_burn = burn * scale_mult
+    scaled_revenue = revenue * scale_mult
+    scaled_cash = cash * scale_mult
     paths = []
     if runway_months < 12:
         paths.append({
@@ -516,21 +529,28 @@ Each action must be a clear instruction — not vague advice like 'improve sales
 CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strategies that you CONSIDERED but ultimately DID NOT recommend. For each, explain clearly why it was rejected given the company's specific data, and under what conditions it might become the right choice. This shows the founder you considered multiple angles."""
     
     try:
+        import concurrent.futures
         from server.lib.llm.llm_router import get_llm_router, TaskType
+
         llm_router = get_llm_router(
             db_session=db,
             company_id=company_id,
             user_id=current_user.id
         )
         
-        result = llm_router.chat(
-            messages=[{"role": "user", "content": f"Provide a strategic diagnosis for this company:\n\n{company_context}"}],
-            task_type=TaskType.FINANCIAL_ANALYSIS,
-            model="gpt-4o",
-            system=system_prompt,
-            temperature=0.6,
-            max_tokens=8000,
-        )
+        def _call_llm():
+            return llm_router.chat(
+                messages=[{"role": "user", "content": f"Provide a strategic diagnosis for this company:\n\n{company_context}"}],
+                task_type=TaskType.FINANCIAL_ANALYSIS,
+                model="gpt-4o",
+                system=system_prompt,
+                temperature=0.6,
+                max_tokens=8000,
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_call_llm)
+            result = future.result(timeout=15)
         
         import json, re
         content = result.get("content", "{}")
@@ -617,8 +637,8 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
                 "Team capacity constraints that could limit growth execution",
                 "Market timing risk as conditions may shift"
             ],
-            "key_risks": _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth),
-            "alternative_paths": _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth),
+            "key_risks": _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth, scale_mult),
+            "alternative_paths": _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth, scale_mult),
             "company_name": company.name,
             "generated_at": datetime.utcnow().isoformat(),
             "model_used": "fallback",
