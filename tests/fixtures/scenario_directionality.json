@@ -1,0 +1,499 @@
+{
+  "meta": {
+    "name": "Scenario_Directionality_Fixtures",
+    "version": "1.0",
+    "created_utc": "2026-02-17T20:44:00.047609Z",
+    "notes": [
+      "Directionality fixtures validate monotonic logic and baseline snapshot correctness.",
+      "They are NOT meant to assert exact numeric outputs\u2014only direction flags and invariants.",
+      "Expected flags use: up/down/same/na plus optional 'guard'/'warn' expectations."
+    ],
+    "enum": {
+      "dir": [
+        "up",
+        "down",
+        "same",
+        "na"
+      ],
+      "severity": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ]
+    }
+  },
+  "baselines": [
+    {
+      "id": "BL_SAAS_A",
+      "model": {
+        "business_model": "b2b_saas",
+        "stage": "series_a",
+        "currency": "USD",
+        "frequency": "monthly"
+      },
+      "kpis": {
+        "cash": 4500000,
+        "mrr": 520000,
+        "arr": 6240000,
+        "revenue": 520000,
+        "cogs": 52000,
+        "opex": 850000,
+        "marketing_spend": 240000,
+        "payroll": 420000,
+        "burn": 382000,
+        "runway_months": 11.78,
+        "gross_margin_pct": 0.9,
+        "cac": 100000,
+        "ltv": 500000,
+        "churn_rate": 0.02,
+        "nrr": 1.15,
+        "mom_growth": 0.08
+      }
+    },
+    {
+      "id": "BL_CONSUMER_B",
+      "model": {
+        "business_model": "consumer_subscription",
+        "stage": "series_b",
+        "currency": "USD",
+        "frequency": "monthly"
+      },
+      "kpis": {
+        "cash": 8400000,
+        "subscribers": 220000,
+        "mrr": 1250000,
+        "arr": 15000000,
+        "revenue": 1250000,
+        "cogs": 350000,
+        "opex": 1500000,
+        "marketing_spend": 500000,
+        "payroll": 650000,
+        "burn": 600000,
+        "runway_months": 14.0,
+        "gross_margin_pct": 0.72,
+        "cac": 95,
+        "arpa": 5.68,
+        "churn_rate": 0.052,
+        "nrr": 1.08,
+        "mom_growth": 0.04
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "SC_SAAS_STATUS_QUO",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "Status quo (no changes).",
+      "params_expected": {
+        "type": "status_quo"
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "burn": "same",
+          "runway_months": "same",
+          "revenue": "same",
+          "marketing_spend": "same",
+          "payroll": "same"
+        },
+        "invariants": [
+          {
+            "type": "delta_zero",
+            "metrics": [
+              "burn",
+              "runway_months",
+              "revenue",
+              "marketing_spend",
+              "payroll"
+            ],
+            "tolerance": "small"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": "Status quo must produce 0 deltas; 'before' must match canonical KPI snapshot."
+    },
+    {
+      "id": "SC_CONSUMER_STATUS_QUO",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Status quo (no changes).",
+      "params_expected": {
+        "type": "status_quo"
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "burn": "same",
+          "runway_months": "same",
+          "revenue": "same",
+          "marketing_spend": "same"
+        },
+        "invariants": [
+          {
+            "type": "delta_zero",
+            "metrics": [
+              "burn",
+              "runway_months",
+              "revenue",
+              "marketing_spend"
+            ],
+            "tolerance": "small"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": ""
+    },
+    {
+      "id": "SC_SAAS_CUT_MARKETING_25",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "Cut marketing spend by 25% for 6 months.",
+      "params_expected": {
+        "marketing_spend_multiplier": 0.75,
+        "duration_months": 6
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "marketing_spend": "down",
+          "burn": "down",
+          "runway_months": "up",
+          "revenue": "down"
+        },
+        "invariants": [
+          {
+            "type": "monotonic",
+            "if": "marketing_spend_down",
+            "then": [
+              "burn_not_up",
+              "runway_not_down"
+            ]
+          },
+          {
+            "type": "no_inversion",
+            "rule": "marketing_cut_must_not_increase_growth",
+            "metric": "mom_growth"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": "Marketing cut should not increase growth. If revenue link is lagged, allow revenue same short-term but not 'up'."
+    },
+    {
+      "id": "SC_SAAS_HIRE_15_ENG",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "Hire 15 engineers immediately.",
+      "params_expected": {
+        "headcount_engineers_delta": 15,
+        "timing": "immediate"
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "payroll": "up",
+          "burn": "up",
+          "runway_months": "down"
+        },
+        "invariants": [
+          {
+            "type": "immediate_effect",
+            "metric": "burn",
+            "direction": "up"
+          },
+          {
+            "type": "immediate_effect",
+            "metric": "payroll",
+            "direction": "up"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": ""
+    },
+    {
+      "id": "SC_SAAS_RAISE_6M_20DIL",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "Raise $6M at 20% dilution.",
+      "params_expected": {
+        "fundraise_amount": 6000000,
+        "dilution_pct": 0.2
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "cash": "up",
+          "runway_months": "up"
+        },
+        "invariants": [
+          {
+            "type": "cash_jump",
+            "min_delta": 5000000
+          },
+          {
+            "type": "runway_not_down"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P1",
+      "notes": "Runway increases because cash increases; burn unchanged unless costs modeled."
+    },
+    {
+      "id": "SC_SAAS_REV_DROP_35",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "Revenue drops 35% month-over-month for 2 months.",
+      "params_expected": {
+        "revenue_multiplier": 0.65,
+        "duration_months": 2
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "revenue": "down",
+          "burn": "up",
+          "runway_months": "down"
+        },
+        "invariants": [
+          {
+            "type": "monotonic",
+            "if": "revenue_down_costs_same",
+            "then": [
+              "burn_not_down",
+              "runway_not_up"
+            ]
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": ""
+    },
+    {
+      "id": "SC_SAAS_SEVERANCE_400K",
+      "baseline_id": "BL_SAAS_A",
+      "scenario_text": "One-time severance payout of $400k next month.",
+      "params_expected": {
+        "one_time_expense": 400000,
+        "category": "payroll",
+        "timing_month_offset": 1
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "burn": "up",
+          "runway_months": "down",
+          "cash": "down"
+        },
+        "invariants": [
+          {
+            "type": "one_time_cash_hit",
+            "min_delta": 300000
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P1",
+      "notes": ""
+    },
+    {
+      "id": "SC_CONSUMER_PRICE_UP_10",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Increase subscription price by 10%.",
+      "params_expected": {
+        "price_multiplier": 1.1
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "revenue": "up",
+          "mrr": "up",
+          "burn": "same",
+          "runway_months": "up"
+        },
+        "invariants": [
+          {
+            "type": "price_up_revenue_not_down"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P1",
+      "notes": "Assumes volume constant. If elasticity modeled, allow revenue 'na' unless assumptions displayed."
+    },
+    {
+      "id": "SC_CONSUMER_PRICE_UP_10_CHURN_UP_2ABS",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Increase price by 10%, but churn increases by 2% absolute.",
+      "params_expected": {
+        "price_multiplier": 1.1,
+        "churn_rate_delta_abs": 0.02
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "churn_rate": "up",
+          "ltv": "down",
+          "runway_months": "na"
+        },
+        "invariants": [
+          {
+            "type": "churn_up_ltv_not_up"
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P1",
+      "notes": ""
+    },
+    {
+      "id": "SC_CONSUMER_ANNUAL_CONVERT_20_DISC_15",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Convert 20% of monthly subscribers to annual plan with 15% discount.",
+      "params_expected": {
+        "annual_convert_pct": 0.2,
+        "annual_discount_pct": 0.15
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "cash": "up",
+          "runway_months": "up",
+          "mrr": "down"
+        },
+        "invariants": [
+          {
+            "type": "cash_upfront",
+            "min_delta": 1000000
+          }
+        ],
+        "warnings_expected": [
+          "ASSUMPTION_RECOGNITION"
+        ]
+      },
+      "severity": "P2",
+      "notes": "Must surface assumption about cash vs revenue recognition."
+    },
+    {
+      "id": "SC_CONSUMER_CUT_PAID_30",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Cut paid acquisition spend by 30%.",
+      "params_expected": {
+        "marketing_spend_multiplier": 0.7
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "marketing_spend": "down",
+          "burn": "down",
+          "runway_months": "up",
+          "new_subscribers": "down"
+        },
+        "invariants": [
+          {
+            "type": "monotonic",
+            "if": "marketing_spend_down",
+            "then": [
+              "runway_not_down"
+            ]
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P1",
+      "notes": ""
+    },
+    {
+      "id": "SC_CONSUMER_SHIFT_150K_PAID_TO_REF",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Shift $150k/month from paid ads to referral incentives.",
+      "params_expected": {
+        "reallocate_amount": 150000,
+        "from": "paid_ads",
+        "to": "referral"
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "marketing_spend": "same",
+          "cac": "na"
+        },
+        "invariants": [
+          {
+            "type": "budget_conservation",
+            "fields": [
+              "marketing_spend_total"
+            ]
+          }
+        ],
+        "warnings_expected": [
+          "ASSUMPTION_LAG"
+        ]
+      },
+      "severity": "P2",
+      "notes": "Total spend conserved; effects likely lagged; must show assumptions."
+    },
+    {
+      "id": "SC_CONSUMER_RETENTION_UP_10_COST_80K",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Improve week-3 retention by 10% via product improvements, costs +$80k/month.",
+      "params_expected": {
+        "retention_improve_pct": 0.1,
+        "opex_delta": 80000,
+        "category": "product"
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "churn_rate": "down",
+          "ltv": "up",
+          "burn": "up",
+          "runway_months": "na"
+        },
+        "invariants": [
+          {
+            "type": "churn_down_ltv_not_down"
+          }
+        ],
+        "warnings_expected": [
+          "ASSUMPTION_RETENTION_MAPPING"
+        ]
+      },
+      "severity": "P2",
+      "notes": ""
+    },
+    {
+      "id": "SC_CONSUMER_REV_DROP_35_2MO",
+      "baseline_id": "BL_CONSUMER_B",
+      "scenario_text": "Revenue drops 35% month-over-month for 2 months.",
+      "params_expected": {
+        "revenue_multiplier": 0.65,
+        "duration_months": 2
+      },
+      "expectations": {
+        "baseline_match": true,
+        "kpi_direction": {
+          "revenue": "down",
+          "burn": "up",
+          "runway_months": "down"
+        },
+        "invariants": [
+          {
+            "type": "monotonic",
+            "if": "revenue_down_costs_same",
+            "then": [
+              "runway_not_up"
+            ]
+          }
+        ],
+        "warnings_expected": []
+      },
+      "severity": "P0",
+      "notes": ""
+    }
+  ]
+}

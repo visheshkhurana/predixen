@@ -633,30 +633,61 @@ def qa_export_version(current_user: User = Depends(require_qa_access)):
 
 
 @router.get("/calc/run")
-def qa_calc_run(suite: str = "all", current_user: User = Depends(require_qa_access)):
+def qa_calc_run(suite: str = "core", current_user: User = Depends(require_qa_access)):
     import json, os
     from server.services.kpi_calculations import run_all_fixtures
 
+    if suite not in ("core", "all"):
+        raise HTTPException(status_code=400, detail=f"Invalid suite: {suite}. Use 'core' or 'all'.")
+
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures"))
-    suite_map = {
-        "core": ["calc_cases.json"],
-        "consumer": ["consumer_calc_cases.json"],
-        "all": ["calc_cases.json", "consumer_calc_cases.json"],
-    }
-    files = suite_map.get(suite, suite_map["all"])
+    fpath = os.path.join(base_dir, "calc_cases.json")
+    if not os.path.exists(fpath):
+        raise HTTPException(status_code=500, detail="Core fixtures file not found")
 
-    all_cases = []
-    for fname in files:
-        fpath = os.path.join(base_dir, fname)
-        if os.path.exists(fpath):
-            with open(fpath, "r") as f:
-                all_cases.extend(json.load(f))
+    with open(fpath, "r") as f:
+        cases = json.load(f)
 
-    if not all_cases:
-        raise HTTPException(status_code=500, detail="No fixture files found")
+    results = run_all_fixtures(cases)
+    results["suite"] = "core"
+    results["timestamp"] = datetime.utcnow().isoformat()
+    return results
 
-    results = run_all_fixtures(all_cases)
-    results["suite"] = suite
+
+@router.get("/calc/consumer")
+def qa_calc_consumer(current_user: User = Depends(require_qa_access)):
+    import json, os
+    from server.services.kpi_calculations import run_all_consumer_fixtures
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures"))
+    fpath = os.path.join(base_dir, "consumer_calc_cases.json")
+    if not os.path.exists(fpath):
+        raise HTTPException(status_code=500, detail="Consumer fixtures file not found")
+
+    with open(fpath, "r") as f:
+        cases = json.load(f)
+
+    results = run_all_consumer_fixtures(cases)
+    results["suite"] = "consumer"
+    results["timestamp"] = datetime.utcnow().isoformat()
+    return results
+
+
+@router.get("/calc/directionality")
+def qa_calc_directionality(current_user: User = Depends(require_qa_access)):
+    import json, os
+    from server.services.kpi_calculations import run_all_directionality_fixtures
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures"))
+    fpath = os.path.join(base_dir, "scenario_directionality.json")
+    if not os.path.exists(fpath):
+        raise HTTPException(status_code=500, detail="Directionality fixtures file not found")
+
+    with open(fpath, "r") as f:
+        data = json.load(f)
+
+    results = run_all_directionality_fixtures(data)
+    results["suite"] = "directionality"
     results["timestamp"] = datetime.utcnow().isoformat()
     return results
 

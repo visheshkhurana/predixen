@@ -1042,16 +1042,16 @@ export default function QAFrontPage() {
     }
   }, [toast]);
 
-  async function runCalcSuite(suite: string, label: string): Promise<CheckResult[]> {
+  async function runCalcSuiteGeneric(endpoint: string, label: string): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
     try {
-      const res = await apiFetch(`/qa/calc/run?suite=${suite}`);
+      const res = await apiFetch(endpoint);
       if (!res.ok) {
         results.push({
           name: `${label} Runner`,
           status: "fail",
           details: `API error: ${res.data?.detail || res.status}`,
-          endpoint: `/api/qa/calc/run?suite=${suite}`,
+          endpoint: `/api${endpoint}`,
         });
         return results;
       }
@@ -1060,23 +1060,24 @@ export default function QAFrontPage() {
         name: `${label}: ${data.passed}/${data.total} passed`,
         status: data.failed === 0 ? "pass" : "fail",
         details: `${data.passed} passed, ${data.failed} failed out of ${data.total} total test cases`,
-        endpoint: `/api/qa/calc/run?suite=${suite}`,
+        endpoint: `/api${endpoint}`,
       });
       for (const r of (data.results || [])) {
         const detailParts: string[] = [];
         for (const d of (r.details || [])) {
           if (!d.pass) {
-            detailParts.push(`${d.field}: expected ${JSON.stringify(d.expected)}, got ${JSON.stringify(d.actual)}`);
+            const field = d.field || d.metric || d.invariant || "check";
+            detailParts.push(`${field}: expected ${JSON.stringify(d.expected || d.direction || "pass")}, got ${JSON.stringify(d.actual || d.baseline || "fail")}${d.note ? ` [${d.note}]` : ""}`);
           }
         }
         results.push({
           name: `${r.id}${r.notes ? ` — ${r.notes}` : ""}`,
           status: r.pass ? "pass" : "fail",
           details: r.pass
-            ? `${r.function}: all assertions passed`
-            : `${r.function}: ${detailParts.join("; ") || r.error || "failed"}`,
-          fixHint: r.pass ? undefined : `Check canonical formula in kpi_calculations.py → ${r.function}`,
-          endpoint: `/api/qa/calc/run?suite=${suite}`,
+            ? `${r.function || r.baseline_id || "all"}: all assertions passed`
+            : `${r.function || r.baseline_id || "check"}: ${detailParts.join("; ") || r.error || "failed"}`,
+          fixHint: r.pass ? undefined : `Check canonical formula in kpi_calculations.py`,
+          endpoint: `/api${endpoint}`,
         });
       }
     } catch (err: any) {
@@ -1091,11 +1092,12 @@ export default function QAFrontPage() {
 
   async function runCalcTestChecks(): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
-    const [coreResults, consumerResults] = await Promise.all([
-      runCalcSuite("core", "Core B2B SaaS Fixtures (55)"),
-      runCalcSuite("consumer", "Consumer Subscription Fixtures (25)"),
+    const [coreResults, consumerResults, dirResults] = await Promise.all([
+      runCalcSuiteGeneric("/qa/calc/run", "Core B2B SaaS Fixtures (55)"),
+      runCalcSuiteGeneric("/qa/calc/consumer", "Consumer Subscription Fixtures (25)"),
+      runCalcSuiteGeneric("/qa/calc/directionality", "Scenario Directionality (14)"),
     ]);
-    results.push(...coreResults, ...consumerResults);
+    results.push(...coreResults, ...consumerResults, ...dirResults);
     try {
       const companyId = useFounderStore.getState().currentCompany?.id;
       const cId = companyId || 24;

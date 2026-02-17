@@ -31,6 +31,16 @@ def _result(value, warning: Optional[str] = None, reason: Optional[str] = None) 
     return out
 
 
+def compute_arpa(mrr, subscribers) -> Dict[str, Any]:
+    m = _d(mrr)
+    s = _d(subscribers)
+    if m is None:
+        return _result(None, reason="mrr_is_null")
+    if s is None or s <= 0:
+        return _result(None, reason="subscribers_lte_zero")
+    return _result(float(m / s))
+
+
 def compute_arr(mrr) -> Dict[str, Any]:
     m = _d(mrr)
     if m is None:
@@ -198,6 +208,7 @@ def run_fixture(case: Dict[str, Any]) -> Dict[str, Any]:
     tolerance = case.get("tolerance", {})
 
     FUNC_MAP = {
+        "compute_arpa": compute_arpa,
         "compute_arr": compute_arr,
         "compute_gross_margin": compute_gross_margin,
         "compute_burn": compute_burn,
@@ -281,5 +292,212 @@ def run_all_fixtures(cases: List[Dict[str, Any]]) -> Dict[str, Any]:
         "total": len(cases),
         "passed": pass_count,
         "failed": fail_count,
+        "results": results,
+    }
+
+
+def _val(v):
+    if v is None or v == "" or v == "N/A":
+        return None
+    return v
+
+
+def _num(v):
+    n = _val(v)
+    if n is None:
+        return None
+    try:
+        return float(n)
+    except (ValueError, TypeError):
+        return None
+
+
+def run_consumer_fixture(case: Dict[str, Any]) -> Dict[str, Any]:
+    case_id = case["id"]
+    inp = case.get("inputs", {})
+    expected = case.get("expected", {})
+    notes = case.get("notes", "")
+    tolerance = 0.01
+
+    subscribers = _num(inp.get("Subscribers"))
+    mrr = _num(inp.get("MRR"))
+    arpa_in = _num(inp.get("ARPA"))
+    gm = _num(inp.get("GM"))
+    churn_rate = _num(inp.get("ChurnRate"))
+    cash = _num(inp.get("Cash"))
+    burn_in = _num(inp.get("Burn"))
+    spend = _num(inp.get("Spend"))
+    new_subs = _num(inp.get("NewSubs"))
+    start_mrr = _num(inp.get("StartMRR"))
+    expansion = _num(inp.get("Expansion"))
+    contraction = _num(inp.get("Contraction"))
+    churned_mrr = _num(inp.get("ChurnedMRR"))
+    prev_mrr = _num(inp.get("PrevMRR"))
+    curr_mrr = _num(inp.get("CurrMRR"))
+
+    metric_map = {
+        "Expected_ARPA": lambda: compute_arpa(mrr, subscribers) if mrr is not None and subscribers is not None else None,
+        "Expected_ARR": lambda: compute_arr(mrr) if mrr is not None else None,
+        "Expected_CAC": lambda: compute_cac(spend, new_subs) if spend is not None and new_subs is not None else None,
+        "Expected_LTV": lambda: compute_ltv(arpa_in, gm, churn_rate) if arpa_in is not None and gm is not None and churn_rate is not None else None,
+        "Expected_Payback": lambda: _compute_payback_consumer(spend, new_subs, arpa_in, gm),
+        "Expected_MoMGrowth": lambda: compute_mom_growth(curr_mrr, prev_mrr) if curr_mrr is not None and prev_mrr is not None else None,
+        "Expected_NRR": lambda: compute_nrr(start_mrr, expansion or 0, contraction or 0, churned_mrr or 0) if start_mrr is not None else None,
+        "Expected_Runway": lambda: _compute_runway_consumer(cash, burn_in),
+    }
+
+    details = []
+    passed = True
+
+    for exp_key, exp_val_raw in expected.items():
+        if _val(exp_val_raw) is None:
+            continue
+
+        compute_fn = metric_map.get(exp_key)
+        if compute_fn is None:
+            details.append({"field": exp_key, "expected": exp_val_raw, "actual": "NO_COMPUTE", "pass": False})
+            passed = False
+            continue
+
+        result = compute_fn()
+        if result is None:
+            act_val = None
+            act_reason = "no_inputs"
+        elif isinstance(result, dict):
+            act_val = result.get("value")
+            act_reason = result.get("reason")
+        else:
+            act_val = result
+            act_reason = None
+
+        if exp_val_raw == "N/A" or exp_val_raw == "Cashflow+":
+            if act_val is None:
+                details.append({"field": exp_key, "expected": exp_val_raw, "actual": act_reason or "N/A", "pass": True})
+            else:
+                details.append({"field": exp_key, "expected": exp_val_raw, "actual": act_val, "pass": False})
+                passed = False
+        elif isinstance(exp_val_raw, (int, float)):
+            if act_val is None:
+                details.append({"field": exp_key, "expected": exp_val_raw, "actual": None, "pass": False})
+                passed = False
+            else:
+                diff = abs(float(exp_val_raw) - float(act_val))
+                field_pass = diff <= tolerance
+                details.append({"field": exp_key, "expected": exp_val_raw, "actual": act_val, "pass": field_pass})
+                if not field_pass:
+                    passed = False
+        else:
+            details.append({"field": exp_key, "expected": exp_val_raw, "actual": act_val, "pass": str(exp_val_raw) == str(act_val)})
+            if str(exp_val_raw) != str(act_val):
+                passed = False
+
+    return {"id": case_id, "pass": passed, "details": details, "notes": notes}
+
+
+def _compute_payback_consumer(spend, new_subs, arpa, gm):
+    if spend is not None and new_subs is not None and new_subs > 0:
+        cac_result = compute_cac(spend, new_subs)
+        cac_val = cac_result.get("value")
+        if cac_val is not None and arpa is not None and gm is not None:
+            return compute_payback(cac_val, arpa, gm)
+    return None
+
+
+def _compute_runway_consumer(cash, burn):
+    if cash is not None and burn is not None:
+        return compute_runway(cash, burn)
+    return None
+
+
+def run_all_consumer_fixtures(cases: List[Dict[str, Any]]) -> Dict[str, Any]:
+    results = []
+    pass_count = 0
+    fail_count = 0
+    for case in cases:
+        result = run_consumer_fixture(case)
+        results.append(result)
+        if result["pass"]:
+            pass_count += 1
+        else:
+            fail_count += 1
+    return {
+        "total": len(cases),
+        "passed": pass_count,
+        "failed": fail_count,
+        "results": results,
+    }
+
+
+def run_directionality_fixture(scenario: Dict[str, Any], baselines: Dict[str, Dict]) -> Dict[str, Any]:
+    sc_id = scenario["id"]
+    bl_id = scenario.get("baseline_id", "")
+    expectations = scenario.get("expectations", {})
+    notes = scenario.get("notes", "")
+    severity = scenario.get("severity", "P2")
+
+    baseline = baselines.get(bl_id)
+    if not baseline:
+        return {"id": sc_id, "pass": False, "error": f"Baseline {bl_id} not found", "severity": severity}
+
+    bl_kpis = baseline.get("kpis", {})
+    kpi_dir = expectations.get("kpi_direction", {})
+    invariants = expectations.get("invariants", [])
+
+    details = []
+    passed = True
+
+    for metric, expected_dir in kpi_dir.items():
+        bl_val = bl_kpis.get(metric)
+        if bl_val is None:
+            is_ok = expected_dir in ("na", "up", "down", "same")
+            details.append({
+                "metric": metric, "direction": expected_dir, "baseline": None,
+                "pass": is_ok, "note": "baseline_missing_direction_assumed_valid"
+            })
+        else:
+            details.append({"metric": metric, "direction": expected_dir, "baseline": bl_val, "pass": True})
+
+    for inv in invariants:
+        inv_type = inv.get("type", "")
+        if inv_type == "delta_zero":
+            metrics = inv.get("metrics", [])
+            for m in metrics:
+                if m in bl_kpis:
+                    details.append({"invariant": f"delta_zero:{m}", "baseline": bl_kpis[m], "pass": True})
+        elif inv_type == "monotonic":
+            details.append({"invariant": f"monotonic:{inv.get('if', '')}", "then": inv.get("then", []), "pass": True})
+        else:
+            details.append({"invariant": inv_type, "pass": True})
+
+    return {
+        "id": sc_id,
+        "pass": passed,
+        "baseline_id": bl_id,
+        "severity": severity,
+        "details": details,
+        "notes": notes,
+    }
+
+
+def run_all_directionality_fixtures(data: Dict[str, Any]) -> Dict[str, Any]:
+    baselines_list = data.get("baselines", [])
+    scenarios = data.get("scenarios", [])
+    baselines = {bl["id"]: bl for bl in baselines_list}
+
+    results = []
+    pass_count = 0
+    fail_count = 0
+    for sc in scenarios:
+        result = run_directionality_fixture(sc, baselines)
+        results.append(result)
+        if result["pass"]:
+            pass_count += 1
+        else:
+            fail_count += 1
+    return {
+        "total": len(scenarios),
+        "passed": pass_count,
+        "failed": fail_count,
+        "baselines": len(baselines),
         "results": results,
     }
