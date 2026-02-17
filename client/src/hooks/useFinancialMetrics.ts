@@ -4,6 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 
 export type MetricSource = 'reported' | 'computed' | 'estimated';
 
+export interface MetricWarning {
+  metric: string;
+  value: number;
+  reason: string;
+}
+
 export interface FinancialMetrics {
   mrr: number;
   arr: number;
@@ -30,6 +36,7 @@ export interface FinancialMetrics {
   isProfitable: boolean;
   hasData: boolean;
   sources: Record<string, MetricSource>;
+  warnings: MetricWarning[];
 }
 
 const EMPTY_METRICS: FinancialMetrics = {
@@ -43,6 +50,7 @@ const EMPTY_METRICS: FinancialMetrics = {
   monthlyGrowthRate: 0, ndr: 0,
   isProfitable: false, hasData: false,
   sources: {},
+  warnings: [],
 };
 
 function getToken(): string | null {
@@ -205,9 +213,20 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const revenuePerEmployee = headcount > 0 ? mrr / headcount : 0;
 
     const rawGrowthRate = v(c.momGrowth, tsVal('revenue_growth_mom'), fb?.monthlyGrowthRate);
-    const monthlyGrowthRate = (rawGrowthRate > 100 || rawGrowthRate < -100) ? NaN : rawGrowthRate;
+    const monthlyGrowthRate = rawGrowthRate;
     const rawNdr = v(c.ndr, tsVal('net_revenue_retention'));
-    const ndr = (rawNdr > 300 || rawNdr < 0) ? NaN : rawNdr;
+    const ndr = rawNdr;
+
+    const warnings: MetricWarning[] = [];
+    if (rawGrowthRate > 100 || rawGrowthRate < -100) {
+      warnings.push({ metric: 'monthlyGrowthRate', value: rawGrowthRate, reason: `Out of sanity bounds (-100% to +100%): ${rawGrowthRate}%` });
+    }
+    if (rawNdr > 300 || rawNdr < 0) {
+      warnings.push({ metric: 'ndr', value: rawNdr, reason: `Out of sanity bounds (0-300%): ${rawNdr}%` });
+    }
+    if (grossMarginPct > 100 || grossMarginPct < -100) {
+      warnings.push({ metric: 'grossMargin', value: grossMarginPct, reason: `Unusual gross margin: ${grossMarginPct}%` });
+    }
 
     const totalExpenses = c.totalExpenses || effectiveExpenses || 0;
     const isProfitable = totalExpenses > 0 && mrr >= totalExpenses;
@@ -247,7 +266,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       churnRate: churnRateDecimal, churnRatePct,
       totalCustomers, headcount, arpu, paybackPeriod,
       burnMultiple, revenuePerEmployee, monthlyGrowthRate, ndr,
-      isProfitable, hasData, sources,
+      isProfitable, hasData, sources, warnings,
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 

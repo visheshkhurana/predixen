@@ -318,5 +318,125 @@
     "expected": {"absolute": -5.0, "percent": -0.5},
     "tolerance": {"absolute": 0.01, "percent": 0.01},
     "notes": "Scenario worse than baseline => negative delta (non-revenue comparison)"
+  },
+  {
+    "id": "TC41_ARR_NEGATIVE_MRR",
+    "function": "compute_arr",
+    "inputs": {"mrr": -5000},
+    "expected": {"value": -60000},
+    "tolerance": {"value": 0.01},
+    "notes": "Negative MRR => negative ARR (no guard, pass-through)"
+  },
+  {
+    "id": "TC42_GM_COGS_EXCEEDS_REVENUE",
+    "function": "compute_gross_margin",
+    "inputs": {"revenue": 100000, "cogs": 150000},
+    "expected": {"value": -0.5},
+    "tolerance": {"value": 0.001},
+    "notes": "COGS > revenue => negative GM (-50%)"
+  },
+  {
+    "id": "TC43_BURN_ALL_ZEROS",
+    "function": "compute_burn",
+    "inputs": {"opex": 0, "cogs": 0, "revenue": 0},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.01},
+    "notes": "All zeros => burn is 0"
+  },
+  {
+    "id": "TC44_RUNWAY_TINY_BURN",
+    "function": "compute_runway",
+    "inputs": {"cash": 10000000, "burn": 1000},
+    "expected": {"value": 10000.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Very small burn => very long runway (10K months)"
+  },
+  {
+    "id": "TC45_MOMGROWTH_FLAT",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 100000, "previous": 100000},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.001},
+    "notes": "Flat growth => exactly 0%"
+  },
+  {
+    "id": "TC46_NRR_HIGH_CHURN",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 100000, "expansion_mrr": 0, "contraction_mrr": 0, "churned_mrr": 40000},
+    "expected": {"value": 0.6},
+    "tolerance": {"value": 0.001},
+    "notes": "40% churn => NRR = 60% (below 100%, concerning)"
+  },
+  {
+    "id": "TC47_CAC_FRACTIONAL_CUSTOMERS",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 50000, "new_customers": 3},
+    "expected": {"value": 16666.666},
+    "tolerance": {"value": 1},
+    "notes": "Enterprise CAC: 50K / 3 customers"
+  },
+  {
+    "id": "TC48_LTV_HIGH_CHURN",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 30, "gross_margin_pct": 0.6, "monthly_churn_rate": 0.15},
+    "expected": {"value": 120.0},
+    "tolerance": {"value": 0.01},
+    "notes": "High churn (15%) => low LTV = 30 * 0.6 / 0.15 = 120"
+  },
+  {
+    "id": "TC49_PAYBACK_TINY_ARPA",
+    "function": "compute_payback",
+    "inputs": {"cac": 500, "arpa": 5, "gross_margin_pct": 0.8},
+    "expected": {"value": 125.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Very small ARPA => long payback = 500 / (5 * 0.8) = 125 months"
+  },
+  {
+    "id": "TC50_CAGR_DECLINE",
+    "function": "compute_cagr",
+    "inputs": {"start": 200000, "end": 100000, "num_months": 12},
+    "expected": {"value": -0.5},
+    "tolerance": {"value": 0.01},
+    "notes": "Revenue halved over 12 months => -50% CAGR"
+  },
+  {
+    "id": "TC51_LTVCAC_NULL_LTV",
+    "function": "compute_ltv_cac_ratio",
+    "inputs": {"ltv": null, "cac": 200},
+    "expected": {"value": null, "reason": "values_null"},
+    "tolerance": {},
+    "notes": "Null LTV => null ratio"
+  },
+  {
+    "id": "TC52_BASELINE_DELTA_BOTH_ZERO",
+    "function": "compute_baseline_delta",
+    "inputs": {"scenario_value": 0.0, "baseline_value": 0.0, "min_baseline": 0},
+    "expected": {"absolute": 0.0, "percent": null},
+    "tolerance": {"absolute": 0.001},
+    "notes": "Both zero => absolute=0, percent=null (div-by-zero guard)"
+  },
+  {
+    "id": "TC53_ROUNDING_DISPLAY_LARGE",
+    "function": "format_runway_display",
+    "inputs": {"runway_months": 999.95},
+    "expected": {"value": "1000.0"},
+    "tolerance": {},
+    "notes": "Large runway rounds correctly"
+  },
+  {
+    "id": "TC54_BURN_FROM_EBITDA_ZERO",
+    "function": "compute_burn_from_ebitda",
+    "inputs": {"ebitda": 0},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Zero EBITDA => zero burn"
+  },
+  {
+    "id": "TC55_NRR_BOUNDARY_1000",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 1000, "expansion_mrr": 100, "contraction_mrr": 50, "churned_mrr": 50},
+    "expected": {"value": 1.0},
+    "tolerance": {"value": 0.001},
+    "notes": "Starting MRR exactly at MIN_BASELINE boundary => should compute (1000+100-50-50)/1000 = 1.0"
   }
 ]

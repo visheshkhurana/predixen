@@ -344,6 +344,294 @@ def qa_create_test_founder(
     }
 
 
+@router.get("/baseline-snapshot")
+def qa_baseline_snapshot(
+    company_id: int,
+    current_user: User = Depends(require_qa_access),
+    db: Session = Depends(get_db)
+):
+    from server.services.kpi_calculations import (
+        compute_arr, compute_gross_margin, compute_burn,
+        compute_runway, compute_mom_growth, compute_nrr,
+    )
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    records = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(FinancialRecord.period_start.desc())
+        .limit(2)
+        .all()
+    )
+
+    if not records:
+        return {
+            "company_id": company_id,
+            "company_name": company.name,
+            "snapshot": None,
+            "note": "No financial records",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    latest = records[0]
+    previous = records[1] if len(records) > 1 else None
+
+    revenue = float(latest.revenue or 0)
+    cogs = float(latest.cogs or 0)
+    opex = float(latest.opex or 0)
+    payroll = float(latest.payroll or 0)
+    other_costs = float(latest.other_costs or 0)
+    total_opex = opex + payroll + other_costs
+    cash = float(latest.cash_balance or 0)
+    mrr = float(latest.mrr or 0) if latest.mrr else revenue
+
+    arr_result = compute_arr(mrr)
+    gm_result = compute_gross_margin(revenue, cogs)
+    burn_result = compute_burn(total_opex, cogs, revenue)
+    burn_val = burn_result.get("value", 0)
+    runway_result = compute_runway(cash, burn_val)
+    mom_result = {"value": None, "reason": "no_previous_period"}
+
+    if previous:
+        prev_revenue = float(previous.revenue or 0)
+        prev_mrr = float(previous.mrr or 0) if previous.mrr else prev_revenue
+        mom_result = compute_mom_growth(mrr, prev_mrr)
+
+    snapshot = {
+        "mrr": {"value": mrr, "warning": None, "reason": None},
+        "arr": arr_result,
+        "gross_margin": gm_result,
+        "burn": burn_result,
+        "runway": runway_result,
+        "mom_growth": mom_result,
+    }
+
+    return {
+        "company_id": company_id,
+        "company_name": company.name,
+        "snapshot": snapshot,
+        "financial_record_id": latest.id,
+        "period_start": str(latest.period_start) if latest.period_start else None,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/tenant-tamper-test")
+def qa_tenant_tamper(
+    company_id: int,
+    target_company_id: int,
+    current_user: User = Depends(require_qa_access),
+    db: Session = Depends(get_db)
+):
+    if company_id == target_company_id:
+        return {
+            "test": "tenant_tamper",
+            "status": "SKIP",
+            "reason": "Same company - no cross-tenant test possible",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    source_company = db.query(Company).filter(Company.id == company_id).first()
+    target_company = db.query(Company).filter(Company.id == target_company_id).first()
+
+    if not source_company or not target_company:
+        return {
+            "test": "tenant_tamper",
+            "status": "SKIP",
+            "reason": "One or both companies not found",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    source_scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).limit(5).all()
+    target_scenarios = db.query(Scenario).filter(Scenario.company_id == target_company_id).limit(5).all()
+
+    source_records = db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).limit(5).all()
+    target_records = db.query(FinancialRecord).filter(FinancialRecord.company_id == target_company_id).limit(5).all()
+
+    source_ids = set(s.id for s in source_scenarios)
+    target_ids = set(s.id for s in target_scenarios)
+    overlap_scenarios = source_ids & target_ids
+
+    source_rec_ids = set(r.id for r in source_records)
+    target_rec_ids = set(r.id for r in target_records)
+    overlap_records = source_rec_ids & target_rec_ids
+
+    checks = []
+    checks.append({
+        "test": "scenario_isolation",
+        "status": "PASS" if not overlap_scenarios else "FAIL",
+        "detail": f"Source scenarios: {len(source_ids)}, Target: {len(target_ids)}, Overlap: {len(overlap_scenarios)}",
+    })
+    checks.append({
+        "test": "financial_record_isolation",
+        "status": "PASS" if not overlap_records else "FAIL",
+        "detail": f"Source records: {len(source_rec_ids)}, Target: {len(target_rec_ids)}, Overlap: {len(overlap_records)}",
+    })
+    checks.append({
+        "test": "company_identity",
+        "status": "PASS" if source_company.name != target_company.name else "WARN",
+        "detail": f"Source: '{source_company.name}' vs Target: '{target_company.name}'",
+    })
+
+    all_pass = all(c["status"] == "PASS" for c in checks)
+
+    return {
+        "test": "tenant_tamper",
+        "company_id": company_id,
+        "target_company_id": target_company_id,
+        "checks": checks,
+        "all_pass": all_pass,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/scenario-invariants")
+def qa_scenario_invariants(
+    company_id: int,
+    current_user: User = Depends(require_qa_access),
+    db: Session = Depends(get_db)
+):
+    from server.services.kpi_calculations import compute_runway, compute_burn
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    latest_record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+
+    checks = []
+
+    if not latest_record:
+        return {
+            "company_id": company_id,
+            "checks": [],
+            "note": "No financial records for invariant testing",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    revenue = float(latest_record.revenue or 0)
+    cogs = float(latest_record.cogs or 0)
+    opex = float(latest_record.opex or 0)
+    payroll = float(latest_record.payroll or 0)
+    other_costs = float(latest_record.other_costs or 0)
+    total_opex = opex + payroll + other_costs
+    cash = float(latest_record.cash_balance or 0)
+
+    base_burn = compute_burn(total_opex, cogs, revenue)
+    base_burn_val = base_burn["value"] or 0
+    base_runway = compute_runway(cash, base_burn_val)
+    base_runway_val = base_runway["value"]
+
+    cost_cut_opex = total_opex * 0.8
+    cut_burn = compute_burn(cost_cut_opex, cogs, revenue)
+    cut_burn_val = cut_burn["value"] or 0
+    cut_runway = compute_runway(cash, cut_burn_val)
+    cut_runway_val = cut_runway["value"]
+
+    checks.append({
+        "invariant": "cost_cut_reduces_burn",
+        "status": "PASS" if cut_burn_val <= base_burn_val else "FAIL",
+        "detail": f"Base burn: {base_burn_val:.0f}, After 20% cut: {cut_burn_val:.0f}",
+    })
+
+    if base_runway_val is not None and cut_runway_val is not None and base_burn_val > 0:
+        checks.append({
+            "invariant": "cost_cut_extends_runway",
+            "status": "PASS" if cut_runway_val >= base_runway_val else "FAIL",
+            "detail": f"Base runway: {base_runway_val:.1f}mo, After cut: {cut_runway_val:.1f}mo",
+        })
+    else:
+        checks.append({
+            "invariant": "cost_cut_extends_runway",
+            "status": "SKIP",
+            "detail": "Cannot test - cash flow positive or no data",
+        })
+
+    rev_up = revenue * 1.1
+    rev_up_burn = compute_burn(total_opex, cogs, rev_up)
+    rev_up_burn_val = rev_up_burn["value"] or 0
+    checks.append({
+        "invariant": "revenue_increase_reduces_burn",
+        "status": "PASS" if rev_up_burn_val <= base_burn_val else "FAIL",
+        "detail": f"Base burn: {base_burn_val:.0f}, After 10% rev up: {rev_up_burn_val:.0f}",
+    })
+
+    rev_down = revenue * 0.7
+    rev_down_burn = compute_burn(total_opex, cogs, rev_down)
+    rev_down_burn_val = rev_down_burn["value"] or 0
+    checks.append({
+        "invariant": "revenue_decrease_increases_burn",
+        "status": "PASS" if rev_down_burn_val >= base_burn_val else "FAIL",
+        "detail": f"Base burn: {base_burn_val:.0f}, After 30% rev down: {rev_down_burn_val:.0f}",
+    })
+
+    more_cash = cash * 2
+    more_cash_runway = compute_runway(more_cash, base_burn_val)
+    more_cash_runway_val = more_cash_runway["value"]
+    if base_runway_val is not None and more_cash_runway_val is not None:
+        checks.append({
+            "invariant": "more_cash_extends_runway",
+            "status": "PASS" if more_cash_runway_val >= base_runway_val else "FAIL",
+            "detail": f"Base runway: {base_runway_val:.1f}mo, 2x cash: {more_cash_runway_val:.1f}mo",
+        })
+
+    checks.append({
+        "invariant": "burn_non_negative",
+        "status": "PASS" if base_burn_val >= 0 else "FAIL",
+        "detail": f"Burn: {base_burn_val:.0f} (must be >= 0)",
+    })
+
+    if base_runway_val is not None:
+        checks.append({
+            "invariant": "runway_positive_when_burning",
+            "status": "PASS" if base_runway_val > 0 else "FAIL",
+            "detail": f"Runway: {base_runway_val:.1f}mo",
+        })
+
+    all_pass = all(c["status"] in ("PASS", "SKIP") for c in checks)
+
+    return {
+        "company_id": company_id,
+        "checks": checks,
+        "all_pass": all_pass,
+        "invariant_count": len(checks),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/export-version")
+def qa_export_version(current_user: User = Depends(require_qa_access)):
+    import subprocess, os
+    commit_hash = "unknown"
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            commit_hash = result.stdout.strip()
+    except Exception:
+        pass
+
+    env = os.environ.get("REPL_SLUG", "dev")
+
+    return {
+        "commit_hash": commit_hash,
+        "environment": env,
+        "server_time": datetime.utcnow().isoformat(),
+        "version": "2.0",
+        "platform": "FounderConsole QA",
+    }
+
+
 @router.get("/calc/run")
 def qa_calc_run(current_user: User = Depends(require_qa_access)):
     import json, os

@@ -1,0 +1,260 @@
+You are a senior full-stack engineer + QA. You have full access to this repo.
+
+We just shipped:
+- QA Front with 10 tabs (admin only), Run All, JSON report, Create Test Founder
+- canonical Decimal KPI calc module returning {value, warning, reason}
+- 40 calc fixtures passing
+- improved intent parser patterns
+- strategic diagnosis fallback & timeouts
+- onboarding redirect for users with no companies
+
+Now: think like a founder-grade reliability engineer.
+Your job is to propose and implement the next set of changes/tests to prevent regressions and catch new classes of bugs.
+
+DO NOT write a generic list. Output:
+(1) Concrete change proposals
+(2) Concrete test additions (with exact cases and acceptance criteria)
+(3) Exact files/modules likely touched
+(4) Any fast refactors needed to avoid “clamps hiding bugs”
+
+========================================================
+TOP RISKS WE MUST ADDRESS NEXT
+========================================================
+R1) CLAMPING MASKS REAL DATA BUGS
+- useFinancialMetrics clamps growth to -100..+100 and NDR 0..300, but clamping can hide broken denominators, wrong windowing, or wrong mapping.
+- Canonical backend now returns warnings/reasons; frontend must display warnings consistently instead of silently clamping.
+
+R2) TENANT ISOLATION EDGE CASES
+- We fixed new-user onboarding redirect and tenant checks, but we must test:
+  - user invited to existing company
+  - multi-company user switching company context
+  - admin user viewing multiple tenants
+  - accidental demo-company attachment
+  - cross-tenant API access via company_id tampering
+
+R3) BASELINE + SCENARIO INVARIANTS
+- We improved baseline delta guard. Now we need invariants tests:
+  - status quo => 0 delta always
+  - monotonic direction tests: cost down shouldn’t decrease runway; rev down shouldn’t increase runway
+  - scenario rerun should invalidate cache / recompute consistently
+
+R4) INTENT PARSER COVERAGE GAPS
+- We added many patterns, but need negative/compound sentences, mixed units, and time horizons:
+  - “cut marketing 25% for 3 months then restore”
+  - “reallocate $150k from paid to referral” (already added) but check it maps to the correct line items
+  - “increase price 10% but expect churn +2%”
+  - “hire 15 engineers over 90 days”
+  - “reduce infra costs by 20% via reserved instances”
+  - “raise $6m at 20% dilution” (ensure funding impacts cash baseline)
+
+R5) OBSERVABILITY & FAILURE MODES
+- We added timeouts; now ensure:
+  - errors are logged with request_id
+  - UI shows actionable errors
+  - QA report includes backend correlation IDs
+
+R6) ROUTE & NAV REGRESSIONS
+- Decision/Health tabs previously disappeared; add permanent tests to ensure nav + routes remain present for non-admin founders.
+
+========================================================
+REQUIRED NEW CHANGES (IMPLEMENT)
+========================================================
+
+CHANGE 1 — UNIFY KPI DISPLAY LOGIC (NO SILENT CLAMPS)
+Goal: frontend must render backend KPI outputs consistently and transparently.
+- Replace/adjust useFinancialMetrics.ts so that:
+  - If backend returns {warning, reason}, show a warning badge + tooltip (e.g. OUTLIER, baseline_too_small)
+  - Do NOT clamp in frontend unless explicitly requested; prefer backend canonical results.
+  - If frontend must clamp for UI safety, it must also show “Clamped” warning and preserve raw value in debug panel.
+
+Acceptance criteria:
+- Any KPI shown as N/A has a reason (baseline too small, missing inputs).
+- Any KPI shown as outlier has warning surfaced.
+- No page shows a different value than canonical API output.
+
+Files likely:
+- client/src/hooks/useFinancialMetrics.ts
+- client/src/pages/overview.tsx (and other KPI pages)
+- client/src/pages/qa.tsx (display warnings)
+
+CHANGE 2 — SECURITY / TENANT TAMPER PROTECTION TESTS
+Add explicit tests that attempt to access another company_id.
+- In QA Front Tenant tab, add:
+  - “Company ID Tamper Test”: take a company_id that is not owned by user; call key endpoints; expect 403/404.
+- Add backend assertion middleware:
+  - every /companies/{id}/... endpoint checks membership in that company for non-admins.
+
+Acceptance criteria:
+- Non-admin cannot access any other company’s endpoints by guessing IDs.
+- Admin can access only if role truly admin.
+
+Files likely:
+- server/auth/middleware or existing auth util
+- server/api/* endpoints
+
+CHANGE 3 — MULTI-COMPANY CONTEXT SWITCHING (IF SUPPORTED)
+If users can belong to multiple companies:
+- Add a company switcher UI and ensure all endpoints use selected company context.
+- Add QA test:
+  - create user, create 2 companies, switch, ensure KPIs and scenarios change accordingly, no bleed.
+
+If multi-company not supported:
+- enforce single company per user and make it explicit; remove ambiguous UI.
+
+Acceptance criteria:
+- no KPI bleed between tenants.
+- all pages show current company name consistently.
+
+CHANGE 4 — SCENARIO INVARIANT TEST SUITE (NOT JUST PARSER)
+Extend tests beyond parser:
+A) Add 20 scenario invariants (backend tests or QA endpoint):
+- status quo => all deltas zero
+- marketing cut: marketing cost decreases
+- revenue decline: runway decreases
+- hiring: burn increases
+- raising funds: cash increases immediately (if scenario implies)
+- “increase price 10%” => revenue increases if volume constant
+
+B) Add time horizon tests:
+- “for 3 months” pattern sets duration; scenario engine uses duration.
+
+Acceptance criteria:
+- invariants always pass for synthetic baseline data.
+
+Files likely:
+- server/services/kpi_calculations.py (delta)
+- server/copilot/intent_parser.py
+- server/api/scenarios or decisions pipeline
+
+CHANGE 5 — BASELINE CORRECTNESS GUARANTEE
+Add a canonical baseline snapshot function:
+- compute_baseline_snapshot(company_id) => canonical KPI bundle used by all pages and scenario comparisons.
+- Scenario engine must load baseline snapshot, not rebuild ad-hoc.
+- Add QA test: “Baseline Snapshot Match”
+  - compare baseline snapshot to dashboard KPI endpoint output => identical.
+
+Acceptance criteria:
+- runway on dashboard equals runway baseline everywhere.
+
+Files likely:
+- server/api/health / server/api/kpis
+- server/api/qa.py
+- server/api/decisions.py
+
+CHANGE 6 — DECISION + HEALTH TAB REGRESSION GUARD
+Add a permanent regression test in QA Front Regression tab:
+- check sidebar nav contains Decision + Health items for normal founders (non-admin).
+- check routes load and are in router.
+
+Also add a simple Playwright/Cypress e2e smoke test if test infra exists:
+- login as founder
+- verify nav items present
+- open pages
+
+Acceptance criteria:
+- this fails CI if tabs disappear again.
+
+Files likely:
+- client/src/components/app-sidebar.tsx
+- client/src/App.tsx
+- tests/e2e/* (if present)
+
+CHANGE 7 — QA FRONT EXPORT + VERSIONING
+Improve QA report usefulness:
+- add build version (commit hash), env, and timestamp to JSON export
+- include backend request_id(s) in failing checks
+- include response payload excerpts (redacted)
+- add “Shareable bug bundle” output
+
+Files likely:
+- client/src/pages/qa.tsx
+- server/api/qa.py
+
+CHANGE 8 — DOCUMENT UPLOAD PATH (IF STILL MISSING)
+If file upload UI is still absent:
+- Add a minimal UI-only stub behind QA Front:
+  - drag/drop for XLSX/PPTX
+  - posts to existing ingest/import endpoint if exists
+  - shows extracted fields and mapping table
+If backend endpoints exist but unused, connect them.
+If endpoints don’t exist, add placeholder with explicit TODO.
+
+Acceptance criteria:
+- At least in QA Front, we can upload xlsx/pptx and see parsed output or a clear error.
+
+Files likely:
+- client/src/pages/qa.tsx
+- server/api/import endpoints
+
+========================================================
+NEW TESTS TO ADD (DETAILED)
+========================================================
+
+TEST SET A — KPI edge cases (add 15 more fixtures)
+1) MoM growth with Prev=0 => N/A (guard)
+2) NRR with StartMRR=0 => N/A (guard)
+3) GM with Revenue very small (e.g. 50) => GM computed or N/A (decide standard)
+4) Payback with GM=0 => N/A
+5) LTV with churn=0 => N/A
+6) Burn when costs missing => null
+7) Burn negative => 0
+8) Runway with burn negative => Cashflow+
+9) Baseline delta baseline=0 => N/A
+10) Outlier warnings: NRR>3.0 flagged
+11) Growth outlier flagged (but not clamped silently)
+12) Verify rounding and display formatting
+13) Decimal precision regression test (1 cent differences)
+14) Currency formatting tests
+15) Null propagation tests
+
+Files:
+- tests/fixtures/calc_cases.json
+- server/services/kpi_calculations.py
+
+TEST SET B — Intent parsing (add 20 parser cases)
+Include compound and time horizon:
+- “Cut marketing 25% for 3 months then revert”
+- “Increase price 10% but churn increases 2%”
+- “Hire 15 engineers over 90 days”
+- “Reallocate $150k from paid ads to referral incentives”
+- “Reduce infra/AWS by 20% via reserved instances”
+- “Raise $6M at 20% dilution”
+- “Revenue drops 35% MoM for 2 months”
+- “Improve retention 10% with $80k/mo product cost”
+Expected: structured parameters with correct signs and durations.
+
+Files:
+- server/copilot/intent_parser.py
+- tests for parser
+
+TEST SET C — Scenario invariants (add 20)
+Given baseline data:
+- Apply scenario params and ensure output directionality holds.
+- Validate baseline before equals canonical KPI snapshot.
+
+Files:
+- server/api/qa.py new endpoint OR tests/scenario_cases.json
+- scenario engine module
+
+TEST SET D — Security tests
+- Non-admin company_id tampering: must 403.
+- Admin-only endpoints: must 403 for founder.
+- Confirm QA Front is admin-only in production mode.
+
+Files:
+- server/api/qa.py
+- auth middleware
+- tests/security/*
+
+========================================================
+FINAL OUTPUT REQUIRED
+========================================================
+Return a “Next Changes Plan” + implement as many as possible:
+- list of implemented changes
+- list of new tests added
+- how to run tests locally
+- QA Front screenshots (optional)
+- any remaining TODOs with estimates
+
+START NOW:
+Prioritize CHANGE 1 (no silent clamps), CHANGE 2 (tamper tests), CHANGE 4/5 (baseline invariants), and Decision/Health regression guard.

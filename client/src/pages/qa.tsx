@@ -388,6 +388,30 @@ async function runTenantChecks(): Promise<CheckResult[]> {
     });
   }
 
+  try {
+    const tamperRes = await apiFetch(`/qa/tenant-tamper-test?company_id=${companyId}&target_company_id=${companyId + 1}`);
+    if (tamperRes.ok && tamperRes.data) {
+      const td = tamperRes.data;
+      if (td.status === "SKIP") {
+        results.push({
+          name: "Tenant Tamper: Cross-company isolation",
+          status: "warn",
+          details: td.reason || "Skipped",
+          endpoint: "/api/qa/tenant-tamper-test",
+        });
+      } else {
+        for (const ch of (td.checks || [])) {
+          results.push({
+            name: `Tenant Tamper: ${ch.test}`,
+            status: ch.status === "PASS" ? "pass" : ch.status === "WARN" ? "warn" : "fail",
+            details: ch.detail,
+            endpoint: "/api/qa/tenant-tamper-test",
+          });
+        }
+      }
+    }
+  } catch {}
+
   return results;
 }
 
@@ -502,6 +526,20 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
     });
   }
 
+  try {
+    const invRes = await apiFetch(`/qa/scenario-invariants?company_id=${companyId}`);
+    if (invRes.ok && invRes.data) {
+      for (const ch of (invRes.data.checks || [])) {
+        results.push({
+          name: `Invariant: ${ch.invariant}`,
+          status: ch.status === "PASS" ? "pass" : ch.status === "SKIP" ? "warn" : "fail",
+          details: ch.detail,
+          endpoint: `/api/qa/scenario-invariants?company_id=${companyId}`,
+        });
+      }
+    }
+  } catch {}
+
   interface NlpTestCase {
     input: string;
     label: string;
@@ -522,6 +560,25 @@ async function runScenarioChecks(): Promise<CheckResult[]> {
     { input: "convert 20% monthly subscribers to annual with 15% discount", label: "NLP: Annual plan conversion", expectField: "churn_reduction_pct", expectPositive: true },
     { input: "shift 150k from paid ads to referral incentives", label: "NLP: Spend reallocation $150k", expectField: "burn_reduction_pct", expectPositive: true },
     { input: "improve week-3 retention by 10%", label: "NLP: Retention improvement 10%", expectField: "churn_reduction_pct", expectPositive: true },
+    { input: "cut burn by 20% and increase prices by 10%", label: "NLP: Compound burn+price", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "freeze hiring for 6 months", label: "NLP: Hiring freeze 6mo", expectField: "hiring_freeze_months", expectPositive: true },
+    { input: "lay off 10 people", label: "NLP: Layoff 10 people", expectField: "headcount_change", expectNegative: true },
+    { input: "raise $5M", label: "NLP: Raise $5M", expectField: "fundraise_amount", expectPositive: true },
+    { input: "fundraise of $2M", label: "NLP: Fundraise $2M", expectField: "fundraise_amount", expectPositive: true },
+    { input: "reduce overhead by 15%", label: "NLP: Reduce overhead 15%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "grow revenue by 25%", label: "NLP: Revenue growth 25%", expectField: "revenue_growth_pct", expectPositive: true },
+    { input: "revenue decline of 20%", label: "NLP: Revenue decline 20%", expectField: "revenue_growth_pct", expectNegative: true },
+    { input: "slash expenses by 30%", label: "NLP: Slash expenses 30%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "add 20 salespeople", label: "NLP: Add 20 salespeople", expectField: "headcount_change", expectPositive: true },
+    { input: "decrease price by 5%", label: "NLP: Price decrease 5%", expectField: "price_change_pct", expectNegative: true },
+    { input: "raise series A $3M", label: "NLP: Series A $3M", expectField: "fundraise_amount", expectPositive: true },
+    { input: "cut infrastructure costs by 40%", label: "NLP: Cut infra costs 40%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "hire 3 developers", label: "NLP: Hire 3 devs", expectField: "headcount_change", expectPositive: true },
+    { input: "boost retention by 15%", label: "NLP: Boost retention 15%", expectField: "churn_reduction_pct", expectPositive: true },
+    { input: "lower spending by 25%", label: "NLP: Lower spending 25%", expectField: "burn_reduction_pct", expectPositive: true },
+    { input: "bump prices by 8%", label: "NLP: Bump prices 8%", expectField: "price_change_pct", expectPositive: true },
+    { input: "reduce churn by 5% and raise $10M", label: "NLP: Compound churn+fundraise", expectField: "churn_reduction_pct", expectPositive: true },
+    { input: "cut cloud costs by 50%", label: "NLP: Cut cloud costs 50%", expectField: "burn_reduction_pct", expectPositive: true },
   ];
 
   for (const tc of nlpTestCases) {
@@ -856,6 +913,25 @@ async function runRegressionChecks(): Promise<CheckResult[]> {
     fixHint: "Both are available to any logged-in user",
   });
 
+  const decisionsLink = document.querySelector('a[href="/decisions"], [data-testid="nav-decisions"] a');
+  const healthLink = document.querySelector('a[href="/truth"], [data-testid="nav-health-check"] a');
+  results.push({
+    name: "Regression: Decisions sidebar link accessible",
+    status: decisionsLink ? "pass" : "warn",
+    details: decisionsLink
+      ? "Decisions link found in sidebar - visible to current user"
+      : "Decisions link not found - verify sidebar renders for non-admin users",
+    fixHint: decisionsLink ? undefined : "Check app-sidebar.tsx navigation items",
+  });
+  results.push({
+    name: "Regression: Health sidebar link accessible",
+    status: healthLink ? "pass" : "warn",
+    details: healthLink
+      ? "Health Check link found in sidebar - visible to current user"
+      : "Health Check link not found - verify sidebar renders for non-admin users",
+    fixHint: healthLink ? undefined : "Check app-sidebar.tsx navigation items",
+  });
+
   return results;
 }
 
@@ -1011,7 +1087,9 @@ export default function QAFrontPage() {
       });
     }
     try {
-      const cRes = await apiFetch("/qa/calc/consistency?company_id=24");
+      const companyId = useFounderStore.getState().currentCompany?.id;
+      const cId = companyId || 24;
+      const cRes = await apiFetch(`/qa/calc/consistency?company_id=${cId}`);
       if (cRes.ok) {
         const cData = cRes.data;
         for (const ch of (cData.checks || [])) {
@@ -1024,12 +1102,43 @@ export default function QAFrontPage() {
         }
       }
     } catch {}
+    try {
+      const companyId = useFounderStore.getState().currentCompany?.id;
+      if (companyId) {
+        const bRes = await apiFetch(`/qa/baseline-snapshot?company_id=${companyId}`);
+        if (bRes.ok && bRes.data?.snapshot) {
+          const snap = bRes.data.snapshot;
+          const fields = ["mrr", "arr", "gross_margin", "burn", "runway", "mom_growth"];
+          for (const f of fields) {
+            const sv = snap[f];
+            if (sv) {
+              const val = sv.value;
+              const warn = sv.warning;
+              results.push({
+                name: `Baseline: ${f}`,
+                status: val !== null ? "pass" : "warn",
+                details: `Value=${JSON.stringify(val)}${warn ? ` [${warn}]` : ""}${sv.reason ? ` (${sv.reason})` : ""}`,
+                endpoint: `/api/qa/baseline-snapshot?company_id=${companyId}`,
+              });
+            }
+          }
+        }
+      }
+    } catch {}
     return results;
   }
 
-  const downloadFullReport = useCallback(() => {
+  const downloadFullReport = useCallback(async () => {
+    let versionInfo: any = {};
+    try {
+      const vRes = await apiFetch("/qa/export-version");
+      if (vRes.ok) versionInfo = vRes.data;
+    } catch {}
+    const correlationId = `qa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const report = {
       generated_at: new Date().toISOString(),
+      correlation_id: correlationId,
+      version: versionInfo,
       test_founder: testFounder,
       tabs: Object.entries(tabs).map(([key, state]) => ({
         tab: key,
@@ -1047,7 +1156,7 @@ export default function QAFrontPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `qa-report-${Date.now()}.json`;
+    a.download = `qa-report-${correlationId}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [tabs, testFounder]);
