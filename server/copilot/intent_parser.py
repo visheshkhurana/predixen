@@ -100,6 +100,7 @@ PARAMETER_PATTERNS = {
         (r'(\d+(?:\.\d+)?)\s*%\s*(?:burn|cost|expense|spending)\s*(reduction|cut|decrease)', 1),
         (r'(?:burn|cost|expense)\s*(reduction|cut)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'(reduc\w*|cut\w*|lower\w*|slash\w*)\s+(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?(?:the\s+)?(?:burn|costs?|expenses?|spending)', 2),
+        (r'(reduc\w*|cut\w*|lower\w*|decrease\w*|slash\w*)\s*(?:the\s+)?(?:marketing|payroll|salaries|rent|infra|infrastructure|cloud|aws|server)\s*(?:spend(?:ing)?|budget|costs?)?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
     ],
     'price_change': [
         (r'(increas\w*|rais\w*|bump\w*|grow\w*)\s*(?:the\s+)?price[s]?\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
@@ -133,6 +134,8 @@ PARAMETER_PATTERNS = {
         (r'(increase|boost|grow)\s*revenue\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'(\d+(?:\.\d+)?)\s*%\s*revenue\s*(growth|increase)', 1),
         (r'revenue\s*(growth|increase)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduce|cut|lower|decrease|drop)\s*revenue\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'revenue\s*(decline|decrease|drop|reduction)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
     ],
     'churn_reduction': [
         (r'(reduce|cut|lower|decrease)\s*churn\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
@@ -327,10 +330,11 @@ def extract_parameters(message: str) -> SimulationParameters:
     for pattern_tuple in PARAMETER_PATTERNS.get('revenue_growth', []):
         pattern = pattern_tuple[0]
         group_idx = pattern_tuple[1]
+        multiplier = pattern_tuple[2] if len(pattern_tuple) > 2 else 1
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             try:
-                params.revenue_growth_pct = float(match.group(group_idx))
+                params.revenue_growth_pct = float(match.group(group_idx)) * multiplier
                 break
             except (ValueError, IndexError):
                 pass

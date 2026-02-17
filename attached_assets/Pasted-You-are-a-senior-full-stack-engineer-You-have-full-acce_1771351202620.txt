@@ -1,0 +1,280 @@
+You are a senior full-stack engineer. You have full access to this codebase and can edit backend + frontend. 
+Your job is to implement fixes for the attached QA report (P0/P1 issues). 
+Do NOT respond with general advice. Make actual code changes and produce a clear PR-style summary + test checklist.
+
+========================================================
+CONTEXT / QA SUMMARY (MUST FIX)
+========================================================
+The following are confirmed issues from real founder testing:
+
+P0 (must fix before any demo)
+1) Tenant isolation missing: new users land inside TechFlow Analytics demo company with demo data.
+2) Authorization leak: viewer-role user has access to Admin Console (Users, Companies, Billing, Email Templates, LLM Audit).
+3) Scenario NLP misinterprets "Cut marketing 25%" as "Growth +25%" and breaks causal logic.
+4) Baseline comparison broken: "Before" values incorrect (runway 14.0mo vs dashboard 11.8; Revenue @24mo = $0) and status quo compares against itself incorrectly.
+5) NRR shown as 734% and Growth rate 1268% (trust-killer; likely division by near-zero or wrong window).
+
+P1 (next)
+6) Cross-page inconsistencies: Business Health and Data Confidence change across routes (88 vs 73; 67% vs 60%).
+7) Strategic Briefing times out (likely LLM config missing / bad env / bad endpoint).
+8) /simulate route broken (router missing / bad link).
+9) Simulation rerun doesn’t trigger with edited scenario input; cached/stale results.
+10) Document upload/parsing UI missing even though backend imports/ingest modules might exist.
+11) Duplicate company entries in admin.
+
+Additionally: 
+CRITICAL regression: Decision and Health tabs that existed earlier are suddenly missing from UI. 
+You MUST locate the regression and restore them.
+
+========================================================
+PRIMARY OBJECTIVE
+========================================================
+Implement fixes that restore:
+- Secure RBAC (no admin access for non-admin users)
+- Tenant isolation + onboarding/new-company creation or proper empty state
+- Correct KPI formulas for Growth and NRR with sensible caps + explainability
+- Correct baseline logic for scenario comparisons
+- Reliable scenario rerun triggering (frontend state binding + backend recompute)
+- Restore missing Decision/Health tabs
+- Fix routes (/simulate) and navigation links
+- Fix health/confidence consistency logic
+
+========================================================
+STEP 0 — REPO ORIENTATION (DO THIS FIRST)
+========================================================
+1) Find where auth/session and role logic is implemented:
+   - search for middleware, auth guards, "role", "viewer", "admin", "RBAC", "requireRole"
+2) Find tenant scoping:
+   - search for "company_id", "tenant_id", "defaultCompany", "demo", "TechFlow"
+3) Find KPI calculations:
+   - search for "NRR", "growth", "net revenue retention", "MoM", "YoY"
+4) Find scenario engine:
+   - search for "scenario", "simulate", "decision", "copilot", "baseline"
+5) Find router/nav definitions:
+   - search for routes config, sidebar items, "Decision", "Health", "simulate"
+
+Note: QA suspects these areas:
+- imports/ingest/datasets/data_health/dashboard_kpis/copilot/decisions
+But locate real paths in this repo.
+
+========================================================
+FIX 1 — TENANT ISOLATION + NEW USER FLOW (P0)
+========================================================
+Problem:
+New users after signup are dumped into demo company with demo data. This is a trust killer.
+
+Required behavior:
+A) When a new user signs up:
+   - create a new "company/tenant" record OR prompt them to create it on first login
+   - associate the user with that tenant
+   - redirect to an onboarding / empty state page that guides data import
+
+B) If you still want demo mode:
+   - demo company should only be accessible via explicit "Try Demo" button
+   - never auto-attach demo tenant to real signups
+
+Implementation options (choose simplest for this codebase):
+Option 1 (best): On signup, create Company row automatically:
+- Company name default: "<user_name>'s Company" or "New Company"
+- Stage default: "seed"
+- Set user role: "owner/admin" for that tenant
+- Redirect to /onboarding or /getting-started
+
+Option 2: Force onboarding creation step on first login:
+- If user has no company_id, redirect /onboarding
+- Onboarding wizard creates company + initial metrics
+
+Acceptance criteria:
+- A new signup sees NO demo KPIs. Empty dashboard or onboarding.
+- API responses are tenant-scoped to this user's tenant.
+- Admin companies list does not show demo as their company unless explicitly chosen.
+
+========================================================
+FIX 2 — RBAC / AUTHORIZATION LEAK (P0 SECURITY)
+========================================================
+Problem:
+Viewer role can access admin console (Users/Companies/Billing/Email Templates/LLM Audit).
+
+Required behavior:
+- Admin pages require admin/owner role.
+- Admin APIs require admin/owner role.
+- Non-admin trying to access should get 403 + redirected to /dashboard with toast "Not authorized".
+
+Implementation:
+A) Backend:
+- Add auth middleware guard for admin routes.
+- Ensure all admin endpoints check role.
+- Ensure queries use tenant scoping.
+
+B) Frontend:
+- Hide Admin nav items unless role is admin/owner.
+- Add route guard (client) but do NOT rely solely on client.
+
+Acceptance criteria:
+- logged in as viewer: cannot see admin nav; hitting /admin returns 403/redirect.
+- backend: curl/admin fetch returns 403.
+
+========================================================
+FIX 3 — RESTORE MISSING DECISION + HEALTH TABS (REGRESSION)
+========================================================
+Problem:
+Decision and Health tabs existed before and are now missing.
+
+Tasks:
+1) Find commit / change that removed them:
+   - search in router/nav for "Decision", "Decisions", "Health", "Business Health"
+2) Confirm pages still exist but are not linked vs deleted.
+3) Restore:
+   - sidebar nav items
+   - route definitions
+   - correct link targets
+4) Ensure permissions don't accidentally hide them due to role changes.
+
+Acceptance criteria:
+- Decision and Health tabs appear for normal users.
+- Routes load without "Did you forget to add the page to router?" error.
+- Links point to correct paths (avoid /simulate if not used).
+
+========================================================
+FIX 4 — KPI FORMULAS: NRR + GROWTH RATE (P0)
+========================================================
+Problem:
+NRR shows 734% and Growth 1268% — implausible, destroys trust.
+
+Likely causes:
+- division by near-zero baseline
+- wrong time window or mixing monthly and annualized incorrectly
+- using one-off spike as base
+
+Required:
+A) Define exact metrics:
+- Growth Rate: default should be MoM revenue growth % over last 30 days OR trailing 3 months smoothed.
+- NRR: (Starting MRR + Expansion - Contraction - Churn) / Starting MRR over a defined period.
+B) Add guards:
+- If baseline < threshold (e.g., < $1k MRR), show "N/A" or explain "insufficient baseline"
+- cap display or show confidence warning if outlier.
+
+C) Ensure same computed value used across pages:
+- centralize KPI computation in one service/function
+- pages should read from same endpoint / same cached computed object
+
+Acceptance criteria:
+- NRR plausible range; no >200% unless clearly explained (and extremely rare).
+- Growth no absurd values unless a real spike; if baseline tiny -> show N/A.
+- Values consistent across Dashboard / Scenarios / Decisions pages.
+
+========================================================
+FIX 5 — HEALTH + CONFIDENCE CONSISTENCY (P1)
+========================================================
+Problem:
+Business Health and Data Confidence differ across pages.
+
+Required:
+- One canonical calculation.
+- If page uses subset metrics, label it (e.g. "Scenario Health" vs "Overall Health"), but default should match.
+
+Implementation:
+- Create a single endpoint /health-summary that returns {health_score, confidence, inputs_used, last_updated}
+- All pages use it.
+- Ensure caching invalidates when inputs change.
+
+Acceptance criteria:
+- Same numbers across routes unless explicitly labeled and explainable.
+
+========================================================
+FIX 6 — SCENARIO NLP PARSER + CAUSAL MAPPING (P0/P1)
+========================================================
+Problem:
+"Cut marketing 25%" interpreted as growth +25%. Also marketing not tied to revenue.
+
+Required:
+A) NLP parsing:
+- Detect action verbs: cut/reduce/decrease vs increase/raise/add
+- Detect target variable: marketing spend vs growth rate vs headcount vs pricing vs revenue
+- Parse percentage magnitude correctly
+- Map it to structured scenario parameters:
+  { marketing_delta_pct: -0.25 } etc.
+
+B) Causal mapping:
+- marketing_spend change should affect revenue growth with lag:
+  e.g. revenue_growth_delta = alpha * marketing_delta with lag 1-2 months 
+  (alpha configurable; default conservative)
+- hiring affects burn immediately; revenue impact optional and slower.
+
+C) Baseline comparison:
+- "Before" must be pulled from current model state, not default/zero.
+
+Acceptance criteria:
+- "Cut marketing 25%" reduces marketing cost and reduces growth (or pipeline) in forecast; runway may extend, growth slows.
+- Simulation outputs update and make sense.
+- Baseline "status quo" produces 0 delta vs itself.
+
+========================================================
+FIX 7 — SIMULATION RE-RUN + STALE CACHE (P1)
+========================================================
+Problem:
+Typing scenario + clicking simulate shows stale results; quick buttons populate but do not run; likely React state / event binding issues.
+
+Required:
+- Clicking Simulate must always:
+  1) read latest scenario input value
+  2) call backend simulate endpoint
+  3) show loading
+  4) render fresh results
+- If backend caches, cache key must include scenario text + timestamp or scenario hash.
+
+Acceptance criteria:
+- Editing scenario and clicking simulate changes results.
+- No stale baseline.
+- Console has no errors.
+
+========================================================
+FIX 8 — STRATEGIC BRIEFING TIMEOUT (P1)
+========================================================
+Problem:
+Briefing times out after 30s likely missing key or endpoint misconfig.
+
+Tasks:
+- Check environment variables for LLM provider keys
+- Add graceful fallback:
+  - if key missing, show "AI not configured" with instructions
+  - do not spin forever; stop after 8–10 seconds and show a friendly error
+- Add server-side timeout and retries + logging.
+
+Acceptance criteria:
+- Users either get briefing OR a clear actionable error in <10s.
+
+========================================================
+FIX 9 — ROUTES & NAV CLEANUP (P1)
+========================================================
+Problem:
+/simulate route broken. Also /copilot redirect confusion.
+
+Tasks:
+- fix router mapping
+- update nav links
+- add 404 page and prevent dead links
+
+Acceptance criteria:
+- No route shows "forgot to add page to router".
+- All sidebar items load.
+
+========================================================
+DELIVERABLES REQUIRED
+========================================================
+1) Implement code changes.
+2) Add minimal tests (unit tests for KPI formulas + RBAC guards if test framework exists).
+3) Provide a final report:
+   - What files changed
+   - What was fixed
+   - How to verify (manual checklist)
+4) Include migration/seed notes if you change signup/company creation.
+
+========================================================
+DO IT NOW
+========================================================
+Start with Fix 2 (RBAC security) and Fix 1 (tenant isolation) first because they are critical.
+Then restore missing Decision/Health tabs.
+Then fix KPI formulas and baseline/scenario logic.
+
+Do not stop at suggestions—make the changes.

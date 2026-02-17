@@ -204,8 +204,10 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const burnMultiple = v(c.burnMultiple, ext?.burnMultiple, tsVal('burn_multiple'));
     const revenuePerEmployee = headcount > 0 ? mrr / headcount : 0;
 
-    const monthlyGrowthRate = v(c.momGrowth, tsVal('revenue_growth_mom'), fb?.monthlyGrowthRate);
-    const ndr = v(c.ndr, tsVal('net_revenue_retention'));
+    const rawGrowthRate = v(c.momGrowth, tsVal('revenue_growth_mom'), fb?.monthlyGrowthRate);
+    const monthlyGrowthRate = (rawGrowthRate > 100 || rawGrowthRate < -100) ? NaN : rawGrowthRate;
+    const rawNdr = v(c.ndr, tsVal('net_revenue_retention'));
+    const ndr = (rawNdr > 300 || rawNdr < 0) ? NaN : rawNdr;
 
     const totalExpenses = c.totalExpenses || effectiveExpenses || 0;
     const isProfitable = totalExpenses > 0 && mrr >= totalExpenses;

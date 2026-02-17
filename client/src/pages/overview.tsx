@@ -1011,7 +1011,7 @@ export default function OverviewPage() {
     { name: 'Gross Margin', value: baseData.grossMargin, metric: 'grossMargin', tooltip: { formula: '(Revenue - COGS) / Revenue', goodRange: '70%+', badRange: '< 50%' } },
     { name: terms.churn.charAt(0).toUpperCase() + terms.churn.slice(1), value: sharedMetrics.sources['churnRate'] === 'estimated' || (!sharedMetrics.sources['churnRate'] && sharedMetrics.churnRatePct === 0) ? null : baseData.churnRate, metric: 'churnRate', tooltip: { formula: `Lost ${terms.customers} / Total ${terms.customers}`, goodRange: '< 3%', badRange: '> 7%' } },
     { name: 'LTV/CAC', value: baseData.ltvCacRatio > 0 ? baseData.ltvCacRatio : null, metric: 'ltv_cac', tooltip: { formula: 'Lifetime Value / Customer Acquisition Cost', goodRange: '3x+', badRange: '< 2x' } },
-    { name: 'Growth Rate', value: sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
+    { name: 'Growth Rate', value: isNaN(sharedMetrics.monthlyGrowthRate) ? null : sharedMetrics.monthlyGrowthRate, metric: 'growthRate', tooltip: { formula: '(Current MRR - Previous MRR) / Previous MRR', goodRange: '15%+ MoM', badRange: '< 5%' } },
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   

@@ -107,7 +107,10 @@ function HealthScoreCard() {
   const { truthScan } = useFounderStore();
   const confidence = truthScan?.data_confidence_score || 0;
   const qualityIndex = truthScan?.quality_of_growth_index || 0;
-  const healthScore = qualityIndex > 0 ? Math.min(Math.round(qualityIndex), 100) : (confidence > 0 ? Math.round(confidence * 0.8 + 15) : 73);
+  const hasData = confidence > 0 || qualityIndex > 0;
+  const healthScore = hasData
+    ? (qualityIndex > 0 ? Math.min(Math.round(qualityIndex), 100) : Math.round(confidence * 0.8 + 15))
+    : null;
 
   const getHealthColor = (score: number) => {
     if (score >= 70) return "text-emerald-400";
@@ -128,18 +131,18 @@ function HealthScoreCard() {
     >
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-xs font-medium text-muted-foreground">Business Health</span>
-        <span className={cn("text-sm font-bold font-mono", getHealthColor(healthScore))} data-testid="text-health-score">
-          {healthScore}/100
+        <span className={cn("text-sm font-bold font-mono", healthScore !== null ? getHealthColor(healthScore) : "text-muted-foreground")} data-testid="text-health-score">
+          {healthScore !== null ? `${healthScore}/100` : "N/A"}
         </span>
       </div>
       <Progress
-        value={healthScore}
-        className={cn("h-1.5 bg-muted/40", getProgressColor(healthScore))}
+        value={healthScore ?? 0}
+        className={cn("h-1.5 bg-muted/40", healthScore !== null ? getProgressColor(healthScore) : "")}
       />
       <div className="flex items-center justify-between gap-2 mt-2">
         <span className="text-[11px] text-muted-foreground">Data Confidence</span>
         <span className="text-[11px] font-medium text-muted-foreground font-mono" data-testid="text-data-confidence">
-          {confidence > 0 ? `${confidence}%` : "60%"}
+          {confidence > 0 ? `${confidence}%` : "N/A"}
         </span>
       </div>
     </div>

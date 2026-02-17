@@ -196,6 +196,9 @@ function Router() {
       <Route path="/data/verify/:sessionId">
         {() => <AuthenticatedRoute component={DataVerificationPage} />}
       </Route>
+      <Route path="/simulate">
+        {() => <Redirect to="/scenarios" />}
+      </Route>
       <Route path="/scenarios">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
       </Route>

@@ -337,8 +337,12 @@ export const api = {
       request<any>(`/simulation/${runId}/decisions/generate`, { method: 'POST' }),
     latest: (companyId: number) =>
       request<any>(`/companies/${companyId}/decisions/latest`),
-    strategicDiagnosis: (companyId: number) =>
-      request<any>(`/companies/${companyId}/strategic-diagnosis`),
+    strategicDiagnosis: (companyId: number) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      return request<any>(`/companies/${companyId}/strategic-diagnosis`, { signal: controller.signal })
+        .finally(() => clearTimeout(timeoutId));
+    },
   },
   
   copilot: {

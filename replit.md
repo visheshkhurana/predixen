@@ -89,6 +89,13 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 4. **P0-4/P0-2/P0-3 Growth Rate Overflow**: Added `safe_growth_rate_from_series()` guard for <2 data points. Monthly growth capped at ±50% in simulations. Revenue capped at baseline*1000 in both simulation_engine.py and enhanced_monte_carlo.py.
 5. **P0-5 Currency Formatting**: Replaced all hardcoded "$" with dynamic currency from company settings. Uses `useCurrency` hook and `formatCurrencyAbbrev(value, currency)` across DashboardKPICards, ProjectionChart, ProjectionSummary, ScenarioCard, dashboard.tsx, and overview.tsx.
 
+### QA Round 2 Fixes
+6. **Tenant Isolation**: Removed hardcoded TechFlow Analytics preference for non-demo login. Users with no companies redirect to onboarding.
+7. **KPI Guards**: NRR capped at 0-300%, monthly growth rate capped at ±100%. Out-of-bounds values show N/A instead of misleading numbers.
+8. **Health/Confidence Consistency**: Removed hardcoded fallbacks (73/60%) in sidebar HealthScoreCard. Shows "N/A" when no truth scan data exists.
+9. **Scenario NLP Expansion**: Added negative revenue growth patterns (cut/reduce revenue). Added marketing/payroll/infrastructure expense reduction patterns to burn_reduction.
+10. **Route & Timeout**: Added /simulate → /scenarios redirect. Added 30s AbortController timeout on strategic diagnosis API call.
+
 ### Key Conventions
 - **Net burn**: `net_burn = total_expenses - revenue` (positive = burning, negative = profitable)
 - **Gross margin**: Always stored as 0-100 (percentage), never as decimal 0-1

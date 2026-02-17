@@ -69,18 +69,22 @@ export default function AuthPage() {
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
           identifyUser(result.user_id, result.email);
 
+      let userCompanies: any[] = [];
       try {
-        const companies = await api.companies.list();
-        if (companies && companies.length > 0) {
-          const preferred = companies.find((c: any) => c.name === 'TechFlow Analytics') || companies[0];
-          setCompanies(companies);
-          setCurrentCompany(preferred);
+        userCompanies = await api.companies.list();
+        if (userCompanies && userCompanies.length > 0) {
+          setCompanies(userCompanies);
+          setCurrentCompany(userCompanies[0]);
         }
       } catch {
-        // Company auto-select is non-critical
+        // Company fetch is non-critical
       }
 
       toast({ title: 'Welcome back!' });
+      if (!result.is_platform_admin && (!userCompanies || userCompanies.length === 0)) {
+        setLocation('/onboarding');
+        return;
+      }
       setLocation('/');
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Login failed';
