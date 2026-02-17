@@ -1042,25 +1042,25 @@ export default function QAFrontPage() {
     }
   }, [toast]);
 
-  async function runCalcTestChecks(): Promise<CheckResult[]> {
+  async function runCalcSuite(suite: string, label: string): Promise<CheckResult[]> {
     const results: CheckResult[] = [];
     try {
-      const res = await apiFetch("/qa/calc/run");
+      const res = await apiFetch(`/qa/calc/run?suite=${suite}`);
       if (!res.ok) {
         results.push({
-          name: "Calc Test Runner",
+          name: `${label} Runner`,
           status: "fail",
           details: `API error: ${res.data?.detail || res.status}`,
-          endpoint: "/api/qa/calc/run",
+          endpoint: `/api/qa/calc/run?suite=${suite}`,
         });
         return results;
       }
       const data = res.data;
       results.push({
-        name: `Calc Fixtures Summary: ${data.passed}/${data.total} passed`,
+        name: `${label}: ${data.passed}/${data.total} passed`,
         status: data.failed === 0 ? "pass" : "fail",
         details: `${data.passed} passed, ${data.failed} failed out of ${data.total} total test cases`,
-        endpoint: "/api/qa/calc/run",
+        endpoint: `/api/qa/calc/run?suite=${suite}`,
       });
       for (const r of (data.results || [])) {
         const detailParts: string[] = [];
@@ -1076,16 +1076,26 @@ export default function QAFrontPage() {
             ? `${r.function}: all assertions passed`
             : `${r.function}: ${detailParts.join("; ") || r.error || "failed"}`,
           fixHint: r.pass ? undefined : `Check canonical formula in kpi_calculations.py → ${r.function}`,
-          endpoint: "/api/qa/calc/run",
+          endpoint: `/api/qa/calc/run?suite=${suite}`,
         });
       }
     } catch (err: any) {
       results.push({
-        name: "Calc Test Runner",
+        name: `${label} Runner`,
         status: "fail",
         details: `Network error: ${err.message}`,
       });
     }
+    return results;
+  }
+
+  async function runCalcTestChecks(): Promise<CheckResult[]> {
+    const results: CheckResult[] = [];
+    const [coreResults, consumerResults] = await Promise.all([
+      runCalcSuite("core", "Core B2B SaaS Fixtures (55)"),
+      runCalcSuite("consumer", "Consumer Subscription Fixtures (25)"),
+    ]);
+    results.push(...coreResults, ...consumerResults);
     try {
       const companyId = useFounderStore.getState().currentCompany?.id;
       const cId = companyId || 24;

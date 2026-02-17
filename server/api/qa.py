@@ -633,20 +633,30 @@ def qa_export_version(current_user: User = Depends(require_qa_access)):
 
 
 @router.get("/calc/run")
-def qa_calc_run(current_user: User = Depends(require_qa_access)):
+def qa_calc_run(suite: str = "all", current_user: User = Depends(require_qa_access)):
     import json, os
     from server.services.kpi_calculations import run_all_fixtures
 
-    fixtures_path = os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "calc_cases.json")
-    fixtures_path = os.path.abspath(fixtures_path)
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures"))
+    suite_map = {
+        "core": ["calc_cases.json"],
+        "consumer": ["consumer_calc_cases.json"],
+        "all": ["calc_cases.json", "consumer_calc_cases.json"],
+    }
+    files = suite_map.get(suite, suite_map["all"])
 
-    if not os.path.exists(fixtures_path):
-        raise HTTPException(status_code=500, detail=f"Fixtures file not found: {fixtures_path}")
+    all_cases = []
+    for fname in files:
+        fpath = os.path.join(base_dir, fname)
+        if os.path.exists(fpath):
+            with open(fpath, "r") as f:
+                all_cases.extend(json.load(f))
 
-    with open(fixtures_path, "r") as f:
-        cases = json.load(f)
+    if not all_cases:
+        raise HTTPException(status_code=500, detail="No fixture files found")
 
-    results = run_all_fixtures(cases)
+    results = run_all_fixtures(all_cases)
+    results["suite"] = suite
     results["timestamp"] = datetime.utcnow().isoformat()
     return results
 

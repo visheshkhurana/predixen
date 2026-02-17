@@ -1,0 +1,202 @@
+[
+  {
+    "id": "CS01_CONSUMER_ARPA_LOW",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 9.99, "gross_margin_pct": 0.65, "monthly_churn_rate": 0.08},
+    "expected": {"value": 81.17},
+    "tolerance": {"value": 0.01},
+    "notes": "Low-ARPA mobile app: $9.99/mo, 65% margin, 8% monthly churn => LTV = 9.99*0.65/0.08 = 81.17"
+  },
+  {
+    "id": "CS02_CONSUMER_CAC_SOCIAL",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 50000, "new_customers": 12500},
+    "expected": {"value": 4.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Social media acquisition: $50K spend, 12,500 new users => CAC = $4.00"
+  },
+  {
+    "id": "CS03_CONSUMER_LTV_CAC_RATIO",
+    "function": "compute_ltv_cac_ratio",
+    "inputs": {"ltv": 81.17, "cac": 4.0},
+    "expected": {"value": 20.29},
+    "tolerance": {"value": 0.01},
+    "notes": "Consumer LTV:CAC = 81.17/4.0 = 20.29 (strong for consumer)"
+  },
+  {
+    "id": "CS04_CONSUMER_PAYBACK_FAST",
+    "function": "compute_payback",
+    "inputs": {"cac": 4.0, "arpa": 9.99, "gross_margin_pct": 0.65},
+    "expected": {"value": 0.62},
+    "tolerance": {"value": 0.01},
+    "notes": "Consumer payback: 4.0 / (9.99*0.65) = 0.62 months (fast payback)"
+  },
+  {
+    "id": "CS05_CONSUMER_HIGH_CHURN",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 14.99, "gross_margin_pct": 0.70, "monthly_churn_rate": 0.15},
+    "expected": {"value": 69.95},
+    "tolerance": {"value": 0.01},
+    "notes": "High-churn consumer app: $14.99 ARPA, 70% GM, 15% churn => LTV = 14.99*0.7/0.15 = 69.95"
+  },
+  {
+    "id": "CS06_CONSUMER_FREEMIUM_CAC",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 200000, "new_customers": 2000},
+    "expected": {"value": 100.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Freemium model: $200K spend, only 2K paid conversions (not free users) => CAC = $100"
+  },
+  {
+    "id": "CS07_CONSUMER_STREAMING_MRR",
+    "function": "compute_arr",
+    "inputs": {"mrr": 2500000},
+    "expected": {"value": 30000000},
+    "tolerance": {"value": 0.01},
+    "notes": "Consumer streaming: $2.5M MRR => $30M ARR"
+  },
+  {
+    "id": "CS08_CONSUMER_SUBSCRIPTION_GROWTH",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 2500000, "previous": 2200000},
+    "expected": {"value": 0.1364},
+    "tolerance": {"value": 0.001},
+    "notes": "Consumer MoM growth: (2.5M - 2.2M)/2.2M = 13.64%"
+  },
+  {
+    "id": "CS09_CONSUMER_NRR_WITH_EXPANSION",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 500000, "expansion_mrr": 75000, "contraction_mrr": 25000, "churned_mrr": 40000},
+    "expected": {"value": 1.02},
+    "tolerance": {"value": 0.001},
+    "notes": "Consumer NRR: (500K+75K-25K-40K)/500K = 1.02 (102% with upsells)"
+  },
+  {
+    "id": "CS10_CONSUMER_HIGH_VOLUME_BURN",
+    "function": "compute_burn",
+    "inputs": {"opex": 3000000, "cogs": 1500000, "revenue": 2500000},
+    "expected": {"value": 2000000},
+    "tolerance": {"value": 0.01},
+    "notes": "High-volume consumer: OpEx $3M + COGS $1.5M - Revenue $2.5M = $2M burn"
+  },
+  {
+    "id": "CS11_CONSUMER_RUNWAY_SHORT",
+    "function": "compute_runway",
+    "inputs": {"cash": 3000000, "burn": 2000000},
+    "expected": {"value": 1.5},
+    "tolerance": {"value": 0.01},
+    "notes": "Consumer startup short runway: $3M / $2M burn = 1.5 months (critical)"
+  },
+  {
+    "id": "CS12_CONSUMER_LTV_ZERO_CHURN",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 19.99, "gross_margin_pct": 0.80, "monthly_churn_rate": 0},
+    "expected": {"value": null, "reason": "churn_lte_zero"},
+    "tolerance": {},
+    "notes": "Zero churn => LTV undefined (infinite), should return null with reason"
+  },
+  {
+    "id": "CS13_CONSUMER_LTV_NEGATIVE_CHURN",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 19.99, "gross_margin_pct": 0.80, "monthly_churn_rate": -0.02},
+    "expected": {"value": null, "reason": "churn_lte_zero"},
+    "tolerance": {},
+    "notes": "Negative churn (net expansion) => LTV guard triggers, null with reason"
+  },
+  {
+    "id": "CS14_CONSUMER_PAYBACK_ZERO_GM",
+    "function": "compute_payback",
+    "inputs": {"cac": 50, "arpa": 9.99, "gross_margin_pct": 0},
+    "expected": {"value": null, "reason": "arpa_or_gm_lte_zero"},
+    "tolerance": {},
+    "notes": "Zero gross margin => payback undefined, null with reason"
+  },
+  {
+    "id": "CS15_CONSUMER_CAC_ZERO_SPEND",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 0, "new_customers": 5000},
+    "expected": {"value": 0.0},
+    "tolerance": {"value": 0.01},
+    "notes": "Organic-only acquisition: $0 spend, 5K new users => CAC = $0 (viral product)"
+  },
+  {
+    "id": "CS16_CONSUMER_NRR_HEAVY_CHURN",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 800000, "expansion_mrr": 10000, "contraction_mrr": 50000, "churned_mrr": 120000},
+    "expected": {"value": 0.80},
+    "tolerance": {"value": 0.001},
+    "notes": "Consumer NRR with heavy churn: (800K+10K-50K-120K)/800K = 0.80 (80%)"
+  },
+  {
+    "id": "CS17_CONSUMER_MICRO_ARPA_LTV",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 2.99, "gross_margin_pct": 0.90, "monthly_churn_rate": 0.10},
+    "expected": {"value": 26.91},
+    "tolerance": {"value": 0.01},
+    "notes": "Micro-ARPA gaming app: $2.99/mo, 90% margin, 10% churn => LTV = 2.99*0.9/0.1 = 26.91"
+  },
+  {
+    "id": "CS18_CONSUMER_ANNUAL_PLAN_ARPA",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 8.25, "gross_margin_pct": 0.75, "monthly_churn_rate": 0.04},
+    "expected": {"value": 154.69},
+    "tolerance": {"value": 0.01},
+    "notes": "Annual plan amortized: $99/yr => $8.25/mo ARPA, 75% GM, 4% churn => LTV = 8.25*0.75/0.04 = 154.69"
+  },
+  {
+    "id": "CS19_DIRECTION_PRICE_INCREASE",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 12.99, "gross_margin_pct": 0.70, "monthly_churn_rate": 0.08},
+    "expected": {"value": 113.66},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: Price increase $9.99->$12.99 (same churn) should increase LTV. 12.99*0.7/0.08 = 113.66 > CS01 LTV of 81.17"
+  },
+  {
+    "id": "CS20_DIRECTION_ANNUAL_PLAN_RETENTION",
+    "function": "compute_nrr",
+    "inputs": {"starting_mrr": 500000, "expansion_mrr": 75000, "contraction_mrr": 15000, "churned_mrr": 20000},
+    "expected": {"value": 1.08},
+    "tolerance": {"value": 0.001},
+    "notes": "DIRECTIONALITY: Annual plan reduces churn (40K->20K) and contraction (25K->15K) => NRR improves from 1.02 (CS09) to 1.08"
+  },
+  {
+    "id": "CS21_DIRECTION_RETENTION_IMPROVEMENT",
+    "function": "compute_ltv",
+    "inputs": {"arpa": 9.99, "gross_margin_pct": 0.65, "monthly_churn_rate": 0.05},
+    "expected": {"value": 129.87},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: Retention improvement (churn 8%->5%) should increase LTV. 9.99*0.65/0.05 = 129.87 > CS01 LTV of 81.17"
+  },
+  {
+    "id": "CS22_DIRECTION_REFERRAL_CAC_DROP",
+    "function": "compute_cac",
+    "inputs": {"sales_marketing_spend": 30000, "new_customers": 15000},
+    "expected": {"value": 2.0},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: Referral program shifts acquisition => CAC drops from $4 (CS02) to $2 with less spend and more users"
+  },
+  {
+    "id": "CS23_DIRECTION_INFRA_COST_REDUCTION",
+    "function": "compute_burn",
+    "inputs": {"opex": 3000000, "cogs": 1200000, "revenue": 2500000},
+    "expected": {"value": 1700000},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: Infra cost reduction (COGS 1.5M->1.2M) => burn drops from $2M (CS10) to $1.7M"
+  },
+  {
+    "id": "CS24_DIRECTION_REVENUE_SHOCK",
+    "function": "compute_mom_growth",
+    "inputs": {"current": 1800000, "previous": 2500000},
+    "expected": {"value": -0.28},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: Revenue shock (viral content dies) => negative growth -28%. Previous was +13.64% (CS08)"
+  },
+  {
+    "id": "CS25_DIRECTION_EXTENDED_RUNWAY",
+    "function": "compute_runway",
+    "inputs": {"cash": 3000000, "burn": 1700000},
+    "expected": {"value": 1.76},
+    "tolerance": {"value": 0.01},
+    "notes": "DIRECTIONALITY: After infra cost reduction (CS23), burn drops from $2M to $1.7M => runway extends from 1.5mo (CS11) to 1.76mo"
+  }
+]
