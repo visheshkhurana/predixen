@@ -122,6 +122,7 @@ PARAMETER_PATTERNS = {
     ],
     'fundraise': [
         (r'(raise|fundraise|get)\s*\$?(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?', 2, 3),
+        (r'(raise|fundraise|get)\s+(?:a\s+)?(?:series\s*[a-z]\s+)?(?:round\s+(?:of\s+)?)?\$?(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?', 2, 3),
         (r'\$(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?\s*(fundraise|raise|round)', 1, 2),
         (r'fundraise\s*(?:of\s*)?\$?(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?', 1, 2),
     ],
@@ -140,6 +141,12 @@ PARAMETER_PATTERNS = {
     'churn_reduction': [
         (r'(reduce|cut|lower|decrease)\s*churn\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'(\d+(?:\.\d+)?)\s*%\s*churn\s*(reduction|decrease)', 1),
+        (r'(improv\w*|increas\w*|boost\w*)\s*(?:week[\s-]?\d+\s+)?retention\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'convert\s*(\d+(?:\.\d+)?)\s*%\s*(?:monthly\s+)?(?:subscribers?|users?|customers?)\s*(?:to\s+)?annual', 1),
+    ],
+    'burn_reallocation': [
+        (r'shift\s*\$?(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?\s*(?:\/\s*month\s*)?(?:from\s+)(?:paid\s+)?(?:ads?|advertising|acquisition|marketing)', 1, 2),
+        (r'reallocat\w*\s*\$?(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?\s*(?:from|to)', 1, 2),
     ],
     'horizon': [
         (r'(?:for|over|next)\s*(\d+)\s*(month|mo)', 1),
@@ -350,6 +357,25 @@ def extract_parameters(message: str) -> SimulationParameters:
             except (ValueError, IndexError):
                 pass
     
+    for pattern_tuple in PARAMETER_PATTERNS.get('burn_reallocation', []):
+        pattern = pattern_tuple[0]
+        amount_idx = pattern_tuple[1]
+        unit_idx = pattern_tuple[2] if len(pattern_tuple) > 2 else None
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match and params.burn_reduction_pct is None:
+            try:
+                amount = float(match.group(amount_idx))
+                if unit_idx:
+                    unit = (match.group(unit_idx) or '').lower()
+                    if unit in ('k', 'thousand'):
+                        amount *= 1_000
+                    elif unit in ('m', 'million'):
+                        amount *= 1_000_000
+                params.burn_reduction_pct = amount
+                break
+            except (ValueError, IndexError):
+                pass
+
     for pattern_tuple in PARAMETER_PATTERNS.get('horizon', []):
         pattern = pattern_tuple[0]
         group_idx = pattern_tuple[1]
