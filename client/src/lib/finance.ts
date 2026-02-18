@@ -71,13 +71,8 @@ export function clampGrowthRate(rawPercentage: number | null | undefined): numbe
   
   let rate = rawPercentage;
   
-  // If the rate seems already in decimal form (e.g., 0.05), convert to percentage
-  // This handles cases where value might be stored differently
-  if (Math.abs(rate) < 1 && Math.abs(rate) > 0) {
-    rate = rate * 100;
-  }
-  
-  // Convert percentage to decimal: 5% -> 0.05
+  // Input is always a percentage (e.g., 5 for 5%). Convert to decimal.
+  // Do NOT try to auto-detect decimals — that turns 0.5% into 50%.
   const decimal = rate / 100;
   
   // Clamp to reasonable range: -50% to +100% monthly
@@ -174,8 +169,8 @@ export function formatRunway(runwayMonths: number | null): string {
 export function normalizeGrossMarginPct(value: number | null | undefined): number | null {
   if (value == null || isNaN(value)) return null;
   
-  // If value is between 0 and 1 (exclusive), it's likely a decimal fraction
-  if (value > 0 && value < 1) {
+  // If value is between 0 and 1 (inclusive of boundaries), it's likely a decimal fraction
+  if (value >= 0 && value <= 1) {
     return value * 100;
   }
   

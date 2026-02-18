@@ -65,7 +65,8 @@ export function useWebSocket(companyId: number | null) {
     cleanup();
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws?companyId=${companyId}`;
+    const token = localStorage.getItem('founderconsole-token') || '';
+    const wsUrl = `${protocol}//${window.location.host}/ws?companyId=${companyId}&token=${encodeURIComponent(token)}`;
 
     try {
       const ws = new WebSocket(wsUrl);

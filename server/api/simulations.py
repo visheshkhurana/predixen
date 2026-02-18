@@ -892,7 +892,7 @@ def get_scenario_timeseries(
         cash_balance = cas.get("p50", 0)
         monthly_burn = brn.get("p50", 0)
         monthly_revenue = rev.get("p50", 0)
-        net_burn = max(1, monthly_burn - monthly_revenue)
+        net_burn = max(0, monthly_burn - monthly_revenue)
         runway_remaining = cash_balance / net_burn if net_burn > 0 else 48
         
         timeseries.append({

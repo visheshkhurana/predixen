@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
     SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     
     FEATURE_INVESTOR_MODE: bool = os.getenv("FEATURE_INVESTOR_MODE", "false").lower() == "true"
     
@@ -89,3 +89,6 @@ def get_settings() -> Settings:
     return Settings()
 
 settings = get_settings()
+
+if settings.is_production and settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
+    raise RuntimeError("FATAL: You must set SESSION_SECRET env var in production. Do NOT use the default secret key.")

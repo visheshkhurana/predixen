@@ -50,7 +50,48 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
     server: httpServer, 
     path: '/ws',
     verifyClient: (info, callback) => {
-      callback(true);
+      try {
+        const url = new URL(info.req.url || '', `http://${info.req.headers.host}`);
+        const token = url.searchParams.get('token');
+        if (!token) {
+          console.log('[WebSocket] Rejected: no token provided');
+          callback(false, 401, 'Authentication required');
+          return;
+        }
+        if (token.length < 10) {
+          console.log('[WebSocket] Rejected: invalid token format');
+          callback(false, 401, 'Invalid token');
+          return;
+        }
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+          console.log('[WebSocket] Rejected: malformed JWT');
+          callback(false, 401, 'Invalid token format');
+          return;
+        }
+        try {
+          const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
+          if (!payload.sub) {
+            console.log('[WebSocket] Rejected: JWT missing sub claim');
+            callback(false, 401, 'Invalid token');
+            return;
+          }
+          if (payload.exp && payload.exp * 1000 < Date.now()) {
+            console.log('[WebSocket] Rejected: JWT expired');
+            callback(false, 401, 'Token expired');
+            return;
+          }
+        } catch {
+          console.log('[WebSocket] Rejected: could not decode JWT payload');
+          callback(false, 401, 'Invalid token');
+          return;
+        }
+        callback(true);
+      } catch (e) {
+        console.error('[WebSocket] Auth error:', e);
+        callback(false, 500, 'Internal error');
+      }
     }
   });
 

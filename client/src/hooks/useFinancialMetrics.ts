@@ -128,6 +128,15 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       const candidates = [primary, ...fallbacks];
       for (const val of candidates) {
         const n = typeof val === 'string' ? parseFloat(val) : val;
+        if (typeof n === 'number' && isFinite(n) && n !== 0) return n;
+      }
+      return 0;
+    };
+
+    const vPos = (primary: any, ...fallbacks: any[]): number => {
+      const candidates = [primary, ...fallbacks];
+      for (const val of candidates) {
+        const n = typeof val === 'string' ? parseFloat(val) : val;
         if (typeof n === 'number' && isFinite(n) && n > 0) return n;
       }
       return 0;
@@ -141,9 +150,9 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       return 0;
     };
 
-    const mrr = v(c.mrr, bb?.monthlyRevenue, fb?.monthlyRevenue, tsVal('mrr'));
+    const mrr = vPos(c.mrr, bb?.monthlyRevenue, fb?.monthlyRevenue, tsVal('mrr'));
     const arr = v(c.arr, ext?.arr, tsVal('arr')) || mrr * 12;
-    const cashOnHand = v(c.cashOnHand, bb?.cashOnHand, fb?.cashOnHand, tsVal('cash_balance'));
+    const cashOnHand = vPos(c.cashOnHand, bb?.cashOnHand, fb?.cashOnHand, tsVal('cash_balance'));
 
     const breakdownPayroll = bb?.expenseBreakdown?.payroll ?? fb?.expenseBreakdown?.payroll ?? 0;
     const breakdownMarketing = bb?.expenseBreakdown?.marketing ?? fb?.expenseBreakdown?.marketing ?? 0;
@@ -181,8 +190,8 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
       runwayDisplay = `${runway.toFixed(1)} mo`;
     }
 
-    const cac = v(c.cac, ext?.cac, tsVal('cac'));
-    const ltv = v(c.ltv, ext?.ltv, tsVal('ltv'));
+    const cac = vPos(c.cac, ext?.cac, tsVal('cac'));
+    const ltv = vPos(c.ltv, ext?.ltv, tsVal('ltv'));
     const ltvCacRatio = v(c.ltvCacRatio, ext?.ltvCacRatio, tsVal('ltv_cac_ratio'))
       || (cac > 0 && ltv > 0 ? ltv / cac : 0);
     const grossMarginRaw = v(c.grossMarginPct, ext?.grossMargin, tsVal('gross_margin'));
@@ -193,7 +202,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const churnRatePct = churnRaw > 0 && churnRaw <= 1 ? churnRaw * 100 : churnRaw;
     const churnRateDecimal = churnRatePct / 100;
 
-    const totalCustomers = v(c.totalCustomers, ext?.customers, tsVal('customer_count'), tsVal('total_customers'));
+    const totalCustomers = vPos(c.totalCustomers, ext?.customers, tsVal('customer_count'), tsVal('total_customers'));
     const headcount = v(c.headcount, ext?.headcount, tsVal('headcount'))
       || (currentCompany ? (currentCompany as any).employees || 0 : 0);
     const arpu = v(c.arpu) || (totalCustomers > 0 ? mrr / totalCustomers : 0);

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta
 from server.core.db import get_db
 from server.core.security import get_password_hash, verify_password, create_access_token
@@ -8,6 +8,7 @@ from server.core.config import settings
 from server.models.user import User
 from server.models.login_history import LoginHistory
 import re
+import hmac
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -76,6 +77,17 @@ def log_login_attempt(db: Session, email: str, user_id: int = None, success: boo
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        return v
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -172,7 +184,7 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
     req_email_lower = req.email.lower().strip()
     
     if (admin_email_config and settings.ADMIN_MASTER_PASSWORD and 
-        req_email_lower == admin_email_config and req.password == settings.ADMIN_MASTER_PASSWORD):
+        req_email_lower == admin_email_config and hmac.compare_digest(req.password, settings.ADMIN_MASTER_PASSWORD)):
         
         log_login_attempt(db, req.email, None, success=True, request=request)
         
@@ -183,7 +195,7 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
         
         return TokenResponse(
             access_token=access_token,
-            user_id=0,
+            user_id=-1,
             email=settings.ADMIN_MASTER_EMAIL,
             role="owner",
             is_platform_admin=True

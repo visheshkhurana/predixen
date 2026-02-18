@@ -414,7 +414,7 @@ app.use(
         console.error("Proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
           res.writeHead(502, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Backend service unavailable", detail: err.message }));
+          res.end(JSON.stringify({ error: "Backend service unavailable" }));
         }
       },
     },
@@ -501,9 +501,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+      // Response body logging removed for security
 
       log(logLine);
     }
@@ -523,7 +521,7 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error(`[error] ${status} ${message}`, err.stack || err);
   });
 
   // importantly only setup vite in development and after

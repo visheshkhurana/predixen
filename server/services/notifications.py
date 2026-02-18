@@ -6,6 +6,7 @@ Uses Resend integration for email delivery.
 import os
 import re
 import asyncio
+import html as html_module
 import httpx
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -13,10 +14,12 @@ from pathlib import Path
 
 
 NOTIFICATION_RECIPIENTS = [
-    "nikita@founderconsole.ai",
-    "vysheshk@gmail.com",
-    "nikita.luther@gmail.com",
-    "nikitafl2024@gmail.com"
+    email.strip()
+    for email in os.getenv(
+        "NOTIFICATION_RECIPIENTS",
+        "nikita@founderconsole.ai,vysheshk@gmail.com,nikita.luther@gmail.com,nikitafl2024@gmail.com"
+    ).split(",")
+    if email.strip()
 ]
 
 # Sender rotation counter (persisted in memory, resets on restart)
@@ -96,7 +99,7 @@ async def send_feature_notification(
         
         timestamp = datetime.now().strftime("%B %d, %Y at %I:%M %p")
         
-        changes_html = "".join([f"<li style='margin-bottom: 8px;'>{change}</li>" for change in changes])
+        changes_html = "".join([f"<li style='margin-bottom: 8px;'>{html_module.escape(str(change))}</li>" for change in changes])
         
         html_content = f"""
 <!DOCTYPE html>
