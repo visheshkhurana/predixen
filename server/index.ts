@@ -17,12 +17,36 @@ const wss = setupWebSocketServer(httpServer);
 let fastapiProcess: ChildProcess | null = null;
 let shuttingDown = false;
 let restartCount = 0;
-const MAX_RESTARTS = 5;
-const RESTART_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
+const MAX_RESTARTS = 10;
+const RESTART_DELAYS = [2000, 3000, 5000, 8000, 12000]; // Exponential backoff
 let fastapiStatus: "starting" | "up" | "down" | "restarting" = "starting";
+
+function killProcessOnPort(port: string): void {
+  try {
+    const { execSync } = require("child_process");
+    const result = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: "utf-8" }).trim();
+    if (result) {
+      const pids = result.split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), "SIGKILL");
+          console.log(`[fastapi] Killed stale process ${pid} on port ${port}`);
+        } catch {
+          // Process may already be gone
+        }
+      }
+      execSync("sleep 0.5");
+    }
+  } catch {
+    // lsof may not be available, that's ok
+  }
+}
 
 function startFastAPIServer(): ChildProcess {
   const port = process.env.FASTAPI_PORT || "8001";
+  
+  killProcessOnPort(port);
+  
   const cmd = ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
@@ -30,7 +54,7 @@ function startFastAPIServer(): ChildProcess {
   const child = spawn("python", ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
     stdio: "inherit",
     shell: true,
-    detached: process.platform !== "win32", // Use process group on Unix
+    detached: process.platform !== "win32",
   });
   
   console.log(`[fastapi] Spawned with PID: ${child.pid}`);
