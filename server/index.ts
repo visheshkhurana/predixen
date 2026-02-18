@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
@@ -22,24 +22,22 @@ const RESTART_DELAYS = [2000, 3000, 5000, 8000, 12000]; // Exponential backoff
 let fastapiStatus: "starting" | "up" | "down" | "restarting" = "starting";
 
 function killProcessOnPort(port: string): void {
-  try {
-    const { execSync } = require("child_process");
-    const result = execSync(`lsof -ti:${port} 2>/dev/null || true`, { encoding: "utf-8" }).trim();
-    if (result) {
-      const pids = result.split("\n").filter(Boolean);
-      for (const pid of pids) {
-        try {
-          process.kill(parseInt(pid, 10), "SIGKILL");
-          console.log(`[fastapi] Killed stale process ${pid} on port ${port}`);
-        } catch {
-          // Process may already be gone
-        }
+  const commands = [
+    `fuser -k ${port}/tcp 2>/dev/null || true`,
+    `lsof -ti:${port} 2>/dev/null | xargs -r kill -9 2>/dev/null || true`,
+    `ss -tlnp 'sport = :${port}' 2>/dev/null | grep -oP 'pid=\\K[0-9]+' | xargs -r kill -9 2>/dev/null || true`,
+  ];
+  for (const cmd of commands) {
+    try {
+      const result = execSync(cmd, { encoding: "utf-8", timeout: 3000 }).trim();
+      if (result) {
+        console.log(`[fastapi] Port cleanup (${cmd.split(" ")[0]}): ${result}`);
       }
-      execSync("sleep 0.5");
+    } catch {
+      // Command not available, try next
     }
-  } catch {
-    // lsof may not be available, that's ok
   }
+  try { execSync("sleep 1"); } catch {}
 }
 
 function startFastAPIServer(): ChildProcess {
@@ -109,7 +107,7 @@ async function probeFastAPI(): Promise<boolean> {
   }
 }
 
-async function waitForFastAPI(maxRetries = 30, retryDelay = 1000): Promise<boolean> {
+async function waitForFastAPI(maxRetries = 90, retryDelay = 2000): Promise<boolean> {
   for (let i = 0; i < maxRetries; i++) {
     const isUp = await probeFastAPI();
     if (isUp) {
