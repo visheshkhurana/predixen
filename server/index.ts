@@ -508,6 +508,18 @@ app.use((req, res, next) => {
   next();
 });
 
+const port = parseInt(process.env.PORT || "5000", 10);
+httpServer.listen(
+  {
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  },
+  () => {
+    log(`serving on port ${port}`);
+  },
+);
+
 (async () => {
   await registerRoutes(httpServer, app);
 
@@ -526,22 +538,11 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-      waitForFastAPI(60, 3000).then((ready) => {
-        if (ready) {
-          log("FastAPI backend is ready");
-        } else {
-          log("FastAPI backend not ready yet - API requests will be proxied when available");
-        }
-      });
-    },
-  );
+  waitForFastAPI(30, 2000).then((ready) => {
+    if (ready) {
+      log("FastAPI backend is ready");
+    } else {
+      log("FastAPI backend not ready yet - API requests will be proxied when available");
+    }
+  });
 })();
