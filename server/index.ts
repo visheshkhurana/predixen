@@ -432,7 +432,7 @@ app.use(
         console.error("Notifications proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
           res.writeHead(502, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Notifications service unavailable", detail: err.message }));
+          res.end(JSON.stringify({ error: "Notifications service unavailable", detail: "Internal proxy error" }));
         }
       },
     },
@@ -451,7 +451,7 @@ app.use(
         console.error("Email tracking proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
           res.writeHead(502, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Email tracking service unavailable", detail: err.message }));
+          res.end(JSON.stringify({ error: "Email tracking service unavailable", detail: "Internal proxy error" }));
         }
       },
     },

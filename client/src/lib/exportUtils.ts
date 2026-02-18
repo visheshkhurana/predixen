@@ -179,8 +179,12 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
   
   const printWindow = window.open('', '_blank');
   if (printWindow) {
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    printWindow.document.replaceChild(
+      printWindow.document.importNode(doc.documentElement, true),
+      printWindow.document.documentElement
+    );
     setTimeout(() => {
       printWindow.print();
     }, 500);
