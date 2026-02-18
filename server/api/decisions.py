@@ -550,7 +550,7 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(_call_llm)
-            result = future.result(timeout=15)
+            result = future.result(timeout=90)
         
         import json, re
         content = result.get("content", "{}")

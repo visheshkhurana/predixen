@@ -54,7 +54,7 @@ function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRet
     const timer = setTimeout(() => {
       setTimedOut(true);
       onTimeout?.();
-    }, 30000);
+    }, 120000);
     return () => clearTimeout(timer);
   }, [onTimeout]);
 
@@ -67,7 +67,7 @@ function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRet
         <div className="text-center">
           <p className="text-sm font-semibold text-foreground mb-1">Analysis is taking longer than expected</p>
           <p className="text-xs text-muted-foreground max-w-sm">
-            The AI analysis timed out after 30 seconds. This can happen when the system is under heavy load.
+            The AI analysis timed out. This can happen when the system is under heavy load.
           </p>
         </div>
         {onRetry && (
@@ -344,12 +344,12 @@ export default function DecisionsPage() {
     setIsGenerating(true);
     setGenerationError(null);
 
-    const timeoutMs = 30000;
+    const timeoutMs = 120000;
     let timedOut = false;
     const timeoutId = setTimeout(() => {
       timedOut = true;
       setIsGenerating(false);
-      setGenerationError('The analysis timed out after 30 seconds. The AI service may be under heavy load.');
+      setGenerationError('The analysis timed out. The AI service may be under heavy load. Please try again.');
     }, timeoutMs);
 
     try {
@@ -577,7 +577,7 @@ export default function DecisionsPage() {
         <LoadingProgress
           onTimeout={() => {
             setIsGenerating(false);
-            setGenerationError('The analysis timed out after 30 seconds. The AI service may be under heavy load.');
+            setGenerationError('The analysis timed out. The AI service may be under heavy load. Please try again.');
           }}
           onRetry={handleGenerateDecisions}
         />

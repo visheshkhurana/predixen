@@ -339,7 +339,7 @@ export const api = {
       request<any>(`/companies/${companyId}/decisions/latest`),
     strategicDiagnosis: (companyId: number) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
       return request<any>(`/companies/${companyId}/strategic-diagnosis`, { signal: controller.signal })
         .finally(() => clearTimeout(timeoutId));
     },
