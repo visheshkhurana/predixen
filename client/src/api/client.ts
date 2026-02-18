@@ -337,10 +337,12 @@ export const api = {
       request<any>(`/simulation/${runId}/decisions/generate`, { method: 'POST' }),
     latest: (companyId: number) =>
       request<any>(`/companies/${companyId}/decisions/latest`),
-    strategicDiagnosis: (companyId: number) => {
+    strategicDiagnosis: (companyId: number) =>
+      request<any>(`/companies/${companyId}/strategic-diagnosis`),
+    regenerateDiagnosis: (companyId: number) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
-      return request<any>(`/companies/${companyId}/strategic-diagnosis`, { signal: controller.signal })
+      return request<any>(`/companies/${companyId}/strategic-diagnosis`, { method: 'POST', signal: controller.signal })
         .finally(() => clearTimeout(timeoutId));
     },
   },

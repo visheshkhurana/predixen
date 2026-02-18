@@ -344,6 +344,28 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
 
 
 @router.get("/companies/{company_id}/strategic-diagnosis")
+def get_strategic_diagnosis(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    meta = company.metadata_json or {}
+    saved = meta.get("strategic_diagnosis")
+    if saved:
+        return saved
+
+    raise HTTPException(status_code=404, detail="No strategic diagnosis generated yet")
+
+
+@router.post("/companies/{company_id}/strategic-diagnosis")
 def generate_strategic_diagnosis(
     company_id: int,
     db: Session = Depends(get_db),
@@ -578,6 +600,11 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         diagnosis["generated_at"] = datetime.utcnow().isoformat()
         diagnosis["model_used"] = result.get("model", "unknown")
         
+        meta = dict(company.metadata_json or {})
+        meta["strategic_diagnosis"] = diagnosis
+        company.metadata_json = meta
+        db.commit()
+        
         return diagnosis
         
     except Exception as e:
@@ -609,7 +636,7 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         inaction_p2 = f"The consequences begin well before cash actually hits zero. Within {max(1, crisis_months - 2)} months, your cash position will be visible to employees — expect your best people to start exploring other options. Within {crisis_months} months, you will have approximately ${cash_at_crisis:,.0f} remaining, which puts you below the threshold where investors consider you a viable investment. At that point, fundraising shifts from 'raising a round' to 'negotiating a rescue' — terms become punitive, dilution becomes severe, and board control may shift."
         inaction_p3 = f"By the time cash reserves approach zero, your options narrow to three: a distressed acquisition at a fraction of your peak valuation, a bridge round with onerous terms from existing investors, or an orderly wind-down. None of these outcomes are inevitable today — but they become increasingly likely with each month of inaction."
 
-        return {
+        fallback = {
             "situation_narrative": f"{company.name} is currently burning {_fmt(scaled_burn)}/month against {_fmt(scaled_revenue)} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
             "recommendation_headline": rec_headline,
             "recommendation_narrative": rec_narrative,
@@ -644,6 +671,14 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
             "model_used": "fallback",
             "error": str(e)
         }
+        try:
+            meta = dict(company.metadata_json or {})
+            meta["strategic_diagnosis"] = fallback
+            company.metadata_json = meta
+            db.commit()
+        except Exception:
+            pass
+        return fallback
 
 
 @router.get("/companies/{company_id}/decisions/latest", response_model=Dict[str, Any])

@@ -779,7 +779,14 @@ async function runBriefingChecks(): Promise<CheckResult[]> {
       results.push({
         name: "Briefing: Response received",
         status: "pass",
-        details: `Returned in ${elapsed}ms`,
+        details: `Returned saved diagnosis in ${elapsed}ms`,
+        endpoint: `/api/companies/${companyId}/strategic-diagnosis`,
+      });
+    } else if (res.status === 404) {
+      results.push({
+        name: "Briefing: No saved diagnosis",
+        status: "pass",
+        details: `No diagnosis generated yet (${elapsed}ms). Generate one from the Decisions page.`,
         endpoint: `/api/companies/${companyId}/strategic-diagnosis`,
       });
     } else if (res.status === 500 || res.status === 503) {

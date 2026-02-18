@@ -9,6 +9,7 @@ import { useDecisions, useScenarios, useGenerateDecisions, useRunSimulation, use
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { api } from '@/api/client';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 
 const LOADING_STEPS = [
@@ -374,7 +375,12 @@ export default function DecisionsPage() {
       if (timedOut) return;
 
       await refetch();
-      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', currentCompany.id] });
+
+      if (timedOut) return;
+
+      const diagnosisResult = await api.decisions.regenerateDiagnosis(currentCompany.id);
+      queryClient.setQueryData(['strategic-diagnosis', currentCompany.id], diagnosisResult);
+
       setCurrentStep('decision');
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
@@ -581,21 +587,21 @@ export default function DecisionsPage() {
           }}
           onRetry={handleGenerateDecisions}
         />
-      ) : diagnosisError && !diagnosisData ? (
-        <Card className="border-destructive/30" data-testid="section-diagnosis-error">
-          <CardContent className="py-8 text-center">
-            <XCircle className="h-8 w-8 text-destructive mx-auto mb-3" />
-            <p className="text-sm font-medium text-foreground mb-1">Unable to load strategic analysis</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              This may be due to a temporary issue. Try again or regenerate the briefing.
+      ) : diagnosisError && !diagnosisData && !hasBriefing ? (
+        <Card data-testid="section-no-briefing">
+          <CardContent className="py-12 text-center">
+            <Brain className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+            <p className="text-sm font-medium text-foreground mb-1">No briefing generated yet</p>
+            <p className="text-xs text-muted-foreground mb-5 max-w-sm mx-auto">
+              Click "Regenerate Briefing" above to create your first strategic briefing with AI-powered analysis.
             </p>
             <Button
-              variant="outline"
-              onClick={() => refetchDiagnosisQuery()}
-              data-testid="button-retry-diagnosis"
+              onClick={handleGenerateDecisions}
+              disabled={isGenerating}
+              data-testid="button-generate-first-briefing"
             >
               <Brain className="h-4 w-4 mr-2" />
-              Try Again
+              Generate Briefing
             </Button>
           </CardContent>
         </Card>

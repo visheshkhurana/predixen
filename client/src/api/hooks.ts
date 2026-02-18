@@ -184,9 +184,9 @@ export function useStrategicDiagnosis() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (companyId: number) => api.decisions.strategicDiagnosis(companyId),
-    onSuccess: (_, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ['strategic-diagnosis', companyId] });
+    mutationFn: (companyId: number) => api.decisions.regenerateDiagnosis(companyId),
+    onSuccess: (data, companyId) => {
+      queryClient.setQueryData(['strategic-diagnosis', companyId], data);
     },
   });
 }
@@ -199,11 +199,9 @@ export function useStrategicDiagnosisQuery(companyId: number | null, enabled: bo
       return result;
     },
     enabled: !!companyId && enabled,
-    retry: 2,
-    retryDelay: 3000,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnMount: 'always',
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
     placeholderData: (previousData: any) => previousData,
   });
 }
