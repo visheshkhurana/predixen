@@ -1,6 +1,8 @@
 export function formatPercent(value: number | null | undefined, decimals = 1): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
-  return `${Number(value).toFixed(decimals)}%`;
+  const fixed = Number(value).toFixed(decimals);
+  const clean = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed;
+  return `${clean}%`;
 }
 
 export { formatCurrencyAbbrev } from '@/lib/utils';
@@ -9,20 +11,26 @@ export function formatCurrency(value: number | null | undefined, prefix = '$'): 
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
   const absValue = Math.abs(value);
   const sign = value < 0 ? '-' : '';
-  if (absValue >= 1_000_000) return `${sign}${prefix}${(absValue / 1_000_000).toFixed(1)}M`;
-  if (absValue >= 1_000) return `${sign}${prefix}${(absValue / 1_000).toFixed(1)}K`;
+  if (absValue >= 1_000_000) {
+    const f = (absValue / 1_000_000).toFixed(1).replace(/\.0$/, '');
+    return `${sign}${prefix}${f}M`;
+  }
+  if (absValue >= 1_000) {
+    const f = (absValue / 1_000).toFixed(1).replace(/\.0$/, '');
+    return `${sign}${prefix}${f}K`;
+  }
   if (absValue > 0 && absValue < 1) return `${sign}${prefix}${absValue.toFixed(2)}`;
   return `${sign}${prefix}${absValue.toFixed(0)}`;
 }
 
 export function formatMonths(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
-  return `${value.toFixed(1)} mo`;
+  return `${value.toFixed(1).replace(/\.0$/, '')} mo`;
 }
 
 export function formatRatio(value: number | null | undefined): string {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
-  return `${value.toFixed(1)}x`;
+  return `${value.toFixed(1).replace(/\.0$/, '')}x`;
 }
 
 export function formatMetricName(snakeCaseName: string): string {

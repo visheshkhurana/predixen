@@ -974,7 +974,9 @@ export default function OverviewPage() {
   
   const safeToFixed = (value: any, digits: number = 1, suffix: string = ''): string => {
     if (value == null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) return 'N/A';
-    return value.toFixed(digits) + suffix;
+    const fixed = value.toFixed(digits);
+    const clean = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed;
+    return clean + suffix;
   };
   
   const getConfidenceBadge = () => {

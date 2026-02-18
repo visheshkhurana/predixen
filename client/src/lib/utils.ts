@@ -10,6 +10,13 @@ export function cn(...inputs: ClassValue[]) {
  * Displays: $1.5M, $250K, $13.9K, $1,500 (with proper currency symbol)
  * Never rounds small non-zero values to $0
  */
+function cleanTrailingZeros(numStr: string): string {
+  if (numStr.includes('.')) {
+    return numStr.replace(/\.?0+$/, '');
+  }
+  return numStr;
+}
+
 export function formatCurrencyAbbrev(value: number | null | undefined, currency = 'USD'): string {
   if (value == null || isNaN(value)) return 'N/A';
   
@@ -24,15 +31,18 @@ export function formatCurrencyAbbrev(value: number | null | undefined, currency 
   
   if (absValue >= 1000000000) {
     const billions = absValue / 1000000000;
-    return `${sign}${symbol}${billions >= 10 ? billions.toFixed(1) : billions.toFixed(2)}B`;
+    const formatted = billions >= 10 ? billions.toFixed(1) : billions.toFixed(2);
+    return `${sign}${symbol}${cleanTrailingZeros(formatted)}B`;
   }
   if (absValue >= 1000000) {
     const millions = absValue / 1000000;
-    return `${sign}${symbol}${millions >= 10 ? millions.toFixed(1) : millions.toFixed(2)}M`;
+    const formatted = millions >= 10 ? millions.toFixed(1) : millions.toFixed(2);
+    return `${sign}${symbol}${cleanTrailingZeros(formatted)}M`;
   }
   if (absValue >= 1000) {
     const thousands = absValue / 1000;
-    return `${sign}${symbol}${thousands >= 100 ? thousands.toFixed(0) : thousands.toFixed(1)}K`;
+    const formatted = thousands >= 100 ? thousands.toFixed(0) : thousands.toFixed(1);
+    return `${sign}${symbol}${cleanTrailingZeros(formatted)}K`;
   }
   if (absValue > 0 && absValue < 1) {
     return `${sign}${symbol}${absValue.toFixed(2)}`;
@@ -58,7 +68,8 @@ export function formatCurrencyFull(value: number | null | undefined, currency = 
  */
 export function formatPercent(value: number | null | undefined): string {
   if (value == null || isNaN(value)) return 'N/A';
-  return `${value.toFixed(1)}%`;
+  const fixed = value.toFixed(1);
+  return `${fixed.replace(/\.0$/, '')}%`;
 }
 
 /**

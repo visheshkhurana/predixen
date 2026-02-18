@@ -42,12 +42,18 @@ export function EnhancedKPICard({
     switch (format) {
       case "currency":
         return formatCurrencyAbbrev(value, currency);
-      case "percent":
-        return `${value.toFixed(1)}%`;
-      case "months":
-        return `${value.toFixed(1)} mo`;
-      case "multiple":
-        return `${value.toFixed(1)}x`;
+      case "percent": {
+        const p = value.toFixed(1);
+        return `${p.replace(/\.0$/, '')}%`;
+      }
+      case "months": {
+        const m = value.toFixed(1);
+        return `${m.replace(/\.0$/, '')} mo`;
+      }
+      case "multiple": {
+        const x = value.toFixed(1);
+        return `${x.replace(/\.0$/, '')}x`;
+      }
       default:
         return value.toLocaleString();
     }
