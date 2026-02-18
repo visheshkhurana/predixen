@@ -1495,19 +1495,21 @@ export default function OverviewPage() {
       {/* Additional KPIs Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="overflow-visible">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">ARPU</span>
-              {sharedMetrics.sources['arpu'] && sharedMetrics.sources['arpu'] !== 'reported' && (
-                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-arpu">
-                  {sharedMetrics.sources['arpu'] === 'computed' ? 'Derived' : 'AI Est.'}
-                </Badge>
-              )}
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-muted-foreground">ARPU</span>
+                {sharedMetrics.sources['arpu'] && sharedMetrics.sources['arpu'] !== 'reported' && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-arpu">
+                    {sharedMetrics.sources['arpu'] === 'computed' ? 'Derived' : 'AI Est.'}
+                  </Badge>
+                )}
+              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-arpu">
+                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-arpu">
                     <Info className="h-3 w-3" />
-                  </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="font-medium">Average Revenue Per User</p>
@@ -1516,10 +1518,12 @@ export default function OverviewPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <p className="text-2xl font-bold font-mono" data-testid="metric-arpu">
-              {formatCurrency(sharedMetrics.arpu)}
-            </p>
-            <p className="text-xs text-muted-foreground">/user/month</p>
+            <div className="mt-2">
+              <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="metric-arpu">
+                {formatCurrency(sharedMetrics.arpu)}
+              </span>
+              <p className="text-xs text-muted-foreground mt-1">/user/month</p>
+            </div>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-arpu">
               <BarChart3 className="h-3 w-3 mr-1" /> Top 20% seed SaaS
             </Badge>
@@ -1527,19 +1531,21 @@ export default function OverviewPage() {
         </Card>
         
         <Card className="overflow-visible">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Active {terms.customers.charAt(0).toUpperCase() + terms.customers.slice(1)}</span>
-              {sharedMetrics.sources['totalCustomers'] && sharedMetrics.sources['totalCustomers'] !== 'reported' && (
-                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-users">
-                  {sharedMetrics.sources['totalCustomers'] === 'computed' ? 'Derived' : 'AI Est.'}
-                </Badge>
-              )}
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-muted-foreground">Active {terms.customers.charAt(0).toUpperCase() + terms.customers.slice(1)}</span>
+                {sharedMetrics.sources['totalCustomers'] && sharedMetrics.sources['totalCustomers'] !== 'reported' && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-users">
+                    {sharedMetrics.sources['totalCustomers'] === 'computed' ? 'Derived' : 'AI Est.'}
+                  </Badge>
+                )}
+              </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-users">
+                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-users">
                     <Info className="h-3 w-3" />
-                  </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="font-medium">Total Active Customers</p>
@@ -1547,10 +1553,12 @@ export default function OverviewPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <p className="text-2xl font-bold font-mono" data-testid="metric-active-users">
-              {sharedMetrics.sources['totalCustomers'] === 'estimated' || (!sharedMetrics.sources['totalCustomers'] && sharedMetrics.totalCustomers === 0) ? 'N/A' : sharedMetrics.totalCustomers.toLocaleString()}
-            </p>
-            <p className="text-xs text-muted-foreground">paying {terms.customers}</p>
+            <div className="mt-2">
+              <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="metric-active-users">
+                {sharedMetrics.sources['totalCustomers'] === 'estimated' || (!sharedMetrics.sources['totalCustomers'] && sharedMetrics.totalCustomers === 0) ? 'N/A' : sharedMetrics.totalCustomers.toLocaleString()}
+              </span>
+              <p className="text-xs text-muted-foreground mt-1">paying {terms.customers}</p>
+            </div>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-users">
               <BarChart3 className="h-3 w-3 mr-1" /> Above median
             </Badge>
@@ -1558,14 +1566,14 @@ export default function OverviewPage() {
         </Card>
         
         <Card className="overflow-visible">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">NRR</span>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-medium text-muted-foreground">NRR</span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-nrr">
+                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-nrr">
                     <Info className="h-3 w-3" />
-                  </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="font-medium">Net Revenue Retention</p>
@@ -1576,14 +1584,16 @@ export default function OverviewPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <p className={`text-2xl font-bold font-mono ${
-              sharedMetrics.sources['ndr'] === 'estimated' ? 'text-muted-foreground' :
-              100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
-              100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
-            }`} data-testid="metric-nrr">
-              {sharedMetrics.sources['ndr'] === 'estimated' ? 'N/A' : safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
-            </p>
-            <p className="text-xs text-muted-foreground">net revenue retention</p>
+            <div className="mt-2">
+              <span className={`text-2xl font-semibold font-mono tracking-tight ${
+                sharedMetrics.sources['ndr'] === 'estimated' ? 'text-muted-foreground' :
+                100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
+                100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
+              }`} data-testid="metric-nrr">
+                {sharedMetrics.sources['ndr'] === 'estimated' ? 'N/A' : safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
+              </span>
+              <p className="text-xs text-muted-foreground mt-1">net revenue retention</p>
+            </div>
             <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-nrr">
               <BarChart3 className="h-3 w-3 mr-1" /> Top 25% seed SaaS
             </Badge>
@@ -1591,14 +1601,14 @@ export default function OverviewPage() {
         </Card>
         
         <Card className="overflow-visible">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">LTV:CAC Ratio</span>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-sm font-medium text-muted-foreground">LTV:CAC Ratio</span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" data-testid="info-ltvcac">
+                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-ltvcac">
                     <Info className="h-3 w-3" />
-                  </Button>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="font-medium">Lifetime Value to Acquisition Cost</p>
@@ -1609,17 +1619,17 @@ export default function OverviewPage() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className="flex items-baseline gap-2">
+            <div className="mt-2 flex items-baseline gap-2">
               {metricsLoading ? (
                 <div className="h-8 w-16 bg-muted animate-pulse rounded" data-testid="metric-ltvcac-loading" />
               ) : baseData.ltvCacRatio > 0 ? (
                 <>
-                  <p className={`text-2xl font-bold font-mono ${
+                  <span className={`text-2xl font-semibold font-mono tracking-tight ${
                     baseData.ltvCacRatio >= 3 ? 'text-emerald-500' : 
                     baseData.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
                   }`} data-testid="metric-ltvcac-value">
                     {safeToFixed(baseData.ltvCacRatio, 1, 'x')}
-                  </p>
+                  </span>
                   <Badge 
                     variant={baseData.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
                     className="text-xs"
@@ -1628,9 +1638,9 @@ export default function OverviewPage() {
                   </Badge>
                 </>
               ) : (
-                <p className="text-2xl font-bold font-mono text-muted-foreground" data-testid="metric-ltvcac-value">
+                <span className="text-2xl font-semibold font-mono tracking-tight text-muted-foreground" data-testid="metric-ltvcac-value">
                   N/A
-                </p>
+                </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
