@@ -1,0 +1,600 @@
+diff --git a/client/src/lib/exportUtils.ts b/client/src/lib/exportUtils.ts
+index 6b1d324..1ad3bd4 100644
+--- a/client/src/lib/exportUtils.ts
++++ b/client/src/lib/exportUtils.ts
+@@ -2,6 +2,15 @@ export function printSimulationResults(): void {
+   window.print();
+ }
+ 
++function escapeHtml(str: string): string {
++  return String(str)
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&#39;');
++}
++
+ export function downloadCSV(data: Record<string, any>[], filename: string) {
+   if (data.length === 0) return;
+   
+@@ -67,8 +76,8 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+   const formatMetrics = (metrics: Record<string, any>) => {
+     const items = Object.entries(metrics).filter(([_, v]) => v !== null && v !== undefined);
+     return items.map(([key, value]) => {
+-      const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+-      let formattedValue = value;
++      const formattedKey = escapeHtml(key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
++      let formattedValue: string;
+       if (typeof value === 'number') {
+         if (key.includes('margin') || key.includes('growth') || key.includes('rate')) {
+           formattedValue = `${(value * 100).toFixed(1)}%`;
+@@ -77,6 +86,8 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+         } else {
+           formattedValue = value.toLocaleString();
+         }
++      } else {
++        formattedValue = escapeHtml(String(value));
+       }
+       return `<div class="metric"><span class="metric-name">${formattedKey}</span><span class="metric-value">${formattedValue}</span></div>`;
+     }).join('');
+@@ -85,9 +96,9 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+   const formatFlags = (flags: any[]) => {
+     if (!flags || flags.length === 0) return '<p>No flags detected.</p>';
+     return flags.map((flag: any) => `
+-      <div class="flag flag-${flag.severity || 'low'}">
+-        <div class="flag-title">${flag.title}</div>
+-        <div>${flag.description}</div>
++      <div class="flag flag-${escapeHtml(String(flag.severity || 'low'))}">
++        <div class="flag-title">${escapeHtml(String(flag.title || ''))}</div>
++        <div>${escapeHtml(String(flag.description || ''))}</div>
+       </div>
+     `).join('');
+   };
+@@ -105,7 +116,7 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+       
+       return `
+         <div class="benchmark">
+-          <strong>${bench.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</strong>
++          <strong>${escapeHtml(bench.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()))}</strong>
+           <div class="benchmark-bar">
+             <div class="benchmark-marker" style="left: ${p25Pos}%"></div>
+             <div class="benchmark-marker" style="left: ${p50Pos}%"></div>
+@@ -134,11 +145,11 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+     <html>
+     <head>
+       <meta charset="utf-8">
+-      <title>${title}</title>
++      <title>${escapeHtml(title)}</title>
+       ${styles}
+     </head>
+     <body>
+-      <h1>${title}</h1>
++      <h1>${escapeHtml(title)}</h1>
+       <p>Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+       
+       <div class="section">
+@@ -179,8 +190,12 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
+   
+   const printWindow = window.open('', '_blank');
+   if (printWindow) {
+-    printWindow.document.write(htmlContent);
+-    printWindow.document.close();
++    const parser = new DOMParser();
++    const doc = parser.parseFromString(htmlContent, 'text/html');
++    printWindow.document.replaceChild(
++      printWindow.document.importNode(doc.documentElement, true),
++      printWindow.document.documentElement
++    );
+     setTimeout(() => {
+       printWindow.print();
+     }, 500);
+diff --git a/client/src/lib/queryClient.ts b/client/src/lib/queryClient.ts
+index e50ebaa..3346a7e 100644
+--- a/client/src/lib/queryClient.ts
++++ b/client/src/lib/queryClient.ts
+@@ -112,7 +112,7 @@ export const queryClient = new QueryClient({
+       queryFn: getQueryFn({ on401: "throw" }),
+       refetchInterval: false,
+       refetchOnWindowFocus: false,
+-      staleTime: Infinity,
++      staleTime: 5 * 60 * 1000,
+       retry: false,
+     },
+     mutations: {
+diff --git a/server/api/companies.py b/server/api/companies.py
+index 63414e9..8aa8e13 100644
+--- a/server/api/companies.py
++++ b/server/api/companies.py
+@@ -20,6 +20,9 @@ from server.models.company_decision import CompanyDecision, CompanyScenario
+ from server.models.company_source import CompanySource, CompanyDriverModel, CompanyWorkstream, CompanyAlert
+ from server.models.fundraising import CompanyCapTable, FundraisingRound, InvestorPipeline
+ from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
++import logging
++
++logger = logging.getLogger(__name__)
+ 
+ router = APIRouter(prefix="/companies", tags=["companies"])
+ 
+@@ -164,48 +167,51 @@ def delete_company(
+             detail="Company not found"
+         )
+     
+-    # Delete all related records in proper order (children before parents)
+-    # Conversation related
+-    conversations = db.query(Conversation).filter(Conversation.company_id == company_id).all()
+-    for conv in conversations:
+-        db.query(ConversationRecommendation).filter(ConversationRecommendation.conversation_id == conv.id).delete()
+-        db.query(ConversationMessage).filter(ConversationMessage.conversation_id == conv.id).delete()
+-    db.query(Conversation).filter(Conversation.company_id == company_id).delete()
+-    
+-    # Scenario versions and related
+-    db.query(MacroEnvironment).filter(MacroEnvironment.company_id == company_id).delete()
+-    db.query(SensitivityRun).filter(SensitivityRun.company_id == company_id).delete()
+-    db.query(Recommendation).filter(Recommendation.company_id == company_id).delete()
+-    
+-    # Simulation cache (child of assumption_set)
+-    assumption_sets = db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).all()
+-    for a in assumption_sets:
+-        db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete()
+-    db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete()
+-    
+-    # Other related tables
+-    db.query(Scenario).filter(Scenario.company_id == company_id).delete()
+-    db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).delete()
+-    db.query(FinancialMetricPoint).filter(FinancialMetricPoint.company_id == company_id).delete()
+-    db.query(ImportSession).filter(ImportSession.company_id == company_id).delete()
+-    db.query(ChatMessage).filter(ChatMessage.company_id == company_id).delete()
+-    db.query(TruthScan).filter(TruthScan.company_id == company_id).delete()
+-    db.query(Dataset).filter(Dataset.company_id == company_id).delete()
+-    db.query(CustomerRecord).filter(CustomerRecord.company_id == company_id).delete()
+-    db.query(TransactionRecord).filter(TransactionRecord.company_id == company_id).delete()
+-    db.query(CompanyScenario).filter(CompanyScenario.company_id == company_id).delete()
+-    db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id).delete()
+-    db.query(CompanySource).filter(CompanySource.company_id == company_id).delete()
+-    db.query(CompanyDriverModel).filter(CompanyDriverModel.company_id == company_id).delete()
+-    db.query(CompanyWorkstream).filter(CompanyWorkstream.company_id == company_id).delete()
+-    db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id).delete()
+-    db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company_id).delete()
+-    db.query(FundraisingRound).filter(FundraisingRound.company_id == company_id).delete()
+-    db.query(InvestorPipeline).filter(InvestorPipeline.company_id == company_id).delete()
+-    
+-    # Finally delete the company
+-    db.delete(company)
+-    db.commit()
++    try:
++        # Conversation related
++        conversations = db.query(Conversation).filter(Conversation.company_id == company_id).all()
++        for conv in conversations:
++            db.query(ConversationRecommendation).filter(ConversationRecommendation.conversation_id == conv.id).delete()
++            db.query(ConversationMessage).filter(ConversationMessage.conversation_id == conv.id).delete()
++        db.query(Conversation).filter(Conversation.company_id == company_id).delete()
++        
++        # Scenario versions and related
++        db.query(MacroEnvironment).filter(MacroEnvironment.company_id == company_id).delete()
++        db.query(SensitivityRun).filter(SensitivityRun.company_id == company_id).delete()
++        db.query(Recommendation).filter(Recommendation.company_id == company_id).delete()
++        
++        # Simulation cache (child of assumption_set)
++        assumption_sets = db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).all()
++        for a in assumption_sets:
++            db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete()
++        db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete()
++        
++        # Other related tables
++        db.query(Scenario).filter(Scenario.company_id == company_id).delete()
++        db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).delete()
++        db.query(FinancialMetricPoint).filter(FinancialMetricPoint.company_id == company_id).delete()
++        db.query(ImportSession).filter(ImportSession.company_id == company_id).delete()
++        db.query(ChatMessage).filter(ChatMessage.company_id == company_id).delete()
++        db.query(TruthScan).filter(TruthScan.company_id == company_id).delete()
++        db.query(Dataset).filter(Dataset.company_id == company_id).delete()
++        db.query(CustomerRecord).filter(CustomerRecord.company_id == company_id).delete()
++        db.query(TransactionRecord).filter(TransactionRecord.company_id == company_id).delete()
++        db.query(CompanyScenario).filter(CompanyScenario.company_id == company_id).delete()
++        db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id).delete()
++        db.query(CompanySource).filter(CompanySource.company_id == company_id).delete()
++        db.query(CompanyDriverModel).filter(CompanyDriverModel.company_id == company_id).delete()
++        db.query(CompanyWorkstream).filter(CompanyWorkstream.company_id == company_id).delete()
++        db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id).delete()
++        db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company_id).delete()
++        db.query(FundraisingRound).filter(FundraisingRound.company_id == company_id).delete()
++        db.query(InvestorPipeline).filter(InvestorPipeline.company_id == company_id).delete()
++        
++        db.delete(company)
++        db.commit()
++    except Exception as e:
++        db.rollback()
++        logger.error(f"Failed to delete company {company_id}: {e}")
++        raise HTTPException(status_code=500, detail="Failed to delete company. No data was removed.")
+     
+     return {"message": "Company deleted successfully"}
+ 
+diff --git a/server/api/csv_import.py b/server/api/csv_import.py
+index 4bac993..d0a0508 100644
+--- a/server/api/csv_import.py
++++ b/server/api/csv_import.py
+@@ -14,6 +14,9 @@ from server.models.financial import FinancialRecord
+ 
+ router = APIRouter(tags=["csv-import"])
+ 
++MAX_CSV_SIZE = 5 * 1024 * 1024
++MAX_CSV_ROWS = 10_000
++
+ 
+ COLUMN_MAPPINGS = {
+     "date": ["date", "period", "month", "period_end", "period_start"],
+@@ -63,11 +66,15 @@ async def detect_csv_columns(
+         raise HTTPException(status_code=404, detail="Company not found")
+ 
+     content = await file.read()
++    if len(content) > MAX_CSV_SIZE:
++        raise HTTPException(status_code=413, detail=f"CSV file exceeds {MAX_CSV_SIZE // (1024*1024)}MB limit")
+     text = content.decode("utf-8-sig")
+     reader = csv.DictReader(io.StringIO(text))
+     headers = reader.fieldnames or []
+     rows = []
+     for row in reader:
++        if len(rows) >= MAX_CSV_ROWS:
++            raise HTTPException(status_code=413, detail=f"CSV exceeds {MAX_CSV_ROWS} row limit")
+         rows.append(dict(row))
+ 
+     suggested = detect_columns(headers)
+@@ -95,6 +102,9 @@ def import_csv_data(
+     if not company:
+         raise HTTPException(status_code=404, detail="Company not found")
+ 
++    if len(data.rows) > MAX_CSV_ROWS:
++        raise HTTPException(status_code=413, detail=f"Import exceeds {MAX_CSV_ROWS} row limit")
++
+     mappings = data.mappings
+     imported = 0
+     errors = []
+diff --git a/server/index.ts b/server/index.ts
+index 02bb02e..8d37b6a 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -432,7 +432,7 @@ app.use(
+         console.error("Notifications proxy error:", err.message);
+         if ('writeHead' in res && typeof res.writeHead === 'function') {
+           res.writeHead(502, { "Content-Type": "application/json" });
+-          res.end(JSON.stringify({ error: "Notifications service unavailable", detail: err.message }));
++          res.end(JSON.stringify({ error: "Notifications service unavailable", detail: "Internal proxy error" }));
+         }
+       },
+     },
+@@ -451,7 +451,7 @@ app.use(
+         console.error("Email tracking proxy error:", err.message);
+         if ('writeHead' in res && typeof res.writeHead === 'function') {
+           res.writeHead(502, { "Content-Type": "application/json" });
+-          res.end(JSON.stringify({ error: "Email tracking service unavailable", detail: err.message }));
++          res.end(JSON.stringify({ error: "Email tracking service unavailable", detail: "Internal proxy error" }));
+         }
+       },
+     },
+diff --git a/server/routes.ts b/server/routes.ts
+index ad9d06e..f078dea 100644
+--- a/server/routes.ts
++++ b/server/routes.ts
+@@ -1,8 +1,22 @@
+-import type { Express, Request, Response } from "express";
++import type { Express, Request, Response, NextFunction } from "express";
+ import type { Server } from "http";
+ import { registerChatRoutes } from "./replit_integrations/chat";
+ import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
+ import { registerAiGovernanceRoutes } from "./ai-governance/routes";
++
++function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
++  const secret = process.env.INTERNAL_API_SECRET;
++  if (!secret) {
++    if (process.env.NODE_ENV !== "production") return next();
++    return res.status(503).json({ error: "Internal routes not configured" });
++  }
++  const provided = req.headers["x-internal-secret"];
++  if (provided !== secret) {
++    return res.status(401).json({ error: "Unauthorized" });
++  }
++  next();
++}
++
+ export async function registerRoutes(
+   httpServer: Server,
+   app: Express
+@@ -10,7 +24,7 @@ export async function registerRoutes(
+   registerChatRoutes(app);
+   registerAiGovernanceRoutes(app);
+ 
+-  app.post("/internal/broadcast/metrics", (req: Request, res: Response) => {
++  app.post("/internal/broadcast/metrics", requireInternalAuth, (req: Request, res: Response) => {
+     const { companyId, metrics, source } = req.body;
+     if (!companyId || !metrics) {
+       return res.status(400).json({ error: "Missing companyId or metrics" });
+@@ -19,7 +33,7 @@ export async function registerRoutes(
+     res.json({ success: true, clients: getConnectedClientsCount() });
+   });
+ 
+-  app.post("/internal/broadcast/simulation", (req: Request, res: Response) => {
++  app.post("/internal/broadcast/simulation", requireInternalAuth, (req: Request, res: Response) => {
+     const { scenarioId, status, progress, results } = req.body;
+     if (!scenarioId || !status) {
+       return res.status(400).json({ error: "Missing scenarioId or status" });
+@@ -28,7 +42,7 @@ export async function registerRoutes(
+     res.json({ success: true, clients: getConnectedClientsCount() });
+   });
+ 
+-  app.post("/internal/broadcast/truth-scan", (req: Request, res: Response) => {
++  app.post("/internal/broadcast/truth-scan", requireInternalAuth, (req: Request, res: Response) => {
+     const { companyId, metrics, status } = req.body;
+     if (!companyId) {
+       return res.status(400).json({ error: "Missing companyId" });
+@@ -37,7 +51,7 @@ export async function registerRoutes(
+     res.json({ success: true, clients: getConnectedClientsCount() });
+   });
+ 
+-  app.get("/internal/ws/status", (_req: Request, res: Response) => {
++  app.get("/internal/ws/status", requireInternalAuth, (_req: Request, res: Response) => {
+     res.json({ clients: getConnectedClientsCount() });
+   });
+ 
+diff --git a/server/services/notifications.py b/server/services/notifications.py
+index 80e0059..1f7b24c 100644
+--- a/server/services/notifications.py
++++ b/server/services/notifications.py
+@@ -8,16 +8,18 @@ import re
+ import asyncio
+ import html as html_module
+ import httpx
++import logging
+ from typing import List, Optional, Dict, Any
+ from datetime import datetime
+ from pathlib import Path
+ 
++logger = logging.getLogger(__name__)
+ 
+ NOTIFICATION_RECIPIENTS = [
+     email.strip()
+     for email in os.getenv(
+         "NOTIFICATION_RECIPIENTS",
+-        "nikita@founderconsole.ai,vysheshk@gmail.com,nikita.luther@gmail.com,nikitafl2024@gmail.com"
++        ""
+     ).split(",")
+     if email.strip()
+ ]
+@@ -112,24 +114,24 @@ async def send_feature_notification(
+     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+         <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
+             <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">FounderConsole</h1>
+-            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">{category}</p>
++            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">{html_module.escape(str(category))}</p>
+         </div>
+         
+         <div style="padding: 32px;">
+             <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
+-                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">{feature_name}</h2>
++                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">{html_module.escape(str(feature_name))}</h2>
+                 <p style="color: #15803d; margin: 0; font-size: 14px;">Deployed on {timestamp}</p>
+             </div>
+             
+             <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Description</h3>
+-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">{description}</p>
++            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">{html_module.escape(str(description))}</p>
+             
+             <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Changes Made</h3>
+             <ul style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0; padding-left: 20px;">
+                 {changes_html}
+             </ul>
+             
+-            {f'<p style="color: #6b7280; font-size: 13px; margin: 24px 0 0 0;"><strong>Author:</strong> {author}</p>' if author else ''}
++            {f'<p style="color: #6b7280; font-size: 13px; margin: 24px 0 0 0;"><strong>Author:</strong> {html_module.escape(str(author))}</p>' if author else ''}
+         </div>
+         
+         <div style="background-color: #f9fafb; padding: 20px 32px; border-top: 1px solid #e5e7eb;">
+@@ -176,14 +178,14 @@ This is an automated notification from FounderConsole.
+             )
+             
+             if response.status_code in (200, 201):
+-                print(f"Feature notification sent successfully: {feature_name}")
++                logger.info(f"Feature notification sent successfully: {feature_name}")
+                 return True
+             else:
+-                print(f"Failed to send notification: {response.status_code} - {response.text}")
++                logger.warning(f"Failed to send notification: {response.status_code}")
+                 return False
+                 
+     except Exception as e:
+-        print(f"Error sending feature notification: {e}")
++        logger.error(f"Error sending feature notification: {e}")
+         return False
+ 
+ 
+@@ -370,10 +372,10 @@ FounderConsole • Automated Feature Update
+                 
+                 if response.status_code in (200, 201):
+                     sent.append(email)
+-                    print(f"Feature update sent to: {email}")
++                    logger.info(f"Feature update sent to: {email}")
+                 else:
+                     failed.append(email)
+-                    print(f"Failed to send to {email}: {response.status_code} - {response.text}")
++                    logger.warning(f"Failed to send to {email}: {response.status_code}")
+         
+         return {
+             "success": len(failed) == 0,
+@@ -383,7 +385,7 @@ FounderConsole • Automated Feature Update
+         }
+         
+     except Exception as e:
+-        print(f"Error sending AI copilot feature update: {e}")
++        logger.error(f"Error sending AI copilot feature update: {e}")
+         return {
+             "success": False,
+             "sent": [],
+@@ -501,7 +503,7 @@ async def send_beta_invite_email(
+         }
+         
+     except Exception as e:
+-        print(f"Error sending beta invites: {e}")
++        logger.error(f"Error sending beta invites: {e}")
+         return {
+             "success": False,
+             "sent": [],
+@@ -742,10 +744,10 @@ FounderConsole • {timestamp}
+                 sender_used = f"new{get_current_sender_count()}@founderconsole.ai"
+                 if response.status_code in (200, 201):
+                     sent.append(email)
+-                    print(f"Early member invite sent to: {email} (from: {sender_used})")
++                    logger.info(f"Early member invite sent to: {email}")
+                 else:
+                     failed.append(email)
+-                    print(f"Failed to send to {email}: {response.status_code}")
++                    logger.warning(f"Failed to send to {email}: {response.status_code}")
+         
+         return {
+             "success": len(failed) == 0,
+@@ -755,7 +757,7 @@ FounderConsole • {timestamp}
+         }
+         
+     except Exception as e:
+-        print(f"Error sending early member invites: {e}")
++        logger.error(f"Error sending early member invites: {e}")
+         return {
+             "success": False,
+             "sent": [],
+@@ -829,7 +831,7 @@ def get_last_notified_version() -> Optional[str]:
+         if version_file.exists():
+             return version_file.read_text().strip()
+     except Exception as e:
+-        print(f"Warning: Could not read last notified version: {e}")
++        logger.warning(f"Could not read last notified version: {e}")
+     return None
+ 
+ 
+@@ -839,7 +841,7 @@ def set_last_notified_version(version: str) -> None:
+         version_file = Path(__file__).parent.parent.parent / ".last_notified_version"
+         version_file.write_text(version)
+     except Exception as e:
+-        print(f"Warning: Could not save last notified version: {e}")
++        logger.warning(f"Could not save last notified version: {e}")
+ 
+ 
+ async def send_publish_notification() -> Dict[str, Any]:
+@@ -853,7 +855,7 @@ async def send_publish_notification() -> Dict[str, Any]:
+     import os
+     
+     if os.getenv("ENVIRONMENT", "development") != "production":
+-        print("Skipping publish notification in non-production environment")
++        logger.debug("Skipping publish notification in non-production environment")
+         return {"success": False, "reason": "Not in production environment"}
+     
+     changelog = parse_changelog()
+@@ -865,7 +867,7 @@ async def send_publish_notification() -> Dict[str, Any]:
+     last_notified = get_last_notified_version()
+     
+     if last_notified == current_version:
+-        print(f"Version {current_version} already notified, skipping")
++        logger.debug(f"Version {current_version} already notified, skipping")
+         return {"success": False, "reason": f"Version {current_version} already notified"}
+     
+     changes = changelog.get("changes", {})
+@@ -900,7 +902,7 @@ async def send_publish_notification() -> Dict[str, Any]:
+     
+     if success:
+         set_last_notified_version(current_version)
+-        print(f"Publish notification sent for version {current_version}")
++        logger.info(f"Publish notification sent for version {current_version}")
+         return {
+             "success": True,
+             "version": current_version,
+@@ -919,11 +921,11 @@ async def check_and_send_publish_notification() -> None:
+     try:
+         result = await send_publish_notification()
+         if result.get("success"):
+-            print(f"Publish notification sent successfully: {result}")
++            logger.info(f"Publish notification sent successfully")
+         else:
+-            print(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
++            logger.info(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
+     except Exception as e:
+-        print(f"Error in publish notification check: {e}")
++        logger.error(f"Error in publish notification check: {e}")
+ 
+ 
+ async def send_platform_update(
+@@ -947,7 +949,7 @@ async def send_platform_update(
+             to_emails = [user.email for user in users if user.email]
+             db.close()
+         except Exception as e:
+-            print(f"Error fetching users from database: {e}")
++            logger.error(f"Error fetching users from database: {e}")
+             to_emails = NOTIFICATION_RECIPIENTS
+     
+     if not to_emails:
+@@ -1144,13 +1146,13 @@ Visit: https://founderconsole.ai
+                     
+                     if response.status_code in (200, 201):
+                         sent.append(email)
+-                        print(f"Platform update sent to: {email}")
++                        logger.info(f"Platform update sent to: {email}")
+                     else:
+                         failed.append({"email": email, "error": response.text})
+-                        print(f"Failed to send to {email}: {response.status_code} - {response.text}")
++                        logger.warning(f"Failed to send to {email}: {response.status_code}")
+                 except Exception as e:
+                     failed.append({"email": email, "error": str(e)})
+-                    print(f"Error sending to {email}: {e}")
++                    logger.error(f"Error sending to {email}: {e}")
+         
+         return {
+             "success": len(failed) == 0,
+@@ -1161,7 +1163,7 @@ Visit: https://founderconsole.ai
+         }
+         
+     except Exception as e:
+-        print(f"Error sending platform update: {e}")
++        logger.error(f"Error sending platform update: {e}")
+         return {
+             "success": False,
+             "sent": [],
+@@ -1190,7 +1192,7 @@ async def send_hybrid_feature_announcement(
+             to_emails = [user.email for user in users if user.email]
+             db.close()
+         except Exception as e:
+-            print(f"Error fetching users from database: {e}")
++            logger.error(f"Error fetching users from database: {e}")
+             to_emails = NOTIFICATION_RECIPIENTS
+     
+     if not to_emails:
+@@ -1300,7 +1302,7 @@ FounderConsole"""
+                     
+                     if response.status_code in (200, 201):
+                         sent.append(email)
+-                        print(f"Hybrid feature announcement sent to: {email}")
++                        logger.info(f"Hybrid feature announcement sent to: {email}")
+                     else:
+                         failed.append({"email": email, "error": response.text})
+                 except Exception as e:
+@@ -1315,7 +1317,7 @@ FounderConsole"""
+         }
+         
+     except Exception as e:
+-        print(f"Error sending hybrid feature announcement: {e}")
++        logger.error(f"Error sending hybrid feature announcement: {e}")
+         return {"success": False, "sent": [], "failed": to_emails or [], "error": str(e)}
+ 
+ 
+@@ -1511,12 +1513,12 @@ View your full dashboard: https://founderconsole.ai/dashboard
+             )
+             
+             if response.status_code in (200, 201):
+-                print(f"Weekly digest sent to: {to_email}")
++                logger.info(f"Weekly digest sent to: {to_email}")
+                 return True
+             else:
+-                print(f"Failed to send weekly digest: {response.text}")
++                logger.warning(f"Failed to send weekly digest")
+                 return False
+                 
+     except Exception as e:
+-        print(f"Error sending weekly digest: {e}")
++        logger.error(f"Error sending weekly digest: {e}")
+         return False
