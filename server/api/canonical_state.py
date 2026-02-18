@@ -33,7 +33,7 @@ from server.schemas.canonical import (
     SimulationConfig,
 )
 
-router = APIRouter(prefix="/canonical", tags=["Canonical State"])
+router = APIRouter(prefix="", tags=["Canonical State"])
 
 
 RUNWAY_TOLERANCE = 2.0
@@ -126,8 +126,8 @@ def get_or_create_company_state(db: Session, company_id: int) -> CompanyState:
         ).first()
     
     financials = {}
-    if truth_dataset and truth_dataset.financials_json:
-        fin_data = truth_dataset.financials_json
+    if truth_dataset and truth_dataset.derived:
+        fin_data = truth_dataset.derived
         if isinstance(fin_data, str):
             fin_data = json.loads(fin_data)
         financials = {
