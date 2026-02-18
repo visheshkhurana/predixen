@@ -62,8 +62,9 @@ export default function PricingPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <div
-            className="flex items-center gap-2 cursor-pointer"
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0"
             onClick={() => navigate("/")}
             data-testid="link-home"
           >
@@ -71,12 +72,12 @@ export default function PricingPage() {
               <Sparkles className="h-4 w-4 text-primary" />
             </div>
             <span className="text-lg font-bold" data-testid="text-brand">FounderConsole</span>
-          </div>
+          </button>
           <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/auth")} data-testid="button-login">
+            <Button variant="ghost" onClick={() => navigate("/auth")} data-testid="button-login">
               Sign In
             </Button>
-            <Button size="sm" onClick={() => navigate("/auth")} data-testid="button-signup">
+            <Button onClick={() => navigate("/auth")} data-testid="button-signup">
               Get Started
             </Button>
           </div>
