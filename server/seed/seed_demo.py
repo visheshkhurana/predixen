@@ -88,6 +88,21 @@ def seed_demo_data(db: Session):
         if demo_user.role != "owner":
             demo_user.role = "owner"
             db.commit()
+        all_companies = db.query(Company).filter(Company.user_id == demo_user.id).order_by(Company.id).all()
+        if len(all_companies) > 1:
+            primary = all_companies[0]
+            for dup in all_companies[1:]:
+                try:
+                    logger.info(f"Removing duplicate demo company id={dup.id} name={dup.name}")
+                    db.delete(dup)
+                    db.flush()
+                except Exception:
+                    db.rollback()
+                    logger.warning(f"Could not remove duplicate company id={dup.id}, has references")
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
         company = db.query(Company).filter(Company.user_id == demo_user.id).first()
         if company:
             demo_company = company

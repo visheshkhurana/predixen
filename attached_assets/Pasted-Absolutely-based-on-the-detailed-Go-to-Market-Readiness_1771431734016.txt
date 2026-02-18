@@ -1,0 +1,374 @@
+Absolutely — based on the detailed Go-to-Market Readiness Report, I’ve crafted a Claude-for-Chrome prompt that:
+
+✅ Summarizes the specific issues uncovered
+✅ Provides precise patch suggestions per area
+✅ Sends clear fix instructions to the engineering team
+✅ Includes test cases and expected behavior
+✅ Is developer-actionable — no guessing required
+
+🚀 This is ideal to paste directly into Claude for Chrome as a “patch instruction + code suggestion” generator.
+
+⸻
+
+📌 Claude Prompt — Fix & Harden FounderConsole.ai
+
+You are a senior full-stack engineer and code patching assistant. 
+You have the entire FounderConsole.ai source code in context.
+
+Below is a prioritized list of product issues from a Go-to-Market readiness report.
+Your job is to output a *developer-ready patch plan* with precise code suggestions,
+fixes, guardrails, tests, and safe defaults.
+
+For each issue below, output:
+
+1) **Root cause diagnosis**
+2) **Fix description**
+3) **Specific code changes (file, function, pseudocode or real code snippets)**
+4) **Tests to add (unit, integration, UI/API checks)**
+
+---
+
+# PRIORITY FIX LIST
+
+## 1) Simulation "Company not found" error (Showstopper, P0)
+Users attempting to run scenario simulation receive:
+  "Error: Company not found" even after login.
+
+Output specifically:
+- Why is simulate API failing to resolve current user’s company?
+- Patch auth/company lookup guard.
+- Ensure demo accounts, new accounts, and sample companies load correctly.
+
+---
+
+## 2) Tenant Isolation & Demo Data Logic (P0)
+New users see "TechFlow Analytics" (someone else's company) with zeros.
+- Fix tenant isolation: each new user must have their **own company workspace** scoped.
+- Demo account must use demo seed data, not default on new user login.
+
+---
+
+## 3) Zeroed Dashboard Data + Demo Data Regression
+Dashboard showing all zeros for both new and demo accounts.
+- Find regression caused by recent changes (likely seed/demo data wipe or wrong join).
+- Patch sample data loading logic.
+
+---
+
+## 4) Onboarding Bypass (P1)
+Users bypass onboarding and land on dashboard with no real data.
+- Enforce route guard: if user has no company, redirect to `/onboarding`.
+- Must work even on page reload / deep link.
+
+---
+
+## 5) Runway Division-by-Zero Handling (P1)
+Runway shows 999.0 or huge number when burn is zero.
+- Fix calculation: when burn <= 0, display `∞`, `"No Burn Detected"`, or `"Cashflow+"` consistently.
+
+---
+
+## 6) NLP Scenario Parser Logic Inversion (P1)
+Phrases like “cut marketing 25%” are parsed incorrectly as increases.
+- Update intent_parser logic to map correctly:
+  - cut / reduce => negative
+  - increase / add => positive
+  - revenue drop => negative
+  - neutral language => no change
+
+---
+
+## 7) Strategic Briefing LLM Key & Fallback (P1)
+Strategic diagnosis endpoint often fails due to missing API keys.
+- Add fallback: use cached insights + simple rule generator when LLM fails.
+
+---
+
+## 8) Industry KPI Templates Beyond SaaS (P1)
+Users in marketplace, hardware, D2C need relevant metrics.
+- Define metric templates beyond SaaS (GMV, take rate, AOV, repeat rate, contribution margin).
+- Patch UI + backend to support template selection and associated KPI calculations.
+
+---
+
+## 9) Duplicate Company Entries in Admin (P2)
+Fix duplicate seed data entries for the same company.
+
+---
+
+## 10) Add Pricing Page & Plan Structure (P2)
+Add a visible pricing page with plan tiers.
+
+---
+
+---
+
+# IMPLEMENTATION GUIDELINES
+
+Please generate fix bundles in the following structure:
+
+---
+
+## 🛠 Fix Bundle 1: Simulation Company Lookup
+
+**Cause**
+The simulate endpoint is using a wrong company_id or missing tenant context when resolving the current user’s company.
+
+**Fix**
+Ensure:
+- company_id is extracted from current user’s tenant session
+- not from query string or stale cookie
+- handle demo workspace specially
+
+**Files**
+- `server/api/scenarios.py` (or simulate handler)
+- `server/auth/middleware.py`
+- `server/main.py`
+
+**Example Patch**
+```python
+# auth middleware or company context loader
+def get_current_company(request):
+    user = request.user
+    # must have company_id in user profile
+    if not user.company_id:
+        raise HttpError(403, "User has no company assigned")
+    return Company.find_by_id(user.company_id)
+
+# scenario endpoint
+@router.post("/simulate")
+def simulate_route(request):
+    company = get_current_company(request)
+    if not company:
+        return {"error": "Company not found"}
+    # pass explicit company context to engine
+    result = scenario_engine.run(company, request.body.scenario)
+    return result
+
+Tests
+	•	/simulate returns 200 for logged-in user with valid company
+	•	/simulate returns 403 for user with no company
+	•	Demo account runs simulation on its seeded company
+
+⸻
+
+🛠 Fix Bundle 2: Tenant Isolation
+
+Cause
+New users see global/default demo data because tenant scoping is missing in data loaders.
+
+Fix
+Every query for business data must be scoped by:
+WHERE company_id = session.company_id
+
+Files
+	•	server/services/db_helpers.py
+	•	DAO/Repository code
+	•	All KPI endpoints
+
+Example Patch
+
+SELECT * FROM financial_records
+WHERE company_id = :company_id
+  AND user_id = :user_id
+
+In code:
+
+records = FinancialRecord.filter(company_id=session.company_id)
+
+Tests
+	•	User-A sees only User-A companies
+	•	User-B sees only User-B companies
+	•	Viewer role cannot see other companies
+
+⸻
+
+🛠 Fix Bundle 3: Stop Onboarding Bypass
+
+Cause
+Dashboard route does not enforce onboarding completion check.
+
+Fix
+Add a guard in router:
+
+if user.has_no_company():
+    redirect("/onboarding")
+
+Files
+	•	client/src/routes.tsx
+	•	client/src/pages/dashboard.tsx
+
+Patch
+
+useEffect(() => {
+    if (!currentUser.company) {
+        navigate("/onboarding");
+    }
+}, [currentUser]);
+
+Tests
+	•	New user lands on onboarding, cannot access dashboard
+	•	After onboarding, dashboard loads with their data
+
+⸻
+
+🛠 Fix Bundle 4: Runway Edge Case
+
+Cause
+Burn <= 0 not properly guarded → division yields huge values.
+
+Fix
+Define guard in canonical KPI calculations:
+
+if burn <= 0:
+    return {"value": None, "display": "∞", "reason": "no_burn_detected"}
+
+Files
+	•	server/services/kpi_calculations.py
+
+Tests
+	•	Burn = 0 → runway display is “∞” or “Cashflow+”
+	•	Negative burn → same
+
+⸻
+
+🛠 Fix Bundle 5: NLP Intent Correct Mapping
+
+Cause
+Parser rules not mapping negative verbs correctly.
+
+Fix
+In server/copilot/intent_parser.py:
+	•	add patterns for “cut|reduce|decrease” → negative operator
+	•	add patterns for “increase|raise|add” → positive operator
+
+Patch
+
+NEGATIVE_WORDS = ["cut","reduce","decrease","drop"]
+POSITIVE_WORDS = ["increase","add","raise","grow"]
+
+def parse_change_intent(text):
+    for w in NEGATIVE_WORDS:
+        if w in text:
+            return {"direction": -1}
+    for w in POSITIVE_WORDS:
+        if w in text:
+            return {"direction": 1}
+    return {"direction": 0}
+
+Tests
+	•	“Cut marketing 25%” → negative
+	•	“Increase revenue 15%” → positive
+	•	“Reduce burn” → negative
+
+⸻
+
+🛠 Fix Bundle 6: Strategic Briefing Fallback
+
+Cause
+LLM key missing → no fallback logic.
+
+Fix
+Surround LLM call with timeout + fallback to rule based:
+
+try:
+    ai_result = call_llm_api(...)
+except LLMError:
+    ai_result = rule_based_insights(company_kpis)
+
+Files
+	•	server/api/decisions.py
+
+Tests
+	•	Force LLM failure → returns fallback list
+
+⸻
+
+🛠 Fix Bundle 7: New KPI Templates
+
+Cause
+Current KPI set purely SaaS.
+
+Fix
+	•	Add templates config for:
+	•	Consumer (AOV, repeat rate)
+	•	Marketplace (GMV, take rate, buyer/seller churn)
+	•	Hardware (unit economics)
+
+Files
+	•	server/services/kpi_templates.py
+	•	UI template selector
+
+Tests
+	•	Creating company with template=Marketplace shows GMV fields
+
+⸻
+
+🛠 Fix Bundle 8: Dedupe Companies
+
+Cause
+Duplicate demo company seeds.
+
+Fix
+	•	Add unique constraint on company name/email
+	•	Adjust seed data logic to update, not insert if exists
+
+Files
+	•	server/seed/seed_demo.py
+
+Tests
+	•	Running seeder twice does not create duplicates
+
+⸻
+
+🛠 Fix Bundle 9: Pricing Page
+
+Cause
+No visible pricing -> cannot convert users.
+
+Fix
+Add static pricing page with plans:
+	•	Free tier
+	•	Founder tier ($199/mo)
+	•	Startup tier ($399/mo)
+
+Files
+	•	client/src/pages/pricing.tsx
+	•	routing config
+
+Tests
+	•	Visiting /pricing shows plan cards
+
+⸻
+
+SUMMARY
+
+For each fix, provide:
+	•	Code snippet
+	•	File names
+	•	Unit & integration tests
+	•	API & UI edge tests
+
+Make sure user flows:
+	•	New users cannot see dashboard before onboarding
+	•	Simulation always finds company
+	•	KPI calculations never produce invalid numbers
+
+Apply auto-redirects, hard guards, and fallback logic as described.
+
+اکنون شروع کنید و output patch details developer can copy/paste.
+
+---
+
+### What this prompt does
+
+🔥 It turns your **qualitative report** into a **developer action plan** with:
+
+✔ Bug root causes  
+✔ Specific file locations  
+✔ Code patches and logic  
+✔ Test assertions you can add  
+
+---
+
+If you want, I can also generate a **ready-to-run test suite** (API + UI + scenario tests) in Jest/Supertest + Playwright/Cypress to fully validate these changes.

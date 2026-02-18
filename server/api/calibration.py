@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.truth_scan import TruthScan
@@ -30,13 +31,7 @@ def calibrate_inputs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     calibrator = InputCalibrator(industry=request.industry)
     result = calibrator.calibrate(
@@ -55,13 +50,7 @@ def auto_calibrate_from_truth_scan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id

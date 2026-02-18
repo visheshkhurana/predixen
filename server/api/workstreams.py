@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.company_source import CompanyWorkstream, CompanyAlert
@@ -63,13 +64,7 @@ def list_workstreams(
     current_user: User = Depends(get_current_user)
 ):
     """List all workstreams for a company."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     workstreams = db.query(CompanyWorkstream).filter(
         CompanyWorkstream.company_id == company_id
@@ -86,13 +81,7 @@ def create_workstream(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new workstream."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     workstream = CompanyWorkstream(
         company_id=company_id,
@@ -115,13 +104,7 @@ def create_default_workstreams(
     current_user: User = Depends(get_current_user)
 ):
     """Create default workstream templates for a company."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     created = []
     for template in DEFAULT_WORKSTREAMS:
@@ -154,13 +137,7 @@ def update_workstream(
     current_user: User = Depends(get_current_user)
 ):
     """Update a workstream."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         ws_uuid = uuid.UUID(workstream_id)
@@ -199,13 +176,7 @@ def list_alerts(
     current_user: User = Depends(get_current_user)
 ):
     """List alerts for a company, optionally filtered by status."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     query = db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id)
     
@@ -224,13 +195,7 @@ def evaluate_alerts(
     current_user: User = Depends(get_current_user)
 ):
     """Evaluate alert rules and create new alerts if triggered."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -337,13 +302,7 @@ def update_alert(
     current_user: User = Depends(get_current_user)
 ):
     """Update alert status (resolve, snooze)."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         a_uuid = uuid.UUID(alert_id)

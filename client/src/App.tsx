@@ -80,12 +80,18 @@ import JournalPage from "@/pages/journal";
 import GoalsPage from "@/pages/goals";
 import SharedScenarioPage from "@/pages/shared-scenario";
 import QAFrontPage from "@/pages/qa";
+import PricingPage from "@/pages/pricing";
 
-function AuthenticatedRoute({ component: Component }: { component: React.ComponentType }) {
+function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
   const token = useFounderStore((s) => s.token);
+  const currentCompany = useFounderStore((s) => s.currentCompany);
   
   if (!token) {
     return <Redirect to="/auth" />;
+  }
+  
+  if (!allowWithoutCompany && !currentCompany) {
+    return <Redirect to="/onboarding" />;
   }
   
   return <Component />;
@@ -169,12 +175,13 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
 function Router() {
   return (
     <Switch>
+      <Route path="/pricing" component={PricingPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
       <Route path="/onboarding">
-        {() => <AuthenticatedRoute component={OnboardingPage} />}
+        {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
       </Route>
       <Route path="/">
         {() => <AuthenticatedRoute component={OverviewPage} />}
@@ -503,6 +510,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const isStandalonePage = typeof window !== 'undefined' && 
     (window.location.pathname === '/owner-console' || 
      window.location.pathname === '/auth' ||
+     window.location.pathname === '/pricing' ||
      window.location.pathname === '/onboarding' ||
      window.location.pathname.startsWith('/admin') ||
      window.location.pathname.startsWith('/scenarios/shared/'));

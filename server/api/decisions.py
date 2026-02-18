@@ -17,6 +17,7 @@ def _fmt_currency(val):
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.simulation_run import SimulationRun
@@ -85,13 +86,7 @@ def generate_decisions(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
@@ -349,13 +344,7 @@ def get_strategic_diagnosis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     meta = company.metadata_json or {}
     saved = meta.get("strategic_diagnosis")
@@ -371,13 +360,7 @@ def generate_strategic_diagnosis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     revenue = 0.0
     burn = 0.0
@@ -687,13 +670,7 @@ def get_latest_decisions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     from server.models.scenario import Scenario
     scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
@@ -733,13 +710,7 @@ def list_company_decisions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     query = db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id)
     
@@ -761,13 +732,7 @@ def get_company_decision(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         decision_uuid = uuid_lib.UUID(decision_id)
@@ -792,13 +757,7 @@ def create_company_decision(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     decision = CompanyDecision(
         company_id=company_id,
@@ -828,13 +787,7 @@ def update_company_decision(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         decision_uuid = uuid_lib.UUID(decision_id)
@@ -881,13 +834,7 @@ def delete_company_decision(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         decision_uuid = uuid_lib.UUID(decision_id)
@@ -1139,12 +1086,7 @@ def share_action_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
 
     subject = request.subject or f"Action Item from {company.name}"
 

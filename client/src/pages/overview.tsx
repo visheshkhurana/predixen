@@ -281,7 +281,7 @@ const computeMonthlyProjections = (baseData: typeof DUMMY_BASE_DATA, assumptions
       arr: mrr * 12,
       cash: Math.max(0, cash),
       burnRate: burn,
-      runway: cash > 0 ? cash / burn : 0,
+      runway: burn <= 0 ? 999 : cash > 0 ? cash / burn : 0,
       cac,
       ltv,
       ltvCacRatio: cac > 0 ? ltv / cac : 0,

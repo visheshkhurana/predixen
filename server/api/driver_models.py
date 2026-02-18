@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.company_source import CompanyDriverModel, DRIVER_TEMPLATES
@@ -33,13 +34,7 @@ def list_driver_models(
     current_user: User = Depends(get_current_user)
 ):
     """List all driver models for a company."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     models = db.query(CompanyDriverModel).filter(
         CompanyDriverModel.company_id == company_id
@@ -55,13 +50,7 @@ def get_templates(
     current_user: User = Depends(get_current_user)
 ):
     """Get available driver model templates."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     return {"templates": DRIVER_TEMPLATES}
 
@@ -74,13 +63,7 @@ def create_driver_model(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new driver model."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     if data.template not in DRIVER_TEMPLATES:
         raise HTTPException(status_code=400, detail=f"Invalid template: {data.template}")
@@ -111,13 +94,7 @@ def run_driver_model(
     current_user: User = Depends(get_current_user)
 ):
     """Run a driver model forecast."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         m_uuid = uuid.UUID(model_id)
@@ -300,13 +277,7 @@ def update_driver_model(
     current_user: User = Depends(get_current_user)
 ):
     """Update a driver model."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         m_uuid = uuid.UUID(model_id)
@@ -341,13 +312,7 @@ def delete_driver_model(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a driver model."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         m_uuid = uuid.UUID(model_id)

@@ -7,6 +7,7 @@ import uuid as uuid_lib
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.company_decision import CompanyScenario
@@ -39,13 +40,7 @@ def list_scenarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     scenarios = db.query(CompanyScenario).filter(
         CompanyScenario.company_id == company_id
@@ -64,13 +59,7 @@ def get_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         scenario_uuid = uuid_lib.UUID(scenario_id)
@@ -95,13 +84,7 @@ def create_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     base_uuid = None
     if request.base_scenario_id:
@@ -145,13 +128,7 @@ def fork_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         base_uuid = uuid_lib.UUID(scenario_id)
@@ -203,13 +180,7 @@ def update_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         scenario_uuid = uuid_lib.UUID(scenario_id)
@@ -263,13 +234,7 @@ def delete_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     try:
         scenario_uuid = uuid_lib.UUID(scenario_id)
@@ -307,13 +272,7 @@ def compare_scenarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     ids = [s.strip() for s in scenario_ids.split(",")]
     

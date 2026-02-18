@@ -7,6 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models.user import User
 from server.models.company import Company
 from server.models.scenario import Scenario
@@ -96,13 +97,7 @@ def create_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     scenario = Scenario(
         company_id=company_id,
@@ -125,13 +120,7 @@ def list_scenarios(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     scenarios = db.query(Scenario).filter(
         Scenario.company_id == company_id,
@@ -226,12 +215,7 @@ def duplicate_scenario(
     if not original:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == original.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, original.company_id, current_user)
     
     new_scenario = Scenario(
         company_id=original.company_id,
@@ -265,12 +249,7 @@ def update_scenario(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     if request.name is not None:
         scenario.name = request.name
@@ -302,12 +281,7 @@ def archive_scenario(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     scenario.is_archived = 1
     db.commit()
@@ -325,12 +299,7 @@ def get_scenario_versions(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     root_id = scenario.parent_id or scenario.id
     versions = db.query(Scenario).filter(
@@ -381,13 +350,7 @@ def run_simulation(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
@@ -714,12 +677,7 @@ def simulate_counter_moves(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
 
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
@@ -774,13 +732,7 @@ def get_latest_simulation(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     sim_run = db.query(SimulationRun).filter(
         SimulationRun.scenario_id == scenario_id
@@ -859,13 +811,7 @@ def get_scenario_timeseries(
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
     
-    company = db.query(Company).filter(
-        Company.id == scenario.company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=403, detail="Access denied")
+    company = get_user_company(db, scenario.company_id, current_user)
     
     sim_run = db.query(SimulationRun).filter(
         SimulationRun.scenario_id == scenario_id
@@ -947,13 +893,7 @@ def get_default_scenarios(
     current_user: User = Depends(get_current_user)
 ):
     """Return the list of default scenario definitions"""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     return {
         "scenarios": [
@@ -974,13 +914,7 @@ def simulate_multiple_scenarios(
     Run Monte Carlo simulation for multiple scenarios at once.
     Returns month-indexed P10/P50/P90 metrics for each scenario.
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -1088,13 +1022,7 @@ def simulate_enhanced(
     Run enhanced Monte Carlo simulation with regime-aware drivers and correlated sampling.
     Returns enriched results with regime distribution, monthly states, and survival curves.
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -1167,13 +1095,7 @@ def simulate_scenarios_enhanced(
     Run enhanced Monte Carlo simulation across multiple scenarios with decision ranking.
     Supports time-windowed events and optional sensitivity analysis.
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -1327,13 +1249,7 @@ def run_sensitivity_analysis(
     Run driver sensitivity analysis to determine what must be true to achieve target runway.
     Returns key drivers, thresholds, and actionable recommendations.
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company_id
@@ -1433,13 +1349,7 @@ def generate_recommendations(
     Generate actionable recommendations based on simulation results and benchmarks.
     Returns prioritized list of actions to improve runway and survival probability.
     """
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     recommendations = []
     priority = 1
