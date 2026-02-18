@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { SlidersHorizontal, TrendingUp, TrendingDown, Percent, DollarSign, Flame, RotateCcw, Play } from 'lucide-react';
 import { cn, formatCurrencyAbbrev } from '@/lib/utils';
+import { formatRunwayDisplay, isSustainable } from '@/lib/simulation/sensitivityAnalysis';
 
 interface SliderConfig {
   key: string;
@@ -144,15 +145,25 @@ export function WhatIfExplorer({
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className={cn(
                 "rounded-lg p-4 border transition-all",
+                isSustainable(results.runway) ? 'border-green-500/30 bg-green-500/5' :
                 results.runwayChange > 0.5 ? 'border-green-500/30 bg-green-500/5' : 
                 results.runwayChange < -0.5 ? 'border-red-500/30 bg-red-500/5' : 
                 'border-border bg-muted/30'
               )}>
                 <div className="text-muted-foreground text-xs mb-1">Runway</div>
-                <div className="text-xl font-bold font-mono">{results.runway.toFixed(1)}mo</div>
-                <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.runwayChange))}>
-                  {getChangeIcon(results.runwayChange)}
-                  {results.runwayChange > 0 ? '+' : ''}{results.runwayChange.toFixed(1)} months
+                <div className="text-xl font-semibold font-mono tracking-tight">{formatRunwayDisplay(results.runway)}</div>
+                <div className={cn("text-sm flex items-center gap-1", 
+                  isSustainable(results.runway) ? 'text-green-500' : 
+                  isSustainable(baselineResults.runway) ? 'text-red-500' :
+                  getChangeColor(results.runwayChange)
+                )}>
+                  {isSustainable(results.runway) && isSustainable(baselineResults.runway) 
+                    ? 'Cash-flow positive' 
+                    : isSustainable(results.runway) 
+                    ? <><TrendingUp className="h-3 w-3" /> Now sustainable</>
+                    : isSustainable(baselineResults.runway)
+                    ? <><TrendingDown className="h-3 w-3" /> No longer sustainable</>
+                    : <>{getChangeIcon(results.runwayChange)} {results.runwayChange > 0 ? '+' : ''}{results.runwayChange.toFixed(1).replace(/\.0$/, '')} months</>}
                 </div>
               </div>
               
@@ -163,7 +174,7 @@ export function WhatIfExplorer({
                 'border-border bg-muted/30'
               )}>
                 <div className="text-muted-foreground text-xs mb-1">Survival (18m)</div>
-                <div className="text-xl font-bold font-mono">{results.survival18m.toFixed(0)}%</div>
+                <div className="text-xl font-semibold font-mono tracking-tight">{results.survival18m.toFixed(0)}%</div>
                 <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.survivalChange))}>
                   {getChangeIcon(results.survivalChange)}
                   {results.survivalChange > 0 ? '+' : ''}{results.survivalChange.toFixed(0)}%
@@ -177,7 +188,7 @@ export function WhatIfExplorer({
                 'border-border bg-muted/30'
               )}>
                 <div className="text-muted-foreground text-xs mb-1">Cash at 18mo</div>
-                <div className="text-xl font-bold font-mono">{formatCurrencyAbbrev(results.cashAt18m)}</div>
+                <div className="text-xl font-semibold font-mono tracking-tight">{formatCurrencyAbbrev(results.cashAt18m)}</div>
                 <div className={cn("text-sm flex items-center gap-1", getChangeColor(results.cashChange))}>
                   {getChangeIcon(results.cashChange)}
                   {results.cashChange > 0 ? '+' : ''}{formatCurrencyAbbrev(results.cashChange)}

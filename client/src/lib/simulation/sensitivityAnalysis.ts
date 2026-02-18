@@ -22,13 +22,28 @@ export interface SensitivityResult {
   currentValue: number;
 }
 
+export const RUNWAY_SUSTAINABLE = 999;
+export const RUNWAY_DISPLAY_CAP = 120;
+
 export function calculateRunway(state: FinancialState): number {
   const monthlyGrossProfit = state.monthlyRevenue * (state.grossMargin / 100);
   const totalExpenses = state.opex + state.payroll + state.otherCosts;
   const netBurn = totalExpenses - monthlyGrossProfit;
   
-  if (netBurn <= 0) return 999; // Profitable
-  return state.cashBalance / netBurn;
+  if (netBurn <= 0) return RUNWAY_SUSTAINABLE;
+  const runway = state.cashBalance / netBurn;
+  return Math.min(runway, RUNWAY_SUSTAINABLE);
+}
+
+export function formatRunwayDisplay(months: number): string {
+  if (months >= RUNWAY_SUSTAINABLE) return 'Sustainable';
+  if (months >= RUNWAY_DISPLAY_CAP) return '120+ mo';
+  const fixed = months.toFixed(1);
+  return `${fixed.replace(/\.0$/, '')} mo`;
+}
+
+export function isSustainable(runway: number): boolean {
+  return runway >= RUNWAY_SUSTAINABLE;
 }
 
 export function calculateSensitivity(
