@@ -254,7 +254,7 @@ app.post("/api/notion/push-report", express.json(), async (req, res) => {
     let inTable = false;
     let tableRows: string[][] = [];
 
-    function flushTable() {
+    const flushTable = () => {
       if (tableRows.length > 0) {
         const header = tableRows[0];
         const dataRows = tableRows.slice(1);
