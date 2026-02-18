@@ -351,7 +351,15 @@ def get_strategic_diagnosis(
     if saved:
         return saved
 
-    raise HTTPException(status_code=404, detail="No strategic diagnosis generated yet")
+    return {
+        "status": "not_generated",
+        "situation": None,
+        "recommendations": [],
+        "consequences_of_inaction": None,
+        "execution_playbook": [],
+        "key_risks": [],
+        "message": "No strategic diagnosis generated yet. Run a simulation first."
+    }
 
 
 @router.post("/companies/{company_id}/strategic-diagnosis")

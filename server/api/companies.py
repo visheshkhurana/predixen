@@ -20,9 +20,39 @@ from server.models.company_decision import CompanyDecision, CompanyScenario
 from server.models.company_source import CompanySource, CompanyDriverModel, CompanyWorkstream, CompanyAlert
 from server.models.fundraising import CompanyCapTable, FundraisingRound, InvestorPipeline
 from server.models.scenario_version import MacroEnvironment, SensitivityRun, Recommendation
+from server.models.company_state import CompanyState, compute_snapshot_id
+import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get_stage_sample_financials(stage: str = None) -> dict:
+    """Return stage-appropriate sample financial data for new companies."""
+    stage_defaults = {
+        "pre_seed": {
+            "cashBalance": 150000, "monthlyBurn": 12000, "revenueMonthly": 0,
+            "revenueGrowthRate": 0, "expensesMonthly": 12000,
+            "mrr": 0, "arr": 0, "arpu": 0, "customers": 0
+        },
+        "seed": {
+            "cashBalance": 500000, "monthlyBurn": 25000, "revenueMonthly": 8000,
+            "revenueGrowthRate": 12.0, "expensesMonthly": 33000,
+            "mrr": 8000, "arr": 96000, "arpu": 100, "customers": 80
+        },
+        "series_a": {
+            "cashBalance": 2000000, "monthlyBurn": 80000, "revenueMonthly": 60000,
+            "revenueGrowthRate": 15.0, "expensesMonthly": 140000,
+            "mrr": 60000, "arr": 720000, "arpu": 200, "customers": 300
+        },
+        "series_b": {
+            "cashBalance": 8000000, "monthlyBurn": 250000, "revenueMonthly": 300000,
+            "revenueGrowthRate": 10.0, "expensesMonthly": 550000,
+            "mrr": 300000, "arr": 3600000, "arpu": 300, "customers": 1000
+        },
+    }
+    return stage_defaults.get(stage, stage_defaults["seed"])
+
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
@@ -70,7 +100,29 @@ def create_company(
         amount_scale=request.amount_scale
     )
     db.add(company)
-    db.commit()
+    db.flush()
+
+    try:
+        sample_data = _get_stage_sample_financials(request.stage)
+        state = CompanyState(
+            company_id=company.id,
+            environment="user",
+            state_json=json.dumps(sample_data),
+            snapshot_id=compute_snapshot_id(sample_data),
+            cash_balance=sample_data.get("cashBalance", 0),
+            monthly_burn=sample_data.get("monthlyBurn", 0),
+            revenue_monthly=sample_data.get("revenueMonthly", 0),
+            revenue_growth_rate=str(sample_data.get("revenueGrowthRate", 0)),
+            expenses_monthly=sample_data.get("expensesMonthly", 0)
+        )
+        db.add(state)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create CompanyState for company {company.id}: {e}")
+        db.add(company)
+        db.commit()
+
     db.refresh(company)
     return company
 
@@ -185,6 +237,9 @@ def delete_company(
         for a in assumption_sets:
             db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete()
         db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete()
+        
+        # Company state
+        db.query(CompanyState).filter(CompanyState.company_id == company_id).delete()
         
         # Other related tables
         db.query(Scenario).filter(Scenario.company_id == company_id).delete()

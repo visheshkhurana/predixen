@@ -21,10 +21,43 @@ from server.models.company_decision import CompanyScenario, CompanyDecision
 from server.models.dashboard import Dashboard, DashboardWidget
 from server.models.fundraising import Investor, InvestorPipeline
 from server.core.security import get_password_hash
+from server.models.company_state import CompanyState, compute_snapshot_id
 
 logger = logging.getLogger(__name__)
 
 DEMO_SEED_VERSION = 3
+
+
+def _ensure_company_state(db: Session, company):
+    """Create CompanyState for demo company if it doesn't exist."""
+    existing = db.query(CompanyState).filter(CompanyState.company_id == company.id).first()
+    if existing:
+        return
+    demo_financials = {
+        "cashBalance": 513746,
+        "monthlyBurn": 28000,
+        "revenueMonthly": 43949,
+        "revenueGrowthRate": 10.0,
+        "expensesMonthly": 71949,
+        "mrr": 43949,
+        "arr": 527388,
+        "arpu": 150,
+        "customers": 293
+    }
+    state = CompanyState(
+        company_id=company.id,
+        environment="user",
+        state_json=json.dumps(demo_financials),
+        snapshot_id=compute_snapshot_id(demo_financials),
+        cash_balance=513746,
+        monthly_burn=28000,
+        revenue_monthly=43949,
+        revenue_growth_rate="10.0",
+        expenses_monthly=71949
+    )
+    db.add(state)
+    db.commit()
+    logger.info(f"Created CompanyState for company {company.id}")
 
 
 def _ensure_connector_metadata(db: Session, company):
@@ -120,12 +153,14 @@ def seed_demo_data(db: Session):
                 _seed_investors_pipeline(db, demo_company)
                 _seed_company_decisions(db, demo_company)
                 _ensure_connector_metadata(db, demo_company)
+                _ensure_company_state(db, demo_company)
                 seed_team_members(db)
                 return demo_user
             existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
             if existing_scenario:
                 _seed_extended_demo_data(db, demo_company, demo_user)
                 _ensure_connector_metadata(db, demo_company)
+                _ensure_company_state(db, demo_company)
                 seed_team_members(db)
                 logger.info("Demo data extended successfully")
                 return demo_user
@@ -141,6 +176,7 @@ def seed_demo_data(db: Session):
             db.add(demo_company)
             db.commit()
             db.refresh(demo_company)
+            _ensure_company_state(db, demo_company)
     else:
         demo_user = User(
             email="demo@founderconsole.ai",
@@ -162,6 +198,7 @@ def seed_demo_data(db: Session):
         db.add(demo_company)
         db.commit()
         db.refresh(demo_company)
+        _ensure_company_state(db, demo_company)
     
     base_date = datetime.now() - timedelta(days=365)
     revenue = 15000
