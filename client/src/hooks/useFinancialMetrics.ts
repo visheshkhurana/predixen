@@ -215,14 +215,14 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const rawGrowthRate = v(c.momGrowth, tsVal('revenue_growth_mom'), fb?.monthlyGrowthRate);
     const monthlyGrowthRate = rawGrowthRate;
     const rawNdr = v(c.ndr, tsVal('net_revenue_retention'));
-    const ndr = rawNdr;
+    const ndr = rawNdr > 0 && rawNdr <= 200 ? rawNdr : 0;
 
     const warnings: MetricWarning[] = [];
     if (rawGrowthRate > 100 || rawGrowthRate < -100) {
       warnings.push({ metric: 'monthlyGrowthRate', value: rawGrowthRate, reason: `Out of sanity bounds (-100% to +100%): ${rawGrowthRate}%` });
     }
-    if (rawNdr > 300 || rawNdr < 0) {
-      warnings.push({ metric: 'ndr', value: rawNdr, reason: `Out of sanity bounds (0-300%): ${rawNdr}%` });
+    if (rawNdr > 200 || rawNdr < 0) {
+      warnings.push({ metric: 'ndr', value: rawNdr, reason: `Out of sanity bounds (0-200%): ${rawNdr}%` });
     }
     if (grossMarginPct > 100 || grossMarginPct < -100) {
       warnings.push({ metric: 'grossMargin', value: grossMarginPct, reason: `Unusual gross margin: ${grossMarginPct}%` });

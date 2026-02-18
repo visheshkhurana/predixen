@@ -343,18 +343,22 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, compan
         testId={`${testId}-arr-growth`}
       />
     ),
-    nrr: (
-      <KPICard
-        key="nrr"
-        title="Net Revenue Retention"
-        value={extractValue(mergedMetrics?.net_revenue_retention) ? `${extractValue(mergedMetrics?.net_revenue_retention).toFixed(0)}%` : "N/A"}
-        subtitle="Including expansion"
-        status={!extractValue(mergedMetrics?.net_revenue_retention) ? "warning" : extractValue(mergedMetrics?.net_revenue_retention) >= 100 ? "healthy" : "critical"}
-        icon={<Percent className="h-4 w-4" />}
-        tooltip="Revenue retention including expansion revenue from existing customers. Requires customer data to compute."
-        testId={`${testId}-nrr`}
-      />
-    ),
+    nrr: (() => {
+      const rawNrr = extractValue(mergedMetrics?.net_revenue_retention);
+      const nrrValid = rawNrr > 0 && rawNrr <= 200;
+      return (
+        <KPICard
+          key="nrr"
+          title="Net Revenue Retention"
+          value={nrrValid ? `${rawNrr.toFixed(0)}%` : "N/A"}
+          subtitle="Including expansion"
+          status={!nrrValid ? "warning" : rawNrr >= 100 ? "healthy" : "critical"}
+          icon={<Percent className="h-4 w-4" />}
+          tooltip="Revenue retention including expansion revenue from existing customers. Requires customer data to compute."
+          testId={`${testId}-nrr`}
+        />
+      );
+    })(),
   };
 
   const enabledCards = configs

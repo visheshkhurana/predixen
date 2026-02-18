@@ -1524,9 +1524,16 @@ export default function OverviewPage() {
               </span>
               <p className="text-xs text-muted-foreground mt-1">/user/month</p>
             </div>
-            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-arpu">
-              <BarChart3 className="h-3 w-3 mr-1" /> Top 20% seed SaaS
-            </Badge>
+            {sharedMetrics.arpu > 0 && (() => {
+              const arpu = sharedMetrics.arpu;
+              const label = arpu >= 5000 ? 'Top 10% seed SaaS' : arpu >= 1000 ? 'Top 20% seed SaaS' : arpu >= 200 ? 'Above median' : arpu >= 50 ? 'Below median' : 'Needs improvement';
+              const color = arpu >= 1000 ? 'bg-primary/10 text-primary' : arpu >= 200 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
+              return (
+                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-arpu">
+                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
+                </Badge>
+              );
+            })()}
           </CardContent>
         </Card>
         
@@ -1559,9 +1566,16 @@ export default function OverviewPage() {
               </span>
               <p className="text-xs text-muted-foreground mt-1">paying {terms.customers}</p>
             </div>
-            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-users">
-              <BarChart3 className="h-3 w-3 mr-1" /> Above median
-            </Badge>
+            {sharedMetrics.totalCustomers > 0 && (() => {
+              const customers = sharedMetrics.totalCustomers;
+              const label = customers >= 500 ? 'Top 10% seed SaaS' : customers >= 100 ? 'Above median' : customers >= 20 ? 'Below median' : 'Early stage';
+              const color = customers >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
+              return (
+                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-users">
+                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
+                </Badge>
+              );
+            })()}
           </CardContent>
         </Card>
         
@@ -1585,18 +1599,37 @@ export default function OverviewPage() {
               </Tooltip>
             </div>
             <div className="mt-2">
-              <span className={`text-2xl font-semibold font-mono tracking-tight ${
-                sharedMetrics.sources['ndr'] === 'estimated' ? 'text-muted-foreground' :
-                100 - baseData.churnRate + assumptions.growthRate / 2 >= 100 ? 'text-emerald-500' : 
-                100 - baseData.churnRate + assumptions.growthRate / 2 >= 90 ? 'text-amber-500' : 'text-red-500'
-              }`} data-testid="metric-nrr">
-                {sharedMetrics.sources['ndr'] === 'estimated' ? 'N/A' : safeToFixed(100 - baseData.churnRate + assumptions.growthRate / 2, 1, '%')}
-              </span>
-              <p className="text-xs text-muted-foreground mt-1">net revenue retention</p>
+              {(() => {
+                const hasNdr = sharedMetrics.ndr > 0 && sharedMetrics.ndr <= 200 && sharedMetrics.sources['ndr'] !== 'estimated';
+                const ndrValue = hasNdr
+                  ? sharedMetrics.ndr
+                  : (baseData.churnRate > 0 && sharedMetrics.sources['churnRate'] !== 'estimated')
+                    ? Math.max(0, Math.min(200, 100 - baseData.churnRate))
+                    : null;
+                const ndrColor = ndrValue === null ? 'text-muted-foreground' :
+                  ndrValue >= 100 ? 'text-emerald-500' :
+                  ndrValue >= 90 ? 'text-amber-500' : 'text-red-500';
+                const ndrBenchmark = ndrValue === null ? null :
+                  ndrValue >= 120 ? 'Top 10% seed SaaS' :
+                  ndrValue >= 110 ? 'Top 25% seed SaaS' :
+                  ndrValue >= 100 ? 'Above median' :
+                  ndrValue >= 90 ? 'Below median' : 'Needs improvement';
+                const ndrBenchmarkColor = ndrValue !== null && ndrValue >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
+                return (
+                  <>
+                    <span className={`text-2xl font-semibold font-mono tracking-tight ${ndrColor}`} data-testid="metric-nrr">
+                      {ndrValue !== null ? safeToFixed(ndrValue, 1, '%') : 'N/A'}
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-1">net revenue retention</p>
+                    {ndrBenchmark && (
+                      <Badge variant="secondary" className={`mt-1.5 text-[10px] ${ndrBenchmarkColor}`} data-testid="badge-benchmark-nrr">
+                        <BarChart3 className="h-3 w-3 mr-1" /> {ndrBenchmark}
+                      </Badge>
+                    )}
+                  </>
+                );
+              })()}
             </div>
-            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-emerald-500/10 text-emerald-500" data-testid="badge-benchmark-nrr">
-              <BarChart3 className="h-3 w-3 mr-1" /> Top 25% seed SaaS
-            </Badge>
           </CardContent>
         </Card>
         
@@ -1646,9 +1679,16 @@ export default function OverviewPage() {
             <p className="text-xs text-muted-foreground mt-1">
               LTV: {metricsLoading ? '...' : baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {metricsLoading ? '...' : baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
             </p>
-            <Badge variant="secondary" className="mt-1.5 text-[10px] bg-primary/10 text-primary" data-testid="badge-benchmark-ltvcac">
-              <BarChart3 className="h-3 w-3 mr-1" /> Above median
-            </Badge>
+            {baseData.ltvCacRatio > 0 && (() => {
+              const ratio = baseData.ltvCacRatio;
+              const label = ratio >= 5 ? 'Top 10% seed SaaS' : ratio >= 3 ? 'Above median' : ratio >= 2 ? 'Below median' : 'Needs improvement';
+              const color = ratio >= 3 ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-500';
+              return (
+                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-ltvcac">
+                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
+                </Badge>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
