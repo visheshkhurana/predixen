@@ -46,16 +46,14 @@ from server.api import qa as qa_api
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Log startup configuration (without secrets)
-    logger.info(f"Starting FounderConsole v1.0.0")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"CORS origins: {settings.cors_origins_list}")
-    logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
+_startup_state = {"ready": False, "error": None}
+
+async def _run_deferred_startup():
+    """Run migrations, seeding, and notifications after the server port is open."""
+    import asyncio
+    await asyncio.sleep(0.1)
     
     try:
-        # Gated schema creation
         if settings.should_create_schema:
             logger.info("Creating database tables...")
             Base.metadata.create_all(bind=engine)
@@ -63,7 +61,6 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Skipping schema creation (CREATE_SCHEMA=false)")
         
-        # Gated migrations
         if settings.should_run_migrations:
             logger.info("Running migrations...")
             run_migrations(engine)
@@ -71,7 +68,6 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Skipping migrations (RUN_MIGRATIONS=false)")
         
-        # Gated seeding
         db = SessionLocal()
         try:
             if settings.should_seed_benchmarks:
@@ -89,29 +85,36 @@ async def lifespan(app: FastAPI):
                 logger.info("Skipping demo data seeding (SEED_DEMO_DATA=false)")
         except Exception as e:
             logger.error(f"Error during seeding: {e}")
-            raise
         finally:
             db.close()
         
-        # Send publish notification in production (runs in background)
+        _startup_state["ready"] = True
+        logger.info("Deferred startup tasks completed successfully")
+        
         if settings.ENVIRONMENT == "production":
             try:
                 from server.services.notifications import check_and_send_publish_notification
-                import asyncio
                 logger.info("Checking for publish notification...")
-                task = asyncio.create_task(check_and_send_publish_notification())
-                task.add_done_callback(
-                    lambda t: logger.info(f"Publish notification task completed: {t.exception() or 'success'}")
-                    if t.done() else None
-                )
+                await check_and_send_publish_notification()
             except Exception as e:
                 logger.warning(f"Could not send publish notification: {e}")
                 
     except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        raise
+        _startup_state["error"] = str(e)
+        logger.error(f"Error during deferred startup: {e}")
+        if settings.is_production:
+            logger.critical("FATAL: Deferred startup failed in production - schema/migrations may be incomplete")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+    logger.info(f"Starting FounderConsole v1.0.0")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"CORS origins: {settings.cors_origins_list}")
+    logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
     
-    logger.info("Startup complete - FastAPI server ready")
+    logger.info("Startup complete - FastAPI server ready (deferred tasks scheduled)")
+    asyncio.create_task(_run_deferred_startup())
     yield
     logger.info("Shutting down FastAPI server...")
 
@@ -187,4 +190,8 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "ready": _startup_state["ready"],
+        "startup_error": _startup_state["error"],
+    }

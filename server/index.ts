@@ -42,9 +42,7 @@ function killProcessOnPort(port: string): void {
 
 function getFastAPIPort(): string {
   if (process.env.FASTAPI_PORT) return process.env.FASTAPI_PORT;
-  const mainPort = parseInt(process.env.PORT || "5000", 10);
-  const internalPort = mainPort === 8001 ? 8002 : 8001;
-  return String(internalPort);
+  return "8001";
 }
 
 function startFastAPIServer(): ChildProcess {
@@ -114,7 +112,7 @@ async function probeFastAPI(): Promise<boolean> {
   }
 }
 
-async function waitForFastAPI(maxRetries = 90, retryDelay = 2000): Promise<boolean> {
+async function waitForFastAPI(maxRetries = 120, retryDelay = 2000): Promise<boolean> {
   for (let i = 0; i < maxRetries; i++) {
     const isUp = await probeFastAPI();
     if (isUp) {
