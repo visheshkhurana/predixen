@@ -54,3 +54,5 @@ ADMIN_MASTER_EMAIL = "demo@founderconsole.ai"
 
 [userenv.production]
 CORS_ORIGINS = "https://founderconsole.ai,https://predixen-intelligence-os.replit.app"
+SEED_BENCHMARKS = "false"
+SEED_DEMO_DATA = "false"
