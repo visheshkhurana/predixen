@@ -1,0 +1,254 @@
+You are a senior QA lead + GTM readiness consultant testing FounderConsole.ai before a public launch announcement.
+
+MISSION:
+Run a strict pre-launch regression suite. Treat this as a “launch gate”: if any P0 fails, we do NOT launch.
+
+SCOPE (must test all):
+1) Production domain routing (frontend vs API)
+2) Auth + onboarding gate enforcement
+3) Empty-state guidance (no wall of N/A)
+4) Load Sample Company (creates real non-zero baseline)
+5) Demo account is alive (non-zero KPIs)
+6) Scenario engine produces meaningful distributions and directionality changes
+7) Baseline consistency (Dashboard vs Scenarios vs Decisions vs Health)
+8) Strategic diagnosis behaves correctly (returns fallback, no raw 404)
+9) Pricing page exists and CTA works
+10) Basic integration path (at least one connector or manual data entry path) yields meaningful KPIs
+
+IMPORTANT RULES:
+- Use a fresh incognito session.
+- Record everything in the strict format below.
+- For each check, include steps and result.
+- If you cannot find a feature, that is a FAIL (unless explicitly out of scope).
+
+STRICT OUTPUT FORMAT (use exactly):
+[CHECK # + NAME]
+[STEPS]
+[EXPECTED]
+[ACTUAL]
+[PASS/FAIL]
+[SEVERITY] (P0/P1/P2/P3)
+[SCREENSHOT NOTE] (describe what you saw; no need to attach)
+[RECOMMENDED FIX] (only if FAIL)
+
+FINAL DELIVERABLES:
+A) Pre-Launch Gate Summary: P0 must be all PASS
+B) Remaining P1/P2 backlog
+C) “Ready to Launch?” verdict: YES / NO
+D) Top 5 risks even if YES
+
+========================================================
+PHASE 0 — ENVIRONMENT
+========================================================
+1) Open a fresh Incognito window.
+2) Close any other sessions.
+3) Navigate to production domain first: https://founderconsole.ai
+
+========================================================
+CHECK 1 — PRODUCTION DOMAIN ROUTING (P0)
+========================================================
+Goal: domain serves frontend SPA, not raw API JSON.
+
+STEPS:
+- Visit https://founderconsole.ai
+- Visit https://founderconsole.ai/auth
+- Visit https://founderconsole.ai/onboarding
+- Visit https://founderconsole.ai/scenarios
+
+EXPECTED:
+- All show frontend pages (SPA routes load), not JSON like {"detail":"Not Found"}.
+- Deep links render properly.
+
+FAIL CONDITIONS:
+- Any route shows raw JSON error from API.
+- Any route returns 404 or blank white screen.
+
+========================================================
+CHECK 2 — SIGNUP + ONBOARDING GATE (P0)
+========================================================
+STEPS:
+1) Create a new account:
+   Name: Launch Gate Tester
+   Email: launch.gate+<TIMESTAMP>@gmail.com
+   Password: LaunchGate@2026!
+2) After signup, try to bypass onboarding:
+   - manually type /dashboard or /
+   - hard refresh
+
+EXPECTED:
+- User is forced into onboarding until company is created or sample data chosen.
+- No access to dashboard without company context.
+
+FAIL CONDITIONS:
+- Dashboard loads with someone else’s company name.
+- Onboarding is skippable after refresh.
+
+========================================================
+CHECK 3 — EMPTY STATE GUIDANCE (P0/P1)
+========================================================
+Goal: if KPIs are N/A, user sees clear next steps.
+
+STEPS:
+- In onboarding, create a company but DO NOT load sample data.
+- Navigate to dashboard.
+
+EXPECTED:
+- Dashboard shows a prominent “Get Started” panel with 2-3 clear CTAs:
+  - Load sample data
+  - Upload docs
+  - Connect integrations
+- Explain why KPIs are N/A and what to do.
+
+FAIL CONDITIONS (P0 if totally absent):
+- Wall of N/A with no CTA or instructions.
+- User is left confused about next action.
+
+========================================================
+CHECK 4 — LOAD SAMPLE COMPANY CREATES REAL BASELINE (P0)
+========================================================
+Goal: 1-click sample makes product instantly valuable.
+
+STEPS:
+- Go to onboarding (or wherever sample loading exists)
+- Click “Load Sample Company”
+- Go to dashboard
+
+EXPECTED:
+- KPIs become non-zero and realistic (cash, burn, runway, revenue/MRR, etc.)
+- Charts render with time series (if supported)
+- Benchmarks show meaningful percentiles (not based on zeros)
+
+FAIL CONDITIONS:
+- KPIs remain N/A or zeros.
+- Sample load succeeds but scenarios still flat-line.
+
+========================================================
+CHECK 5 — DEMO ACCOUNT IS ALIVE (P0)
+========================================================
+STEPS:
+- Log out
+- Log in as demo@founderconsole.ai / demo123
+- Open the main demo company dashboard
+
+EXPECTED:
+- Demo KPIs are non-zero and realistic (MRR, cash, burn, runway)
+- No duplicate confusing demo company list OR at least a clear “primary demo company”
+- Demo is stable across refresh
+
+FAIL CONDITIONS:
+- Demo dashboard shows all N/A.
+- Demo KPIs are all zeros.
+- Demo company list has duplicates and no clear default.
+
+========================================================
+CHECK 6 — SCENARIO ENGINE MEANINGFUL OUTPUTS (P0)
+========================================================
+Goal: scenarios produce different outcomes (not identical runway distributions).
+
+STEPS (use DEMO company OR sample-loaded company):
+Run these 5 scenarios one by one:
+A) “Cut marketing spend by 25% for 6 months”
+B) “Hire 15 engineers immediately”
+C) “Revenue drops 35% month-over-month for 2 months”
+D) “Raise $6M at 20% dilution”
+E) “One-time severance payout of $400k next month”
+
+For each scenario check:
+- it runs successfully
+- baseline “Before” is non-zero
+- p10/p50/p90 are NOT all identical across scenarios
+- outputs change with scenario
+
+EXPECTED:
+- Scenarios change runway distribution meaningfully.
+- Directionality makes sense (marketing cut doesn’t increase growth, hiring increases burn, raise increases cash/runway, revenue drop decreases runway, severance decreases cash/runway).
+
+FAIL CONDITIONS:
+- Any “Company not found”
+- Any identical p10/p50/p90 across all scenarios
+- Directionality inversion
+- Rerun doesn’t change results
+
+========================================================
+CHECK 7 — BASELINE CONSISTENCY ACROSS PAGES (P0/P1)
+========================================================
+STEPS:
+- On the same company, record Runway/Burn/Cash from:
+  1) Dashboard
+  2) Scenarios “Before”
+  3) Decisions summary (if shown)
+  4) Health/Truth page
+
+EXPECTED:
+- Same values everywhere or explicitly explained labeling if different windows.
+- No mismatch like runway 11.8 on dashboard but 14.0 in scenarios baseline.
+
+FAIL CONDITIONS:
+- Any unexplained mismatch.
+
+========================================================
+CHECK 8 — STRATEGIC DIAGNOSIS UX + API BEHAVIOR (P1)
+========================================================
+Goal: no raw 404; proper empty state or fallback.
+
+STEPS:
+- Navigate to Decisions
+- If no diagnosis exists, observe behavior
+- Click “Generate Briefing/Diagnosis” if available
+
+EXPECTED:
+- If none exists: show “Not generated yet” with clear CTA (not raw errors).
+- If LLM is unavailable: fallback is returned within timeouts.
+- No infinite spinner.
+
+FAIL CONDITIONS:
+- Raw JSON 404 shown to user.
+- Spinner hangs >30 seconds.
+- Unhandled error message.
+
+========================================================
+CHECK 9 — PRICING PAGE + CTA (P0/P1)
+========================================================
+Goal: monetization readiness basics.
+
+STEPS:
+- Visit /pricing (or find Pricing link)
+- Verify tier cards exist and CTA works (“Start trial”, “Request access”, “Upgrade”)
+
+EXPECTED:
+- Pricing page visible, clear tiers, CTA leads to next step.
+
+FAIL CONDITIONS:
+- No pricing page anywhere (P1 if beta-only, P0 if you intend paid launch now).
+
+========================================================
+CHECK 10 — DATA PIPELINE MVP PATH (P0/P1)
+========================================================
+Goal: at least one realistic path from “no data” → “meaningful KPIs”.
+
+STEPS:
+Choose the simplest available:
+- Connect Stripe OR QuickBooks OR Google Sheets OR Upload Excel/PDF
+OR if connectors not ready:
+- Manual entry of cash/burn/MRR via onboarding
+
+EXPECTED:
+- After completing ONE path, dashboard shows non-N/A KPIs and scenario outputs become meaningful.
+- App tells user what to do next.
+
+FAIL CONDITIONS:
+- User cannot add any data after onboarding.
+- Data added but KPIs still N/A.
+- Scenario still flat-line.
+
+========================================================
+PHASE 3 — FINAL REPORT
+========================================================
+Now output:
+A) Pre-Launch Gate Summary: list checks 1–10 and PASS/FAIL
+B) P0 failures (must be zero to launch)
+C) Remaining P1/P2 backlog
+D) “Ready to Launch?” verdict: YES/NO (with 2–3 reasons)
+E) Top 5 risks even if YES
+
+BEGIN NOW with CHECK 1 on production domain.
