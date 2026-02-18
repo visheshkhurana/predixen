@@ -8,16 +8,18 @@ import re
 import asyncio
 import html as html_module
 import httpx
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
 
 NOTIFICATION_RECIPIENTS = [
     email.strip()
     for email in os.getenv(
         "NOTIFICATION_RECIPIENTS",
-        "nikita@founderconsole.ai,vysheshk@gmail.com,nikita.luther@gmail.com,nikitafl2024@gmail.com"
+        ""
     ).split(",")
     if email.strip()
 ]
@@ -112,24 +114,24 @@ async def send_feature_notification(
     <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
         <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 24px 32px;">
             <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">FounderConsole</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">{category}</p>
+            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">{html_module.escape(str(category))}</p>
         </div>
         
         <div style="padding: 32px;">
             <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin-bottom: 24px; border-radius: 0 4px 4px 0;">
-                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">{feature_name}</h2>
+                <h2 style="color: #166534; margin: 0 0 8px 0; font-size: 18px;">{html_module.escape(str(feature_name))}</h2>
                 <p style="color: #15803d; margin: 0; font-size: 14px;">Deployed on {timestamp}</p>
             </div>
             
             <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Description</h3>
-            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">{description}</p>
+            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0;">{html_module.escape(str(description))}</p>
             
             <h3 style="color: #1f2937; font-size: 16px; margin: 0 0 12px 0;">Changes Made</h3>
             <ul style="color: #4b5563; line-height: 1.6; margin: 0 0 24px 0; padding-left: 20px;">
                 {changes_html}
             </ul>
             
-            {f'<p style="color: #6b7280; font-size: 13px; margin: 24px 0 0 0;"><strong>Author:</strong> {author}</p>' if author else ''}
+            {f'<p style="color: #6b7280; font-size: 13px; margin: 24px 0 0 0;"><strong>Author:</strong> {html_module.escape(str(author))}</p>' if author else ''}
         </div>
         
         <div style="background-color: #f9fafb; padding: 20px 32px; border-top: 1px solid #e5e7eb;">
@@ -176,14 +178,14 @@ This is an automated notification from FounderConsole.
             )
             
             if response.status_code in (200, 201):
-                print(f"Feature notification sent successfully: {feature_name}")
+                logger.info(f"Feature notification sent successfully: {feature_name}")
                 return True
             else:
-                print(f"Failed to send notification: {response.status_code} - {response.text}")
+                logger.warning(f"Failed to send notification: {response.status_code}")
                 return False
                 
     except Exception as e:
-        print(f"Error sending feature notification: {e}")
+        logger.error(f"Error sending feature notification: {e}")
         return False
 
 
@@ -370,10 +372,10 @@ FounderConsole • Automated Feature Update
                 
                 if response.status_code in (200, 201):
                     sent.append(email)
-                    print(f"Feature update sent to: {email}")
+                    logger.info(f"Feature update sent to: {email}")
                 else:
                     failed.append(email)
-                    print(f"Failed to send to {email}: {response.status_code} - {response.text}")
+                    logger.warning(f"Failed to send to {email}: {response.status_code}")
         
         return {
             "success": len(failed) == 0,
@@ -383,7 +385,7 @@ FounderConsole • Automated Feature Update
         }
         
     except Exception as e:
-        print(f"Error sending AI copilot feature update: {e}")
+        logger.error(f"Error sending AI copilot feature update: {e}")
         return {
             "success": False,
             "sent": [],
@@ -501,7 +503,7 @@ async def send_beta_invite_email(
         }
         
     except Exception as e:
-        print(f"Error sending beta invites: {e}")
+        logger.error(f"Error sending beta invites: {e}")
         return {
             "success": False,
             "sent": [],
@@ -742,10 +744,10 @@ FounderConsole • {timestamp}
                 sender_used = f"new{get_current_sender_count()}@founderconsole.ai"
                 if response.status_code in (200, 201):
                     sent.append(email)
-                    print(f"Early member invite sent to: {email} (from: {sender_used})")
+                    logger.info(f"Early member invite sent to: {email}")
                 else:
                     failed.append(email)
-                    print(f"Failed to send to {email}: {response.status_code}")
+                    logger.warning(f"Failed to send to {email}: {response.status_code}")
         
         return {
             "success": len(failed) == 0,
@@ -755,7 +757,7 @@ FounderConsole • {timestamp}
         }
         
     except Exception as e:
-        print(f"Error sending early member invites: {e}")
+        logger.error(f"Error sending early member invites: {e}")
         return {
             "success": False,
             "sent": [],
@@ -829,7 +831,7 @@ def get_last_notified_version() -> Optional[str]:
         if version_file.exists():
             return version_file.read_text().strip()
     except Exception as e:
-        print(f"Warning: Could not read last notified version: {e}")
+        logger.warning(f"Could not read last notified version: {e}")
     return None
 
 
@@ -839,7 +841,7 @@ def set_last_notified_version(version: str) -> None:
         version_file = Path(__file__).parent.parent.parent / ".last_notified_version"
         version_file.write_text(version)
     except Exception as e:
-        print(f"Warning: Could not save last notified version: {e}")
+        logger.warning(f"Could not save last notified version: {e}")
 
 
 async def send_publish_notification() -> Dict[str, Any]:
@@ -853,7 +855,7 @@ async def send_publish_notification() -> Dict[str, Any]:
     import os
     
     if os.getenv("ENVIRONMENT", "development") != "production":
-        print("Skipping publish notification in non-production environment")
+        logger.debug("Skipping publish notification in non-production environment")
         return {"success": False, "reason": "Not in production environment"}
     
     changelog = parse_changelog()
@@ -865,7 +867,7 @@ async def send_publish_notification() -> Dict[str, Any]:
     last_notified = get_last_notified_version()
     
     if last_notified == current_version:
-        print(f"Version {current_version} already notified, skipping")
+        logger.debug(f"Version {current_version} already notified, skipping")
         return {"success": False, "reason": f"Version {current_version} already notified"}
     
     changes = changelog.get("changes", {})
@@ -900,7 +902,7 @@ async def send_publish_notification() -> Dict[str, Any]:
     
     if success:
         set_last_notified_version(current_version)
-        print(f"Publish notification sent for version {current_version}")
+        logger.info(f"Publish notification sent for version {current_version}")
         return {
             "success": True,
             "version": current_version,
@@ -919,11 +921,11 @@ async def check_and_send_publish_notification() -> None:
     try:
         result = await send_publish_notification()
         if result.get("success"):
-            print(f"Publish notification sent successfully: {result}")
+            logger.info(f"Publish notification sent successfully")
         else:
-            print(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
+            logger.info(f"Publish notification skipped: {result.get('reason', 'Unknown')}")
     except Exception as e:
-        print(f"Error in publish notification check: {e}")
+        logger.error(f"Error in publish notification check: {e}")
 
 
 async def send_platform_update(
@@ -947,7 +949,7 @@ async def send_platform_update(
             to_emails = [user.email for user in users if user.email]
             db.close()
         except Exception as e:
-            print(f"Error fetching users from database: {e}")
+            logger.error(f"Error fetching users from database: {e}")
             to_emails = NOTIFICATION_RECIPIENTS
     
     if not to_emails:
@@ -1144,13 +1146,13 @@ Visit: https://founderconsole.ai
                     
                     if response.status_code in (200, 201):
                         sent.append(email)
-                        print(f"Platform update sent to: {email}")
+                        logger.info(f"Platform update sent to: {email}")
                     else:
                         failed.append({"email": email, "error": response.text})
-                        print(f"Failed to send to {email}: {response.status_code} - {response.text}")
+                        logger.warning(f"Failed to send to {email}: {response.status_code}")
                 except Exception as e:
                     failed.append({"email": email, "error": str(e)})
-                    print(f"Error sending to {email}: {e}")
+                    logger.error(f"Error sending to {email}: {e}")
         
         return {
             "success": len(failed) == 0,
@@ -1161,7 +1163,7 @@ Visit: https://founderconsole.ai
         }
         
     except Exception as e:
-        print(f"Error sending platform update: {e}")
+        logger.error(f"Error sending platform update: {e}")
         return {
             "success": False,
             "sent": [],
@@ -1190,7 +1192,7 @@ async def send_hybrid_feature_announcement(
             to_emails = [user.email for user in users if user.email]
             db.close()
         except Exception as e:
-            print(f"Error fetching users from database: {e}")
+            logger.error(f"Error fetching users from database: {e}")
             to_emails = NOTIFICATION_RECIPIENTS
     
     if not to_emails:
@@ -1300,7 +1302,7 @@ FounderConsole"""
                     
                     if response.status_code in (200, 201):
                         sent.append(email)
-                        print(f"Hybrid feature announcement sent to: {email}")
+                        logger.info(f"Hybrid feature announcement sent to: {email}")
                     else:
                         failed.append({"email": email, "error": response.text})
                 except Exception as e:
@@ -1315,7 +1317,7 @@ FounderConsole"""
         }
         
     except Exception as e:
-        print(f"Error sending hybrid feature announcement: {e}")
+        logger.error(f"Error sending hybrid feature announcement: {e}")
         return {"success": False, "sent": [], "failed": to_emails or [], "error": str(e)}
 
 
@@ -1511,12 +1513,12 @@ View your full dashboard: https://founderconsole.ai/dashboard
             )
             
             if response.status_code in (200, 201):
-                print(f"Weekly digest sent to: {to_email}")
+                logger.info(f"Weekly digest sent to: {to_email}")
                 return True
             else:
-                print(f"Failed to send weekly digest: {response.text}")
+                logger.warning(f"Failed to send weekly digest")
                 return False
                 
     except Exception as e:
-        print(f"Error sending weekly digest: {e}")
+        logger.error(f"Error sending weekly digest: {e}")
         return False

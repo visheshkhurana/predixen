@@ -14,6 +14,9 @@ from server.models.financial import FinancialRecord
 
 router = APIRouter(tags=["csv-import"])
 
+MAX_CSV_SIZE = 5 * 1024 * 1024
+MAX_CSV_ROWS = 10_000
+
 
 COLUMN_MAPPINGS = {
     "date": ["date", "period", "month", "period_end", "period_start"],
@@ -63,11 +66,15 @@ async def detect_csv_columns(
         raise HTTPException(status_code=404, detail="Company not found")
 
     content = await file.read()
+    if len(content) > MAX_CSV_SIZE:
+        raise HTTPException(status_code=413, detail=f"CSV file exceeds {MAX_CSV_SIZE // (1024*1024)}MB limit")
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     headers = reader.fieldnames or []
     rows = []
     for row in reader:
+        if len(rows) >= MAX_CSV_ROWS:
+            raise HTTPException(status_code=413, detail=f"CSV exceeds {MAX_CSV_ROWS} row limit")
         rows.append(dict(row))
 
     suggested = detect_columns(headers)
@@ -94,6 +101,9 @@ def import_csv_data(
     ).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    if len(data.rows) > MAX_CSV_ROWS:
+        raise HTTPException(status_code=413, detail=f"Import exceeds {MAX_CSV_ROWS} row limit")
 
     mappings = data.mappings
     imported = 0

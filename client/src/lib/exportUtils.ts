@@ -2,6 +2,15 @@ export function printSimulationResults(): void {
   window.print();
 }
 
+function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function downloadCSV(data: Record<string, any>[], filename: string) {
   if (data.length === 0) return;
   
@@ -67,8 +76,8 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
   const formatMetrics = (metrics: Record<string, any>) => {
     const items = Object.entries(metrics).filter(([_, v]) => v !== null && v !== undefined);
     return items.map(([key, value]) => {
-      const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-      let formattedValue = value;
+      const formattedKey = escapeHtml(key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
+      let formattedValue: string;
       if (typeof value === 'number') {
         if (key.includes('margin') || key.includes('growth') || key.includes('rate')) {
           formattedValue = `${(value * 100).toFixed(1)}%`;
@@ -77,6 +86,8 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
         } else {
           formattedValue = value.toLocaleString();
         }
+      } else {
+        formattedValue = escapeHtml(String(value));
       }
       return `<div class="metric"><span class="metric-name">${formattedKey}</span><span class="metric-value">${formattedValue}</span></div>`;
     }).join('');
@@ -85,9 +96,9 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
   const formatFlags = (flags: any[]) => {
     if (!flags || flags.length === 0) return '<p>No flags detected.</p>';
     return flags.map((flag: any) => `
-      <div class="flag flag-${flag.severity || 'low'}">
-        <div class="flag-title">${flag.title}</div>
-        <div>${flag.description}</div>
+      <div class="flag flag-${escapeHtml(String(flag.severity || 'low'))}">
+        <div class="flag-title">${escapeHtml(String(flag.title || ''))}</div>
+        <div>${escapeHtml(String(flag.description || ''))}</div>
       </div>
     `).join('');
   };
@@ -105,7 +116,7 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
       
       return `
         <div class="benchmark">
-          <strong>${bench.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</strong>
+          <strong>${escapeHtml(bench.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()))}</strong>
           <div class="benchmark-bar">
             <div class="benchmark-marker" style="left: ${p25Pos}%"></div>
             <div class="benchmark-marker" style="left: ${p50Pos}%"></div>
@@ -134,11 +145,11 @@ export function downloadPDF(data: any, filename: string, title: string = 'Report
     <html>
     <head>
       <meta charset="utf-8">
-      <title>${title}</title>
+      <title>${escapeHtml(title)}</title>
       ${styles}
     </head>
     <body>
-      <h1>${title}</h1>
+      <h1>${escapeHtml(title)}</h1>
       <p>Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
       
       <div class="section">
