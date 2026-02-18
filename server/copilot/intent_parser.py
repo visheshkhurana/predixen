@@ -110,9 +110,9 @@ PARAMETER_PATTERNS = {
         (r'(increas\w*|rais\w*|bump\w*)\s+(\d+(?:\.\d+)?)\s*%\s*(?:on\s+)?(?:the\s+)?(?:price|pricing)', 2),
     ],
     'hiring_freeze': [
-        (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:the\s+)?hir(ing|es?)\s*(?:for\s*)?(\d+)\s*(month|mo)', 3),
-        (r'hiring\s*freeze\s*(?:for\s*)?(\d+)\s*(month|mo)', 1),
-        (r'no\s*(new\s*)?(hir(ing|es?))\s*(?:for\s*)?(\d+)\s*(month|mo)', 4),
+        (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:the\s+)?hir(ing|es?)\s*(?:for\s*)?(\d+)\s*(months?|mos?)', 3),
+        (r'hiring\s*freeze\s*(?:for\s*)?(\d+)\s*(months?|mos?)', 1),
+        (r'no\s*(new\s*)?(hir(ing|es?))\s*(?:for\s*)?(\d+)\s*(months?|mos?)', 4),
         (r'(freez\w*|stop\w*|paus\w*|halt\w*)\s*(?:all\s+)?(?:new\s+)?hir(ing|es?)', None),
     ],
     'headcount': [
@@ -127,9 +127,9 @@ PARAMETER_PATTERNS = {
         (r'fundraise\s*(?:of\s*)?\$?(\d+(?:\.\d+)?)\s*(m|million|k|thousand)?', 1, 2),
     ],
     'fundraise_timing': [
-        (r'(delay|push|postpone)\s*(fundraise|raise|round)\s*(?:by\s*)?(\d+)\s*(month|mo)', 3),
+        (r'(delay|push|postpone)\s*(fundraise|raise|round)\s*(?:by\s*)?(\d+)\s*(months?|mos?)', 3),
         (r'fundraise\s*(?:in|at)\s*month\s*(\d+)', 1),
-        (r'raise\s*(?:in|at)\s*(\d+)\s*(month|mo)', 1),
+        (r'raise\s*(?:in|at)\s*(\d+)\s*(months?|mos?)', 1),
     ],
     'revenue_growth': [
         (r'(increase|boost|grow)\s*revenue\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),

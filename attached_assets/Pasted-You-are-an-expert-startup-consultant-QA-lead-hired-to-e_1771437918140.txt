@@ -1,0 +1,263 @@
+You are an expert startup consultant + QA lead hired to evaluate FounderConsole.ai for a paid beta launch.
+
+ASSUMPTION:
+All code fixes from the Feb 18 GTM report have been implemented:
+- Simulation “Company not found” fixed
+- Tenant isolation fixed
+- Demo data loads with realistic non-zero KPIs
+- Onboarding cannot be bypassed (route guard enforced)
+- Runway division-by-zero shows “Cashflow+” / “N/A” with reason
+- NLP parser no longer inverts logic (cut = down)
+- Strategic diagnosis works with fallback if LLM unavailable
+- Decision + Health tabs restored and stable
+- KPI calculations use canonical backend module with warnings/reasons
+- QA Front exists at /qa for validation (admin-only or non-prod gate)
+
+YOUR JOB:
+PHASE 1: Verify all fixes are truly working (no regressions).
+PHASE 2: Run a full GTM market readiness assessment as a consultant, including synthetic founder interviews.
+
+STRICT OUTPUT FORMAT:
+For every test issue or insight use:
+
+[TEST AREA]
+[STEPS TO REPRODUCE]
+[EXPECTED]
+[ACTUAL]
+[PASS/FAIL]
+[SEVERITY] (P0/P1/P2/P3)
+[NOTES]
+[RECOMMENDATION]
+
+At the end provide:
+A) Fix Verification Summary (P0/P1 list)
+B) Consultant GTM Readiness Report (with scorecard + launch recommendation)
+
+========================================================
+PHASE 0 — CLEAN START
+========================================================
+1) Open a fresh Incognito window.
+2) Go to founderconsole.ai
+3) Confirm you are logged out.
+4) Hard refresh.
+
+========================================================
+PHASE 1 — FIX VERIFICATION (MUST)
+========================================================
+
+1) CREATE A BRAND NEW ACCOUNT (Tenant Isolation + Onboarding Guard)
+- Click Create Account / Sign Up.
+- Use these creds (use a timestamp to ensure uniqueness):
+  Name: Priya Mehta
+  Email: priya.mehta+fc.qa.<TIMESTAMP>@gmail.com
+  Password: ClearPath@2026!
+
+[CHECK 1: Onboarding Gate]
+- Immediately after signup, attempt to navigate directly to "/" or "/dashboard" (type in URL).
+EXPECTED:
+- You must be redirected back to /onboarding until setup is complete.
+- You must NOT see demo company name like “TechFlow Analytics” as your own workspace.
+FAIL if dashboard loads with someone else’s company, or if onboarding can be bypassed.
+
+2) COMPLETE ONBOARDING
+- Fill required fields: Company Name, Industry, Stage, Currency, Value scale.
+- Use:
+  Company: ClearPath Analytics
+  Industry: SaaS / Analytics
+  Stage: Series A
+  Currency: USD
+- If sample/demo import is offered, do NOT use it yet (we’ll test demo separately).
+EXPECTED:
+- On completion, you land on dashboard for YOUR company with non-zero baseline sample data OR clear empty state with “connect data” guidance.
+- No zero-everywhere dashboard with nonsense runway.
+
+3) VERIFY KPI TRUST + EDGE CASE HANDLING
+On dashboard:
+- Confirm runway display is realistic (not 999 months).
+- Confirm any N/A is accompanied by a reason/explanation.
+- Open Health page and Decision page and confirm KPI values consistent (or clearly labeled).
+
+[CHECK 2: KPI Consistency]
+Compare:
+- Dashboard KPIs (runway, burn, cash, MRR/Revenue)
+- Health KPIs (health score/confidence)
+- Decisions/Scenarios baseline “Before”
+EXPECTED:
+- Baseline values match exactly across pages or have explicit labels.
+FAIL if runway/burn differs across routes without explanation.
+
+4) VERIFY SCENARIO ENGINE (Core Value)
+Go to Scenarios / Simulate / Decision Room:
+Run these scenarios one-by-one and verify rerun works and directionality is correct:
+A) “Cut marketing spend by 25% for 6 months”
+B) “Hire 15 engineers immediately”
+C) “Revenue drops 35% month-over-month for 2 months”
+D) “Raise $6M at 20% dilution”
+E) “One-time severance payout of $400k next month”
+
+[CHECK 3: Scenario Directionality]
+EXPECTED (directionally):
+A) marketing spend ↓, burn ↓, runway ↑, growth should NOT increase
+B) payroll/burn ↑, runway ↓
+C) revenue ↓, burn ↑ (if costs fixed), runway ↓
+D) cash ↑, runway ↑
+E) cash ↓, burn ↑, runway ↓
+
+Also verify:
+- “Before” equals current baseline (no mismatch).
+- Editing scenario text and pressing Simulate always updates results (no stale cache).
+FAIL if any scenario returns “Company not found”, or baseline is wrong, or results don’t update.
+
+5) VERIFY DEMO ACCOUNT (Demo Stability)
+Log out.
+Log in using:
+- demo@founderconsole.ai / demo123
+EXPECTED:
+- Demo dashboard shows realistic non-zero KPIs.
+- Simulation works on demo too.
+FAIL if demo shows all zeros or “Company not found”.
+
+6) VERIFY STRATEGIC DIAGNOSIS / AI BRIEFING
+Trigger strategic diagnosis / briefing:
+EXPECTED:
+- Returns within expected timeout (<=15 sec server fallback; <=30 sec client).
+- If LLM unavailable, clear “Fallback mode” response appears (not hanging).
+FAIL if it spins indefinitely or errors without guidance.
+
+7) VERIFY NAV + ROUTE HEALTH (Regression)
+Check:
+- Decision tab exists and loads
+- Health tab exists and loads
+- /simulate route is either valid or cleanly redirects to /scenarios (no “forgot to add router” errors)
+- QA Front /qa is gated appropriately
+
+========================================================
+PHASE 2 — CONSULTANT MARKET READINESS ASSESSMENT
+========================================================
+
+Now switch into consultant mode: you are evaluating GTM readiness and interviewing synthetic founders.
+You MUST do 3 interviews with distinct personas and concrete KPIs.
+
+For each persona:
+- Explain their current KPI tracking stack/tools
+- Explain their scenario planning method today
+- Have them try FounderConsole workflow (simulate 3 scenarios)
+- Ask hard questions (why switch, what would you pay, what must be perfect, what breaks trust)
+- Capture emotional + functional feedback
+
+INTERVIEW FORMAT (MUST USE):
+[FOUNDER PERSONA]
+[CURRENT TOOL STACK]
+[CURRENT DECISION WORKFLOW]
+[WHAT THEY TRY IN FOUNDERCONSOLE]
+[HARD QUESTIONS + ANSWERS]
+[EMOTIONAL FEEDBACK]
+[FUNCTIONAL FEEDBACK]
+[WOULD THEY PAY? PRICE RANGE]
+[WHAT MUST BE FIXED BEFORE THEY ADOPT]
+
+-------------------------
+PERSONA 1 — B2B SaaS Founder
+Name: Priya Mehta
+Company: ClearPath Analytics
+Stage: Series A
+KPIs:
+- MRR: $520,000
+- ARR: $6.24M
+- Gross Margin: 89%
+- Cash: $4.5M
+- Burn: $380K/mo
+- Runway: 11.8 mo
+- CAC: $120K
+- LTV:CAC: 5.2x
+- NRR: 1.15
+Tools today: Stripe + ChartMogul + QuickBooks + Google Sheets model + Looker
+Scenarios to run:
+1) Cut marketing 30%
+2) Hire 10 SDRs + 5 engineers
+3) Lose biggest customer (revenue -15%) + raise bridge $3M
+
+-------------------------
+PERSONA 2 — Consumer Subscription Founder
+Name: Ananya Iyer
+Company: Pulse+ Wellness
+Stage: Series B
+KPIs:
+- Subscribers: 220,000
+- MRR: $1,250,000
+- GM: 72%
+- Burn: $600,000/mo
+- Cash: $8.4M
+- Runway: 14 mo
+- CAC: $95
+- ARPA: $5.68
+- Churn: 5.2% monthly
+Tools today: Mixpanel/Amplitude + Meta/Google Ads dashboards + Sheets + NetSuite
+Scenarios:
+1) Price +10%
+2) Annual plan: 20% conversion with 15% discount
+3) Retention +10% with +$80K monthly product cost
+
+-------------------------
+PERSONA 3 — Marketplace Founder
+Name: Rahul Verma
+Company: OpenMarkets
+Stage: Seed
+KPIs:
+- GMV: $3.2M/mo
+- Take rate: 18%
+- Net revenue: $576K/mo
+- Active buyers: 45,000
+- Active sellers: 10,500
+- Buyer CAC: $60; Seller CAC: $150
+- Buyer churn: 7% MoM; Seller churn: 4% MoM
+- Cash: $2.5M
+- Burn: $350K/mo
+- Runway: 7.1 mo
+Tools today: BigQuery + Metabase/Looker + Sheets + Stripe + internal ops dashboards
+Scenarios:
+1) Increase take-rate +2%
+2) Reduce buyer churn by 1.5% absolute
+3) Increase seller incentives by $120K/mo (burn up)
+
+HARD QUESTIONS (ASK EACH PERSONA):
+- Why is FounderConsole better than your current workflow?
+- What would instantly make you stop trusting it?
+- Would you present its outputs to your board? Why/not?
+- What’s the ONE metric you need above the fold every morning?
+- What would you pay monthly? What plan would you expect?
+
+========================================================
+PHASE 3 — FINAL DELIVERABLE (MANDATORY)
+========================================================
+
+Produce a Go-to-Market Readiness Report:
+
+1) Executive Summary
+- Are we ready for paid beta? (Yes/No + conditions)
+
+2) Fix Verification Summary
+- Confirm each previously reported P0 is fixed, or list remaining issues.
+
+3) Persona Findings (3 founders)
+- What they loved
+- What blocked adoption
+- Pricing willingness
+- Key workflows you must support
+
+4) Competitive Comparison
+- Compare against Sheets, Finmark/Jirav/Pry, ChartMogul/Baremetrics, Looker/Tableau.
+
+5) Launch Checklist
+- P0 must-haves before paid beta
+- P1 improvements for retention
+- Instrumentation/analytics needed
+
+6) Scorecard (0-10):
+- Onboarding
+- KPI Trust
+- Scenario Engine
+- Value vs existing tools
+- Monetization readiness
+
+Start now: sign up as a new user and begin Phase 1.

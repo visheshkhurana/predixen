@@ -273,7 +273,7 @@ def qa_parse_nlp(
         from server.copilot.intent_parser import extract_parameters
         params = extract_parameters(text)
         params_dict = {}
-        for field in ['burn_reduction_pct', 'revenue_growth_pct', 'price_change_pct', 'headcount_change', 'fundraise_amount', 'churn_reduction_pct']:
+        for field in ['burn_reduction_pct', 'revenue_growth_pct', 'price_change_pct', 'headcount_change', 'fundraise_amount', 'churn_reduction_pct', 'hiring_freeze_months']:
             val = getattr(params, field, None)
             if val is not None:
                 params_dict[field] = val
