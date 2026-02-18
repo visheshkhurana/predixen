@@ -40,8 +40,15 @@ function killProcessOnPort(port: string): void {
   try { execSync("sleep 1"); } catch {}
 }
 
+function getFastAPIPort(): string {
+  if (process.env.FASTAPI_PORT) return process.env.FASTAPI_PORT;
+  const mainPort = parseInt(process.env.PORT || "5000", 10);
+  const internalPort = mainPort === 8001 ? 8002 : 8001;
+  return String(internalPort);
+}
+
 function startFastAPIServer(): ChildProcess {
-  const port = process.env.FASTAPI_PORT || "8001";
+  const port = getFastAPIPort();
   
   killProcessOnPort(port);
   
@@ -97,7 +104,7 @@ function startFastAPIServer(): ChildProcess {
 
 async function probeFastAPI(): Promise<boolean> {
   try {
-    const url = process.env.FASTAPI_URL || "http://localhost:8001";
+    const url = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPort()}`;
     const response = await fetch(`${url}/health`, { 
       signal: AbortSignal.timeout(2000) 
     });
@@ -185,7 +192,7 @@ process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
 
 fastapiProcess = startFastAPIServer();
 
-const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8001";
+const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPort()}`;
 const startTime = Date.now();
 
 // Node health endpoint - returns status of both Node and FastAPI
