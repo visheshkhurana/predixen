@@ -72,6 +72,9 @@ class SimulationInputs:
     n_simulations: int = 1000
     growth_sigma: float = 5.0
     margin_sigma: float = 3.5
+    cost_sigma: float = 3.0
+    expense_shock_prob: float = 0.05
+    expense_shock_magnitude: float = 0.15
 
 def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dict[str, Any]:
     rng = np.random.default_rng(seed)
@@ -83,9 +86,9 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
     adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
     
     burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
-    adjusted_opex = inputs.opex * burn_reduction_mult
-    adjusted_payroll = inputs.payroll * burn_reduction_mult
-    adjusted_other = inputs.other_costs * burn_reduction_mult
+    base_opex = inputs.opex * burn_reduction_mult
+    base_payroll = inputs.payroll * burn_reduction_mult
+    base_other = inputs.other_costs * burn_reduction_mult
     
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
     
@@ -94,10 +97,12 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
     burn_paths = np.zeros((n, horizon))
     runway_months = np.zeros(n)
     
+    cost_sigma_frac = inputs.cost_sigma / 100.0
+    
     for sim in range(n):
         revenue = adjusted_revenue
         cash = inputs.cash_balance
-        payroll = adjusted_payroll
+        sim_payroll = base_payroll
         
         for month in range(horizon):
             growth_rate = rng.normal(adjusted_growth, inputs.growth_sigma) / 100
@@ -108,19 +113,40 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
             ) / 100
             
             revenue = revenue * (1 + growth_rate)
+            revenue = max(revenue, 0)
             revenue = min(revenue, inputs.baseline_revenue * 1000)
             
             if inputs.hiring_plan:
                 for hire in inputs.hiring_plan:
                     if hire.get("start_month", 0) == month + 1:
-                        payroll += hire.get("monthly_cost", 0)
+                        sim_payroll += hire.get("monthly_cost", 0)
             
             if inputs.fundraise_month and month + 1 == inputs.fundraise_month:
                 cash += inputs.fundraise_amount
             
-            gross_profit = revenue * margin
-            net_cashflow = gross_profit - adjusted_opex - payroll - adjusted_other
+            opex_noise = max(0, rng.normal(1.0, cost_sigma_frac))
+            payroll_noise = max(0, rng.normal(1.0, cost_sigma_frac * 0.5))
+            other_noise = max(0, rng.normal(1.0, cost_sigma_frac * 1.5))
             
+            month_opex = base_opex * opex_noise
+            month_payroll = sim_payroll * payroll_noise
+            month_other = base_other * other_noise
+            
+            if rng.random() < inputs.expense_shock_prob:
+                shock_target = rng.choice(3)
+                shock_mult = 1 + rng.uniform(0.5, 1.0) * inputs.expense_shock_magnitude / 0.15
+                if shock_target == 0:
+                    month_opex *= shock_mult
+                elif shock_target == 1:
+                    month_payroll *= shock_mult
+                else:
+                    month_other *= shock_mult
+            
+            gross_profit = revenue * margin
+            total_costs = month_opex + month_payroll + month_other
+            net_cashflow = gross_profit - total_costs
+            
+            prev_cash = cash
             cash = cash + net_cashflow
             burn = max(0, -net_cashflow) if net_cashflow < 0 else 0
             
@@ -129,7 +155,11 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
             burn_paths[sim, month] = burn
             
             if cash <= 0 and runway_months[sim] == 0:
-                runway_months[sim] = month + 1
+                if prev_cash > 0 and burn > 0:
+                    frac = prev_cash / (prev_cash - cash)
+                    runway_months[sim] = month + frac
+                else:
+                    runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
             ending_cash = cash_paths[sim, -1]
@@ -137,17 +167,20 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
             avg_burn = np.mean(last_burns) if np.any(last_burns > 0) else 0
             if avg_burn > 0:
                 extra_months = ending_cash / avg_burn
-                runway_months[sim] = horizon + min(extra_months, 36)
+                noise = rng.normal(1.0, 0.1)
+                runway_months[sim] = horizon + min(extra_months * max(noise, 0.5), 48)
             else:
-                last_net = 0
+                last_cashflows = []
                 for m_idx in range(max(0, horizon - 3), horizon):
-                    rev_m = revenue_paths[sim, m_idx]
-                    cash_diff = cash_paths[sim, m_idx] - (cash_paths[sim, m_idx - 1] if m_idx > 0 else inputs.cash_balance)
-                    last_net = cash_diff
-                if last_net > 0:
-                    runway_months[sim] = horizon + 36
+                    prev = cash_paths[sim, m_idx - 1] if m_idx > 0 else inputs.cash_balance
+                    last_cashflows.append(cash_paths[sim, m_idx] - prev)
+                avg_net = np.mean(last_cashflows) if last_cashflows else 0
+                if avg_net > 0:
+                    months_of_buffer = ending_cash / max(float(avg_net), 1.0)
+                    noise = rng.normal(1.0, 0.15)
+                    runway_months[sim] = horizon + min(months_of_buffer * max(noise, 0.5), 48)
                 else:
-                    runway_months[sim] = horizon + 12
+                    runway_months[sim] = horizon + rng.uniform(6, 18)
     
     survival_6m = np.sum(runway_months > 6) / n
     survival_12m = np.sum(runway_months > 12) / n
