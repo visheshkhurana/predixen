@@ -488,6 +488,7 @@ export default function OverviewPage() {
   const { data: truthScan, isLoading: truthLoading, error: truthError } = useTruthScan(currentCompany?.id || null);
   const { data: decisions, isLoading: decisionsLoading } = useDecisions(currentCompany?.id || null);
   const { metrics: sharedMetrics, isLoading: metricsLoading } = useFinancialMetrics();
+  const isEmptyState = !truthLoading && !metricsLoading && (!sharedMetrics?.mrr && !sharedMetrics?.cashOnHand && !sharedMetrics?.totalMonthlyExpenses);
   const terms = useIndustryTerms();
   const { scaleMultiplier, scale: companyScale, scaleLabel: companyScaleLabel } = useCurrency();
   const runTruthScanMutation = useRunTruthScan();
