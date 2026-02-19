@@ -481,9 +481,13 @@ export default function OnboardingPage() {
     try {
       const company = await createCompanyMutation.mutateAsync(SAMPLE_COMPANY);
       setCurrentCompany(company);
+      
+      const { token } = useFounderStore.getState();
+      await apiRequest('POST', `/api/companies/${company.id}/seed-sample`);
+      
       toast({ 
         title: 'Sample company loaded', 
-        description: 'TechFlow AI has been created with sample financials' 
+        description: 'TechFlow AI has been created with 12 months of sample financials' 
       });
       setStep(2);
     } catch (err) {
