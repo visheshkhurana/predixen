@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,9 @@ import {
   Search,
   Plus,
   Flag,
+  Upload,
+  Database,
+  Rocket,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -69,7 +72,7 @@ import {
   Cell,
 } from 'recharts';
 import { useFounderStore } from '@/store/founderStore';
-import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries } from '@/api/hooks';
+import { useTruthScan, useDecisions, useRunTruthScan, useBenchmarkSearch, useBenchmarkIndustries, useSeedSample } from '@/api/hooks';
 import { formatCurrencyAbbrev, formatPercent as formatPct, formatRunway } from '@/lib/utils';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
