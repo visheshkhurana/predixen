@@ -974,7 +974,7 @@ export default function OverviewPage() {
             </div>
             <CardTitle className="text-2xl">Let's get you to your first simulation</CardTitle>
             <CardDescription className="text-base mt-1">
-              Add your financial data so we can run your Truth Scan and first scenario simulation.
+              Your dashboard shows N/A because no financial data has been added yet.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
