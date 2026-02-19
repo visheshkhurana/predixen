@@ -1,0 +1,55 @@
+You are a senior UX engineer + product designer hired to fix FounderConsole.ai onboarding based on the attached audit.
+
+GOAL:
+Reduce onboarding to 3 steps and deliver the “Aha moment” (first meaningful simulation result) in <3 minutes.
+Eliminate founder friction and prevent users from seeing blank/NA dashboards without guidance.
+
+You have access to the full codebase. You MUST:
+1) Implement the redesign, not just describe it.
+2) Provide patch-level code suggestions (file paths, components, functions, pseudocode/snippets).
+3) Add regression checks (QA tab or automated checks) to prevent future re-breakage.
+
+STRICT OUTPUT REQUIRED:
+For each fix:
+- [Problem]
+- [UX intent]
+- [Implementation changes]
+- [Files to edit]
+- [Code patch snippet]
+- [Acceptance criteria]
+- [Tests to add]
+
+========================================================
+A) P0 BUG FIXES (DO FIRST)
+========================================================
+
+P0-1) Fix “See Demo” button and /demo route
+Problem:
+- “See Demo” appears non-functional. /demo route returns developer router error.
+- /dashboard also returns dev 404 for unauthenticated.
+
+UX intent:
+- Demo must be the easiest trust path: 1 click => interactive populated dashboard.
+- Never show “Did you forget to add the page to the router?” in production.
+
+Implementation changes:
+- Add /demo route in frontend router.
+- Make “See Demo” navigate to /demo.
+- /demo loads demo company context (or sample workspace) WITHOUT login, or prompts “Continue with demo” with auto-login.
+- Replace dev router error with branded 404 page everywhere.
+
+Files to edit (likely):
+- client/src/App.tsx (routes)
+- client/src/pages/auth.tsx (See Demo button handler)
+- client/src/pages/demo.tsx (NEW)
+- client/src/pages/not-found.tsx (NEW)
+- client/src/components/app-sidebar.tsx (nav)
+
+Code patch snippet (example):
+```tsx
+// App.tsx
+<Route path="/demo" element={<DemoExperience />} />
+<Route path="*" element={<NotFound />} />
+
+// auth.tsx
+<Button onClick={() => navigate("/demo")}>See Demo</Button>
