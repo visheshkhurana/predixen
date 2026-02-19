@@ -3,17 +3,21 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles, ArrowRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Check, Sparkles, ArrowRight, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 const tiers = [
   {
-    name: "Starter",
+    name: "Free",
     price: { monthly: 0, annual: 0 },
     description: "For early-stage founders exploring their first scenarios.",
     features: [
-      "1 company",
-      "Manual data input",
-      "Basic scenarios (3 max)",
+      "Demo + sample data",
+      "3 basic scenarios",
       "Community support",
     ],
     cta: "Get Started",
@@ -21,34 +25,30 @@ const tiers = [
     highlighted: false,
   },
   {
-    name: "Pro",
-    price: { monthly: 49, annual: 39 },
-    description: "For growth-stage teams running serious financial simulations.",
+    name: "Founder",
+    price: { monthly: 199, annual: 159 },
+    description: "For founders running serious financial simulations.",
     features: [
-      "Unlimited companies",
-      "CSV + API data import",
-      "Unlimited scenarios & simulations",
-      "AI Copilot with 500 queries/mo",
-      "Truth Scan validation",
-      "Priority email support",
+      "Unlimited scenarios",
+      "Saved scenarios & exports",
+      "Email briefings",
+      "Priority support",
     ],
-    cta: "Start Free Trial",
+    cta: "Request Beta Access",
     ctaVariant: "default" as const,
     highlighted: true,
   },
   {
-    name: "Enterprise",
-    price: { monthly: -1, annual: -1 },
-    description: "For organizations needing custom integrations and compliance.",
+    name: "Growth",
+    price: { monthly: 399, annual: 319 },
+    description: "For growing teams needing integrations and collaboration.",
     features: [
-      "Everything in Pro",
-      "Custom data connectors",
-      "RBAC & team management",
-      "Dedicated CSM",
-      "SLA & audit logs",
-      "White-label options",
+      "Everything in Founder",
+      "Team seats (up to 5)",
+      "Integrations (Stripe, QuickBooks)",
+      "Custom alerts & automations",
     ],
-    cta: "Contact Sales",
+    cta: "Request Beta Access",
     ctaVariant: "outline" as const,
     highlighted: false,
   },
@@ -57,6 +57,42 @@ const tiers = [
 export default function PricingPage() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [betaOpen, setBetaOpen] = useState(false);
+  const [betaPlan, setBetaPlan] = useState("");
+  const [betaEmail, setBetaEmail] = useState("");
+  const [betaCompany, setBetaCompany] = useState("");
+  const [betaSubmitting, setBetaSubmitting] = useState(false);
+
+  const handleTierClick = (tier: typeof tiers[number]) => {
+    if (tier.cta === "Get Started") {
+      navigate("/auth");
+    } else {
+      setBetaPlan(tier.name);
+      setBetaOpen(true);
+    }
+  };
+
+  const handleBetaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!betaEmail) return;
+    setBetaSubmitting(true);
+    try {
+      await apiRequest("POST", "/api/leads", {
+        email: betaEmail,
+        company: betaCompany,
+        plan: betaPlan,
+      });
+      toast({ title: "You're on the list!", description: `We'll reach out when ${betaPlan} is available.` });
+      setBetaOpen(false);
+      setBetaEmail("");
+      setBetaCompany("");
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setBetaSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,7 +163,6 @@ export default function PricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {tiers.map((tier) => {
             const price = isAnnual ? tier.price.annual : tier.price.monthly;
-            const isCustom = price < 0;
 
             return (
               <Card
@@ -151,9 +186,7 @@ export default function PricingPage() {
 
                 <CardContent className="flex-1">
                   <div className="mb-6" data-testid={`text-price-${tier.name.toLowerCase()}`}>
-                    {isCustom ? (
-                      <span className="text-3xl font-bold">Custom</span>
-                    ) : price === 0 ? (
+                    {price === 0 ? (
                       <span className="text-3xl font-bold">Free</span>
                     ) : (
                       <div className="flex items-baseline gap-1">
@@ -161,7 +194,7 @@ export default function PricingPage() {
                         <span className="text-sm text-muted-foreground">/mo</span>
                       </div>
                     )}
-                    {isAnnual && !isCustom && price > 0 && (
+                    {isAnnual && price > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Billed annually at ${price * 12}/yr
                       </p>
@@ -182,7 +215,7 @@ export default function PricingPage() {
                   <Button
                     variant={tier.ctaVariant}
                     className="w-full gap-2"
-                    onClick={() => navigate("/auth")}
+                    onClick={() => handleTierClick(tier)}
                     data-testid={`button-cta-${tier.name.toLowerCase()}`}
                   >
                     {tier.cta}
@@ -194,12 +227,68 @@ export default function PricingPage() {
           })}
         </div>
 
+        <div className="text-center mt-10">
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline"
+            onClick={() => navigate("/demo")}
+            data-testid="link-start-demo"
+          >
+            Start with Demo &rarr;
+          </button>
+        </div>
+
         <div className="text-center mt-16">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
             All plans include SSL encryption, daily backups, and 99.9% uptime SLA.
           </p>
         </div>
       </main>
+
+      <Dialog open={betaOpen} onOpenChange={setBetaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Beta Access</DialogTitle>
+            <DialogDescription>
+              Enter your details and we'll notify you when the {betaPlan} plan is available.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleBetaSubmit} className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label htmlFor="beta-email">Email</Label>
+              <Input
+                id="beta-email"
+                type="email"
+                required
+                placeholder="you@company.com"
+                value={betaEmail}
+                onChange={(e) => setBetaEmail(e.target.value)}
+                data-testid="input-beta-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="beta-company">Company name</Label>
+              <Input
+                id="beta-company"
+                placeholder="Acme Inc."
+                value={betaCompany}
+                onChange={(e) => setBetaCompany(e.target.value)}
+                data-testid="input-beta-company"
+              />
+            </div>
+            <Button type="submit" className="w-full gap-2" disabled={betaSubmitting} data-testid="button-beta-submit">
+              {betaSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Request Access"
+              )}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

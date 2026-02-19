@@ -286,6 +286,11 @@ def seed_sample(
     from server.services.sample_data import seed_sample_company
     result = seed_sample_company(db, company_id)
     return result
+        from server.models.analytics_event import AnalyticsEvent
+        from datetime import datetime
+        event = AnalyticsEvent(event_name="sample_seed_success", company_id=company_id, user_id=current_user.id, meta_json={"template": "saas_series_a"}, created_at=datetime.utcnow())
+        db.add(event)
+        db.commit()
 
 
 @router.post("/{company_id}/web-search", response_model=Dict[str, Any])
