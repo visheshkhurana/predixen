@@ -157,6 +157,14 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
+    if user.email == "demo@founderconsole.ai":
+        try:
+            from server.seed.seed_demo import seed_demo_data
+            seed_demo_data(db)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Demo seed on login failed: {e}")
+    
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
