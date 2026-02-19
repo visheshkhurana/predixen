@@ -25,8 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
   { id: 2, title: 'Financial Baseline', description: 'Enter your current financials' },
-  { id: 3, title: 'Connect Data Sources', description: 'Link your tools for live data' },
-  { id: 4, title: 'First Truth Scan', description: 'Analyzing your data' },
+  { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
 ];
 
 interface DataSourceConnector {
@@ -607,7 +606,7 @@ export default function OnboardingPage() {
     }
 
     setIsSubmitting(true);
-    setStep(4);
+    setStep(3);
     setScanError(null);
 
     try {
@@ -625,7 +624,7 @@ export default function OnboardingPage() {
       const message = err instanceof ApiError ? err.message : 'Failed to run Truth Scan. Please try again.';
       setScanError(message);
       toast({ title: 'Error', description: message, variant: 'destructive' });
-      setStep(3);
+      setStep(2);
     } finally {
       setIsSubmitting(false);
     }
@@ -673,8 +672,8 @@ export default function OnboardingPage() {
         data: baselineData,
       });
       
-      toast({ title: 'Baseline saved!', description: 'Now connect your data sources.' });
-      setStep(3);
+      toast({ title: 'Baseline saved!', description: 'Running your first analysis...' });
+      handleRunTruthScan();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({ 
