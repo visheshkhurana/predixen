@@ -495,6 +495,7 @@ export default function OverviewPage() {
   const terms = useIndustryTerms();
   const { scaleMultiplier, scale: companyScale, scaleLabel: companyScaleLabel } = useCurrency();
   const runTruthScanMutation = useRunTruthScan();
+  const seedSampleMutation = useSeedSample();
   const [decisionStatuses, setDecisionStatuses] = useState<Record<string, DecisionStatus>>({});
   
   const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
@@ -955,6 +956,98 @@ export default function OverviewPage() {
             <Button onClick={() => setLocation('/onboarding')} data-testid="button-create-company">
               Get Started
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isEmptyState && currentCompany) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <Card>
+          <CardHeader className="text-center pb-2">
+            <div className="flex justify-center mb-3">
+              <div className="p-3 rounded-full bg-primary/10">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">Let's get you to your first simulation</CardTitle>
+            <CardDescription className="text-base mt-1">
+              Add your financial data so we can run your Truth Scan and first scenario simulation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div className="flex flex-col gap-2 mb-2">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span>Company created</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="h-4 w-4 rounded border border-muted-foreground/40" />
+                <span className="text-muted-foreground">Financial data added</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="h-4 w-4 rounded border border-muted-foreground/40" />
+                <span className="text-muted-foreground">First simulation run</span>
+              </div>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card className="hover-elevate">
+                <CardContent className="p-4 text-center space-y-2">
+                  <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                  <p className="font-medium text-sm">Upload Financials</p>
+                  <p className="text-xs text-muted-foreground">CSV or Excel with your monthly data</p>
+                  <Link href="/data">
+                    <Button variant="outline" size="sm" className="w-full mt-1" data-testid="button-upload-data">
+                      Upload
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+
+              <Card className="hover-elevate">
+                <CardContent className="p-4 text-center space-y-2">
+                  <Database className="h-6 w-6 mx-auto text-muted-foreground" />
+                  <p className="font-medium text-sm">Load Sample Data</p>
+                  <p className="text-xs text-muted-foreground">Pre-filled SaaS metrics to explore</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-1"
+                    data-testid="button-seed-sample"
+                    disabled={seedSampleMutation.isPending}
+                    onClick={() => {
+                      seedSampleMutation.mutate(currentCompany.id, {
+                        onSuccess: () => {
+                          toast({ title: 'Sample data loaded', description: 'Refresh to see your dashboard come alive.' });
+                          setTimeout(() => window.location.reload(), 1200);
+                        },
+                        onError: () => {
+                          toast({ title: 'Failed to load sample data', variant: 'destructive' });
+                        },
+                      });
+                    }}
+                  >
+                    {seedSampleMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Load Samples'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="hover-elevate">
+                <CardContent className="p-4 text-center space-y-2">
+                  <Rocket className="h-6 w-6 mx-auto text-muted-foreground" />
+                  <p className="font-medium text-sm">Enter Manually</p>
+                  <p className="text-xs text-muted-foreground">Type in your key financial figures</p>
+                  <Link href="/data">
+                    <Button variant="outline" size="sm" className="w-full mt-1" data-testid="button-manual-entry">
+                      Enter Data
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
           </CardContent>
         </Card>
       </div>
