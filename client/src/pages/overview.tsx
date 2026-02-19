@@ -993,60 +993,37 @@ export default function OverviewPage() {
               </div>
             </div>
             <Separator />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card className="hover-elevate">
-                <CardContent className="p-4 text-center space-y-2">
-                  <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
-                  <p className="font-medium text-sm">Upload Financials</p>
-                  <p className="text-xs text-muted-foreground">CSV or Excel with your monthly data</p>
-                  <Link href="/data">
-                    <Button variant="outline" size="sm" className="w-full mt-1" data-testid="button-upload-data">
-                      Upload
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              <Card className="hover-elevate">
-                <CardContent className="p-4 text-center space-y-2">
-                  <Database className="h-6 w-6 mx-auto text-muted-foreground" />
-                  <p className="font-medium text-sm">Load Sample Data</p>
-                  <p className="text-xs text-muted-foreground">Pre-filled SaaS metrics to explore</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-1"
-                    data-testid="button-seed-sample"
-                    disabled={seedSampleMutation.isPending}
-                    onClick={() => {
-                      seedSampleMutation.mutate(currentCompany.id, {
-                        onSuccess: () => {
-                          toast({ title: 'Sample data loaded', description: 'Refresh to see your dashboard come alive.' });
-                          setTimeout(() => window.location.reload(), 1200);
-                        },
-                        onError: () => {
-                          toast({ title: 'Failed to load sample data', variant: 'destructive' });
-                        },
-                      });
-                    }}
-                  >
-                    {seedSampleMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Load Samples'}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="hover-elevate">
-                <CardContent className="p-4 text-center space-y-2">
-                  <Rocket className="h-6 w-6 mx-auto text-muted-foreground" />
-                  <p className="font-medium text-sm">Enter Manually</p>
-                  <p className="text-xs text-muted-foreground">Type in your key financial figures</p>
-                  <Link href="/data">
-                    <Button variant="outline" size="sm" className="w-full mt-1" data-testid="button-manual-entry">
-                      Enter Data
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                data-testid="button-seed-sample"
+                disabled={seedSampleMutation.isPending}
+                onClick={() => {
+                  seedSampleMutation.mutate(currentCompany.id, {
+                    onSuccess: () => {
+                      toast({ title: 'Sample data loaded!' });
+                      setTimeout(() => window.location.reload(), 1200);
+                    },
+                    onError: () => {
+                      toast({ title: 'Failed to load sample data', variant: 'destructive' });
+                    },
+                  });
+                }}
+              >
+                {seedSampleMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
+                Load Sample Data
+              </Button>
+              <Link href="/onboarding">
+                <Button variant="outline" data-testid="button-upload-financials">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Financials
+                </Button>
+              </Link>
+              <Link href="/settings?tab=integrations">
+                <Button variant="ghost" data-testid="button-connect-sources">
+                  <Rocket className="h-4 w-4 mr-2" />
+                  Connect Data Sources
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
