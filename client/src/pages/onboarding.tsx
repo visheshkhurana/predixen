@@ -180,6 +180,7 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const { setCurrentCompany, setTruthScan, setCurrentStep: setStoreStep } = useFounderStore();
   const [step, setStep] = useState(1);
+  const [showDefaultsBanner, setShowDefaultsBanner] = useState(false);
   const [companyData, setCompanyData] = useState({
     name: '',
     website: '',
@@ -1121,7 +1122,7 @@ export default function OnboardingPage() {
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">We use this to benchmark you against similar companies in your sector.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Used to select relevant benchmarks and comparisons for your sector</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -1135,6 +1136,7 @@ export default function OnboardingPage() {
                           const untouched = Object.values(baselineData).every(val => val === 0);
                           if (untouched) {
                             setBaselineData(defaults);
+                            setShowDefaultsBanner(true);
                           }
                         }
                       }}
@@ -1156,7 +1158,7 @@ export default function OnboardingPage() {
                         <SelectItem value="public">Public / Listed</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">Sets smart defaults for your financial snapshot in the next step.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Helps us calibrate financial expectations and benchmark ranges</p>
                   </div>
                 </div>
 
@@ -1175,11 +1177,7 @@ export default function OnboardingPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {companyData.currency !== 'USD' 
-                      ? `All financial values will be displayed in ${companyData.currency}.`
-                      : 'Ensures all figures are shown in your local currency for accuracy.'}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">All monetary values will be displayed in this currency</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1291,6 +1289,12 @@ export default function OnboardingPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {showDefaultsBanner && companyData.stage && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm flex items-center justify-between gap-2 mb-4" data-testid="banner-defaults">
+                  <span>Pre-filled with typical values for {companyData.stage.replace(/_/g, ' ')} companies. Adjust to match your actuals.</span>
+                  <button onClick={() => setShowDefaultsBanner(false)} className="text-muted-foreground hover-elevate rounded-md px-1" data-testid="button-dismiss-banner" aria-label="Dismiss">x</button>
+                </div>
+              )}
               {/* Financial File Upload Zone */}
               <div className="mb-6">
                 <div
