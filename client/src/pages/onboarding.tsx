@@ -24,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const STEPS = [
   { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
-  { id: 2, title: 'Financial Baseline', description: 'Enter your current financials' },
+  { id: 2, title: 'Financial Snapshot', description: 'Quick financial baseline' },
   { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
 ];
 
@@ -135,6 +135,15 @@ const SAMPLE_FINANCIALS = {
   other_costs: 8000,
   cash_balance: 750000,
   headcount: 12,
+};
+
+const STAGE_DEFAULTS: Record<string, { monthly_revenue: number; gross_margin_pct: number; opex: number; payroll: number; other_costs: number; cash_balance: number; headcount: number }> = {
+  pre_seed: { monthly_revenue: 0, gross_margin_pct: 0, opex: 5000, payroll: 0, other_costs: 2000, cash_balance: 50000, headcount: 2 },
+  seed: { monthly_revenue: 15000, gross_margin_pct: 60, opex: 10000, payroll: 25000, other_costs: 5000, cash_balance: 500000, headcount: 5 },
+  pre_series_a: { monthly_revenue: 50000, gross_margin_pct: 65, opex: 20000, payroll: 40000, other_costs: 8000, cash_balance: 400000, headcount: 10 },
+  series_a: { monthly_revenue: 150000, gross_margin_pct: 70, opex: 40000, payroll: 80000, other_costs: 15000, cash_balance: 2000000, headcount: 25 },
+  series_b: { monthly_revenue: 500000, gross_margin_pct: 72, opex: 100000, payroll: 200000, other_costs: 30000, cash_balance: 5000000, headcount: 60 },
+  growth: { monthly_revenue: 1000000, gross_margin_pct: 75, opex: 200000, payroll: 400000, other_costs: 50000, cash_balance: 10000000, headcount: 120 },
 };
 
 interface ExtractedData {
@@ -1118,7 +1127,16 @@ export default function OnboardingPage() {
                     <Label>Stage <span className="text-destructive">*</span></Label>
                     <Select
                       value={companyData.stage}
-                      onValueChange={(v) => setCompanyData({ ...companyData, stage: v })}
+                      onValueChange={(v) => {
+                        setCompanyData({ ...companyData, stage: v });
+                        const defaults = STAGE_DEFAULTS[v];
+                        if (defaults) {
+                          const untouched = Object.values(baselineData).every(val => val === 0);
+                          if (untouched) {
+                            setBaselineData(defaults);
+                          }
+                        }
+                      }}
                     >
                       <SelectTrigger 
                         data-testid="select-stage"
