@@ -228,9 +228,14 @@ export default function AuthPage() {
               <br />
               FounderConsole is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies.
             </p>
-            <a href="/pricing" className="text-sm text-primary hover:underline mt-3 inline-block" data-testid="link-view-pricing">
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline mt-3 inline-block bg-transparent border-0 p-0 cursor-pointer"
+              onClick={() => setLocation('/pricing')}
+              data-testid="link-view-pricing"
+            >
               View Pricing &rarr;
-            </a>
+            </button>
           </div>
         </div>
       </div>
