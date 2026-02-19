@@ -1121,6 +1121,7 @@ export default function OnboardingPage() {
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">We use this to benchmark you against similar companies in your sector.</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -1155,6 +1156,7 @@ export default function OnboardingPage() {
                         <SelectItem value="public">Public / Listed</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">Sets smart defaults for your financial snapshot in the next step.</p>
                   </div>
                 </div>
 
@@ -1173,11 +1175,11 @@ export default function OnboardingPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {companyData.currency !== 'USD' && (
-                    <p className="text-xs text-muted-foreground">
-                      All financial values will be displayed in {companyData.currency}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {companyData.currency !== 'USD' 
+                      ? `All financial values will be displayed in ${companyData.currency}.`
+                      : 'Ensures all figures are shown in your local currency for accuracy.'}
+                  </p>
                 </div>
 
                 <div className="space-y-2">
