@@ -115,6 +115,10 @@ export const api = {
       request<{ message: string }>(`/companies/${id}`, {
         method: 'DELETE',
       }),
+    seedSample: (id: number) =>
+      request<{ already_seeded: boolean; record_count: number }>(`/companies/${id}/seed-sample`, {
+        method: 'POST',
+      }),
   },
   
   datasets: {

@@ -271,6 +271,23 @@ def delete_company(
     return {"message": "Company deleted successfully"}
 
 
+@router.post("/{company_id}/seed-sample")
+def seed_sample(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    from server.services.sample_data import seed_sample_company
+    result = seed_sample_company(db, company_id)
+    return result
+
+
 @router.post("/{company_id}/web-search", response_model=Dict[str, Any])
 async def search_company_web_info(
     company_id: int,

@@ -61,6 +61,19 @@ export function useDeleteCompany() {
   });
 }
 
+export function useSeedSample() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (companyId: number) => api.companies.seedSample(companyId),
+    onSuccess: (_, companyId) => {
+      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['computed-metrics', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+    },
+  });
+}
+
 export function useComputedMetrics(companyId: number | null) {
   return useQuery({
     queryKey: ['computed-metrics', companyId],
