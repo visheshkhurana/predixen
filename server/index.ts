@@ -10,6 +10,12 @@ import { registerTwilioRoutes } from "./twilio/routes";
 const app = express();
 const httpServer = createServer(app);
 
+// Open port 5000 IMMEDIATELY so deployment health checks pass
+const port = parseInt(process.env.PORT || "5000", 10);
+httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+  console.log(`[startup] Port ${port} open and accepting connections`);
+});
+
 // Initialize WebSocket server for real-time updates
 const wss = setupWebSocketServer(httpServer);
 
@@ -54,10 +60,12 @@ function startFastAPIServer(): ChildProcess {
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
+  const nodeEnv = process.env.NODE_ENV || "development";
   const child = spawn("python", ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
     stdio: "inherit",
     shell: true,
     detached: process.platform !== "win32",
+    env: { ...process.env, NODE_ENV: nodeEnv, ENVIRONMENT: nodeEnv },
   });
   
   console.log(`[fastapi] Spawned with PID: ${child.pid}`);
@@ -507,18 +515,6 @@ app.use((req, res, next) => {
 
   next();
 });
-
-const port = parseInt(process.env.PORT || "5000", 10);
-httpServer.listen(
-  {
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  },
-  () => {
-    log(`serving on port ${port}`);
-  },
-);
 
 (async () => {
   await registerRoutes(httpServer, app);
