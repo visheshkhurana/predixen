@@ -48,6 +48,7 @@ import AlertsPage from "@/pages/alerts";
 import TemplatesPage from "@/pages/templates";
 import DataVerificationPage from "@/pages/data-verification";
 import NotFound from "@/pages/not-found";
+import DemoRedirectPage from "@/pages/demo-redirect";
 import AdminDashboard from "@/pages/admin/index";
 import AdminUsers from "@/pages/admin/users";
 import AdminCompanies from "@/pages/admin/companies";
@@ -312,6 +313,7 @@ function Router() {
       </Route>
       <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
       <Route path="/owner-console" component={OwnerConsole} />
+      <Route path="/demo" component={DemoRedirectPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -511,6 +513,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     (window.location.pathname === '/owner-console' || 
      window.location.pathname === '/auth' ||
      window.location.pathname === '/pricing' ||
+     window.location.pathname === '/demo' ||
      window.location.pathname === '/onboarding' ||
      window.location.pathname.startsWith('/admin') ||
      window.location.pathname.startsWith('/scenarios/shared/'));
