@@ -53,6 +53,7 @@ import {
   Upload,
   Database,
   Rocket,
+  Loader2,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -1009,7 +1010,7 @@ export default function OverviewPage() {
                   });
                 }}
               >
-                {seedSampleMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
+                {seedSampleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
                 Load Sample Data
               </Button>
               <Link href="/onboarding">
