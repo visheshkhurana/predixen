@@ -489,7 +489,7 @@ export default function OnboardingPage() {
         title: 'Sample company loaded', 
         description: 'TechFlow AI has been created with 12 months of sample financials' 
       });
-      setStep(2);
+      setLocation("/");
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({ 

@@ -183,6 +183,10 @@ app.include_router(digest_api.router)
 app.include_router(csv_import_api.router)
 app.include_router(currency_api.router)
 app.include_router(qa_api.router)
+from server.api import leads as leads_api
+from server.api import events as events_api
+app.include_router(leads_api.router)
+app.include_router(events_api.router)
 
 @app.get("/")
 def root():
