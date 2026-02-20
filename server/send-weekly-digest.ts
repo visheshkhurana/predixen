@@ -45,7 +45,7 @@ async function sendWeeklyDigest() {
     'vysheshk@gmail.com'
   ];
 
-  const senderEmail = 'FounderConsole Weekly <kavibe8@founderconsole.ai>';
+  const senderEmail = 'FounderConsole Weekly <hello@founderconsole.ai>';
   const subject = 'FounderConsole Weekly Digest — Feb 8-14, 2026: 5 Bug Fixes, 4 New Features, 3 UI Upgrades';
   const htmlContent = `
 <!DOCTYPE html>

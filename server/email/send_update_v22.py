@@ -224,7 +224,6 @@ def send_all():
             "X-Entity-Ref-ID": str(uuid.uuid4()),
             "List-Unsubscribe": "<mailto:updates@founderconsole.ai?subject=unsubscribe>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-            "Precedence": "bulk",
         }
 
         utm_params = {

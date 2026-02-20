@@ -1,6 +1,6 @@
 """
 Send update email v24 - QA Front Complete, NLP Engine, Security Hardening & Deployment Stability.
-Sender: kavibe8@founderconsole.ai
+Sender: hello@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -273,7 +273,7 @@ FounderConsole
 
 
 def send_all():
-    sender = "Nikita from FounderConsole <kavibe8@founderconsole.ai>"
+    sender = "Nikita from FounderConsole <hello@founderconsole.ai>"
 
     print(f"Sending QA/Security/Deployment update v24 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
@@ -290,9 +290,6 @@ def send_all():
 
         headers = {
             "X-Entity-Ref-ID": str(uuid.uuid4()),
-            "List-Unsubscribe": "<mailto:kavibe8@founderconsole.ai?subject=unsubscribe>",
-            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-            "Precedence": "bulk",
         }
 
         utm_params = {

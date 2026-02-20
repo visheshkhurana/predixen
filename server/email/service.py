@@ -140,7 +140,7 @@ def _send_email_sync(
         }
     
     resend.api_key = creds["api_key"]
-    sender_email = from_email or "FounderConsole <kavibe8@founderconsole.ai>"
+    sender_email = from_email or "FounderConsole <hello@founderconsole.ai>"
     
     try:
         params = {
