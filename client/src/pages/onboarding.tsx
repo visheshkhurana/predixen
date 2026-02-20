@@ -488,8 +488,8 @@ export default function OnboardingPage() {
       await seedSampleMutation.mutateAsync(company.id);
       
       toast({ 
-        title: 'Sample company loaded', 
-        description: 'TechFlow AI has been created with 12 months of sample financials' 
+        title: 'Sample data loaded!', 
+        description: 'Redirecting to dashboard...' 
       });
       setLocation("/");
     } catch (err) {
