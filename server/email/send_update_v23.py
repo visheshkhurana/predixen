@@ -1,6 +1,6 @@
 """
 Send update email v23 - P1/P2 Bug Fixes: Metrics, Currency, Scale & Scenarios.
-Sender: hello@founderconsole.ai
+Sender: updates@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -217,7 +217,7 @@ FounderConsole
 
 
 def send_all():
-    sender = "Nikita from FounderConsole <hello@founderconsole.ai>"
+    sender = "Nikita from FounderConsole <updates@founderconsole.ai>"
 
     print(f"Sending P1/P2 Bug Fixes update v23 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")

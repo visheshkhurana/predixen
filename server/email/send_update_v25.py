@@ -1,6 +1,6 @@
 """
 Send update email v25 - Deployment Stability Fix: Instant Port Binding & Production Environment Detection.
-Sender: hello@founderconsole.ai
+Sender: updates@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -178,7 +178,7 @@ FounderConsole
 
 
 def send_all():
-    sender = "Nikita from FounderConsole <hello@founderconsole.ai>"
+    sender = "Nikita from FounderConsole <updates@founderconsole.ai>"
 
     print(f"Sending deployment fix update v25 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
