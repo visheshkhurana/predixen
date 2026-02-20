@@ -101,13 +101,19 @@ def get_resend_api_key() -> Optional[str]:
 
 def get_from_email() -> str:
     """Get the default from email address for updates and notifications."""
-    return "FounderConsole <updates@founderconsole.ai>"
+    creds = get_resend_credentials()
+    verified_email = creds.get("from_email", "noreply@founderconsole.ai") if creds else "noreply@founderconsole.ai"
+    return f"FounderConsole <{verified_email}>"
 
 
 def get_transactional_from_email() -> str:
     """Get the transactional from email address for user-triggered emails (invites, shares, resets)."""
     env_override = os.getenv("RESEND_TRANSACTIONAL_FROM")
-    return env_override or "FounderConsole <notifications@founderconsole.ai>"
+    if env_override:
+        return env_override
+    creds = get_resend_credentials()
+    verified_email = creds.get("from_email", "noreply@founderconsole.ai") if creds else "noreply@founderconsole.ai"
+    return f"FounderConsole <{verified_email}>"
 
 
 def is_email_configured() -> bool:
@@ -140,7 +146,8 @@ def _send_email_sync(
         }
     
     resend.api_key = creds["api_key"]
-    sender_email = from_email or "FounderConsole <updates@founderconsole.ai>"
+    verified_from = creds.get("from_email", "noreply@founderconsole.ai")
+    sender_email = from_email or f"FounderConsole <{verified_from}>"
     
     try:
         params = {

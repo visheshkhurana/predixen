@@ -1,6 +1,6 @@
 """
 Send update email v24 - QA Front Complete, NLP Engine, Security Hardening & Deployment Stability.
-Sender: updates@founderconsole.ai
+Sender: noreply@founderconsole.ai
 """
 import os, sys, time, uuid
 
@@ -273,7 +273,7 @@ FounderConsole
 
 
 def send_all():
-    sender = "Nikita from FounderConsole <updates@founderconsole.ai>"
+    sender = "Nikita from FounderConsole <noreply@founderconsole.ai>"
 
     print(f"Sending QA/Security/Deployment update v24 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
