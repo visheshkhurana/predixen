@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ApiError } from '@/api/client';
 import { apiRequest } from '@/lib/queryClient';
 import { useFounderStore } from '@/store/founderStore';
-import { useCreateCompany, useManualBaseline, useRunTruthScan } from '@/api/hooks';
+import { useCreateCompany, useManualBaseline, useRunTruthScan, useSeedSample } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -458,9 +458,12 @@ export default function OnboardingPage() {
   const createCompanyMutation = useCreateCompany();
   const manualBaselineMutation = useManualBaseline();
   const runTruthScanMutation = useRunTruthScan();
+  const seedSampleMutation = useSeedSample();
+  
+  const isSeedingInProgress = createCompanyMutation.isPending || seedSampleMutation.isPending;
   
   const loadSampleCompany = async () => {
-    if (isSubmitting || createCompanyMutation.isPending) return;
+    if (isSubmitting || isSeedingInProgress) return;
     
     const { token } = useFounderStore.getState();
     if (!token) {
@@ -482,8 +485,7 @@ export default function OnboardingPage() {
       const company = await createCompanyMutation.mutateAsync(SAMPLE_COMPANY);
       setCurrentCompany(company);
       
-      const { token } = useFounderStore.getState();
-      await apiRequest('POST', `/api/companies/${company.id}/seed-sample`);
+      await seedSampleMutation.mutateAsync(company.id);
       
       toast({ 
         title: 'Sample company loaded', 
@@ -1262,7 +1264,7 @@ export default function OnboardingPage() {
                   variant="outline"
                   className="w-full"
                   onClick={loadSampleCompany}
-                  disabled={isSubmitting || createCompanyMutation.isPending}
+                  disabled={isSubmitting || isSeedingInProgress}
                   data-testid="button-load-sample"
                 >
                   {isSubmitting && isSampleMode ? (
