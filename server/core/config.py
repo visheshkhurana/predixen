@@ -20,12 +20,13 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
     SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))  # 1 hour default
+    MASTER_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("MASTER_TOKEN_EXPIRE_MINUTES", "30"))  # 30 min for admin
 
     FEATURE_INVESTOR_MODE: bool = os.getenv("FEATURE_INVESTOR_MODE", "false").lower() == "true"
 
     ADMIN_MASTER_EMAIL: str = os.getenv("ADMIN_MASTER_EMAIL", "")
-    ADMIN_MASTER_PASSWORD: str = os.getenv("ADMIN_MASTER_PASSWORD", "")
+    ADMIN_MASTER_PASSWORD_HASH: str = os.getenv("ADMIN_MASTER_PASSWORD_HASH", "")  # bcrypt hash, not plaintext
 
     # Environment: "development" or "production"
     ENVIRONMENT: str = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
@@ -35,8 +36,14 @@ class Settings(BaseSettings):
 
     # Rate limiting configuration (requests per minute)
     RATE_LIMIT_AUTH: int = int(os.getenv("RATE_LIMIT_AUTH", "5"))
+    RATE_LIMIT_ADMIN_LOGIN: int = int(os.getenv("RATE_LIMIT_ADMIN_LOGIN", "3"))  # Stricter for admin
     RATE_LIMIT_API: int = int(os.getenv("RATE_LIMIT_API", "60"))
     RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
+
+    # Database connection pool settings
+    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
+    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
     
     @property
     def is_production(self) -> bool:
@@ -95,5 +102,10 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-if settings.is_production and settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
-    raise RuntimeError("FATAL: You must set SESSION_SECRET env var in production. Do NOT use the default secret key.")
+if settings.is_production:
+    if settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
+        raise RuntimeError("FATAL: You must set SESSION_SECRET env var in production. Do NOT use the default secret key.")
+    if not settings.CORS_ORIGINS:
+        raise RuntimeError("FATAL: You must set CORS_ORIGINS env var in production. Do NOT allow open CORS.")
+    if settings.ADMIN_MASTER_EMAIL and not settings.ADMIN_MASTER_PASSWORD_HASH:
+        raise RuntimeError("FATAL: ADMIN_MASTER_EMAIL is set but ADMIN_MASTER_PASSWORD_HASH is empty. Set a bcrypt hash.")

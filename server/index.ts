@@ -432,6 +432,8 @@ app.use(
   createProxyMiddleware({
     target: FASTAPI_URL,
     changeOrigin: true,
+    timeout: 30000,
+    proxyTimeout: 30000,
     pathRewrite: (path) => `/notifications${path}`,
     on: {
       error: (err: Error, req, res) => {
@@ -451,6 +453,8 @@ app.use(
   createProxyMiddleware({
     target: FASTAPI_URL,
     changeOrigin: true,
+    timeout: 30000,
+    proxyTimeout: 30000,
     pathRewrite: (path) => `/email-tracking${path}`,
     on: {
       error: (err: Error, req, res) => {

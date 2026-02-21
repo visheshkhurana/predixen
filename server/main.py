@@ -45,7 +45,11 @@ from server.api import csv_import as csv_import_api
 from server.api import currency as currency_api
 from server.api import qa as qa_api
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 _startup_state = {"ready": False, "error": None}
@@ -112,7 +116,10 @@ async def lifespan(app: FastAPI):
     import asyncio
     logger.info(f"Starting FounderConsole v1.0.0")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
-    logger.info(f"CORS origins: {settings.cors_origins_list}")
+    if settings.cors_origins_list:
+        logger.info(f"CORS origins: {settings.cors_origins_list}")
+    else:
+        logger.warning("CORS origins list is empty! No cross-origin requests will be allowed.")
     logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
     
     logger.info("Startup complete - FastAPI server ready (deferred tasks scheduled)")
@@ -136,6 +143,7 @@ app.add_middleware(CSRFProtectionMiddleware)
 app.add_middleware(
     RateLimiterMiddleware,
     rate_limit_auth=settings.RATE_LIMIT_AUTH,
+    rate_limit_admin_login=settings.RATE_LIMIT_ADMIN_LOGIN,
     rate_limit_api=settings.RATE_LIMIT_API,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
 )
@@ -209,8 +217,22 @@ def root():
 
 @app.get("/health")
 def health():
+    """Health check endpoint with database connectivity verification."""
+    db_healthy = False
+    try:
+        db = SessionLocal()
+        db.execute(
+            __import__('sqlalchemy').text("SELECT 1")
+        )
+        db_healthy = True
+        db.close()
+    except Exception as e:
+        logger.warning(f"Health check DB probe failed: {e}")
+
+    overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
     return {
-        "status": "healthy",
+        "status": overall_status,
         "ready": _startup_state["ready"],
+        "database": "connected" if db_healthy else "unavailable",
         "startup_error": _startup_state["error"],
     }

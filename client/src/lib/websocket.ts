@@ -22,6 +22,7 @@ export interface SimulationUpdate {
 const WS_RECONNECT_DELAY = 3000;
 const WS_MAX_RECONNECT_ATTEMPTS = 5;
 const WS_PING_INTERVAL = 30000;
+const WS_MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB max message size
 
 export function useWebSocket(companyId: number | null) {
   const [isConnected, setIsConnected] = useState(false);
@@ -89,7 +90,13 @@ export function useWebSocket(companyId: number | null) {
 
       ws.onmessage = (event) => {
         try {
-          const message: WebSocketMessage = JSON.parse(event.data);
+          // Validate message size to prevent memory exhaustion
+          const rawData = typeof event.data === 'string' ? event.data : '';
+          if (rawData.length > WS_MAX_MESSAGE_SIZE) {
+            console.warn(`[WebSocket] Message too large (${rawData.length} bytes), discarding`);
+            return;
+          }
+          const message: WebSocketMessage = JSON.parse(rawData);
           setLastMessage(message);
 
           if (message.type === 'metric_update') {

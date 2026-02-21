@@ -72,7 +72,8 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     """
 
     # Endpoint category patterns
-    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/admin/login"}
+    AUTH_PATHS = {"/auth/login", "/auth/register"}
+    ADMIN_AUTH_PATHS = {"/auth/admin/login"}  # Stricter rate limiting for admin
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}  # Endpoints containing upload operations
     HEALTH_PATHS = {"/health", "/"}
 
@@ -82,6 +83,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         rate_limit_auth: int = 5,  # requests per minute
         rate_limit_api: int = 60,  # requests per minute
         rate_limit_upload: int = 10,  # requests per minute
+        rate_limit_admin_login: int = 3,  # requests per minute (stricter)
     ):
         """
         Initialize rate limiter middleware.
@@ -91,12 +93,16 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             rate_limit_auth: Auth requests per minute (default: 5)
             rate_limit_api: API requests per minute (default: 60)
             rate_limit_upload: Upload requests per minute (default: 10)
+            rate_limit_admin_login: Admin login requests per minute (default: 3)
         """
         super().__init__(app)
 
         # Load from environment variables if set, otherwise use parameters
         self.rate_limit_auth = int(
             os.getenv("RATE_LIMIT_AUTH", str(rate_limit_auth))
+        )
+        self.rate_limit_admin_login = int(
+            os.getenv("RATE_LIMIT_ADMIN_LOGIN", str(rate_limit_admin_login))
         )
         self.rate_limit_api = int(
             os.getenv("RATE_LIMIT_API", str(rate_limit_api))
@@ -149,6 +155,10 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         # Check health endpoints first (no limit)
         if path in self.HEALTH_PATHS:
             return ("health", float('inf'))
+
+        # Check admin auth endpoints (stricter limit)
+        if path in self.ADMIN_AUTH_PATHS:
+            return ("admin_auth", self.rate_limit_admin_login)
 
         # Check auth endpoints
         if path in self.AUTH_PATHS:

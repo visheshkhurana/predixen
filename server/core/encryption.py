@@ -26,9 +26,9 @@ logger = logging.getLogger(__name__)
 class CredentialEncryptor:
     """Handles encryption and decryption of connector credentials."""
 
-    # Derivation salt - fixed salt for consistent key derivation
-    # In production, consider using a per-company or per-installation salt
-    _SALT = b"founderconsole-credential-salt-v1"
+    # Derivation salt - configurable per installation via env var
+    # Default salt is for development; production should set ENCRYPTION_SALT env var
+    _SALT = os.getenv("ENCRYPTION_SALT", "founderconsole-credential-salt-v1").encode("utf-8")
 
     def __init__(self, secret_key: str):
         """

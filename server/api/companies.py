@@ -261,52 +261,55 @@ def delete_company(
         )
     
     try:
+        # Use explicit nested transaction to ensure atomic cascade delete
+        db.begin_nested()
+
         # Conversation related
         conversations = db.query(Conversation).filter(Conversation.company_id == company_id).all()
         for conv in conversations:
-            db.query(ConversationRecommendation).filter(ConversationRecommendation.conversation_id == conv.id).delete()
-            db.query(ConversationMessage).filter(ConversationMessage.conversation_id == conv.id).delete()
-        db.query(Conversation).filter(Conversation.company_id == company_id).delete()
-        
+            db.query(ConversationRecommendation).filter(ConversationRecommendation.conversation_id == conv.id).delete(synchronize_session='fetch')
+            db.query(ConversationMessage).filter(ConversationMessage.conversation_id == conv.id).delete(synchronize_session='fetch')
+        db.query(Conversation).filter(Conversation.company_id == company_id).delete(synchronize_session='fetch')
+
         # Scenario versions and related
-        db.query(MacroEnvironment).filter(MacroEnvironment.company_id == company_id).delete()
-        db.query(SensitivityRun).filter(SensitivityRun.company_id == company_id).delete()
-        db.query(Recommendation).filter(Recommendation.company_id == company_id).delete()
-        
+        db.query(MacroEnvironment).filter(MacroEnvironment.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(SensitivityRun).filter(SensitivityRun.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(Recommendation).filter(Recommendation.company_id == company_id).delete(synchronize_session='fetch')
+
         # Simulation cache (child of assumption_set)
         assumption_sets = db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).all()
         for a in assumption_sets:
-            db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete()
-        db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete()
-        
+            db.query(SimulationCache).filter(SimulationCache.assumption_set_id == a.id).delete(synchronize_session='fetch')
+        db.query(AssumptionSetModel).filter(AssumptionSetModel.company_id == company_id).delete(synchronize_session='fetch')
+
         # Company state
-        db.query(CompanyState).filter(CompanyState.company_id == company_id).delete()
-        
+        db.query(CompanyState).filter(CompanyState.company_id == company_id).delete(synchronize_session='fetch')
+
         # Other related tables
-        db.query(Scenario).filter(Scenario.company_id == company_id).delete()
-        db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).delete()
-        db.query(FinancialMetricPoint).filter(FinancialMetricPoint.company_id == company_id).delete()
-        db.query(ImportSession).filter(ImportSession.company_id == company_id).delete()
-        db.query(ChatMessage).filter(ChatMessage.company_id == company_id).delete()
-        db.query(TruthScan).filter(TruthScan.company_id == company_id).delete()
-        db.query(Dataset).filter(Dataset.company_id == company_id).delete()
-        db.query(CustomerRecord).filter(CustomerRecord.company_id == company_id).delete()
-        db.query(TransactionRecord).filter(TransactionRecord.company_id == company_id).delete()
-        db.query(CompanyScenario).filter(CompanyScenario.company_id == company_id).delete()
-        db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id).delete()
-        db.query(CompanySource).filter(CompanySource.company_id == company_id).delete()
-        db.query(CompanyDriverModel).filter(CompanyDriverModel.company_id == company_id).delete()
-        db.query(CompanyWorkstream).filter(CompanyWorkstream.company_id == company_id).delete()
-        db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id).delete()
-        db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company_id).delete()
-        db.query(FundraisingRound).filter(FundraisingRound.company_id == company_id).delete()
-        db.query(InvestorPipeline).filter(InvestorPipeline.company_id == company_id).delete()
-        
+        db.query(Scenario).filter(Scenario.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(FinancialRecord).filter(FinancialRecord.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(FinancialMetricPoint).filter(FinancialMetricPoint.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(ImportSession).filter(ImportSession.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(ChatMessage).filter(ChatMessage.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(TruthScan).filter(TruthScan.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(Dataset).filter(Dataset.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CustomerRecord).filter(CustomerRecord.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(TransactionRecord).filter(TransactionRecord.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyScenario).filter(CompanyScenario.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanySource).filter(CompanySource.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyDriverModel).filter(CompanyDriverModel.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyWorkstream).filter(CompanyWorkstream.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyAlert).filter(CompanyAlert.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(CompanyCapTable).filter(CompanyCapTable.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(FundraisingRound).filter(FundraisingRound.company_id == company_id).delete(synchronize_session='fetch')
+        db.query(InvestorPipeline).filter(InvestorPipeline.company_id == company_id).delete(synchronize_session='fetch')
+
         db.delete(company)
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to delete company {company_id}: {e}")
+        logger.error(f"Failed to delete company {company_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete company. No data was removed.")
     
     return {"message": "Company deleted successfully"}

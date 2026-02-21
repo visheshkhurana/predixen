@@ -8,7 +8,10 @@ from server.core.config import settings
 from server.models.user import User
 from server.models.login_history import LoginHistory
 import re
-import hmac
+import bcrypt
+import logging
+
+auth_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -81,10 +84,16 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one digit")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            raise ValueError("Password must contain at least one special character")
         return v
 
 class LoginRequest(BaseModel):
@@ -101,7 +110,9 @@ class TokenResponse(BaseModel):
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == req.email).first()
+    # Normalize email to lowercase
+    normalized_email = req.email.lower().strip()
+    existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
         log_login_attempt(db, req.email, success=False, 
                          failure_reason="Email already registered", request=request)
@@ -111,7 +122,7 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
         )
     
     user = User(
-        email=req.email,
+        email=normalized_email,
         password_hash=get_password_hash(req.password)
     )
     db.add(user)
@@ -157,7 +168,8 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
-    if user.email == "demo@founderconsole.ai":
+    # Only seed demo data if explicitly enabled via config (not on every login in production)
+    if user.email == "demo@founderconsole.ai" and settings.should_seed_demo_data:
         try:
             from server.seed.seed_demo import seed_demo_data
             seed_demo_data(db)
@@ -189,14 +201,23 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
     admin_email_config = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     req_email_lower = req.email.lower().strip()
     
-    if (admin_email_config and settings.ADMIN_MASTER_PASSWORD and 
-        req_email_lower == admin_email_config and hmac.compare_digest(req.password, settings.ADMIN_MASTER_PASSWORD)):
-        
+    # Verify master credentials using bcrypt hash comparison (not plaintext)
+    master_password_valid = False
+    if admin_email_config and settings.ADMIN_MASTER_PASSWORD_HASH and req_email_lower == admin_email_config:
+        try:
+            master_password_valid = bcrypt.checkpw(
+                req.password.encode('utf-8'),
+                settings.ADMIN_MASTER_PASSWORD_HASH.encode('utf-8')
+            )
+        except (ValueError, TypeError) as e:
+            auth_logger.error(f"Master password hash verification failed: {e}")
+
+    if master_password_valid:
         log_login_attempt(db, req.email, None, success=True, request=request)
-        
+
         access_token = create_access_token(
             data={"sub": "master", "admin": True, "is_master": True},
-            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expires_delta=timedelta(minutes=settings.MASTER_TOKEN_EXPIRE_MINUTES)
         )
         
         return TokenResponse(

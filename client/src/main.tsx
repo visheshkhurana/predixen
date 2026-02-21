@@ -8,7 +8,11 @@ import "./index.css";
  * This is the final safety net that catches any errors that slip through
  * the application-level error boundaries
  */
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("Root element not found. Ensure there is an element with id='root' in index.html.");
+}
+createRoot(rootElement).render(
   <ErrorBoundary
     onError={(error) => {
       // Global error logging - could be sent to error tracking service (Sentry, LogRocket, etc.)

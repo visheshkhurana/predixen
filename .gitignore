@@ -3,4 +3,33 @@ dist
 .DS_Store
 server/public
 vite.config.ts.*
-*.tar.gzattached_assets/Fund-Flow_1771351021259.zip
+*.tar.gz
+attached_assets/Fund-Flow_1771351021259.zip
+
+# Environment files (NEVER commit secrets)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Keep the example file
+!.env.example
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Database files
+*.db
+*.sqlite3

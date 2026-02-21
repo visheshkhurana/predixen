@@ -42,42 +42,76 @@ function getCSRFToken(): string | null {
   return null;
 }
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   let response: Response;
+  let lastError: Error | null = null;
 
-  try {
-    const token = getAuthToken();
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const token = getAuthToken();
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {}),
-    };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...((options.headers as Record<string, string>) || {}),
+      };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
-    const method = (options.method || 'GET').toUpperCase();
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const csrfToken = getCSRFToken();
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
-    }
 
-    response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-    });
-  } catch (error) {
-    const networkError = error instanceof Error ? error.message : String(error);
-    console.error(`Network error for ${endpoint}:`, error);
-    throw new ApiError(0, `Network request failed: ${networkError}`);
+      // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
+      const method = (options.method || 'GET').toUpperCase();
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        const csrfToken = getCSRFToken();
+        if (csrfToken) {
+          headers['X-CSRF-Token'] = csrfToken;
+        }
+      }
+
+      response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+      });
+
+      // Retry on transient server errors (only for idempotent GET requests or explicit retryable status)
+      if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < MAX_RETRIES) {
+        const isIdempotent = !method || method === 'GET';
+        if (isIdempotent) {
+          const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+          console.warn(`[API] Retrying ${endpoint} (attempt ${attempt + 1}/${MAX_RETRIES}) after ${delay}ms - status ${response.status}`);
+          await sleep(delay);
+          continue;
+        }
+      }
+
+      // Break out of retry loop on success or non-retryable error
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[API] Network error for ${endpoint}, retrying (attempt ${attempt + 1}/${MAX_RETRIES}) after ${delay}ms`);
+        await sleep(delay);
+        continue;
+      }
+      console.error(`Network error for ${endpoint}:`, error);
+      throw new ApiError(0, `Network request failed: ${lastError.message}`);
+    }
   }
+
+  // TypeScript: response is guaranteed to be assigned if we reach here without throwing
+  response = response!;
 
   if (!response.ok) {
     let errorMessage = 'Request failed';
