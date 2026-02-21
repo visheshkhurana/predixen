@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from server.core.db import get_db
-from server.core.security import get_current_user
+from server.core.security import get_current_user, require_company_access, is_master_user
+from server.core.pagination import paginate, create_paginated_response, PaginatedResponse
 from server.models.user import User
 from server.models.company import Company
 from server.lib.web_search import search_company_info
@@ -81,15 +82,22 @@ class CompanyResponse(BaseModel):
 def create_company(
     request: CompanyCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
+    # MasterUser cannot create companies - they can only view and manage existing ones
+    if is_master_user(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MasterUser cannot create companies. Use a regular user account."
+        )
+
     existing = db.query(Company).filter(
         Company.user_id == current_user.id,
         Company.name == request.name
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="A company with this name already exists")
-    
+
     company = Company(
         user_id=current_user.id,
         name=request.name,
@@ -126,13 +134,51 @@ def create_company(
     db.refresh(company)
     return company
 
-@router.get("", response_model=List[CompanyResponse])
+@router.get("")
 def list_companies(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(get_current_user)
 ):
-    companies = db.query(Company).filter(Company.user_id == current_user.id).all()
-    return companies
+    """
+    List companies with pagination.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+
+    MasterUser can see all companies, regular users see only their own.
+    """
+    # Build query based on user type
+    if is_master_user(current_user):
+        query = db.query(Company)
+        # Log MasterUser access for audit purposes
+        from server.core.security import log_audit
+        log_audit(
+            db,
+            user_id=current_user.id,
+            action="master_user_list_companies",
+            resource_type="company_list",
+            details={"page": page, "page_size": page_size}
+        )
+    else:
+        query = db.query(Company).filter(Company.user_id == current_user.id)
+
+    # Order by created_at descending
+    query = query.order_by(Company.created_at.desc())
+
+    # Apply pagination
+    items, total = paginate(query, page=page, page_size=page_size)
+
+    # Convert to response models
+    response_items = [CompanyResponse.from_orm(item) for item in items]
+
+    return create_paginated_response(
+        items=response_items,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
@@ -148,19 +194,18 @@ class CompanyUpdate(BaseModel):
 def get_company(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(require_company_access(company_id))
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
+    # Authorization check already performed by require_company_access dependency
+    # This includes audit logging for MasterUser access
+    company = db.query(Company).filter(Company.id == company_id).first()
+
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found"
         )
-    
+
     return company
 
 
@@ -169,19 +214,17 @@ def update_company(
     company_id: int,
     request: CompanyUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(require_company_access(company_id))
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
+    # Authorization check already performed by require_company_access dependency
+    company = db.query(Company).filter(Company.id == company_id).first()
+
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Company not found"
         )
-    
+
     if request.name is not None:
         company.name = request.name
     if request.website is not None:
@@ -196,7 +239,7 @@ def update_company(
         company.description = request.description
     if request.amount_scale is not None:
         company.amount_scale = request.amount_scale
-    
+
     db.commit()
     db.refresh(company)
     return company
@@ -206,13 +249,11 @@ def update_company(
 def delete_company(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(require_company_access(company_id))
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
+    # Authorization check already performed by require_company_access dependency
+    company = db.query(Company).filter(Company.id == company_id).first()
+
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -275,12 +316,10 @@ def delete_company(
 def seed_sample(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(require_company_access(company_id))
 ):
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
+    # Authorization check already performed by require_company_access dependency
+    company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     from server.services.sample_data import seed_sample_company
@@ -297,14 +336,12 @@ def seed_sample(
 async def search_company_web_info(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user = Depends(require_company_access(company_id))
 ):
     """Search the web for company information using AI."""
-    company = db.query(Company).filter(
-        Company.id == company_id,
-        Company.user_id == current_user.id
-    ).first()
-    
+    # Authorization check already performed by require_company_access dependency
+    company = db.query(Company).filter(Company.id == company_id).first()
+
     if not company:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

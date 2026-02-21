@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/errors';
+import { ApiError, safeParseJSON } from '@/lib/errors';
 export { ApiError };
 
 const API_BASE = '/api';
@@ -7,7 +7,7 @@ const API_BASE = '/api';
 function getAuthToken(): string | null {
   // First try direct localStorage key
   let token = localStorage.getItem('founderconsole-token');
-  
+
   // Fallback: try to get from Zustand persisted storage
   if (!token) {
     try {
@@ -24,59 +24,105 @@ function getAuthToken(): string | null {
       // Ignore JSON parse errors
     }
   }
-  
+
   return token;
+}
+
+// Helper to get CSRF token from cookies
+function getCSRFToken(): string | null {
+  const name = 'X-CSRF-Token=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const cookieArray = decodedCookie.split(';');
+  for (let cookie of cookieArray) {
+    cookie = cookie.trim();
+    if (cookie.indexOf(name) === 0) {
+      return cookie.substring(name.length, cookie.length);
+    }
+  }
+  return null;
 }
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getAuthToken();
-  
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...((options.headers as Record<string, string>) || {}),
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  let response: Response;
+
+  try {
+    const token = getAuthToken();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...((options.headers as Record<string, string>) || {}),
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
+    const method = (options.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrfToken = getCSRFToken();
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+    }
+
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    const networkError = error instanceof Error ? error.message : String(error);
+    console.error(`Network error for ${endpoint}:`, error);
+    throw new ApiError(0, `Network request failed: ${networkError}`);
   }
-  
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
-  
+
   if (!response.ok) {
     let errorMessage = 'Request failed';
     let detail: any = null;
-    
+
     try {
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        detail = error.detail || error;
-        if (typeof detail === 'object') {
-          errorMessage = detail.message || error.message || `Request failed (${response.status})`;
-        } else if (typeof detail === 'string') {
-          errorMessage = detail;
-          detail = null;
+        const error = await safeParseJSON(response, `Request failed (${response.status})`);
+        if (error) {
+          detail = error.detail || error;
+          if (typeof detail === 'object') {
+            errorMessage = detail.message || error.message || `Request failed (${response.status})`;
+          } else if (typeof detail === 'string') {
+            errorMessage = detail;
+            detail = null;
+          } else {
+            errorMessage = error.message || `Request failed (${response.status})`;
+          }
         } else {
-          errorMessage = error.message || `Request failed (${response.status})`;
+          errorMessage = `Request failed (${response.status})`;
         }
       } else {
         const text = await response.text();
         errorMessage = text || `Request failed (${response.status})`;
       }
-    } catch {
+    } catch (parseError) {
+      if (parseError instanceof ApiError) {
+        throw parseError;
+      }
       errorMessage = `Request failed (${response.status})`;
     }
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
     throw new ApiError(response.status, errorMessage, detail);
   }
-  
-  return response.json();
+
+  // Safe JSON parsing on success response
+  try {
+    return await safeParseJSON(response, 'Failed to parse successful response') as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(response.status, 'Failed to parse response body');
+  }
 }
 
 export const api = {
@@ -123,24 +169,48 @@ export const api = {
   
   datasets: {
     upload: async (companyId: number, type: string, file: File) => {
-      const token = getAuthToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(`${API_BASE}/companies/${companyId}/datasets/upload?dataset_type=${type}`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        const detail = error.detail;
-        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
-        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+      let response: Response;
+      try {
+        const token = getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        response = await fetch(`${API_BASE}/companies/${companyId}/datasets/upload?dataset_type=${type}`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Upload network error for company ${companyId}:`, error);
+        throw new ApiError(0, `Upload request failed: ${networkError}`);
       }
-      
-      return response.json();
+
+      if (!response.ok) {
+        try {
+          const error = await safeParseJSON(response, `Upload failed (${response.status})`);
+          if (error) {
+            const detail = error.detail;
+            const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+            throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+          }
+        } catch (parseError) {
+          if (parseError instanceof ApiError) {
+            throw parseError;
+          }
+          throw new ApiError(response.status, `Upload failed (${response.status})`);
+        }
+        throw new ApiError(response.status, 'Upload failed');
+      }
+
+      try {
+        return await safeParseJSON(response, 'Upload response parsing failed');
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(response.status, 'Failed to parse upload response');
+      }
     },
     manualBaseline: (companyId: number, data: {
       monthly_revenue: number;
@@ -156,50 +226,98 @@ export const api = {
         body: JSON.stringify(data),
       }),
     uploadTerminaPdf: async (companyId: number, file: File, saveAsBaseline = true) => {
-      const token = getAuthToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(
-        `${API_BASE}/companies/${companyId}/datasets/termina-pdf?save_as_baseline=${saveAsBaseline}`, 
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: formData,
-        }
-      );
-      
-      if (!response.ok) {
-        const error = await response.json();
-        const detail = error.detail;
-        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
-        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+      let response: Response;
+      try {
+        const token = getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        response = await fetch(
+          `${API_BASE}/companies/${companyId}/datasets/termina-pdf?save_as_baseline=${saveAsBaseline}`,
+          {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          }
+        );
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Termina PDF upload network error for company ${companyId}:`, error);
+        throw new ApiError(0, `PDF upload request failed: ${networkError}`);
       }
-      
-      return response.json();
+
+      if (!response.ok) {
+        try {
+          const error = await safeParseJSON(response, `PDF upload failed (${response.status})`);
+          if (error) {
+            const detail = error.detail;
+            const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+            throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+          }
+        } catch (parseError) {
+          if (parseError instanceof ApiError) {
+            throw parseError;
+          }
+          throw new ApiError(response.status, `PDF upload failed (${response.status})`);
+        }
+        throw new ApiError(response.status, 'PDF upload failed');
+      }
+
+      try {
+        return await safeParseJSON(response, 'PDF upload response parsing failed');
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(response.status, 'Failed to parse PDF upload response');
+      }
     },
     uploadTerminaExcel: async (companyId: number, file: File, saveAsBaseline = true) => {
-      const token = getAuthToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(
-        `${API_BASE}/companies/${companyId}/datasets/termina-excel?save_as_baseline=${saveAsBaseline}`, 
-        {
-          method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body: formData,
-        }
-      );
-      
-      if (!response.ok) {
-        const error = await response.json();
-        const detail = error.detail;
-        const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
-        throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+      let response: Response;
+      try {
+        const token = getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        response = await fetch(
+          `${API_BASE}/companies/${companyId}/datasets/termina-excel?save_as_baseline=${saveAsBaseline}`,
+          {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          }
+        );
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Termina Excel upload network error for company ${companyId}:`, error);
+        throw new ApiError(0, `Excel upload request failed: ${networkError}`);
       }
-      
-      return response.json();
+
+      if (!response.ok) {
+        try {
+          const error = await safeParseJSON(response, `Excel upload failed (${response.status})`);
+          if (error) {
+            const detail = error.detail;
+            const message = typeof detail === 'object' ? (detail.message || 'Upload failed') : (detail || 'Upload failed');
+            throw new ApiError(response.status, message, typeof detail === 'object' ? detail : null);
+          }
+        } catch (parseError) {
+          if (parseError instanceof ApiError) {
+            throw parseError;
+          }
+          throw new ApiError(response.status, `Excel upload failed (${response.status})`);
+        }
+        throw new ApiError(response.status, 'Excel upload failed');
+      }
+
+      try {
+        return await safeParseJSON(response, 'Excel upload response parsing failed');
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(response.status, 'Failed to parse Excel upload response');
+      }
     },
   },
   

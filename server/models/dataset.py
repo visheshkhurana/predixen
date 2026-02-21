@@ -11,9 +11,9 @@ class DatasetType(str, enum.Enum):
 
 class Dataset(Base):
     __tablename__ = "datasets"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     type = Column(String, nullable=False)
     file_name = Column(String, nullable=False)
     row_count = Column(Integer, default=0)

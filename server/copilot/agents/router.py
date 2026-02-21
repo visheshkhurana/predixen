@@ -10,8 +10,12 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 from .base import (
-    BaseAgent, AgentResponse, AgentType, 
+    BaseAgent, AgentResponse, AgentType,
     CompanyKnowledgeBase, ConfidenceLevel
+)
+from server.copilot.prompt_injection_defense import (
+    PromptInjectionDefense,
+    build_agent_system_prompt
 )
 
 logger = logging.getLogger(__name__)
@@ -352,36 +356,61 @@ class RouterAgent(BaseAgent):
         Synthesize a cohesive executive summary from agent findings.
         Enriches with business context and web research when available.
         Uses Gemini Flash for fast orchestration.
+
+        Security: All company data is sanitized before inclusion in prompts.
+        User-controlled data is wrapped in XML delimiters.
         """
         if not self.llm_router or not findings:
             return None
-        
+
         findings_text = "\n".join([f"- {f}" for f in findings[:8]])
         risks_text = "\n".join([f"- {r}" for r in risks[:4]]) if risks else "No specific risks identified"
-        
-        prompt = f"""You are synthesizing insights from multiple financial analysis agents for {ckb.company_name}.
 
-Key Findings:
+        # Sanitize company name before including in prompt
+        sanitized_company_name = PromptInjectionDefense.sanitize_user_input(
+            ckb.company_name,
+            allow_newlines=False
+        )
+
+        # Build base prompt using safe method
+        base_system = "You are a senior strategy consultant (McKinsey + a16z partner) synthesizing insights for startup founders. Be opinionated and data-driven."
+
+        # Build the prompt with sanitized context
+        prompt = f"""You are synthesizing insights from multiple financial analysis agents for <company_name>{sanitized_company_name}</company_name>.
+
+<findings>
 {findings_text}
+</findings>
 
-Key Risks:
-{risks_text}"""
+<risks>
+{risks_text}
+</risks>"""
 
         if context:
+            # Safely include optional context
             business_ctx = context.get("business_context", "")
             if business_ctx:
-                prompt += f"\n\nBusiness Context:\n{business_ctx[:2000]}"
-            
+                # Sanitize but preserve structure
+                sanitized_ctx = PromptInjectionDefense.sanitize_user_input(
+                    business_ctx[:2000],
+                    allow_newlines=True
+                )
+                prompt += f"\n\n<business_context>\n{sanitized_ctx}\n</business_context>"
+
             web_research = context.get("web_research", "")
             if web_research:
-                prompt += f"\n\nWeb Research (real-time market data):\n{web_research[:2000]}"
+                sanitized_research = PromptInjectionDefense.sanitize_user_input(
+                    web_research[:2000],
+                    allow_newlines=True
+                )
+                prompt += f"\n\n<web_research>\n{sanitized_research}\n</web_research>"
 
         prompt += "\n\nProvide a 3-5 sentence executive summary that captures the most important insights. Be direct, specific, actionable, and opinionated. If web research data is available, incorporate relevant market benchmarks."
-        
+
         try:
             response = self._call_llm(
                 messages=[{"role": "user", "content": prompt}],
-                system_prompt="You are a senior strategy consultant (McKinsey + a16z partner) synthesizing insights for startup founders. Be opinionated and data-driven.",
+                system_prompt=base_system,
                 task_type="general_chat",
                 temperature=0.5
             )

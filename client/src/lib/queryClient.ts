@@ -1,29 +1,30 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { ApiError } from "./errors";
+import { ApiError, safeParseJSON } from "./errors";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     let detail: any = null;
     let message = res.statusText;
-    
+
     try {
-      const text = await res.text();
-      if (text) {
-        try {
-          detail = JSON.parse(text);
-          message = detail.message || detail.detail || text;
-          if (typeof detail.detail === 'object') {
-            detail = detail.detail;
-            message = detail.message || message;
-          }
-        } catch {
-          message = text;
+      const parsedData = await safeParseJSON(res, `Request failed (${res.status})`);
+      if (parsedData) {
+        detail = parsedData.detail || parsedData;
+        message = detail.message || detail.detail || parsedData.message || message;
+        if (typeof detail.detail === 'object') {
+          detail = detail.detail;
+          message = detail.message || message;
         }
       }
-    } catch {
-      // ignore read errors
+    } catch (parseError) {
+      // If safeParseJSON already threw an ApiError, re-throw it
+      if (parseError instanceof ApiError) {
+        throw parseError;
+      }
+      // Otherwise continue with statusText as message
+      message = res.statusText || 'Request failed';
     }
-    
+
     const error = new ApiError(res.status, `${res.status}: ${message}`, detail);
     throw error;
   }
@@ -33,7 +34,7 @@ async function throwIfResNotOk(res: Response) {
 function getAuthToken(): string | null {
   // First try direct localStorage key
   let token = localStorage.getItem('founderconsole-token');
-  
+
   // Fallback: try to get from Zustand persisted storage
   if (!token) {
     try {
@@ -50,8 +51,22 @@ function getAuthToken(): string | null {
       // Ignore JSON parse errors
     }
   }
-  
+
   return token;
+}
+
+// Helper to get CSRF token from cookies
+function getCSRFToken(): string | null {
+  const name = 'X-CSRF-Token=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const cookieArray = decodedCookie.split(';');
+  for (let cookie of cookieArray) {
+    cookie = cookie.trim();
+    if (cookie.indexOf(name) === 0) {
+      return cookie.substring(name.length, cookie.length);
+    }
+  }
+  return null;
 }
 
 export async function apiRequest(
@@ -59,22 +74,38 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {};
-  
-  if (data) {
-    headers["Content-Type"] = "application/json";
+  let res: Response;
+
+  try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+
+    if (data) {
+      headers["Content-Type"] = "application/json";
+    }
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+      const csrfToken = getCSRFToken();
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+    }
+
+    res = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+    });
+  } catch (error) {
+    const networkError = error instanceof Error ? error.message : String(error);
+    console.error(`Network error for ${method} ${url}:`, error);
+    throw new ApiError(0, `Network request failed: ${networkError}`);
   }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
 
   await throwIfResNotOk(res);
   return res;
@@ -86,24 +117,40 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const token = getAuthToken();
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+    let res: Response;
+
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = {};
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      res = await fetch(queryKey.join("/") as string, {
+        credentials: "include",
+        headers,
+      });
+    } catch (error) {
+      const networkError = error instanceof Error ? error.message : String(error);
+      console.error(`Network error for query ${queryKey.join("/")}:`, error);
+      throw new ApiError(0, `Network request failed: ${networkError}`);
     }
-    
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-      headers,
-    });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+
+    try {
+      return await safeParseJSON(res, 'Failed to parse query response') as T;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(res.status, 'Failed to parse query response');
+    }
   };
 
 export const queryClient = new QueryClient({

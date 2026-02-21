@@ -9,9 +9,9 @@ from server.core.db import Base
 class CompanySource(Base):
     """Source citations for facts and claims (PDF, web, manual)."""
     __tablename__ = "company_sources"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     kind = Column(String, nullable=False)
     title = Column(Text, nullable=True)
     url = Column(Text, nullable=True)
@@ -59,9 +59,9 @@ class CompanySource(Base):
 class CompanyWorkstream(Base):
     """Operating cadence workstreams (weekly metrics, monthly board, etc.)."""
     __tablename__ = "company_workstreams"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     cadence = Column(String, nullable=False)
     enabled = Column(Boolean, default=True)
@@ -89,9 +89,9 @@ class CompanyWorkstream(Base):
 class CompanyAlert(Base):
     """Alerts and reminders triggered by metrics."""
     __tablename__ = "company_alerts"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     type = Column(String, nullable=False)
     severity = Column(String, default="medium")
     message = Column(Text, nullable=True)
@@ -119,9 +119,9 @@ class CompanyAlert(Base):
 class CompanyDriverModel(Base):
     """Driver-based forecasting models."""
     __tablename__ = "company_driver_models"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     model_name = Column(String, nullable=False)
     template = Column(String, nullable=False)
     drivers_json = Column(JSONB, nullable=True, default=dict)

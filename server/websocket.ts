@@ -45,6 +45,37 @@ const clients = new Map<WebSocket, WSClient>();
 const PING_INTERVAL = 30000;
 const PING_TIMEOUT = 10000;
 
+/**
+ * Safely sends a message to a WebSocket client.
+ * Checks connection state before sending and handles errors gracefully.
+ *
+ * @param ws WebSocket connection
+ * @param data Data to send (will be JSON stringified if not already a string)
+ * @param label Optional label for logging context
+ * @returns true if send was attempted, false if socket was not open
+ */
+function safeSend(ws: WebSocket, data: string | object, label: string = 'message'): boolean {
+  try {
+    // Check if WebSocket is in OPEN state before attempting to send
+    if (ws.readyState !== WebSocket.OPEN) {
+      console.warn(`[WebSocket] Cannot send ${label}: socket not open (state: ${ws.readyState})`);
+      return false;
+    }
+
+    const messageStr = typeof data === 'string' ? data : JSON.stringify(data);
+    ws.send(messageStr, (err) => {
+      if (err) {
+        console.error(`[WebSocket] Failed to send ${label}:`, err.message);
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error(`[WebSocket] Exception while sending ${label}:`, error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+
 export function setupWebSocketServer(httpServer: Server): WebSocketServer {
   const wss = new WebSocketServer({ 
     server: httpServer, 
@@ -111,19 +142,20 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
     clients.set(ws, client);
     console.log(`[WebSocket] Client connected (companyId: ${companyId}, total: ${clients.size})`);
 
-    ws.send(JSON.stringify({
+    // Send connection confirmation message
+    safeSend(ws, {
       type: 'connection',
       payload: { connected: true, companyId },
       timestamp: Date.now(),
-    }));
+    }, 'connection-confirmation');
 
     ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
-        
+
         if (message.type === 'ping') {
           client.lastPing = Date.now();
-          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          safeSend(ws, { type: 'pong', timestamp: Date.now() }, 'pong-response');
         } else if (message.type === 'subscribe') {
           if (message.companyId) {
             client.companyId = message.companyId;
@@ -142,7 +174,18 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
 
     ws.on('error', (error) => {
       console.error('[WebSocket] Client error:', error);
-      clients.delete(ws);
+      // Ensure client is removed from tracking
+      if (clients.has(ws)) {
+        clients.delete(ws);
+      }
+      // Attempt to close the connection gracefully
+      try {
+        if (ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+          ws.close();
+        }
+      } catch (e) {
+        console.warn('[WebSocket] Error closing socket after error:', e);
+      }
     });
   });
 
@@ -151,10 +194,22 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
     clients.forEach((client, ws) => {
       if (now - client.lastPing > PING_INTERVAL + PING_TIMEOUT) {
         console.log('[WebSocket] Client timed out, closing connection');
-        ws.terminate();
+        try {
+          ws.terminate();
+        } catch (e) {
+          console.warn('[WebSocket] Error terminating timed-out connection:', e);
+        }
         clients.delete(ws);
       } else if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
+        try {
+          ws.ping((err) => {
+            if (err) {
+              console.error('[WebSocket] Ping error:', err.message);
+            }
+          });
+        } catch (e) {
+          console.error('[WebSocket] Error sending ping:', e);
+        }
       }
     });
   }, PING_INTERVAL);
@@ -171,16 +226,23 @@ export function broadcastMetricUpdate(companyId: number, metrics: Record<string,
 
   const messageStr = JSON.stringify(message);
   let sentCount = 0;
+  let failedCount = 0;
 
   clients.forEach((client) => {
-    if (client.ws.readyState === WebSocket.OPEN && client.companyId === companyId) {
-      client.ws.send(messageStr);
-      sentCount++;
+    if (client.companyId === companyId) {
+      if (safeSend(client.ws, messageStr, `metric-update-companyId-${companyId}`)) {
+        sentCount++;
+      } else {
+        failedCount++;
+      }
     }
   });
 
   if (sentCount > 0) {
     console.log(`[WebSocket] Broadcast metric update to ${sentCount} clients (companyId: ${companyId})`);
+  }
+  if (failedCount > 0) {
+    console.warn(`[WebSocket] Failed to send metric update to ${failedCount} clients (companyId: ${companyId})`);
   }
 }
 
@@ -193,16 +255,21 @@ export function broadcastSimulationUpdate(scenarioId: number, status: 'running' 
 
   const messageStr = JSON.stringify(message);
   let sentCount = 0;
+  let failedCount = 0;
 
   clients.forEach((client) => {
-    if (client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(messageStr);
+    if (safeSend(client.ws, messageStr, `simulation-update-scenarioId-${scenarioId}`)) {
       sentCount++;
+    } else {
+      failedCount++;
     }
   });
 
   if (sentCount > 0) {
     console.log(`[WebSocket] Broadcast simulation update to ${sentCount} clients (scenarioId: ${scenarioId}, status: ${status})`);
+  }
+  if (failedCount > 0) {
+    console.warn(`[WebSocket] Failed to send simulation update to ${failedCount} clients (scenarioId: ${scenarioId}, status: ${status})`);
   }
 }
 
@@ -215,16 +282,23 @@ export function broadcastTruthScanUpdate(companyId: number, metrics: Record<stri
 
   const messageStr = JSON.stringify(message);
   let sentCount = 0;
+  let failedCount = 0;
 
   clients.forEach((client) => {
-    if (client.ws.readyState === WebSocket.OPEN && client.companyId === companyId) {
-      client.ws.send(messageStr);
-      sentCount++;
+    if (client.companyId === companyId) {
+      if (safeSend(client.ws, messageStr, `truth-scan-update-companyId-${companyId}`)) {
+        sentCount++;
+      } else {
+        failedCount++;
+      }
     }
   });
 
   if (sentCount > 0) {
     console.log(`[WebSocket] Broadcast truth scan update to ${sentCount} clients (companyId: ${companyId})`);
+  }
+  if (failedCount > 0) {
+    console.warn(`[WebSocket] Failed to send truth scan update to ${failedCount} clients (companyId: ${companyId})`);
   }
 }
 

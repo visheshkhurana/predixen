@@ -13,6 +13,8 @@ import { ScenarioTutorial, TutorialTrigger } from '@/components/ScenarioTutorial
 import { ScenarioSummarySidebar } from '@/components/ScenarioSummarySidebar';
 import { CustomEventBuilder, type ScenarioEvent } from '@/components/CustomEventBuilder';
 import { ScenarioTagManager } from '@/components/ScenarioTagManager';
+import { ScenarioTemplateGallery, TEMPLATE_CARDS, type TemplateCard } from '@/components/ScenarioTemplateGallery';
+import { GuidedScenarioSlider } from '@/components/GuidedScenarioSlider';
 import { SCENARIO_SLIDER_TOOLTIPS } from '@/lib/metricDefinitions';
 import { cn } from '@/lib/utils';
 import {
@@ -82,7 +84,7 @@ interface ScenarioWizardProps {
 }
 
 const STEPS = [
-  { id: 1, title: 'Template', icon: Lightbulb, description: 'Choose a starting point' },
+  { id: 1, title: 'Templates', icon: Lightbulb, description: 'Choose a starting point' },
   { id: 2, title: 'Parameters', icon: Target, description: 'Adjust financial levers' },
   { id: 3, title: 'Fundraising', icon: DollarSign, description: 'Model funding rounds' },
   { id: 4, title: 'Events', icon: Zap, description: 'Add scenario events' },
@@ -390,7 +392,7 @@ export function ScenarioWizard({
     }
   }, [currentStep, params]);
 
-  const handleTemplateSelect = (template: ScenarioTemplate) => {
+  const handleTemplateSelect = (template: ScenarioTemplate | TemplateCard) => {
     setSelectedTemplate(template);
     setParams({
       ...params,
@@ -401,11 +403,11 @@ export function ScenarioWizard({
       gross_margin_delta_pct: template.deltas.gross_margin_delta_pct ?? 0,
       churn_change_pct: template.deltas.churn_change_pct ?? 0,
       cac_change_pct: template.deltas.cac_change_pct ?? 0,
-      fundraise_month: template.deltas.fundraise_month ?? null,
-      fundraise_amount: template.deltas.fundraise_amount ?? 0,
+      fundraise_month: (template as ScenarioTemplate).deltas.fundraise_month ?? null,
+      fundraise_amount: (template as ScenarioTemplate).deltas.fundraise_amount ?? 0,
       tags: template.tags,
       template_id: template.id,
-      baseline_diff: template.baselineDiff,
+      baseline_diff: (template as ScenarioTemplate).baselineDiff,
     });
     // Auto-advance to step 2 after template selection
     setTimeout(() => setCurrentStep(2), 150);
@@ -581,54 +583,10 @@ export function ScenarioWizard({
       <Card className="overflow-visible">
         <CardContent className="pt-6">
           {currentStep === 1 && (
-            <div className="space-y-4">
-              <div className="text-center mb-6">
-                <h2 className="text-xl font-semibold">Choose a Starting Template</h2>
-                <p className="text-muted-foreground text-sm mt-1">
-                  Select a template or skip to create from scratch
-                </p>
-              </div>
-
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {templates.map((template) => (
-                    <button
-                      key={template.name}
-                      onClick={() => handleTemplateSelect(template)}
-                      className={cn(
-                        'p-4 rounded-lg border text-left transition-all hover-elevate',
-                        selectedTemplate?.name === template.name
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border'
-                      )}
-                      aria-pressed={selectedTemplate?.name === template.name}
-                      data-testid={`template-${template.name.toLowerCase().replace(/\s/g, '-')}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{template.name}</span>
-                            {selectedTemplate?.name === template.name && (
-                              <Check className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {template.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-1 mt-3 flex-wrap">
-                        {template.tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
+            <ScenarioTemplateGallery
+              onSelectTemplate={handleTemplateSelect}
+              onSkip={() => setCurrentStep(2)}
+            />
           )}
 
           {currentStep === 2 && (
@@ -690,17 +648,17 @@ export function ScenarioWizard({
               <Separator />
 
               <div className="space-y-8">
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="Pricing Change"
                     icon={<Tag className="h-4 w-4 text-green-500" />}
                     value={params.pricing_change_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'pricing_change_pct') {
                         setActiveSlider({ name: 'pricing_change_pct', previousValue: params.pricing_change_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, pricing_change_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, pricing_change_pct: v });
                     }}
                     min={-20}
                     max={30}
@@ -708,30 +666,25 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.pricing_change_pct?.markers || []}
                     testId="slider-pricing"
+                    benchmarkLabel="SaaS pricing increases"
+                    benchmarkValue="Typically 5-10% annually"
+                    impactDescription={getSliderFeedback('pricing_change_pct', params.pricing_change_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="pricing_change_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('pricing_change_pct', params.pricing_change_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('pricing_change_pct', params.pricing_change_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('pricing_change_pct', params.pricing_change_pct).text}
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="Growth Uplift"
                     icon={<TrendingUp className="h-4 w-4 text-green-500" />}
                     value={params.growth_uplift_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'growth_uplift_pct') {
                         setActiveSlider({ name: 'growth_uplift_pct', previousValue: params.growth_uplift_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, growth_uplift_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, growth_uplift_pct: v });
                     }}
                     min={-10}
                     max={20}
@@ -739,30 +692,25 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.growth_uplift_pct?.markers || []}
                     testId="slider-growth"
+                    benchmarkLabel="Seed-stage monthly growth"
+                    benchmarkValue="Top quartile: 15-25% MoM"
+                    impactDescription={getSliderFeedback('growth_uplift_pct', params.growth_uplift_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="growth_uplift_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('growth_uplift_pct', params.growth_uplift_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('growth_uplift_pct', params.growth_uplift_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('growth_uplift_pct', params.growth_uplift_pct).text}
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="Burn Reduction"
                     icon={<Scissors className="h-4 w-4 text-orange-500" />}
                     value={params.burn_reduction_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'burn_reduction_pct') {
                         setActiveSlider({ name: 'burn_reduction_pct', previousValue: params.burn_reduction_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, burn_reduction_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, burn_reduction_pct: v });
                     }}
                     min={-20}
                     max={40}
@@ -770,30 +718,25 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.burn_reduction_pct?.markers || []}
                     testId="slider-burn"
+                    benchmarkLabel="Top quartile burn reduction"
+                    benchmarkValue="15-20% is achievable with cost cuts"
+                    impactDescription={getSliderFeedback('burn_reduction_pct', params.burn_reduction_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="burn_reduction_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('burn_reduction_pct', params.burn_reduction_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('burn_reduction_pct', params.burn_reduction_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('burn_reduction_pct', params.burn_reduction_pct).text}
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="Gross Margin Change"
                     icon={<Percent className="h-4 w-4 text-blue-500" />}
                     value={params.gross_margin_delta_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'gross_margin_delta_pct') {
                         setActiveSlider({ name: 'gross_margin_delta_pct', previousValue: params.gross_margin_delta_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, gross_margin_delta_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, gross_margin_delta_pct: v });
                     }}
                     min={-10}
                     max={20}
@@ -801,30 +744,25 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.gross_margin_delta_pct?.markers || []}
                     testId="slider-margin"
+                    benchmarkLabel="SaaS gross margin target"
+                    benchmarkValue="70%+ is healthy; 80%+ is best-in-class"
+                    impactDescription={getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="gross_margin_delta_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('gross_margin_delta_pct', params.gross_margin_delta_pct).text}
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="Churn Rate Change"
                     icon={<Users className="h-4 w-4 text-red-500" />}
                     value={params.churn_change_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'churn_change_pct') {
                         setActiveSlider({ name: 'churn_change_pct', previousValue: params.churn_change_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, churn_change_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, churn_change_pct: v });
                     }}
                     min={-5}
                     max={5}
@@ -833,30 +771,25 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.churn_change_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.churn_change_pct?.markers || []}
                     testId="slider-churn"
+                    benchmarkLabel="Best-in-class monthly churn"
+                    benchmarkValue="<1% is excellent; 1-2% is healthy"
+                    impactDescription={getSliderFeedback('churn_change_pct', params.churn_change_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="churn_change_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('churn_change_pct', params.churn_change_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('churn_change_pct', params.churn_change_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('churn_change_pct', params.churn_change_pct).text}
-                    </span>
-                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <AnnotatedSlider
+                <div>
+                  <GuidedScenarioSlider
                     label="CAC Change"
                     icon={<UserPlus className="h-4 w-4 text-purple-500" />}
                     value={params.cac_change_pct}
-                    onChange={(v) => { 
+                    onChange={(v) => {
                       if (!activeSlider || activeSlider.name !== 'cac_change_pct') {
                         setActiveSlider({ name: 'cac_change_pct', previousValue: params.cac_change_pct });
                       }
-                      setActivePreset(null); 
-                      setParams({ ...params, cac_change_pct: v }); 
+                      setActivePreset(null);
+                      setParams({ ...params, cac_change_pct: v });
                     }}
                     min={-30}
                     max={20}
@@ -864,17 +797,12 @@ export function ScenarioWizard({
                     example={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.example}
                     markers={SCENARIO_SLIDER_TOOLTIPS.cac_change_pct?.markers || []}
                     testId="slider-cac"
+                    benchmarkLabel="Efficient customer acquisition"
+                    benchmarkValue="Top companies: -15% to -20% CAC improvements"
+                    impactDescription={getSliderFeedback('cac_change_pct', params.cac_change_pct).text}
+                    baselineMetrics={baseMetrics}
+                    paramKey="cac_change_pct"
                   />
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className={cn(
-                      'text-xs',
-                      getSliderFeedback('cac_change_pct', params.cac_change_pct).type === 'positive' && 'text-green-600 dark:text-green-400',
-                      getSliderFeedback('cac_change_pct', params.cac_change_pct).type === 'negative' && 'text-red-600 dark:text-red-400'
-                    )}>
-                      {getSliderFeedback('cac_change_pct', params.cac_change_pct).text}
-                    </span>
-                  </div>
                 </div>
                 
                 {companyId && activeSlider && (

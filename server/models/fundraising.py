@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Date
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Date, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -39,9 +39,9 @@ class PipelineStage(str, enum.Enum):
 
 class CompanyCapTable(Base):
     __tablename__ = "company_cap_tables"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False, default="Current Cap Table")
     as_of_date = Column(Date, nullable=True)
     currency = Column(String, default="USD")
@@ -72,9 +72,9 @@ class CompanyCapTable(Base):
 
 class FundraisingRound(Base):
     __tablename__ = "fundraising_rounds"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     target_raise = Column(Float, nullable=True)
     pre_money = Column(Float, nullable=True)
@@ -109,9 +109,9 @@ class FundraisingRound(Base):
 
 class RoundTerms(Base):
     __tablename__ = "round_terms"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    round_id = Column(UUID(as_uuid=True), ForeignKey("fundraising_rounds.id"), nullable=False)
+    round_id = Column(UUID(as_uuid=True), ForeignKey("fundraising_rounds.id"), nullable=False, index=True)
     terms_json = Column(JSONB, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -144,9 +144,9 @@ class RoundTerms(Base):
 
 class Investor(Base):
     __tablename__ = "investors"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     type = Column(String, default=InvestorType.VC.value)
     geography = Column(String, nullable=True)
@@ -174,10 +174,10 @@ class Investor(Base):
 
 class InvestorPipeline(Base):
     __tablename__ = "investor_pipeline"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    round_id = Column(UUID(as_uuid=True), ForeignKey("fundraising_rounds.id"), nullable=False)
-    investor_id = Column(UUID(as_uuid=True), ForeignKey("investors.id"), nullable=False)
+    round_id = Column(UUID(as_uuid=True), ForeignKey("fundraising_rounds.id"), nullable=False, index=True)
+    investor_id = Column(UUID(as_uuid=True), ForeignKey("investors.id"), nullable=False, index=True)
     stage = Column(String, default=PipelineStage.SOURCED.value)
     probability = Column(Float, default=0.0)
     last_contacted_at = Column(DateTime, nullable=True)

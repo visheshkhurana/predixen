@@ -5,13 +5,13 @@ from server.core.db import Base
 
 class WorkspaceMember(Base):
     __tablename__ = "workspace_members"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     role = Column(String, default="viewer")  # owner, admin, editor, viewer
     status = Column(String, default="active")  # active, pending, suspended
-    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     invited_at = Column(DateTime, default=datetime.utcnow)
     joined_at = Column(DateTime, nullable=True)
     
@@ -22,13 +22,13 @@ class WorkspaceMember(Base):
 
 class WorkspaceInvite(Base):
     __tablename__ = "workspace_invites"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     email = Column(String, nullable=False)
     role = Column(String, default="viewer")
     status = Column(String, default="pending")  # pending, accepted, expired, revoked
-    invited_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     invited_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
     token = Column(String, unique=True, nullable=False)
@@ -39,10 +39,10 @@ class WorkspaceInvite(Base):
 
 class NotificationPreference(Base):
     __tablename__ = "notification_preferences"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
     email_enabled = Column(Boolean, default=True)
     email_address = Column(String, nullable=True)
     alert_types = Column(JSON, default=dict)
@@ -56,10 +56,10 @@ class NotificationPreference(Base):
 
 class AlertNotification(Base):
     __tablename__ = "alert_notifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     alert_type = Column(String, nullable=False)
     title = Column(String, nullable=False)
     message = Column(Text, nullable=True)

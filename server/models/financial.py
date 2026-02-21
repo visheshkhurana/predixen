@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text
+from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -62,36 +62,36 @@ class SourceType(str, enum.Enum):
 
 class ImportSession(Base):
     """Tracks an import session from file upload through verification to save.
-    
+
     Status flow: parsed -> verified -> truth_scan -> saved
     """
     __tablename__ = "import_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     source_type = Column(String(20), nullable=False)
     filename = Column(String(255))
     uploaded_at = Column(DateTime, default=datetime.utcnow)
-    
+
     detected_sign_convention = Column(String(20), default="all_positive")
     detected_time_granularity = Column(String(20), default="monthly")
-    
+
     selected_period_mode = Column(String(20), default="latest")
     selected_period = Column(Date, nullable=True)
-    
+
     status = Column(String(20), default="parsed")
-    
+
     warnings = Column(JSON, default=list)
     errors = Column(JSON, default=list)
-    
+
     raw_data = Column(JSON, nullable=True)
-    
+
     truth_scan_upload_id = Column(String(36), nullable=True, index=True)
     truth_dataset_id = Column(String(36), nullable=True, index=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     company = relationship("Company", back_populates="import_sessions")
     metric_points = relationship("FinancialMetricPoint", back_populates="import_session", cascade="all, delete-orphan")
     truth_scan_upload = relationship("TruthScanUpload", back_populates="import_session", foreign_keys="TruthScanUpload.import_session_id")
@@ -100,11 +100,11 @@ class ImportSession(Base):
 class FinancialMetricPoint(Base):
     """Stores individual financial metric values with classification and normalization tracking."""
     __tablename__ = "financial_metric_points"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    
+    import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+
     period = Column(Date, nullable=False)
     
     metric_key = Column(String(50), nullable=False)
@@ -138,9 +138,9 @@ class FinancialMetricPoint(Base):
 class FinancialRecord(Base):
     """Aggregated financial record for a period (final verified data)."""
     __tablename__ = "financial_records"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
     revenue = Column(Float, default=0)
@@ -150,8 +150,8 @@ class FinancialRecord(Base):
     other_costs = Column(Float, default=0)
     cash_balance = Column(Float, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True)
+
+    import_session_id = Column(Integer, ForeignKey("import_sessions.id"), nullable=True, index=True)
     
     mrr = Column(Float, nullable=True)
     arr = Column(Float, nullable=True)

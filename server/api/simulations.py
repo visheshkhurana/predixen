@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
 from server.models.scenario import Scenario
@@ -114,19 +115,30 @@ def create_scenario(
         "inputs": scenario.inputs_json
     }
 
-@router.get("/companies/{company_id}/scenarios", response_model=List[Dict[str, Any]])
+@router.get("/companies/{company_id}/scenarios")
 def list_scenarios(
     company_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    List scenarios for a company with pagination.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+    """
     company = get_user_company(db, company_id, current_user)
-    
-    scenarios = db.query(Scenario).filter(
+
+    query = db.query(Scenario).filter(
         Scenario.company_id == company_id,
         Scenario.is_archived == 0
-    ).all()
-    
+    ).order_by(Scenario.updated_at.desc() if hasattr(Scenario, 'updated_at') else Scenario.created_at.desc())
+
+    # Apply pagination
+    scenarios, total = paginate(query, page=page, page_size=page_size)
+
     result = []
     for s in scenarios:
         latest_run = s.get_latest_run()
@@ -155,7 +167,13 @@ def list_scenarios(
             "latest_simulation": latest_sim,
             "summary": summary,
         })
-    return result
+
+    return create_paginated_response(
+        items=result,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 INPUT_GUARDRAILS = {

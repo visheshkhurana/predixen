@@ -3,7 +3,7 @@ export class ApiError extends Error {
   code?: string;
   detail?: any;
   upload_id?: string;
-  
+
   constructor(status: number, message: string, detail?: any) {
     super(message);
     this.name = 'ApiError';
@@ -13,6 +13,35 @@ export class ApiError extends Error {
       this.code = detail.code;
       this.upload_id = detail.upload_id;
     }
+  }
+}
+
+/**
+ * Safely parse JSON from a Response object with proper error handling
+ * @param response The Response object to parse
+ * @param fallbackMessage Message to use if parsing fails
+ * @returns The parsed JSON object or null if parsing fails
+ */
+export async function safeParseJSON(
+  response: Response,
+  fallbackMessage: string = 'Failed to parse response'
+): Promise<any> {
+  try {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+    return JSON.parse(text);
+  } catch (error) {
+    const parseError = error instanceof Error ? error.message : String(error);
+    console.error(
+      `JSON parse error from ${response.status} response: ${parseError}`,
+      error
+    );
+    throw new ApiError(
+      response.status,
+      `${fallbackMessage} (${response.status}) - JSON parsing failed: ${parseError}`
+    );
   }
 }
 

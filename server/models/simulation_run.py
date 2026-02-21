@@ -6,9 +6,9 @@ from server.core.db import Base
 
 class SimulationRun(Base):
     __tablename__ = "simulation_runs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=False)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=False, index=True)
     n_sims = Column(Integer, default=1000)
     seed = Column(Integer, nullable=True)
     outputs_json = Column(JSON, nullable=False)

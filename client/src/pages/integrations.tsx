@@ -9,21 +9,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { 
-  RefreshCw, 
-  Link2, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Clock, 
-  Database, 
-  Shield, 
-  ArrowRight, 
+import {
+  RefreshCw,
+  Link2,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Clock,
+  Database,
+  Shield,
+  ArrowRight,
   FileText,
   Users,
   DollarSign,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Zap,
+  TrendingUp,
+  Settings,
+  Briefcase
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
@@ -57,6 +61,14 @@ interface IntegrationStatus {
   last_sync: string | null;
   sync_details?: SyncDetails;
 }
+
+interface ConnectorMetadata extends IntegrationProvider {
+  setupTime: "~5 min" | "~10 min" | "~15 min";
+  category: "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "other";
+  isRecommended?: boolean;
+}
+
+type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "other";
 
 const providerIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-6 w-6" />,
@@ -295,6 +307,49 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
   },
 };
 
+const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15 min"; category: ConnectorCategory; isRecommended?: boolean }> = {
+  stripe: { setupTime: "~5 min", category: "revenue", isRecommended: true },
+  quickbooks: { setupTime: "~10 min", category: "accounting", isRecommended: true },
+  xero: { setupTime: "~10 min", category: "accounting" },
+  gusto: { setupTime: "~10 min", category: "hr", isRecommended: true },
+  rippling: { setupTime: "~15 min", category: "hr" },
+  deel: { setupTime: "~10 min", category: "hr" },
+  salesforce: { setupTime: "~15 min", category: "crm" },
+  hubspot: { setupTime: "~10 min", category: "crm" },
+  pipedrive: { setupTime: "~10 min", category: "crm" },
+  zoho: { setupTime: "~10 min", category: "crm" },
+  plaid: { setupTime: "~5 min", category: "revenue" },
+  chargebee: { setupTime: "~10 min", category: "revenue" },
+  paddle: { setupTime: "~10 min", category: "revenue" },
+  shopify: { setupTime: "~10 min", category: "revenue" },
+  brex: { setupTime: "~5 min", category: "revenue" },
+  netsuite: { setupTime: "~15 min", category: "accounting" },
+  wave: { setupTime: "~10 min", category: "accounting" },
+  freshbooks: { setupTime: "~10 min", category: "accounting" },
+  zoho_books: { setupTime: "~10 min", category: "accounting" },
+  tally: { setupTime: "~15 min", category: "accounting" },
+  razorpayx_payroll: { setupTime: "~10 min", category: "hr" },
+  greythr: { setupTime: "~10 min", category: "hr" },
+  keka: { setupTime: "~10 min", category: "hr" },
+  peoplestrong: { setupTime: "~15 min", category: "hr" },
+  quikchex: { setupTime: "~10 min", category: "hr" },
+  deskera: { setupTime: "~15 min", category: "accounting" },
+  sap_b1: { setupTime: "~15 min", category: "accounting" },
+  odoo: { setupTime: "~15 min", category: "accounting" },
+  marg: { setupTime: "~15 min", category: "accounting" },
+};
+
+const categoryLabels: Record<ConnectorCategory, { label: string; description: string; icon: React.ReactNode }> = {
+  all: { label: "All Connectors", description: "All available integrations", icon: <Link2 className="h-4 w-4" /> },
+  recommended: { label: "Recommended", description: "Best for getting started quickly", icon: <Zap className="h-4 w-4" /> },
+  revenue: { label: "Revenue & Payments", description: "Payment processing and revenue tracking", icon: <DollarSign className="h-4 w-4" /> },
+  accounting: { label: "Accounting", description: "Financial and accounting software", icon: <Database className="h-4 w-4" /> },
+  hr: { label: "HR & Payroll", description: "Payroll and HR management systems", icon: <Users className="h-4 w-4" /> },
+  analytics: { label: "Analytics", description: "Product and business analytics", icon: <TrendingUp className="h-4 w-4" /> },
+  crm: { label: "CRM & Sales", description: "Customer relationship management", icon: <Briefcase className="h-4 w-4" /> },
+  other: { label: "Other", description: "Additional data sources", icon: <Link2 className="h-4 w-4" /> },
+};
+
 const additionalAccountingProviders: IntegrationProvider[] = [
   {
     id: "netsuite",
@@ -421,11 +476,42 @@ const paymentsProviders: IntegrationProvider[] = [
   },
 ];
 
+function getConnectorCategory(providerId: string): ConnectorCategory {
+  return connectorMetadata[providerId]?.category || "other";
+}
+
+function getConnectorSetupTime(providerId: string): "~5 min" | "~10 min" | "~15 min" {
+  return connectorMetadata[providerId]?.setupTime || "~10 min";
+}
+
+function shouldShowConnector(provider: IntegrationProvider, selectedCategory: ConnectorCategory): boolean {
+  if (selectedCategory === "all") return true;
+  const connectorCategory = getConnectorCategory(provider.id);
+  if (selectedCategory === "recommended") {
+    return connectorMetadata[provider.id]?.isRecommended || false;
+  }
+  return connectorCategory === selectedCategory;
+}
+
+function getProviderType(providerId: string): "accounting" | "crm" | "payments" | "payroll" | "erp" {
+  // Check payroll providers
+  if (payrollProviders.some(p => p.id === providerId)) return "payroll";
+  // Check ERP providers
+  if (erpProviders.some(p => p.id === providerId)) return "erp";
+  // Check payment providers
+  if (paymentsProviders.some(p => p.id === providerId)) return "payments";
+  // Check CRM providers
+  if (additionalCrmProviders.some(p => p.id === providerId)) return "crm";
+  // Default to accounting
+  return "accounting";
+}
+
 export default function IntegrationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [companyId] = useState(1);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
+  const [selectedConnectorCategory, setSelectedConnectorCategory] = useState<ConnectorCategory>("all");
   
   const [selectedIntegration, setSelectedIntegration] = useState<IntegrationConfig | null>(null);
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
@@ -624,22 +710,25 @@ export default function IntegrationsPage() {
     const isConnectorBacked = type === "payroll" || type === "erp" || connectorBackedIds.includes(provider.id);
     const isConnected = isConnectorBacked
       ? connectorInfo?.connected || false
-      : type === "payments" 
+      : type === "payments"
         ? status?.integrations.payments?.connected === provider.id
         : status?.integrations[type]?.connected === provider.id;
     const integrationStatus = isConnectorBacked
       ? undefined
-      : type === "payments" 
-        ? status?.integrations.payments 
+      : type === "payments"
+        ? status?.integrations.payments
         : status?.integrations[type];
-    const lastSync = isConnectorBacked 
-      ? connectorInfo?.last_sync 
+    const lastSync = isConnectorBacked
+      ? connectorInfo?.last_sync
       : integrationStatus?.last_sync;
     const syncDetails = isConnectorBacked
       ? connectorInfo ? { records_synced: connectorInfo.records_synced, last_error: connectorInfo.error } : undefined
       : integrationStatus?.sync_details;
     const isSyncing = syncingProvider === provider.id && syncMutation.isPending;
-    
+
+    const setupTime = getConnectorSetupTime(provider.id);
+    const isRecommended = connectorMetadata[provider.id]?.isRecommended;
+
     return (
       <Card key={provider.id} className="hover-elevate" data-testid={`card-integration-${provider.id}`}>
         <CardHeader className="flex flex-row items-center gap-4">
@@ -649,6 +738,12 @@ export default function IntegrationsPage() {
           <div className="flex-1">
             <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
               {provider.name}
+              {isRecommended && (
+                <Badge variant="default" className="bg-amber-600 flex items-center gap-1">
+                  <Zap className="h-3 w-3" />
+                  Recommended
+                </Badge>
+              )}
               {provider.comingSoon && (
                 <Badge variant="secondary" className="text-xs">
                   Coming Soon
@@ -673,9 +768,16 @@ export default function IntegrationsPage() {
             ))}
           </div>
 
+          {!provider.comingSoon && (
+            <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded-lg flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+              <span className="text-xs text-blue-700 dark:text-blue-300">Setup time: {setupTime}</span>
+            </div>
+          )}
+
           {isConnected && (
-            <SyncStatusDisplay 
-              lastSync={lastSync ?? null} 
+            <SyncStatusDisplay
+              lastSync={lastSync ?? null}
               syncDetails={syncDetails}
               isSyncing={isSyncing}
             />
@@ -732,6 +834,23 @@ export default function IntegrationsPage() {
     );
   };
 
+  const recommendedProviders = Object.entries({ ...allAccountingProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}), ...payrollProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}), ...paymentsProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}) })
+    .filter(([id]) => connectorMetadata[id]?.isRecommended)
+    .slice(0, 3)
+    .map(([, provider]) => provider);
+
+  const getConnectorsByCategory = (category: ConnectorCategory) => {
+    const allProviders = [
+      ...allAccountingProviders,
+      ...payrollProviders,
+      ...erpProviders,
+      ...allCrmProviders,
+      ...paymentsProviders,
+    ];
+
+    return allProviders.filter((p) => shouldShowConnector(p, category));
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -741,15 +860,103 @@ export default function IntegrationsPage() {
         </p>
       </div>
 
+      {/* Quick Setup Banner */}
+      {recommendedProviders.length > 0 && (
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Zap className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div>
+                <CardTitle className="text-blue-900 dark:text-blue-100">Quick Setup</CardTitle>
+                <CardDescription className="text-blue-700 dark:text-blue-300">
+                  Connect your key data sources in 15 minutes
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-3 gap-4">
+              {recommendedProviders.map((provider) => {
+                const setupTime = getConnectorSetupTime(provider.id);
+                const connectorInfo = getConnectorInfo(provider.id);
+                const isConnected = connectorInfo?.connected || status?.integrations[provider.id === "stripe" || provider.id === "plaid" ? "payments" : "accounting"]?.connected === provider.id;
+
+                return (
+                  <div key={provider.id} className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="p-2 bg-muted rounded-lg">
+                        {providerIcons[provider.id] || <Link2 className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-sm">{provider.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{setupTime} to set up</p>
+                      </div>
+                    </div>
+                    {isConnected ? (
+                      <Badge variant="default" className="w-full justify-center bg-green-600">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Connected
+                      </Badge>
+                    ) : (
+                      <ConnectDialog
+                        provider={provider}
+                        type={provider.id === "stripe" || provider.id === "plaid" ? "payments" : "accounting"}
+                        companyId={companyId}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Connector Category Filter */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Data Connectors</h2>
+        <div className="flex flex-wrap gap-2">
+          {(["all", "recommended", "revenue", "accounting", "hr", "analytics", "crm"] as const).map((category) => (
+            <Button
+              key={category}
+              variant={selectedConnectorCategory === category ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedConnectorCategory(category)}
+              className="flex items-center gap-2"
+            >
+              {categoryLabels[category].icon}
+              {categoryLabels[category].label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Unified Connector Grid */}
+      <div className="space-y-4">
+        {selectedConnectorCategory !== "all" && (
+          <div className="p-3 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">{categoryLabels[selectedConnectorCategory].description}</p>
+          </div>
+        )}
+        <div className="grid md:grid-cols-2 gap-4">
+          {getConnectorsByCategory(selectedConnectorCategory).map((provider) =>
+            renderProviderCard(provider, getProviderType(provider.id))
+          )}
+        </div>
+        {getConnectorsByCategory(selectedConnectorCategory).length === 0 && (
+          <div className="text-center py-12">
+            <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <p className="text-muted-foreground">No connectors available in this category</p>
+          </div>
+        )}
+      </div>
+
+      <Separator className="my-8" />
+
       <Tabs defaultValue="spreadsheets">
         <TabsList data-testid="tabs-integration-type" className="flex-wrap gap-1">
           <TabsTrigger value="spreadsheets" data-testid="tab-spreadsheets">Spreadsheets</TabsTrigger>
           <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="accounting" data-testid="tab-accounting">Accounting</TabsTrigger>
-          <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
-          <TabsTrigger value="erp" data-testid="tab-erp">ERP</TabsTrigger>
-          <TabsTrigger value="crm" data-testid="tab-crm">CRM</TabsTrigger>
-          <TabsTrigger value="payments" data-testid="tab-payments">Payments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="spreadsheets" className="space-y-4">
@@ -796,58 +1003,6 @@ export default function IntegrationsPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="accounting" className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            {allAccountingProviders.map((provider) =>
-              renderProviderCard(provider, "accounting")
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="payroll" className="space-y-4">
-          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
-            <h3 className="font-medium mb-2">Indian Payroll Providers</h3>
-            <p className="text-sm text-muted-foreground">
-              Connect your payroll system to automatically import employee costs, statutory contributions (PF, ESI, TDS), 
-              and compensation data for accurate financial modeling.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {payrollProviders.map((provider) =>
-              renderProviderCard(provider, "payroll")
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="erp" className="space-y-4">
-          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
-            <h3 className="font-medium mb-2">Enterprise Resource Planning</h3>
-            <p className="text-sm text-muted-foreground">
-              Connect your ERP system to sync inventory, operations, and financial data for comprehensive business insights.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-2 gap-4">
-            {erpProviders.map((provider) =>
-              renderProviderCard(provider, "erp")
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="crm" className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            {allCrmProviders.map((provider) =>
-              renderProviderCard(provider, "crm")
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="payments" className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            {paymentsProviders.map((provider) =>
-              renderProviderCard(provider, "payments")
-            )}
-          </div>
-        </TabsContent>
       </Tabs>
 
       <Card>

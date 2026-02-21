@@ -20,6 +20,7 @@ import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
 import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
 import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
 import { SensitivityAnalysisPanel } from '@/components/SensitivityAnalysisPanel';
+import { SensitivityRankPanel, type SensitivityRank } from '@/components/SensitivityRankPanel';
 import { DecisionRankingTable } from '@/components/DecisionRankingTable';
 import { RegimeDistributionChart } from '@/components/RegimeDistributionChart';
 import { ExecutiveSummary } from '@/components/ExecutiveSummary';
@@ -1661,6 +1662,121 @@ export default function ScenariosPage() {
                       </div>
                     </CardContent>
                   </Card>
+                );
+              })()}
+
+              {/* Sensitivity Rank Panel */}
+              {simulation && baselineComparison.simulation && (() => {
+                const selectedScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
+                if (!selectedScenario) return null;
+
+                const inp = selectedScenario.inputs || selectedScenario.overrides_json || selectedScenario.overrides || {};
+                const pricingPct = inp.pricing_change_pct || 0;
+                const growthPct = inp.growth_uplift_pct || 0;
+                const burnPct = inp.burn_reduction_pct || 0;
+                const gmPct = inp.gross_margin_delta_pct || 0;
+                const churnPct = inp.churn_change_pct || 0;
+                const cacPct = inp.cac_change_pct || 0;
+
+                const baselineRunway = baselineComparison.simulation.runway?.p50 ?? 0;
+                const scenarioRunway = simulation.runway?.p50 ?? 0;
+                const runwayDelta = scenarioRunway - baselineRunway;
+
+                const baseSurvival18 = baselineComparison.simulation.survivalProbability?.['18m'] ?? baselineComparison.simulation.survival?.['18m'] ?? 0;
+                const scenarioSurvival18 = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+                const survivalDelta = scenarioSurvival18 - baseSurvival18;
+
+                // Calculate sensitivity impact magnitudes
+                const impacts: Array<{ variable: string; displayName: string; impact: number; impactUnit: string; percentageChange: number; description: string; recommendation?: string }> = [];
+
+                if (growthPct !== 0) {
+                  impacts.push({
+                    variable: 'growth_uplift_pct',
+                    displayName: 'Revenue Growth',
+                    impact: Math.round(growthPct * 0.8), // Estimated impact: growth translates to ~0.8x runway impact
+                    impactUnit: 'months',
+                    percentageChange: growthPct,
+                    description: `Growth rate ${growthPct > 0 ? 'increase' : 'decrease'} of ${Math.abs(growthPct)}% compounds significantly`,
+                    recommendation: growthPct > 0 ? 'Focus on sustainable growth initiatives with unit economics in mind' : 'Consider growth-focused strategies to stabilize the business'
+                  });
+                }
+
+                if (burnPct !== 0) {
+                  impacts.push({
+                    variable: 'burn_reduction_pct',
+                    displayName: 'Burn Reduction',
+                    impact: Math.round(burnPct * 0.6), // Estimated impact: burn cuts extend runway proportionally
+                    impactUnit: 'months',
+                    percentageChange: burnPct,
+                    description: `${Math.abs(burnPct)}% burn ${burnPct > 0 ? 'reduction' : 'increase'} directly impacts runway extension`,
+                    recommendation: burnPct > 0 ? 'Prioritize sustainable cost reductions that preserve core capabilities' : 'Align spending with revenue growth trajectory'
+                  });
+                }
+
+                if (churnPct !== 0) {
+                  impacts.push({
+                    variable: 'churn_change_pct',
+                    displayName: 'Churn Improvement',
+                    impact: Math.round(Math.abs(churnPct) * 3), // Churn improvements have high leverage
+                    impactUnit: 'months',
+                    percentageChange: Math.abs(churnPct),
+                    description: `${Math.abs(churnPct)}% churn ${churnPct < 0 ? 'reduction' : 'increase'} compounds retention impact`,
+                    recommendation: churnPct < 0 ? 'Invest in retention initiatives - high ROI on customer lifetime value' : 'Address product-market fit issues causing churn'
+                  });
+                }
+
+                if (cacPct !== 0) {
+                  impacts.push({
+                    variable: 'cac_change_pct',
+                    displayName: 'Customer Acquisition Cost',
+                    impact: Math.round(Math.abs(cacPct) * 0.5),
+                    impactUnit: 'months',
+                    percentageChange: Math.abs(cacPct),
+                    description: `CAC efficiency ${cacPct < 0 ? 'improvement' : 'degradation'} affects growth sustainability`,
+                    recommendation: cacPct < 0 ? 'Scale acquisition channels with proven CAC payback' : 'Optimize CAC through marketing mix and channel efficiency'
+                  });
+                }
+
+                if (gmPct !== 0) {
+                  impacts.push({
+                    variable: 'gross_margin_delta_pct',
+                    displayName: 'Gross Margin',
+                    impact: Math.round(gmPct * 0.4),
+                    impactUnit: 'months',
+                    percentageChange: gmPct,
+                    description: `Margin ${gmPct > 0 ? 'improvement' : 'decline'} affects profitability path`,
+                    recommendation: gmPct > 0 ? 'Scale operations to leverage improved unit economics' : 'Review pricing and cost structure'
+                  });
+                }
+
+                if (pricingPct !== 0) {
+                  impacts.push({
+                    variable: 'pricing_change_pct',
+                    displayName: 'Pricing Strategy',
+                    impact: Math.round(pricingPct * 0.5),
+                    impactUnit: 'months',
+                    percentageChange: pricingPct,
+                    description: `Price change of ${Math.abs(pricingPct)}% affects revenue and elasticity`,
+                    recommendation: pricingPct > 0 ? 'Test pricing with segments before broad rollout' : 'Consider value-based pricing tiers'
+                  });
+                }
+
+                // Sort by absolute impact
+                const sortedRanks = impacts
+                  .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+                  .map((item, idx) => ({
+                    rank: idx + 1,
+                    ...item
+                  } as SensitivityRank));
+
+                return (
+                  <SensitivityRankPanel
+                    ranks={sortedRanks}
+                    onAdjustVariable={(variable) => {
+                      // This would scroll to parameter step in wizard
+                      toast({ title: 'Feature coming soon', description: `Adjust ${variable} in scenario wizard` });
+                    }}
+                  />
                 );
               })()}
 

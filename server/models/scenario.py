@@ -5,9 +5,9 @@ from server.core.db import Base
 
 class Scenario(Base):
     __tablename__ = "scenarios"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     inputs_json = Column(JSON, nullable=False)
@@ -16,7 +16,7 @@ class Scenario(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     version = Column(Integer, default=1)
-    parent_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True)
+    parent_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True, index=True)
     tags = Column(JSON, default=list)
     is_archived = Column(Integer, default=0)
     
@@ -41,10 +41,10 @@ class Scenario(Base):
 
 class ScenarioComment(Base):
     __tablename__ = "scenario_comments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     

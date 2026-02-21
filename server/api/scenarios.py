@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
@@ -8,6 +8,7 @@ import uuid as uuid_lib
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
 from server.models.company_decision import CompanyScenario
@@ -37,19 +38,33 @@ class ForkScenarioRequest(BaseModel):
 @router.get("/companies/{company_id}/scenarios")
 def list_scenarios(
     company_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    List scenarios for a company with pagination.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+    """
     company = get_user_company(db, company_id, current_user)
-    
-    scenarios = db.query(CompanyScenario).filter(
+
+    # Build query ordered by creation date
+    query = db.query(CompanyScenario).filter(
         CompanyScenario.company_id == company_id
-    ).order_by(CompanyScenario.created_at.desc()).all()
-    
-    return {
-        "scenarios": [s.to_dict() for s in scenarios],
-        "total": len(scenarios)
-    }
+    ).order_by(CompanyScenario.created_at.desc())
+
+    # Apply pagination
+    items, total = paginate(query, page=page, page_size=page_size)
+
+    return create_paginated_response(
+        items=[s.to_dict() for s in items],
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 @router.get("/companies/{company_id}/scenarios/{scenario_id}")

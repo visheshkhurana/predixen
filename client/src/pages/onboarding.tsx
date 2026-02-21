@@ -23,9 +23,10 @@ import { SCALE_LABELS } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const STEPS = [
-  { id: 1, title: 'Company Info', description: 'Tell us about your startup' },
-  { id: 2, title: 'Financial Snapshot', description: 'Quick financial baseline' },
-  { id: 3, title: 'First Truth Scan', description: 'Analyzing your data' },
+  { id: 1, title: 'Company Basics', description: 'Tell us about your startup' },
+  { id: 2, title: 'Financial Snapshot', description: 'Quick financial overview' },
+  { id: 3, title: 'Expense Breakdown', description: 'Optional detailed costs' },
+  { id: 4, title: 'Data Sources', description: 'Connect or upload data' },
 ];
 
 interface DataSourceConnector {
@@ -180,6 +181,7 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const { setCurrentCompany, setTruthScan, setCurrentStep: setStoreStep } = useFounderStore();
   const [step, setStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [showDefaultsBanner, setShowDefaultsBanner] = useState(false);
   const [companyData, setCompanyData] = useState({
     name: '',
@@ -198,9 +200,17 @@ export default function OnboardingPage() {
     cash_balance: 0,
     headcount: 0,
   });
+  const [expenseBreakdown, setExpenseBreakdown] = useState({
+    payroll: 0,
+    marketing: 0,
+    operating: 0,
+    cogs: 0,
+  });
+  const [dataSourceChoice, setDataSourceChoice] = useState<'manual' | 'upload' | 'connect' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSampleMode, setIsSampleMode] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [showCompletionScreen, setShowCompletionScreen] = useState(false);
   
   // File upload state
   const [isDragging, setIsDragging] = useState(false);
@@ -510,51 +520,58 @@ export default function OnboardingPage() {
     }
   };
   
+  const markStepComplete = (stepNum: number) => {
+    if (!completedSteps.includes(stepNum)) {
+      setCompletedSteps([...completedSteps, stepNum]);
+    }
+  };
+
   const handleCompanySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     if (isSubmitting || createCompanyMutation.isPending) return;
-    
+
     const { token } = useFounderStore.getState();
     if (!token) {
-      toast({ 
-        title: 'Session expired', 
-        description: 'Please log in again to continue.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Session expired',
+        description: 'Please log in again to continue.',
+        variant: 'destructive'
       });
       setLocation('/auth');
       return;
     }
-    
+
     if (!companyData.name.trim()) {
       toast({ title: 'Validation Error', description: 'Company name is required', variant: 'destructive' });
       return;
     }
-    
+
     if (!companyData.industry) {
       toast({ title: 'Validation Error', description: 'Please select an industry', variant: 'destructive' });
       return;
     }
-    
+
     if (!companyData.stage) {
       toast({ title: 'Validation Error', description: 'Please select a company stage', variant: 'destructive' });
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       let company;
-      
+
       company = await createCompanyMutation.mutateAsync(companyData);
-      
+
       setCurrentCompany(company);
+      markStepComplete(1);
       setStep(2);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        toast({ 
-          title: 'Session expired', 
-          description: 'Please log in again to continue.', 
-          variant: 'destructive' 
+        toast({
+          title: 'Session expired',
+          description: 'Please log in again to continue.',
+          variant: 'destructive'
         });
         setLocation('/auth');
         return;
@@ -623,15 +640,16 @@ export default function OnboardingPage() {
     }
 
     setIsSubmitting(true);
-    setStep(3);
     setScanError(null);
 
     try {
       const truthScan = await runTruthScanMutation.mutateAsync(currentCompany.id);
       setTruthScan(truthScan);
       setStoreStep('truth');
+      markStepComplete(4);
+      setShowCompletionScreen(true);
       toast({ title: 'Setup complete!', description: 'Your first Truth Scan is ready.' });
-      setTimeout(() => setLocation('/'), 1500);
+      setTimeout(() => setLocation('/'), 2000);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
@@ -641,7 +659,7 @@ export default function OnboardingPage() {
       const message = err instanceof ApiError ? err.message : 'Failed to run Truth Scan. Please try again.';
       setScanError(message);
       toast({ title: 'Error', description: message, variant: 'destructive' });
-      setStep(2);
+      setStep(4);
     } finally {
       setIsSubmitting(false);
     }
@@ -649,60 +667,61 @@ export default function OnboardingPage() {
 
   const handleBaselineSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
-    
+
     setScanError(null);
-    
+
     const validationError = validateBaseline();
     if (validationError) {
       toast({ title: 'Validation Error', description: validationError, variant: 'destructive' });
       return;
     }
-    
+
     const { currentCompany, token } = useFounderStore.getState();
     if (!token) {
-      toast({ 
-        title: 'Session expired', 
-        description: 'Please log in again to continue.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Session expired',
+        description: 'Please log in again to continue.',
+        variant: 'destructive'
       });
       setLocation('/auth');
       return;
     }
-    
+
     if (!currentCompany) {
-      toast({ 
-        title: 'Error', 
-        description: 'No company selected. Please go back and create a company first.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Error',
+        description: 'No company selected. Please go back and create a company first.',
+        variant: 'destructive'
       });
       setStep(1);
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
       await manualBaselineMutation.mutateAsync({
         companyId: currentCompany.id,
         data: baselineData,
       });
-      
-      toast({ title: 'Baseline saved!', description: 'Running your first analysis...' });
-      handleRunTruthScan();
+
+      markStepComplete(2);
+      toast({ title: 'Financial snapshot saved!' });
+      setStep(3);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        toast({ 
-          title: 'Session expired', 
-          description: 'Please log in again to continue.', 
-          variant: 'destructive' 
+        toast({
+          title: 'Session expired',
+          description: 'Please log in again to continue.',
+          variant: 'destructive'
         });
         setLocation('/auth');
         return;
       }
-      const message = err instanceof ApiError 
-        ? err.message 
+      const message = err instanceof ApiError
+        ? err.message
         : 'Failed to save baseline. Please try again.';
       toast({ title: 'Error', description: message, variant: 'destructive' });
     } finally {
@@ -711,330 +730,127 @@ export default function OnboardingPage() {
   };
   
   const progress = (step / STEPS.length) * 100;
-  
+
+  if (showCompletionScreen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-xl space-y-6">
+          <Card>
+            <CardContent className="flex flex-col items-center text-center pt-8">
+              <div className="p-4 rounded-full bg-green-500/10 mb-4">
+                <Check className="w-12 h-12 text-green-500" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Your company is set up!</h2>
+              <p className="text-muted-foreground mb-6">
+                Here's what happens next...
+              </p>
+
+              <div className="w-full bg-muted/50 rounded-lg p-4 mb-6 border">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-primary mt-1 shrink-0" />
+                  <div className="text-left">
+                    <h4 className="font-medium mb-1">Truth Scan Ready</h4>
+                    <p className="text-sm text-muted-foreground">
+                      We've computed 24 financial metrics and benchmarks specific to your {companyData.stage?.replace(/_/g, ' ')} {companyData.industry} company.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-full space-y-3 mb-6">
+                <div className="flex items-center gap-2 text-sm text-left">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Cash runway and burn analysis</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-left">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Benchmarks against similar companies</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-left">
+                  <Check className="w-4 h-4 text-green-500" />
+                  <span>Growth trajectory and profitability forecast</span>
+                </div>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={() => setLocation('/')}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Run Your First Truth Scan
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className={`w-full space-y-6 ${step === 3 ? 'max-w-3xl' : 'max-w-xl'}`}>
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">Getting Started</h1>
-          <p className="text-muted-foreground">
-            Step {step} of {STEPS.length}: {STEPS[step - 1].title}
-          </p>
+      <div className="w-full max-w-2xl space-y-6">
+        {/* Progress Bar with Step Indicators */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold">Getting Started</h1>
+            {step < STEPS.length && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  toast({
+                    title: 'Progress saved',
+                    description: 'You can return to this onboarding flow anytime.',
+                  });
+                }}
+                className="text-xs"
+              >
+                <SkipForward className="w-3.5 h-3.5 mr-1.5" />
+                Save & Continue Later
+              </Button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            {STEPS.map((s, idx) => (
+              <div key={s.id} className="flex items-center flex-1">
+                <div className="flex items-center gap-2 flex-1">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full font-medium text-sm ${
+                    completedSteps.includes(s.id)
+                      ? 'bg-green-500 text-white'
+                      : step === s.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {completedSteps.includes(s.id) ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      s.id
+                    )}
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className="text-sm font-medium">{s.title}</p>
+                    <p className="text-xs text-muted-foreground">{s.description}</p>
+                  </div>
+                </div>
+                {idx < STEPS.length - 1 && (
+                  <ChevronRight className="w-5 h-5 text-muted-foreground mx-2 shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <Progress value={progress} className="h-2" data-testid="onboarding-progress" />
         </div>
-        
-        <Progress value={progress} className="h-2" data-testid="onboarding-progress" />
         
         {step === 1 && (
           <Card>
             <CardHeader>
-              <CardTitle>Company Information</CardTitle>
-              <CardDescription>Tell us about your startup</CardDescription>
+              <CardTitle>Company Basics</CardTitle>
+              <CardDescription>Tell us about your startup so we can find relevant benchmarks</CardDescription>
             </CardHeader>
             <CardContent>
-              {/* AI-Powered Upload Zone */}
-              <div className="mb-6">
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${
-                    isDragging 
-                      ? 'border-primary bg-primary/5' 
-                      : uploadedFile 
-                        ? 'border-muted-foreground/30 bg-muted/30' 
-                        : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/20'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => !isExtracting && fileInputRef.current?.click()}
-                  data-testid="dropzone-deck-upload"
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.xls,.xlsx,.csv"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    data-testid="input-file-upload"
-                  />
-                  
-                  {isExtracting ? (
-                    <div className="flex flex-col items-center gap-3 text-center">
-                      <div className="p-3 rounded-full bg-primary/10">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Analyzing your document...</p>
-                        <p className="text-sm text-muted-foreground">
-                          AI is extracting company and financial information
-                        </p>
-                      </div>
-                    </div>
-                  ) : extractedData ? (
-                    <div className="flex flex-col items-center gap-3 text-center">
-                      {/* Show green if all required fields present, amber if partial */}
-                      {companyData.name && companyData.industry && companyData.stage ? (
-                        <div className="p-3 rounded-full bg-green-500/10">
-                          <Check className="w-8 h-8 text-green-500" />
-                        </div>
-                      ) : (
-                        <div className="p-3 rounded-full bg-amber-500/10">
-                          <AlertCircle className="w-8 h-8 text-amber-500" />
-                        </div>
-                      )}
-                      <div>
-                        <p className={`font-medium ${companyData.name && companyData.industry && companyData.stage ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                          {companyData.name && companyData.industry && companyData.stage 
-                            ? 'Information extracted successfully' 
-                            : 'Partial extraction - please complete missing fields'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {uploadedFile?.name} - Check fields below
-                        </p>
-                        {(!companyData.name || !companyData.industry || !companyData.stage) && (
-                          <p className="text-xs text-amber-500 mt-1">
-                            Missing: {[
-                              !companyData.name && 'Company Name',
-                              !companyData.industry && 'Industry',
-                              !companyData.stage && 'Stage'
-                            ].filter(Boolean).join(', ')}
-                          </p>
-                        )}
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={(e) => { e.stopPropagation(); clearUpload(); }}
-                        data-testid="button-clear-upload"
-                      >
-                        Upload different file
-                      </Button>
-                    </div>
-                  ) : extractionError ? (
-                    <div className="flex flex-col items-center gap-3 text-center">
-                      <div className="p-3 rounded-full bg-destructive/10">
-                        <AlertCircle className="w-8 h-8 text-destructive" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-destructive">Extraction failed</p>
-                        <p className="text-sm text-muted-foreground">{extractionError}</p>
-                      </div>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={(e) => { e.stopPropagation(); clearUpload(); }}
-                      >
-                        Try again
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 text-center">
-                      <div className="p-3 rounded-full bg-primary/10">
-                        <Sparkles className="w-8 h-8 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Upload your pitch deck, financial report, or spreadsheet</p>
-                        <p className="text-sm text-muted-foreground">
-                          Drop a file here or click to browse. AI will auto-fill company and financial details.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <FileText className="w-3 h-3" />
-                        <span>PDF, Excel (.xls, .xlsx), or CSV - up to 20MB</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {extractedData && extractedData.confidence && (
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-green-500" />
-                      Company info: {Math.round((extractedData.confidence.company_info || 0) * 100)}% confident
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-green-500" />
-                      Financials: {Math.round((extractedData.confidence.financials || 0) * 100)}% confident
-                    </span>
-                    {extractedData.extraction_method && (
-                      <Badge variant="outline" className="text-xs">
-                        {extractedData.extraction_method.includes('excel') ? 'Excel' : 
-                         extractedData.extraction_method.includes('csv') ? 'CSV' : 'PDF'}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-                
-                {/* Data Cross-Check Section */}
-                {extractedData && (
-                  <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium flex items-center gap-2">
-                        <Eye className="w-4 h-4" />
-                        Extracted Data Cross-Check
-                      </h4>
-                      <div className="flex gap-2">
-                        {extractedData.raw_data_preview && (
-                          <Dialog open={showDataPreview} onOpenChange={setShowDataPreview}>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" data-testid="button-view-raw-data">
-                                <FileText className="w-3 h-3 mr-1" />
-                                View Source Data
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
-                              <DialogHeader>
-                                <DialogTitle>Source Data Preview</DialogTitle>
-                                <DialogDescription>
-                                  Raw data from your uploaded file ({extractedData.raw_data_preview.row_count} rows)
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="overflow-auto">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      {extractedData.raw_data_preview.columns.map((col) => (
-                                        <TableHead key={col} className="whitespace-nowrap">{col}</TableHead>
-                                      ))}
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {extractedData.raw_data_preview.sample_rows.map((row, idx) => (
-                                      <TableRow key={idx}>
-                                        {extractedData.raw_data_preview!.columns.map((col) => (
-                                          <TableCell key={col} className="whitespace-nowrap">
-                                            {String(row[col] ?? '')}
-                                          </TableCell>
-                                        ))}
-                                      </TableRow>
-                                    ))}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        )}
-                        <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" data-testid="button-report-discrepancy">
-                              <MessageSquare className="w-3 h-3 mr-1" />
-                              Report Issue
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Report a Discrepancy</DialogTitle>
-                              <DialogDescription>
-                                Let us know if the extracted data doesn't match your document
-                              </DialogDescription>
-                            </DialogHeader>
-                            <Textarea
-                              placeholder="Describe what values look incorrect or are missing..."
-                              value={feedbackText}
-                              onChange={(e) => setFeedbackText(e.target.value)}
-                              rows={4}
-                              data-testid="input-feedback"
-                            />
-                            <div className="flex justify-end gap-2">
-                              <Button variant="outline" onClick={() => setShowFeedbackDialog(false)}>
-                                Cancel
-                              </Button>
-                              <Button 
-                                onClick={() => {
-                                  toast({ title: 'Feedback sent', description: 'Thank you for your feedback!' });
-                                  setShowFeedbackDialog(false);
-                                  setFeedbackText('');
-                                }}
-                                disabled={!feedbackText.trim()}
-                              >
-                                Send Feedback
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    </div>
-                    
-                    {/* Extracted Values Table */}
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      {[
-                        { label: 'Monthly Revenue', value: extractedData.financials.monthly_revenue, format: 'currency' },
-                        { label: 'Gross Margin', value: extractedData.financials.gross_margin_pct, format: 'percent' },
-                        { label: 'Opex', value: extractedData.financials.opex, format: 'currency' },
-                        { label: 'Payroll', value: extractedData.financials.payroll, format: 'currency' },
-                        { label: 'Cash Balance', value: extractedData.financials.cash_balance, format: 'currency' },
-                        { label: 'Headcount', value: extractedData.financials.headcount, format: 'number' },
-                      ].map(({ label, value, format }) => (
-                        <div key={label} className="flex justify-between p-2 bg-background rounded border">
-                          <span className="text-muted-foreground">{label}</span>
-                          {value !== undefined && value !== null ? (
-                            <span className="font-medium text-green-600 dark:text-green-400">
-                              {format === 'currency' 
-                                ? `$${Number(value).toLocaleString()}` 
-                                : format === 'percent' 
-                                  ? `${value}%` 
-                                  : value}
-                            </span>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-amber-500 flex items-center gap-1 cursor-help">
-                                  <Info className="w-3 h-3" />
-                                  Not found
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>This metric wasn't found in your document. You can enter it manually below.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Review the extracted values above. You can override any value in the form fields below.
-                    </p>
-                  </div>
-                )}
-                
-                {/* Upload History */}
-                {uploadHistory.length > 0 && (
-                  <div className="mt-4 p-3 bg-muted/30 rounded-md">
-                    <div className="flex items-center gap-2 mb-2">
-                      <History className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Upload History</span>
-                    </div>
-                    <div className="space-y-1">
-                      {uploadHistory.map((file, idx) => (
-                        <div 
-                          key={`${file.name}-${idx}`} 
-                          className="flex items-center justify-between text-xs text-muted-foreground"
-                        >
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-3 h-3" />
-                            <span className="truncate max-w-[200px]">{file.name}</span>
-                            {idx === 0 && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Current</Badge>}
-                          </div>
-                          <span className="text-[10px]">
-                            {file.uploadedAt.toLocaleTimeString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">Or fill in manually</span>
-                  </div>
-                </div>
-              </div>
-              
               <form onSubmit={handleCompanySubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="company-name">Company Name <span className="text-destructive">*</span></Label>
@@ -1051,50 +867,20 @@ export default function OnboardingPage() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="company-website">Website (optional)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="company-website"
-                      value={companyData.website}
-                      onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
-                      onBlur={(e) => {
-                        const detected = detectCurrencyFromWebsite(e.target.value);
-                        if (detected && companyData.currency === 'USD') {
-                          setCompanyData(prev => ({ ...prev, currency: detected }));
-                        }
-                      }}
-                      placeholder="https://yourcompany.com"
-                      data-testid="input-company-website"
-                      className={extractedData?.company_info?.website ? 'border-green-500/50' : ''}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={fetchCompanyDetailsAI}
-                      disabled={isFetchingAI || !companyData.website?.trim()}
-                      data-testid="button-fetch-company-ai"
-                      className="shrink-0 gap-2"
-                    >
-                      {isFetchingAI ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Fetching...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4" />
-                          Fetch using AI
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {aiLookupSummary && (
-                    <div className="mt-2 p-3 bg-primary/5 border border-primary/20 rounded-md text-sm">
-                      <div className="flex items-start gap-2">
-                        <Globe className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                        <p className="text-muted-foreground">{aiLookupSummary}</p>
-                      </div>
-                    </div>
-                  )}
+                  <Input
+                    id="company-website"
+                    value={companyData.website}
+                    onChange={(e) => setCompanyData({ ...companyData, website: e.target.value })}
+                    onBlur={(e) => {
+                      const detected = detectCurrencyFromWebsite(e.target.value);
+                      if (detected && companyData.currency === 'USD') {
+                        setCompanyData(prev => ({ ...prev, currency: detected }));
+                      }
+                    }}
+                    placeholder="https://yourcompany.com"
+                    data-testid="input-company-website"
+                  />
+                  <p className="text-xs text-muted-foreground">Used to detect your location for currency conversion</p>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -1128,9 +914,9 @@ export default function OnboardingPage() {
                         <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">Used to select relevant benchmarks and comparisons for your sector</p>
+                    <p className="text-xs text-muted-foreground mt-1">Helps us find the right benchmarks for your company</p>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Stage <span className="text-destructive">*</span></Label>
                     <Select
@@ -1147,7 +933,7 @@ export default function OnboardingPage() {
                         }
                       }}
                     >
-                      <SelectTrigger 
+                      <SelectTrigger
                         data-testid="select-stage"
                         className={extractedData?.company_info?.stage ? 'border-green-500/50' : !companyData.stage ? 'border-amber-500/50' : ''}
                       >
@@ -1164,120 +950,55 @@ export default function OnboardingPage() {
                         <SelectItem value="public">Public / Listed</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">Helps us calibrate financial expectations and benchmark ranges</p>
+                    <p className="text-xs text-muted-foreground mt-1">This helps us calibrate financial expectations</p>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Currency</Label>
-                  <Select
-                    value={companyData.currency}
-                    onValueChange={(v) => setCompanyData({ ...companyData, currency: v })}
-                  >
-                    <SelectTrigger data-testid="select-currency">
-                      <SelectValue placeholder="Select currency..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_CURRENCIES.map(c => (
-                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">All monetary values will be displayed in this currency</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select
+                      value={companyData.currency}
+                      onValueChange={(v) => setCompanyData({ ...companyData, currency: v })}
+                    >
+                      <SelectTrigger data-testid="select-currency">
+                        <SelectValue placeholder="Select currency..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_CURRENCIES.map(c => (
+                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Amount Scale</Label>
+                    <Select
+                      value={companyData.amount_scale}
+                      onValueChange={(v) => setCompanyData({ ...companyData, amount_scale: v as AmountScale })}
+                    >
+                      <SelectTrigger data-testid="select-amount-scale">
+                        <SelectValue placeholder="Select scale..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="UNITS">Units</SelectItem>
+                        <SelectItem value="THOUSANDS">Thousands</SelectItem>
+                        <SelectItem value="MILLIONS">Millions</SelectItem>
+                        <SelectItem value="CRORES">Crores</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Values entered in</Label>
-                  <Select
-                    value={companyData.amount_scale}
-                    onValueChange={(v) => setCompanyData({ ...companyData, amount_scale: v as AmountScale })}
-                  >
-                    <SelectTrigger data-testid="select-amount-scale">
-                      <SelectValue placeholder="Select scale..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UNITS">Units</SelectItem>
-                      <SelectItem value="THOUSANDS">Thousands</SelectItem>
-                      <SelectItem value="MILLIONS">Millions</SelectItem>
-                      <SelectItem value="CRORES">Crores</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {companyData.amount_scale !== 'UNITS' && (() => {
-                    const symbols: Record<string, string> = {
-                      USD: '$', EUR: '€', GBP: '£', INR: '₹', JPY: '¥',
-                      CNY: '¥', KRW: '₩', BRL: 'R$', CHF: 'CHF', SEK: 'kr',
-                      AED: 'AED', HKD: 'HK$', MXN: 'MX$', ILS: '₪', NGN: '₦',
-                      KES: 'KSh', ZAR: 'R', SGD: 'S$', AUD: 'A$', CAD: 'C$',
-                    };
-                    const sym = symbols[companyData.currency] || companyData.currency;
-                    const multipliers: Record<string, number> = {
-                      UNITS: 1, THOUSANDS: 1000, MILLIONS: 1000000, CRORES: 10000000,
-                    };
-                    const mult = multipliers[companyData.amount_scale] || 1;
-                    const exampleInput = 25;
-                    const exampleOutput = exampleInput * mult;
-                    const formatted = exampleOutput.toLocaleString();
-                    return (
-                      <div className="p-2.5 bg-muted/50 rounded-md space-y-1" data-testid="scale-preview">
-                        <p className="text-xs font-medium text-muted-foreground">Live Preview</p>
-                        <p className="text-sm">
-                          You enter <span className="font-mono font-semibold">{sym}{exampleInput}</span>
-                          {' → '}
-                          FounderConsole reads it as <span className="font-mono font-semibold">{sym}{formatted}</span>
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </div>
-                
-                {/* Show validation message if form is incomplete */}
-                {(!companyData.name.trim() || !companyData.industry || !companyData.stage) && (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-sm text-amber-600 dark:text-amber-400">
-                    Please fill in all required fields: {[
-                      !companyData.name.trim() && 'Company Name',
-                      !companyData.industry && 'Industry',
-                      !companyData.stage && 'Stage'
-                    ].filter(Boolean).join(', ')}
-                  </div>
-                )}
-                
                 <Button
                   type="submit"
                   className="w-full"
                   disabled={isSubmitting || createCompanyMutation.isPending || !companyData.name.trim() || !companyData.industry || !companyData.stage}
                   data-testid="button-next-step"
                 >
-                  {isSubmitting || createCompanyMutation.isPending ? 'Creating...' : 'Continue'}
-                </Button>
-                
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">Or try with sample data</span>
-                  </div>
-                </div>
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={loadSampleCompany}
-                  disabled={isSubmitting || isSeedingInProgress}
-                  data-testid="button-load-sample"
-                >
-                  {isSubmitting && isSampleMode ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading Sample Company...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Load Sample Company
-                    </>
-                  )}
+                  {isSubmitting || createCompanyMutation.isPending ? 'Creating...' : 'Next: Financial Snapshot'}
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </form>
             </CardContent>
@@ -1287,73 +1008,16 @@ export default function OnboardingPage() {
         {step === 2 && (
           <Card>
             <CardHeader>
-              <CardTitle>Financial Baseline</CardTitle>
-              <CardDescription>
-                {isSampleMode 
-                  ? 'Sample financials are pre-filled below. Click "Run First Truth Scan" to continue.'
-                  : 'Upload an Excel/CSV with financials or enter values manually below.'}
-              </CardDescription>
+              <CardTitle>Financial Snapshot</CardTitle>
+              <CardDescription>Tell us about your current financial position. We'll use this to model your growth trajectory.</CardDescription>
             </CardHeader>
             <CardContent>
               {showDefaultsBanner && companyData.stage && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-md text-sm flex items-center justify-between gap-2 mb-4" data-testid="banner-defaults">
                   <span>Pre-filled with typical values for {companyData.stage.replace(/_/g, ' ')} companies. Adjust to match your actuals.</span>
-                  <button onClick={() => setShowDefaultsBanner(false)} className="text-muted-foreground hover-elevate rounded-md px-1" data-testid="button-dismiss-banner" aria-label="Dismiss">x</button>
+                  <button onClick={() => setShowDefaultsBanner(false)} className="text-muted-foreground hover:bg-blue-500/5 rounded-md px-1" data-testid="button-dismiss-banner" aria-label="Dismiss">x</button>
                 </div>
               )}
-              {/* Financial File Upload Zone */}
-              <div className="mb-6">
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
-                    isDragging 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/20'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => !isExtracting && fileInputRef.current?.click()}
-                  data-testid="dropzone-financials-upload"
-                >
-                  {isExtracting ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                      <span className="text-sm">Extracting financial data...</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-3 text-center">
-                      <Upload className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">Upload Excel/CSV with financials</p>
-                        <p className="text-xs text-muted-foreground">
-                          Drag & drop or click to browse (.xlsx, .xls, .csv)
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {extractedData?.financials && (
-                  <div className="mt-3 p-3 bg-green-500/10 border border-green-500/30 rounded-md">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Check className="w-4 h-4 text-green-500" />
-                      <span className="text-sm font-medium text-green-500">Financial data extracted</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Values below have been pre-filled from your uploaded file. You can adjust them if needed.
-                    </p>
-                  </div>
-                )}
-                
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">Or enter manually</span>
-                  </div>
-                </div>
-              </div>
               
               {companyData.amount_scale !== 'UNITS' && (
                 <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md flex items-center gap-2">
@@ -1605,24 +1269,35 @@ export default function OnboardingPage() {
                   </p>
                 </div>
                 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting || manualBaselineMutation.isPending}
-                  data-testid="button-save-baseline"
-                >
-                  {isSubmitting || manualBaselineMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      Continue to Data Sources
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setStep(1)}
+                    disabled={isSubmitting}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={isSubmitting || manualBaselineMutation.isPending}
+                    data-testid="button-save-baseline"
+                  >
+                    {isSubmitting || manualBaselineMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Next: Expense Breakdown
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -1630,13 +1305,281 @@ export default function OnboardingPage() {
         
         {step === 3 && (
           <Card>
-            <CardHeader className="text-center">
-              <CardTitle>Analyzing Your Data</CardTitle>
-              <CardDescription>Running your first Truth Scan...</CardDescription>
+            <CardHeader>
+              <CardTitle>Expense Breakdown</CardTitle>
+              <CardDescription>Optional: Provide a detailed breakdown to improve our burn accuracy by up to 30%</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col items-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              <p className="mt-4 text-muted-foreground">Computing 24 metrics and benchmarks</p>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="payroll-detail">Payroll</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Total employee salaries, benefits, and payroll taxes</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Input
+                      id="payroll-detail"
+                      type="number"
+                      step="any"
+                      min={0}
+                      value={expenseBreakdown.payroll}
+                      onChange={(e) => setExpenseBreakdown({ ...expenseBreakdown, payroll: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="marketing-detail">Marketing & Sales</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Customer acquisition, marketing campaigns, and sales costs</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Input
+                      id="marketing-detail"
+                      type="number"
+                      step="any"
+                      min={0}
+                      value={expenseBreakdown.marketing}
+                      onChange={(e) => setExpenseBreakdown({ ...expenseBreakdown, marketing: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="operating-detail">Operating Expenses</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Rent, utilities, software, infrastructure, and other overhead</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Input
+                      id="operating-detail"
+                      type="number"
+                      step="any"
+                      min={0}
+                      value={expenseBreakdown.operating}
+                      onChange={(e) => setExpenseBreakdown({ ...expenseBreakdown, operating: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="cogs-detail">Cost of Goods Sold</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs">
+                          <p>Direct costs to produce goods or deliver services</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Input
+                      id="cogs-detail"
+                      type="number"
+                      step="any"
+                      min={0}
+                      value={expenseBreakdown.cogs}
+                      onChange={(e) => setExpenseBreakdown({ ...expenseBreakdown, cogs: Number(e.target.value) })}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/30 rounded-lg border">
+                  <div className="flex items-start gap-3">
+                    <Info className="w-4 h-4 text-muted-foreground mt-1 shrink-0" />
+                    <div className="text-sm space-y-1">
+                      <p className="font-medium text-foreground">Can't fill in the details right now?</p>
+                      <p className="text-muted-foreground">No problem! Skip this step and you can always add this breakdown later to improve accuracy.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setStep(2)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="flex-1"
+                    onClick={() => {
+                      markStepComplete(3);
+                      setStep(4);
+                    }}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={() => {
+                      markStepComplete(3);
+                      setStep(4);
+                    }}
+                  >
+                    Next: Data Sources
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 4 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Set Up Data Sources</CardTitle>
+              <CardDescription>Choose how you'd like to keep your financial data up to date. You can always change this later.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3">
+                  {/* Manual Entry Card */}
+                  <div
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      dataSourceChoice === 'manual'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-primary/50 hover:bg-muted/30'
+                    }`}
+                    onClick={() => setDataSourceChoice('manual')}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                        dataSourceChoice === 'manual' ? 'border-primary bg-primary' : 'border-muted-foreground'
+                      }`}>
+                        {dataSourceChoice === 'manual' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium">Manual Entry</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Update your financials manually each month. Perfect for getting started quickly.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Upload Card */}
+                  <div
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      dataSourceChoice === 'upload'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-primary/50 hover:bg-muted/30'
+                    }`}
+                    onClick={() => setDataSourceChoice('upload')}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                        dataSourceChoice === 'upload' ? 'border-primary bg-primary' : 'border-muted-foreground'
+                      }`}>
+                        {dataSourceChoice === 'upload' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium">Upload Files</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Upload monthly Excel or CSV files. We'll extract and track changes automatically.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Connect Apps Card */}
+                  <div
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      dataSourceChoice === 'connect'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-primary/50 hover:bg-muted/30'
+                    }`}
+                    onClick={() => setDataSourceChoice('connect')}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                        dataSourceChoice === 'connect' ? 'border-primary bg-primary' : 'border-muted-foreground'
+                      }`}>
+                        {dataSourceChoice === 'connect' && <Check className="w-3 h-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium">Connect Apps</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Sync with Stripe, QuickBooks, Gusto, and more. Real-time data updates. Recommended for accuracy.
+                        </p>
+                        {dataSourceChoice === 'connect' && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant="secondary" className="text-xs">Stripe</Badge>
+                            <Badge variant="secondary" className="text-xs">QuickBooks</Badge>
+                            <Badge variant="secondary" className="text-xs">Gusto</Badge>
+                            <Badge variant="secondary" className="text-xs">+ More</Badge>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-blue-600 dark:text-blue-400">
+                      You can always add more data sources later or switch to a different method at any time.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setStep(3)}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    disabled={!dataSourceChoice}
+                    onClick={handleRunTruthScan}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Setting up...
+                      </>
+                    ) : (
+                      <>
+                        Finish Setup
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

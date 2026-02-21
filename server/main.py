@@ -5,6 +5,8 @@ import logging
 from server.core.db import engine, Base, SessionLocal
 from server.core.migrations import run_migrations
 from server.core.config import settings
+from server.middleware.rate_limiter import RateLimiterMiddleware
+from server.middleware.csrf_protection import CSRFProtectionMiddleware
 from server.seed.seed_benchmarks import seed_benchmarks
 from server.seed.seed_demo import seed_demo_data
 from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration, scenarios
@@ -125,13 +127,26 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CSRF protection middleware - protects against CSRF attacks
+# Must be added before rate limiting to validate requests early
+app.add_middleware(CSRFProtectionMiddleware)
+
+# Rate limiting middleware - protects against brute force and DDoS attacks
+# Must be added before CORS to ensure it runs first
+app.add_middleware(
+    RateLimiterMiddleware,
+    rate_limit_auth=settings.RATE_LIMIT_AUTH,
+    rate_limit_api=settings.RATE_LIMIT_API,
+    rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
+)
+
 # CORS configuration - uses env-driven origins list (no wildcard with credentials)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token"],
 )
 
 app.include_router(auth.router)

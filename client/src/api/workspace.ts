@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { ApiError, safeParseJSON } from '@/lib/errors';
 
 export interface TeamMember {
   id: number;
@@ -55,11 +56,29 @@ export function useWorkspaceMembers(companyId: number) {
   return useQuery<TeamMember[]>({
     queryKey: ['/workspace/companies', companyId, 'members'],
     queryFn: async () => {
-      const res = await fetch(`/api/workspace/companies/${companyId}/members`, {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to fetch members');
-      return res.json();
+      let res: Response;
+      try {
+        res = await fetch(`/api/workspace/companies/${companyId}/members`, {
+          credentials: 'include',
+        });
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Network error fetching workspace members for company ${companyId}:`, error);
+        throw new ApiError(0, `Failed to fetch members: ${networkError}`);
+      }
+
+      if (!res.ok) {
+        throw new ApiError(res.status, `Failed to fetch members (${res.status})`);
+      }
+
+      try {
+        return await safeParseJSON(res, 'Failed to parse members response') as TeamMember[];
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(res.status, 'Failed to parse members response');
+      }
     },
     enabled: !!companyId,
   });
@@ -69,11 +88,29 @@ export function useWorkspaceInvites(companyId: number) {
   return useQuery<WorkspaceInvite[]>({
     queryKey: ['/workspace/companies', companyId, 'invites'],
     queryFn: async () => {
-      const res = await fetch(`/api/workspace/companies/${companyId}/invites`, {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to fetch invites');
-      return res.json();
+      let res: Response;
+      try {
+        res = await fetch(`/api/workspace/companies/${companyId}/invites`, {
+          credentials: 'include',
+        });
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Network error fetching workspace invites for company ${companyId}:`, error);
+        throw new ApiError(0, `Failed to fetch invites: ${networkError}`);
+      }
+
+      if (!res.ok) {
+        throw new ApiError(res.status, `Failed to fetch invites (${res.status})`);
+      }
+
+      try {
+        return await safeParseJSON(res, 'Failed to parse invites response') as WorkspaceInvite[];
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(res.status, 'Failed to parse invites response');
+      }
     },
     enabled: !!companyId,
   });
@@ -139,11 +176,29 @@ export function useNotificationPreferences() {
   return useQuery<NotificationSettings>({
     queryKey: ['/workspace/notifications/preferences'],
     queryFn: async () => {
-      const res = await fetch('/api/workspace/notifications/preferences', {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to fetch notification preferences');
-      return res.json();
+      let res: Response;
+      try {
+        res = await fetch('/api/workspace/notifications/preferences', {
+          credentials: 'include',
+        });
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error('Network error fetching notification preferences:', error);
+        throw new ApiError(0, `Failed to fetch notification preferences: ${networkError}`);
+      }
+
+      if (!res.ok) {
+        throw new ApiError(res.status, `Failed to fetch notification preferences (${res.status})`);
+      }
+
+      try {
+        return await safeParseJSON(res, 'Failed to parse notification preferences') as NotificationSettings;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(res.status, 'Failed to parse notification preferences');
+      }
     },
   });
 }
@@ -164,11 +219,29 @@ export function useScenarioComments(scenarioId: number) {
   return useQuery<Comment[]>({
     queryKey: ['/comments/scenarios', scenarioId],
     queryFn: async () => {
-      const res = await fetch(`/api/comments/scenarios/${scenarioId}`, {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to fetch comments');
-      return res.json();
+      let res: Response;
+      try {
+        res = await fetch(`/api/comments/scenarios/${scenarioId}`, {
+          credentials: 'include',
+        });
+      } catch (error) {
+        const networkError = error instanceof Error ? error.message : String(error);
+        console.error(`Network error fetching comments for scenario ${scenarioId}:`, error);
+        throw new ApiError(0, `Failed to fetch comments: ${networkError}`);
+      }
+
+      if (!res.ok) {
+        throw new ApiError(res.status, `Failed to fetch comments (${res.status})`);
+      }
+
+      try {
+        return await safeParseJSON(res, 'Failed to parse comments response') as Comment[];
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        throw new ApiError(res.status, 'Failed to parse comments response');
+      }
     },
     enabled: !!scenarioId,
   });

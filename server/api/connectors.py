@@ -18,6 +18,11 @@ import json
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.encryption import (
+    encrypt_credentials,
+    decrypt_credentials,
+    mask_credentials,
+)
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
@@ -338,25 +343,30 @@ async def connect_provider(
     
     try:
         auth_success = await connector.authenticate()
-        
+
         if not auth_success:
             raise HTTPException(status_code=401, detail="Authentication failed. Check your credentials.")
-        
-        # Store credentials securely (encrypted in production)
+
+        # Store credentials securely (encrypted)
         metadata = company.metadata_json or {}
         if "connectors" not in metadata:
             metadata["connectors"] = {}
-        
+
+        # Encrypt sensitive credentials before storing in database
+        encrypted_creds = encrypt_credentials(credentials.credentials)
+
         metadata["connectors"][provider_id] = {
             "connected": True,
-            "credentials": credentials.credentials,  # Should be encrypted
+            "credentials": encrypted_creds,  # Encrypted string
             "settings": credentials.settings,
             "connected_at": datetime.utcnow().isoformat(),
         }
-        
+
         company.metadata_json = metadata
         db.commit()
-        
+
+        logger.info(f"Successfully connected provider {provider_id} for company {company_id}")
+
         return {
             "success": True,
             "provider_id": provider_id,
@@ -435,36 +445,85 @@ async def sync_provider(
     if not connector_class:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_id}")
     
-    # Get stored credentials
+    # Get stored credentials and decrypt them
     stored_config = connectors[provider_id]
+    stored_credentials = stored_config.get("credentials", {})
+
+    # Decrypt credentials if they're encrypted (string)
+    if isinstance(stored_credentials, str):
+        try:
+            credentials_dict = decrypt_credentials(stored_credentials)
+        except Exception as e:
+            logger.error(f"Failed to decrypt credentials for {provider_id}: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to decrypt stored credentials. Configuration may be corrupted.",
+            )
+    else:
+        # Fallback for plaintext credentials (migration scenario)
+        credentials_dict = stored_credentials or {}
+
     config = ConnectorConfig(
         provider_id=provider_id,
         company_id=company_id,
-        credentials=stored_config.get("credentials", {}),
+        credentials=credentials_dict,
         settings=stored_config.get("settings", {}),
     )
     
     connector = connector_class(config)
     
     try:
+        # STEP 1: Fetch data from connector (no DB changes yet)
         result = await connector.sync_all()
-        
-        # Update sync status in metadata
-        connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
-        connectors[provider_id]["records_synced"] = result.records_synced
-        connectors[provider_id]["last_error"] = result.errors[0] if result.errors else None
-        
-        metadata["connectors"] = connectors
-        company.metadata_json = metadata
-        
+
+        # STEP 2: Validate synced data BEFORE any DB commits
+        if not result.success and result.errors:
+            error_msg = f"Connector sync validation failed: {result.errors[0]}"
+            logger.warning(f"Sync validation error for {provider_id}: {error_msg}")
+            raise ValueError(error_msg)
+
+        # STEP 3: Build and validate financial records
+        financial_record = None
         if result.success and result.metadata.get("financials"):
             financials = result.metadata["financials"]
             today = datetime.utcnow().date()
-            record = _build_financial_record(company_id, provider_id, connector.PROVIDER_NAME, financials, today)
-            db.add(record)
-        
-        db.commit()
-        
+            financial_record = _build_financial_record(company_id, provider_id, connector.PROVIDER_NAME, financials, today)
+
+            # Validate financial record has meaningful data
+            if (financial_record.revenue is None and
+                financial_record.cash_balance is None and
+                financial_record.payroll is None and
+                financial_record.opex is None):
+                raise ValueError("Financial record must contain at least one financial metric (revenue, cash_balance, payroll, or opex)")
+
+        # STEP 4: All validations passed, now commit in single transaction
+        try:
+            # Update sync status in metadata
+            connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
+            connectors[provider_id]["records_synced"] = result.records_synced
+            connectors[provider_id]["last_error"] = None  # Clear previous errors on success
+
+            logger.info(
+                f"Sync completed for provider {provider_id}, company {company_id}: "
+                f"{result.records_synced} records synced"
+            )
+
+            metadata["connectors"] = connectors
+            company.metadata_json = metadata
+
+            # Add financial record if present
+            if financial_record:
+                db.add(financial_record)
+
+            # Commit all changes together
+            db.commit()
+
+        except Exception as commit_error:
+            # STEP 5: Rollback on commit error
+            db.rollback()
+            logger.error(f"Failed to commit sync data for {provider_id}: {commit_error}")
+            raise ValueError(f"Database commit failed: {str(commit_error)}")
+
         return {
             "success": result.success,
             "provider_id": provider_id,
@@ -473,8 +532,15 @@ async def sync_provider(
             "warnings": result.warnings,
             "sync_completed": result.sync_completed.isoformat() if result.sync_completed else None,
         }
-        
+
+    except ValueError as validation_error:
+        # Validation error - ensure rollback
+        db.rollback()
+        logger.error(f"Sync validation error for {provider_id}: {validation_error}")
+        raise HTTPException(status_code=400, detail=str(validation_error))
     except Exception as e:
+        # Unexpected error - ensure rollback
+        db.rollback()
         logger.error(f"Sync error for {provider_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:

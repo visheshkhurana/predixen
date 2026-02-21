@@ -21,17 +21,22 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
-    
+
     FEATURE_INVESTOR_MODE: bool = os.getenv("FEATURE_INVESTOR_MODE", "false").lower() == "true"
-    
+
     ADMIN_MASTER_EMAIL: str = os.getenv("ADMIN_MASTER_EMAIL", "")
     ADMIN_MASTER_PASSWORD: str = os.getenv("ADMIN_MASTER_PASSWORD", "")
-    
+
     # Environment: "development" or "production"
     ENVIRONMENT: str = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
-    
+
     # CORS configuration - comma-separated list of allowed origins
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
+
+    # Rate limiting configuration (requests per minute)
+    RATE_LIMIT_AUTH: int = int(os.getenv("RATE_LIMIT_AUTH", "5"))
+    RATE_LIMIT_API: int = int(os.getenv("RATE_LIMIT_API", "60"))
+    RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
     
     @property
     def is_production(self) -> bool:

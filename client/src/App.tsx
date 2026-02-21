@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { ContextBar } from "@/components/ContextBar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { useFounderStore } from "@/store/founderStore";
 import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2 } from "lucide-react";
 import {
@@ -35,6 +37,9 @@ import { Separator } from "@/components/ui/separator";
 import { api } from "@/api/client";
 import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { formatCurrencyAbbrev } from "@/lib/utils";
+import GlobalLoadingBar from "@/components/GlobalLoadingBar";
+import { AskAIButton } from "@/components/AskAIButton";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import AuthPage from "@/pages/auth";
 import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
@@ -86,16 +91,33 @@ import PricingPage from "@/pages/pricing";
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
   const token = useFounderStore((s) => s.token);
   const currentCompany = useFounderStore((s) => s.currentCompany);
-  
+
   if (!token) {
     return <Redirect to="/auth" />;
   }
-  
+
   if (!allowWithoutCompany && !currentCompany) {
     return <Redirect to="/onboarding" />;
   }
-  
-  return <Component />;
+
+  // Wrap authenticated routes with page-level error boundary
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => (
+        <PageErrorFallback
+          error={error}
+          reset={reset}
+          pageName="Page"
+        />
+      )}
+      onError={(error, info) => {
+        console.error('Authenticated Route Error:', error);
+        console.error('Component Stack:', info.componentStack);
+      }}
+    >
+      <Component />
+    </ErrorBoundary>
+  );
 }
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
@@ -165,19 +187,40 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
       </div>
     );
   }
-  
+
+  // Wrap admin routes with error boundary
   return (
-    <AdminLayout>
-      <Component />
-    </AdminLayout>
+    <ErrorBoundary
+      fallback={(error, reset) => (
+        <PageErrorFallback
+          error={error}
+          reset={reset}
+          pageName="Admin Panel"
+        />
+      )}
+      onError={(error, info) => {
+        console.error('Admin Route Error:', error);
+        console.error('Component Stack:', info.componentStack);
+      }}
+    >
+      <AdminLayout>
+        <Component />
+      </AdminLayout>
+    </ErrorBoundary>
   );
 }
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/pricing" component={PricingPage} />
-      <Route path="/auth" component={AuthPage} />
+    <ErrorBoundary
+      onError={(error) => {
+        // Log to console with context
+        console.error('Router Error:', error);
+      }}
+    >
+      <Switch>
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/auth" component={AuthPage} />
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
@@ -314,11 +357,12 @@ function Router() {
       <Route path="/qa">
         {() => <AdminRoute component={QAFrontPage} />}
       </Route>
-      <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
-      <Route path="/owner-console" component={OwnerConsole} />
-      <Route path="/demo" component={DemoRedirectPage} />
-      <Route component={NotFound} />
-    </Switch>
+        <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
+        <Route path="/owner-console" component={OwnerConsole} />
+        <Route path="/demo" component={DemoRedirectPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </ErrorBoundary>
   );
 }
 
@@ -678,9 +722,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </DialogContent>
           </Dialog>
           <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
+          <Breadcrumbs />
           <main className="flex-1 overflow-auto bg-background">
             {children}
           </main>
+          <AskAIButton />
         </div>
       </div>
     </SidebarProvider>
@@ -689,16 +735,24 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="founderconsole-theme">
-        <TooltipProvider delayDuration={0}>
-          <AppLayout>
-            <Router />
-          </AppLayout>
-          <Toaster />
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary
+      onError={(error) => {
+        // Global error logging - this could send to an error tracking service
+        console.error('App-level Error:', error);
+      }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="dark" storageKey="founderconsole-theme">
+          <TooltipProvider delayDuration={0}>
+            <GlobalLoadingBar />
+            <AppLayout>
+              <Router />
+            </AppLayout>
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

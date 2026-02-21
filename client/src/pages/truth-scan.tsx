@@ -13,6 +13,11 @@ import { BurnBreakdownChart } from '@/components/BurnBreakdownChart';
 import { ScenarioRunwayToggle } from '@/components/ScenarioRunwayToggle';
 import { CashFlowForecast } from '@/components/CashFlowForecast';
 import { HeadcountPanel } from '@/components/HeadcountPanel';
+import { Tier1ScoreCards } from '@/components/TruthScanTier1ScoreCards';
+import { TruthScanBiggestRisks } from '@/components/TruthScanBiggestRisks';
+import { TruthScanTier2KeyMetrics } from '@/components/TruthScanTier2KeyMetrics';
+import { TruthScanTier3AdvancedMetrics } from '@/components/TruthScanTier3AdvancedMetrics';
+import { TruthScanSuggestedActions } from '@/components/TruthScanSuggestedActions';
 import { AlertTriangle, TrendingUp, RefreshCw, Info, HelpCircle, ChevronDown, ChevronUp, Lightbulb, CheckCircle, Pencil, Building2, X, Check, Globe, Loader2, ExternalLink } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -104,9 +109,212 @@ function getMetricValue(metric: any): number | null {
   return null;
 }
 
+interface Risk {
+  id: string;
+  icon: 'critical' | 'warning' | 'metric';
+  title: string;
+  description: string;
+  priority: 1 | 2 | 3;
+}
+
+interface SuggestedAction {
+  id: string;
+  title: string;
+  description: string;
+  metricIssue: string;
+  actionType: 'retention' | 'runway' | 'burn' | 'margin' | 'growth' | 'acquisition';
+  scenarioName?: string;
+  scenarioParams?: Record<string, any>;
+  priority: 'high' | 'medium' | 'low';
+}
+
+function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
+  const risks: Risk[] = [];
+
+  const runwayP50 = getMetricValue(metrics.runway_p50);
+  const burnMultiple = getMetricValue(metrics.burn_multiple);
+  const grossMargin = getMetricValue(metrics.gross_margin);
+  const churnRate = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const runwaySustainable = metrics.runway_sustainable === true;
+
+  // P0: Low runway
+  if (runwayP50 && runwayP50 < 6 && !runwaySustainable) {
+    risks.push({
+      id: 'low-runway',
+      icon: 'critical',
+      title: 'Runway Below 6 Months',
+      description: `Only ${runwayP50.toFixed(1)} months of cash remaining. Immediate fundraising or burn reduction needed.`,
+      priority: 1,
+    });
+  }
+
+  // P0: High burn multiple
+  if (burnMultiple && burnMultiple > 3) {
+    risks.push({
+      id: 'high-burn-multiple',
+      icon: 'critical',
+      title: 'Inefficient Growth Spending',
+      description: `Burn multiple of ${burnMultiple.toFixed(1)}x indicates you're spending $${burnMultiple.toFixed(1)} per $1 of new revenue.`,
+      priority: 1,
+    });
+  }
+
+  // P1: Low gross margin
+  if (grossMargin && grossMargin < 60) {
+    risks.push({
+      id: 'low-margin',
+      icon: 'warning',
+      title: 'Gross Margin Below Target',
+      description: `At ${grossMargin.toFixed(0)}%, below the 70%+ SaaS benchmark. Limits profitability potential.`,
+      priority: 2,
+    });
+  }
+
+  // P1: High churn
+  if (churnRate && churnRate > 0.1) {
+    risks.push({
+      id: 'high-churn',
+      icon: 'warning',
+      title: 'Customer Churn Above Benchmark',
+      description: `Monthly churn of ${(churnRate * 100).toFixed(1)}% is above healthy levels. Focus on retention.`,
+      priority: 2,
+    });
+  }
+
+  // Add critical flags as risks
+  flags
+    .filter((f: any) => f.severity === 'high')
+    .slice(0, 2)
+    .forEach((flag: any, index: number) => {
+      if (risks.length < 3) {
+        risks.push({
+          id: `flag-${index}`,
+          icon: 'critical',
+          title: flag.title,
+          description: flag.description,
+          priority: 1,
+        });
+      }
+    });
+
+  return risks.slice(0, 3);
+}
+
+function generateSuggestedActions(metrics: any, flags: any[]): SuggestedAction[] {
+  const actions: SuggestedAction[] = [];
+
+  const runwayP50 = getMetricValue(metrics.runway_p50);
+  const burnMultiple = getMetricValue(metrics.burn_multiple);
+  const grossMargin = getMetricValue(metrics.gross_margin);
+  const churnRate = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const arr = getMetricValue(metrics.arr);
+  const runwaySustainable = metrics.runway_sustainable === true;
+
+  // P0: Low runway - suggest fundraising scenario
+  if (runwayP50 && runwayP50 < 12 && !runwaySustainable) {
+    actions.push({
+      id: 'action-runway',
+      title: 'Model Fundraising Round',
+      description: `With ${runwayP50.toFixed(1)} months of runway, model different fundraising amounts and scenarios.`,
+      metricIssue: `Runway is ${runwayP50.toFixed(1)} months`,
+      actionType: 'runway',
+      scenarioName: 'fundraising',
+      scenarioParams: {
+        scenarioType: 'fundraising',
+        currentRunway: runwayP50,
+      },
+      priority: 'high',
+    });
+  }
+
+  // High burn multiple - suggest cost optimization
+  if (burnMultiple && burnMultiple > 2.5) {
+    actions.push({
+      id: 'action-burn',
+      title: 'Run Cost Optimization Scenario',
+      description: `Test reducing operating expenses by 10-20% to improve efficiency and extend runway.`,
+      metricIssue: `Burn multiple is ${burnMultiple.toFixed(1)}x (target: <1.5x)`,
+      actionType: 'burn',
+      scenarioName: 'cost-optimization',
+      scenarioParams: {
+        scenarioType: 'cost-reduction',
+        target: 0.85, // 15% reduction
+      },
+      priority: 'high',
+    });
+  }
+
+  // Low gross margin - suggest pricing scenario
+  if (grossMargin && grossMargin < 65) {
+    actions.push({
+      id: 'action-margin',
+      title: 'Test Pricing Optimization',
+      description: `Model impact of 10-15% price increase or cost reduction on gross margin and profitability.`,
+      metricIssue: `Gross margin is ${grossMargin.toFixed(0)}% (target: 70%+)`,
+      actionType: 'margin',
+      scenarioName: 'pricing-optimization',
+      scenarioParams: {
+        scenarioType: 'pricing',
+        priceIncrease: 0.12, // 12% increase
+      },
+      priority: 'high',
+    });
+  }
+
+  // High churn - suggest retention scenario
+  if (churnRate && churnRate > 0.08) {
+    actions.push({
+      id: 'action-churn',
+      title: 'Run Retention Improvement Scenario',
+      description: `Model the impact of reducing churn by 20-30% through better onboarding and customer success.`,
+      metricIssue: `Monthly churn is ${(churnRate * 100).toFixed(1)}% (benchmark: 3-5%)`,
+      actionType: 'retention',
+      scenarioName: 'retention',
+      scenarioParams: {
+        scenarioType: 'retention',
+        churnReduction: 0.25, // 25% reduction
+      },
+      priority: 'high',
+    });
+  }
+
+  // Strong economics - suggest growth investment
+  const ltvCacRatio = getMetricValue(metrics.ltv_cac_ratio);
+  if (ltvCacRatio && ltvCacRatio >= 3) {
+    actions.push({
+      id: 'action-growth',
+      title: 'Model Growth Investment Scenario',
+      description: `Your unit economics support more aggressive growth. Test 25-50% increase in marketing spend.`,
+      metricIssue: `LTV:CAC ratio is ${ltvCacRatio.toFixed(1)}x (strong efficiency)`,
+      actionType: 'growth',
+      scenarioName: 'growth-acceleration',
+      scenarioParams: {
+        scenarioType: 'growth',
+        marketingIncrease: 0.35, // 35% increase
+      },
+      priority: 'medium',
+    });
+  }
+
+  // Sustainable / profitable - no immediate action needed
+  if (runwaySustainable && !actions.some((a) => a.priority === 'high')) {
+    actions.push({
+      id: 'action-strategy',
+      title: 'Model Strategic Scenario',
+      description: `Explore different growth strategies to accelerate expansion while maintaining profitability.`,
+      metricIssue: 'Company is cash-flow positive',
+      actionType: 'growth',
+      scenarioName: 'strategic-choice',
+      priority: 'medium',
+    });
+  }
+
+  return actions.slice(0, 4);
+}
+
 function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
   const recommendations: Recommendation[] = [];
-  
+
   // Extract numeric values (some metrics may be objects with value/benchmark_percentile)
   const runwayP50 = getMetricValue(metrics.runway_p50);
   const burnMultiple = getMetricValue(metrics.burn_multiple);
@@ -203,6 +411,258 @@ function generateRecommendations(metrics: any, flags: any[]): Recommendation[] {
   }
   
   return recommendations.slice(0, 5); // Limit to 5 recommendations
+}
+
+function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string) {
+  const keyMetrics = [
+    {
+      id: 'runway',
+      label: 'Runway (P50)',
+      value: (() => {
+        if (metrics.runway_sustainable) return 'Sustainable';
+        const tsRunway = extractValue(metrics.runway_p50);
+        const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+        return `${runway.toFixed(1)} months`;
+      })(),
+      trend: undefined as any,
+      trendValue: undefined,
+      benchmark: 'Benchmark: 12+ months',
+      status: (() => {
+        if (metrics.runway_sustainable) return 'healthy';
+        const tsRunway = extractValue(metrics.runway_p50);
+        const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+        return runway < 6 ? 'critical' : runway < 12 ? 'warning' : 'healthy';
+      })() as any,
+      source: 'calculated' as any,
+      tooltip: 'Months of cash remaining at current burn rate',
+    },
+    {
+      id: 'burn-rate',
+      label: 'Burn Rate',
+      value: (() => {
+        const burn = extractValue(metrics.net_burn);
+        return burn ? formatCurrency(Math.abs(burn)) : 'N/A';
+      })(),
+      trend: undefined,
+      trendValue: '/month',
+      benchmark: '',
+      status: 'healthy' as any,
+      source: 'calculated' as any,
+      tooltip: 'Monthly cash consumption after revenue',
+    },
+    {
+      id: 'mrr',
+      label: 'Monthly Revenue',
+      value: formatCurrency(metrics.monthly_revenue || metrics.mrr),
+      trend: undefined,
+      trendValue: undefined,
+      benchmark: '',
+      status: 'healthy' as any,
+      source: 'calculated' as any,
+      tooltip: 'Total predictable monthly recurring revenue',
+    },
+    {
+      id: 'gross-margin',
+      label: 'Gross Margin',
+      value: formatPercent(metrics.gross_margin),
+      trend: undefined,
+      trendValue: undefined,
+      benchmark: 'Target: 70%+',
+      status: (() => {
+        const gm = extractValue(metrics.gross_margin);
+        return gm && gm >= 70 ? 'healthy' : gm && gm >= 60 ? 'warning' : 'critical';
+      })() as any,
+      source: 'calculated' as any,
+      tooltip: 'Revenue remaining after cost of goods sold',
+    },
+    {
+      id: 'cac',
+      label: 'Customer Acquisition Cost',
+      value: formatCurrency(metrics.cac),
+      trend: undefined,
+      trendValue: undefined,
+      benchmark: '',
+      status: 'healthy' as any,
+      source: 'calculated' as any,
+      tooltip: 'Average cost to acquire one new customer',
+    },
+    {
+      id: 'ltv-cac',
+      label: 'LTV:CAC Ratio',
+      value: (() => {
+        const ratio = extractValue(metrics.ltv_cac_ratio);
+        return ratio ? `${ratio.toFixed(1)}x` : 'N/A';
+      })(),
+      trend: undefined,
+      trendValue: undefined,
+      benchmark: 'Target: 3x+',
+      status: (() => {
+        const ratio = extractValue(metrics.ltv_cac_ratio);
+        return ratio && ratio >= 3 ? 'healthy' : ratio && ratio >= 2 ? 'warning' : 'critical';
+      })() as any,
+      source: 'calculated' as any,
+      tooltip: 'Ratio of lifetime value to customer acquisition cost',
+    },
+    {
+      id: 'churn',
+      label: 'Churn Rate',
+      value: (() => {
+        const churn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        return churn ? `${(churn * 100).toFixed(1)}%` : 'N/A';
+      })(),
+      trend: undefined,
+      trendValue: '/month',
+      benchmark: 'Target: <5%',
+      status: (() => {
+        const churn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        return churn && churn <= 0.05 ? 'healthy' : churn && churn <= 0.1 ? 'warning' : 'critical';
+      })() as any,
+      source: 'calculated' as any,
+      tooltip: 'Percentage of customers lost per month',
+    },
+    {
+      id: 'nrr',
+      label: 'Net Revenue Retention',
+      value: (() => {
+        const nrr = extractValue(metrics.net_revenue_retention);
+        return nrr ? `${nrr.toFixed(0)}%` : 'N/A';
+      })(),
+      trend: undefined,
+      trendValue: undefined,
+      benchmark: 'Target: 110%+',
+      status: (() => {
+        const nrr = extractValue(metrics.net_revenue_retention);
+        return nrr && nrr >= 110 ? 'healthy' : nrr && nrr >= 100 ? 'warning' : 'critical';
+      })() as any,
+      source: 'calculated' as any,
+      tooltip: 'Growth from existing customer expansion and retention',
+    },
+  ];
+
+  return keyMetrics;
+}
+
+function buildTier3AdvancedMetrics(metrics: any, extractValue: (v: any) => number | null, formatCurrency: (v: any) => string, formatPercent: (v: any) => string) {
+  const advancedMetrics = [
+    // Unit Economics
+    {
+      id: 'ltv',
+      label: 'Lifetime Value',
+      value: formatCurrency(metrics.ltv),
+      category: 'unit_economics' as any,
+      source: 'calculated' as any,
+      tooltip: 'Total revenue expected from a customer over their lifetime',
+    },
+    {
+      id: 'payback',
+      label: 'Payback Period',
+      value: (() => {
+        const pb = extractValue(metrics.payback_months);
+        return pb ? `${pb.toFixed(1)} months` : 'N/A';
+      })(),
+      category: 'unit_economics' as any,
+      source: 'calculated' as any,
+      tooltip: 'Months to recover customer acquisition cost',
+    },
+    {
+      id: 'arpu',
+      label: 'ARPU',
+      value: formatCurrency(metrics.arpu),
+      category: 'unit_economics' as any,
+      source: 'calculated' as any,
+      tooltip: 'Average revenue per user per month',
+    },
+    {
+      id: 'arr',
+      label: 'Annual Recurring Revenue',
+      value: formatCurrency(metrics.arr),
+      category: 'unit_economics' as any,
+      source: 'calculated' as any,
+      tooltip: 'MRR annualized (MRR x 12)',
+    },
+    {
+      id: 'customer-count',
+      label: 'Total Customers',
+      value: extractValue(metrics.customer_count)?.toFixed(0) || 'N/A',
+      category: 'unit_economics' as any,
+      source: 'manual' as any,
+      tooltip: 'Total number of active customers',
+    },
+
+    // Efficiency
+    {
+      id: 'burn-multiple',
+      label: 'Burn Multiple',
+      value: (() => {
+        const bm = extractValue(metrics.burn_multiple);
+        return bm ? `${bm.toFixed(1)}x` : 'N/A';
+      })(),
+      category: 'efficiency' as any,
+      source: 'calculated' as any,
+      tooltip: 'Cash burned per $1 of new ARR (lower is better)',
+    },
+    {
+      id: 'operating-margin',
+      label: 'Operating Margin',
+      value: formatPercent(metrics.operating_margin),
+      category: 'efficiency' as any,
+      source: 'calculated' as any,
+      tooltip: 'Profit after all operating expenses',
+    },
+    {
+      id: 'revenue-per-employee',
+      label: 'Revenue per Employee',
+      value: formatCurrency(metrics.revenue_per_employee),
+      category: 'efficiency' as any,
+      source: 'calculated' as any,
+      tooltip: 'Annual revenue generated per team member',
+    },
+    {
+      id: 'headcount',
+      label: 'Headcount',
+      value: extractValue(metrics.headcount)?.toFixed(0) || 'N/A',
+      category: 'efficiency' as any,
+      source: 'manual' as any,
+      tooltip: 'Current team size',
+    },
+
+    // Growth
+    {
+      id: 'revenue-growth',
+      label: 'Revenue Growth (MoM)',
+      value: (() => {
+        const rg = extractValue(metrics.revenue_growth_mom);
+        return rg !== null ? `${(rg * 100).toFixed(1)}%` : 'N/A';
+      })(),
+      category: 'growth' as any,
+      source: 'calculated' as any,
+      tooltip: 'Month-over-month revenue growth rate',
+    },
+    {
+      id: 'customer-growth',
+      label: 'Customer Growth Rate',
+      value: (() => {
+        const cg = extractValue(metrics.customer_growth_rate);
+        return cg !== null ? `${(cg * 100).toFixed(1)}%` : 'N/A';
+      })(),
+      category: 'growth' as any,
+      source: 'calculated' as any,
+      tooltip: 'Month-over-month new customer acquisition rate',
+    },
+    {
+      id: 'magic-number',
+      label: 'Magic Number',
+      value: (() => {
+        const mn = extractValue(metrics.magic_number);
+        return mn ? `${mn.toFixed(2)}` : 'N/A';
+      })(),
+      category: 'growth' as any,
+      source: 'calculated' as any,
+      tooltip: 'Quarterly revenue growth / sales & marketing spend (>0.75 is excellent)',
+    },
+  ];
+
+  return advancedMetrics;
 }
 
 export default function TruthScanPage() {
@@ -644,6 +1104,30 @@ export default function TruthScanPage() {
         </Collapsible>
       </div>
       
+      {/* Tier 1: Score Cards */}
+      <Tier1ScoreCards
+        dataConfidenceScore={confidence}
+        qualityOfGrowthIndex={qualityOfGrowth}
+        overallRiskLevel={
+          extractValue(metrics.runway_p50) && extractValue(metrics.runway_p50) < 6
+            ? 'critical'
+            : flags.filter((f: any) => f.severity === 'high').length > 0
+              ? 'warning'
+              : 'healthy'
+        }
+        isLoading={isLoading}
+      />
+
+      {/* Biggest Risks Section */}
+      <TruthScanBiggestRisks risks={useMemo(() => generateBiggestRisks(metrics, flags), [metrics, flags])} isLoading={isLoading} />
+
+      {/* Suggested Actions Section */}
+      <TruthScanSuggestedActions
+        actions={useMemo(() => generateSuggestedActions(metrics, flags), [metrics, flags])}
+        companyId={currentCompany?.id}
+        isLoading={runTruthScanMutation.isPending}
+      />
+
       {/* Business Summary Section */}
       <Card className="overflow-visible">
         <CardHeader className="pb-2">
@@ -657,9 +1141,9 @@ export default function TruthScanPage() {
                 <>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => webSearchMutation.mutate()}
                         disabled={webSearchMutation.isPending}
                         data-testid="button-ai-web-search"
@@ -676,9 +1160,9 @@ export default function TruthScanPage() {
                       <p className="text-sm">Search the web for company information using AI</p>
                     </TooltipContent>
                   </Tooltip>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setIsEditingSummary(true)}
                     data-testid="button-edit-summary"
                   >
@@ -693,7 +1177,7 @@ export default function TruthScanPage() {
         <CardContent>
           {isEditingSummary ? (
             <div className="space-y-3">
-              <Textarea 
+              <Textarea
                 value={summaryText}
                 onChange={(e) => setSummaryText(e.target.value)}
                 placeholder="Describe your company, product, market, and key value proposition..."
@@ -708,7 +1192,7 @@ export default function TruthScanPage() {
                   </p>
                   <div className="space-y-1">
                     {webSearchCitations.slice(0, 5).map((url, i) => (
-                      <a 
+                      <a
                         key={i}
                         href={url}
                         target="_blank"
@@ -723,9 +1207,9 @@ export default function TruthScanPage() {
                 </div>
               )}
               <div className="flex gap-2 justify-end">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setSummaryText(currentCompany?.description || '');
                     setWebSearchCitations([]);
@@ -736,8 +1220,8 @@ export default function TruthScanPage() {
                   <X className="h-4 w-4 mr-1" />
                   Cancel
                 </Button>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   onClick={() => {
                     updateDescriptionMutation.mutate(summaryText);
                     setWebSearchCitations([]);
@@ -761,9 +1245,9 @@ export default function TruthScanPage() {
                   <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No business summary yet.</p>
                   <p className="text-xs">Add a description to help contextualize your metrics.</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="mt-3"
                     onClick={() => setIsEditingSummary(true)}
                     data-testid="button-add-summary"
@@ -777,9 +1261,28 @@ export default function TruthScanPage() {
           )}
         </CardContent>
       </Card>
-      
+
+      {/* Tier 2: Key Metrics */}
+      <TruthScanTier2KeyMetrics
+        metrics={useMemo(
+          () => buildTier2KeyMetrics(metrics, sharedMetrics, extractValue, formatCurrency, formatPercent),
+          [metrics, sharedMetrics]
+        )}
+        isLoading={isLoading}
+      />
+
+      {/* Tier 3: Advanced Metrics */}
+      <TruthScanTier3AdvancedMetrics
+        metrics={useMemo(
+          () => buildTier3AdvancedMetrics(metrics, extractValue, formatCurrency, formatPercent),
+          [metrics]
+        )}
+        isLoading={isLoading}
+      />
+
+      {/* Legacy Detailed Metrics - hidden by default but kept for backward compatibility */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Key Metrics</h2>
+        <h2 className="text-xl font-semibold">Legacy Metrics Detail</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {isLoading ? (
             Array(8).fill(0).map((_, i) => (

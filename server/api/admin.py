@@ -7,28 +7,41 @@ from datetime import datetime, timedelta
 import json
 
 from server.core.db import get_db
-from server.core.security import get_current_user
+from server.core.security import get_current_user, is_master_user, log_audit
 from server.core.config import settings
 from server.models import User, UserRole, Company, Subscription, AuditLog, TruthScan, Scenario, LoginHistory, Notification, Invite, LLMAuditLog, EvalRun, TeamMember
 from server.models.financial import FinancialRecord
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-def require_platform_admin(current_user: User = Depends(get_current_user)):
+def require_platform_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Ensures only the platform owner (whose email matches ADMIN_MASTER_EMAIL) 
+    Ensures only the platform owner (whose email matches ADMIN_MASTER_EMAIL or is MasterUser)
     can access admin endpoints. This is NOT a company-level role check.
+    All MasterUser access is logged for audit purposes.
     """
+    # MasterUser has automatic admin access
+    if is_master_user(current_user):
+        # Log MasterUser access to admin endpoints
+        log_audit(
+            db,
+            user_id=current_user.id,
+            action="master_user_admin_access",
+            resource_type="admin_panel",
+            details={"accessed_admin_panel": True}
+        )
+        return current_user
+
     admin_email = settings.ADMIN_MASTER_EMAIL
     if not admin_email:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin access is not configured"
         )
-    
+
     user_email = getattr(current_user, 'email', '').lower().strip()
     admin_email_normalized = admin_email.lower().strip()
-    
+
     if user_email != admin_email_normalized:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -36,9 +49,9 @@ def require_platform_admin(current_user: User = Depends(get_current_user)):
         )
     return current_user
 
-def require_admin(current_user: User = Depends(get_current_user)):
+def require_admin(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Legacy function - redirects to require_platform_admin for security."""
-    return require_platform_admin(current_user)
+    return require_platform_admin(current_user, db)
 
 def log_action(db: Session, user_id, action: str, resource_type: Optional[str] = None, resource_id: Optional[int] = None, details: Optional[dict] = None, ip_address: Optional[str] = None):
     audit_log = AuditLog(
@@ -293,10 +306,22 @@ def get_company_details(
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    
+
+    # Log admin access to company details (especially important for MasterUser)
+    if is_master_user(current_user):
+        log_audit(
+            db,
+            user_id=current_user.id,
+            action="master_user_view_company_details",
+            resource_type="company",
+            resource_id=company_id,
+            company_id=company_id,
+            details={"accessed_by_master": True, "owned_by_user_id": company.user_id}
+        )
+
     truth_scans = db.query(TruthScan).filter(TruthScan.company_id == company_id).count()
     scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).count()
-    
+
     return {
         "id": company.id,
         "name": company.name,

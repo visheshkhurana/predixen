@@ -2,7 +2,7 @@
 API endpoints for metrics management, DSL validation, and computation.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
 from server.models.metric_definition import MetricDefinition
@@ -80,40 +81,66 @@ def _get_metric_or_404(company_id: int, metric_key: str, db: Session) -> MetricD
 @router.get("")
 async def list_metrics(
     company_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
     status: Optional[str] = None,
     tag: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all metric definitions for a company with optional filters."""
+    """
+    List all metric definitions for a company with pagination and optional filters.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+    - **status**: Filter by metric status (optional)
+    - **tag**: Filter by tag (optional)
+    """
     company = db.query(Company).filter(
         Company.id == company_id,
         Company.user_id == current_user.id
     ).first()
     if not company:
-        return []
-    
+        return create_paginated_response(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size
+        )
+
+    # Build query with filters
     query = db.query(MetricDefinition).filter(
         MetricDefinition.company_id == company_id
     )
-    
+
     if status:
         query = query.filter(MetricDefinition.status == status)
-    
-    metrics = query.order_by(MetricDefinition.name).all()
-    
+
+    # Order by name for consistent pagination
+    query = query.order_by(MetricDefinition.name)
+
+    # Get all filtered metrics for tag filtering (if needed)
     if tag:
-        metrics = [m for m in metrics if m.tags and tag in m.tags]
-    
+        # Get all metrics first to filter by tag
+        metrics_all = query.all()
+        metrics_for_page = [m for m in metrics_all if m.tags and tag in m.tags]
+        total = len(metrics_for_page)
+        # Apply manual pagination for tag-filtered results
+        offset = (page - 1) * page_size
+        metrics = metrics_for_page[offset:offset + page_size]
+    else:
+        # Use database pagination for better performance
+        items, total = paginate(query, page=page, page_size=page_size)
+        metrics = items
+
     engine = MetricEngine(db)
-    snapshot_cache = None
-    
+
     result = []
     for m in metrics:
         last_computed = db.query(MetricValue).filter(
             MetricValue.metric_id == m.id
         ).order_by(MetricValue.computed_at.desc()).first()
-        
+
         metric_dict = m.to_dict()
         if last_computed:
             metric_dict["last_computed_at"] = last_computed.computed_at.isoformat()
@@ -123,8 +150,13 @@ async def list_metrics(
             metric_dict["latest_value"] = snapshot_val
             metric_dict["last_computed_at"] = None
         result.append(metric_dict)
-    
-    return result
+
+    return create_paginated_response(
+        items=result,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 @router.post("")

@@ -13,6 +13,7 @@ from .base import (
     BaseAgent, AgentResponse, AgentType,
     CompanyKnowledgeBase, ConfidenceLevel
 )
+from server.copilot.prompt_injection_defense import PromptInjectionDefense
 
 logger = logging.getLogger(__name__)
 
@@ -458,10 +459,15 @@ class CFOAgent(BaseAgent):
         ckb: "CompanyKnowledgeBase",
         context: Dict[str, Any]
     ) -> Optional[str]:
-        """Generate LLM-powered financial insights using GPT-4o."""
+        """
+        Generate LLM-powered financial insights using GPT-4o.
+
+        Security: All user-controlled data (company name, query) is sanitized
+        before inclusion in prompts.
+        """
         if not self.llm_router:
             return None
-        
+
         metrics_summary = []
         if self._is_number(metrics.revenue):
             metrics_summary.append(f"Monthly Revenue: {self.format_currency(metrics.revenue, metrics.currency_base)}")
@@ -475,18 +481,35 @@ class CFOAgent(BaseAgent):
             metrics_summary.append(f"LTV/CAC: {float(metrics.ltv_cac_ratio):.1f}x")
         if self._is_number(metrics.churn_rate):
             metrics_summary.append(f"Monthly Churn: {float(metrics.churn_rate):.1f}%")
-        
+
         if not metrics_summary:
             return None
-        
-        prompt = f"""Based on the following financial metrics for {ckb.company_name} ({ckb.industry or 'startup'}):
+
+        # Sanitize user-controlled data before inclusion in prompt
+        sanitized_company_name = PromptInjectionDefense.sanitize_user_input(
+            ckb.company_name,
+            allow_newlines=False
+        )
+        sanitized_industry = PromptInjectionDefense.sanitize_user_input(
+            ckb.industry or 'startup',
+            allow_newlines=False
+        )
+        sanitized_query = PromptInjectionDefense.sanitize_user_input(
+            query,
+            allow_newlines=True
+        )
+
+        # Build prompt with sanitized data wrapped in XML delimiters
+        prompt = f"""Based on the following financial metrics for <company>{sanitized_company_name}</company> (<industry>{sanitized_industry}</industry>):
 
 {chr(10).join(metrics_summary)}
 
-User question: {query}
+<user_question>
+{sanitized_query}
+</user_question>
 
 Provide a brief, actionable financial insight (2-3 sentences) focused on the most important financial implication. Be specific and data-driven."""
-        
+
         try:
             response = self._call_llm(
                 messages=[{"role": "user", "content": prompt}],

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
 from server.models.dataset import Dataset
@@ -33,9 +34,66 @@ class DatasetResponse(BaseModel):
     file_name: str
     row_count: int
     detected_mapping: Optional[Dict[str, str]] = None
-    
+
     class Config:
         from_attributes = True
+
+
+@router.get("/companies/{company_id}/datasets")
+def list_datasets(
+    company_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
+    dataset_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    List datasets for a company with pagination.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+    - **dataset_type**: Filter by type (financial, transactions, customers) - optional
+    """
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Build query with optional type filter
+    query = db.query(Dataset).filter(Dataset.company_id == company_id)
+
+    if dataset_type and dataset_type in ["financial", "transactions", "customers"]:
+        query = query.filter(Dataset.type == dataset_type)
+
+    # Order by most recently created first
+    query = query.order_by(Dataset.created_at.desc()) if hasattr(Dataset, 'created_at') else query
+
+    # Apply pagination
+    items, total = paginate(query, page=page, page_size=page_size)
+
+    # Convert to response models
+    response_items = [
+        DatasetResponse(
+            id=item.id,
+            type=item.type,
+            file_name=item.file_name,
+            row_count=item.row_count,
+            detected_mapping=getattr(item, 'detected_mapping', None)
+        )
+        for item in items
+    ]
+
+    return create_paginated_response(
+        items=response_items,
+        total=total,
+        page=page,
+        page_size=page_size
+    )
+
 
 @router.post("/companies/{company_id}/datasets/upload", response_model=DatasetResponse)
 async def upload_dataset(

@@ -79,6 +79,12 @@ import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
+import { MetricGridSkeleton, HeroSkeleton, TableSkeleton } from '@/components/ui/skeleton-loaders';
+import { EmptyTable, EmptyChart, EmptyList } from '@/components/ui/empty-states';
+import { SourceBadge } from '@/components/ui/source-badge';
+import { FieldHelp } from '@/components/ui/field-help';
+import { IOLegend } from '@/components/ui/io-legend';
+import { getFieldHelp } from '@/lib/field-help-data';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1419,107 +1425,133 @@ export default function OverviewPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <MetricCard
-          title="MRR"
-          value={formatCurrency(baseData.mrr)}
-          subtitle="Monthly Recurring Revenue"
-          trend="up"
-          trendValue={`+${assumptions.growthRate}%`}
-          metricSource={sharedMetrics.sources['mrr']}
-          lastUpdated={truthScan?.computed_at}
-          testId="metric-mrr"
-          onClick={() => setSelectedDrillDownMetric('mrr')}
-          provenance={{
-            definition: 'Monthly Recurring Revenue from your validated financial data.',
-            source: 'truth_scan',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-        <MetricCard
-          title="ARR"
-          value={formatCurrency(baseData.arr)}
-          subtitle="Annual Recurring Revenue"
-          trend="up"
-          metricSource={sharedMetrics.sources['arr']}
-          lastUpdated={truthScan?.computed_at}
-          testId="metric-arr"
-          onClick={() => setSelectedDrillDownMetric('arr')}
-          provenance={{
-            definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
-            formula: 'MRR × 12',
-            source: 'computed',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-        <MetricCard
-          title="Cash on Hand"
-          value={formatCurrency(baseData.cash)}
-          subtitle={`Runway: ${formatRunway(baseData.runway)}`}
-          variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
-          metricSource={sharedMetrics.sources['cashOnHand']}
-          lastUpdated={truthScan?.computed_at}
-          testId="metric-cash"
-          onClick={() => setSelectedDrillDownMetric('cash')}
-          provenance={{
-            definition: 'Current available cash on hand from your validated financial data.',
-            source: 'truth_scan',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-        <MetricCard
-          title="Burn Rate"
-          value={formatCurrency(baseData.burnRate)}
-          subtitle="/month"
-          metricSource={sharedMetrics.sources['netBurn']}
-          lastUpdated={truthScan?.computed_at}
-          onClick={() => setSelectedDrillDownMetric('burnRate')}
-          testId="metric-burn-rate"
-          provenance={{
-            definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
-            formula: 'Revenue - Total Expenses',
-            source: 'truth_scan',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-        <MetricCard
-          title="CAC"
-          value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
-          subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
-          metricSource={sharedMetrics.sources['cac']}
-          lastUpdated={truthScan?.computed_at}
-          testId="metric-cac"
-          onClick={() => setSelectedDrillDownMetric('cac')}
-          provenance={{
-            definition: 'Customer Acquisition Cost - total cost to acquire a new customer.',
-            formula: 'Sales & Marketing Spend / New Customers',
-            source: 'truth_scan',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-        <MetricCard
-          title="LTV"
-          value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
-          subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
-          variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
-          metricSource={sharedMetrics.sources['ltv']}
-          lastUpdated={truthScan?.computed_at}
-          testId="metric-ltv"
-          onClick={() => setSelectedDrillDownMetric('ltv')}
-          provenance={{
-            definition: 'Customer Lifetime Value - expected revenue from a customer over their lifetime.',
-            formula: 'ARPU / Monthly Churn Rate',
-            source: 'computed',
-            timestamp: truthScan?.computed_at,
-            confidence: truthScan?.data_confidence_score,
-          }}
-        />
-      </div>
+      {/* Loading state for metrics */}
+      {(metricsLoading || truthLoading) && (
+        <MetricGridSkeleton count={6} />
+      )}
+
+      {/* Metrics grid - only show when not loading */}
+      {!metricsLoading && !truthLoading && (
+        <>
+          {isEmptyState ? (
+            <EmptyTable
+              title="No Financial Data Yet"
+              description="Start by uploading your financial data or connecting an integration to see your metrics appear here."
+              action={{
+                label: "Upload Data",
+                onClick: () => setLocation('/data'),
+                icon: Upload,
+              }}
+              secondaryAction={{
+                label: "Connect Integration",
+                onClick: () => setLocation('/integrations'),
+              }}
+            />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              <MetricCard
+                title="MRR"
+                value={formatCurrency(baseData.mrr)}
+                subtitle="Monthly Recurring Revenue"
+                trend="up"
+                trendValue={`+${assumptions.growthRate}%`}
+                metricSource={sharedMetrics.sources['mrr']}
+                lastUpdated={truthScan?.computed_at}
+                testId="metric-mrr"
+                onClick={() => setSelectedDrillDownMetric('mrr')}
+                provenance={{
+                  definition: 'Monthly Recurring Revenue from your validated financial data.',
+                  source: 'truth_scan',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+              <MetricCard
+                title="ARR"
+                value={formatCurrency(baseData.arr)}
+                subtitle="Annual Recurring Revenue"
+                trend="up"
+                metricSource={sharedMetrics.sources['arr']}
+                lastUpdated={truthScan?.computed_at}
+                testId="metric-arr"
+                onClick={() => setSelectedDrillDownMetric('arr')}
+                provenance={{
+                  definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
+                  formula: 'MRR × 12',
+                  source: 'computed',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+              <MetricCard
+                title="Cash on Hand"
+                value={formatCurrency(baseData.cash)}
+                subtitle={`Runway: ${formatRunway(baseData.runway)}`}
+                variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
+                metricSource={sharedMetrics.sources['cashOnHand']}
+                lastUpdated={truthScan?.computed_at}
+                testId="metric-cash"
+                onClick={() => setSelectedDrillDownMetric('cash')}
+                provenance={{
+                  definition: 'Current available cash on hand from your validated financial data.',
+                  source: 'truth_scan',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+              <MetricCard
+                title="Burn Rate"
+                value={formatCurrency(baseData.burnRate)}
+                subtitle="/month"
+                metricSource={sharedMetrics.sources['netBurn']}
+                lastUpdated={truthScan?.computed_at}
+                onClick={() => setSelectedDrillDownMetric('burnRate')}
+                testId="metric-burn-rate"
+                provenance={{
+                  definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
+                  formula: 'Revenue - Total Expenses',
+                  source: 'truth_scan',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+              <MetricCard
+                title="CAC"
+                value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
+                subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
+                metricSource={sharedMetrics.sources['cac']}
+                lastUpdated={truthScan?.computed_at}
+                testId="metric-cac"
+                onClick={() => setSelectedDrillDownMetric('cac')}
+                provenance={{
+                  definition: 'Customer Acquisition Cost - total cost to acquire a new customer.',
+                  formula: 'Sales & Marketing Spend / New Customers',
+                  source: 'truth_scan',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+              <MetricCard
+                title="LTV"
+                value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
+                subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
+                variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
+                metricSource={sharedMetrics.sources['ltv']}
+                lastUpdated={truthScan?.computed_at}
+                testId="metric-ltv"
+                onClick={() => setSelectedDrillDownMetric('ltv')}
+                provenance={{
+                  definition: 'Customer Lifetime Value - expected revenue from a customer over their lifetime.',
+                  formula: 'ARPU / Monthly Churn Rate',
+                  source: 'computed',
+                  timestamp: truthScan?.computed_at,
+                  confidence: truthScan?.data_confidence_score,
+                }}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       {riskAlerts.length > 0 && (
         <Card className="overflow-visible" data-testid="risk-alerts-section">
@@ -2405,6 +2437,8 @@ export default function OverviewPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <IOLegend position="bottom" defaultOpen={false} />
     </div>
   );
 }

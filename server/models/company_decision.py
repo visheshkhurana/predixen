@@ -8,9 +8,9 @@ from server.core.db import Base
 
 class CompanyDecision(Base):
     __tablename__ = "company_decisions"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     context = Column(Text, nullable=True)
     options_json = Column(JSONB, nullable=True, default=list)
@@ -47,11 +47,11 @@ class CompanyDecision(Base):
 
 class CompanyScenario(Base):
     __tablename__ = "company_scenarios"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
-    base_scenario_id = Column(UUID(as_uuid=True), ForeignKey("company_scenarios.id"), nullable=True)
+    base_scenario_id = Column(UUID(as_uuid=True), ForeignKey("company_scenarios.id"), nullable=True, index=True)
     assumptions_json = Column(JSONB, nullable=True, default=dict)
     outputs_json = Column(JSONB, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
@@ -18,6 +18,7 @@ def _fmt_currency(val):
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
 from server.models.simulation_run import SimulationRun
@@ -714,23 +715,38 @@ def get_latest_decisions(
 @router.get("/companies/{company_id}/decisions")
 def list_company_decisions(
     company_id: int,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page (max 200)"),
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    List company decisions with pagination.
+
+    - **page**: Page number (1-indexed, default=1)
+    - **page_size**: Items per page (default=50, max=200)
+    - **status**: Filter by status (optional)
+    """
     company = get_user_company(db, company_id, current_user)
-    
+
     query = db.query(CompanyDecision).filter(CompanyDecision.company_id == company_id)
-    
+
     if status:
         query = query.filter(CompanyDecision.status == status)
-    
-    decisions = query.order_by(CompanyDecision.created_at.desc()).all()
-    
-    return {
-        "decisions": [d.to_dict() for d in decisions],
-        "total": len(decisions)
-    }
+
+    # Order by most recent first
+    query = query.order_by(CompanyDecision.created_at.desc())
+
+    # Apply pagination
+    items, total = paginate(query, page=page, page_size=page_size)
+
+    return create_paginated_response(
+        items=[d.to_dict() for d in items],
+        total=total,
+        page=page,
+        page_size=page_size
+    )
 
 
 @router.get("/companies/{company_id}/decisions/{decision_id}")

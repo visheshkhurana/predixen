@@ -12,6 +12,7 @@ from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.copilot.context_pack import build_context_pack
 from server.copilot.trust import fetchVerifiedRunResult, GroundingStatus
+from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 from server.lib.privacy.pii_redactor import redact_text, detect_pii
 from server.api.simulations import extract_metric_value
@@ -511,6 +512,18 @@ async def copilot_quick_chat(
         from server.copilot.context_pack import build_context_pack
         from server.copilot.business_context import build_business_context, format_context_for_prompt
         from server.copilot.web_search import search_for_copilot, format_web_research_for_prompt
+
+        # Security: Sanitize and validate user input before processing
+        is_valid, error_msg = PromptInjectionDefense.validate_user_query(request.message)
+        if not is_valid:
+            return QuickChatResponse(
+                response=f"Your message could not be processed: {error_msg}",
+                sources_used=[],
+                suggested_followups=["What are my key metrics?", "Show me my runway"]
+            )
+
+        sanitized_message = PromptInjectionDefense.sanitize_user_input(request.message)
+
         context = build_context_pack(company, db)
         data_summary = _build_data_summary(context)
 
@@ -521,7 +534,7 @@ async def copilot_quick_chat(
         today_str = dt.utcnow().strftime("%B %d, %Y")
 
         web_research = await search_for_copilot(
-            message=request.message,
+            message=sanitized_message,
             company_industry=company.industry or "",
             company_stage=company.stage or "",
             company_name=company.name or "",
@@ -540,8 +553,10 @@ async def copilot_quick_chat(
         messages = []
         if request.conversation_history:
             for msg in request.conversation_history[-10:]:
-                messages.append({"role": msg.role, "content": msg.content})
-        messages.append({"role": "user", "content": request.message})
+                # Also sanitize conversation history
+                sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
+                messages.append({"role": msg.role, "content": sanitized_content})
+        messages.append({"role": "user", "content": PromptInjectionDefense.wrap_user_message(sanitized_message)})
 
         system_prompt = QUICK_CHAT_SYSTEM_PROMPT + f"\n\nToday's date: {today_str}\n\n--- COMPANY DATA ---\n{data_summary}\n--- END DATA ---"
 
@@ -771,20 +786,35 @@ async def _copilot_chat_inner(
     from server.copilot.business_context import build_business_context, format_context_for_prompt
     from server.copilot.web_search import search_for_copilot, format_web_research_for_prompt
     import uuid as uuid_lib
-    
+
+    # Security: Sanitize and validate user input to prevent prompt injection
+    is_valid, error_msg = PromptInjectionDefense.validate_user_query(request.message)
+    if not is_valid:
+        return CopilotChatResponse(
+            executive_summary=[f"Your message could not be processed: {error_msg}"],
+            company_snapshot=[],
+            assumptions=[],
+            risks=[],
+            next_questions=["What are my key financial metrics?"],
+            confidence="Low",
+            intent_detected="invalid_input"
+        )
+
+    sanitized_message = PromptInjectionDefense.sanitize_user_input(request.message)
+
     conv_state = conversation_store.get(company_id, current_user.id)
     session_context = conv_state.get_session_context()
-    
-    response_mode = request.response_mode or detect_response_mode(request.message)
+
+    response_mode = request.response_mode or detect_response_mode(sanitized_message)
     if request.response_mode:
         conv_state.set_response_mode(request.response_mode)
-    
+
     if request.run_id:
         conv_state.set_active_context(run_id=request.run_id)
-    
+
     ckb_storage = CKBStorage(db)
     ckb = ckb_storage.get_ckb(company_id)
-    
+
     if not ckb:
         ckb = CompanyKnowledgeBase(
             company_id=company.id,
@@ -793,12 +823,12 @@ async def _copilot_chat_inner(
             stage=company.stage or "",
             currency=company.currency or "USD"
         )
-    
+
     business_ctx = build_business_context(company, db)
     business_context_text = format_context_for_prompt(business_ctx)
-    
+
     web_research = await search_for_copilot(
-        message=request.message,
+        message=sanitized_message,
         company_industry=company.industry or "",
         company_stage=company.stage or "",
         company_name=company.name or "",
@@ -838,7 +868,7 @@ async def _copilot_chat_inner(
         except ValueError:
             pass
     
-    clarification_needed = detect_clarification_needed(request.message, session_context)
+    clarification_needed = detect_clarification_needed(sanitized_message, session_context)
     if clarification_needed and not session_context.get("hasPendingClarification"):
         conv_state.set_pending_clarification(clarification_needed)
         return CopilotChatResponse(
@@ -852,12 +882,12 @@ async def _copilot_chat_inner(
             response_mode=response_mode if isinstance(response_mode, str) else response_mode.value,
             session_context=session_context
         )
-    
+
     pii_mode = "standard"
     if request.privacy and request.privacy.pii_mode:
         pii_mode = request.privacy.pii_mode
-    
-    redaction_result = redact_text(request.message, mode=pii_mode)
+
+    redaction_result = redact_text(sanitized_message, mode=pii_mode)
     redacted_message = redaction_result.redacted_text
     pii_findings = redaction_result.findings
     
@@ -941,11 +971,13 @@ async def _copilot_chat_inner(
     
     response_mode_str = response_mode if isinstance(response_mode, str) else response_mode.value
     mode_instructions = get_mode_instructions(response_mode) if hasattr(response_mode, 'value') else ""
-    
+
+    # Security: Sanitize conversation history to prevent prompt injection via conversation
     conversation_context = []
     if request.conversation_history:
         for msg in request.conversation_history[-10:]:
-            conversation_context.append({"role": msg.role, "content": msg.content})
+            sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
+            conversation_context.append({"role": msg.role, "content": sanitized_content})
     
     context = {
         "has_document": False,
