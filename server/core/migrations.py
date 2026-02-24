@@ -921,8 +921,8 @@ def run_migrations(engine: Engine) -> None:
 
 def ensure_currency_tables(engine: Engine) -> None:
     """Create exchange_rates table and add currency columns to financial_records."""
-    with engine.connect() as conn:
-        conn.execute(text("""
+    is_sqlite = engine.dialect.name == "sqlite"
+    create_exchange_rates_sql = """
             CREATE TABLE IF NOT EXISTS exchange_rates (
                 id SERIAL PRIMARY KEY,
                 base_currency VARCHAR(3) NOT NULL,
@@ -933,23 +933,42 @@ def ensure_currency_tables(engine: Engine) -> None:
                 fetched_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(base_currency, quote_currency, rate_date)
             )
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_exchange_rates_base ON exchange_rates(base_currency)
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_exchange_rates_date ON exchange_rates(rate_date)
-        """))
-        for col_name, col_type, default in [
-            ('original_currency', "VARCHAR(3)", "'USD'"),
-            ('fx_rate_to_base', 'FLOAT', '1.0'),
-            ('base_currency', "VARCHAR(3)", "'USD'"),
-        ]:
-            try:
-                conn.execute(text(
-                    f"ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS {col_name} {col_type} DEFAULT {default}"
-                ))
-            except Exception as e:
-                logger.debug(f"Column {col_name} may already exist: {e}")
-        conn.commit()
+        """
+    if is_sqlite:
+        create_exchange_rates_sql = """
+            CREATE TABLE IF NOT EXISTS exchange_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                base_currency VARCHAR(3) NOT NULL,
+                quote_currency VARCHAR(3) NOT NULL,
+                rate FLOAT NOT NULL,
+                rate_date DATE NOT NULL,
+                source VARCHAR(50) DEFAULT 'ecb',
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(base_currency, quote_currency, rate_date)
+            )
+        """
+
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(create_exchange_rates_sql))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_exchange_rates_base ON exchange_rates(base_currency)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_exchange_rates_date ON exchange_rates(rate_date)
+            """))
+            for col_name, col_type, default in [
+                ('original_currency', "VARCHAR(3)", "'USD'"),
+                ('fx_rate_to_base', 'FLOAT', '1.0'),
+                ('base_currency', "VARCHAR(3)", "'USD'"),
+            ]:
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS {col_name} {col_type} DEFAULT {default}"
+                    ))
+                except Exception as e:
+                    logger.debug(f"Column {col_name} may already exist: {e}")
+            conn.commit()
+        except Exception as e:
+            logger.debug(f"Currency tables migration may already exist: {e}")
     logger.info("Currency tables migration complete")

@@ -57,6 +57,15 @@ def _get_stage_sample_financials(stage: str = None) -> dict:
 
 router = APIRouter(prefix="/companies", tags=["companies"])
 
+async def require_company_access_by_path(
+    company_id: int,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Resolve company access using the path `company_id` at request time."""
+    dependency = require_company_access(company_id)
+    return await dependency(current_user=current_user, db=db)
+
 class CompanyCreate(BaseModel):
     name: str
     website: Optional[str] = None
@@ -194,7 +203,7 @@ class CompanyUpdate(BaseModel):
 def get_company(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_company_access(company_id))
+    current_user = Depends(require_company_access_by_path)
 ):
     # Authorization check already performed by require_company_access dependency
     # This includes audit logging for MasterUser access
@@ -214,7 +223,7 @@ def update_company(
     company_id: int,
     request: CompanyUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(require_company_access(company_id))
+    current_user = Depends(require_company_access_by_path)
 ):
     # Authorization check already performed by require_company_access dependency
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -249,7 +258,7 @@ def update_company(
 def delete_company(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_company_access(company_id))
+    current_user = Depends(require_company_access_by_path)
 ):
     # Authorization check already performed by require_company_access dependency
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -319,7 +328,7 @@ def delete_company(
 def seed_sample(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_company_access(company_id))
+    current_user = Depends(require_company_access_by_path)
 ):
     # Authorization check already performed by require_company_access dependency
     company = db.query(Company).filter(Company.id == company_id).first()
@@ -339,7 +348,7 @@ def seed_sample(
 async def search_company_web_info(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_company_access(company_id))
+    current_user = Depends(require_company_access_by_path)
 ):
     """Search the web for company information using AI."""
     # Authorization check already performed by require_company_access dependency

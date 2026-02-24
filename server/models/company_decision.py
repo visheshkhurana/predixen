@@ -1,9 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 from server.core.db import Base
+
+JSONType = JSON().with_variant(JSONB, "postgresql")
 
 
 class CompanyDecision(Base):
@@ -13,13 +15,13 @@ class CompanyDecision(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     context = Column(Text, nullable=True)
-    options_json = Column(JSONB, nullable=True, default=list)
-    recommendation_json = Column(JSONB, nullable=True, default=dict)
+    options_json = Column(JSONType, nullable=True, default=list)
+    recommendation_json = Column(JSONType, nullable=True, default=dict)
     status = Column(String, default="proposed")
     owner = Column(String, nullable=True)
-    tags = Column(JSONB, nullable=True, default=list)
+    tags = Column(JSONType, nullable=True, default=list)
     confidence = Column(String, default="medium")
-    sources_json = Column(JSONB, nullable=True, default=list)
+    sources_json = Column(JSONType, nullable=True, default=list)
     created_from_message_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -52,8 +54,8 @@ class CompanyScenario(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     base_scenario_id = Column(UUID(as_uuid=True), ForeignKey("company_scenarios.id"), nullable=True, index=True)
-    assumptions_json = Column(JSONB, nullable=True, default=dict)
-    outputs_json = Column(JSONB, nullable=True, default=dict)
+    assumptions_json = Column(JSONType, nullable=True, default=dict)
+    outputs_json = Column(JSONType, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

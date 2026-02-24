@@ -2,17 +2,23 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { spawn, execSync, ChildProcess } from "child_process";
+import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
+import { existsSync } from "fs";
+import path from "path";
 
 const app = express();
 const httpServer = createServer(app);
 
 // Open port 5000 IMMEDIATELY so deployment health checks pass
 const port = parseInt(process.env.PORT || "5000", 10);
-httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+const listenOptions: Record<string, string | number | boolean> = { port, host: "0.0.0.0" };
+if (process.platform === "linux") {
+  listenOptions.reusePort = true;
+}
+httpServer.listen(listenOptions, () => {
   console.log(`[startup] Port ${port} open and accepting connections`);
 });
 
@@ -31,7 +37,6 @@ function killProcessOnPort(port: string): void {
   const commands = [
     `fuser -k ${port}/tcp 2>/dev/null || true`,
     `lsof -ti:${port} 2>/dev/null | xargs -r kill -9 2>/dev/null || true`,
-    `ss -tlnp 'sport = :${port}' 2>/dev/null | grep -oP 'pid=\\K[0-9]+' | xargs -r kill -9 2>/dev/null || true`,
   ];
   for (const cmd of commands) {
     try {
@@ -51,19 +56,48 @@ function getFastAPIPort(): string {
   return "8001";
 }
 
+function resolvePythonCommand(): string {
+  const candidates = [
+    process.env.PYTHON_BIN,
+    path.join(process.cwd(), ".venv313", "bin", "python"),
+    path.join(process.cwd(), ".venv", "bin", "python"),
+    "python3",
+    "python",
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    if (candidate.includes("/")) {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+      continue;
+    }
+
+    const probe = spawnSync(candidate, ["--version"], { stdio: "ignore" });
+    if (probe.status === 0) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    "No Python runtime found. Set PYTHON_BIN or install python3/virtualenv dependencies."
+  );
+}
+
 function startFastAPIServer(): ChildProcess {
   const port = getFastAPIPort();
+  const pythonCommand = resolvePythonCommand();
   
   killProcessOnPort(port);
   
-  const cmd = ["python", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
+  const cmd = [pythonCommand, "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
   const nodeEnv = process.env.NODE_ENV || "development";
-  const child = spawn("python", ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
+  const child = spawn(pythonCommand, ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
     stdio: "inherit",
-    shell: true,
+    shell: false,
     detached: process.platform !== "win32",
     env: { ...process.env, NODE_ENV: nodeEnv, ENVIRONMENT: nodeEnv },
   });
@@ -405,27 +439,32 @@ app.get("/api/notion/databases", async (req, res) => {
   }
 });
 
-app.use(
-  "/api",
-  createProxyMiddleware({
-    target: FASTAPI_URL,
-    changeOrigin: true,
-    timeout: 120000,
-    proxyTimeout: 120000,
-    pathRewrite: {
-      "^/api": "",
+const apiProxy = createProxyMiddleware({
+  target: FASTAPI_URL,
+  changeOrigin: true,
+  timeout: 120000,
+  proxyTimeout: 120000,
+  pathRewrite: {
+    "^/api": "",
+  },
+  on: {
+    error: (err: Error, req, res) => {
+      console.error("Proxy error:", err.message);
+      if ('writeHead' in res && typeof res.writeHead === 'function') {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Backend service unavailable" }));
+      }
     },
-    on: {
-      error: (err: Error, req, res) => {
-        console.error("Proxy error:", err.message);
-        if ('writeHead' in res && typeof res.writeHead === 'function') {
-          res.writeHead(502, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Backend service unavailable" }));
-        }
-      },
-    },
-  })
-);
+  },
+});
+
+const LOCAL_API_PREFIXES = ["/ai/", "/notion/", "/messaging/"];
+app.use("/api", (req, res, next) => {
+  if (LOCAL_API_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
+    return next();
+  }
+  return apiProxy(req, res, next);
+});
 
 app.use(
   "/notifications",

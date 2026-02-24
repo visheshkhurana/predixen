@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Date, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Date, Index, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 import enum
 from server.core.db import Base
+
+JSONType = JSON().with_variant(JSONB, "postgresql")
 
 
 class InstrumentType(str, enum.Enum):
@@ -45,7 +47,7 @@ class CompanyCapTable(Base):
     name = Column(String, nullable=False, default="Current Cap Table")
     as_of_date = Column(Date, nullable=True)
     currency = Column(String, default="USD")
-    cap_table_json = Column(JSONB, nullable=True, default=dict)
+    cap_table_json = Column(JSONType, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -81,7 +83,7 @@ class FundraisingRound(Base):
     post_money = Column(Float, nullable=True)
     instrument = Column(String, default=InstrumentType.EQUITY.value)
     option_pool_refresh_percent = Column(Float, nullable=True)
-    use_of_funds_json = Column(JSONB, nullable=True, default=dict)
+    use_of_funds_json = Column(JSONType, nullable=True, default=dict)
     status = Column(String, default=RoundStatus.PLANNED.value)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -112,7 +114,7 @@ class RoundTerms(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     round_id = Column(UUID(as_uuid=True), ForeignKey("fundraising_rounds.id"), nullable=False, index=True)
-    terms_json = Column(JSONB, nullable=True, default=dict)
+    terms_json = Column(JSONType, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -151,8 +153,8 @@ class Investor(Base):
     type = Column(String, default=InvestorType.VC.value)
     geography = Column(String, nullable=True)
     stage_focus = Column(String, nullable=True)
-    thesis_tags = Column(JSONB, nullable=True, default=list)
-    contact_json = Column(JSONB, nullable=True, default=dict)
+    thesis_tags = Column(JSONType, nullable=True, default=list)
+    contact_json = Column(JSONType, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     company = relationship("Company", back_populates="investors")

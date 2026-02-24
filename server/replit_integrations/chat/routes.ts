@@ -1,10 +1,26 @@
 import type { Express, Request, Response } from "express";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+const configuredOpenAIKey =
+  process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+let cachedOpenAIClient: OpenAI | null | undefined;
+
+function getOpenAIClient(): OpenAI | null {
+  if (cachedOpenAIClient !== undefined) {
+    return cachedOpenAIClient;
+  }
+
+  if (!configuredOpenAIKey) {
+    cachedOpenAIClient = null;
+    return cachedOpenAIClient;
+  }
+
+  cachedOpenAIClient = new OpenAI({
+    apiKey: configuredOpenAIKey,
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  });
+  return cachedOpenAIClient;
+}
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -31,6 +47,14 @@ export function registerChatRoutes(app: Express): void {
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ error: "Messages array is required" });
+      }
+
+      const openai = getOpenAIClient();
+      if (!openai) {
+        return res.status(503).json({
+          error:
+            "AI chat is not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY.",
+        });
       }
 
       const systemPrompt = `You are a helpful financial advisor AI assistant for startups. You help founders understand their financial metrics, runway, and make data-driven decisions.
@@ -99,6 +123,14 @@ Be concise but insightful. Use specific numbers from the context when answering 
 
       if (!question) {
         return res.status(400).json({ error: "Question is required" });
+      }
+
+      const openai = getOpenAIClient();
+      if (!openai) {
+        return res.status(503).json({
+          error:
+            "AI quick answers are not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY.",
+        });
       }
 
       const systemPrompt = `You are a concise financial advisor. Answer in 2-3 sentences max.

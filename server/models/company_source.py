@@ -1,9 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 from server.core.db import Base
+
+JSONType = JSON().with_variant(JSONB, "postgresql")
 
 
 class CompanySource(Base):
@@ -65,7 +67,7 @@ class CompanyWorkstream(Base):
     name = Column(String, nullable=False)
     cadence = Column(String, nullable=False)
     enabled = Column(Boolean, default=True)
-    config_json = Column(JSONB, nullable=True, default=dict)
+    config_json = Column(JSONType, nullable=True, default=dict)
     last_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -95,7 +97,7 @@ class CompanyAlert(Base):
     type = Column(String, nullable=False)
     severity = Column(String, default="medium")
     message = Column(Text, nullable=True)
-    rule_json = Column(JSONB, nullable=True, default=dict)
+    rule_json = Column(JSONType, nullable=True, default=dict)
     triggered_at = Column(DateTime, default=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
     status = Column(String, default="open")
@@ -124,9 +126,9 @@ class CompanyDriverModel(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     model_name = Column(String, nullable=False)
     template = Column(String, nullable=False)
-    drivers_json = Column(JSONB, nullable=True, default=dict)
-    assumptions_json = Column(JSONB, nullable=True, default=dict)
-    outputs_json = Column(JSONB, nullable=True, default=dict)
+    drivers_json = Column(JSONType, nullable=True, default=dict)
+    assumptions_json = Column(JSONType, nullable=True, default=dict)
+    outputs_json = Column(JSONType, nullable=True, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

@@ -2,7 +2,6 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
-import { registerAiGovernanceRoutes } from "./ai-governance/routes";
 
 function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
   const secret = process.env.INTERNAL_API_SECRET;
@@ -22,7 +21,12 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   registerChatRoutes(app);
-  registerAiGovernanceRoutes(app);
+  if (process.env.DATABASE_URL) {
+    const { registerAiGovernanceRoutes } = await import("./ai-governance/routes");
+    registerAiGovernanceRoutes(app);
+  } else {
+    console.warn("[startup] DATABASE_URL is not configured. AI governance routes are disabled.");
+  }
 
   app.post("/internal/broadcast/metrics", requireInternalAuth, (req: Request, res: Response) => {
     const { companyId, metrics, source } = req.body;

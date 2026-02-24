@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from server.core.db import Base
