@@ -834,7 +834,12 @@ export default function IntegrationsPage() {
     );
   };
 
-  const recommendedProviders = Object.entries({ ...allAccountingProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}), ...payrollProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}), ...paymentsProviders.reduce((acc, p) => ({ ...acc, [p.id]: p }), {}) })
+  const providerMap: Record<string, IntegrationProvider> = {};
+  [...allAccountingProviders, ...payrollProviders, ...paymentsProviders].forEach((provider) => {
+    providerMap[provider.id] = provider;
+  });
+
+  const recommendedProviders: IntegrationProvider[] = Object.entries(providerMap)
     .filter(([id]) => connectorMetadata[id]?.isRecommended)
     .slice(0, 3)
     .map(([, provider]) => provider);

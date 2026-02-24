@@ -15,6 +15,7 @@ import {
   ChartSkeleton,
   MetricGridSkeleton,
   ListSkeleton,
+  FormSkeleton,
 } from '@/components/ui/skeleton-loaders';
 
 // Empty States
@@ -192,12 +193,12 @@ export function ExamplePattern4_MultipleSections() {
     queryFn: async () => null,
   });
 
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics = [], isLoading: metricsLoading } = useQuery({
     queryKey: ['metrics'],
     queryFn: async () => [],
   });
 
-  const { data: recentActivity, isLoading: activityLoading } = useQuery({
+  const { data: recentActivity = [], isLoading: activityLoading } = useQuery({
     queryKey: ['activity'],
     queryFn: async () => [],
   });

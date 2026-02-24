@@ -535,27 +535,6 @@ def suspend_user(
     
     return {"message": f"User {user.email} suspended", "user_id": user_id}
 
-@router.post("/users/{user_id}/activate")
-def activate_user(
-    user_id: int,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
-):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user.is_active = True
-    db.commit()
-    
-    log_action(
-        db, current_user.id, "user_activated", "user", user_id,
-        {"email": user.email}, request.client.host if request.client else None
-    )
-    
-    return {"message": f"User {user.email} activated", "user_id": user_id}
-
 @router.get("/notifications")
 def get_notifications(
     limit: int = 50,

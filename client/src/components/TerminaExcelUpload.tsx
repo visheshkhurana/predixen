@@ -225,6 +225,8 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
           payroll: editableMetrics.payroll || 0,
           marketing: 0,
           operating: editableMetrics.opex || 0,
+          cogs: editableMetrics.cogs || 0,
+          otherOpex: 0,
         },
         currency: 'USD',
         asOfDate: null,

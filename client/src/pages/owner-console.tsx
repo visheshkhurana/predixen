@@ -35,51 +35,61 @@ export default function OwnerConsole() {
 
   const { data: meData, isLoading: meLoading } = useQuery({
     queryKey: ["/api/admin/me"],
+    queryFn: () => api.admin.me(),
     enabled: !!token,
   });
 
   const { data: dashboard, isLoading: dashLoading, refetch: refetchDashboard } = useQuery({
     queryKey: ["/api/admin/dashboard"],
+    queryFn: () => api.admin.dashboard(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: metrics, refetch: refetchMetrics } = useQuery({
     queryKey: ["/api/admin/metrics/aggregate"],
+    queryFn: () => api.admin.metrics(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: users, refetch: refetchUsers } = useQuery({
     queryKey: ["/api/admin/users"],
+    queryFn: () => api.admin.users.list(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: companies, refetch: refetchCompanies } = useQuery({
     queryKey: ["/api/admin/companies"],
+    queryFn: () => api.admin.companies.list(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: subscriptions, refetch: refetchSubscriptions } = useQuery({
     queryKey: ["/api/admin/subscriptions"],
+    queryFn: () => api.admin.subscriptions.list(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: activityStats, refetch: refetchActivity } = useQuery({
     queryKey: ["/api/admin/stats/activity"],
+    queryFn: () => api.admin.activityStats(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: loginHistory, refetch: refetchLogins } = useQuery({
     queryKey: ["/api/admin/login-history"],
+    queryFn: () => api.admin.loginHistory(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: auditLogs, refetch: refetchAudit } = useQuery({
     queryKey: ["/api/admin/audit-logs"],
+    queryFn: () => api.admin.auditLogs(),
     enabled: !!token && meData?.is_admin,
   });
 
   const { data: notifications, refetch: refetchNotifications } = useQuery({
     queryKey: ["/api/admin/notifications"],
+    queryFn: () => api.admin.notifications(),
     enabled: !!token && meData?.is_admin,
   });
 
@@ -246,6 +256,7 @@ export default function OwnerConsole() {
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.user_email.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
+  const auditLogItems = auditLogs || [];
 
   const loginRate = dashboard ? Math.round((dashboard.active_users / dashboard.total_users) * 100) || 0 : 0;
 
@@ -564,7 +575,7 @@ export default function OwnerConsole() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[200px]">
-                    {auditLogs?.length > 0 ? auditLogs.slice(0, 10).map((log: any) => (
+                    {auditLogItems.length > 0 ? auditLogItems.slice(0, 10).map((log: any) => (
                       <div key={log.id} className="flex items-center gap-3 py-2 border-b last:border-0">
                         <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
                           <Activity className="h-4 w-4 text-muted-foreground" />
@@ -739,7 +750,7 @@ export default function OwnerConsole() {
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-[400px]">
-                    {auditLogs?.length > 0 ? auditLogs.map((log: any) => (
+                    {auditLogItems.length > 0 ? auditLogItems.map((log: any) => (
                       <div key={log.id} className="py-3 border-b last:border-0">
                         <div className="flex items-center justify-between">
                           <div>

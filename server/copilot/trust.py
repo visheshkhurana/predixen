@@ -398,9 +398,19 @@ def fetchVerifiedRunResult(
     else:
         grounding = GroundingStatus.UNVERIFIED
     
+    resolved_scenario_id: Optional[int] = None
+    for candidate in (
+        scenario_id,
+        getattr(run, "scenario_id", None),
+        getattr(scenario, "id", None),
+    ):
+        if isinstance(candidate, int) and not isinstance(candidate, bool):
+            resolved_scenario_id = candidate
+            break
+
     provenance = SimpleProvenance(
         company_id=company_id,
-        scenario_id=scenario.id if scenario else None,
+        scenario_id=resolved_scenario_id,
         run_id=run.id,
         run_timestamp=run.created_at,
         data_snapshot_id=getattr(run, 'data_snapshot_id', None),

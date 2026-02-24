@@ -158,7 +158,7 @@ def compute_baseline_metrics(
     cash_on_hand: Optional[float] = None,
     growth_rate_mom: Optional[float] = None,
     expense_breakdown: Optional[Dict[str, float]] = None,
-    auto_estimate_cash: bool = True
+    auto_estimate_cash: bool = False
 ) -> BaselineMetrics:
     """
     Compute all baseline metrics from raw financial data.
@@ -169,7 +169,7 @@ def compute_baseline_metrics(
         cash_on_hand: Current cash balance (optional)
         growth_rate_mom: Month-over-month growth rate (optional)
         expense_breakdown: Dict with keys like 'cogs', 'marketing', 'payroll', 'operating'
-        auto_estimate_cash: If True, estimate cash when not provided (default True)
+        auto_estimate_cash: If True, estimate cash when not provided (default False)
     
     Returns:
         BaselineMetrics object with all computed values

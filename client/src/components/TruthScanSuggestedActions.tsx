@@ -17,7 +17,7 @@ interface SuggestedAction {
 
 interface TruthScanSuggestedActionsProps {
   actions: SuggestedAction[];
-  companyId?: string;
+  companyId?: string | number;
   isLoading?: boolean;
 }
 
@@ -88,7 +88,7 @@ export function TruthScanSuggestedActions({
     const params = new URLSearchParams();
 
     if (companyId) {
-      params.append('company', companyId);
+      params.append('company', String(companyId));
     }
 
     // Add scenario-specific parameters

@@ -224,6 +224,8 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
           payroll: payroll,
           marketing: 0,
           operating: opex,
+          cogs: 0,
+          otherOpex: 0,
         },
         currency: 'USD',
         asOfDate: null,

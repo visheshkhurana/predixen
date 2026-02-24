@@ -51,18 +51,19 @@ export function useLoadingState({
 }: LoadingStateConfig): LoadingState {
   return useMemo(() => {
     // Determine if we have data
-    const isEmpty = customIsEmpty ?? !hasData(data);
-    const hasData = !isEmpty && data != null;
+    const hasDataValue = hasData(data);
+    const isEmpty = customIsEmpty ?? !hasDataValue;
+    const hasDataForView = !isEmpty && data != null;
     const hasError = error != null;
 
     return {
       isLoading,
       isEmpty,
       hasError,
-      hasData,
+      hasData: hasDataForView,
       shouldShowSkeleton: isLoading,
       shouldShowEmpty: !isLoading && isEmpty && !hasError,
-      shouldShowContent: !isLoading && hasData && !hasError,
+      shouldShowContent: !isLoading && hasDataForView && !hasError,
     };
   }, [isLoading, data, error, customIsEmpty]);
 }
@@ -109,16 +110,16 @@ export function useCombinedLoadingState(
     const allData = states.map(s => s.data);
     const isEmpty = allData.every(d => !hasData(d));
     const hasError = states.some(s => s.error != null);
-    const hasData = !isEmpty;
+    const hasDataForView = !isEmpty;
 
     return {
       isLoading,
       isEmpty,
       hasError,
-      hasData,
+      hasData: hasDataForView,
       shouldShowSkeleton: isLoading,
       shouldShowEmpty: !isLoading && isEmpty && !hasError,
-      shouldShowContent: !isLoading && hasData && !hasError,
+      shouldShowContent: !isLoading && hasDataForView && !hasError,
     };
   }, [states]);
 }

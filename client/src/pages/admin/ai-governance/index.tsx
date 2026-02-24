@@ -1306,7 +1306,7 @@ const DEFAULT_SETTINGS = {
     { name: 'Manual Review', minConfidence: 0, maxNegativeVotes: 999 },
   ],
   guardrails: { maxSpendLimit: 50000, blockProductionCodeChanges: false, blockHeadcountReduction: false, requireHumanForSecurity: true },
-  agentConfig: AGENTS.map(a => ({ id: a, weight: 1.0, riskTolerance: 'medium' as const, enabled: true })),
+  agentConfig: AGENTS.map(a => ({ id: a, weight: 1.0, riskTolerance: 'medium' as 'low' | 'medium' | 'high', enabled: true })),
   scheduledCycles: { enabled: false, dailyRiskAssessment: true, weeklyStrategyReview: true, monthlyAudit: true },
   notifications: { channels: { inApp: true, email: true, slack: false, webhook: false }, triggers: { pending: true, disagreement: true, riskThreshold: true, emergency: true, autoApproval: false } },
   multiFounder: { enabled: false, quorumSize: 2, members: [] as { name: string; email: string; role: string }[] },

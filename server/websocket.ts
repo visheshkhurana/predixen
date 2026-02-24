@@ -202,7 +202,7 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
         clients.delete(ws);
       } else if (ws.readyState === WebSocket.OPEN) {
         try {
-          ws.ping((err) => {
+          ws.ping((err?: Error) => {
             if (err) {
               console.error('[WebSocket] Ping error:', err.message);
             }

@@ -14,6 +14,7 @@ export interface FinancialMetrics {
   mrr: number;
   arr: number;
   cashOnHand: number;
+  totalMonthlyExpenses: number;
   burnRate: number;
   netBurn: number;
   runway: number;
@@ -40,7 +41,7 @@ export interface FinancialMetrics {
 }
 
 const EMPTY_METRICS: FinancialMetrics = {
-  mrr: 0, arr: 0, cashOnHand: 0, burnRate: 0, netBurn: 0,
+  mrr: 0, arr: 0, cashOnHand: 0, totalMonthlyExpenses: 0, burnRate: 0, netBurn: 0,
   runway: 0, runwayDisplay: '0.0 mo',
   cac: 0, ltv: 0, ltvCacRatio: 0,
   grossMargin: 0, grossMarginPct: 0,
@@ -269,7 +270,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     sources['ndr'] = (c.ndr || tsVal('net_revenue_retention') > 0) ? 'reported' : 'estimated';
 
     return {
-      mrr, arr, cashOnHand, burnRate, netBurn, runway, runwayDisplay,
+      mrr, arr, cashOnHand, totalMonthlyExpenses: totalExpenses, burnRate, netBurn, runway, runwayDisplay,
       cac, ltv, ltvCacRatio,
       grossMargin: grossMarginDecimal, grossMarginPct,
       churnRate: churnRateDecimal, churnRatePct,

@@ -26,6 +26,7 @@ interface GuidedScenariosSliderProps {
   onChange: (value: number) => void;
   min: number;
   max: number;
+  step?: number;
   icon?: React.ReactNode;
   tooltip?: string;
   example?: string;
@@ -193,6 +194,7 @@ export function GuidedScenarioSlider({
   onChange,
   min,
   max,
+  step,
   icon,
   tooltip,
   example,
@@ -236,6 +238,7 @@ export function GuidedScenarioSlider({
         onChange={onChange}
         min={min}
         max={max}
+        step={step}
         tooltip={tooltip}
         example={example}
         markers={markers}

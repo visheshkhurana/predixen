@@ -321,7 +321,7 @@ export function ScenarioWizard({
   baseMetrics,
 }: ScenarioWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<ScenarioTemplate | TemplateCard | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [activeSlider, setActiveSlider] = useState<{ name: string; previousValue: number } | null>(null);
@@ -405,7 +405,7 @@ export function ScenarioWizard({
       cac_change_pct: template.deltas.cac_change_pct ?? 0,
       fundraise_month: (template as ScenarioTemplate).deltas.fundraise_month ?? null,
       fundraise_amount: (template as ScenarioTemplate).deltas.fundraise_amount ?? 0,
-      tags: template.tags,
+      tags: 'tags' in template ? template.tags : [],
       template_id: template.id,
       baseline_diff: (template as ScenarioTemplate).baselineDiff,
     });

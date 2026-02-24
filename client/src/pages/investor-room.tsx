@@ -45,6 +45,10 @@ interface InvestorRoomData {
   investor_faq: FAQItem[];
 }
 
+interface FundraisingRoundsResponse {
+  rounds: FundraisingRound[];
+}
+
 export default function InvestorRoomPage() {
   const { currentCompany: selectedCompany } = useFounderStore();
   const { toast } = useToast();
@@ -56,19 +60,21 @@ export default function InvestorRoomPage() {
   const [investorRoomData, setInvestorRoomData] = useState<InvestorRoomData | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, Record<string, boolean>>>({});
 
-  const { data: roundsData, isLoading: roundsLoading } = useQuery({
+  const { data: roundsData, isLoading: roundsLoading } = useQuery<FundraisingRoundsResponse>({
     queryKey: ['/api/companies', selectedCompany?.id, 'fundraising/rounds'],
-    queryFn: () => apiRequest(`/companies/${selectedCompany?.id}/fundraising/rounds`),
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/companies/${selectedCompany?.id}/fundraising/rounds`);
+      return res.json() as Promise<FundraisingRoundsResponse>;
+    },
     enabled: !!selectedCompany?.id,
   });
 
   const generateMutation = useMutation({
-    mutationFn: (data: { round_id: string; mode: string }) => 
-      apiRequest(`/companies/${selectedCompany?.id}/investor-room/generate`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: (data) => {
+    mutationFn: async (data: { round_id: string; mode: string }) => {
+      const res = await apiRequest("POST", `/api/companies/${selectedCompany?.id}/investor-room/generate`, data);
+      return res.json() as Promise<InvestorRoomData>;
+    },
+    onSuccess: (data: InvestorRoomData) => {
       setInvestorRoomData(data);
       toast({ title: 'Investor Room Generated', description: 'Your investor materials are ready.' });
       

@@ -343,6 +343,8 @@ export default function DataInput() {
           otherOpex: 0,
         },
         hasManualExpenseOverride: false,
+        currency: b.currency || currentCompany?.currency || null,
+        asOfDate: b.asOfDate || null,
       });
     }
   }, [backendBaseline, hasLoadedFromBackend, form, setFinancialBaseline]);

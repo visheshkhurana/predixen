@@ -837,6 +837,7 @@ export default function TruthScanPage() {
     const numValue = extractValue(value);
     return formatPct(numValue);
   };
+  const runwayP50Value = extractValue(metrics.runway_p50);
   
   const handleRefresh = async () => {
     if (!currentCompany) return;
@@ -1109,7 +1110,7 @@ export default function TruthScanPage() {
         dataConfidenceScore={confidence}
         qualityOfGrowthIndex={qualityOfGrowth}
         overallRiskLevel={
-          extractValue(metrics.runway_p50) && extractValue(metrics.runway_p50) < 6
+          runwayP50Value !== null && runwayP50Value < 6
             ? 'critical'
             : flags.filter((f: any) => f.severity === 'high').length > 0
               ? 'warning'

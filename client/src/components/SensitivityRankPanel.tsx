@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertCircle, ChevronRight, TrendingUp } from 'lucide-react';
 
-interface SensitivityRank {
+export interface SensitivityRank {
   rank: number;
   variable: string;
   displayName: string;
