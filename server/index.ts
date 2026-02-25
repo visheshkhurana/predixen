@@ -150,16 +150,16 @@ function startFastAPIServer(): ChildProcess {
   
   killProcessOnPort(port);
   
-  const cmd = [pythonCommand, "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
+  const cmd = [pythonCommand, "-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port];
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
   const nodeEnv = process.env.NODE_ENV || process.env.ENVIRONMENT || "development";
-  const childEnv = { ...process.env, NODE_ENV: nodeEnv };
+  const childEnv = { ...process.env, NODE_ENV: nodeEnv, PYTHONUNBUFFERED: "1" };
   if (!process.env.ENVIRONMENT) {
     childEnv.ENVIRONMENT = nodeEnv;
   }
-  const child = spawn(pythonCommand, ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
+  const child = spawn(pythonCommand, ["-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
     detached: process.platform !== "win32",
@@ -237,19 +237,39 @@ async function probeFastAPI(): Promise<boolean> {
 
 async function waitForFastAPI(maxRetries = 120, retryDelay = 2000): Promise<boolean> {
   for (let i = 0; i < maxRetries; i++) {
+    if (shuttingDown) return false;
     const isUp = await probeFastAPI();
     if (isUp) {
       console.log("[fastapi] Server is ready");
       fastapiStatus = "up";
-      restartCount = 0; // Reset restart counter on successful start
+      restartCount = 0;
       return true;
     }
-    console.log(`[fastapi] Waiting... (${i + 1}/${maxRetries})`);
+    if (i % 10 === 0 || i < 5) {
+      console.log(`[fastapi] Waiting... (${i + 1}/${maxRetries})`);
+    }
     await new Promise(resolve => setTimeout(resolve, retryDelay));
   }
-  console.error("[fastapi] Server failed to start within timeout");
-  fastapiStatus = "down";
+  console.error("[fastapi] Server not ready after primary wait, continuing background polling...");
+  fastapiStatus = "starting";
+  backgroundPollFastAPI();
   return false;
+}
+
+function backgroundPollFastAPI() {
+  const poll = async () => {
+    while (!shuttingDown && fastapiStatus !== "up") {
+      const isUp = await probeFastAPI();
+      if (isUp) {
+        console.log("[fastapi] Server is ready (background poll)");
+        fastapiStatus = "up";
+        restartCount = 0;
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  };
+  poll().catch(err => console.error("[fastapi] Background poll error:", err));
 }
 
 // Graceful shutdown handler
@@ -669,7 +689,7 @@ app.use((req, res, next) => {
   setupComplete = true;
   console.log("[startup] Application setup complete");
 
-  waitForFastAPI(180, 2000).then((ready) => {
+  waitForFastAPI(600, 2000).then((ready) => {
     if (ready) {
       log("FastAPI backend is ready");
     } else {

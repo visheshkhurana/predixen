@@ -1,8 +1,9 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import logging
+import sys
 import time
+import logging
+
+_t0 = time.time()
+print(f"[main.py] Module load start", file=sys.stderr, flush=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -11,15 +12,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-_import_start = time.time()
+print(f"[main.py] Importing FastAPI... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+print(f"[main.py] FastAPI imported (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
+
+print(f"[main.py] Importing config... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from server.core.config import settings
+print(f"[main.py] Importing db... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from server.core.db import engine, Base, SessionLocal
-logger.info(f"Core imports loaded in {time.time() - _import_start:.1f}s")
+print(f"[main.py] Core imports done (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 
 _startup_state = {"ready": False, "error": None, "routers_loaded": False}
 
+
 def _register_all_routers(app: FastAPI):
-    """Import and register all API routers. Called during lifespan startup."""
     t0 = time.time()
     logger.info("Loading API modules...")
 
@@ -118,8 +126,8 @@ def _register_all_routers(app: FastAPI):
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
 
+
 async def _run_deferred_startup():
-    """Run migrations, seeding, and notifications after the server port is open."""
     import asyncio
     await asyncio.sleep(0.1)
 
@@ -178,6 +186,7 @@ async def _run_deferred_startup():
         if settings.is_production:
             logger.critical("FATAL: Deferred startup failed in production - schema/migrations may be incomplete")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -196,6 +205,9 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down FastAPI server...")
 
+
+print(f"[main.py] Creating FastAPI app (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
+
 app = FastAPI(
     title="FounderConsole",
     description="AI-powered financial simulation and decision engine for startups",
@@ -203,6 +215,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from server.middleware.rate_limiter import RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
 
@@ -230,13 +243,10 @@ def root():
 
 @app.get("/health")
 def health():
-    """Health check endpoint - responds immediately even before routers load."""
     db_healthy = False
     try:
         db = SessionLocal()
-        db.execute(
-            __import__('sqlalchemy').text("SELECT 1")
-        )
+        db.execute(__import__('sqlalchemy').text("SELECT 1"))
         db_healthy = True
         db.close()
     except Exception as e:
@@ -250,3 +260,5 @@ def health():
         "database": "connected" if db_healthy else "unavailable",
         "startup_error": _startup_state["error"],
     }
+
+print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
