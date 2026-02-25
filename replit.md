@@ -58,6 +58,13 @@ The platform utilizes a modern full-stack architecture, combining React/TypeScri
 -   **Resend**: Email delivery service (verified sender: noreply@founderconsole.ai).
 -   **Twilio**: SMS/phone notifications (credentials configured).
 
+## Production Deployment Architecture
+-   **Health Check**: Pre-setup middleware returns 200 at `/` and `/health` immediately when port opens, before async route/static setup completes. Uses `setupComplete` flag to transition to full app serving.
+-   **FastAPI Supervision**: Node spawns uvicorn with piped stdio (`[fastapi:out]` / `[fastapi:err]` prefixed logs). Exponential backoff retry up to 10 attempts. Graceful shutdown via SIGTERM with 5s kill timeout.
+-   **Environment Passing**: `NODE_ENV` is hardcoded to `"production"` at build time via esbuild define. `ENVIRONMENT` is preserved from Replit's `[userenv.production]` config, not overridden by Node.
+-   **Config Safety**: Production config checks (SESSION_SECRET, CORS_ORIGINS, ADMIN_MASTER_PASSWORD_HASH) log critical warnings instead of raising RuntimeError, preventing silent crash-loops.
+-   **Static Fallback**: If `dist/public` is missing, serves a minimal HTML page instead of crashing.
+
 ## Error Handling Architecture
 -   **`getErrorMessage()`**: Central utility in `client/src/lib/errors.ts` that safely extracts string messages from any error type, preventing React Error #185.
 -   **ErrorBoundary**: Supports both full-page and inline (`inline` prop) modes for component-level isolation.

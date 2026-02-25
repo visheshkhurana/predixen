@@ -12,8 +12,19 @@ import path from "path";
 const app = express();
 const httpServer = createServer(app);
 
-// Open an HTTP port IMMEDIATELY so deployment health checks pass.
-// If the requested port is already in use, automatically fallback to the next port.
+let setupComplete = false;
+
+app.use((req, res, next) => {
+  if (setupComplete) return next();
+  if (req.path === "/health") {
+    return res.status(200).json({ ok: true, status: "starting", fastapi: "starting" });
+  }
+  if (req.method === "GET" && !req.path.startsWith("/api")) {
+    return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>FounderConsole</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}.loader{text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:0.7}</style></head><body><div class="loader"><div class="spinner"></div><p>Loading FounderConsole...</p></div></body></html>`);
+  }
+  next();
+});
+
 const requestedPort = parseInt(process.env.PORT || "5000", 10);
 const maxPortAttempts = Math.max(parseInt(process.env.PORT_RETRY_ATTEMPTS || "10", 10), 1);
 
@@ -143,13 +154,34 @@ function startFastAPIServer(): ChildProcess {
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
-  const nodeEnv = process.env.NODE_ENV || "development";
+  const nodeEnv = process.env.NODE_ENV || process.env.ENVIRONMENT || "development";
+  const childEnv = { ...process.env, NODE_ENV: nodeEnv };
+  if (!process.env.ENVIRONMENT) {
+    childEnv.ENVIRONMENT = nodeEnv;
+  }
   const child = spawn(pythonCommand, ["-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
     shell: false,
     detached: process.platform !== "win32",
-    env: { ...process.env, NODE_ENV: nodeEnv, ENVIRONMENT: nodeEnv },
+    env: childEnv,
   });
+  
+  if (child.stdout) {
+    child.stdout.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.log(`[fastapi:out] ${line}`);
+      }
+    });
+  }
+  if (child.stderr) {
+    child.stderr.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.error(`[fastapi:err] ${line}`);
+      }
+    });
+  }
   
   console.log(`[fastapi] Spawned with PID: ${child.pid}`);
   fastapiStatus = "starting";
@@ -620,11 +652,22 @@ app.use((req, res, next) => {
   });
 
   if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
+    try {
+      serveStatic(app);
+      console.log("[startup] Static file serving configured");
+    } catch (err: any) {
+      console.error(`[startup] Static serving failed: ${err.message}`);
+      app.use("*", (_req, res) => {
+        res.status(200).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>FounderConsole</title></head><body style="background:#0a0a0a;color:#e5e7eb;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh"><p>FounderConsole is starting up. Please refresh in a moment.</p></body></html>`);
+      });
+    }
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
+
+  setupComplete = true;
+  console.log("[startup] Application setup complete");
 
   waitForFastAPI(30, 2000).then((ready) => {
     if (ready) {

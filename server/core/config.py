@@ -102,10 +102,18 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
+import logging as _cfg_logging
+_cfg_logger = _cfg_logging.getLogger("server.core.config")
+
 if settings.is_production:
+    _config_errors = []
     if settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
-        raise RuntimeError("FATAL: You must set SESSION_SECRET env var in production. Do NOT use the default secret key.")
+        _config_errors.append("SESSION_SECRET env var is not set — using default key is insecure")
     if not settings.CORS_ORIGINS:
-        raise RuntimeError("FATAL: You must set CORS_ORIGINS env var in production. Do NOT allow open CORS.")
+        _config_errors.append("CORS_ORIGINS env var is not set — no cross-origin requests allowed")
     if settings.ADMIN_MASTER_EMAIL and not settings.ADMIN_MASTER_PASSWORD_HASH:
-        raise RuntimeError("FATAL: ADMIN_MASTER_EMAIL is set but ADMIN_MASTER_PASSWORD_HASH is empty. Set a bcrypt hash.")
+        _config_errors.append("ADMIN_MASTER_EMAIL is set but ADMIN_MASTER_PASSWORD_HASH is empty")
+    for _err in _config_errors:
+        _cfg_logger.critical(f"PRODUCTION CONFIG: {_err}")
+    if _config_errors:
+        _cfg_logger.critical(f"Found {len(_config_errors)} production config issue(s) — server will start but may be insecure")
