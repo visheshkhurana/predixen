@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -165,7 +166,7 @@ export default function AdminUsers() {
       setRoleChangeConfirm(null);
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to update user', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to update user', description: getErrorMessage(err, 'Failed to update user'), variant: 'destructive' });
       setRoleChangeConfirm(null);
     },
   });
@@ -199,7 +200,7 @@ export default function AdminUsers() {
       setSuspendConfirm(null);
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to suspend user', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to suspend user', description: getErrorMessage(err, 'Failed to suspend user'), variant: 'destructive' });
       setSuspendConfirm(null);
     },
   });
@@ -212,7 +213,7 @@ export default function AdminUsers() {
       toast({ title: 'User activated successfully' });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to activate user', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to activate user', description: getErrorMessage(err, 'Failed to activate user'), variant: 'destructive' });
     },
   });
 

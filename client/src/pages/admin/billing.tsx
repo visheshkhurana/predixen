@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,7 @@ export default function AdminBilling() {
       setEditingId(null);
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to update subscription', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to update subscription', description: getErrorMessage(err, 'Failed to update subscription'), variant: 'destructive' });
     },
   });
 

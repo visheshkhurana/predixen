@@ -2,7 +2,12 @@ import { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Shield, AlertTriangle, CheckCircle, ArrowRight, CircleAlert, Target, Activity } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isRunwaySustainable } from '@/lib/utils';
+
+function fmtRunway(v: number): string {
+  if (isRunwaySustainable(v)) return 'sustainable';
+  return v.toFixed(0);
+}
 
 interface AIDecisionSummaryProps {
   simulation: any;
@@ -95,23 +100,25 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
 
     let headline = '';
 
+    const rwy = fmtRunway(runwayP50);
+
     if (verdict === 'go') {
       if (bRunwayDelta > 2 && breakeven && breakeven <= 18) {
         headline = `${action}. Your unit economics support it \u2014 you gain ${bRunwayDelta.toFixed(0)} months of runway and hit breakeven by month ${breakeven}.`;
       } else if (bRunwayDelta > 0 && cm) {
-        headline = `${action}. The numbers back you up \u2014 ${runwayP50.toFixed(0)} months of runway at ${survival18m.toFixed(0)}% survival. Pair with ${cm.name.toLowerCase()} for another +${cm.runwayGain.toFixed(0)} months.`;
+        headline = `${action}. The numbers back you up \u2014 ${rwy} months of runway at ${survival18m.toFixed(0)}% survival. Pair with ${cm.name.toLowerCase()} for another +${cm.runwayGain.toFixed(0)} months.`;
       } else if (endCash > 500000 && runwayP50 >= 18) {
-        headline = `${action}. You end with ${fmtCurrency(endCash)} in the bank and ${runwayP50.toFixed(0)} months of runway \u2014 this is a strong position.`;
+        headline = `${action}. You end with ${fmtCurrency(endCash)} in the bank and ${rwy} months of runway \u2014 this is a strong position.`;
       } else {
-        headline = `${action}. ${survival18m.toFixed(0)}% survival and ${runwayP50.toFixed(0)} months of runway give you room to execute. The data says go.`;
+        headline = `${action}. ${survival18m.toFixed(0)}% survival and ${rwy} months of runway give you room to execute. The data says go.`;
       }
     } else if (verdict === 'no-go') {
       if (cm && cm.runwayGain >= 3) {
-        headline = `Don't ${action.toLowerCase()} yet. At ${runwayP50.toFixed(0)} months runway and ${survival18m.toFixed(0)}% survival, you're exposed. ${cm.name} would add +${cm.runwayGain.toFixed(0)} months \u2014 do that first.`;
+        headline = `Don't ${action.toLowerCase()} yet. At ${rwy} months runway and ${survival18m.toFixed(0)}% survival, you're exposed. ${cm.name} would add +${cm.runwayGain.toFixed(0)} months \u2014 do that first.`;
       } else if (monthlyBurn > 0 && endCash > 0 && endCash / monthlyBurn < 6) {
         headline = `Hold off. ${fmtCurrency(endCash)} end cash covers only ${(endCash / monthlyBurn).toFixed(0)} months of burn at ${fmtCurrency(monthlyBurn)}/mo. You need to cut burn or raise capital before this move.`;
       } else {
-        headline = `This doesn't work yet. ${runwayP50.toFixed(0)} months of runway and ${survival18m.toFixed(0)}% survival is below the safety threshold. Restructure before committing.`;
+        headline = `This doesn't work yet. ${rwy} months of runway and ${survival18m.toFixed(0)}% survival is below the safety threshold. Restructure before committing.`;
       }
     } else {
       if (cm && cm.runwayGain >= 2) {
@@ -119,9 +126,9 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       } else if (bSurvDelta > 5 && bRunwayDelta > 0) {
         headline = `${action} \u2014 cautiously. You gain +${bSurvDelta.toFixed(0)}% survival and +${bRunwayDelta.toFixed(1)} months vs baseline, but keep a close eye on ${monthlyBurn > 0 ? `the ${fmtCurrency(monthlyBurn)}/mo burn` : 'your burn rate'}.`;
       } else if (breakeven && breakeven <= 20) {
-        headline = `${action}, but watch the timing. Breakeven at month ${breakeven} is achievable, but ${runwayP50.toFixed(0)} months of runway doesn't leave much margin for slippage.`;
+        headline = `${action}, but watch the timing. Breakeven at month ${breakeven} is achievable, but ${rwy} months of runway doesn't leave much margin for slippage.`;
       } else {
-        headline = `${action} is possible but needs guardrails. ${runwayP50.toFixed(0)} months runway at ${survival18m.toFixed(0)}% survival \u2014 not enough conviction to go all-in without a backup plan.`;
+        headline = `${action} is possible but needs guardrails. ${rwy} months runway at ${survival18m.toFixed(0)}% survival \u2014 not enough conviction to go all-in without a backup plan.`;
       }
     }
 
@@ -140,7 +147,7 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     } else if (monthlyBurn > 0) {
       keyRisk = `Monthly burn of ${fmtCurrency(monthlyBurn)} compounds quickly \u2014 any revenue miss accelerates your cash-out date.`;
     } else {
-      keyRisk = `P10 downside scenario gives you only ${runwayP10.toFixed(0)} months \u2014 stress-test your assumptions.`;
+      keyRisk = `P10 downside scenario gives you only ${fmtRunway(runwayP10)} months \u2014 stress-test your assumptions.`;
     }
 
     let keyOpportunity = '';
@@ -151,7 +158,7 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     } else if (bRunwayDelta > 3) {
       keyOpportunity = `+${bRunwayDelta.toFixed(0)} months of runway vs baseline gives you significantly more time to execute and hit milestones.`;
     } else if (runwayP90 >= 24) {
-      keyOpportunity = `In the best case (P90), you have ${runwayP90.toFixed(0)} months of runway \u2014 enough to reach key milestones and raise from strength.`;
+      keyOpportunity = `In the best case (P90), you have ${fmtRunway(runwayP90)} months of runway \u2014 enough to reach key milestones and raise from strength.`;
     } else if (survival18m >= 75) {
       keyOpportunity = `${survival18m.toFixed(0)}% survival gives you strong odds \u2014 use this window to hit growth targets that improve your next raise.`;
     } else {

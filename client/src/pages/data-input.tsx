@@ -1894,7 +1894,7 @@ export default function DataInput() {
                             <p className="text-lg font-mono font-semibold" data-testid="text-runway">
                               {calculatedBurn > 0 && watchedValues.cashOnHand ? (
                                 <span className={calculatedRunway && calculatedRunway < 12 ? "text-red-500" : calculatedRunway && calculatedRunway < 18 ? "text-amber-500" : "text-emerald-500"}>
-                                  {calculatedRunway?.toFixed(1)} months
+                                  {calculatedRunway != null && calculatedRunway >= 900 ? 'Sustainable' : `${calculatedRunway?.toFixed(1)} months`}
                                 </span>
                               ) : calculatedBurn <= 0 ? (
                                 <span className="text-emerald-500">Profitable / Sustainable</span>
@@ -2133,7 +2133,7 @@ export default function DataInput() {
                         <div className="flex items-start gap-2 p-3 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
                           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                           <p className="text-sm">
-                            Your current runway ({calculatedRunway.toFixed(1)} months) is below your target ({watchedValues.targetRunway} months). 
+                            Your current runway ({calculatedRunway >= 900 ? 'Sustainable' : calculatedRunway.toFixed(1) + ' months'}) is below your target ({watchedValues.targetRunway} months). 
                             Consider reducing expenses or securing funding.
                           </p>
                         </div>

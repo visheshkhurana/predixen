@@ -102,7 +102,7 @@ export function StressTestPanel({
                     "font-mono",
                     runwayChange < 0 ? 'text-red-500' : 'text-green-500'
                   )}>
-                    {currentRunway.toFixed(0)}mo <ArrowRight className="inline h-3 w-3" /> {previewRunway.toFixed(0)}mo
+                    {currentRunway >= 900 ? '∞' : `${currentRunway.toFixed(0)}mo`} <ArrowRight className="inline h-3 w-3" /> {previewRunway >= 900 ? '∞' : `${previewRunway.toFixed(0)}mo`}
                   </span>
                 </div>
                 

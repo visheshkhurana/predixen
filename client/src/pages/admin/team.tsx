@@ -1,6 +1,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -147,7 +148,7 @@ export default function AdminTeam() {
       closeDialog();
     },
     onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Failed to save team member'), variant: 'destructive' });
     },
   });
 
@@ -158,7 +159,7 @@ export default function AdminTeam() {
       toast({ title: 'Team member offboarded' });
     },
     onError: (err: any) => {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Failed to offboard team member'), variant: 'destructive' });
     },
   });
 

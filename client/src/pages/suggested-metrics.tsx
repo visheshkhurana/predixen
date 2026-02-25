@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { getErrorMessage } from "@/lib/errors";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -362,7 +363,7 @@ export default function SuggestedMetrics() {
       refetch();
     },
     onError: (err: any) => {
-      toast({ title: "Failed to accept suggestion", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to accept suggestion", description: getErrorMessage(err, 'Failed to accept suggestion'), variant: "destructive" });
     },
   });
   
@@ -374,7 +375,7 @@ export default function SuggestedMetrics() {
       refetch();
     },
     onError: (err: any) => {
-      toast({ title: "Failed to dismiss", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to dismiss", description: getErrorMessage(err, 'Failed to dismiss'), variant: "destructive" });
     },
   });
   

@@ -762,7 +762,7 @@ export default function ScenariosPage() {
       }
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
     } catch (err: any) {
-      toast({ title: 'Simulation error', description: err.message || 'Failed to run dual-path simulation', variant: 'destructive' });
+      toast({ title: 'Simulation error', description: getErrorMessage(err, 'Failed to run dual-path simulation'), variant: 'destructive' });
     } finally {
       setIsCreating(false);
       setIsRunning(false);

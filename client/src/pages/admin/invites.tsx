@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '@/lib/errors';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +53,7 @@ export default function AdminInvites() {
       setInviteRole('viewer');
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to send invite', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to send invite', description: getErrorMessage(err, 'Failed to send invite'), variant: 'destructive' });
     },
   });
 
@@ -63,7 +64,7 @@ export default function AdminInvites() {
       toast({ title: 'Invite revoked successfully' });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to revoke invite', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to revoke invite', description: getErrorMessage(err, 'Failed to revoke invite'), variant: 'destructive' });
     },
   });
 
@@ -74,7 +75,7 @@ export default function AdminInvites() {
       toast({ title: 'Invite resent successfully' });
     },
     onError: (err: any) => {
-      toast({ title: 'Failed to resend invite', description: err.message, variant: 'destructive' });
+      toast({ title: 'Failed to resend invite', description: getErrorMessage(err, 'Failed to resend invite'), variant: 'destructive' });
     },
   });
 

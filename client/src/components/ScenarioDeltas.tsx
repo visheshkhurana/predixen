@@ -6,7 +6,11 @@ import {
   TrendingUp, TrendingDown, Timer, ArrowRight,
   DollarSign, PieChart, Fuel, Shield, Target, Mail
 } from 'lucide-react';
-import { formatCurrencyAbbrev } from '@/lib/utils';
+import { formatCurrencyAbbrev, isRunwaySustainable } from '@/lib/utils';
+
+function fmtRunway(v: number): string {
+  return isRunwaySustainable(v) ? 'Sustainable' : v.toFixed(1);
+}
 
 interface SimulationData {
   runway?: { p10?: number; p50?: number; p90?: number };
@@ -179,11 +183,11 @@ export function BeforeAfterDeltaCards({
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider truncate">{d.label}</p>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground font-mono line-through">
-                  {d.isPercent ? `${d.baseline.toFixed(0)}%` : d.suffix === 'mo' ? `${d.baseline.toFixed(1)}` : formatCurrency(d.baseline, currencySymbol)}
+                  {d.isPercent ? `${d.baseline.toFixed(0)}%` : d.suffix === 'mo' ? fmtRunway(d.baseline) : formatCurrency(d.baseline, currencySymbol)}
                 </span>
                 <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
                 <span className="text-sm font-semibold font-mono">
-                  {d.isPercent ? `${d.scenario.toFixed(0)}%` : d.suffix === 'mo' ? `${d.scenario.toFixed(1)}` : formatCurrency(d.scenario, currencySymbol)}
+                  {d.isPercent ? `${d.scenario.toFixed(0)}%` : d.suffix === 'mo' ? fmtRunway(d.scenario) : formatCurrency(d.scenario, currencySymbol)}
                 </span>
               </div>
               <div className="flex items-center gap-1">
@@ -363,10 +367,10 @@ export function RiskAlertBanner({
               {alert.survivalDrop > 0 && (
                 <> ({alert.survivalDrop.toFixed(0)}pp decrease)</>
               )}
-              {alert.runwayDrop > 1 && (
+              {alert.runwayDrop > 1 && !isRunwaySustainable(alert.baselineRunway) && (
                 <>
                   {'. '}Runway shortens by <strong>{alert.runwayDrop.toFixed(1)} months</strong> (
-                  {alert.baselineRunway.toFixed(1)} &rarr; {alert.scenarioRunway.toFixed(1)}).
+                  {fmtRunway(alert.baselineRunway)} &rarr; {fmtRunway(alert.scenarioRunway)}).
                 </>
               )}
               {alert.scenarioSurvival < 50 && ' Immediate corrective action recommended.'}
@@ -420,9 +424,9 @@ export function DataDrivenRecommendation({
         );
       }
 
-      if (Math.abs(runwayDelta) > 0.5) {
+      if (Math.abs(runwayDelta) > 0.5 && !isRunwaySustainable(bRunway)) {
         sentences.push(
-          `Runway ${runwayDelta > 0 ? 'extends' : 'shrinks'} by ${Math.abs(runwayDelta).toFixed(1)} months (${bRunway.toFixed(1)} to ${runwayP50.toFixed(1)}).`
+          `Runway ${runwayDelta > 0 ? 'extends' : 'shrinks'} by ${Math.abs(runwayDelta).toFixed(1)} months (${fmtRunway(bRunway)} to ${fmtRunway(runwayP50)}).`
         );
       }
 
@@ -454,7 +458,7 @@ export function DataDrivenRecommendation({
 
     if (sentences.length === 0) {
       if (survival18m >= 80) {
-        sentences.push(`Strong position: ${survival18m.toFixed(0)}% survival probability with ${runwayP50.toFixed(1)} months of runway.`);
+        sentences.push(`Strong position: ${survival18m.toFixed(0)}% survival probability with ${fmtRunway(runwayP50)} months of runway.`);
       } else if (survival18m >= 50) {
         sentences.push(`Moderate position: ${survival18m.toFixed(0)}% survival at 18 months suggests manageable risk, but improvements should be explored.`);
       } else {

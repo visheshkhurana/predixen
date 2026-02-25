@@ -116,7 +116,7 @@ export function StrategyCard({
           <div className="space-y-1">
             <div className="text-xs text-muted-foreground">Runway</div>
             <div className="flex items-baseline gap-2">
-              <span className="text-lg font-semibold">{Number(strategy.projectedRunway).toFixed(1)}mo</span>
+              <span className="text-lg font-semibold">{Number(strategy.projectedRunway) >= 900 ? 'Sustainable' : `${Number(strategy.projectedRunway).toFixed(1)}mo`}</span>
               <RunwayChange current={currentRunway} projected={strategy.projectedRunway} />
             </div>
           </div>

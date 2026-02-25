@@ -80,8 +80,8 @@ export function ImpactBar({
       
       {showLabel && (
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Current: {baselineRunway.toFixed(1)} months</span>
-          <span>Projected: {projectedRunway.toFixed(1)} months</span>
+          <span>Current: {baselineRunway >= 900 ? 'Sustainable' : `${baselineRunway.toFixed(1)} months`}</span>
+          <span>Projected: {projectedRunway >= 900 ? 'Sustainable' : `${projectedRunway.toFixed(1)} months`}</span>
         </div>
       )}
     </div>

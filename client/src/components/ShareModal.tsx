@@ -291,7 +291,7 @@ export function ShareModal({ open, onOpenChange, data, companyId, companyName }:
         onOpenChange(false);
       }
     } catch (err: any) {
-      toast({ title: 'Failed to send', description: err.message || 'Something went wrong.', variant: 'destructive' });
+      toast({ title: 'Failed to send', description: (err instanceof Error ? err.message : '') || 'Something went wrong.', variant: 'destructive' });
     } finally {
       setIsSending(false);
     }

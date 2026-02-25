@@ -160,7 +160,13 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: 5 * 60 * 1000,
-      retry: false,
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+          return false;
+        }
+        return failureCount < 1;
+      },
+      throwOnError: false,
     },
     mutations: {
       retry: false,

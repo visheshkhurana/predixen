@@ -215,7 +215,7 @@ export function AISummaryCard({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="text-center p-2 bg-background/50 rounded-lg">
-                <p className="text-lg font-bold">{narrative.key_metrics.runway_p50.toFixed(1)}</p>
+                <p className="text-lg font-bold">{narrative.key_metrics.runway_p50 >= 900 ? 'Sustainable' : narrative.key_metrics.runway_p50.toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">Runway (months)</p>
               </div>
               <div className="text-center p-2 bg-background/50 rounded-lg">

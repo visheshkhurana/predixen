@@ -65,7 +65,7 @@ function generateAlerts(simulation: any, scenario: any, baseline: any): Intellig
     });
   }
 
-  if (runwayP50 > 0 && runwayP50 < 9) {
+  if (runwayP50 > 0 && runwayP50 < 9 && runwayP50 < 900) {
     alerts.push({
       type: 'critical',
       title: `Runway under 9 months (${runwayP50.toFixed(1)}mo P50)`,
@@ -81,7 +81,7 @@ function generateAlerts(simulation: any, scenario: any, baseline: any): Intellig
     });
   }
 
-  if (runwayP10 > 0 && runwayP10 < 6) {
+  if (runwayP10 > 0 && runwayP10 < 6 && runwayP10 < 900) {
     alerts.push({
       type: 'warning',
       title: 'Worst-case runway under 6 months',
@@ -107,7 +107,7 @@ function generateAlerts(simulation: any, scenario: any, baseline: any): Intellig
     alerts.push({
       type: 'opportunity',
       title: 'Strong position for growth investment',
-      description: `${survival18m.toFixed(0)}% survival with ${runwayP50.toFixed(0)}+ month runway. You have room to invest in growth.`,
+      description: `${survival18m.toFixed(0)}% survival with ${runwayP50 >= 900 ? 'sustainable' : runwayP50.toFixed(0) + '+ month'} runway. You have room to invest in growth.`,
       action: { label: 'Explore Growth', href: '/scenarios' },
     });
   }

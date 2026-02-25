@@ -106,7 +106,7 @@ export function TeamWorkspace({
       setInviteEmail('');
       setInviteRole('viewer');
     } catch (err: any) {
-      setInviteError(err.message || 'Failed to send invite');
+      setInviteError((err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'Failed to send invite');
     } finally {
       setIsInviting(false);
     }

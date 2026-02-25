@@ -107,16 +107,13 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 <p className="text-sm mb-2">
                   An unexpected error occurred. Please try again or contact support if the problem persists.
                 </p>
-                {import.meta.env.DEV && (
                   <details className="mt-3 text-xs bg-destructive/10 p-2 rounded border border-destructive/20">
-                    <summary className="cursor-pointer font-medium mb-1">Error Details</summary>
-                    <pre className="overflow-auto text-xs whitespace-pre-wrap break-words">
-                      {safeMessage}
-                      {'\n\n'}
-                      {this.state.errorInfo?.componentStack}
-                    </pre>
-                  </details>
-                )}
+                  <summary className="cursor-pointer font-medium mb-1">Error Details</summary>
+                  <pre className="overflow-auto text-xs whitespace-pre-wrap break-words max-h-40">
+                    {safeMessage}
+                    {import.meta.env.DEV && this.state.errorInfo?.componentStack ? `\n\n${this.state.errorInfo.componentStack}` : ''}
+                  </pre>
+                </details>
               </AlertDescription>
             </Alert>
 

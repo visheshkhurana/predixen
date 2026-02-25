@@ -177,7 +177,7 @@ export function MonthlyResultsTable({
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Runway:</span>
                     <Badge variant="outline" className="font-mono">
-                      {scenario.summary.runway_p50.toFixed(1)} months
+                      {scenario.summary.runway_p50 >= 900 ? 'Sustainable' : `${scenario.summary.runway_p50.toFixed(1)} months`}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">

@@ -67,8 +67,11 @@ The platform utilizes a modern full-stack architecture, combining React/TypeScri
 
 ## Error Handling Architecture
 -   **`getErrorMessage()`**: Central utility in `client/src/lib/errors.ts` that safely extracts string messages from any error type, preventing React Error #185.
--   **ErrorBoundary**: Supports both full-page and inline (`inline` prop) modes for component-level isolation.
--   **API errors**: All 14+ page/component files use `getErrorMessage()` for toast error display.
--   **Runway display**: Values ≥999 months rendered as "Sustainable" or "Profitable" via `formatRunwayDisplay()` in `sensitivityAnalysis.ts`.
--   **Burn Rate**: Labeled as "Net Burn Rate" on both Dashboard and Health Check with matching methodology tooltips.
--   **Churn Rate**: Truth scan backend now populates `churn_rate` key; frontend normalizes percentage vs decimal values.
+-   **ErrorBoundary**: Supports both full-page and inline (`inline` prop) modes for component-level isolation. Error Details panel always visible (collapsed by default).
+-   **QueryClient**: `throwOnError: false` prevents query errors from propagating to ErrorBoundary. Smart retry skips 401/403/404.
+-   **API errors**: All page/component files use `getErrorMessage()` for toast error display (billing, invites, scenarios, decisions, metrics, team, users, ShareModal).
+-   **Runway display**: Values ≥900 months rendered as "Sustainable" or "∞" via `isRunwaySustainable()` / `formatRunway()` / `formatRunwayInline()` in `utils.ts`. Applied across all pages: scenarios, copilot, truth-scan, data-input, decisions, and all simulation components (AIDecisionSummary, CrossPageIntelligence, ScenarioVersionHistory, MultiScenarioSummary, MonthlyResultsTable, AISummaryCard, ImpactBar, StrategyCard, StressTestPanel).
+-   **useFinancialMetrics**: Threshold changed from `< 999` to `< 900` to correctly identify sustainable runway values.
+-   **Burn Rate**: Labeled as "Net Burn Rate" on Dashboard; dynamically labeled "Net Burn" or "Monthly Surplus" on Health Check.
+-   **Churn Rate**: Truth scan backend populates `churn_rate` key; frontend normalizes percentage vs decimal values via fallback chain: `churn_rate_customer` → `churn_rate_revenue` → `churn_rate` → `sharedMetrics.churnRate`.
+-   **OAuth/Demo errors**: Auth page provides specific error feedback for OAuth failures (timeout, unconfigured), demo login failures, and backend-down scenarios with retry logic.

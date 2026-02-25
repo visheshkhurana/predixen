@@ -402,7 +402,7 @@ export default function DecisionsPage() {
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
     } catch (err: any) {
       if (timedOut) return;
-      const message = err.message || 'Something went wrong';
+      const message = (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'Something went wrong';
       if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
         toast({
           title: 'Session Expired',

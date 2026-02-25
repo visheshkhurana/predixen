@@ -51,7 +51,7 @@ export function MultiScenarioSummary({ comparison, testId = 'multi-scenario-summ
               <div className="flex items-center gap-1">
                 <Clock className="h-3 w-3 text-muted-foreground" />
                 <span className={cn("font-mono font-medium", getRunwayColor(bestScenario?.runway_p50 || 0))}>
-                  {bestScenario?.runway_p50.toFixed(1)} mo
+                  {bestScenario?.runway_p50 != null && bestScenario.runway_p50 >= 900 ? 'Sustainable' : `${bestScenario?.runway_p50.toFixed(1)} mo`}
                 </span>
               </div>
               <Badge className={getSurvivalBadgeClass(bestScenario?.survival_18m || 0)}>
@@ -71,11 +71,11 @@ export function MultiScenarioSummary({ comparison, testId = 'multi-scenario-summ
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className={cn("text-2xl font-bold font-mono", getRunwayColor(worstScenario?.runway_p50 || 0))}>
-                {worstScenario?.runway_p50.toFixed(1)}
+                {worstScenario?.runway_p50 != null && worstScenario.runway_p50 >= 900 ? '∞' : worstScenario?.runway_p50.toFixed(1)}
               </span>
               <span className="text-muted-foreground">to</span>
               <span className={cn("text-2xl font-bold font-mono", getRunwayColor(bestScenario?.runway_p50 || 0))}>
-                {bestScenario?.runway_p50.toFixed(1)}
+                {bestScenario?.runway_p50 != null && bestScenario.runway_p50 >= 900 ? '∞' : bestScenario?.runway_p50.toFixed(1)}
               </span>
               <span className="text-sm text-muted-foreground">months</span>
             </div>

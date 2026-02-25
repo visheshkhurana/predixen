@@ -152,7 +152,7 @@ export function ScenarioVersionHistory({
                             {version.latest_simulation && (
                               <>
                                 <span>
-                                  Runway: {version.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo
+                                  Runway: {version.latest_simulation.runway?.p50 != null && version.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${version.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo`}
                                 </span>
                                 <span>
                                   Survival: {(version.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%

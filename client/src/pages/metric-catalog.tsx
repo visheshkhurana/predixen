@@ -190,7 +190,7 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
       queryClient.invalidateQueries({ queryKey: [`/api/metrics/${metric.key}/lineage?company_id=${companyId}`] });
     },
     onError: (err: any) => {
-      toast({ title: "Compute failed", description: err.message, variant: "destructive" });
+      toast({ title: "Compute failed", description: getErrorMessage(err, 'Compute failed'), variant: "destructive" });
     },
   });
   
@@ -205,7 +205,7 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
       onClose();
     },
     onError: (err: any) => {
-      toast({ title: "Publish failed", description: err.message, variant: "destructive" });
+      toast({ title: "Publish failed", description: getErrorMessage(err, 'Publish failed'), variant: "destructive" });
     },
   });
   
@@ -454,7 +454,7 @@ function CreateMetricDialog({ companyId, onCreated }: { companyId: number; onCre
       onCreated();
     },
     onError: (err: any) => {
-      toast({ title: "Failed to create metric", description: err.message, variant: "destructive" });
+      toast({ title: "Failed to create metric", description: getErrorMessage(err, 'Failed to create metric'), variant: "destructive" });
     },
   });
   
@@ -707,7 +707,7 @@ export default function MetricCatalog() {
       refetch();
     },
     onError: (err: any) => {
-      toast({ title: "Initialization failed", description: err.message, variant: "destructive" });
+      toast({ title: "Initialization failed", description: getErrorMessage(err, 'Initialization failed'), variant: "destructive" });
     },
   });
 

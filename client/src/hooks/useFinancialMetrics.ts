@@ -177,7 +177,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
 
     let runway: number;
     let runwayDisplay: string;
-    if (c.runway && c.runway > 0 && c.runway < 999) {
+    if (c.runway && c.runway > 0 && c.runway < 900) {
       runway = c.runway;
       runwayDisplay = `${runway.toFixed(1)} mo`;
     } else if (netBurn <= 0) {

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
+import { isRunwaySustainable } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -400,7 +401,7 @@ function RunwayBandChart({ chartData }: { chartData: NonNullable<CopilotApiRespo
           <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#888' }} />
           <Tooltip 
             contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-            formatter={(value: number) => [`${value.toFixed(1)} months`, 'Runway']}
+            formatter={(value: number) => [isRunwaySustainable(value) ? 'Sustainable' : `${value.toFixed(1)} months`, 'Runway']}
           />
           <Bar dataKey="value" radius={[0, 4, 4, 0]}>
             {data.map((entry, index) => (
@@ -515,7 +516,7 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
       {results && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
-            <div className="text-2xl font-bold text-blue-400">{results.runway_months?.toFixed(1) || '0'}</div>
+            <div className="text-2xl font-bold text-blue-400">{results.runway_months != null && isRunwaySustainable(results.runway_months) ? 'Sustainable' : results.runway_months?.toFixed(1) || '0'}</div>
             <div className="text-xs text-muted-foreground">Runway (months)</div>
           </div>
           <div className="p-3 rounded-lg bg-card/50 border border-border/30 text-center">
@@ -578,11 +579,11 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <span className="font-medium">{simResult.comparison.scenario_1.name}:</span>
-              <span className="ml-2">{simResult.comparison.scenario_1.runway.toFixed(1)}mo</span>
+              <span className="ml-2">{isRunwaySustainable(simResult.comparison.scenario_1.runway) ? 'Sustainable' : `${simResult.comparison.scenario_1.runway.toFixed(1)}mo`}</span>
             </div>
             <div>
               <span className="font-medium">{simResult.comparison.scenario_2.name}:</span>
-              <span className="ml-2">{simResult.comparison.scenario_2.runway.toFixed(1)}mo</span>
+              <span className="ml-2">{isRunwaySustainable(simResult.comparison.scenario_2.runway) ? 'Sustainable' : `${simResult.comparison.scenario_2.runway.toFixed(1)}mo`}</span>
             </div>
           </div>
           <div className="mt-2 text-xs">
@@ -762,15 +763,15 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div className="p-2 rounded bg-secondary/50">
                     <p className="text-xs text-muted-foreground">P10</p>
-                    <p className="text-sm font-mono">{sim.runway.p10.toFixed(1)}mo</p>
+                    <p className="text-sm font-mono">{isRunwaySustainable(sim.runway.p10) ? '∞' : `${sim.runway.p10.toFixed(1)}mo`}</p>
                   </div>
                   <div className="p-2 rounded bg-secondary/50">
                     <p className="text-xs text-muted-foreground">P50</p>
-                    <p className="text-sm font-mono font-medium">{sim.runway.p50.toFixed(1)}mo</p>
+                    <p className="text-sm font-mono font-medium">{isRunwaySustainable(sim.runway.p50) ? 'Sustainable' : `${sim.runway.p50.toFixed(1)}mo`}</p>
                   </div>
                   <div className="p-2 rounded bg-secondary/50">
                     <p className="text-xs text-muted-foreground">P90</p>
-                    <p className="text-sm font-mono">{sim.runway.p90.toFixed(1)}mo</p>
+                    <p className="text-sm font-mono">{isRunwaySustainable(sim.runway.p90) ? '∞' : `${sim.runway.p90.toFixed(1)}mo`}</p>
                   </div>
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
@@ -1396,7 +1397,7 @@ export default function CopilotPage() {
       const FETCH_METRIC_MAP: Record<string, { key: string; label: string; format: (v: any) => string }> = {
         'mrr': { key: 'mrr', label: 'Monthly Recurring Revenue', format: (v) => `$${(v || 0).toLocaleString()}` },
         'arr': { key: 'mrr', label: 'Annual Recurring Revenue', format: (v) => `$${((v || 0) * 12).toLocaleString()}` },
-        'runway': { key: 'runway_months', label: 'Runway', format: (v) => `${v?.toFixed(1) || 'N/A'} months` },
+        'runway': { key: 'runway_months', label: 'Runway', format: (v) => v != null && isRunwaySustainable(v) ? 'Sustainable' : `${v?.toFixed(1) || 'N/A'} months` },
         'burn': { key: 'net_burn', label: 'Net Burn Rate', format: (v) => `$${(v || 0).toLocaleString()}/month` },
         'cac': { key: 'cac', label: 'Customer Acquisition Cost', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
         'ltv': { key: 'ltv', label: 'Lifetime Value', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A' },
@@ -1709,7 +1710,7 @@ Type **help** for a full list of what I can do.`,
       'arr': { key: 'mrr', format: (v) => `$${((v || 45000) * 12).toLocaleString()}`, label: 'Annual Recurring Revenue' },
       'margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
       'gross margin': { key: 'gross_margin', format: (v) => `${v || 75}%`, label: 'Gross Margin' },
-      'runway': { key: 'runway_months', format: (v) => `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
+      'runway': { key: 'runway_months', format: (v) => v != null && isRunwaySustainable(v) ? 'Sustainable' : `${v?.toFixed(1) || '16.5'} months`, label: 'Runway' },
       'cash': { key: 'cash_balance', format: (v) => `$${(v || 500000).toLocaleString()}`, label: 'Cash Balance' },
       'cac': { key: 'cac', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Customer Acquisition Cost' },
       'ltv': { key: 'ltv', format: (v) => v != null && v > 0 ? `$${v.toLocaleString()}` : 'N/A', label: 'Lifetime Value' },
@@ -1736,7 +1737,7 @@ Type **help** for a full list of what I can do.`,
     if (lowerQuery.includes('runway') || lowerQuery.includes('extend')) {
       return {
         role: 'assistant',
-        content: `Based on your current metrics, your runway is **${metrics.runway_months?.value?.toFixed(1) || 16.5} months** (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
+        content: `Based on your current metrics, your runway is **${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5) + ' months'}** (P50). To extend by 6 months, I recommend:\n\n1. **Reduce burn by 15%** - This alone could add 3-4 months\n2. **Implement 10% price increase** - With your strong NRR of ${metrics.net_revenue_retention?.value || 108}%, churn risk is minimal\n3. **Defer non-critical hires** - Push Q2 hires to Q3\n\nWould you like me to run a simulation with these changes?`,
         metrics: ['runway_months', 'net_burn', 'net_revenue_retention'],
         dataSources: ['truth_scan', 'simulation'],
         suggestion: { label: 'Run burn cut scenario', action: 'burn_cut_15' },
@@ -1747,7 +1748,7 @@ Type **help** for a full list of what I can do.`,
     if (lowerQuery.includes('risk') || lowerQuery.includes('assumption')) {
       return {
         role: 'assistant',
-        content: `Your riskiest assumption is **revenue concentration**. Your top 5 customers represent ${metrics.concentration_top5?.value || 32}% of revenue.\n\nIf you lose your largest customer, runway drops from ${metrics.runway_months?.value?.toFixed(1) || 16.5} to approximately 11 months.\n\nRecommendation: Prioritize customer diversification and increase logo count before your next fundraise.`,
+        content: `Your riskiest assumption is **revenue concentration**. Your top 5 customers represent ${metrics.concentration_top5?.value || 32}% of revenue.\n\nIf you lose your largest customer, runway drops from ${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5)} to approximately 11 months.\n\nRecommendation: Prioritize customer diversification and increase logo count before your next fundraise.`,
         metrics: ['concentration_top5', 'customer_count', 'runway_months'],
         dataSources: ['truth_scan', 'benchmark'],
         timestamp: new Date(),
@@ -1757,7 +1758,7 @@ Type **help** for a full list of what I can do.`,
     if (lowerQuery.includes('fundraise') || lowerQuery.includes('slip') || lowerQuery.includes('raise') || lowerQuery.includes('dilution') || lowerQuery.includes('valuation')) {
       return {
         role: 'assistant',
-        content: `If your fundraise slips 3 months:\n\n- Current runway: **${metrics.runway_months?.value?.toFixed(1) || 16.5} months**\n- Survival probability at 18m: **${simulation?.survival?.['18m'] || 65}%**\n- Post-slip survival: **~52%**\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
+        content: `If your fundraise slips 3 months:\n\n- Current runway: **${metrics.runway_months?.value != null && isRunwaySustainable(metrics.runway_months.value) ? 'Sustainable' : (metrics.runway_months?.value?.toFixed(1) || 16.5) + ' months'}**\n- Survival probability at 18m: **${simulation?.survival?.['18m'] || 65}%**\n- Post-slip survival: **~52%**\n\nMitigation options:\n1. Secure a bridge round now ($500K-750K)\n2. Implement immediate burn reduction (15-20%)\n3. Accelerate revenue with pricing optimization\n\nThe confidence in these projections is ${confidence >= 80 ? 'high' : confidence >= 60 ? 'moderate' : 'low'} based on your data quality.`,
         metrics: ['runway_months', 'survival_18m', 'cash_balance'],
         dataSources: ['truth_scan', 'simulation', 'scenario'],
         suggestion: { label: 'Run bridge scenario', action: 'bridge_round' },
@@ -2262,7 +2263,7 @@ Type **help** for a full list of what I can do.`,
                   <CardContent className="text-sm">
                     {simulation ? (
                       <>
-                        <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50?.toFixed(1)} mo</span></p>
+                        <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50 != null && isRunwaySustainable(simulation.runway.p50) ? 'Sustainable' : `${simulation.runway?.p50?.toFixed(1)} mo`}</span></p>
                         <p>Survival 18m: <span className="font-mono font-medium">{typeof simulation.survival?.['18m'] === 'number' ? Number(simulation.survival['18m']).toFixed(1) : simulation.survival?.['18m']}%</span></p>
                       </>
                     ) : (
