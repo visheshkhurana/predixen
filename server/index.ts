@@ -669,7 +669,7 @@ app.use((req, res, next) => {
   setupComplete = true;
   console.log("[startup] Application setup complete");
 
-  waitForFastAPI(30, 2000).then((ready) => {
+  waitForFastAPI(180, 2000).then((ready) => {
     if (ready) {
       log("FastAPI backend is ready");
     } else {
