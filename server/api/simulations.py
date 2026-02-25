@@ -77,8 +77,8 @@ class ScenarioCreate(BaseModel):
 
     @validator('burn_reduction_pct')
     def validate_burn_reduction(cls, v):
-        if v < 0 or v > 100:
-            raise ValueError('burn_reduction_pct must be between 0 and 100')
+        if v < -100 or v > 100:
+            raise ValueError('burn_reduction_pct must be between -100 and 100')
         return v
 
     @validator('fundraise_month')
@@ -179,7 +179,7 @@ def list_scenarios(
 INPUT_GUARDRAILS = {
     "pricing_change_pct": {"min": -50, "max": 100, "label": "Pricing change", "unit": "%"},
     "growth_uplift_pct": {"min": -30, "max": 50, "label": "Growth uplift", "unit": "%"},
-    "burn_reduction_pct": {"min": 0, "max": 80, "label": "Burn reduction", "unit": "%"},
+    "burn_reduction_pct": {"min": -100, "max": 80, "label": "Burn reduction", "unit": "%"},
     "churn_rate": {"min": 0, "max": 30, "label": "Monthly churn rate", "unit": "%"},
     "gross_margin": {"min": 10, "max": 95, "label": "Gross margin", "unit": "%"},
     "cac": {"min": 0, "max": 50000, "label": "Customer acquisition cost", "unit": "$"},

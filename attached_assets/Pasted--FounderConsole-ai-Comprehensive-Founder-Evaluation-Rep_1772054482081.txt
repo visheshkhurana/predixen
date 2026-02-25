@@ -1,0 +1,157 @@
+---
+
+# FounderConsole.ai — Comprehensive Founder Evaluation Report
+
+**Evaluator Persona**: Early-stage SaaS B2B founder (CloudPulse AI — post-seed, $85K MRR, 14 employees)
+**Date**: February 26, 2026
+**Testing Duration**: ~45 minutes of hands-on evaluation
+
+---
+
+## A) Executive Satisfaction Score (0–10)
+
+| Category | Score | Notes |
+|---|---|---|
+| Onboarding | 7/10 | Fast wizard, smart defaults, but duplicate companies bug |
+| Data Confidence | 4/10 | Score is inconsistent across pages, N/A frequently |
+| Scenario Usefulness | 6/10 | Impressive when it works; silent failures kill trust |
+| Integrations | 7/10 | Broad catalog, good UI; "Connected" labels misleading for new companies |
+| UI/UX | 7/10 | Dark theme is polished; information density is excellent |
+| Reliability | 3/10 | 422 errors, silent sim failures, data inconsistency across views |
+| Value | 6/10 | High potential if reliability were fixed |
+
+**Composite: 5.7/10** — I would not pay today, but would revisit in 4–6 weeks if reliability were addressed.
+
+---
+
+## B) Feature-By-Feature Review
+
+### 1. Onboarding
+
+**What worked**: The 4-step wizard (Company Basics → Financial Snapshot → Expense Breakdown → Data Sources) is intuitive and fast. I completed it in under 3 minutes. The pre-filled values for Pre-Series A companies ($60K MRR, 72% margins, $2M cash, 18 employees) are realistic and helpful, with a clear blue info banner explaining they're stage-appropriate defaults. The "How Your Metrics Are Computed" section at the bottom of Step 2 showing formulas for Gross Profit, Net Burn, Runway, and Total Expenses is a strong trust signal. Step 3 is correctly marked optional. Step 4 data source selection (Manual Entry / Upload Files / Connect Apps) is clean.
+
+**What didn't work**: The company switcher dropdown contains dozens of duplicate entries — I counted 15+ "TechFlow Analytics" and multiple "TechFlow AI" and "NimbusHR Labs" entries. This is clearly a database deduplication failure and would immediately erode a paying founder's trust. The "Add New Company" button is buried at the bottom of a very long scroll, behind all the duplicates. There's also no "B2B" vs "B2C" distinction during onboarding, which matters for benchmark calibration.
+
+**Star Rating: ★★★★☆ (4/5)**
+
+### 2. Dashboard Metrics
+
+**KPI Summary**: The Financial Intelligence Overview is well-designed. On first load after setup it showed: MRR $85K (Verified, +10%), ARR $1.02M, Cash on Hand $1.8M, Burn Rate $75.7K/mo, CAC $3.5K, LTV $13.8K (LTV:CAC 3.9x), ARPU $567, Active Customers 150, NRR 108%, with "Updated about 4 hours ago" timestamps and "Above median" benchmarks. The Goal Tracker with auto-generated goals (Reach $100K MRR, Extend Runway to 36 mo, Churn Below 2%) and progress bars is a nice touch.
+
+**Confidence Score Evaluation**: The "Medium Confidence (62)" badge is visible but poorly explained. On a subsequent page load, Business Health and Data Confidence both showed "N/A" in the sidebar. The Health Check page (/truth) showed 0/100 for both Quality of Growth Index and Data Confidence Score, while the dashboard simultaneously showed 75/100 and 62%. The "Low Confidence (0)" badge appeared after a page reload. This inconsistency is deeply concerning for a tool that positions itself around "truth" and data confidence.
+
+**Three specific improvements for trust signals**:
+
+The first improvement is to show the calculation methodology. When I see "Data Confidence: 62%," I need to know what's being measured. Add a tooltip or expandable section that says something like "Confidence is computed from: data freshness (40%), source verification (30%), and completeness (30%). Your manual-entry data scores lower because it hasn't been cross-verified against an integration." Without this, the number feels arbitrary.
+
+The second improvement is to fix the staleness indicators. "Updated about 4 hours ago" appeared on every KPI, even ones I just entered manually minutes prior. The timestamp should reflect when I entered the data or at minimum match the company creation time. Having stale timestamps on freshly-entered data creates distrust from the first moment.
+
+The third improvement is to reconcile scores across all views. Business Health showing 75/100 on the dashboard and N/A in the sidebar and 0/100 on the Health Check page on the same session is a critical data integrity bug. These numbers must be consistent everywhere they appear, or founders will immediately question whether any number in the product can be trusted.
+
+### 3. Simulator
+
+**Scenarios tested**: (A) Cut marketing spend 25% for 6 months, (B) Hire 10 engineers and 3 sales (FAILED), (C) Raise prices 20%, (D) Churn hits 5%
+
+**Scenario A — Cost Optimization**: The result was strong: 7/10 GO, 100% survival, 48 months runway, break-even at month 5. The Key Risk / Key Opportunity / Watch framework is excellent decision-framing. The Sensitivity Analysis tornado chart showing payroll costs as the #1 runway lever is genuinely useful. The What-If Explorer sliders are powerful. However, the P10/P50/P90 distributions all showed identical 48.0 month runway, which means the Monte Carlo simulation isn't actually producing meaningful variance — that's either a bug or the model is too deterministic.
+
+**Scenario B — Staff Scaling**: This scenario silently failed multiple times. I typed custom text, clicked Simulate, the input cleared, and no results appeared. Console errors showed repeated 422 errors on `/companies/87/scenarios`. There was no error message, no loading indicator, no feedback whatsoever. The simulation just vanished. This is a critical bug: silent failures destroy user trust more than visible errors ever could.
+
+**Scenario C — Pricing Change (Raise prices 20%)**: Ran successfully via preset button. Result: 7/10 GO, +3.0mo runway, +100% survival, P10-P90 spread of 2.0 months. Reasonable and actionable. The detail about breakeven at month 25 and P10 downside of 19 months is useful strategic framing.
+
+**Scenario D — External Shock (Churn hits 5%)**: Excellent result differentiation: 3/10 NO-GO, survival drops from 100% to 0%, runway shrinks from 48 to 17 months (-31 months). Decision Score breakdown (Risk 1/10, Reward 5/10, Capital Efficiency 4/10, Survival Impact -100%) is genuinely insightful. The "High Risk Alert" critical banner is well-designed.
+
+**Additional observations**: The Stress Test Scenarios section (Mild Recession, Severe Downturn, Funding Winter) with pre-computed impact estimates is a great feature. The Breaking Point Analysis showing churn would need to hit 19.2% (+500%) to be fatal is the kind of insight that justifies paying for this tool. The Cash Projection Bands chart shows P10/P90 ranges but the P50 (Median) tooltip showed "N/A" which is a display bug.
+
+**Suggested improvements**: Fix the silent 422 failures with clear error states. Make the Monte Carlo distributions actually diverge at P10/P50/P90 for runway (currently identical). Fix the What-If Explorer slider values showing 320% churn rate and 7800% gross margin — these are clearly unit conversion bugs. Add the ability to chain or combine scenarios (e.g., "Raise prices 20% AND cut marketing 25%").
+
+**Star Rating: ★★★☆☆ (3/5)** — The vision is excellent; the execution has critical reliability gaps.
+
+### 4. Integrations
+
+**Ease of use**: The integrations page is well-organized with a "Quick Setup" section (QuickBooks, Gusto, Stripe) and filterable Data Connectors (All, Recommended, Revenue & Payments, Accounting, HR & Payroll, Analytics, CRM & Sales). Setup time estimates (~5-15 min) are helpful. The "Test with Sample Data" buttons on unconnected integrations are a smart design choice for evaluation.
+
+**Available integrations**: QuickBooks Online, Xero, Zoho Books, Tally ERP, Stripe, Gusto, RazorpayX Payroll, Keka HR, GreytHR, Salesforce, HubSpot with several Coming Soon (NetSuite, Pipedrive, PeopleStrong, QuikChex, Deskera, SAP Business One, Odoo, Marg ERP, Zoho CRM).
+
+**Data freshness**: QuickBooks showed "Last synced: about 13 hours ago, 847 records imported." HubSpot showed the same — 13 hours ago, 234 records. The "Sync Now" button is available but I didn't test whether it completes within 5-15 minutes. There's no visible webhook configuration or real-time sync indicator.
+
+**Reliability of sync**: Connected integrations showed clear status (green "Connected" badge, record count, last sync time). The "Disconnect" option is available. However, QuickBooks and Stripe showed as "Connected" for my brand-new CloudPulse AI company, which is misleading — these connections appear to be shared across the account, not company-specific.
+
+**Missing**: No HubSpot-to-pipeline-revenue attribution visible. No error recovery UI for failed syncs. No webhook configuration. No data mapping customization.
+
+### 5. Decision Journal
+
+**Expectations vs reality**: The Decisions page generates a well-structured "Strategic Briefing" document with sections: The Situation, What We Recommend, If You Do Nothing, Key Risks, Alternative Paths. The briefing is AI-generated and grounded in financial data. The table of contents sidebar navigation is nice. Export options include Copy Brief, Email Briefing, and Regenerate Briefing.
+
+The "Recent Simulations" section on the Simulate page shows past runs with summary metrics (runway, survival, date) but there's no formal "Decision Journal" that tracks: what was decided, what the prediction was, and what actually happened. There's a "Notes & Annotations" text area on the dashboard for adding notes about scenarios, and simulation results can be saved (I saw "1 saved" counter), but there's no retrospective tracking capability.
+
+**Suggested UI/UX for a Decision Journal**: I'd want a timeline view showing: (1) Date of simulation, (2) Scenario description, (3) AI recommendation (GO/NO-GO with score), (4) My decision (Adopted/Rejected/Modified), (5) Expected outcomes at 3/6/12 months, (6) Actual outcomes (auto-populated from data if integrations are connected), (7) Delta analysis showing how predictions compared to reality. This would be the killer feature that drives retention — founders would come back monthly to see if the predictions held.
+
+### 6. Stability & Performance
+
+**Bug #1 (Critical): Silent simulation failures** — Custom-text simulations silently fail with 422 errors. No error message displayed. Text input clears without feedback. Console shows repeated `API Error: 422 /companies/87/scenarios Request failed (422)`.
+
+**Bug #2 (Critical): Data inconsistency across views** — Business Health shows 75/100 on dashboard, N/A in sidebar, 0/100 on Health Check page. Burn rate shows $75.7K on one load, $57K on another. CAC and LTV show values then N/A. Churn shows 3.2% then 0.0%.
+
+**Bug #3 (Major): Duplicate companies in company switcher** — 30+ duplicate entries (TechFlow Analytics, TechFlow AI, NimbusHR Labs) with no delete option and Add New Company buried at the bottom.
+
+**Bug #4 (Major): P50 Median shows "N/A" in Cash Projection Bands tooltip** and P10/P50/P90 runway values are identical (48.0 mo) in all three scenarios.
+
+**Bug #5 (Medium): What-If Explorer slider values display bugs** — Monthly Churn Rate shows 320%, Gross Margin shows 7800%. These appear to be percentage-to-decimal conversion errors.
+
+**Bug #6 (Medium): 500 Internal Server Error** — Console shows `JSON parse error from 500 response: Unexpected token 'I', "Internal S"...` indicating an unhandled server crash.
+
+**Bug #7 (Low): Health Check URL mismatch** — Sidebar link goes to `/truth`, but direct navigation to `/health-check` returns 404.
+
+**Performance**: Page loads were generally fast (1-2 seconds). Simulation runs took 5-8 seconds which is acceptable for Monte Carlo analysis. The briefing generation took ~15 seconds with a good progress indicator. No crashes or "something went wrong" screens — failures were all silent, which is arguably worse.
+
+### 7. Billing & Value Proposition
+
+**Pricing clarity**: No visible pricing page was found during this evaluation. The admin Billing Management page showed MRR: $0 with 0 subscriptions, but this appears to be the admin backend, not a user-facing pricing page. Without visible pricing, I cannot evaluate value-for-money.
+
+**Competitive comparison**: Compared to Baremetrics ($108-$648/mo for SaaS analytics), ChartMogul ($0-$999/mo for subscription analytics), Causal ($50-$400/mo for financial planning), and Runway ($500+/mo for financial modeling) — FounderConsole's unique value proposition is the combination of: (a) AI-powered scenario simulation with Monte Carlo analysis, (b) Decision scoring with GO/NO-GO recommendations, (c) Industry benchmarking with percentile comparisons, and (d) Stress testing and breaking point analysis. None of the competitors offer all four together.
+
+**Why I would not pay today**: The data inconsistency and silent failures mean I cannot trust the numbers this tool produces. For a product whose tagline includes "Know Your Truth" and positions around "Data Confidence," having numbers change between page loads is a dealbreaker. If I present a board deck based on these simulations and the runway number is wrong, that's my credibility on the line.
+
+**Why I would pay in the future**: If reliability were fixed, this could easily justify $199-$299/mo for a Pre-Series A company. The simulation engine, when it works, produces genuinely actionable insights. The Decision Score framework (Risk, Reward, Capital Efficiency, Survival Impact) is unique in the market. The sensitivity analysis and stress testing features are things I'd otherwise build in spreadsheets.
+
+---
+
+## C) Top 5 Product Priorities Before Paying
+
+**P0 (Showstopper — Must fix before any paid conversion):**
+
+1. **Fix data consistency across all views.** Business Health, Data Confidence, KPIs must show identical values everywhere they appear — dashboard, sidebar, Health Check page, simulation context bar. A single instance of "75/100 here, 0/100 there" kills trust permanently.
+
+2. **Fix silent simulation failures.** Every simulation attempt must produce either results or a clear, actionable error message. The current behavior of clearing the input and showing nothing is unacceptable. Add loading states, error toasts, and retry buttons.
+
+**P1 (High Priority — Must fix within 30 days of launch):**
+
+3. **Fix company switcher duplicate entries.** Implement deduplication, add ability to delete/archive companies, and move "Add New Company" to the top of the list with a distinct CTA, not buried under 30+ duplicates.
+
+4. **Make Monte Carlo distributions actually diverge.** P10/P50/P90 showing identical runway values (48.0 mo across all three) defeats the entire purpose of probabilistic modeling. If the spread is genuinely zero, explain why. If it's a bug, fix the variance modeling.
+
+**P2 (Important — Fix within 60 days):**
+
+5. **Build a proper Decision Journal with retrospective tracking.** This is the feature that converts trial users to paying subscribers. Show founders whether the predictions held, track decisions over time, and auto-populate actual outcomes from connected integrations.
+
+---
+
+## D) Suggested Copy/UX Improvements
+
+**Data Confidence badge**: Change "Medium Confidence (62)" → "62% Confidence — based on manual data entry. Connect Stripe or QuickBooks to improve to 85%+." This gives the user a clear action path.
+
+**Simulation input placeholder**: Change "What happens if we hire 3 engineers and raise prices 15%?" → "Ask a 'what if' question (e.g., 'What if we cut burn by 20% and hire 2 AEs?')" — the current placeholder is great but should change after first use to avoid confusion about whether it's real text or a placeholder.
+
+**Health Check sidebar label**: Change "Health Check" → "Truth Scan" to match the actual URL and page title, or vice versa. The current mismatch between the label and the internal route name creates confusion.
+
+**"Low Confidence (0)" badge**: When data confidence is truly at 0 or N/A, don't show a badge at all. Instead show "Set up your data sources →" with a link to onboarding. A red "Low Confidence (0)" badge on a brand-new company feels punishing rather than helpful.
+
+**Simulation results "YOUR ANSWER" section**: Add a small "How we calculated this" expandable below the GO/NO-GO recommendation. Founders need to trust the model, and transparency is the fastest path there.
+
+**Goal Tracker**: The auto-generated goals are great, but label them as "Suggested Goals" and let founders dismiss or edit them before they become persistent. Seeing "Churn Below 2% — Off Track" when I haven't even input churn data yet feels inaccurate.
+
+**What-If Explorer sliders**: Display actual values, not multiplied percentages. "Monthly Churn Rate: 320%" should read "Monthly Churn Rate: 3.2%" with the slider range being 0–10%.
+
+---
+
+**Bottom line**: FounderConsole has the most ambitious and well-conceived feature set I've seen in the founder tooling space. The simulation engine, when it works, produces insights I can't get from Baremetrics or ChartMogul. But the reliability issues are severe enough that I'd be nervous basing real strategic decisions on it. Fix P0 items, and I'll pay on day one.

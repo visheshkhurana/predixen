@@ -290,7 +290,7 @@ async def get_dashboard_kpis(
         cash_value = metrics.get("cash_balance") if isinstance(metrics.get("cash_balance"), (int, float)) else (metrics.get("cash_balance", {}).get("value") if isinstance(metrics.get("cash_balance"), dict) else 1500000)
         concentration_value = metrics.get("concentration_top5") if isinstance(metrics.get("concentration_top5"), (int, float)) else 35
         
-        data_confidence = outputs.get("overall_score", 75)
+        data_confidence = outputs.get("data_confidence_score") or outputs.get("overall_score") or 0
         validation = metrics.get("data_validation", {})
         missing_data = validation.get("missing_data", [])
         
@@ -328,8 +328,8 @@ async def get_dashboard_kpis(
     
     kpis = {
         "dataConfidence": data_confidence,
-        "qualityOfGrowthIndex": 72,
-        "topConcentration": 35,
+        "qualityOfGrowthIndex": outputs.get("quality_of_growth_index", 0) if truth_scan else 0,
+        "topConcentration": concentration_value if concentration_value is not None else 35,
         "runway": {
             "metricName": "runway",
             "currentValue": runway_value,

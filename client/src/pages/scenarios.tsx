@@ -781,9 +781,10 @@ export default function ScenariosPage() {
       return;
     }
 
-    const scenarioName = questionInput.trim().length > 60 ? questionInput.trim().slice(0, 60) + '...' : questionInput.trim();
+    const inputText = questionInput.trim();
+    const scenarioName = inputText.length > 60 ? inputText.slice(0, 60) + '...' : inputText;
 
-    const { params, tags } = parseNaturalLanguageScenario(questionInput);
+    const { params, tags } = parseNaturalLanguageScenario(inputText);
 
     const scenarioData: any = {
       name: scenarioName,
@@ -791,13 +792,13 @@ export default function ScenariosPage() {
       tags,
     };
 
-    console.log('[NLP] Input:', questionInput);
+    console.log('[NLP] Input:', inputText);
     console.log('[NLP] Parsed params:', JSON.stringify(params));
     console.log('[NLP] Tags:', tags);
 
     setDualPathMode({ active: false });
-    handleWizardComplete(scenarioData);
     setQuestionInput('');
+    handleWizardComplete(scenarioData);
   };
 
   const handleChipClick = (label: string) => {

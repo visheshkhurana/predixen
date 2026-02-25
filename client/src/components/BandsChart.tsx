@@ -114,9 +114,10 @@ export function BandsChart({
                 }}
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
-                    const p10 = payload.find(p => p.dataKey === 'p10')?.value as number;
-                    const p50 = payload.find(p => p.dataKey === 'p50')?.value as number;
-                    const p90 = payload.find(p => p.dataKey === 'p90')?.value as number;
+                    const entry = payload[0]?.payload;
+                    const p10 = entry?.p10 ?? (payload.find(p => p.dataKey === 'p10')?.value as number);
+                    const p50 = entry?.p50 ?? (payload.find(p => p.dataKey === 'p50')?.value as number);
+                    const p90 = entry?.p90 ?? (payload.find(p => p.dataKey === 'p90')?.value as number);
                     return (
                       <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
                         <p className="font-medium text-sm mb-2">Month {label}</p>

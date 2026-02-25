@@ -229,12 +229,13 @@ async def list_catalog(
 @router.get("/catalog/{connector_id}")
 async def get_catalog_connector(
     connector_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
     Get single connector from catalog.
     """
-    catalog = await list_catalog(None, False, False, current_user)
+    catalog = await list_catalog(None, False, False, None, current_user, db)
     for c in catalog:
         if c["id"] == connector_id:
             return c

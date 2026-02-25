@@ -44,8 +44,8 @@ export function WhatIfExplorer({
 }: WhatIfExplorerProps) {
   const sliderConfigs: SliderConfig[] = useMemo(() => [
     { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: baselineState?.monthlyGrowthRate || baselineState?.growthRate || 0, unit: '%' },
-    { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: baselineState?.churnRate ? baselineState.churnRate * 100 : 5, unit: '%' },
-    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: baselineState?.grossMargin ? baselineState.grossMargin * 100 : 70, unit: '%' },
+    { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: baselineState?.churnRate ? (baselineState.churnRate > 1 ? baselineState.churnRate : baselineState.churnRate * 100) : 5, unit: '%' },
+    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: baselineState?.grossMargin ? (baselineState.grossMargin > 1 ? baselineState.grossMargin : baselineState.grossMargin * 100) : 70, unit: '%' },
     { key: 'burnChange', label: 'Burn Rate Change', icon: Flame, min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
     { key: 'fundraising', label: 'Fundraising Amount', icon: DollarSign, min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => formatCurrencyAbbrev(v) },
   ], [baselineState]);
