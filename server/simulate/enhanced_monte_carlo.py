@@ -1,4 +1,4 @@
-import numpy as np
+from server.lib.lazy_imports import np
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime

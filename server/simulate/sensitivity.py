@@ -8,7 +8,7 @@ assumptions have the greatest impact on simulation outcomes.
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from copy import deepcopy
-import numpy as np
+from server.lib.lazy_imports import np
 
 from server.simulate.transformer import (
     transform_assumptions_to_inputs,

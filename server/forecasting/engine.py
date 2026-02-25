@@ -5,8 +5,7 @@ Implements Holt-Winters, exponential smoothing, and trend detection.
 import math
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
-import numpy as np
-from scipy import stats
+from server.lib.lazy_imports import np, scipy_stats
 
 from .models import (
     ForecastConfig,
@@ -61,7 +60,7 @@ def create_forecast(
     # Calculate confidence intervals
     residuals = _calculate_residuals(values, trend_comp[:n], seasonal_comp[:n])
     std_error = np.std(residuals) if len(residuals) > 1 else 0.1 * np.mean(values)
-    z_score = stats.norm.ppf((1 + config.confidence_level) / 2)
+    z_score = scipy_stats.norm.ppf((1 + config.confidence_level) / 2)
     
     # Build historical points
     historical_points = []
@@ -167,7 +166,7 @@ def detect_trend(values: List[float]) -> TrendAnalysis:
     
     # Linear regression for trend
     x = np.arange(n)
-    slope, intercept, r_value, _, _ = stats.linregress(x, arr)
+    slope, intercept, r_value, _, _ = scipy_stats.linregress(x, arr)
     
     # Determine direction
     if abs(slope) < 0.01 * np.mean(arr):
@@ -224,7 +223,7 @@ def _linear_forecast(
     """Simple linear regression forecast."""
     n = len(values)
     x = np.arange(n)
-    slope, intercept, _, _, _ = stats.linregress(x, values)
+    slope, intercept, _, _, _ = scipy_stats.linregress(x, values)
     
     # Trend component
     trend = slope * np.arange(n + config.horizon_months) + intercept

@@ -3,8 +3,7 @@ import json
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
-import pandas as pd
-from openai import OpenAI
+from server.lib.lazy_imports import pd
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +87,9 @@ def create_word_representations(metrics: Dict[str, Any], currency: str = "USD") 
     return word_representations
 
 
-def get_openai_client() -> OpenAI:
+def get_openai_client():
     """Get OpenAI client with validation."""
+    from openai import OpenAI
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     

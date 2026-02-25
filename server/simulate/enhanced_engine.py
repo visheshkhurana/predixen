@@ -1,7 +1,6 @@
-import numpy as np
-from scipy.linalg import cholesky
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import asdict
+from server.lib.lazy_imports import np
 from .models import (
     EnrichedSimulationInputs, 
     MonthlyState, 
@@ -125,6 +124,7 @@ class EnhancedSimulationEngine:
     
     def _compute_cholesky(self) -> np.ndarray:
         try:
+            from scipy.linalg import cholesky
             return cholesky(self.correlation_matrix, lower=True)
         except:
             return np.eye(len(self.driver_names))

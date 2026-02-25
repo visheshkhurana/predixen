@@ -526,7 +526,7 @@ export function StrategicScenarioBuilder({
                       ) : (
                         <TrendingDown className="w-3 h-3" />
                       )}
-                      {(simulation.runway.p50 - baseMetrics.currentRunway).toFixed(1)} months
+                      {simulation.runway.p50 >= 900 || baseMetrics.currentRunway >= 900 ? 'Sustainable' : `${(simulation.runway.p50 - baseMetrics.currentRunway).toFixed(1)} months`}
                     </div>
                   )}
                 </div>

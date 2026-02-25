@@ -246,6 +246,23 @@ export default function DecisionsPage() {
   const isAnalyzing = isDiagnosisLoading && !diagnosisData;
   const isUpdating = isDiagnosisFetching && !!diagnosisData;
 
+  const [autoGenTriggered, setAutoGenTriggered] = useState(false);
+  useEffect(() => {
+    if (
+      currentCompany?.id &&
+      !isLoading &&
+      !isDiagnosisLoading &&
+      !isGenerating &&
+      !autoGenTriggered &&
+      !diagnosisData &&
+      !hasBriefing &&
+      !generationError
+    ) {
+      setAutoGenTriggered(true);
+      handleGenerateDecisions();
+    }
+  }, [currentCompany?.id, isLoading, isDiagnosisLoading, isGenerating, autoGenTriggered, diagnosisData, hasBriefing, generationError, handleGenerateDecisions]);
+
   useEffect(() => {
     const sectionIds = TOC_SECTIONS.map((s) => s.id);
     const observer = new IntersectionObserver(

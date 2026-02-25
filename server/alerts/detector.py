@@ -4,8 +4,7 @@ Anomaly detection and threshold monitoring for financial drivers.
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-import numpy as np
-
+from server.lib.lazy_imports import np
 from .models import (
     Alert,
     AlertType,

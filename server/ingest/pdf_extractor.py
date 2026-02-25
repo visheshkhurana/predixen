@@ -6,7 +6,6 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 import pdfplumber
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -278,8 +277,9 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
     return metrics
 
 
-def get_openai_client() -> OpenAI:
+def get_openai_client():
     """Get OpenAI client with validation."""
+    from openai import OpenAI
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     

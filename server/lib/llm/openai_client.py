@@ -7,7 +7,6 @@ import time
 import os
 from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime
-from openai import OpenAI
 
 from server.lib.privacy.pii_redactor import redact_text, redact_object, RedactionResult
 from server.models.llm_audit_log import LLMAuditLog
@@ -15,6 +14,7 @@ from server.models.llm_audit_log import LLMAuditLog
 
 def get_openai_client():
     """Get OpenAI client with Replit AI Integrations configuration."""
+    from openai import OpenAI
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     
@@ -24,7 +24,13 @@ def get_openai_client():
     return OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
 
 
-client = get_openai_client()
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = get_openai_client()
+    return _client
 
 
 def compute_prompt_hash(text: str) -> str:
@@ -53,7 +59,7 @@ class AuditedOpenAIClient:
         self.company_id = company_id
         self.user_id = user_id
         self.pii_mode = pii_mode
-        self.client = client or get_openai_client()
+        self.client = _get_client()
         if self.client is None:
             raise ValueError("OpenAI API key not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY or OPENAI_API_KEY environment variable.")
     

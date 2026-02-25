@@ -40,7 +40,7 @@ import { TruthScanBlockedModal } from '@/components/TruthScanGate';
 import { BeforeAfterDeltaCards, PaybackClock, RiskAlertBanner, DataDrivenRecommendation, CounterMoveCards, FundraisingIntelligence, FundraiseDilutionModel, DecisionScoreCard, getBaselineSimulation } from '@/components/ScenarioDeltas';
 import { ScenarioComparePicker, ScenarioCompareMode } from '@/components/ScenarioCompareMode';
 import { SensitivitySliders } from '@/components/SensitivitySliders';
-import { isTruthScanRequired, getTruthScanUploadId } from '@/lib/errors';
+import { isTruthScanRequired, getTruthScanUploadId, getErrorMessage } from '@/lib/errors';
 import {
   Play, BarChart3, History, Loader2, Target, Trophy,
   Sparkles, Lock, Zap, AlertTriangle, ExternalLink,
@@ -453,7 +453,7 @@ export default function ScenariosPage() {
         }
         return;
       }
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     } finally {
       setIsCreating(false);
       setIsRunning(false);
@@ -478,7 +478,7 @@ export default function ScenariosPage() {
         }
         return;
       }
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     } finally {
       setIsRunning(false);
     }
@@ -511,7 +511,7 @@ export default function ScenariosPage() {
         }
         return;
       }
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     }
   };
 
@@ -529,7 +529,7 @@ export default function ScenariosPage() {
         }
         return;
       }
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     }
   };
 
@@ -558,7 +558,7 @@ export default function ScenariosPage() {
         }
         return;
       }
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     }
   };
 
@@ -583,7 +583,7 @@ export default function ScenariosPage() {
       toast({ title: 'Baseline scenario created!', description: 'Your baseline simulation is ready to view.' });
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth' }), 300);
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error', description: getErrorMessage(err, 'Something went wrong'), variant: 'destructive' });
     } finally {
       setIsCreatingBaseline(false);
     }

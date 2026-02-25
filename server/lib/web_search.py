@@ -3,7 +3,6 @@ import os
 import httpx
 import logging
 from typing import Optional, Dict, Any
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +102,7 @@ def _search_with_openai(company_name: str, website: Optional[str] = None) -> Dic
         return {"success": False, "error": "OpenAI not configured"}
     
     try:
+        from openai import OpenAI
         client = OpenAI(base_url=base_url, api_key=api_key)
         
         search_query = _get_company_prompt(company_name, website)

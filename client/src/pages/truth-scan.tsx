@@ -134,7 +134,7 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
   const runwayP50 = getMetricValue(metrics.runway_p50);
   const burnMultiple = getMetricValue(metrics.burn_multiple);
   const grossMargin = getMetricValue(metrics.gross_margin);
-  const churnRateRaw = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRateRaw = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue) || getMetricValue(metrics.churn_rate);
   const churnRate = churnRateRaw !== null ? (churnRateRaw > 1 ? churnRateRaw / 100 : churnRateRaw) : null;
   const runwaySustainable = metrics.runway_sustainable === true;
 
@@ -207,7 +207,7 @@ function generateSuggestedActions(metrics: any, flags: any[]): SuggestedAction[]
   const runwayP50 = getMetricValue(metrics.runway_p50);
   const burnMultiple = getMetricValue(metrics.burn_multiple);
   const grossMargin = getMetricValue(metrics.gross_margin);
-  const churnRateRaw2 = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRateRaw2 = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue) || getMetricValue(metrics.churn_rate);
   const churnRate = churnRateRaw2 !== null ? (churnRateRaw2 > 1 ? churnRateRaw2 / 100 : churnRateRaw2) : null;
   const arr = getMetricValue(metrics.arr);
   const runwaySustainable = metrics.runway_sustainable === true;
@@ -526,7 +526,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'churn',
       label: 'Churn Rate',
       value: (() => {
-        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue) || extractValue(metrics.churn_rate);
         const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
         const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
         return churn && churn > 0 ? `${(churn * 100).toFixed(1)}%` : 'N/A';
@@ -535,7 +535,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       trendValue: '/month',
       benchmark: 'Target: <5%',
       status: (() => {
-        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue) || extractValue(metrics.churn_rate);
         const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
         const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
         return churn && churn <= 0.05 ? 'healthy' : churn && churn <= 0.1 ? 'warning' : 'critical';

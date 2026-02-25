@@ -1,12 +1,12 @@
-import pandas as pd
 from io import StringIO
 from typing import List, Dict, Any
 from datetime import datetime
+from server.lib.lazy_imports import pd
 
-def parse_csv(content: str) -> pd.DataFrame:
+def parse_csv(content: str):
     return pd.read_csv(StringIO(content))
 
-def detect_column_mapping(df: pd.DataFrame, dataset_type: str) -> Dict[str, str]:
+def detect_column_mapping(df, dataset_type: str) -> Dict[str, str]:
     columns = [c.lower().strip() for c in df.columns]
     mapping = {}
     
@@ -49,7 +49,7 @@ def detect_column_mapping(df: pd.DataFrame, dataset_type: str) -> Dict[str, str]
     
     return mapping
 
-def parse_financial_records(df: pd.DataFrame, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+def parse_financial_records(df, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
     records = []
     for _, row in df.iterrows():
         record = {
@@ -65,7 +65,7 @@ def parse_financial_records(df: pd.DataFrame, mapping: Dict[str, str]) -> List[D
         records.append(record)
     return records
 
-def parse_transaction_records(df: pd.DataFrame, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+def parse_transaction_records(df, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
     records = []
     for _, row in df.iterrows():
         record = {
@@ -79,7 +79,7 @@ def parse_transaction_records(df: pd.DataFrame, mapping: Dict[str, str]) -> List
         records.append(record)
     return records
 
-def parse_customer_records(df: pd.DataFrame, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
+def parse_customer_records(df, mapping: Dict[str, str]) -> List[Dict[str, Any]]:
     records = []
     for _, row in df.iterrows():
         record = {

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-import numpy as np
+from server.lib.lazy_imports import np
 from server.models.company import Company
 from server.models.financial import FinancialRecord
 from server.models.transaction import TransactionRecord
