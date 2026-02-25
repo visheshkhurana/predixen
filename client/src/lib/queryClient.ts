@@ -76,7 +76,7 @@ export async function apiRequest(
 ): Promise<Response> {
   let res: Response;
 
-  try {
+  const makeRequest = async () => {
     const token = getAuthToken();
     const headers: Record<string, string> = {};
 
@@ -87,7 +87,6 @@ export async function apiRequest(
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
       const csrfToken = getCSRFToken();
       if (csrfToken) {
@@ -95,12 +94,27 @@ export async function apiRequest(
       }
     }
 
-    res = await fetch(url, {
+    return fetch(url, {
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
       credentials: "include",
     });
+  };
+
+  try {
+    res = await makeRequest();
+
+    if (res.status === 403) {
+      try {
+        const body = await res.clone().json();
+        if (body?.detail === 'CSRF token validation failed') {
+          await fetch('/api/health', { credentials: 'include' });
+          await new Promise(r => setTimeout(r, 100));
+          res = await makeRequest();
+        }
+      } catch {}
+    }
   } catch (error) {
     const networkError = error instanceof Error ? error.message : String(error);
     console.error(`Network error for ${method} ${url}:`, error);

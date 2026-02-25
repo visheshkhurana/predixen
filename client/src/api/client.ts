@@ -82,9 +82,20 @@ async function request<T>(
       response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers,
+        credentials: 'include',
       });
 
-      // Retry on transient server errors (only for idempotent GET requests or explicit retryable status)
+      if (response.status === 403 && attempt < MAX_RETRIES) {
+        try {
+          const body = await response.clone().json();
+          if (body?.detail === 'CSRF token validation failed') {
+            await fetch(`${API_BASE}/health`, { credentials: 'include' });
+            await sleep(100);
+            continue;
+          }
+        } catch {}
+      }
+
       if (RETRYABLE_STATUS_CODES.includes(response.status) && attempt < MAX_RETRIES) {
         const isIdempotent = !method || method === 'GET';
         if (isIdempotent) {
