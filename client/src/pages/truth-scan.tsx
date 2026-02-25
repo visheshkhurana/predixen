@@ -529,7 +529,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
         const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue) || extractValue(metrics.churn_rate);
         const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
         const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
-        return churn && churn > 0 ? `${(churn * 100).toFixed(1)}%` : 'N/A';
+        return churn !== null && churn !== undefined ? `${(churn * 100).toFixed(1)}%` : 'N/A';
       })(),
       trend: undefined,
       trendValue: '/month',

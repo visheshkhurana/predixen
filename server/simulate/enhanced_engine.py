@@ -414,7 +414,20 @@ class EnhancedSimulationEngine:
                     break
             
             if not ran_out:
-                runway_months[sim] = min(horizon + 12, 60)
+                last_state = states[-1] if states else None
+                if last_state and last_state.cash > 0:
+                    last_net = last_state.revenue * (last_state.margin / 100) - last_state.opex
+                    if last_net >= 0:
+                        volatility = self.rng.normal(1.0, 0.25)
+                        surplus = last_net * max(volatility, 0.3)
+                        theoretical = horizon + last_state.cash / max(surplus * 0.1, 1.0)
+                        runway_months[sim] = min(theoretical, 120)
+                    else:
+                        extra = last_state.cash / abs(last_net) if abs(last_net) > 0 else 60
+                        noise = self.rng.normal(1.0, 0.2)
+                        runway_months[sim] = min(horizon + extra * max(noise, 0.3), 120)
+                else:
+                    runway_months[sim] = min(horizon + self.rng.uniform(6, 24), 120)
         
         total_regime_months = sum(regime_counts.values())
         regime_distribution = {k: v / total_regime_months for k, v in regime_counts.items()}

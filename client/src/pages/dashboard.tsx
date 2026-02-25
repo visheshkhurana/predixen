@@ -462,7 +462,7 @@ export default function Dashboard() {
             
             <EnhancedKPICard
               data={overviewKpis.netBurn}
-              title="Net Burn"
+              title="Net Burn Rate"
               format="currency"
               currency={companyCurrency}
               icon={<Flame className="h-4 w-4" />}
@@ -814,7 +814,7 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <KPITile
-              title="Net Burn"
+              title="Net Burn Rate"
               value={formatCurrency(liveMetrics.net_burn)}
               icon={<TrendingDown className="h-4 w-4" />}
               subtitle="per month"
