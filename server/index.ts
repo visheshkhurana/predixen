@@ -12,15 +12,64 @@ import path from "path";
 const app = express();
 const httpServer = createServer(app);
 
-// Open port 5000 IMMEDIATELY so deployment health checks pass
-const port = parseInt(process.env.PORT || "5000", 10);
-const listenOptions: Record<string, string | number | boolean> = { port, host: "0.0.0.0" };
-if (process.platform === "linux") {
-  listenOptions.reusePort = true;
+// Open an HTTP port IMMEDIATELY so deployment health checks pass.
+// If the requested port is already in use, automatically fallback to the next port.
+const requestedPort = parseInt(process.env.PORT || "5000", 10);
+const maxPortAttempts = Math.max(parseInt(process.env.PORT_RETRY_ATTEMPTS || "10", 10), 1);
+
+function getListenOptions(port: number): Record<string, string | number | boolean> {
+  const options: Record<string, string | number | boolean> = { port, host: "0.0.0.0" };
+  if (process.platform === "linux") {
+    options.reusePort = true;
+  }
+  return options;
 }
-httpServer.listen(listenOptions, () => {
-  console.log(`[startup] Port ${port} open and accepting connections`);
-});
+
+function startHttpServerWithPortFallback(startPort: number): void {
+  let attempt = 0;
+
+  const tryPort = (candidatePort: number) => {
+    const onListening = () => {
+      httpServer.off("error", onError);
+      httpServer.off("listening", onListening);
+
+      const address = httpServer.address();
+      const boundPort =
+        address && typeof address === "object" && "port" in address
+          ? address.port
+          : candidatePort;
+
+      process.env.PORT = String(boundPort);
+      console.log(`[startup] Port ${boundPort} open and accepting connections`);
+      if (boundPort !== startPort) {
+        console.log(`[startup] Requested port ${startPort} unavailable; running on ${boundPort}`);
+      }
+    };
+
+    const onError = (err: NodeJS.ErrnoException) => {
+      httpServer.off("error", onError);
+      httpServer.off("listening", onListening);
+      if (err.code === "EADDRINUSE" && attempt + 1 < maxPortAttempts) {
+        attempt += 1;
+        const nextPort = candidatePort + 1;
+        console.warn(`[startup] Port ${candidatePort} is in use, retrying on ${nextPort}`);
+        tryPort(nextPort);
+        return;
+      }
+
+      console.error(`[startup] Failed to open port ${candidatePort}: ${err.message}`);
+      process.exit(1);
+    };
+
+    httpServer.once("error", onError);
+    httpServer.once("listening", onListening);
+    httpServer.listen(getListenOptions(candidatePort));
+  };
+
+  tryPort(startPort);
+}
+
+startHttpServerWithPortFallback(requestedPort);
 
 // Initialize WebSocket server for real-time updates
 const wss = setupWebSocketServer(httpServer);

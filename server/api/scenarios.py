@@ -35,7 +35,7 @@ class ForkScenarioRequest(BaseModel):
     assumptions: Dict[str, Any] = {}
 
 
-@router.get("/companies/{company_id}/scenarios")
+@router.get("/companies/{company_id}/company-scenarios")
 def list_scenarios(
     company_id: int,
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
@@ -67,7 +67,37 @@ def list_scenarios(
     )
 
 
-@router.get("/companies/{company_id}/scenarios/{scenario_id}")
+@router.get("/companies/{company_id}/company-scenarios/compare")
+def compare_company_scenarios(
+    company_id: int,
+    scenario_ids: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    get_user_company(db, company_id, current_user)
+    
+    ids = [s.strip() for s in scenario_ids.split(",")]
+    
+    scenarios = []
+    for sid in ids:
+        try:
+            suuid = uuid_lib.UUID(sid)
+            scenario = db.query(CompanyScenario).filter(
+                CompanyScenario.id == suuid,
+                CompanyScenario.company_id == company_id
+            ).first()
+            if scenario:
+                scenarios.append(scenario.to_dict())
+        except ValueError:
+            continue
+    
+    return {
+        "scenarios": scenarios,
+        "comparison": generate_comparison(scenarios)
+    }
+
+
+@router.get("/companies/{company_id}/company-scenarios/{scenario_id}")
 def get_scenario(
     company_id: int,
     scenario_id: str,
@@ -92,8 +122,8 @@ def get_scenario(
     return scenario.to_dict()
 
 
-@router.post("/companies/{company_id}/scenarios")
-def create_scenario(
+@router.post("/companies/{company_id}/company-scenarios")
+def create_company_scenario(
     company_id: int,
     request: CreateScenarioRequest,
     db: Session = Depends(get_db),
@@ -135,7 +165,7 @@ def create_scenario(
     return scenario.to_dict()
 
 
-@router.post("/companies/{company_id}/scenarios/{scenario_id}/fork")
+@router.post("/companies/{company_id}/company-scenarios/{scenario_id}/fork")
 def fork_scenario(
     company_id: int,
     scenario_id: str,
@@ -187,7 +217,7 @@ def fork_scenario(
     return forked.to_dict()
 
 
-@router.patch("/companies/{company_id}/scenarios/{scenario_id}")
+@router.patch("/companies/{company_id}/company-scenarios/{scenario_id}")
 def update_scenario(
     company_id: int,
     scenario_id: str,
@@ -242,7 +272,7 @@ def update_scenario(
     return scenario.to_dict()
 
 
-@router.delete("/companies/{company_id}/scenarios/{scenario_id}")
+@router.delete("/companies/{company_id}/company-scenarios/{scenario_id}")
 def delete_scenario(
     company_id: int,
     scenario_id: str,
@@ -278,36 +308,6 @@ def delete_scenario(
     db.commit()
     
     return {"success": True, "message": "Scenario deleted"}
-
-
-@router.get("/companies/{company_id}/scenarios/compare")
-def compare_scenarios(
-    company_id: int,
-    scenario_ids: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    company = get_user_company(db, company_id, current_user)
-    
-    ids = [s.strip() for s in scenario_ids.split(",")]
-    
-    scenarios = []
-    for sid in ids:
-        try:
-            suuid = uuid_lib.UUID(sid)
-            scenario = db.query(CompanyScenario).filter(
-                CompanyScenario.id == suuid,
-                CompanyScenario.company_id == company_id
-            ).first()
-            if scenario:
-                scenarios.append(scenario.to_dict())
-        except ValueError:
-            continue
-    
-    return {
-        "scenarios": scenarios,
-        "comparison": generate_comparison(scenarios)
-    }
 
 
 def compute_scenario_outputs(assumptions: Dict[str, Any], truth_data: Dict[str, Any]) -> Dict[str, Any]:

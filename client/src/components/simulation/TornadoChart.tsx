@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ReferenceLine,
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart3, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatRunwayDisplay } from '@/lib/simulation/sensitivityAnalysis';
 
 interface SensitivityVariable {
   name: string;
@@ -74,7 +75,7 @@ export function TornadoChart({ baselineRunway, variables, onVariableClick, testI
       </CardHeader>
       <CardContent>
         <div className="text-center text-sm text-muted-foreground mb-4">
-          Baseline: {baselineRunway.toFixed(1)} months
+          Baseline: {formatRunwayDisplay(baselineRunway)}
         </div>
 
         <ResponsiveContainer width="100%" height={sortedData.length * 50 + 40}>

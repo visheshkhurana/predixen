@@ -13,8 +13,10 @@ from datetime import datetime
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models import Company, CompanyState, Scenario, SimulationRun
 from server.models.company_state import compute_snapshot_id
+from server.models.user import User
 from server.schemas.canonical import (
     CompanyStateSchema,
     CompanyStateUpdate,
@@ -168,7 +170,7 @@ def get_or_create_company_state(db: Session, company_id: int) -> CompanyState:
 async def get_company_state(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get the canonical company state - single source of truth for all modules.
@@ -176,6 +178,7 @@ async def get_company_state(
     This endpoint is used by Overview, Truth Scan, Simulation, and Compare pages
     to ensure consistent data display across the application.
     """
+    get_user_company(db, company_id, current_user)
     state = get_or_create_company_state(db, company_id)
     return state.to_dict()
 
@@ -185,7 +188,7 @@ async def update_company_state(
     company_id: int,
     update: CompanyStateUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update the canonical company state.
@@ -193,6 +196,7 @@ async def update_company_state(
     This invalidates any queued/running simulation runs and updates the snapshot ID.
     All modules will reflect this change on next read.
     """
+    get_user_company(db, company_id, current_user)
     state = get_or_create_company_state(db, company_id)
     
     if update.financials:
@@ -216,14 +220,15 @@ async def update_company_state(
     return state.to_dict()
 
 
-@router.get("/companies/{company_id}/scenarios")
+@router.get("/canonical/companies/{company_id}/scenarios")
 async def list_scenarios(
     company_id: int,
     include_archived: bool = False,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List all scenarios for a company."""
+    get_user_company(db, company_id, current_user)
     query = db.query(Scenario).filter(Scenario.company_id == company_id)
     if not include_archived:
         query = query.filter(Scenario.is_archived == 0)
@@ -243,17 +248,15 @@ async def list_scenarios(
     } for s in scenarios]
 
 
-@router.post("/companies/{company_id}/scenarios")
+@router.post("/canonical/companies/{company_id}/scenarios")
 async def create_scenario(
     company_id: int,
     request: CreateScenarioRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new scenario with optional overrides."""
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    get_user_company(db, company_id, current_user)
     
     scenario = Scenario(
         company_id=company_id,
@@ -281,12 +284,13 @@ async def update_scenario(
     scenario_id: int,
     request: UpdateScenarioRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update an existing scenario."""
     scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    get_user_company(db, scenario.company_id, current_user)
     
     if request.name is not None:
         scenario.name = request.name
@@ -315,9 +319,14 @@ async def update_scenario(
 async def get_latest_run(
     scenario_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get the latest completed simulation run for a scenario."""
+    scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    get_user_company(db, scenario.company_id, current_user)
+
     run = db.query(SimulationRun).filter(
         SimulationRun.scenario_id == scenario_id,
         SimulationRun.status == "completed"
@@ -333,12 +342,16 @@ async def get_latest_run(
 async def get_run(
     run_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get a specific simulation run by ID."""
     run = db.query(SimulationRun).filter(SimulationRun.id == run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    scenario = db.query(Scenario).filter(Scenario.id == run.scenario_id).first()
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    get_user_company(db, scenario.company_id, current_user)
     
     return run.to_dict()
 
@@ -349,7 +362,7 @@ async def run_simulation(
     scenario_id: int,
     request: RunSimulationRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Run a Monte Carlo simulation for a scenario.
@@ -357,6 +370,7 @@ async def run_simulation(
     This creates a frozen snapshot of the current company state and scenario overrides,
     ensuring reproducibility and provenance tracking.
     """
+    get_user_company(db, company_id, current_user)
     state = get_or_create_company_state(db, company_id)
     scenario = db.query(Scenario).filter(
         Scenario.id == scenario_id,

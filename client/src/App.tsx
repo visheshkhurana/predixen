@@ -311,6 +311,9 @@ function Router() {
       <Route path="/goals">
         {() => <AuthenticatedRoute component={GoalsPage} />}
       </Route>
+      <Route path="/billing">
+        {() => <Redirect to="/admin/billing" />}
+      </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
         {() => <AdminRoute component={AdminDashboard} />}

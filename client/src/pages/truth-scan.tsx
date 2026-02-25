@@ -419,7 +419,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'runway',
       label: 'Runway (P50)',
       value: (() => {
-        if (metrics.runway_sustainable) return 'Sustainable';
+        if (metrics.runway_sustainable || sharedMetrics.runway === Infinity) return 'Sustainable';
         const tsRunway = extractValue(metrics.runway_p50);
         const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
         return `${runway.toFixed(1)} months`;
@@ -428,7 +428,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       trendValue: undefined,
       benchmark: 'Benchmark: 12+ months',
       status: (() => {
-        if (metrics.runway_sustainable) return 'healthy';
+        if (metrics.runway_sustainable || sharedMetrics.runway === Infinity) return 'healthy';
         const tsRunway = extractValue(metrics.runway_p50);
         const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
         return runway < 6 ? 'critical' : runway < 12 ? 'warning' : 'healthy';
@@ -440,8 +440,9 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'burn-rate',
       label: 'Burn Rate',
       value: (() => {
-        const burn = extractValue(metrics.net_burn);
-        return burn ? formatCurrency(Math.abs(burn)) : 'N/A';
+        const tsBurn = extractValue(metrics.net_burn);
+        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
+        return burn !== null && burn !== undefined ? formatCurrency(Math.abs(burn)) : 'N/A';
       })(),
       trend: undefined,
       trendValue: '/month',
@@ -453,7 +454,11 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     {
       id: 'mrr',
       label: 'Monthly Revenue',
-      value: formatCurrency(metrics.monthly_revenue || metrics.mrr),
+      value: (() => {
+        const tsMrr = extractValue(metrics.monthly_revenue) || extractValue(metrics.mrr);
+        const mrr = tsMrr !== null ? tsMrr : sharedMetrics.mrr;
+        return mrr !== null && mrr !== undefined ? formatCurrency(mrr) : 'N/A';
+      })(),
       trend: undefined,
       trendValue: undefined,
       benchmark: '',
@@ -464,12 +469,17 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     {
       id: 'gross-margin',
       label: 'Gross Margin',
-      value: formatPercent(metrics.gross_margin),
+      value: (() => {
+        const tsGrossMargin = extractValue(metrics.gross_margin);
+        const grossMargin = tsGrossMargin !== null ? tsGrossMargin : sharedMetrics.grossMarginPct;
+        return grossMargin !== null && grossMargin !== undefined ? formatPercent(grossMargin) : 'N/A';
+      })(),
       trend: undefined,
       trendValue: undefined,
       benchmark: 'Target: 70%+',
       status: (() => {
-        const gm = extractValue(metrics.gross_margin);
+        const tsGrossMargin = extractValue(metrics.gross_margin);
+        const gm = tsGrossMargin !== null ? tsGrossMargin : sharedMetrics.grossMarginPct;
         return gm && gm >= 70 ? 'healthy' : gm && gm >= 60 ? 'warning' : 'critical';
       })() as any,
       source: 'calculated' as any,
@@ -478,7 +488,11 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     {
       id: 'cac',
       label: 'Customer Acquisition Cost',
-      value: formatCurrency(metrics.cac),
+      value: (() => {
+        const tsCac = extractValue(metrics.cac);
+        const cac = tsCac !== null ? tsCac : sharedMetrics.cac;
+        return cac !== null && cac !== undefined ? formatCurrency(cac) : 'N/A';
+      })(),
       trend: undefined,
       trendValue: undefined,
       benchmark: '',
@@ -490,14 +504,16 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'ltv-cac',
       label: 'LTV:CAC Ratio',
       value: (() => {
-        const ratio = extractValue(metrics.ltv_cac_ratio);
+        const tsRatio = extractValue(metrics.ltv_cac_ratio);
+        const ratio = tsRatio !== null ? tsRatio : sharedMetrics.ltvCacRatio;
         return ratio ? `${ratio.toFixed(1)}x` : 'N/A';
       })(),
       trend: undefined,
       trendValue: undefined,
       benchmark: 'Target: 3x+',
       status: (() => {
-        const ratio = extractValue(metrics.ltv_cac_ratio);
+        const tsRatio = extractValue(metrics.ltv_cac_ratio);
+        const ratio = tsRatio !== null ? tsRatio : sharedMetrics.ltvCacRatio;
         return ratio && ratio >= 3 ? 'healthy' : ratio && ratio >= 2 ? 'warning' : 'critical';
       })() as any,
       source: 'calculated' as any,
@@ -507,14 +523,16 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'churn',
       label: 'Churn Rate',
       value: (() => {
-        const churn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
         return churn ? `${(churn * 100).toFixed(1)}%` : 'N/A';
       })(),
       trend: undefined,
       trendValue: '/month',
       benchmark: 'Target: <5%',
       status: (() => {
-        const churn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
         return churn && churn <= 0.05 ? 'healthy' : churn && churn <= 0.1 ? 'warning' : 'critical';
       })() as any,
       source: 'calculated' as any,
@@ -524,14 +542,16 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'nrr',
       label: 'Net Revenue Retention',
       value: (() => {
-        const nrr = extractValue(metrics.net_revenue_retention);
+        const tsNrr = extractValue(metrics.net_revenue_retention);
+        const nrr = tsNrr !== null ? tsNrr : sharedMetrics.ndr;
         return nrr ? `${nrr.toFixed(0)}%` : 'N/A';
       })(),
       trend: undefined,
       trendValue: undefined,
       benchmark: 'Target: 110%+',
       status: (() => {
-        const nrr = extractValue(metrics.net_revenue_retention);
+        const tsNrr = extractValue(metrics.net_revenue_retention);
+        const nrr = tsNrr !== null ? tsNrr : sharedMetrics.ndr;
         return nrr && nrr >= 110 ? 'healthy' : nrr && nrr >= 100 ? 'warning' : 'critical';
       })() as any,
       source: 'calculated' as any,

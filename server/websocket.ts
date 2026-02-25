@@ -126,6 +126,16 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
     }
   });
 
+  // Prevent process crashes when the underlying HTTP server emits bind errors
+  // (for example first-attempt EADDRINUSE before port fallback succeeds).
+  wss.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      console.warn('[WebSocket] Bind conflict detected; waiting for HTTP server fallback port');
+      return;
+    }
+    console.error('[WebSocket] Server error:', error);
+  });
+
   console.log('[WebSocket] Server initialized on /ws');
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {

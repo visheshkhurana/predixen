@@ -120,7 +120,11 @@ const SUGGESTION_CHIPS = [
 ];
 
 export default function ScenariosPage() {
-  const { currentCompany, setCurrentStep, setCurrentScenario, setLatestRun, financialBaseline } = useFounderStore();
+  const currentCompany = useFounderStore((s) => s.currentCompany);
+  const financialBaseline = useFounderStore((s) => s.financialBaseline);
+  const setCurrentStep = useFounderStore((s) => s.setCurrentStep);
+  const setCurrentScenario = useFounderStore((s) => s.setCurrentScenario);
+  const setLatestRun = useFounderStore((s) => s.setLatestRun);
   const companyCurrency = (currentCompany as any)?.currency || 'USD';
   const CURRENCY_SYMBOLS: Record<string, string> = {
     USD: '$', EUR: '\u20AC', GBP: '\u00A3', INR: '\u20B9', JPY: '\u00A5',
@@ -309,7 +313,7 @@ export default function ScenariosPage() {
     const grossMargin = sharedMetrics.grossMarginPct;
     const growthRate = sharedMetrics.monthlyGrowthRate > 0 ? sharedMetrics.monthlyGrowthRate : (Number(financialBaseline?.monthlyGrowthRate) || 0);
     const churnRate = sharedMetrics.churnRatePct;
-    const currentRunway = sharedMetrics.runway === Infinity ? 999 : sharedMetrics.runway;
+    const currentRunway = sharedMetrics.runway === Infinity ? 60 : sharedMetrics.runway;
     return {
       baseMetrics: { cashOnHand, monthlyExpenses, monthlyRevenue, currentRunway, growthRate, grossMargin, churnRate },
       isUsingDemoData: !hasRealData,
@@ -363,17 +367,34 @@ export default function ScenariosPage() {
   useEffect(() => {
     if (selectedScenarioId && scenarios) {
       const selected = scenarios.find((s: any) => s.id === selectedScenarioId);
-      if (selected) setCurrentScenario({ id: selected.id, name: selected.name });
+      if (!selected) return;
+      const existing = useFounderStore.getState().currentScenario;
+      if (existing?.id === selected.id && existing?.name === selected.name) {
+        return;
+      }
+      setCurrentScenario({ id: selected.id, name: selected.name });
     } else {
-      setCurrentScenario(null);
+      if (useFounderStore.getState().currentScenario !== null) {
+        setCurrentScenario(null);
+      }
     }
   }, [selectedScenarioId, scenarios, setCurrentScenario]);
 
   useEffect(() => {
     if (simulation && selectedScenarioId) {
+      const existing = useFounderStore.getState().latestRun;
+      const runId = simulation.run_id || simulation.id?.toString() || existing?.id || `scenario-${selectedScenarioId}`;
+      const timestamp = simulation.created_at || existing?.timestamp || new Date().toISOString();
+      if (
+        existing?.id === runId &&
+        existing?.scenarioId === selectedScenarioId &&
+        existing?.timestamp === timestamp
+      ) {
+        return;
+      }
       setLatestRun({
-        id: simulation.run_id || simulation.id?.toString() || `run-${Date.now()}`,
-        timestamp: simulation.created_at || new Date().toISOString(),
+        id: runId,
+        timestamp,
         scenarioId: selectedScenarioId,
       });
     }
@@ -1290,7 +1311,7 @@ export default function ScenariosPage() {
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Runway</p>
                   <p className="text-sm font-semibold font-mono" data-testid="text-context-runway">
-                    {Number(baseMetrics.currentRunway).toFixed(1)} mo
+                    {formatRunway(Number(baseMetrics.currentRunway))}
                   </p>
                 </div>
                 <div>

@@ -291,7 +291,7 @@ const computeMonthlyProjections = (baseData: typeof DUMMY_BASE_DATA, assumptions
       arr: mrr * 12,
       cash: Math.max(0, cash),
       burnRate: burn,
-      runway: burn <= 0 ? 999 : cash > 0 ? cash / burn : 0,
+      runway: burn <= 0 ? 60 : cash > 0 ? Math.min(cash / burn, 60) : 0,
       cac,
       ltv,
       ltvCacRatio: cac > 0 ? ltv / cac : 0,
@@ -804,12 +804,32 @@ export default function OverviewPage() {
   const riskAlerts = useMemo(() => getRiskAlerts(baseData, assumptions), [baseData, assumptions]);
   const sensitivityData = useMemo(() => getSensitivityData(projectedMetrics, assumptions, baseData), [projectedMetrics, assumptions, baseData]);
   
-  const getBenchmarkStatus = (value: number, benchmark: { p25: number; p50: number; p75: number; direction: string }) => {
-    if (benchmark.direction === 'higher' || benchmark.direction === 'higher_is_better') {
+  const isLowerBetterDirection = (direction: string) => direction === 'lower' || direction === 'lower_is_better';
+
+  const getBenchmarkStatus = (
+    value: number,
+    benchmark: { p25: number; p50: number; p75: number; direction: string },
+  ): 'above' | 'median' | 'below' => {
+    if (!isLowerBetterDirection(benchmark.direction)) {
       return value >= benchmark.p50 ? 'above' : value >= benchmark.p25 ? 'median' : 'below';
-    } else {
-      return value <= benchmark.p50 ? 'above' : value <= benchmark.p25 ? 'median' : 'below';
     }
+    return value <= benchmark.p50 ? 'above' : value <= benchmark.p75 ? 'median' : 'below';
+  };
+
+  const getBenchmarkBadgeLabel = (
+    status: 'above' | 'median' | 'below',
+    direction: string,
+    p50: number,
+    unit: string,
+  ) => {
+    if (isLowerBetterDirection(direction)) {
+      if (status === 'above') {
+        const median = Number.isFinite(p50) ? p50.toFixed(1).replace(/\.0$/, '') : 'N/A';
+        return `Better than median (${median}${unit})`;
+      }
+      return status === 'median' ? 'P50-P75' : 'Worse than P75';
+    }
+    return status === 'above' ? 'Above P50' : status === 'median' ? 'P25-P50' : 'Below P25';
   };
   
   const getDynamicBenchmark = (metricName: string) => {
@@ -833,6 +853,7 @@ export default function OverviewPage() {
         p50: growthBenchmark.p50, 
         p75: growthBenchmark.p75,
         unit: '%',
+        direction: growthBenchmark.direction,
         status: getBenchmarkStatus(assumptions.growthRate, growthBenchmark),
       },
       { 
@@ -842,6 +863,7 @@ export default function OverviewPage() {
         p50: grossMarginBenchmark.p50, 
         p75: grossMarginBenchmark.p75,
         unit: '%',
+        direction: grossMarginBenchmark.direction,
         status: getBenchmarkStatus(baseData.grossMargin, grossMarginBenchmark),
       },
       { 
@@ -851,6 +873,7 @@ export default function OverviewPage() {
         p50: ltvCacBenchmark.p50, 
         p75: ltvCacBenchmark.p75,
         unit: 'x',
+        direction: ltvCacBenchmark.direction,
         status: getBenchmarkStatus(baseData.ltvCacRatio, ltvCacBenchmark),
       },
       { 
@@ -860,6 +883,7 @@ export default function OverviewPage() {
         p50: runwayBenchmark.p50, 
         p75: runwayBenchmark.p75,
         unit: 'mo',
+        direction: runwayBenchmark.direction,
         status: getBenchmarkStatus(baseData.runway, runwayBenchmark),
       },
       { 
@@ -869,6 +893,7 @@ export default function OverviewPage() {
         p50: churnBenchmark.p50, 
         p75: churnBenchmark.p75,
         unit: '%',
+        direction: churnBenchmark.direction,
         status: getBenchmarkStatus(baseData.churnRate, churnBenchmark),
       },
       { 
@@ -878,6 +903,7 @@ export default function OverviewPage() {
         p50: burnBenchmark.p50, 
         p75: burnBenchmark.p75,
         unit: 'x',
+        direction: burnBenchmark.direction,
         status: getBenchmarkStatus(baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, burnBenchmark),
       },
     ];
@@ -2144,7 +2170,7 @@ export default function OverviewPage() {
                           ) : (
                             <TrendingDown className="h-3 w-3 mr-1" />
                           )}
-                          {item.status === 'above' ? 'Above P50' : item.status === 'median' ? 'P25-P50' : 'Below P25'}
+                          {getBenchmarkBadgeLabel(item.status, item.direction, item.p50, item.unit)}
                         </Badge>
                       </div>
                     </div>

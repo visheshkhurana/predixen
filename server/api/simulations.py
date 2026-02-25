@@ -856,8 +856,7 @@ def get_scenario_timeseries(
         cash_balance = cas.get("p50", 0)
         monthly_burn = brn.get("p50", 0)
         monthly_revenue = rev.get("p50", 0)
-        net_burn = max(0, monthly_burn - monthly_revenue)
-        runway_remaining = cash_balance / net_burn if net_burn > 0 else 48
+        runway_remaining = cash_balance / monthly_burn if monthly_burn > 0 else 48
         
         timeseries.append({
             "month": i + 1,
@@ -881,7 +880,7 @@ def get_scenario_timeseries(
     fundraise_amount = scenario_inputs.get("fundraise_amount", 0)
     if fundraise_month is not None and fundraise_amount > 0:
         funding_events.append({
-            "month": fundraise_month + 1,
+            "month": fundraise_month,
             "amount": fundraise_amount,
             "label": f"Funding: ${fundraise_amount/1000000:.1f}M" if fundraise_amount >= 1000000 else f"Funding: ${fundraise_amount/1000:.0f}K"
         })

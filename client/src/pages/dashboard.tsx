@@ -190,6 +190,43 @@ export default function Dashboard() {
     enabled: !!selectedCompany?.id,
   });
 
+  const overviewKpis = useMemo<DashboardKPIs | null>(() => {
+    if (!kpis) return null;
+
+    const resolvedRunwayRaw = financialMetrics.sources['runway'] ? financialMetrics.runway : kpis.runway.currentValue;
+    const resolvedRunway = !Number.isFinite(resolvedRunwayRaw) || resolvedRunwayRaw >= 999
+      ? 60
+      : Math.max(0, Math.min(resolvedRunwayRaw, 60));
+
+    return {
+      ...kpis,
+      runway: {
+        ...kpis.runway,
+        currentValue: resolvedRunway,
+      },
+      cashOnHand: {
+        ...kpis.cashOnHand,
+        currentValue: financialMetrics.sources['cashOnHand'] ? financialMetrics.cashOnHand : kpis.cashOnHand.currentValue,
+      },
+      netBurn: {
+        ...kpis.netBurn,
+        currentValue: financialMetrics.sources['netBurn'] ? financialMetrics.netBurn : kpis.netBurn.currentValue,
+      },
+      mrr: {
+        ...kpis.mrr,
+        currentValue: financialMetrics.sources['mrr'] ? financialMetrics.mrr : kpis.mrr.currentValue,
+      },
+      grossMargin: {
+        ...kpis.grossMargin,
+        currentValue: financialMetrics.sources['grossMargin'] ? financialMetrics.grossMarginPct : kpis.grossMargin.currentValue,
+      },
+      burnMultiple: {
+        ...kpis.burnMultiple,
+        currentValue: financialMetrics.sources['burnMultiple'] ? financialMetrics.burnMultiple : kpis.burnMultiple.currentValue,
+      },
+    };
+  }, [kpis, financialMetrics]);
+
   const { data: trendData } = useQuery<{ days: number; data: Array<{ date: string; runway_p50?: number; runway_p10?: number; runway_p90?: number }> }>({
     queryKey: ["/api/companies", selectedCompany?.id, "trends"],
     queryFn: async () => {
@@ -267,7 +304,7 @@ export default function Dashboard() {
             </Badge>
           )}
           
-          {kpis && (
+          {overviewKpis && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <div 
@@ -276,7 +313,7 @@ export default function Dashboard() {
                 >
                   <Info className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium" data-testid="text-data-confidence-value">
-                    Data Confidence: {kpis.dataConfidence}%
+                    Data Confidence: {overviewKpis.dataConfidence}%
                   </span>
                 </div>
               </TooltipTrigger>
@@ -358,13 +395,13 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {kpis?.missingData && kpis.missingData.length > 0 && (
+          {overviewKpis?.missingData && overviewKpis.missingData.length > 0 && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-missing-data">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-800 dark:text-amber-400">Data Missing</AlertTitle>
           <AlertDescription className="text-amber-700 dark:text-amber-300">
             <ul className="mt-2 space-y-1">
-              {kpis.missingData.map((item: { field: string; message: string }, idx: number) => (
+              {overviewKpis.missingData.map((item: { field: string; message: string }, idx: number) => (
                 <li key={idx} className="flex items-center gap-2">
                   <span>{item.message}</span>
                 </li>
@@ -400,12 +437,12 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-      ) : kpis ? (
+      ) : overviewKpis ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-1 lg:row-span-2">
               <EnhancedKPICard
-                data={kpis.runway}
+                data={overviewKpis.runway}
                 title="Runway (P50)"
                 format="months"
                 icon={<Calendar className="h-5 w-5" />}
@@ -415,7 +452,7 @@ export default function Dashboard() {
             </div>
             
             <EnhancedKPICard
-              data={kpis.cashOnHand}
+              data={overviewKpis.cashOnHand}
               title="Cash on Hand"
               format="currency"
               currency={companyCurrency}
@@ -424,7 +461,7 @@ export default function Dashboard() {
             />
             
             <EnhancedKPICard
-              data={kpis.netBurn}
+              data={overviewKpis.netBurn}
               title="Net Burn"
               format="currency"
               currency={companyCurrency}
@@ -433,7 +470,7 @@ export default function Dashboard() {
             />
             
             <EnhancedKPICard
-              data={kpis.mrr}
+              data={overviewKpis.mrr}
               title="MRR"
               format="currency"
               currency={companyCurrency}
@@ -442,7 +479,7 @@ export default function Dashboard() {
             />
             
             <EnhancedKPICard
-              data={kpis.grossMargin}
+              data={overviewKpis.grossMargin}
               title="Gross Margin"
               format="percent"
               icon={<Percent className="h-4 w-4" />}
@@ -452,7 +489,7 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <EnhancedKPICard
-              data={kpis.revenueGrowth}
+              data={overviewKpis.revenueGrowth}
               title="Revenue Growth (YoY)"
               format="percent"
               icon={<BarChart3 className="h-4 w-4" />}
@@ -460,7 +497,7 @@ export default function Dashboard() {
             />
             
             <EnhancedKPICard
-              data={kpis.burnMultiple}
+              data={overviewKpis.burnMultiple}
               title="Burn Multiple"
               format="multiple"
               icon={<Target className="h-4 w-4" />}
@@ -487,18 +524,18 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-2">
                   <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="text-qog-value">
-                    {kpis.qualityOfGrowthIndex !== null ? kpis.qualityOfGrowthIndex : "N/A"}
+                    {overviewKpis.qualityOfGrowthIndex !== null ? overviewKpis.qualityOfGrowthIndex : "N/A"}
                   </span>
                   <span className="text-sm text-muted-foreground ml-1">/100</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2" data-testid="text-top-concentration">
-                  Top 5 concentration: {kpis.topConcentration !== null ? `${kpis.topConcentration}%` : "N/A"}
+                  Top 5 concentration: {overviewKpis.topConcentration !== null ? `${overviewKpis.topConcentration}%` : "N/A"}
                 </p>
               </CardContent>
             </Card>
           </div>
 
-          {kpis.recommendations && kpis.recommendations.length > 0 && (
+          {overviewKpis.recommendations && overviewKpis.recommendations.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
@@ -509,7 +546,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {kpis.recommendations.map((rec) => (
+                  {overviewKpis.recommendations.map((rec) => (
                     <div
                       key={rec.id}
                       className="flex items-start justify-between gap-4 p-4 rounded-lg bg-muted/50"

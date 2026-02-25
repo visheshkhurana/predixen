@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap, Loader2 } from 'lucide-react';
 import { SiGoogle, SiGithub } from 'react-icons/si';
 
 
@@ -33,6 +33,7 @@ export default function AuthPage() {
   const { setToken, setUser, setCurrentCompany, setCompanies } = useFounderStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
+  const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | 'github' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
@@ -165,11 +166,77 @@ export default function AuthPage() {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    toast({ 
-      title: 'Coming Soon', 
-      description: `${provider} login will be available soon.`,
-    });
+  const SOCIAL_AUTH_ENDPOINTS: Record<'google' | 'github', string[]> = {
+    google: ['/auth/google/start', '/auth/google/login', '/auth/google'],
+    github: ['/auth/github/start', '/auth/github/login', '/auth/github'],
+  };
+
+  const tryStartOAuth = async (provider: 'google' | 'github'): Promise<boolean> => {
+    const endpoints = SOCIAL_AUTH_ENDPOINTS[provider];
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(`/api${endpoint}`, {
+          method: 'GET',
+          credentials: 'include',
+          redirect: 'manual',
+        });
+
+        if (response.status >= 300 && response.status < 400) {
+          const redirectTo = response.headers.get('location');
+          if (redirectTo) {
+            window.location.assign(redirectTo);
+          } else {
+            window.location.assign(`/api${endpoint}`);
+          }
+          return true;
+        }
+
+        if (!response.ok) {
+          continue;
+        }
+
+        if (response.redirected && response.url) {
+          window.location.assign(response.url);
+          return true;
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const payload = await response.json().catch(() => null);
+          const redirectTo = payload?.authorization_url || payload?.auth_url || payload?.url || payload?.redirect_url;
+          if (typeof redirectTo === 'string' && redirectTo.length > 0) {
+            window.location.assign(redirectTo);
+            return true;
+          }
+        }
+
+        window.location.assign(`/api${endpoint}`);
+        return true;
+      } catch {
+        // Try next known endpoint fallback
+      }
+    }
+    return false;
+  };
+
+  const handleSocialLogin = async (provider: 'google' | 'github') => {
+    const providerLabel = provider === 'google' ? 'Google' : 'GitHub';
+    setSocialLoadingProvider(provider);
+    try {
+      const started = await tryStartOAuth(provider);
+      if (!started) {
+        throw new Error(`${providerLabel} OAuth is not configured on this deployment.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${providerLabel} login failed`;
+      toast({
+        title: `${providerLabel} sign-in unavailable`,
+        description: `${message} Use email/password or demo mode for now.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setSocialLoadingProvider(null);
+    }
   };
 
   const features = [
@@ -264,23 +331,43 @@ export default function AuthPage() {
             <div className="space-y-3 mb-6">
               <Button
                 variant="outline"
+                type="button"
                 className="w-full h-11 gap-3"
-                onClick={() => handleSocialLogin('Google')}
-                disabled={isLoading}
+                onClick={() => handleSocialLogin('google')}
+                disabled={isLoading || socialLoadingProvider !== null}
                 data-testid="button-google-login"
               >
-                <SiGoogle className="h-4 w-4" />
-                Continue with Google
+                {socialLoadingProvider === 'google' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Connecting Google...
+                  </>
+                ) : (
+                  <>
+                    <SiGoogle className="h-4 w-4" />
+                    Continue with Google
+                  </>
+                )}
               </Button>
               <Button
                 variant="outline"
+                type="button"
                 className="w-full h-11 gap-3"
-                onClick={() => handleSocialLogin('GitHub')}
-                disabled={isLoading}
+                onClick={() => handleSocialLogin('github')}
+                disabled={isLoading || socialLoadingProvider !== null}
                 data-testid="button-github-login"
               >
-                <SiGithub className="h-4 w-4" />
-                Continue with GitHub
+                {socialLoadingProvider === 'github' ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Connecting GitHub...
+                  </>
+                ) : (
+                  <>
+                    <SiGithub className="h-4 w-4" />
+                    Continue with GitHub
+                  </>
+                )}
               </Button>
             </div>
 
