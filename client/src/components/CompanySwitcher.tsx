@@ -192,15 +192,33 @@ export function CompanySwitcher() {
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
-          <DropdownMenuLabel>Your Companies</DropdownMenuLabel>
+        <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
+          <DropdownMenuItem
+            onClick={() => {
+              setOpen(false);
+              navigate('/onboarding');
+            }}
+            className="text-primary font-medium"
+            data-testid="button-add-company"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Company
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuLabel>Your Companies</DropdownMenuLabel>
           {companyList.length === 0 ? (
             <DropdownMenuItem disabled>
               <span className="text-muted-foreground">No companies yet</span>
             </DropdownMenuItem>
           ) : (
-            companyList.map((company) => (
+            (() => {
+              const seen = new Set<string>();
+              return companyList.filter((company) => {
+                const key = company.name?.toLowerCase() || '';
+                if (seen.has(key) && company.id !== currentCompany?.id) return false;
+                seen.add(key);
+                return true;
+              }).map((company) => (
               <DropdownMenuItem
                 key={company.id}
                 onClick={() => {
@@ -238,20 +256,11 @@ export function CompanySwitcher() {
                   </Button>
                 </div>
               </DropdownMenuItem>
-            ))
+            ));
+            })()
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
-              setOpen(false);
-              navigate('/onboarding');
-            }}
-            data-testid="button-add-company"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add New Company
-          </DropdownMenuItem>
         </DropdownMenuContent>
+
       </DropdownMenu>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

@@ -1,0 +1,214 @@
+You are now acting as a **paying early-stage SaaS founder** who has just signed up for FounderConsole.ai to manage and simulate decisions for your business. Your goal is to *test this application deeply* as if you are about to use it for real strategic planning and pay a subscription.
+
+You must evaluate the product on real founder needs, run meaningful business scenarios, track outcomes, and give honest, structured feedback.
+
+---
+
+## TASKS
+
+### 1) SIGNUP & ONBOARDING EVALUATION
+
+Start by signing up a new company profile with the following characteristics:
+
+• Business type: SaaS B2B  
+• Stage: Post-seed (choose an appropriate stage)  
+• Revenue: realistic MRR values (not zeros)  
+• Cash runway: realistic 12–18 months  
+• Burn and headcount: realistic SaaS operating costs
+
+Evaluate:
+• Was onboarding smooth?
+• Did default values help or confuse?
+• How long did it take?
+• Are instructions clear?
+• Any dead ends, confusing labels, or missing help text?
+
+Record step-by-step experience and rating of clarity (1–5 stars).
+
+---
+
+### 2) DATA CONFIDENCE & KPI TRUST TEST
+
+After connecting real test data or sample data:
+
+• Evaluate the Data Confidence Score.
+• Inspect how dashboard KPIs (MRR, Cash, Burn, CAC, LTV, Growth) are computed.
+• Check for staleness indicators and “last updated” labels.
+• Evaluate whether the confidence score feels trustworthy or confusing.
+• If any number looks inaccurate, explain why.
+
+Provide at least three specific improvements for trust signals.
+
+---
+
+### 3) SIMULATION TESTS — REAL BUSINESS STRATEGIES
+
+Run each of the following scenarios:
+
+#### A) Cost Optimization
+“What happens if we cut marketing spend by 25% for 6 months?”
+
+Evaluate:
+• Runway change
+• Growth impact
+• Cash burn impact
+• Strategic clarity
+
+---
+
+#### B) Staff Scaling
+“What happens if we hire 10 engineers and 3 sales team members next quarter?”
+
+Evaluate:
+• Burn increase
+• Productivity assumptions
+• Revenue impact
+• Any unrealistic outputs
+
+---
+
+#### C) Pricing Change
+“What happens if we increase prices by 15% and churn rises by 1%?”
+
+Evaluate:
+• Profit impact
+• Overall business health
+• Scenario clarity
+
+---
+
+#### D) External Shock
+“What if market/VC funding declines 30% and CAC increases 20%?”
+
+Evaluate:
+• Strategy implications
+• Whether the simulator gives insights or just numbers
+• Whether any macro presets are available
+
+---
+
+For each scenario:
+• Note whether results are *meaningfully different*
+• Note whether p10/p50/p90 distributions diverge
+• Note whether recommendations make sense
+• Rate the scenario result usefulness (1–5 stars)
+
+---
+
+### 4) DECISION JOURNAL & TRACKING
+
+If FoundersConsole offers a journal or history of scenarios:
+
+• Run at least 3 scenarios
+• Add retrospective notes and predictions
+• Evaluate whether the tool tracks historical outcomes
+• If not, describe exactly how you would want that feature to work
+• Describe the UI you’d expect
+
+---
+
+### 5) INTEGRATIONS & REAL-TIME DATA
+
+Test integration flows:
+
+• Stripe (revenue)
+• QuickBooks (expenses)
+• HubSpot (customer/pipeline)
+
+Evaluate:
+• Ease of connection
+• UI for permissions & reconnects
+• Whether data appears within 5–15 minutes (not hours)
+• Whether webhooks are triggered
+
+Provide:
+• Fail cases and how error states are communicated
+• Suggestions for improving clarity and error recovery
+
+---
+
+### 6) BILLING & PRICING VALUE
+
+Pretend you are evaluating a subscription plan:
+
+• Evaluate pricing clarity (does product justify its price?)
+• Compare to alternatives (Baremetrics, ChartMogul, Causal, Runway)
+• Provide a pricing strategy recommendation
+
+---
+
+### 7) BUG, RELIABILITY & PERFORMANCE CHECK
+
+While using the dashboard, observe:
+
+• Any crashes or “something went wrong” screens
+• Page load latencies
+• Synchronous vs async problems
+• Scenarios that take too long or hang
+
+Document at least 5 reliability issues and severity.
+
+---
+
+## OUTPUT FORMAT
+
+Your response must be a **structured founder report** containing:
+
+### A) Executive Satisfaction Score (0–10)
+• Onboarding
+• Data confidence
+• Scenario usefulness
+• Integrations
+• UI/UX
+• Reliability
+• Value
+
+### B) Feature-By-Feature Review
+Use headings like:
+
+**1. Onboarding**
+- What worked
+- What didn’t
+- Star rating
+
+**2. Dashboard Metrics**
+- KPI summary
+- Confidence score evaluation
+- Suggested improvements
+
+**3. Simulator**
+- Scenarios tested
+- Real world relevance
+- Output usefulness
+- Suggested improvements
+
+**4. Integrations**
+- Ease of use
+- Data freshness
+- Reliability of sync
+
+**5. Decision Journal**
+- Expectations vs reality
+- Suggested UI/UX
+
+**6. Stability & Performance**
+- Observed bugs
+- Crash rates
+- Load times
+
+**7. Billing & Value Proposition**
+- Pricing clarity
+- Competitive comparison
+- Why I would (or would not) pay
+
+### C) Top 5 Product Priorities Before Paying
+
+Ranked list: P0, P1, P2 issues
+
+### D) Optional: Suggested Copy/UX Improvements
+
+Include suggested label rewrites, microcopy improvements, and UI hints based on real founder expectations.
+
+---
+
+Be thorough, critical, and constructive — evaluate the product *as if your own business depends on it*, and provide real actionable feedback.

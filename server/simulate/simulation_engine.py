@@ -162,13 +162,14 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                     runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
+            max_cap = 120
             ending_cash = cash_paths[sim, -1]
             last_burns = burn_paths[sim, -3:]
             avg_burn = np.mean(last_burns) if np.any(last_burns > 0) else 0
             if avg_burn > 0:
                 extra_months = ending_cash / avg_burn
-                noise = rng.normal(1.0, 0.1)
-                runway_months[sim] = horizon + min(extra_months * max(noise, 0.5), 48)
+                noise = rng.normal(1.0, 0.2)
+                runway_months[sim] = horizon + min(extra_months * max(noise, 0.3), max_cap - horizon)
             else:
                 last_cashflows = []
                 for m_idx in range(max(0, horizon - 3), horizon):
@@ -177,10 +178,10 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                 avg_net = np.mean(last_cashflows) if last_cashflows else 0
                 if avg_net > 0:
                     months_of_buffer = ending_cash / max(float(avg_net), 1.0)
-                    noise = rng.normal(1.0, 0.15)
-                    runway_months[sim] = horizon + min(months_of_buffer * max(noise, 0.5), 48)
+                    noise = rng.normal(1.0, 0.25)
+                    runway_months[sim] = horizon + min(months_of_buffer * max(noise, 0.3), max_cap - horizon)
                 else:
-                    runway_months[sim] = horizon + rng.uniform(6, 18)
+                    runway_months[sim] = horizon + rng.uniform(6, 24)
     
     survival_6m = np.sum(runway_months > 6) / n
     survival_12m = np.sum(runway_months > 12) / n

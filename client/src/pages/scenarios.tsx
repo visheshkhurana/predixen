@@ -618,12 +618,24 @@ export default function ScenariosPage() {
       matched = true;
     }
 
-    const hireMatch = q.match(/hire\s+(\d+)\s*(?:engineer|dev|people|employee|person|staff)?/i);
-    if (hireMatch) {
-      const count = parseInt(hireMatch[1]);
+    let totalHires = 0;
+    const hirePatterns = [
+      /hire\s+(\d+)\s*(?:engineer|dev|developer|people|employee|person|staff|member)?s?/gi,
+      /(\d+)\s+(?:new\s+)?(?:engineer|dev|developer|sales|marketing|designer|pm|product\s+manager|analyst|hire|staff|member|people|employee)s?/gi,
+    ];
+    for (const pattern of hirePatterns) {
+      let m;
+      while ((m = pattern.exec(q)) !== null) {
+        totalHires += parseInt(m[1]);
+      }
+    }
+    if (totalHires === 0 && q.match(/hire\s+(\d+)/i)) {
+      totalHires = parseInt(q.match(/hire\s+(\d+)/i)![1]);
+    }
+    if (totalHires > 0) {
       const salaryEstimate = 12000;
-      params.burn_reduction_pct = Math.round(-(count * salaryEstimate) / (baseMetrics?.monthlyExpenses || 50000) * 100);
-      params.growth_uplift_pct += count * 3;
+      params.burn_reduction_pct = Math.round(-(totalHires * salaryEstimate) / (baseMetrics?.monthlyExpenses || 50000) * 100);
+      params.growth_uplift_pct += totalHires * 3;
       tags.push('growth');
       matched = true;
     } else if (q.includes('hire') || q.includes('engineer') || q.includes('team')) {
@@ -669,12 +681,42 @@ export default function ScenariosPage() {
     }
 
     const churnMatch = q.match(/churn\s+.*?(\d+)\s*%/i);
-    if (churnMatch) {
+    const churnDecreaseMatch = q.match(/churn\s+(?:drop|decrease|fall|decline|reduce|lower)s?\s+(?:by\s+|to\s+)?(\d+)\s*%/i);
+    if (churnDecreaseMatch) {
+      params.churn_change_pct = -parseInt(churnDecreaseMatch[1]);
+      tags.push('optimistic');
+      matched = true;
+    } else if (churnMatch) {
       params.churn_change_pct = parseInt(churnMatch[1]);
       tags.push('pessimistic');
       matched = true;
     } else if (q.includes('churn')) {
       params.churn_change_pct = 5;
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const cacMatch = q.match(/cac\s+(?:increase|rise|go(?:es)?\s+up|jump|spike)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    const cacDecreaseMatch = q.match(/cac\s+(?:decrease|drop|fall|decline|reduce|lower)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    const cacGenMatch = q.match(/cac\s+.*?(\d+)\s*%/i);
+    if (cacDecreaseMatch) {
+      params.cac_change_pct = -parseInt(cacDecreaseMatch[1]);
+      tags.push('optimistic');
+      matched = true;
+    } else if (cacMatch) {
+      params.cac_change_pct = parseInt(cacMatch[1]);
+      tags.push('pessimistic');
+      matched = true;
+    } else if (cacGenMatch) {
+      params.cac_change_pct = parseInt(cacGenMatch[1]);
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const fundingDeclineMatch = q.match(/(?:funding|vc|venture|capital)\s+(?:decline|drop|decrease|dry|freeze)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    if (fundingDeclineMatch) {
+      params.cac_change_pct += parseInt(fundingDeclineMatch[1]) / 2;
+      params.growth_uplift_pct += -parseInt(fundingDeclineMatch[1]) / 3;
       tags.push('pessimistic');
       matched = true;
     }

@@ -244,16 +244,21 @@ def run_enhanced_monte_carlo(
                 runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
-            max_cap = 48
+            max_cap = 120
             final_cash = cash_paths[sim, horizon - 1]
             final_revenue = revenue_paths[sim, horizon - 1]
             
             net_cf = final_revenue * (adjusted_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
             if net_cf >= 0:
-                runway_months[sim] = max_cap
+                monthly_surplus = net_cf
+                volatility_factor = rng.normal(1.0, 0.25)
+                adjusted_surplus = monthly_surplus * max(volatility_factor, 0.3)
+                theoretical_runway = horizon + final_cash / max(adjusted_surplus * 0.1, 1.0)
+                runway_months[sim] = min(theoretical_runway, max_cap)
             else:
                 extra = final_cash / abs(net_cf) if abs(net_cf) > 0 else max_cap
-                runway_months[sim] = min(horizon + extra, max_cap)
+                noise = rng.normal(1.0, 0.15)
+                runway_months[sim] = min(horizon + extra * max(noise, 0.5), max_cap)
         
         for event in inputs.events:
             if event.id in event_occurrences and event_occurrences[event.id] > 0:
