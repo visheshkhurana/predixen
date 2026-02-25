@@ -191,7 +191,7 @@ function generateNarrativeFeedback(params: ScenarioParams, runwayImpact: ReturnT
     return `You're ${changeText}.`;
   }
   
-  if (runwayImpact.months >= 999) {
+  if (runwayImpact.months >= 900) {
     return `By ${changeText}, you're projected to become profitable.`;
   }
   
@@ -222,7 +222,7 @@ function estimateRunwayImpact(
   const netBurn = adjustedExpenses - adjustedRevenue;
 
   if (netBurn <= 0) {
-    return { months: 999, change: 999 - baseMetrics.currentRunway, direction: 'positive' };
+    return { months: 900, change: 900 - baseMetrics.currentRunway, direction: 'positive' };
   }
 
   const newRunway = adjustedCash / netBurn;
@@ -564,10 +564,10 @@ export function ScenarioWizard({
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground">Estimated Runway</p>
                   <p className="text-lg font-mono font-semibold">
-                    {runwayImpact.months >= 999 ? 'Profitable' : `${runwayImpact.months} months`}
+                    {runwayImpact.months >= 900 ? 'Profitable' : `${runwayImpact.months} months`}
                   </p>
                 </div>
-                {runwayImpact.months < 999 && runwayImpact.change !== 0 && (
+                {runwayImpact.months < 900 && runwayImpact.change !== 0 && (
                   <Badge
                     variant={runwayImpact.direction === 'positive' ? 'default' : runwayImpact.direction === 'negative' ? 'destructive' : 'secondary'}
                   >
@@ -1099,10 +1099,10 @@ export function ScenarioWizard({
                     <div>
                       <span className="text-sm text-muted-foreground">Projected Runway</span>
                       <p className="text-2xl font-mono font-bold">
-                        {runwayImpact.months >= 999 ? 'Profitable' : `${runwayImpact.months} months`}
+                        {runwayImpact.months >= 900 ? 'Profitable' : `${runwayImpact.months} months`}
                       </p>
                     </div>
-                    {runwayImpact.months < 999 && runwayImpact.change !== 0 && (
+                    {runwayImpact.months < 900 && runwayImpact.change !== 0 && (
                       <Badge
                         variant={runwayImpact.direction === 'positive' ? 'default' : 'destructive'}
                         className="text-base px-3 py-1"

@@ -87,7 +87,7 @@ function estimateProjectedRunway(
   const adjustedCash = baseMetrics.cashOnHand + (params.fundraise_amount || 0);
   
   const newBurn = adjustedExpenses - adjustedRevenue;
-  if (newBurn <= 0) return 999;
+  if (newBurn <= 0) return 900;
   
   return adjustedCash / newBurn;
 }

@@ -246,6 +246,70 @@ export default function DecisionsPage() {
   const isAnalyzing = isDiagnosisLoading && !diagnosisData;
   const isUpdating = isDiagnosisFetching && !!diagnosisData;
 
+  const handleGenerateDecisions = useCallback(async () => {
+    if (!currentCompany) return;
+    setIsGenerating(true);
+    setGenerationError(null);
+
+    const timeoutMs = 120000;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      setIsGenerating(false);
+      setGenerationError('The analysis timed out. The AI service may be under heavy load. Please try again.');
+    }, timeoutMs);
+
+    try {
+      let scenarioId = latestScenarioId;
+
+      if (!scenarioId) {
+        const scenario = await createScenarioMutation.mutateAsync({
+          companyId: currentCompany.id,
+          data: { name: 'Baseline Scenario' },
+        });
+        scenarioId = scenario.id;
+      }
+
+      if (timedOut) return;
+
+      const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
+
+      if (timedOut) return;
+
+      await generateDecisionsMutation.mutateAsync(simResult.id);
+
+      if (timedOut) return;
+
+      await refetch();
+
+      if (timedOut) return;
+
+      const diagnosisResult = await api.decisions.regenerateDiagnosis(currentCompany.id);
+      queryClient.setQueryData(['strategic-diagnosis', currentCompany.id], diagnosisResult);
+
+      setCurrentStep('decision');
+      toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
+    } catch (err: any) {
+      if (timedOut) return;
+      const message = (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'Something went wrong';
+      if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
+        toast({
+          title: 'Session Expired',
+          description: 'Please sign in again to continue.',
+          variant: 'destructive'
+        });
+      } else {
+        setGenerationError(message);
+        toast({ title: 'Generation failed', description: message, variant: 'destructive' });
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (!timedOut) {
+        setIsGenerating(false);
+      }
+    }
+  }, [currentCompany, latestScenarioId, createScenarioMutation, runSimulationMutation, generateDecisionsMutation, refetch, queryClient, setCurrentStep, toast]);
+
   const [autoGenTriggered, setAutoGenTriggered] = useState(false);
   useEffect(() => {
     if (
@@ -356,70 +420,6 @@ export default function DecisionsPage() {
       contentData: { sections },
     });
   };
-
-  const handleGenerateDecisions = useCallback(async () => {
-    if (!currentCompany) return;
-    setIsGenerating(true);
-    setGenerationError(null);
-
-    const timeoutMs = 120000;
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      setIsGenerating(false);
-      setGenerationError('The analysis timed out. The AI service may be under heavy load. Please try again.');
-    }, timeoutMs);
-
-    try {
-      let scenarioId = latestScenarioId;
-
-      if (!scenarioId) {
-        const scenario = await createScenarioMutation.mutateAsync({
-          companyId: currentCompany.id,
-          data: { name: 'Baseline Scenario' },
-        });
-        scenarioId = scenario.id;
-      }
-
-      if (timedOut) return;
-
-      const simResult = await runSimulationMutation.mutateAsync({ scenarioId, nSims: 1000 });
-
-      if (timedOut) return;
-
-      await generateDecisionsMutation.mutateAsync(simResult.id);
-
-      if (timedOut) return;
-
-      await refetch();
-
-      if (timedOut) return;
-
-      const diagnosisResult = await api.decisions.regenerateDiagnosis(currentCompany.id);
-      queryClient.setQueryData(['strategic-diagnosis', currentCompany.id], diagnosisResult);
-
-      setCurrentStep('decision');
-      toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
-    } catch (err: any) {
-      if (timedOut) return;
-      const message = (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'Something went wrong';
-      if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
-        toast({
-          title: 'Session Expired',
-          description: 'Please sign in again to continue.',
-          variant: 'destructive'
-        });
-      } else {
-        setGenerationError(message);
-        toast({ title: 'Generation failed', description: message, variant: 'destructive' });
-      }
-    } finally {
-      clearTimeout(timeoutId);
-      if (!timedOut) {
-        setIsGenerating(false);
-      }
-    }
-  }, [currentCompany, latestScenarioId, createScenarioMutation, runSimulationMutation, generateDecisionsMutation, refetch, queryClient, setCurrentStep, toast]);
 
   const handleCopyBrief = async () => {
     if (!diagnosisData) return;

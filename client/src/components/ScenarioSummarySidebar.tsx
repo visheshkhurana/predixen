@@ -59,7 +59,7 @@ function calculateProjectedMetrics(params: ScenarioParams, baseMetrics?: BaseMet
   const netBurn = projectedExpenses - projectedRevenue;
   
   const isProfitable = netBurn <= 0;
-  const projectedRunway = netBurn > 0 ? projectedCash / netBurn : 999;
+  const projectedRunway = netBurn > 0 ? projectedCash / netBurn : 900;
   const runwayChange = projectedRunway - baseMetrics.currentRunway;
 
   return {

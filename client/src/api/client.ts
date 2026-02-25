@@ -179,7 +179,10 @@ export const api = {
   },
   
   companies: {
-    list: () => request<any[]>('/companies'),
+    list: async () => {
+      const res = await request<any>('/companies');
+      return (res?.items || res || []) as any[];
+    },
     get: (id: number) => request<any>(`/companies/${id}`),
     create: (data: { name: string; website?: string; industry?: string; stage?: string; currency?: string }) =>
       request<any>('/companies', {
@@ -368,7 +371,10 @@ export const api = {
   },
   
   scenarios: {
-    list: (companyId: number) => request<any[]>(`/companies/${companyId}/scenarios`),
+    list: async (companyId: number) => {
+      const res = await request<any>(`/companies/${companyId}/scenarios`);
+      return (res?.items || res || []) as any[];
+    },
     create: (companyId: number, data: any) =>
       request<any>(`/companies/${companyId}/scenarios`, {
         method: 'POST',

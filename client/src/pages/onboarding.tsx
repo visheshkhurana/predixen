@@ -233,9 +233,10 @@ export default function OnboardingPage() {
   const [uploadHistory, setUploadHistory] = useState<Array<{ name: string; uploadedAt: Date; type: string }>>([]);
   
   // Query existing companies for the user
-  const { data: existingCompanies } = useQuery<Array<{ id: number; name: string; industry?: string; stage?: string; website?: string }>>({
+  const { data: existingCompaniesRaw } = useQuery<any>({
     queryKey: ['/api/companies'],
   });
+  const existingCompanies = Array.isArray(existingCompaniesRaw) ? existingCompaniesRaw : (existingCompaniesRaw?.items || []) as Array<{ id: number; name: string; industry?: string; stage?: string; website?: string }>;
   
   // If user has an existing company, pre-fill the form
   useEffect(() => {
