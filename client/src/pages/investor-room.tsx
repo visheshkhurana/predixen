@@ -12,6 +12,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
 import { apiRequest } from '@/lib/queryClient';
+import { getErrorMessage } from '@/lib/errors';
 import { 
   FileText, CheckSquare, HelpCircle, BarChart3, 
   Play, Building2, RefreshCw, Copy, Download
@@ -87,8 +88,8 @@ export default function InvestorRoomPage() {
       });
       setChecklistState(initialState);
     },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({ title: 'Error', description: getErrorMessage(error, 'Failed to load data'), variant: 'destructive' });
     }
   });
 

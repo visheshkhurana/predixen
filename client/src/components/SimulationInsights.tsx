@@ -210,9 +210,10 @@ function generateNarrativeSummary(simulation: SimulationData, scenarioName: stri
     return narrative;
   }
   
-  let narrative = `Under the "${scenarioName}" scenario, your company has a median runway of ${runwayP50.toFixed(1)} months. `;
+  const fmtRunway = (v: number) => v >= 900 ? 'sustainable (profitable)' : `${v.toFixed(1)} months`;
+  let narrative = `Under the "${scenarioName}" scenario, your company has a median runway of ${fmtRunway(runwayP50)}. `;
   
-  narrative += `In the worst-case outcomes (P10), runway drops to ${runwayP10.toFixed(1)} months, while best-case scenarios (P90) extend to ${runwayP90.toFixed(1)} months. `;
+  narrative += `In the worst-case outcomes (P10), runway drops to ${fmtRunway(runwayP10)}, while best-case scenarios (P90) extend to ${fmtRunway(runwayP90)}. `;
   
   if (survival18m >= 80) {
     narrative += `With an ${survival18m.toFixed(0)}% probability of surviving 18 months, your financial position is strong. `;

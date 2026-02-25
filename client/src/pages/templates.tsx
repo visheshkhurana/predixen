@@ -34,6 +34,7 @@ import {
   Clock
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { useFounderStore } from "@/store/founderStore";
 
@@ -163,10 +164,10 @@ export default function TemplatesPage() {
       setConfirmTemplate(null);
       navigate(`/scenarios/${data.scenario_id}`);
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: String(error),
+        description: getErrorMessage(error, 'Failed to create scenario'),
         variant: "destructive",
       });
     },
@@ -186,10 +187,10 @@ export default function TemplatesPage() {
       setSelectedTemplates([]);
       navigate("/scenarios");
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Error",
-        description: String(error),
+        description: getErrorMessage(error, 'Failed to create scenarios'),
         variant: "destructive",
       });
     },

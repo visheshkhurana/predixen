@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/errors";
 import { useTerminaPdfUpload } from "@/api/hooks";
 import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
@@ -198,10 +199,10 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
           ? `Review extracted metrics. ${estimatedCount} field(s) auto-filled with industry estimates.`
           : "Review the extracted metrics below and click 'Apply to Financials' to save.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Failed to analyze report",
-        description: error.message || "Please try again",
+        description: getErrorMessage(error, "Please try again"),
         variant: "destructive",
       });
     }
@@ -275,10 +276,10 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
       if (onSuccess) {
         onSuccess(editableMetrics);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Failed to save financials",
-        description: error.message || "Please try again",
+        description: getErrorMessage(error, "Please try again"),
         variant: "destructive",
       });
     } finally {

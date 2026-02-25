@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getErrorMessage } from '@/lib/errors';
 
 interface PageErrorFallbackProps {
   error: Error;
@@ -10,27 +11,20 @@ interface PageErrorFallbackProps {
   pageName?: string;
 }
 
-/**
- * Page-level Error Fallback Component
- * Provides a more detailed error UI for individual pages with suggestions
- *
- * Usage:
- * <ErrorBoundary fallback={(error, reset) => <PageErrorFallback error={error} reset={reset} pageName="Scenarios" />}>
- *   <YourPage />
- * </ErrorBoundary>
- */
 export function PageErrorFallback({
   error,
   reset,
   pageName = 'Page',
 }: PageErrorFallbackProps) {
-  const isNetworkError = error.message?.toLowerCase().includes('network') ||
-    error.message?.toLowerCase().includes('fetch') ||
-    error.message?.toLowerCase().includes('timeout');
+  const safeMessage = getErrorMessage(error, 'An unexpected error occurred while loading this page.');
 
-  const isDatabaseError = error.message?.toLowerCase().includes('database') ||
-    error.message?.toLowerCase().includes('data') ||
-    error.message?.toLowerCase().includes('query');
+  const isNetworkError = safeMessage.toLowerCase().includes('network') ||
+    safeMessage.toLowerCase().includes('fetch') ||
+    safeMessage.toLowerCase().includes('timeout');
+
+  const isDatabaseError = safeMessage.toLowerCase().includes('database') ||
+    safeMessage.toLowerCase().includes('data') ||
+    safeMessage.toLowerCase().includes('query');
 
   const getSuggestions = () => {
     if (isNetworkError) {
@@ -78,7 +72,7 @@ export function PageErrorFallback({
           <Alert variant="destructive">
             <AlertTitle className="text-sm">What Happened</AlertTitle>
             <AlertDescription className="mt-2 text-xs">
-              {error.message || 'An unexpected error occurred while loading this page.'}
+              {safeMessage}
             </AlertDescription>
           </Alert>
 
@@ -102,7 +96,7 @@ export function PageErrorFallback({
                 Technical Details
               </summary>
               <pre className="overflow-auto whitespace-pre-wrap break-words text-destructive/70">
-                {error.toString()}
+                {safeMessage}
               </pre>
             </details>
           )}

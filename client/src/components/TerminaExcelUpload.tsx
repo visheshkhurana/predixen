@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { getErrorMessage } from "@/lib/errors";
 import { useTerminaExcelUpload } from "@/api/hooks";
 import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
@@ -203,10 +204,10 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
           ? `Review extracted metrics. ${estimatedCount} field(s) auto-filled with industry estimates.`
           : "Review the extracted metrics below and click 'Apply to Financials' to save.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Failed to analyze spreadsheet",
-        description: error.message || "Please try again",
+        description: getErrorMessage(error, "Please try again"),
         variant: "destructive",
       });
     }
@@ -276,10 +277,10 @@ export function TerminaExcelUpload({ companyId, onSuccess }: TerminaExcelUploadP
       if (onSuccess) {
         onSuccess(editableMetrics);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Failed to save financials",
-        description: error.message || "Please try again",
+        description: getErrorMessage(error, "Please try again"),
         variant: "destructive",
       });
     } finally {

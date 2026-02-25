@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import {
   MessageSquare,
   Phone,
@@ -51,11 +52,11 @@ export default function MessagingPage() {
         setSmsBody("");
         queryClient.invalidateQueries({ queryKey: ["/api/messaging/history"] });
       } else {
-        toast({ title: "Failed", description: data.error, variant: "destructive" });
+        toast({ title: "Failed", description: getErrorMessage(data.error, 'SMS delivery failed'), variant: "destructive" });
       }
     },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Error", description: getErrorMessage(error, 'Failed to send SMS'), variant: "destructive" });
     },
   });
 
@@ -70,11 +71,11 @@ export default function MessagingPage() {
         setWaBody("");
         queryClient.invalidateQueries({ queryKey: ["/api/messaging/history"] });
       } else {
-        toast({ title: "Failed", description: data.error, variant: "destructive" });
+        toast({ title: "Failed", description: getErrorMessage(data.error, 'WhatsApp delivery failed'), variant: "destructive" });
       }
     },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (error: unknown) => {
+      toast({ title: "Error", description: getErrorMessage(error, 'Failed to send WhatsApp message'), variant: "destructive" });
     },
   });
 

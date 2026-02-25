@@ -287,7 +287,7 @@ export function StrategicScenarioBuilder({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Current Runway</div>
-                <div className="text-lg font-semibold">{baseMetrics.currentRunway.toFixed(1)} months</div>
+                <div className="text-lg font-semibold">{baseMetrics.currentRunway >= 900 ? 'Sustainable' : `${baseMetrics.currentRunway.toFixed(1)} months`}</div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Growth Rate</div>
@@ -475,7 +475,11 @@ export function StrategicScenarioBuilder({
                   <div>
                     <div className="font-medium text-sm">What This Means</div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {projectedRunway > baseMetrics.currentRunway ? (
+                      {projectedRunway >= 900 ? (
+                        <>
+                          These changes would make your company <span className="text-emerald-500 font-medium">financially sustainable</span> with positive cash flow.
+                        </>
+                      ) : projectedRunway > baseMetrics.currentRunway ? (
                         <>
                           These changes would <span className="text-emerald-500 font-medium">extend your runway by {(projectedRunway - baseMetrics.currentRunway).toFixed(1)} months</span> to approximately {projectedRunway.toFixed(1)} months.
                         </>
@@ -511,8 +515,8 @@ export function StrategicScenarioBuilder({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 rounded-lg bg-muted/50">
                   <div className="text-xs text-muted-foreground">Runway (P50)</div>
-                  <div className="text-2xl font-bold">{simulation.runway?.p50?.toFixed(1) || '--'} mo</div>
-                  {simulation.runway?.p50 && baseMetrics && (
+                  <div className="text-2xl font-bold">{simulation.runway?.p50 != null ? (simulation.runway.p50 >= 900 ? 'Sustainable' : `${simulation.runway.p50.toFixed(1)} mo`) : '--'}</div>
+                  {simulation.runway?.p50 && simulation.runway.p50 < 900 && baseMetrics && (
                     <div className={cn(
                       "text-xs flex items-center gap-1 mt-1",
                       simulation.runway.p50 > baseMetrics.currentRunway ? "text-emerald-500" : "text-red-500"
@@ -535,7 +539,7 @@ export function StrategicScenarioBuilder({
                 <div className="p-4 rounded-lg bg-muted/50">
                   <div className="text-xs text-muted-foreground">Runway Range</div>
                   <div className="text-lg font-semibold">
-                    {simulation.runway?.p10?.toFixed(0)} - {simulation.runway?.p90?.toFixed(0)} mo
+                    {simulation.runway?.p10 != null ? (simulation.runway.p10 >= 900 ? '∞' : simulation.runway.p10.toFixed(0)) : '?'} - {simulation.runway?.p90 != null ? (simulation.runway.p90 >= 900 ? '∞' : simulation.runway.p90.toFixed(0)) : '?'} mo
                   </div>
                   <div className="text-xs text-muted-foreground">P10 to P90</div>
                 </div>

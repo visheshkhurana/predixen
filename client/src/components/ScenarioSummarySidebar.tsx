@@ -250,13 +250,13 @@ export function ScenarioSummarySidebar({ params, baseMetrics, className }: Scena
                 </div>
                 <div className="text-center">
                   <span className="text-2xl font-bold font-mono">
-                    {projected.isProfitable ? '∞' : `${projected.projectedRunway.toFixed(1)}`}
+                    {projected.isProfitable || projected.projectedRunway >= 900 ? 'Sustainable' : `${projected.projectedRunway.toFixed(1)}`}
                   </span>
-                  {!projected.isProfitable && (
+                  {!projected.isProfitable && projected.projectedRunway < 900 && (
                     <span className="text-muted-foreground text-sm ml-1">months</span>
                   )}
                 </div>
-                {projected.runwayChange !== 0 && !projected.isProfitable && baseMetrics && (
+                {projected.runwayChange !== 0 && !projected.isProfitable && projected.projectedRunway < 900 && baseMetrics && (
                   <p className="text-xs text-center text-muted-foreground">
                     {projected.runwayChange > 0 ? '+' : ''}{projected.runwayChange.toFixed(1)} months vs. current ({baseMetrics.currentRunway.toFixed(1)} mo)
                   </p>

@@ -67,6 +67,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
 import { MetricTimeSeriesEditor } from "@/components/MetricTimeSeriesEditor";
@@ -515,10 +516,10 @@ export default function DataInput() {
       setActiveTab('financials');
       setSelectedFile(null);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Extraction failed",
-        description: error.message || "Failed to process the file",
+        description: getErrorMessage(error, "Failed to process the file"),
         variant: "destructive",
       });
     } finally {

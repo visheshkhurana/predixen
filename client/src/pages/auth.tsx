@@ -88,8 +88,15 @@ export default function AuthPage() {
       }
       setLocation('/');
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Login failed';
-      toast({ title: 'Login failed', description: message, variant: 'destructive' });
+      let description = 'An unexpected error occurred. Please try again.';
+      if (err instanceof ApiError) {
+        description = err.message;
+      } else if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        description = 'Unable to reach the server. Please check your connection and try again.';
+      } else if (err instanceof Error) {
+        description = err.message;
+      }
+      toast({ title: 'Login failed', description, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -129,8 +136,15 @@ export default function AuthPage() {
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Registration failed';
-      toast({ title: 'Registration failed', description: message, variant: 'destructive' });
+      let description = 'An unexpected error occurred. Please try again.';
+      if (err instanceof ApiError) {
+        description = err.message;
+      } else if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        description = 'Unable to reach the server. Please check your connection and try again.';
+      } else if (err instanceof Error) {
+        description = err.message;
+      }
+      toast({ title: 'Registration failed', description, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -159,8 +173,15 @@ export default function AuthPage() {
       toast({ title: 'Welcome to the demo!' });
       setLocation('/');
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Demo login failed';
-      toast({ title: 'Demo login failed', description: message, variant: 'destructive' });
+      let description = 'An unexpected error occurred. Please try again.';
+      if (err instanceof ApiError) {
+        description = err.message;
+      } else if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        description = 'Unable to reach the server. Please check your connection and try again.';
+      } else if (err instanceof Error) {
+        description = err.message;
+      }
+      toast({ title: 'Demo login failed', description, variant: 'destructive' });
     } finally {
       setIsDemoLoading(false);
     }
@@ -173,13 +194,21 @@ export default function AuthPage() {
 
   const tryStartOAuth = async (provider: 'google' | 'github'): Promise<boolean> => {
     const endpoints = SOCIAL_AUTH_ENDPOINTS[provider];
+    let lastError: Error | null = null;
+    let hadNetworkError = false;
+
     for (const endpoint of endpoints) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(`/api${endpoint}`, {
           method: 'GET',
           credentials: 'include',
           redirect: 'manual',
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (response.status >= 300 && response.status < 400) {
           const redirectTo = response.headers.get('location');
@@ -212,9 +241,21 @@ export default function AuthPage() {
 
         window.location.assign(`/api${endpoint}`);
         return true;
-      } catch {
-        // Try next known endpoint fallback
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          lastError = new Error('Request timed out. The server may be unavailable.');
+          hadNetworkError = true;
+        } else if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
+          hadNetworkError = true;
+          lastError = new Error('Unable to reach the server. Please check your connection.');
+        } else if (err instanceof Error) {
+          lastError = err;
+        }
       }
+    }
+
+    if (hadNetworkError && lastError) {
+      throw lastError;
     }
     return false;
   };
@@ -614,23 +655,28 @@ export default function AuthPage() {
             </Tabs>
             
             <div className="mt-6 pt-4 border-t text-center">
-              <button
+              <Button
                 type="button"
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded px-2 py-1"
+                variant="ghost"
+                className="w-full flex-col gap-0"
                 onClick={handleDemoLogin}
-                disabled={isDemoLoading}
+                disabled={isDemoLoading || isLoading}
                 data-testid="button-demo-login"
               >
                 <span className="flex items-center justify-center gap-2">
-                  <Sparkles className="h-4 w-4" />
+                  {isDemoLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
                   {isDemoLoading ? 'Loading demo...' : 'See Demo'}
                 </span>
                 {!isDemoLoading && (
-                  <span className="block text-xs opacity-70 mt-1">
+                  <span className="block text-xs text-muted-foreground font-normal mt-0.5">
                     Explore the full platform with a pre-loaded demo company
                   </span>
                 )}
-              </button>
+              </Button>
             </div>
           </CardContent>
         </Card>

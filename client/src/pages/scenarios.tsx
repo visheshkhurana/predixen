@@ -57,7 +57,7 @@ import type { StressTestTemplate } from '@/lib/simulation/stressTestTemplates';
 import { useFounderStore } from '@/store/founderStore';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
-import { formatCurrencyAbbrev, formatRunway } from '@/lib/utils';
+import { formatCurrencyAbbrev, formatRunway, isRunwaySustainable, formatRunwayInline } from '@/lib/utils';
 import { useScenarios, useCreateScenario, useRunSimulation, useSimulation, useMultiScenarioSimulation, useSensitivityAnalysis, useEnhancedMultiScenarioSimulation, useScenarioTimeseries, useTruthScan } from '@/api/hooks';
 import { api } from '@/api/client';
 import { ScenarioComments } from '@/components/ScenarioComments';
@@ -1462,11 +1462,11 @@ export default function ScenariosPage() {
                     let score = 5;
                     if (s18 >= 90) score = 9; else if (s18 >= 75) score = 8; else if (s18 >= 60) score = 7; else if (s18 >= 50) score = 6; else if (s18 >= 40) score = 5; else if (s18 >= 30) score = 4; else score = 3;
                     handleShareAIDecision({
-                      recommendation: `${currentScenarioName}: ${rp50.toFixed(1)} months runway, ${s18.toFixed(0)}% survival at 18 months`,
+                      recommendation: `${currentScenarioName}: ${rp50 >= 900 ? 'Sustainable' : `${rp50.toFixed(1)} months`} runway, ${s18.toFixed(0)}% survival at 18 months`,
                       verdictLabel: vLabel,
                       score,
                       bullets: [
-                        `Runway P50: ${rp50.toFixed(1)} months`,
+                        `Runway P50: ${rp50 >= 900 ? 'Sustainable' : `${rp50.toFixed(1)} months`}`,
                         `18-month survival: ${s18.toFixed(0)}%`,
                         simulation.summary?.monthly_burn ? `Monthly burn: ${formatCurrency(simulation.summary.monthly_burn)}` : null,
                       ].filter(Boolean),
@@ -1521,8 +1521,8 @@ export default function ScenariosPage() {
                       </div>
                       <div data-testid="founder-metric-runway">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Runway</p>
-                        <p className={`text-2xl font-bold font-mono ${runwayColor}`}>{runwayP50.toFixed(1)}</p>
-                        <p className="text-[10px] text-muted-foreground">months (P50)</p>
+                        <p className={`text-2xl font-bold font-mono ${runwayColor}`}>{isRunwaySustainable(runwayP50) ? 'Sustainable' : runwayP50.toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground">{isRunwaySustainable(runwayP50) ? 'Profitable' : 'months (P50)'}</p>
                       </div>
                       <div data-testid="founder-metric-arr24">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">ARR @24m</p>
@@ -1887,7 +1887,7 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway} mo</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
@@ -1926,7 +1926,7 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway} mo</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
@@ -1965,7 +1965,7 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway} mo</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
@@ -2125,7 +2125,7 @@ export default function ScenariosPage() {
                                 )}
                                 {s.latest_simulation && (
                                   <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                                    <span>Runway: {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo</span>
+                                    <span>Runway: {s.latest_simulation.runway?.p50 != null ? (s.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${s.latest_simulation.runway.p50.toFixed(1)} mo`) : '?'}</span>
                                     <span>Survival: {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%</span>
                                   </div>
                                 )}
@@ -2319,9 +2319,9 @@ export default function ScenariosPage() {
                     <Card><CardHeader><CardTitle className="text-lg">Runway Distribution</CardTitle><CardDescription>Distribution of runway outcomes across all simulations</CardDescription></CardHeader>
                       <CardContent>
                         <div className="grid grid-cols-3 gap-4 text-center">
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p10?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Worst case</p></div>
-                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{simulation.runway?.p50?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Most likely</p></div>
-                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p90?.toFixed(1) || '?'} mo</p><p className="text-xs text-muted-foreground">Best case</p></div>
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">10th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p10 != null ? (simulation.runway.p10 >= 900 ? 'Sustainable' : `${simulation.runway.p10.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Worst case</p></div>
+                          <div className="p-4 bg-primary/10 rounded-lg"><p className="text-xs text-muted-foreground">50th Percentile</p><p className="text-2xl font-mono font-bold text-primary">{simulation.runway?.p50 != null ? (simulation.runway.p50 >= 900 ? 'Sustainable' : `${simulation.runway.p50.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Most likely</p></div>
+                          <div className="p-4 bg-muted/50 rounded-lg"><p className="text-xs text-muted-foreground">90th Percentile</p><p className="text-2xl font-mono font-bold">{simulation.runway?.p90 != null ? (simulation.runway.p90 >= 900 ? 'Sustainable' : `${simulation.runway.p90.toFixed(1)} mo`) : '?'}</p><p className="text-xs text-muted-foreground">Best case</p></div>
                         </div>
                       </CardContent>
                     </Card>
@@ -2396,7 +2396,7 @@ export default function ScenariosPage() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] text-muted-foreground">Runway</span>
                           <span className="text-xs font-mono font-semibold" data-testid={`text-recent-runway-${s.id}`}>
-                            {s.latest_simulation.runway?.p50?.toFixed(1) || '?'} mo
+                            {s.latest_simulation.runway?.p50 != null ? (s.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${s.latest_simulation.runway.p50.toFixed(1)} mo`) : '?'}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-2">

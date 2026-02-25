@@ -199,7 +199,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const grossMarginPct = grossMarginRaw > 0 && grossMarginRaw <= 1 ? grossMarginRaw * 100 : grossMarginRaw;
     const grossMarginDecimal = c.grossMarginDecimal || grossMarginPct / 100;
 
-    const churnRaw = v(c.churnRatePct, tsVal('churn_rate'), tsVal('gross_churn_rate'));
+    const churnRaw = v(c.churnRatePct, tsVal('churn_rate'), tsVal('churn_rate_customer'), tsVal('gross_churn_rate'));
     const churnRatePct = churnRaw > 0 && churnRaw <= 1 ? churnRaw * 100 : churnRaw;
     const churnRateDecimal = churnRatePct / 100;
 

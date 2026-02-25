@@ -1,0 +1,181 @@
+---
+
+# FounderConsole.ai — Comprehensive Founder Evaluation Report
+
+**Evaluator Role:** Paying early-stage SaaS founder (B2B, post-seed, $40K+ MRR)
+**Test Company:** TechFlow Analytics (demo mode)
+**Test Period:** Two sessions across Feb 25, 2026
+**Current Production Status:** 🔴 COMPLETELY DOWN — Backend crash-looping since deployment
+
+---
+
+## A) Executive Satisfaction Scores (0–10)
+
+| Category | Score | Notes |
+|---|---|---|
+| **Onboarding** | 3/10 | OAuth buttons fail silently; no company setup wizard; demo mode is the only viable entry path |
+| **Data Confidence** | 5/10 | Confidence score exists (78%) but burn rate contradicts itself across pages; churn shows N/A on health check |
+| **Scenario Usefulness** | 6/10 | 5 pre-built scenarios with comparison table is genuinely useful when it works; sensitivity analysis and what-if explorer are strong concepts |
+| **Integrations** | 2/10 | QuickBooks shows "Connected" in demo; Stripe/Gusto available; no HubSpot, Salesforce, or Baremetrics; no live data flow testing possible |
+| **UI/UX** | 6/10 | Dark theme is polished; navigation is clean (Know Your Truth → Simulate → Decide & Act); sidebar well-organized. But error states are hostile |
+| **Reliability** | 1/10 | The entire app is currently down. Backend crash-loops on cold start. During previous working session, Simulate page crashed on first load. Every single page shows "Error on Page" right now |
+| **Value** | 3/10 | $199/mo is steep for a product that can't maintain uptime. When working, the scenario comparison and Monte Carlo simulation concepts are genuinely differentiated — but you can't charge for software that doesn't run |
+
+**Overall: 3.7/10** — The product has a genuinely interesting thesis (simulate decisions before making them), but it is not production-ready. A founder would churn within 24 hours at current reliability levels.
+
+---
+
+## B) Feature-By-Feature Review
+
+### 1. Onboarding
+
+**What Worked:**
+The auth page layout is professional — split-screen with feature descriptions on the left and auth form on the right. The "See Demo" button is a smart addition that lets prospects explore without committing. The Create Account form has clear password requirements shown inline. Feature value props on the left side (Decision Simulation Engine, Scenario Builder, Outcome Probability Mapping, AI Decision Copilot) are well-articulated and speak directly to founder needs.
+
+**What Didn't:**
+Google OAuth and GitHub OAuth buttons fail silently — no popup, no redirect, no error message. A founder clicking "Continue with Google" gets zero feedback. This is a deal-breaker for first impressions. There is no company setup wizard after account creation — no fields for business type, stage, MRR, cash position, or headcount. The product jumps straight from auth to a demo company with pre-loaded data. There is no guided onboarding flow, no progress stepper, no checklist. A real founder would have no idea how to input their own company data. The "See Demo" button requires a working backend — when the API is down, clicking it does nothing with no error message shown.
+
+**Star Rating: ★★☆☆☆ (2/5)**
+
+---
+
+### 2. Dashboard Metrics
+
+**KPI Summary (when working):**
+The dashboard shows a daily briefing banner with MRR ($43.9K), growth (10.8%), Burn ($13.1K/mo), and Runway (39.2mo). Below that, KPI cards display MRR, ARR, Cash, Burn Rate, CAC, and LTV — each with a "Verified" badge. Secondary metrics include ARPU, Active Customers, NRR, and LTV:CAC ratio. There is a Business Health score (72/100) and Data Confidence score (78%). The Goal Tracker shows 3 goals with status indicators. Industry Benchmarks compare your metrics against SaaS/Software Series A percentiles.
+
+**Confidence Score Evaluation:**
+The Data Confidence Score (78%) is a genuinely useful concept, but it is undermined by internal contradictions. Burn Rate shows $13.1K on the dashboard but $24.1K on the Health Check (Truth Scan) page — that's an 84% discrepancy on a critical metric. Churn Rate shows 2.5% on the dashboard but "N/A" with a red dot on the Health Check page. NRR shows 107.8% on the dashboard versus 108% on the Health Check. When your "truth" layer disagrees with your main dashboard, the confidence score becomes meaningless.
+
+**Three Specific Trust Signal Improvements:**
+
+First, add "last updated" timestamps to every metric card. Currently there are no staleness indicators at all. A founder needs to know if they're looking at data from today or from 3 weeks ago. Each KPI card should display something like "Updated 2h ago" or "Synced from Stripe: Feb 25."
+
+Second, reconcile the burn rate calculation. Show the methodology on hover. The dashboard should display a tooltip explaining whether this is net burn, gross burn, or operating burn — and both the dashboard and Health Check must use the same calculation. Right now, $13.1K vs $24.1K makes the entire platform feel unreliable.
+
+Third, show data source attribution on each metric. Instead of just "Verified," indicate where the number comes from — "from Stripe" or "from QuickBooks" or "manually entered." The "Verified" badge without context feels like empty reassurance.
+
+---
+
+### 3. Simulator
+
+**Scenarios Tested (from previous working session):**
+The Simulate page offers 5 pre-built scenarios: Raise Prices 20%, Series A Fundraise, Cost Optimization, Current Trajectory, and Aggressive Growth. A comparison table shows Runway (P50), 18-month Survival probability, Cash at 24 months, and a vs-Baseline percentage. There is also a Sensitivity Analysis with a ranking of impact levers, and a What-If Explorer with interactive sliders for Revenue Growth, Churn, Gross Margin, Burn Rate, and Fundraising.
+
+**Scenario A — Cost Optimization:** Could not directly test "cut marketing spend by 25% for 6 months" as a custom scenario. The pre-built "Cost Optimization" scenario shows aggregated results but does not allow parameterization. There is no way to specify which cost category to cut, by how much, or for how long. The What-If Explorer sliders adjust burn rate generally but lack granularity for a specific marketing cut.
+
+**Scenario B — Staff Scaling:** No way to model "hire 10 engineers and 3 sales reps" as a discrete scenario. The simulator operates on high-level financial levers (revenue growth percentage, burn rate) rather than operational inputs (headcount, per-person cost, ramp time). This is a significant gap — founders think in terms of people, not percentages.
+
+**Scenario C — Pricing Change:** The "Raise Prices 20%" pre-built scenario exists but cannot be customized to 15%. There is no churn-sensitivity parameter to pair with the price increase. The What-If Explorer does have a Churn slider, but it operates independently from pricing — you cannot model "if I raise prices 15%, churn increases 1%."
+
+**Scenario D — External Shock:** No macro presets or external shock templates. The simulator has no concept of market conditions, VC funding environment, or industry-level changes. The What-If Explorer could theoretically model increased CAC, but there is no way to model a "VC winter" scenario as a cohesive template.
+
+**Key Bug:** The Sensitivity Analysis baseline showed "999.0 months" for runway — a display bug where Infinity was being cast to 999 in the code.
+
+**Key Crash:** The Simulate page crashed with React Error #185 on first load. Clicking "Try Again" recovered it, but a first-time user would likely leave.
+
+**Star Rating for Scenario Usefulness: ★★★☆☆ (3/5)** — The comparison table and Monte Carlo framing are genuinely valuable, but the inability to create custom parameterized scenarios (as opposed to pre-built ones) severely limits real-world utility.
+
+---
+
+### 4. Integrations
+
+**Ease of Use:** The Integrations page lists QuickBooks (shown as "Connected" in demo), Stripe, and Gusto under Quick Setup. Additional Data Connectors include Xero, Zoho Books, and NetSuite (Coming Soon). HR & Payroll shows RazorpayX, GreytHR, Keka HR, and PeopleStrong (Coming Soon).
+
+**Missing Critical Integrations:** HubSpot (CRM/pipeline data), Salesforce, Baremetrics, ChartMogul, ProfitWell/Paddle. For a SaaS-focused tool, not having CRM or subscription analytics integrations is a major gap. Founders need pipeline data to model sales scenarios and subscription data for churn analysis.
+
+**Data Freshness:** Could not test actual sync timing since integrations are demo-only. No visible webhooks or real-time sync indicators. No "last synced" timestamp on any integration card.
+
+**Fail Cases:** When the backend is down, the Integrations page crashes entirely rather than showing a cached version or a helpful error state. There is no indication of connection health, retry logic, or sync status.
+
+**Star Rating: ★★☆☆☆ (2/5)**
+
+---
+
+### 5. Decision Journal
+
+**Expectations vs Reality:**
+The Decision Journal page (under Decisions) showed 4 pre-loaded entries when working: Expand Enterprise Tier, Reduce CAC, Hire Backend Engineer, and Extend Runway. Each entry has a title, date, and outcome indicator. However, the Strategic Briefing section was completely empty — only a disclaimer line was visible with no actual content.
+
+There is no ability to link a scenario simulation to a decision journal entry. Running a simulation does not automatically create a journal entry or prompt you to log the decision. There is no retrospective tracking — you cannot mark a past decision as "good" or "bad" based on actual outcomes. There is no timeline view showing decisions mapped against company metrics over time.
+
+**Suggested UI/UX:**
+The Decision Journal should be the bridge between simulations and outcomes. When a founder runs a scenario, the system should prompt them to record their decision. Six months later, the journal should compare the predicted outcome (from the simulation) against actual results (from live data). This would be the killer feature — a quantified record of your decision quality over time. Imagine seeing "Your pricing decision was 15% better than the median simulated outcome" displayed on a timeline alongside your MRR chart. That is what would make this product indispensable.
+
+---
+
+### 6. Stability & Performance
+
+**Observed Bugs (Severity: P0/P1/P2):**
+
+**Bug 1 — Backend crash-loop prevents entire app from loading (P0 Critical):** The FastAPI backend fails to start within the autoscale timeout (>90 seconds). Once the initial instance scales down, subsequent cold starts fail, leaving the entire application permanently unreachable. The health endpoint returns {"error":"Backend service unavailable"} indefinitely. This has been occurring across multiple deployment cycles.
+
+**Bug 2 — React Error #185 crashes Dashboard and all core pages (P0 Critical):** When the backend returns 502 errors, the frontend attempts to render error objects as React children, causing a full-page crash. The error boundary shows a generic "Error on Page" message with no actionable guidance. Every page (Dashboard, Simulate, Decisions, Fundraising, Health Check, Integrations) is affected simultaneously.
+
+**Bug 3 — Simulate page crashes on first load even with healthy backend (P1 High):** During the previous working session, navigating to /scenarios triggered React Error #185 on the initial load. Clicking "Try Again" recovered it. This suggests a race condition where scenario data is undefined on first render.
+
+**Bug 4 — Sensitivity Analysis displays "999.0 months" for baseline runway (P1 High):** The code converts Infinity to 999 as a fallback, which then renders as a literal number. A founder seeing "999 months runway" would immediately question the tool's credibility.
+
+**Bug 5 — OAuth buttons fail silently (P1 High):** Both Google and GitHub OAuth buttons produce no visible feedback when clicked — no popup, no redirect, no loading indicator, no error toast. The user is left wondering if they clicked correctly.
+
+**Bug 6 — Burn Rate inconsistency between Dashboard ($13.1K) and Health Check ($24.1K) (P1 High):** Two core pages showing dramatically different values for the same metric destroys user trust. The dashboard appears to show net burn while the Health Check shows gross burn, but neither labels the methodology.
+
+**Bug 7 — Churn Rate shows "N/A" on Health Check while Dashboard shows 2.5% (P2 Medium):** The truth_scan backend returns null for the churn metric, creating an inconsistency with the dashboard.
+
+**Bug 8 — Billing page returns 404 (P2 Medium):** The Settings menu links to /billing but the route is actually at /admin/billing. A paying customer trying to manage their subscription would hit a dead end.
+
+**Bug 9 — Strategic Briefing content is completely empty (P2 Medium):** The Decisions page shows a "Strategic Briefing" section header but no content — only a disclaimer line. This appears to be an AI-generation feature that never returns results.
+
+**Bug 10 — "See Demo" button fails silently when backend is down (P2 Medium):** The primary conversion path for new users does nothing with no feedback when the API is unreachable.
+
+---
+
+### 7. Billing & Value Proposition
+
+**Pricing Structure:**
+Free tier offers demo + sample data, 3 basic scenarios, and community support. Founder tier ($199/mo) adds unlimited scenarios, saved scenarios & exports, email briefings, and priority support. Growth tier ($399/mo) adds team seats (up to 5), integrations (Stripe, QuickBooks), and custom alerts & automations. Monthly/Annual toggle is present.
+
+**Pricing Clarity:** The tiers are clearly differentiated, and the feature gating makes logical sense (free for exploration, paid for serious use, growth for teams). However, $199/month is at the high end for a single-founder tool in early stage. The "Request Beta Access" CTA on paid tiers (rather than direct purchase) suggests the product is not yet commercially live, which contradicts the pricing page's professional presentation.
+
+**Competitive Comparison:**
+Baremetrics starts at $108/mo for revenue analytics with live Stripe integration. ChartMogul starts at $0 for basic subscription analytics. Causal (financial modeling) starts at $50/mo with spreadsheet-like scenario planning. Runway (financial planning) targets Series A+ companies with dedicated implementation. FounderConsole at $199/mo would need to clearly outperform all of these on scenario simulation to justify the premium. Right now, it doesn't — the scenario engine lacks custom parameterization, the integrations are minimal, and the reliability issues are severe.
+
+**Why I Would Not Pay (Today):** The product cannot maintain basic uptime. The backend crashes on cold start, core pages fail with React errors, and the error recovery is non-existent. The scenario engine, while conceptually strong, does not support custom scenario creation. I cannot model "hire 10 engineers" or "cut marketing by 25%" — I can only choose from pre-built templates. At $199/mo, I expect a tool that works every time I open it and lets me model the specific decisions I'm actually facing.
+
+**Why I Might Pay (If Fixed):** The Monte Carlo simulation approach to founder decision-making is genuinely differentiated. No competitor offers probabilistic scenario comparison with p10/p50/p90 distributions. The "Quality of Growth Index" and "Business Health Score" concepts are valuable mental models. If the product achieved stable uptime, allowed custom scenario building, and reconciled its data inconsistencies, $199/mo would be reasonable for a post-seed founder making $500K+ decisions.
+
+---
+
+## C) Top 5 Product Priorities Before Paying
+
+**P0 — Fix Deployment Reliability:** Switch from Autoscale to Reserved VM deployment, or optimize the server startup time to complete within 30 seconds. The backend currently takes >90 seconds to start, which exceeds the autoscale health check timeout. No other improvements matter if the app doesn't load. This is an existential issue.
+
+**P0 — Fix Frontend Error Handling:** The React error boundary catches errors but renders a useless crash screen. When API calls return 502, the frontend should show graceful degradation (cached data, loading skeletons, clear retry messaging) — not a full-page crash on every single page.
+
+**P1 — Enable Custom Scenario Creation:** Allow founders to define custom scenarios with specific parameters like specific cost cuts by category, hiring plans by role with per-person cost, pricing changes paired with churn sensitivity, and fundraise amounts with dilution modeling. The pre-built scenario templates are a good starting point, but founders need to model their actual decisions, not generic archetypes.
+
+**P1 — Reconcile Data Across Pages:** Burn rate, churn, and NRR must show the same values everywhere. Label the calculation methodology on each metric. Add "last updated" timestamps. The Health Check (Truth Scan) page should be the single source of truth, and the dashboard should derive from it — not contradict it.
+
+**P2 — Fix OAuth and Onboarding Flow:** Add error display for failed OAuth attempts. Build a company setup wizard that collects business type, stage, key metrics, and integrations after signup. The current flow drops users into a demo company with no guidance on how to set up their own.
+
+---
+
+## D) Suggested Copy/UX Improvements
+
+**Auth Page — "See Demo" Button:** Change from a small text link to a prominent secondary button. Current copy "Explore the full platform with a pre-loaded demo company" is good but should add "No signup required — try it now" to reduce friction. When the backend is down, show "Demo temporarily unavailable — try again in a few minutes" instead of doing nothing.
+
+**Error Boundary — "Error on Page":** Replace the current crash screen with component-level error isolation. Instead of crashing the entire page when one API call fails, show the page shell with skeleton loaders and a banner: "Some data couldn't load — we're retrying automatically." The current "What you can try: Clear your browser cache" is misleading — the issue is a server error, not a client problem.
+
+**Dashboard — "Verified" Badges:** Change "Verified" to show the data source. Instead of a generic checkmark badge, show "via Stripe" or "via QuickBooks" or "Manual entry." This builds real trust rather than performative trust.
+
+**Simulate Page — Scenario Cards:** Add an "+ Create Custom Scenario" card as the first option. The current 5 pre-built scenarios feel like the only options. The What-If Explorer should be surfaced more prominently — it is actually the most useful tool on the page but it's buried below the fold.
+
+**Health Check — Burn Rate Discrepancy:** Add a tooltip explaining the calculation: "Net burn = Revenue - Total Expenses. This may differ from the Dashboard which shows operating burn excluding one-time costs." Transparency about methodology eliminates confusion.
+
+**Pricing Page — "Request Beta Access":** If the product is in beta, say so explicitly at the top. If it's generally available, change to "Start Free Trial" or "Subscribe." The mixed signals between a polished pricing page and a "Request Beta Access" CTA create uncertainty about product maturity.
+
+**Navigation — Top Bar Breadcrumbs:** The "Know Your Truth → Simulate → Decide & Act" journey in the top nav is excellent conceptual framing. However, the icons are small and the active state isn't visually distinct enough. Make the active section glow or pulse subtly to reinforce the user's position in the workflow.
+
+---
+
+**Final Assessment:** FounderConsole has a compelling product thesis — nobody else in the market offers Monte Carlo simulation for founder decisions with probabilistic outcome ranges. The "Intelligence OS" positioning is ambitious and the feature surface area (health checks, scenario comparison, decision journal, AI copilot) suggests a team with real product vision. However, the product is currently in a pre-MVP reliability state. A 99.9% uptime SLA claim on the pricing page rings hollow when the app can't survive a cold start. Fix the infrastructure and data integrity first, then the scenario engine, then charge for it. The $199/mo price point is defensible *only* when the product delivers on its promise.

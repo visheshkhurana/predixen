@@ -15,6 +15,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/api/client';
+import { getErrorMessage } from '@/lib/errors';
 
 interface EvalRun {
   id: string;
@@ -78,10 +79,10 @@ export default function EvalsPage() {
       toast({ title: 'Evaluation Started', description: 'The evaluation suite is now running.' });
       queryClient.invalidateQueries({ queryKey: ['/admin/evals/runs'] });
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toast({ 
         title: 'Evaluation Failed', 
-        description: error.message,
+        description: getErrorMessage(error, 'Evaluation failed'),
         variant: 'destructive'
       });
     }

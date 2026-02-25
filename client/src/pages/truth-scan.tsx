@@ -134,7 +134,8 @@ function generateBiggestRisks(metrics: any, flags: any[]): Risk[] {
   const runwayP50 = getMetricValue(metrics.runway_p50);
   const burnMultiple = getMetricValue(metrics.burn_multiple);
   const grossMargin = getMetricValue(metrics.gross_margin);
-  const churnRate = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRateRaw = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRate = churnRateRaw !== null ? (churnRateRaw > 1 ? churnRateRaw / 100 : churnRateRaw) : null;
   const runwaySustainable = metrics.runway_sustainable === true;
 
   // P0: Low runway
@@ -206,7 +207,8 @@ function generateSuggestedActions(metrics: any, flags: any[]): SuggestedAction[]
   const runwayP50 = getMetricValue(metrics.runway_p50);
   const burnMultiple = getMetricValue(metrics.burn_multiple);
   const grossMargin = getMetricValue(metrics.gross_margin);
-  const churnRate = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRateRaw2 = getMetricValue(metrics.churn_rate_customer) || getMetricValue(metrics.churn_rate_revenue);
+  const churnRate = churnRateRaw2 !== null ? (churnRateRaw2 > 1 ? churnRateRaw2 / 100 : churnRateRaw2) : null;
   const arr = getMetricValue(metrics.arr);
   const runwaySustainable = metrics.runway_sustainable === true;
 
@@ -422,6 +424,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
         if (metrics.runway_sustainable || sharedMetrics.runway === Infinity) return 'Sustainable';
         const tsRunway = extractValue(metrics.runway_p50);
         const runway = tsRunway && tsRunway > 0 ? tsRunway : (sharedMetrics.runway !== Infinity ? sharedMetrics.runway : 0);
+        if (runway >= 900) return 'Sustainable';
         return `${runway.toFixed(1)} months`;
       })(),
       trend: undefined as any,
@@ -438,7 +441,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     },
     {
       id: 'burn-rate',
-      label: 'Burn Rate',
+      label: 'Net Burn Rate',
       value: (() => {
         const tsBurn = extractValue(metrics.net_burn);
         const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
@@ -449,7 +452,7 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       benchmark: '',
       status: 'healthy' as any,
       source: 'calculated' as any,
-      tooltip: 'Monthly cash consumption after revenue',
+      tooltip: 'Net monthly cash outflow (total expenses minus revenue). Shows how much cash is consumed each month after accounting for revenue.',
     },
     {
       id: 'mrr',
@@ -523,15 +526,17 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       id: 'churn',
       label: 'Churn Rate',
       value: (() => {
-        const tsChurn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
         const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
-        return churn ? `${(churn * 100).toFixed(1)}%` : 'N/A';
+        return churn && churn > 0 ? `${(churn * 100).toFixed(1)}%` : 'N/A';
       })(),
       trend: undefined,
       trendValue: '/month',
       benchmark: 'Target: <5%',
       status: (() => {
-        const tsChurn = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue);
+        const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
         const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
         return churn && churn <= 0.05 ? 'healthy' : churn && churn <= 0.1 ? 'warning' : 'critical';
       })() as any,

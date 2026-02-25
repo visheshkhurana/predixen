@@ -1596,13 +1596,14 @@ Type **help** for a full list of what I can do.`,
         if (response.pii_findings) {
           setLatestPiiFindings(response.pii_findings);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Copilot API error:', error);
         let errorContent = '';
         let structuredFallback: CopilotApiResponse | undefined = undefined;
+        const errMsg = error instanceof Error ? error.message : String(error ?? '');
 
-        if (error.message) {
-          if (error.message.includes('500')) {
+        if (errMsg) {
+          if (errMsg.includes('500')) {
             errorContent = `I'm having trouble connecting to the AI analysis service right now. Here are some things you can do in the meantime:\n\n` +
               `- **Check your Dashboard** for current KPI metrics and trends\n` +
               `- **Review Truth Scan** results for validated financial data\n` +
@@ -1624,13 +1625,13 @@ Type **help** for a full list of what I can do.`,
               confidence: "Low",
               ckb_updated: false,
             };
-          } else if (error.message.includes('502') || error.message.includes('Backend service unavailable')) {
+          } else if (errMsg.includes('502') || errMsg.includes('Backend service unavailable')) {
             errorContent = 'The AI analysis is taking longer than expected. Try asking a shorter or simpler question, or try again in a moment.';
-          } else if (error.message.includes('401') || error.message.includes('403')) {
+          } else if (errMsg.includes('401') || errMsg.includes('403')) {
             errorContent = 'Your session may have expired. Please refresh the page or log in again to continue.';
-          } else if (error.message.includes('404')) {
+          } else if (errMsg.includes('404')) {
             errorContent = 'The AI copilot endpoint could not be found. This may indicate a configuration issue. Please check that the service is running properly.';
-          } else if (error.message.includes('Failed to fetch')) {
+          } else if (errMsg.includes('Failed to fetch')) {
             errorContent = 'Unable to reach the server. Please check your internet connection and try again.';
           } else {
             errorContent = 'Something unexpected happened. Please try again or rephrase your question.';

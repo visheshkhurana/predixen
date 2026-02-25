@@ -13,6 +13,7 @@ import {
   AlertCircle, RefreshCw, Settings
 } from 'lucide-react';
 import { api } from '@/api/client';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function EmailTemplates() {
   const { toast } = useToast();
@@ -48,10 +49,10 @@ export default function EmailTemplates() {
       setTestEmailDialog({ open: false, templateType: null });
       setTestEmail('');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: "Failed to Send Test Email",
-        description: error.message || "An error occurred",
+        description: getErrorMessage(error, "An error occurred"),
         variant: "destructive",
       });
     },

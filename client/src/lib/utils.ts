@@ -113,10 +113,34 @@ export function formatRunway(runwayMonths: number | null | undefined, maxDisplay
   if (isNaN(runwayMonths)) {
     return 'N/A';
   }
+  if (!isFinite(runwayMonths) || runwayMonths >= 900) {
+    return 'Sustainable';
+  }
   if (runwayMonths > maxDisplay) {
     return `${maxDisplay}+`;
   }
   return `${runwayMonths.toFixed(1)} mo`;
+}
+
+/**
+ * Check if a runway value represents a sustainable/profitable state
+ * Values >= 900 (including 999) or Infinity mean the company is profitable
+ */
+export function isRunwaySustainable(runwayMonths: number | null | undefined): boolean {
+  if (runwayMonths === null || runwayMonths === undefined) return true;
+  if (!isFinite(runwayMonths)) return true;
+  return runwayMonths >= 900;
+}
+
+/**
+ * Format a raw runway number for inline display (e.g., in cards, badges)
+ * Converts 999/Infinity to "Sustainable", caps display at 120+ months
+ */
+export function formatRunwayInline(runwayMonths: number | null | undefined): string {
+  if (runwayMonths === null || runwayMonths === undefined || isNaN(runwayMonths)) return 'N/A';
+  if (!isFinite(runwayMonths) || runwayMonths >= 900) return 'Sustainable';
+  if (runwayMonths > 120) return '120+';
+  return runwayMonths.toFixed(1);
 }
 
 /**

@@ -256,7 +256,7 @@ export function SensitivitySliders({
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
                 <p className="text-[10px] text-muted-foreground">Runway</p>
-                <p className="text-sm font-bold font-mono">{impact.runway.toFixed(1)} mo</p>
+                <p className="text-sm font-bold font-mono">{impact.runway >= 900 ? 'Sustainable' : `${impact.runway.toFixed(1)} mo`}</p>
                 <DeltaLabel value={impact.runwayDelta} suffix="mo" higherIsBetter />
               </div>
               <div>

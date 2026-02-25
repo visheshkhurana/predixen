@@ -476,9 +476,18 @@ export default function DecisionsPage() {
   const keyRisks: Array<{risk: string; likelihood: string; impact: string; contingency: string; pivot_deadline?: string}> | null = diagnosisData?.key_risks || null;
   const alternativePaths: Array<{strategy: string; why_rejected: string; when_it_might_work: string}> | null = diagnosisData?.alternative_paths || null;
 
+  const hasMeaningfulDiagnosis = !!(
+    situationNarrative ||
+    recommendationHeadline ||
+    recommendationNarrative ||
+    inactionNarrative ||
+    (keyRisks && keyRisks.length > 0) ||
+    (alternativePaths && alternativePaths.length > 0)
+  );
+
   return (
     <div className="p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
-      {diagnosisData && <StickyTOC activeSection={activeSection} />}
+      {hasMeaningfulDiagnosis && <StickyTOC activeSection={activeSection} />}
 
       <ShareModal
         open={shareModalOpen}
@@ -507,7 +516,7 @@ export default function DecisionsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {diagnosisData && (
+            {hasMeaningfulDiagnosis && (
               <>
                 <Button
                   variant="outline"
@@ -550,13 +559,13 @@ export default function DecisionsPage() {
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  {hasBriefing || diagnosisData ? 'Regenerate Briefing' : 'Generate Briefing'}
+                  {hasBriefing || hasMeaningfulDiagnosis ? 'Regenerate Briefing' : 'Generate Briefing'}
                 </>
               )}
             </Button>
           </div>
         </div>
-        {(diagnosisData || hasBriefing) && (
+        {(hasMeaningfulDiagnosis || hasBriefing) && (
           <div className="mt-6 border-b border-border" />
         )}
       </header>
@@ -587,13 +596,13 @@ export default function DecisionsPage() {
           }}
           onRetry={handleGenerateDecisions}
         />
-      ) : diagnosisError && !diagnosisData && !hasBriefing ? (
+      ) : (diagnosisError && !diagnosisData && !hasBriefing) || (!hasMeaningfulDiagnosis && !hasBriefing && !isAnalyzing && !isGenerating) ? (
         <Card data-testid="section-no-briefing">
           <CardContent className="py-12 text-center">
             <Brain className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
             <p className="text-sm font-medium text-foreground mb-1">No briefing generated yet</p>
             <p className="text-xs text-muted-foreground mb-5 max-w-sm mx-auto">
-              Click "Regenerate Briefing" above to create your first strategic briefing with AI-powered analysis.
+              Click "Generate Briefing" to create your first strategic briefing with AI-powered analysis of your company's financial data.
             </p>
             <Button
               onClick={handleGenerateDecisions}
@@ -605,7 +614,7 @@ export default function DecisionsPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : (diagnosisData || hasBriefing) ? (
+      ) : (hasMeaningfulDiagnosis || hasBriefing) ? (
         <article className="space-y-12" data-testid="article-briefing">
 
           {situationNarrative && (

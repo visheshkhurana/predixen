@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import { useFounderStore, FinancialBaseline } from "@/store/founderStore";
 import { 
   FileSpreadsheet, 
@@ -269,10 +270,10 @@ export default function DataVerification() {
       queryClient.invalidateQueries({ queryKey: ['/api/companies'] });
       navigate("/data");
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Save Failed",
-        description: error.message,
+        description: getErrorMessage(error, 'Failed to save data'),
         variant: "destructive",
       });
     },
@@ -503,8 +504,8 @@ export default function DataVerification() {
           <AlertTitle>Errors (must resolve before saving)</AlertTitle>
           <AlertDescription>
             <ul className="list-disc list-inside mt-2">
-              {verifyData?.errors.map((error, idx) => (
-                <li key={idx}>{error}</li>
+              {verifyData?.errors.map((error: unknown, idx: number) => (
+                <li key={idx}>{typeof error === 'string' ? error : getErrorMessage(error)}</li>
               ))}
             </ul>
           </AlertDescription>

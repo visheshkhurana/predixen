@@ -13,6 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
+import { getErrorMessage } from '@/lib/errors';
 import { CrossPageIntelligence } from '@/components/CrossPageIntelligence';
 import { apiRequest } from '@/lib/queryClient';
 import { 
@@ -107,8 +108,8 @@ export default function FundraisingPage() {
       setShowCapTableDialog(false);
       setNewCapTableName('Current Cap Table');
     },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({ title: 'Error', description: getErrorMessage(error, 'Failed to create cap table'), variant: 'destructive' });
     }
   });
 
@@ -123,8 +124,8 @@ export default function FundraisingPage() {
       setShowRoundDialog(false);
       setNewRound({ name: '', target_raise: '', pre_money: '', instrument: 'equity', option_pool_refresh_percent: '' });
     },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({ title: 'Error', description: getErrorMessage(error, 'Failed to create round'), variant: 'destructive' });
     }
   });
 
@@ -137,8 +138,8 @@ export default function FundraisingPage() {
       toast({ title: 'Simulation Complete', description: 'View your dilution analysis below.' });
       setSimulationResults(data);
     },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    onError: (error: unknown) => {
+      toast({ title: 'Error', description: getErrorMessage(error, 'Simulation failed'), variant: 'destructive' });
     }
   });
 

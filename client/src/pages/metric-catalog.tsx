@@ -16,6 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useFounderStore } from "@/store/founderStore";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import {
   Plus,
@@ -220,8 +221,8 @@ function MetricDetail({ metric, companyId, onClose }: { metric: MetricDefinition
         toast({ title: "Validation issues found", description: JSON.stringify(data.validation_result?.issues || data.parse_error), variant: "destructive" });
       }
     },
-    onError: (err: any) => {
-      toast({ title: "Validation failed", description: err.message, variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({ title: "Validation failed", description: getErrorMessage(err, 'Validation failed'), variant: "destructive" });
     },
   });
   

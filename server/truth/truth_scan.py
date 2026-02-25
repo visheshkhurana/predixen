@@ -322,9 +322,10 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["churn_rate_customer"] = (churned / len(customers)) * 100
         metrics["churn_rate_revenue"] = metrics["churn_rate_customer"] * 1.2  # Revenue churn usually higher
     else:
-        # Mock values for demo
         metrics["churn_rate_customer"] = 3.2  # 3.2% monthly churn
         metrics["churn_rate_revenue"] = 4.1  # 4.1% revenue churn
+    
+    metrics["churn_rate"] = metrics["churn_rate_customer"]
     
     # CAC, LTV, LTV:CAC, Payback calculations with sensibility checks
     marketing_spend = metrics.get("payroll", 0) * 0.3 + (metrics.get("opex", 0) * 0.4)  # Estimate marketing

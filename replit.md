@@ -55,4 +55,13 @@ The platform utilizes a modern full-stack architecture, combining React/TypeScri
 -   **Perplexity**: For real-time web search, market research, and benchmark data in the copilot.
 -   **PostgreSQL**: Primary relational database.
 -   **Google Fonts**: Inter, IBM Plex Mono.
--   **Resend**: Email delivery service.
+-   **Resend**: Email delivery service (verified sender: noreply@founderconsole.ai).
+-   **Twilio**: SMS/phone notifications (credentials configured).
+
+## Error Handling Architecture
+-   **`getErrorMessage()`**: Central utility in `client/src/lib/errors.ts` that safely extracts string messages from any error type, preventing React Error #185.
+-   **ErrorBoundary**: Supports both full-page and inline (`inline` prop) modes for component-level isolation.
+-   **API errors**: All 14+ page/component files use `getErrorMessage()` for toast error display.
+-   **Runway display**: Values ≥999 months rendered as "Sustainable" or "Profitable" via `formatRunwayDisplay()` in `sensitivityAnalysis.ts`.
+-   **Burn Rate**: Labeled as "Net Burn Rate" on both Dashboard and Health Check with matching methodology tooltips.
+-   **Churn Rate**: Truth scan backend now populates `churn_rate` key; frontend normalizes percentage vs decimal values.

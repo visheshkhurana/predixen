@@ -155,12 +155,12 @@ export function ScenarioCard({
                 Runway
               </div>
               <p className="text-2xl font-mono font-bold">
-                {runwayP50.toFixed(1)}
-                <span className="text-sm text-muted-foreground ml-1">mo</span>
+                {runwayP50 >= 900 ? 'Sustainable' : runwayP50.toFixed(1)}
+                {runwayP50 < 900 && <span className="text-sm text-muted-foreground ml-1">mo</span>}
               </p>
               {(runwayP10 || runwayP90) && (
                 <p className="text-xs text-muted-foreground">
-                  Range: {runwayP10?.toFixed(0) || '?'} - {runwayP90?.toFixed(0) || '?'} months
+                  Range: {runwayP10 != null ? (runwayP10 >= 900 ? '∞' : runwayP10.toFixed(0)) : '?'} - {runwayP90 != null ? (runwayP90 >= 900 ? '∞' : runwayP90.toFixed(0)) : '?'} months
                 </p>
               )}
             </div>

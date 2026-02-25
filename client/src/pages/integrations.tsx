@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
+import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
@@ -645,10 +646,10 @@ export default function IntegrationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
       setSyncingProvider(null);
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Sync Failed",
-        description: String(error),
+        description: getErrorMessage(error, 'Sync operation failed'),
         variant: "destructive",
       });
       setSyncingProvider(null);
@@ -677,10 +678,10 @@ export default function IntegrationsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/realtime"] });
       setTestingProvider(null);
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Sample Test Failed",
-        description: String(error),
+        description: getErrorMessage(error, 'Sample test failed'),
         variant: "destructive",
       });
       setTestingProvider(null);
@@ -1365,10 +1366,10 @@ function ConnectDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast({
         title: "Connection Failed",
-        description: String(error),
+        description: getErrorMessage(error, 'Connection failed'),
         variant: "destructive",
       });
     },

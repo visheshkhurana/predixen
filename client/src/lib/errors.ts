@@ -16,6 +16,36 @@ export class ApiError extends Error {
   }
 }
 
+export function getErrorMessage(error: unknown, fallback: string = 'An unexpected error occurred'): string {
+  if (error === null || error === undefined) {
+    return fallback;
+  }
+  if (typeof error === 'string') {
+    return error || fallback;
+  }
+  if (error instanceof ApiError) {
+    return error.message || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  if (typeof error === 'object') {
+    const obj = error as Record<string, any>;
+    if (typeof obj.message === 'string') return obj.message || fallback;
+    if (typeof obj.detail === 'string') return obj.detail || fallback;
+    if (typeof obj.error === 'string') return obj.error || fallback;
+    if (typeof obj.statusText === 'string') return obj.statusText || fallback;
+    try {
+      const str = JSON.stringify(error);
+      if (str && str !== '{}') return str;
+    } catch {
+      // ignore
+    }
+    return fallback;
+  }
+  return String(error) || fallback;
+}
+
 /**
  * Safely parse JSON from a Response object with proper error handling
  * @param response The Response object to parse
