@@ -90,7 +90,7 @@ export function PageErrorFallback({
           </div>
 
           {/* Error Details (Development Only) */}
-          {process.env.NODE_ENV === 'development' && (
+          {import.meta.env.DEV && (
             <details className="text-xs bg-destructive/5 p-3 rounded border border-destructive/20">
               <summary className="cursor-pointer font-medium text-destructive/80 mb-2">
                 Technical Details

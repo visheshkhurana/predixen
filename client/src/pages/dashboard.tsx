@@ -194,7 +194,7 @@ export default function Dashboard() {
     if (!kpis) return null;
 
     const resolvedRunwayRaw = financialMetrics.sources['runway'] ? financialMetrics.runway : kpis.runway.currentValue;
-    const resolvedRunway = !Number.isFinite(resolvedRunwayRaw) || resolvedRunwayRaw >= 999
+    const resolvedRunway = !Number.isFinite(resolvedRunwayRaw) || resolvedRunwayRaw >= 900
       ? 60
       : Math.max(0, Math.min(resolvedRunwayRaw, 60));
 

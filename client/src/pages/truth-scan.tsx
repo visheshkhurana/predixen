@@ -528,7 +528,8 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       value: (() => {
         const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue) || extractValue(metrics.churn_rate);
         const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
-        const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
+        const hasChurnData = tsChurn !== null || (sharedMetrics.churnRatePct > 0);
+        const churn = tsChurn !== null ? tsChurn : (hasChurnData ? sharedMetrics.churnRate : null);
         return churn !== null && churn !== undefined ? `${(churn * 100).toFixed(1)}%` : 'N/A';
       })(),
       trend: undefined,
@@ -537,8 +538,9 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
       status: (() => {
         const tsChurnRaw = extractValue(metrics.churn_rate_customer) || extractValue(metrics.churn_rate_revenue) || extractValue(metrics.churn_rate);
         const tsChurn = tsChurnRaw !== null ? (tsChurnRaw > 1 ? tsChurnRaw / 100 : tsChurnRaw) : null;
-        const churn = tsChurn !== null ? tsChurn : sharedMetrics.churnRate;
-        return churn && churn <= 0.05 ? 'healthy' : churn && churn <= 0.1 ? 'warning' : 'critical';
+        const hasChurnData = tsChurn !== null || (sharedMetrics.churnRatePct > 0);
+        const churn = tsChurn !== null ? tsChurn : (hasChurnData ? sharedMetrics.churnRate : null);
+        return churn !== null && churn <= 0.05 ? 'healthy' : churn !== null && churn <= 0.1 ? 'warning' : 'critical';
       })() as any,
       source: 'calculated' as any,
       tooltip: 'Percentage of customers lost per month',

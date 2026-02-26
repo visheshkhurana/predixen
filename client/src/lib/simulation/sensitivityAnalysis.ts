@@ -22,7 +22,7 @@ export interface SensitivityResult {
   currentValue: number;
 }
 
-export const RUNWAY_SUSTAINABLE = 999;
+export const RUNWAY_SUSTAINABLE = 900;
 export const RUNWAY_DISPLAY_CAP = 120;
 
 export function calculateRunway(state: FinancialState): number {

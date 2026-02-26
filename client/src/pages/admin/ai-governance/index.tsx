@@ -789,7 +789,7 @@ function CompanyHealthView({ data }: { data: GovernanceState }) {
   const runwayFromSummary = cfoSummary?.match(/(\d+\.?\d*)\s*months/)?.[1];
   const runwayValue = runwayFromSummary
     ? `${runwayFromSummary} mo`
-    : (financialMetrics.runway > 0 && financialMetrics.runway < 999 ? `${financialMetrics.runway.toFixed(1)} mo` : '18.5 mo');
+    : (financialMetrics.runway > 0 && financialMetrics.runway < 900 ? `${financialMetrics.runway.toFixed(1)} mo` : 'Sustainable');
 
   const metrics = [
     {
