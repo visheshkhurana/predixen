@@ -159,20 +159,22 @@ async function request<T>(
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
 
     if (response.status === 401 && !endpoint.startsWith('/auth/')) {
-      localStorage.removeItem('founderconsole-token');
-      try {
-        const raw = localStorage.getItem('founderconsole-founder-storage');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.state) {
-            parsed.state.token = null;
-            parsed.state.user = null;
-            localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
-          }
-        }
-      } catch {}
-      if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
+      const method = (options.method || 'GET').toUpperCase();
+      const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+      if (isMutation && !window.location.pathname.startsWith('/auth') && !_redirecting401) {
         _redirecting401 = true;
+        localStorage.removeItem('founderconsole-token');
+        try {
+          const raw = localStorage.getItem('founderconsole-founder-storage');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed?.state) {
+              parsed.state.token = null;
+              parsed.state.user = null;
+              localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
+            }
+          }
+        } catch {}
         setTimeout(() => { window.location.href = '/auth'; }, 100);
       }
     }
