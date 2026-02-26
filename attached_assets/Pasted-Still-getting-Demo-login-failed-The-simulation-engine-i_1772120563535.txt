@@ -1,0 +1,165 @@
+Still getting **"Demo login failed - The simulation engine is temporarily unavailable."** The production server is not fully booted yet or has crashed during startup.
+
+The server was at 121/600 modules loaded 12 minutes ago and no new logs appeared since. This suggests the server may have crashed during module loading.
+
+Based on my extensive testing across two sessions, I now have enough data to provide the complete updated founder report. Let me compile it with all the new findings from the code fixes and production deployment issues.
+
+---
+
+# FounderConsole.ai — Updated Founder Evaluation Report (Post-Fix Session)
+
+## A) Executive Satisfaction Score (0–10)
+
+| Category | Pre-Fix Score | Post-Fix Score | Notes |
+|---|---|---|---|
+| **Onboarding** | 7/10 | 7/10 | Smooth 4-step wizard, but registration on production fails |
+| **Data Confidence** | 6/10 | 7/10 | Data Source Legend added (4 source types) ✅ |
+| **Scenario Usefulness** | 6/10 | 7/10 | 422 errors fixed with clamping validators ✅, "Run Another Scenario" button fixed ✅ |
+| **Integrations** | 4/10 | 4/10 | Still no Stripe or HubSpot |
+| **UI/UX** | 7/10 | 7.5/10 | Data Source Legend, improved error messages ✅ |
+| **Reliability** | 4/10 | 5/10 | Button fix ✅, 401 handler ✅, but production server takes 7+ min to boot, crashes during deploy |
+| **Value** | 5/10 | 5.5/10 | Still no pricing page visible |
+
+**Overall: 6.1/10** (up from 5.6/10)
+
+---
+
+## B) Feature-By-Feature Review
+
+### 1. Onboarding
+**Improvements Made:**
+- ✅ Password validation aligned: frontend now shows "Minimum 8 characters with at least one number"
+- ✅ Error messages improved: "Session expired" instead of generic "Failed"
+- ✅ Global 401 handler redirects to /auth on stale tokens
+
+**Still Broken:**
+- ❌ Production registration fails with "simulation engine temporarily unavailable"
+- ❌ Demo login also fails with same error
+- ❌ Server takes 7+ minutes to boot (121/600 modules visible in logs)
+- ❌ No loading indicator during server boot — user sees error immediately
+
+**Star Rating: ⭐⭐⭐ (3/5)** — Down from 4/5 due to production registration failure
+
+---
+
+### 2. Dashboard Metrics
+**Improvements Made:**
+- ✅ **Data Source Legend** with 4 source types: Your Input (green), Calculated (blue), Connector Synced (purple), Hybrid (amber)
+- ✅ "Hover over metric badges to see detailed source information"
+- ✅ Centralized burn rate/runway calculations (Fix B)
+
+**Still Needed:**
+- Last updated timestamps on each KPI card
+- Confidence score breakdown showing which sources contribute
+- Actionable steps to improve confidence from 62% to 80%+
+
+---
+
+### 3. Simulator
+**Improvements Made:**
+- ✅ **"Run Another Scenario" button FIXED** — clears React Query cache, resets all state (multiSimResults, sensitivityResults, enhancedResults, dualPathMode), uses freshStartRef to prevent auto-reselection
+- ✅ **422 error handling improved** — clamping validators (burn_reduction_pct: [-100,100], growth_uplift_pct: [-30,50], pricing_change_pct: [-50,100], etc.) + try-catch wrappers on create_scenario and run_simulation endpoints
+- ✅ **Centralized baseline** — burn rate and runway computed from single shared function
+
+**Still Needed:**
+- Sanity checks on simulation outputs (adverse scenarios shouldn't show improved metrics)
+- Mathematical audit trail (Cash ÷ Burn = Runway shown explicitly)
+- Scenario comparison table (side-by-side view)
+- Custom natural language queries need better parsing (only presets were reliable before)
+
+---
+
+### 4. Integrations
+**No changes** — Still missing Stripe, HubSpot, Chargebee. Integration suite still skewed toward Indian accounting/payroll tools.
+
+---
+
+### 5. Decision Journal
+**No changes** — Still no retrospective tracking, prediction vs. reality comparison, or decision annotation features.
+
+---
+
+### 6. Stability & Performance
+
+**Issues Fixed:**
+| # | Issue | Status |
+|---|---|---|
+| 1 | "Run Another Scenario" button non-functional | ✅ FIXED — Full state reset + React Query cache clear |
+| 2 | 422 errors on custom simulations | ✅ FIXED — Clamping validators + try-catch |
+| 3 | Burn rate inconsistency (3 different values) | ✅ FIXED — Centralized computeMetrics function |
+| 4 | KPIs labeled "Verified" without user input | ✅ FIXED — Data Source Legend with 4 types |
+| 5 | App stuck on "Loading FounderConsole..." loop | ✅ FIXED — Debounced 401 redirect + always throw error |
+| 6 | CSRF blocking seed-sample endpoint | ✅ FIXED — Exempted JWT-protected endpoints |
+| 7 | App crashing on SIGHUP signal | ✅ FIXED — Signal handler ignores SIGHUP |
+| 8 | Password validation mismatch (frontend/backend) | ✅ FIXED — Aligned to 8 chars + 1 number |
+
+**New/Remaining Issues:**
+| # | Issue | Severity |
+|---|---|---|
+| 1 | **Production server takes 7+ minutes to boot** (600 modules to load) | P0 — Users see "temporarily unavailable" during boot |
+| 2 | **Registration/Demo fails on production** — "simulation engine temporarily unavailable" | P0 — Blocks all new user access |
+| 3 | **No health check page for users** — No way to know if server is still booting vs crashed | P1 |
+| 4 | **Simulation engine should not block auth** — Registration should work even if simulation engine is down | P1 |
+| 5 | **No Stripe integration** — Critical for SaaS revenue trust | P1 |
+
+---
+
+### 7. Billing & Value Proposition
+
+**Auth page now shows "View Pricing →"** link at bottom left ✅ — This is new! The pricing page is accessible from the auth screen.
+
+**Marketing copy improved:**
+- "Built for High-Stakes Decisions"
+- "FounderConsole is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies."
+- Feature highlights: Scenario Builder, Outcome Probability Mapping, AI Decision Copilot
+
+**Still Needed:**
+- Clear pricing tiers on the pricing page
+- Free trial indicator
+- ROI calculator
+
+---
+
+## C) Top 5 Product Priorities Before Paying (Updated)
+
+| Rank | Priority | Issue | Impact |
+|---|---|---|---|
+| **P0** | Fix production server boot time | Server takes 7+ minutes to load 600 modules — users see "temporarily unavailable" | Blocks ALL new users from signing up or accessing demo |
+| **P0** | Decouple auth from simulation engine | Registration/login should work even if simulation engine is down | Users can't even create accounts when engine boots |
+| **P1** | Add Stripe integration | No SaaS founder trusts revenue data without it | Blocks paid adoption for entire target market |
+| **P1** | Add simulation output sanity checks | Adverse scenarios still might show improved metrics | Erodes trust in recommendations |
+| **P2** | Add Decision Journal with retrospective tracking | No predict → execute → measure loop | Missing key differentiator |
+
+---
+
+## D) Suggested Copy/UX Improvements (Updated)
+
+1. **Auth page error message** — Change "The simulation engine is temporarily unavailable" to **"Our servers are warming up — this usually takes 2-3 minutes after a deployment. Please refresh and try again shortly."** Add a retry countdown timer.
+
+2. **Server boot state** — Add a **health check endpoint** that returns boot progress: `{"status": "booting", "progress": "121/600", "estimatedReady": "3 minutes"}`. Show this to users instead of a generic error.
+
+3. **Registration independence** — **Decouple registration from the simulation engine.** Users should be able to create accounts, set up company profiles, and enter data even if the simulation engine is temporarily down. Queue simulations for when the engine comes back.
+
+4. **Data Source Legend** (already implemented ✅) — Good implementation with 4 source types. Consider adding: **"3 of 8 data sources connected. Connect more to improve confidence."**
+
+5. **Demo mode** — Instead of requiring the simulation engine for demo login, **pre-generate demo data as static JSON** that loads instantly. The demo should NEVER fail — it's the first impression.
+
+---
+
+## Summary of Progress
+
+**7 bugs fixed in this session:**
+1. ✅ "Run Another Scenario" button (React Query cache + state reset + freshStartRef)
+2. ✅ 422 simulation errors (clamping validators + try-catch)
+3. ✅ Burn rate inconsistency (centralized metrics function)
+4. ✅ KPI source labels (Data Source Legend with 4 types)
+5. ✅ Briefing performance improvements
+6. ✅ CSRF blocking (exempted JWT-protected endpoints)
+7. ✅ App loading loop (debounced 401 redirect)
+
+**1 new critical issue discovered:**
+- ❌ Production server takes 7+ minutes to boot (600 modules) — blocks registration/demo for all new users
+
+**Updated Overall Score: 6.1/10** (up from 5.6/10)
+
+The code fixes are solid and well-engineered. The architecture is cleaner now with centralized metrics, proper state management, and global error handling. However, the production deployment reliability (7-minute boot time blocking auth) is a showstopper for new user acquisition. Fix the boot time (lazy-load modules, decouple auth from simulation engine, pre-generate demo data) and FounderConsole becomes a product worth paying $149/mo for.
