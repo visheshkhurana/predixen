@@ -1626,8 +1626,24 @@ Type **help** for a full list of what I can do.`,
               confidence: "Low",
               ckb_updated: false,
             };
-          } else if (errMsg.includes('502') || errMsg.includes('Backend service unavailable')) {
-            errorContent = 'The AI analysis is taking longer than expected. Try asking a shorter or simpler question, or try again in a moment.';
+          } else if (errMsg.includes('502') || errMsg.includes('503') || errMsg.includes('504') || errMsg.includes('Backend service unavailable')) {
+            errorContent = `The AI analysis service is temporarily unavailable. This usually resolves within a few minutes.\n\nIn the meantime, you can:\n- **Check the Dashboard** for your current metrics\n- **Use Sensitivity Sliders** on the Simulation page for quick estimates\n- **Review your Truth Scan** for validated data\n\nYour data is safe and will be accessible when the service recovers.`;
+            structuredFallback = {
+              executive_summary: [
+                "The AI service is temporarily unavailable.",
+                "Your data is safe and accessible through other pages.",
+              ],
+              company_snapshot: currentCompany ? [`Company: ${currentCompany.name}`] : [],
+              assumptions: ["AI analysis was limited due to a temporary service issue."],
+              risks: [],
+              next_questions: [
+                "What are my key financial metrics?",
+                "Show me my current runway",
+                "What's my burn rate trend?",
+              ],
+              confidence: "Low",
+              ckb_updated: false,
+            };
           } else if (errMsg.includes('401') || errMsg.includes('403')) {
             errorContent = 'Your session may have expired. Please refresh the page or log in again to continue.';
           } else if (errMsg.includes('404')) {

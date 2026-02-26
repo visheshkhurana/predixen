@@ -1445,13 +1445,29 @@ export default function OnboardingPage() {
                   <Button
                     type="button"
                     className="flex-1"
-                    onClick={() => {
+                    disabled={manualBaselineMutation.isPending}
+                    onClick={async () => {
+                      if (currentCompany?.id && (expenseBreakdown.payroll > 0 || expenseBreakdown.marketing > 0 || expenseBreakdown.operating > 0 || expenseBreakdown.cogs > 0)) {
+                        try {
+                          await manualBaselineMutation.mutateAsync({
+                            companyId: currentCompany.id,
+                            data: {
+                              ...baselineData,
+                              payroll: expenseBreakdown.payroll || baselineData.payroll,
+                              opex: expenseBreakdown.operating || baselineData.opex,
+                              other_costs: (expenseBreakdown.marketing || 0) + (expenseBreakdown.cogs || 0),
+                            },
+                          });
+                        } catch (err) {
+                          toast({ title: 'Warning', description: 'Could not save expense breakdown. You can update it later.', variant: 'destructive' });
+                        }
+                      }
                       markStepComplete(3);
                       setStep(4);
                     }}
                   >
-                    Next: Data Sources
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    {manualBaselineMutation.isPending ? 'Saving...' : 'Next: Data Sources'}
+                    {!manualBaselineMutation.isPending && <ArrowRight className="ml-2 h-4 w-4" />}
                   </Button>
                 </div>
               </div>

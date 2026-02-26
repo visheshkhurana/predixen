@@ -73,3 +73,7 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **Briefing progress indicator**: `LOADING_STEPS` in `decisions.tsx` total 35s (5+8+10+12). Fourth step: "Generating strategic briefing".
 -   **Onboarding Step 3 pre-fill**: Payroll and OpEx pre-filled from Step 2 baselineData when transitioning.
 -   **PageErrorFallback**: Uses `import.meta.env.DEV` for Vite compatibility.
+-   **Scenario retry buttons**: Use React Query `refetch()` instead of `window.location.reload()` to preserve user input state.
+-   **Metrics partial degradation**: `useFinancialMetrics` returns `isPartiallyDegraded` flag when any (but not all) data queries fail.
+-   **Onboarding Step 3 data persistence**: "Next: Data Sources" button saves expense breakdown to backend via `manualBaselineMutation` before advancing to Step 4.
+-   **StrategyCard burn warning**: Cards with `burnChange > 50%` show a red warning with phased execution advice. `data-testid="warning-high-burn-{strategyId}"`.

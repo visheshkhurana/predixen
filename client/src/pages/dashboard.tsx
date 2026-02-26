@@ -123,7 +123,7 @@ const periodLabels: Record<TimePeriod, string> = {
 };
 
 export default function Dashboard() {
-  const { metrics: financialMetrics, isLoading: metricsLoading } = useFinancialMetrics();
+  const { metrics: financialMetrics, isLoading: metricsLoading, isStale, isPartiallyDegraded, lastUpdated } = useFinancialMetrics();
   const { currentCompany: selectedCompany } = useFounderStore();
   const companyCurrency = selectedCompany?.currency || 'USD';
   const formatCurrency = useCallback((value: number) => formatCurrencyAbbrev(value, companyCurrency), [companyCurrency]);
@@ -395,6 +395,17 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          {isStale && lastUpdated && (
+            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-stale-data">
+              <Clock className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 dark:text-amber-400">Showing cached data</AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-300">
+                The data service is temporarily unavailable. Displaying the last known values from {new Date(lastUpdated).toLocaleString()}.
+                Your data is safe — metrics will refresh automatically when the service recovers.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {overviewKpis?.missingData && overviewKpis.missingData.length > 0 && (
         <Alert variant="destructive" className="border-amber-500/50 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-missing-data">
           <AlertTriangle className="h-4 w-4 text-amber-600" />

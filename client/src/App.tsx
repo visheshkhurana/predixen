@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ContextBar } from "@/components/ContextBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageErrorFallback } from "@/components/PageErrorFallback";
+import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { useFounderStore } from "@/store/founderStore";
 import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2 } from "lucide-react";
 import {
@@ -591,6 +592,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <AppSidebar />
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <BackendStatusBanner />
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useFounderStore } from '@/store/founderStore';
 import { useQuery } from '@tanstack/react-query';
 
@@ -38,6 +38,28 @@ export interface FinancialMetrics {
   hasData: boolean;
   sources: Record<string, MetricSource>;
   warnings: MetricWarning[];
+}
+
+const METRICS_CACHE_KEY = 'founderconsole-metrics-cache';
+
+function getCachedMetrics(companyId: number | null): { metrics: FinancialMetrics; timestamp: number } | null {
+  if (!companyId) return null;
+  try {
+    const raw = localStorage.getItem(`${METRICS_CACHE_KEY}-${companyId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.metrics && parsed?.timestamp) return parsed;
+  } catch {}
+  return null;
+}
+
+function setCachedMetrics(companyId: number, metrics: FinancialMetrics) {
+  try {
+    localStorage.setItem(`${METRICS_CACHE_KEY}-${companyId}`, JSON.stringify({
+      metrics,
+      timestamp: Date.now(),
+    }));
+  } catch {}
 }
 
 const EMPTY_METRICS: FinancialMetrics = {
@@ -82,11 +104,11 @@ async function fetchJson(url: string): Promise<any> {
   return res.json();
 }
 
-export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean } {
+export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: boolean; isStale: boolean; isPartiallyDegraded: boolean; lastUpdated: number | null } {
   const { currentCompany, financialBaseline } = useFounderStore();
   const companyId = currentCompany?.id ?? null;
 
-  const { data: computed, isLoading: computedLoading } = useQuery<any>({
+  const { data: computed, isLoading: computedLoading, isError: computedError } = useQuery<any>({
     queryKey: ['computed-metrics', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/metrics/computed`),
     enabled: !!companyId,
@@ -98,7 +120,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 5000),
   });
 
-  const { data: truthScan } = useQuery<any>({
+  const { data: truthScan, isError: truthError } = useQuery<any>({
     queryKey: ['truth-latest', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/truth/latest`),
     enabled: !!companyId,
@@ -108,7 +130,7 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     retry: 1,
   });
 
-  const { data: backendBaseline } = useQuery<any>({
+  const { data: backendBaseline, isError: baselineError } = useQuery<any>({
     queryKey: ['financials-baseline', companyId],
     queryFn: () => fetchJson(`/api/companies/${companyId}/financials/baseline`),
     enabled: !!companyId,
@@ -117,6 +139,9 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     refetchOnMount: true,
     retry: 1,
   });
+
+  const allQueriesFailed = computedError && truthError && baselineError;
+  const anyQueryFailed = computedError || truthError || baselineError;
 
   const metrics = useMemo((): FinancialMetrics => {
     const c = computed || {};
@@ -280,7 +305,20 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     };
   }, [computed, truthScan?.metrics, financialBaseline, currentCompany, backendBaseline]);
 
-  const isLoading = !companyId || (computedLoading && !computed && !backendBaseline && !truthScan);
+  useEffect(() => {
+    if (companyId && (metrics.hasData || metrics.mrr > 0 || metrics.cashOnHand > 0) && !allQueriesFailed) {
+      setCachedMetrics(companyId, metrics);
+    }
+  }, [companyId, metrics, allQueriesFailed]);
 
-  return { metrics, isLoading };
+  const cachedData = useMemo(() => getCachedMetrics(companyId), [companyId, allQueriesFailed]);
+
+  const isStale = !!(allQueriesFailed && cachedData);
+  const isPartiallyDegraded = !!(anyQueryFailed && !allQueriesFailed);
+  const lastUpdated = isStale ? cachedData!.timestamp : null;
+  const effectiveMetrics = (allQueriesFailed && cachedData) ? cachedData.metrics : metrics;
+
+  const isLoading = !companyId || (computedLoading && !computed && !backendBaseline && !truthScan && !cachedData);
+
+  return { metrics: effectiveMetrics, isLoading, isStale, isPartiallyDegraded, lastUpdated };
 }

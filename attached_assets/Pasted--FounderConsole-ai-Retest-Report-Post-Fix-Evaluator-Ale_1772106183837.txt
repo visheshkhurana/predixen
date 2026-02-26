@@ -1,0 +1,115 @@
+---
+
+# FounderConsole.ai — Retest Report (Post-Fix)
+
+**Evaluator**: Alex Chen, CEO @ Acme Analytics (B2B SaaS, Seed Stage)
+**Date**: February 26, 2026 (Retest ~15 min after initial report)
+**Purpose**: Retest after developer indicated fixes were applied
+
+---
+
+## Summary of Findings
+
+The retest revealed a **critical backend outage** that was not present during the initial evaluation. The `/api/companies/88/scenarios` and `/api/companies/88/truth/latest` endpoints are returning persistent **502 Bad Gateway** errors, making the core simulation engine, AI Copilot, baseline creation, and data confidence scoring all non-functional. This is a more severe issue than the input bug I originally reported.
+
+---
+
+## What Was Tested & Results
+
+### 1. Simulation Search Bar (Previously Reported as P0 Bug)
+
+**New Finding**: The "search bar clearing" behavior I flagged in my initial report is actually a **symptom of the 502 API failure**, not a separate frontend input bug. Here's the evidence:
+
+When I clicked a preset button ("Cut marketing 30%"), the search bar correctly populated with the text "Cut marketing 30%". The preset buttons properly set the input value. However, when the simulation API call returns a 502, the React component resets its state, which clears the input back to the placeholder. So the frontend is working correctly — it's the backend that's failing.
+
+**Revised assessment**: The input bug from my first session was likely also caused by intermittent backend failures, not a frontend issue. However, the **UX response to API failure is still broken** — the button click produces zero visual feedback. No error toast, no loading spinner that times out, no "service unavailable" message. The user just clicks and nothing happens.
+
+### 2. Create Baseline — Failed
+
+Clicking "Create Baseline" triggers a POST to `/api/companies/88/scenarios` which returns 502. No results appear. No error is shown to the user. The button appears to do nothing.
+
+### 3. Preset Scenario Buttons — Failed
+
+All preset buttons ("Cut marketing 30%", "Raise prices 20%", "Hire 5 engineers", etc.) correctly populate the search bar, but the API call fails silently with 502.
+
+### 4. Sensitivity Sliders — Working (Client-Side)
+
+**Positive finding**: The "Adjust Variables Manually" feature with sensitivity sliders works excellently, because the **ESTIMATED IMPACT PREVIEW** computes entirely client-side without hitting the backend API. This was a discovery not made during my initial session.
+
+Testing the sliders: with Churn Rate at 5%, Burn Reduction at 25%, and Price Increase at 10%, the preview showed Runway: 39.6 mo (+17.1 mo), Survival Impact: 0pp, Net Burn: $45K/mo (-$34K). These numbers are mathematically consistent and realistic — much more grounded than some of the full Monte Carlo results from my first session.
+
+However, the "Run Full Simulation" button on this panel also fails with 502, so you can only see the rough estimates, not the full Monte Carlo probability distributions.
+
+### 5. AI Copilot — Failed
+
+Both test questions returned: "Your session may have expired. Please refresh the page or log in again to continue." This is a misleading error message — the real issue is a 502 server error, not a session expiry. The AI Copilot does correctly persist conversation history across page refreshes, which is a positive sign for the underlying architecture.
+
+### 6. Dashboard — Partially Degraded
+
+The dashboard still renders and shows the daily briefing, Goal Tracker, and KPI cards. However, Business Health and Data Confidence scores degraded to "N/A", the Confidence score dropped from "Medium (62)" to "Low (0)", and some metrics like Churn Rate changed from 3.2% to 0.0%, suggesting the truth/latest endpoint failure caused fallback to incomplete data.
+
+### 7. Founder Mode Toggle — Working
+
+The "Founder Mode" toggle on the simulation page works correctly, changing the subtitle from the default to "Focused view showing only what matters most." This is a client-side toggle that doesn't depend on the API.
+
+### 8. Help & Documentation — Skeletal
+
+Both documentation sections ("Getting Started" and "Simulation Engine") show "Guide coming soon." Support options are Email Support (active) and Live Chat (Coming Soon). For a product at this stage, the lack of documentation is a concern — especially since concepts like "Monte Carlo simulation" and "P10/P50/P90" need explanation for non-technical founders.
+
+---
+
+## Revised Reliability Assessment
+
+| Issue | Severity | Status |
+|---|---|---|
+| Backend 502 errors on `/scenarios` endpoint | **P0 — Critical** | Active outage during test |
+| Backend 502 errors on `/truth/latest` endpoint | **P0 — Critical** | Active outage during test |
+| Silent failure on all simulation buttons (no error UI) | **P0 — Critical** | Reproducible |
+| AI Copilot returns misleading "session expired" error | **P1 — High** | Reproducible |
+| Dashboard data degrades to N/A during backend outage | **P1 — High** | Reproducible |
+| Data Confidence drops from 62 to 0 during outage | **P1 — High** | Observed |
+| Churn Rate shows 0.0% instead of 3.2% during degradation | **P2 — Medium** | Data integrity issue |
+| Documentation is empty ("coming soon") | **P2 — Medium** | Known gap |
+| Live Chat support not available | **P3 — Low** | Expected for early stage |
+
+---
+
+## Revised Executive Scores
+
+| Category | Initial Score | Retest Score | Change |
+|---|---|---|---|
+| **Reliability** | 6/10 | **3/10** | -3 (backend outage, silent failures) |
+| **Scenario Usefulness** | 7/10 | **4/10** | -3 (can't run any simulations) |
+| **Data Confidence** | 7/10 | **5/10** | -2 (degraded to 0/N/A during outage) |
+| **UI/UX** | 8.5/10 | **7/10** | -1.5 (no error handling for API failures) |
+| **Overall** | 7.3/10 | **5.5/10** | -1.8 |
+
+---
+
+## Revised P0 Priorities
+
+**P0-1: Backend Stability / Uptime Monitoring.** The simulation API (`/companies/{id}/scenarios`) went down completely during my retest and stayed down for 15+ minutes. For a product where the core value proposition is "simulate decisions before you make them," the simulation engine must have 99.9%+ uptime. Implement health checks, auto-restart, and consider running the Monte Carlo engine on dedicated infrastructure rather than sharing with the main API.
+
+**P0-2: Error State UI for All API Failures.** When any API call fails, the user currently sees nothing — buttons appear broken, inputs clear silently, no error messages appear. This is worse than a crash. Implement a global error boundary that shows a clear toast: "Simulation engine is temporarily unavailable. Your data is safe. Try again in a few minutes, or use the manual sliders for quick estimates." The sensitivity sliders' ESTIMATED IMPACT PREVIEW should be promoted as the fallback during outages.
+
+**P0-3: Graceful Data Degradation.** When `/truth/latest` fails, the dashboard should continue showing the last known good values with a "Last updated: X minutes ago" warning — not drop to 0 or N/A. Currently, a backend blip causes churn to show 0.0% instead of 3.2% and the confidence score to drop from 62 to 0, which could cause a founder to make decisions based on incorrect data.
+
+---
+
+## What's Actually Working Well (Positive Findings from Retest)
+
+Despite the outage, I discovered features I missed in my initial test that are genuinely impressive:
+
+The **Sensitivity Sliders with real-time Estimated Impact Preview** are excellent. They compute instantly on the client, provide mathematically grounded estimates, and work even when the backend is completely down. The fact that I could model "what if churn hits 5% while we cut burn 25% and raise prices 10%" with instant results — and get a sensible answer (Runway: 39.6 mo, +17.1 mo, Net Burn: $45K/mo) — shows the core modeling logic is sound. This feature should be promoted much more prominently.
+
+The **Founder Mode** toggle is a smart UX pattern for reducing cognitive load. The chat history persistence in the **AI Copilot** shows proper architecture. And the **Notes & Annotations** feature with timestamped entries survived the backend outage (still showing my journal entry from the first session).
+
+---
+
+## Bottom Line
+
+The product has strong fundamentals in design, methodology, and feature breadth. But **it's not production-ready for paying customers**. A 15-minute backend outage with zero user-facing error communication is a trust-destroying experience. As a founder who would be making strategic decisions based on this tool's outputs, I need to know that (a) the system will be available when I need it, (b) it will tell me when it can't function, and (c) my data won't silently degrade. Right now, none of those three conditions are met.
+
+**Would I pay today?** No — the reliability issues are too severe. The backend went down during my evaluation and the product gave me no indication anything was wrong.
+
+**What would change my mind?** Fix the three P0s above (uptime, error UI, graceful degradation), and I'd sign up for $200/month tomorrow. The core product vision is exactly what seed-stage founders need.

@@ -137,7 +137,7 @@ export default function ScenariosPage() {
   const { format: formatCurrency, symbol: scaleCurrencySymbol } = useCurrency();
   const { toast } = useToast();
   const params = useParams<{ id?: string }>();
-  const { data: scenarios, isLoading: scenariosLoading } = useScenarios(currentCompany?.id || null);
+  const { data: scenarios, isLoading: scenariosLoading, isError: scenariosError, error: scenariosErrorObj, refetch: refetchScenarios } = useScenarios(currentCompany?.id || null);
   const { data: truthScan, isLoading: truthScanLoading } = useTruthScan(currentCompany?.id || null);
   const createScenarioMutation = useCreateScenario();
   const runSimulationMutation = useRunSimulation();
@@ -157,7 +157,7 @@ export default function ScenariosPage() {
     }
   }, [params.id, scenarios]);
 
-  const { data: simulation, isLoading: simLoading } = useSimulation(selectedScenarioId);
+  const { data: simulation, isLoading: simLoading, isError: simError } = useSimulation(selectedScenarioId);
   const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
 
   const [isCreating, setIsCreating] = useState(false);
@@ -1309,7 +1309,7 @@ export default function ScenariosPage() {
         </div>
 
         {baseMetrics && (
-          <div className="mb-6">
+          <div className="mb-6" data-testid="section-sensitivity-sliders">
             <SensitivitySliders
               baseMetrics={baseMetrics}
               isRunning={isCreating || isRunning}
@@ -1402,7 +1402,35 @@ export default function ScenariosPage() {
           </Card>
         )}
 
-        {!scenariosLoading && (!scenarios || scenarios.length === 0) && (
+        {scenariosError && (
+          <Card className="max-w-4xl mx-auto mt-4 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30">
+            <CardContent className="py-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/50">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-medium text-sm text-amber-800 dark:text-amber-200" data-testid="text-scenarios-error-title">Simulation engine temporarily unavailable</h3>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                    Your data is safe. Use the <strong>Adjust Variables Manually</strong> sliders below for quick estimates, or try again in a few minutes.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-500 text-amber-700 dark:text-amber-300 shrink-0"
+                  onClick={() => refetchScenarios()}
+                  data-testid="button-retry-scenarios"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Retry
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!scenariosLoading && !scenariosError && (!scenarios || scenarios.length === 0) && (
           <Card className="max-w-4xl mx-auto mt-4 border-primary/30 bg-primary/5">
             <CardContent className="py-5">
               <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -1444,7 +1472,7 @@ export default function ScenariosPage() {
           </div>
         )}
 
-        {simLoading && !isRunning && selectedScenarioId && (
+        {simLoading && !isRunning && !simError && selectedScenarioId && (
           <div className="space-y-4">
             <Skeleton className="h-8 w-64" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1453,6 +1481,42 @@ export default function ScenariosPage() {
               <Skeleton className="h-48" />
             </div>
           </div>
+        )}
+
+        {simError && !isRunning && selectedScenarioId && (
+          <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/30">
+            <CardContent className="py-8 text-center">
+              <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
+              <h3 className="font-medium text-amber-800 dark:text-amber-200 mb-1" data-testid="text-sim-error-title">Could not load simulation results</h3>
+              <p className="text-sm text-amber-700 dark:text-amber-300 max-w-md mx-auto mb-4">
+                The simulation engine is temporarily unavailable. Your scenario has been saved — you can retry when the service recovers, or use the sensitivity sliders for instant estimates.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-500 text-amber-700 dark:text-amber-300"
+                  onClick={() => handleRunScenario(selectedScenarioId)}
+                  data-testid="button-retry-simulation"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Retry Simulation
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const slidersEl = document.querySelector('[data-testid="section-sensitivity-sliders"]');
+                    if (slidersEl) slidersEl.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  data-testid="button-use-sliders"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                  Use Manual Sliders
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {simulation && !isRunning && !isCreating && (
@@ -2147,6 +2211,12 @@ export default function ScenariosPage() {
                   <CardContent>
                     {scenariosLoading ? (
                       <div className="space-y-2"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
+                    ) : scenariosError ? (
+                      <div className="text-center py-6">
+                        <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                        <p className="text-sm text-amber-700 dark:text-amber-300" data-testid="text-saved-scenarios-error">Could not load saved scenarios. The service is temporarily unavailable.</p>
+                        <Button variant="outline" size="sm" className="mt-3" onClick={() => refetchScenarios()} data-testid="button-retry-saved-scenarios"><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Retry</Button>
+                      </div>
                     ) : !scenarios || scenarios.length === 0 ? (
                       <EmptyState icon={TrendingUp} title="No Saved Scenarios" description="Build your first scenario using the Strategic or Classic builder above." compact />
                     ) : (

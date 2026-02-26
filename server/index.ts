@@ -553,7 +553,12 @@ const apiProxy = createProxyMiddleware({
       console.error("Proxy error:", err.message);
       if ('writeHead' in res && typeof res.writeHead === 'function') {
         res.writeHead(502, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Backend service unavailable" }));
+        res.end(JSON.stringify({
+          error: "Backend service unavailable",
+          detail: "The simulation engine is temporarily unavailable. Please try again in a few minutes.",
+          status: 502,
+          fastapi_status: fastapiStatus,
+        }));
       }
     },
   },

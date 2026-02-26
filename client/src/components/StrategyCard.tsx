@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ArrowRight, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface StrategyPreview {
@@ -147,6 +147,17 @@ export function StrategyCard({
           </div>
         </div>
         
+        {strategy.burnChange > 50 && (
+          <div className="flex items-start gap-2 p-2 rounded-md bg-red-500/10 border border-red-500/20" data-testid={`warning-high-burn-${strategy.id}`}>
+            <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-red-400">
+              {strategy.burnChange > 75
+                ? `This increases burn by ${strategy.burnChange}%. Consider phased execution or cost offsets before committing.`
+                : `This increases burn by ${strategy.burnChange}%. Consider phased hiring to validate growth assumptions first.`}
+            </p>
+          </div>
+        )}
+
         <div className="pt-2 border-t border-border/50">
           <div className="text-xs text-muted-foreground mb-2">Key assumptions:</div>
           <ul className="space-y-1">
