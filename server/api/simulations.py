@@ -71,15 +71,27 @@ class ScenarioCreate(BaseModel):
 
     @validator('fundraise_amount')
     def validate_fundraise_amount(cls, v):
-        if v < 0:
-            raise ValueError('fundraise_amount must be >= 0')
-        return v
+        return max(0, v)
 
     @validator('burn_reduction_pct')
     def validate_burn_reduction(cls, v):
-        if v < -100 or v > 100:
-            raise ValueError('burn_reduction_pct must be between -100 and 100')
-        return v
+        return max(-100, min(100, v))
+
+    @validator('growth_uplift_pct')
+    def validate_growth_uplift(cls, v):
+        return max(-30, min(50, v))
+
+    @validator('pricing_change_pct')
+    def validate_pricing_change(cls, v):
+        return max(-50, min(100, v))
+
+    @validator('churn_change_pct')
+    def validate_churn_change(cls, v):
+        return max(-20, min(30, v))
+
+    @validator('cac_change_pct')
+    def validate_cac_change(cls, v):
+        return max(-50, min(200, v))
 
     @validator('fundraise_month')
     def validate_fundraise_month(cls, v):
@@ -98,22 +110,32 @@ def create_scenario(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    company = get_user_company(db, company_id, current_user)
-    
-    scenario = Scenario(
-        company_id=company_id,
-        name=request.name,
-        inputs_json=request.model_dump()
-    )
-    db.add(scenario)
-    db.commit()
-    db.refresh(scenario)
-    
-    return {
-        "id": scenario.id,
-        "name": scenario.name,
-        "inputs": scenario.inputs_json
-    }
+    try:
+        company = get_user_company(db, company_id, current_user)
+        
+        scenario = Scenario(
+            company_id=company_id,
+            name=request.name,
+            inputs_json=request.model_dump()
+        )
+        db.add(scenario)
+        db.commit()
+        db.refresh(scenario)
+        
+        return {
+            "id": scenario.id,
+            "name": scenario.name,
+            "inputs": scenario.inputs_json
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create scenario: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not create scenario: {str(e)}. Try adjusting your inputs."
+        )
 
 @router.get("/companies/{company_id}/scenarios")
 def list_scenarios(
@@ -418,102 +440,112 @@ def run_simulation(
     if not truth_scan:
         raise HTTPException(status_code=400, detail="Run a truth scan first")
     
-    metrics = truth_scan.outputs_json.get("metrics", {})
-    scenario_inputs = scenario.inputs_json
-    
-    latest_record = db.query(FinancialRecord).filter(
-        FinancialRecord.company_id == company.id
-    ).order_by(FinancialRecord.period_end.desc()).first()
-    
-    ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
-    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
-    baseline_growth = ts_growth if ts_growth != 0 else fr_growth
-    
-    ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
-    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-    baseline_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
-    
-    ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
-    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-    baseline_cash = ts_cash if ts_cash > 0 else fr_cash
-    
-    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
-    fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
-    fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
-    fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
-    
-    enhanced_inputs = EnhancedSimulationInputs(
-        baseline_revenue=baseline_revenue,
-        baseline_growth_rate=baseline_growth,
-        gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
-        opex=extract_metric_value(metrics.get("opex"), fr_opex),
-        payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
-        other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
-        cash_balance=baseline_cash,
-        pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
-        growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
-        burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
-        fundraise_month=scenario_inputs.get("fundraise_month"),
-        fundraise_amount=scenario_inputs.get("fundraise_amount", 0),
-        gross_margin_delta_pct=scenario_inputs.get("gross_margin_delta_pct", 0),
-        churn_change_pct=scenario_inputs.get("churn_change_pct", 0),
-        cac_change_pct=scenario_inputs.get("cac_change_pct", 0),
-    )
-    
-    sim_config = SimulationConfig(
-        iterations=request.n_sims,
-        horizon_months=24,
-        seed=request.seed
-    )
-    
-    outputs = run_enhanced_monte_carlo(enhanced_inputs, sim_config)
-    
-    sanity_warnings = _validate_simulation_output(enhanced_inputs, outputs)
-    if sanity_warnings:
-        outputs["sanity_warnings"] = sanity_warnings
-    
-    counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
-    outputs["counter_moves"] = counter_moves_results
-    
-    fundraising_intel = _compute_fundraising_metrics(scenario, metrics, latest_record, outputs)
-    if fundraising_intel:
-        outputs["fundraising_intelligence"] = fundraising_intel
-    
-    sim_run = SimulationRun(
-        scenario_id=scenario_id,
-        n_sims=request.n_sims,
-        seed=request.seed,
-        outputs_json=outputs
-    )
-    db.add(sim_run)
-    db.commit()
-    db.refresh(sim_run)
-    
-    broadcast_metric_update_sync(
-        company_id=company.id,
-        metrics={
-            "runway_months": outputs.get("runway", {}).get("p50", 0),
-            "survival_12m": outputs.get("survival", {}).get("12m", 0),
-            "survival_18m": outputs.get("survival", {}).get("18m", 0),
-            "cash_balance": outputs.get("summary", {}).get("end_cash", 0),
-            "monthly_revenue": enhanced_inputs.baseline_revenue,
-            "gross_margin": enhanced_inputs.gross_margin,
-            "net_burn": enhanced_inputs.opex + enhanced_inputs.payroll + enhanced_inputs.other_costs - enhanced_inputs.baseline_revenue,
-        },
-        source="simulation"
-    )
-    
     try:
-        from server.api.metric_trends import save_simulation_snapshot
-        save_simulation_snapshot(db, company.id, outputs)
-    except Exception:
-        pass
-    
-    return {
-        "id": sim_run.id,
-        "scenario_id": scenario_id,
-        **outputs
-    }
+        metrics = truth_scan.outputs_json.get("metrics", {})
+        scenario_inputs = scenario.inputs_json
+        
+        latest_record = db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == company.id
+        ).order_by(FinancialRecord.period_end.desc()).first()
+        
+        ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+        fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
+        baseline_growth = ts_growth if ts_growth != 0 else fr_growth
+        
+        ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+        fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
+        baseline_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
+        
+        ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
+        fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
+        baseline_cash = ts_cash if ts_cash > 0 else fr_cash
+        
+        fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
+        fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
+        fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
+        fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+        
+        enhanced_inputs = EnhancedSimulationInputs(
+            baseline_revenue=baseline_revenue,
+            baseline_growth_rate=baseline_growth,
+            gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
+            opex=extract_metric_value(metrics.get("opex"), fr_opex),
+            payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
+            other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+            cash_balance=baseline_cash,
+            pricing_change_pct=scenario_inputs.get("pricing_change_pct", 0),
+            growth_uplift_pct=scenario_inputs.get("growth_uplift_pct", 0),
+            burn_reduction_pct=scenario_inputs.get("burn_reduction_pct", 0),
+            fundraise_month=scenario_inputs.get("fundraise_month"),
+            fundraise_amount=scenario_inputs.get("fundraise_amount", 0),
+            gross_margin_delta_pct=scenario_inputs.get("gross_margin_delta_pct", 0),
+            churn_change_pct=scenario_inputs.get("churn_change_pct", 0),
+            cac_change_pct=scenario_inputs.get("cac_change_pct", 0),
+        )
+        
+        sim_config = SimulationConfig(
+            iterations=request.n_sims,
+            horizon_months=24,
+            seed=request.seed
+        )
+        
+        outputs = run_enhanced_monte_carlo(enhanced_inputs, sim_config)
+        
+        sanity_warnings = _validate_simulation_output(enhanced_inputs, outputs)
+        if sanity_warnings:
+            outputs["sanity_warnings"] = sanity_warnings
+        
+        counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
+        outputs["counter_moves"] = counter_moves_results
+        
+        fundraising_intel = _compute_fundraising_metrics(scenario, metrics, latest_record, outputs)
+        if fundraising_intel:
+            outputs["fundraising_intelligence"] = fundraising_intel
+        
+        sim_run = SimulationRun(
+            scenario_id=scenario_id,
+            n_sims=request.n_sims,
+            seed=request.seed,
+            outputs_json=outputs
+        )
+        db.add(sim_run)
+        db.commit()
+        db.refresh(sim_run)
+        
+        broadcast_metric_update_sync(
+            company_id=company.id,
+            metrics={
+                "runway_months": outputs.get("runway", {}).get("p50", 0),
+                "survival_12m": outputs.get("survival", {}).get("12m", 0),
+                "survival_18m": outputs.get("survival", {}).get("18m", 0),
+                "cash_balance": outputs.get("summary", {}).get("end_cash", 0),
+                "monthly_revenue": enhanced_inputs.baseline_revenue,
+                "gross_margin": enhanced_inputs.gross_margin,
+                "net_burn": enhanced_inputs.opex + enhanced_inputs.payroll + enhanced_inputs.other_costs - enhanced_inputs.baseline_revenue,
+            },
+            source="simulation"
+        )
+        
+        try:
+            from server.api.metric_trends import save_simulation_snapshot
+            save_simulation_snapshot(db, company.id, outputs)
+        except Exception:
+            pass
+        
+        return {
+            "id": sim_run.id,
+            "scenario_id": scenario_id,
+            **outputs
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Simulation failed for scenario {scenario_id}: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Simulation failed: {str(e)}. Check your scenario inputs and try again."
+        )
 
 
 def _build_enhanced_inputs(scenario: Scenario, metrics: Dict, latest_record, overrides: Dict = None) -> EnhancedSimulationInputs:

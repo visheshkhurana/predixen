@@ -164,6 +164,12 @@ export default function ScenariosPage() {
   const { data: simulation, isLoading: simLoading, isError: simError } = useSimulation(selectedScenarioId);
   const { data: timeseriesData, isLoading: timeseriesLoading } = useScenarioTimeseries(selectedScenarioId);
 
+  useEffect(() => {
+    if (selectedScenarioId !== null) {
+      freshStartRef.current = false;
+    }
+  }, [selectedScenarioId]);
+
   const [isCreating, setIsCreating] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<{ open: boolean; existingId?: number; scenarioData?: any }>({ open: false });
