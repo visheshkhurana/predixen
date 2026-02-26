@@ -42,6 +42,7 @@ function getCSRFToken(): string | null {
   return null;
 }
 
+let _redirecting401 = false;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
@@ -170,9 +171,9 @@ async function request<T>(
           }
         }
       } catch {}
-      if (!window.location.pathname.startsWith('/auth')) {
-        window.location.href = '/auth';
-        return undefined as any;
+      if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
+        _redirecting401 = true;
+        setTimeout(() => { window.location.href = '/auth'; }, 100);
       }
     }
 
