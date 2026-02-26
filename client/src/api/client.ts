@@ -156,6 +156,26 @@ async function request<T>(
       errorMessage = `Request failed (${response.status})`;
     }
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
+
+    if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+      localStorage.removeItem('founderconsole-token');
+      try {
+        const raw = localStorage.getItem('founderconsole-founder-storage');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.state) {
+            parsed.state.token = null;
+            parsed.state.user = null;
+            localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
+          }
+        }
+      } catch {}
+      if (!window.location.pathname.startsWith('/auth')) {
+        window.location.href = '/auth';
+        return undefined as any;
+      }
+    }
+
     throw new ApiError(response.status, errorMessage, detail);
   }
 
