@@ -48,8 +48,11 @@ export default function AuthPage() {
   };
 
   const validatePassword = (password: string): string | null => {
-    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (password.length < 10) return 'Password must be at least 10 characters';
     if (!/\d/.test(password)) return 'Password must contain at least one number';
+    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+    if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(password)) return 'Password must contain at least one special character';
     return null;
   };
 
@@ -592,7 +595,7 @@ export default function AuthPage() {
                       </p>
                     ) : (
                       <p id="password-requirements" className="text-xs text-muted-foreground">
-                        Minimum 8 characters with at least one number
+                        Min 10 chars, uppercase, lowercase, number, and special character
                       </p>
                     )}
                   </div>
