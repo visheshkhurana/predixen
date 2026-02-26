@@ -67,7 +67,11 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **CSRF token fix**: `api/client.ts` `request()` includes `credentials: "include"` + automatic CSRF retry (fetch `/api/health` to refresh cookie, retry once).
 -   **Simulation search bar**: Input text persists after clicking Simulate (removed `setQuestionInput('')` calls). Supports iteration on custom scenarios.
 -   **NLP parser**: Handles combined hiring, CAC changes, churn direction, VC funding decline. Growth uplift per hire = `Math.min(totalHires * 1.5, 15)` (was 3x, capped at 15%).
+-   **NLP parser guardrails**: All parsed parameters clamped to backend guardrail limits before submission: burn_reduction_pct [-100, 80], growth_uplift_pct [-30, 50], pricing_change_pct [-50, 100], churn_change_pct [-20, 30], cac_change_pct [-50, 200]. Prevents 422 validation errors on custom scenarios.
 -   **Monte Carlo P10/P50/P90**: All three engines use 120-month cap with stochastic volatility for meaningful percentile spread.
+-   **Monte Carlo burn handling**: `burn_reduction_pct` now properly handles negative values (burn increases). `clamped_burn_change = max(-100, min(100, value))`. A -50% burn reduction means costs increase by 50%.
+-   **Monte Carlo CAC impact**: CAC changes now affect net_cashflow. Incremental CAC cost = (new_customers × adjusted_cac) - (new_customers × baseline_cac). Higher CAC properly reduces runway.
+-   **VC funding decline NLP**: "VC funding declines 30%" now properly models: CAC +18% (60% of decline), growth -12% (40% of decline), burn increase +4.5% (15% of decline). Previously only affected CAC and growth without burn impact.
 -   **Decision engine calibration**: Escalating risk penalties for burn increases: >30% gets -0.10, >50% adds -0.15, >75% adds -0.10 more. Risk text warns about burn increases.
 -   **AI Decision Summary**: Burn-increase caveats added when actual burn increases >50% vs baseline. Score penalty: -0.75 for >50%, -1.5 for extreme. Uses actual burn data, not name heuristics.
 -   **Briefing progress indicator**: `LOADING_STEPS` in `decisions.tsx` total 35s (5+8+10+12). Fourth step: "Generating strategic briefing".
@@ -77,3 +81,5 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **Metrics partial degradation**: `useFinancialMetrics` returns `isPartiallyDegraded` flag when any (but not all) data queries fail.
 -   **Onboarding Step 3 data persistence**: "Next: Data Sources" button saves expense breakdown to backend via `manualBaselineMutation` before advancing to Step 4.
 -   **StrategyCard burn warning**: Cards with `burnChange > 50%` show a red warning with phased execution advice. `data-testid="warning-high-burn-{strategyId}"`.
+-   **"Run Another Scenario" button**: Now resets `selectedScenarioId` to null (clears previous results), clears input, and scrolls to top. Previously only cleared input.
+-   **KPI source labels**: Metrics now properly distinguish user-provided data ("Verified") from backend-computed ("Computed") and AI-estimated ("Estimated"). Only marks as "reported" when data comes from truth scan or manual user entry, not from seed/demo data.

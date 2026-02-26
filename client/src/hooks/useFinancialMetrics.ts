@@ -268,31 +268,37 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const hasData = mrr > 0 || cashOnHand > 0 || netBurn > 0;
 
     const sources: Record<string, MetricSource> = {};
-    const mark = (key: string, directValue: any, computedValue: number) => {
-      if (directValue && Number(directValue) > 0) {
+    const hasTruthScan = !!(tsMetrics && Object.keys(tsMetrics).length > 0);
+    const hasManualEntry = !!(fb?.monthlyRevenue || fb?.cashOnHand || bb?.monthlyRevenue);
+    const mark = (key: string, directValue: any, computedValue: number, isUserProvided?: boolean) => {
+      if (isUserProvided && directValue && Number(directValue) > 0) {
         sources[key] = 'reported';
+      } else if (directValue && Number(directValue) > 0) {
+        sources[key] = hasManualEntry || hasTruthScan ? 'computed' : 'estimated';
       } else if (computedValue > 0) {
         sources[key] = 'computed';
+      } else {
+        sources[key] = 'estimated';
       }
     };
-    mark('mrr', c.mrr || bb?.monthlyRevenue || fb?.monthlyRevenue, mrr);
-    sources['arr'] = (c.arr || ext?.arr) ? 'reported' : (mrr > 0 ? 'computed' : 'estimated');
-    mark('cashOnHand', c.cashOnHand || bb?.cashOnHand || fb?.cashOnHand, cashOnHand);
-    mark('netBurn', c.netBurn, netBurn);
+    mark('mrr', c.mrr || bb?.monthlyRevenue || fb?.monthlyRevenue, mrr, !!(fb?.monthlyRevenue || bb?.monthlyRevenue || tsVal('mrr')));
+    sources['arr'] = tsVal('arr') ? 'reported' : (mrr > 0 ? 'computed' : 'estimated');
+    mark('cashOnHand', c.cashOnHand || bb?.cashOnHand || fb?.cashOnHand, cashOnHand, !!(fb?.cashOnHand || bb?.cashOnHand));
+    mark('netBurn', c.netBurn, netBurn, false);
     sources['runway'] = (netBurn > 0 && cashOnHand > 0) ? 'computed' : 'estimated';
-    mark('cac', c.cac || ext?.cac, cac);
-    mark('ltv', c.ltv || ext?.ltv, ltv);
-    sources['ltvCacRatio'] = (c.ltvCacRatio || ext?.ltvCacRatio) ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
-    mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct);
-    mark('churnRate', c.churnRatePct, churnRatePct);
-    mark('totalCustomers', c.totalCustomers || ext?.customers, totalCustomers);
-    mark('headcount', c.headcount || ext?.headcount, headcount);
-    sources['arpu'] = c.arpu ? 'reported' : (totalCustomers > 0 && mrr > 0 ? 'computed' : 'estimated');
-    sources['paybackPeriod'] = c.paybackPeriod ? 'reported' : (cac > 0 && arpu > 0 ? 'computed' : 'estimated');
-    sources['burnMultiple'] = (c.burnMultiple || ext?.burnMultiple) ? 'reported' : 'computed';
+    mark('cac', c.cac || ext?.cac, cac, !!tsVal('cac'));
+    mark('ltv', c.ltv || ext?.ltv, ltv, !!tsVal('ltv'));
+    sources['ltvCacRatio'] = tsVal('ltv_cac_ratio') ? 'reported' : (cac > 0 && ltv > 0 ? 'computed' : 'estimated');
+    mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct, !!tsVal('gross_margin'));
+    mark('churnRate', c.churnRatePct, churnRatePct, !!tsVal('churn_rate'));
+    mark('totalCustomers', c.totalCustomers || ext?.customers, totalCustomers, !!tsVal('total_customers'));
+    mark('headcount', c.headcount || ext?.headcount, headcount, !!(bb?.headcount || tsVal('headcount')));
+    sources['arpu'] = tsVal('arpu') ? 'reported' : (totalCustomers > 0 && mrr > 0 ? 'computed' : 'estimated');
+    sources['paybackPeriod'] = tsVal('payback_period') ? 'reported' : (cac > 0 && arpu > 0 ? 'computed' : 'estimated');
+    sources['burnMultiple'] = tsVal('burn_multiple') ? 'reported' : 'computed';
     sources['revenuePerEmployee'] = headcount > 0 ? 'computed' : 'estimated';
-    sources['monthlyGrowthRate'] = (c.momGrowth || tsVal('revenue_growth_mom') > 0) ? 'reported' : (fb?.monthlyGrowthRate ? 'estimated' : 'estimated');
-    sources['ndr'] = (c.ndr || tsVal('net_revenue_retention') > 0) ? 'reported' : 'estimated';
+    sources['monthlyGrowthRate'] = tsVal('revenue_growth_mom') ? 'reported' : (fb?.monthlyGrowthRate ? 'estimated' : 'estimated');
+    sources['ndr'] = tsVal('net_revenue_retention') ? 'reported' : 'estimated';
 
     return {
       mrr, arr, cashOnHand, totalMonthlyExpenses: totalExpenses, burnRate, netBurn, runway, runwayDisplay,

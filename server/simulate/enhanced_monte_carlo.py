@@ -114,8 +114,8 @@ def run_enhanced_monte_carlo(
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
     adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
-    clamped_burn_reduction = max(0, min(100, inputs.burn_reduction_pct))
-    burn_reduction_mult = 1 - (clamped_burn_reduction / 100)
+    clamped_burn_change = max(-100, min(100, inputs.burn_reduction_pct))
+    burn_reduction_mult = 1 - (clamped_burn_change / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
     adjusted_churn = inputs.churn_rate + inputs.churn_change_pct
     adjusted_cac = inputs.cac * (1 + inputs.cac_change_pct / 100) if inputs.cac > 0 else 0
@@ -227,7 +227,14 @@ def run_enhanced_monte_carlo(
             gross_profit = revenue * margin
             total_opex = inputs.opex * burn_reduction_mult
             total_other = inputs.other_costs * burn_reduction_mult
-            net_cashflow = gross_profit - total_opex - payroll - total_other
+            
+            cac_cost = 0
+            if adjusted_cac > 0 and inputs.cac > 0:
+                new_customers_estimate = max(0, revenue * growth_rate / (adjusted_cac if adjusted_cac > 0 else 1))
+                baseline_cac_cost = new_customers_estimate * inputs.cac
+                cac_cost = new_customers_estimate * adjusted_cac - baseline_cac_cost
+            
+            net_cashflow = gross_profit - total_opex - payroll - total_other - cac_cost
             
             cash = cash + net_cashflow
             burn = max(0, -net_cashflow) if net_cashflow < 0 else 0

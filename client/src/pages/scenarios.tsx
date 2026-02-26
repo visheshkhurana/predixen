@@ -715,8 +715,10 @@ export default function ScenariosPage() {
 
     const fundingDeclineMatch = q.match(/(?:funding|vc|venture|capital)\s+(?:decline|drop|decrease|dry|freeze)s?\s+(?:by\s+)?(\d+)\s*%/i);
     if (fundingDeclineMatch) {
-      params.cac_change_pct += parseInt(fundingDeclineMatch[1]) / 2;
-      params.growth_uplift_pct += -parseInt(fundingDeclineMatch[1]) / 3;
+      const declinePct = parseInt(fundingDeclineMatch[1]);
+      params.cac_change_pct += Math.round(declinePct * 0.6);
+      params.growth_uplift_pct += -Math.round(declinePct * 0.4);
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, params.burn_reduction_pct - Math.round(declinePct * 0.15));
       tags.push('pessimistic');
       matched = true;
     }
@@ -729,6 +731,12 @@ export default function ScenariosPage() {
         matched = true;
       }
     }
+
+    params.burn_reduction_pct = Math.max(-100, Math.min(80, params.burn_reduction_pct));
+    params.growth_uplift_pct = Math.max(-30, Math.min(50, params.growth_uplift_pct));
+    params.pricing_change_pct = Math.max(-50, Math.min(100, params.pricing_change_pct));
+    params.churn_change_pct = Math.max(-20, Math.min(30, params.churn_change_pct));
+    params.cac_change_pct = Math.max(-50, Math.min(200, params.cac_change_pct));
 
     const uniqueTags = tags.length > 0 ? Array.from(new Set(tags)) : ['custom'];
     return { params, tags: uniqueTags, matched };
@@ -1714,6 +1722,7 @@ export default function ScenariosPage() {
                       size="sm"
                       onClick={() => {
                         setQuestionInput('');
+                        setSelectedScenarioId(null);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       data-testid="button-run-another"
