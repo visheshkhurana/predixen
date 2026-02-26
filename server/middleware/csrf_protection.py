@@ -50,12 +50,22 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Check if path is exempt
         if self._is_path_exempt(request.url.path):
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except BaseException as exc:
+                import logging
+                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
             return response
 
         # Check if method is safe (no CSRF needed for read-only operations)
         if request.method in CSRF_SAFE_METHODS:
-            response = await call_next(request)
+            try:
+                response = await call_next(request)
+            except BaseException as exc:
+                import logging
+                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
             # Set CSRF token in cookie for safe requests (so client can read it)
             self._set_csrf_token_cookie(response, request)
             return response
@@ -66,7 +76,12 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             if not self._is_authenticated(request):
                 # Unauthenticated state-changing requests are not protected by CSRF
                 # (they fail auth anyway), but we still set the token for future use
-                response = await call_next(request)
+                try:
+                    response = await call_next(request)
+                except BaseException as exc:
+                    import logging
+                    logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                    response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
                 self._set_csrf_token_cookie(response, request)
                 return response
 
@@ -82,7 +97,12 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                     content={"detail": "CSRF token validation failed"},
                 )
 
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except BaseException as exc:
+            import logging
+            logging.getLogger(__name__).error(f"Middleware error: {exc}")
+            response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
         # Refresh CSRF token in cookie after successful request
         self._set_csrf_token_cookie(response, request)
         return response

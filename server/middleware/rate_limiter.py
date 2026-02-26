@@ -219,7 +219,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         """Process request through rate limiter."""
         # Skip rate limiting for health checks
         if request.url.path in self.HEALTH_PATHS:
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except BaseException as exc:
+                import logging
+                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         # Get identifier and category
         identifier = self._get_identifier(request)
@@ -227,7 +232,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
         # Check if limit is infinite (health endpoints)
         if limit == float('inf'):
-            return await call_next(request)
+            try:
+                return await call_next(request)
+            except BaseException as exc:
+                import logging
+                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         # Get or create bucket
         bucket = self._get_or_create_bucket(identifier, category, int(limit))
@@ -254,7 +264,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self._cleanup_old_buckets()
 
         # Process request
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except BaseException as exc:
+            import logging
+            logging.getLogger(__name__).error(f"Middleware error: {exc}")
+            response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
         # Add rate limit info headers for visibility
         response.headers["X-RateLimit-Limit"] = str(limit)
