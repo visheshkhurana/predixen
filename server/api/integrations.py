@@ -133,6 +133,14 @@ def get_available_integrations():
                 "features": ["pipeline", "deals", "contacts", "marketing"],
             },
         ],
+        "payments": [
+            {
+                "id": "stripe",
+                "name": "Stripe",
+                "description": "Sync subscription metrics, MRR, churn, and payment data",
+                "features": ["mrr", "arr", "churn", "ltv", "subscriptions", "invoices"],
+            },
+        ],
     }
 
 

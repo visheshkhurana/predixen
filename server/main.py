@@ -33,11 +33,15 @@ def _register_critical_routers(app: FastAPI):
 
     from server.api import auth, companies, admin as admin_api
     from server.api import qa as qa_api
+    from server.api import billing as billing_api
+    from server.api import onboarding as onboarding_api
 
     app.include_router(auth.router)
     app.include_router(companies.router)
     app.include_router(admin_api.router)
     app.include_router(qa_api.router)
+    app.include_router(billing_api.router)
+    app.include_router(onboarding_api.router)
 
     logger.info(f"Critical routes registered in {time.time() - t0:.1f}s")
 
@@ -267,6 +271,25 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"message": "FounderConsole API", "version": "1.0.0"}
+
+@app.get("/demo/metrics")
+def demo_metrics():
+    return {
+        "company": "SampleCo (Demo)",
+        "metrics": {
+            "mrr": 15000, "mrr_growth": 0.08,
+            "arr": 180000,
+            "burn_rate": 45000,
+            "runway_months": 14,
+            "cac": 850, "ltv": 12000,
+            "ltv_cac_ratio": 14.1,
+            "gross_margin": 0.82,
+            "net_revenue_retention": 1.15,
+            "customers": 45, "churn_rate": 0.03
+        },
+        "is_demo": True,
+        "message": "Sign up to see your real metrics"
+    }
 
 @app.get("/health")
 def health():

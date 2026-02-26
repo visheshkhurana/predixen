@@ -1,0 +1,302 @@
+# AUTONOMOUS FIX-TEST-FIX LOOP — Target 8/10 Score
+
+You are an autonomous agent. Your job: fix issues, test, fix again, repeat until quality reaches 8/10. Work through these issues IN ORDER of priority. After each fix, test it by hitting the relevant endpoint with curl, then move to the next.
+
+## SCORING RUBRIC (current: 4.6/10, target: 8/10)
+- Database reliability: currently 3/10 → target 8/10
+- Simulation engine: currently 7/10 → target 8/10
+- Decision journal: currently 6/10 → target 7/10
+- Integrations: currently 5/10 → target 7/10
+- Billing: currently 2/10 → target 7/10
+- Signup/onboarding: currently 5/10 → target 8/10
+- Reliability: currently 4/10 → target 8/10
+
+## FIX 1: DATABASE RELIABILITY (P0 — Do this FIRST)
+
+The database connection drops intermittently. `/api/health` shows `"database":"unavailable"`.
+
+### Root cause investigation:
+1. `cat server/database.py` or `cat server/db.py` — find the SQLAlchemy engine config
+2. Check if connection pooling is configured
+3. Check if there's a health check / pool_pre_ping
+
+### Fix:
+In the database config file, ensure these SQLAlchemy engine settings:
+```python
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,  # Recycle connections every 30 min
+    pool_pre_ping=True,  # Test connections before using them
+    connect_args={"connect_timeout": 10}
+)
+```
+
+If using `NullPool`, switch to connection pooling.
+If the DB URL points to Replit's built-in PostgreSQL, ensure the connection string is correct.
+Add a retry wrapper for database operations:
+
+```python
+import asyncio
+from sqlalchemy.exc import OperationalError, DisconnectionError
+
+async def get_db_with_retry(max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            async with AsyncSession(engine) as session:
+                yield session
+                return
+        except (OperationalError, DisconnectionError) as e:
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(1 * (attempt + 1))
+```
+
+### Test:
+```bash
+curl -s http://localhost:8001/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('DB:', d.get('database')); assert d['database']=='connected', 'DB STILL DOWN'"
+```
+
+## FIX 2: ADD BILLING & SUBSCRIPTION ENDPOINTS (P1)
+
+There are NO billing endpoints. Create `server/routers/billing.py`:
+
+```python
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
+router = APIRouter(prefix="/billing", tags=["billing"])
+
+class Plan(BaseModel):
+    id: str
+    name: str
+    price_monthly: float
+    price_annual: float
+    features: List[str]
+    max_scenarios: int
+    max_integrations: int
+
+class Subscription(BaseModel):
+    plan_id: str
+    status: str
+    current_period_start: Optional[str]
+    current_period_end: Optional[str]
+    cancel_at_period_end: bool = False
+
+PLANS = [
+    Plan(id="free", name="Free", price_monthly=0, price_annual=0,
+         features=["1 scenario template", "Sample data only", "Basic dashboard"],
+         max_scenarios=1, max_integrations=0),
+    Plan(id="pro", name="Pro", price_monthly=99, price_annual=948,
+         features=["All 11 scenario templates", "All integrations", "AI copilot", "Decision journal", "Sensitivity analysis", "Counter-moves", "Export to PDF"],
+         max_scenarios=50, max_integrations=5),
+    Plan(id="team", name="Team", price_monthly=249, price_annual=2388,
+         features=["Everything in Pro", "Team collaboration", "Investor portal", "Custom scenarios", "Priority support", "API access"],
+         max_scenarios=200, max_integrations=10),
+]
+
+@router.get("/plans")
+async def get_plans():
+    return {"plans": [p.dict() for p in PLANS]}
+
+@router.get("/plans/{plan_id}")
+async def get_plan(plan_id: str):
+    plan = next((p for p in PLANS if p.id == plan_id), None)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return plan.dict()
+
+@router.get("/subscription")
+async def get_subscription():
+    # Returns current user's subscription (placeholder until Stripe)
+    return {
+        "plan_id": "free",
+        "status": "active",
+        "current_period_start": datetime.utcnow().isoformat(),
+        "current_period_end": None,
+        "cancel_at_period_end": False,
+        "usage": {"scenarios_used": 0, "integrations_used": 0}
+    }
+
+@router.post("/subscribe/{plan_id}")
+async def subscribe(plan_id: str):
+    plan = next((p for p in PLANS if p.id == plan_id), None)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    if plan.price_monthly == 0:
+        return {"message": "Free plan activated", "plan": plan.dict()}
+    return {"message": "Stripe checkout session required", "checkout_url": None, "plan": plan.dict()}
+
+@router.post("/cancel")
+async def cancel_subscription():
+    return {"message": "Subscription will cancel at end of billing period", "cancel_at_period_end": True}
+```
+
+Register this router in `server/main.py`:
+```python
+from server.routers.billing import router as billing_router
+app.include_router(billing_router, prefix="/api")
+```
+
+### Test:
+```bash
+curl -s http://localhost:8001/billing/plans | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['plans']), 'plans'); assert len(d['plans'])==3"
+curl -s http://localhost:8001/billing/subscription | python3 -c "import sys,json; d=json.load(sys.stdin); print('Status:', d['status']); assert d['status']=='active'"
+```
+
+## FIX 3: ADD STRIPE AS NAMED PAYMENT PROVIDER (P2)
+
+In the integrations available endpoint, the payments category exists but has no named provider. Find the file that serves `/integrations/available` and add Stripe:
+
+```python
+"payments": [
+    {
+        "id": "stripe",
+        "name": "Stripe",
+        "description": "Sync subscription metrics, MRR, churn, and payment data",
+        "features": ["mrr", "arr", "churn", "ltv", "subscriptions", "invoices"]
+    }
+]
+```
+
+### Test:
+```bash
+curl -s http://localhost:8001/integrations/available | python3 -c "import sys,json; d=json.load(sys.stdin); print('Payments:', d.get('payments',[])); assert len(d.get('payments',[]))>0"
+```
+
+## FIX 4: ADD ONBOARDING STATUS & PROGRESS ENDPOINT
+
+Create or update onboarding endpoints. Find if there's already an onboarding router. If not, create `server/routers/onboarding.py`:
+
+```python
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/onboarding", tags=["onboarding"])
+
+@router.get("/steps")
+async def get_onboarding_steps():
+    return {
+        "steps": [
+            {"id": 1, "name": "Create Account", "description": "Sign up with email or Google", "required": True},
+            {"id": 2, "name": "Company Profile", "description": "Tell us about your company", "required": True},
+            {"id": 3, "name": "Upload Data", "description": "Upload financials or connect integrations", "required": False},
+            {"id": 4, "name": "Run First Simulation", "description": "Try a scenario with sample or real data", "required": False},
+        ],
+        "total_steps": 4
+    }
+
+@router.get("/industries")
+async def get_industries():
+    return {
+        "industries": [
+            {"id": "saas", "name": "SaaS / Software", "benchmarks_available": True},
+            {"id": "ecommerce", "name": "E-Commerce", "benchmarks_available": True},
+            {"id": "fintech", "name": "Fintech", "benchmarks_available": True},
+            {"id": "healthtech", "name": "HealthTech", "benchmarks_available": True},
+            {"id": "marketplace", "name": "Marketplace", "benchmarks_available": True},
+            {"id": "edtech", "name": "EdTech", "benchmarks_available": False},
+            {"id": "other", "name": "Other", "benchmarks_available": False}
+        ]
+    }
+```
+
+Register in main.py if not already there.
+
+### Test:
+```bash
+curl -s http://localhost:8001/onboarding/steps | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['total_steps'], 'steps'); assert d['total_steps']==4"
+curl -s http://localhost:8001/onboarding/industries | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['industries']), 'industries'); assert len(d['industries'])>=5"
+```
+
+## FIX 5: IMPROVE ERROR RESPONSES AND ADD LOADING STATE
+
+In the Express proxy (server.js or index.js), add a proper loading/error page that shows when FastAPI is warming up instead of a blank page:
+
+Find the catch-all route that serves the React SPA. Before the `res.sendFile()`, add:
+```javascript
+// Add meta tags for SEO when serving index.html
+app.get('*', (req, res) => {
+    // If requesting API and FastAPI is down, return proper error
+    if (req.path.startsWith('/api/') && !fastApiUp) {
+        return res.status(503).json({
+            error: "Service warming up",
+            message: "Our servers are starting up. Please try again in 30 seconds.",
+            retry_after: 30
+        });
+    }
+    res.sendFile(path.join(__dirname, 'client/dist/index.html'));
+});
+```
+
+Also add these meta tags to `client/index.html`:
+```html
+<meta name="description" content="FounderConsole - AI Decision Simulator for Founders & CXOs. Run what-if scenarios, simulate business decisions, and get AI-powered strategic recommendations.">
+<meta property="og:title" content="FounderConsole - AI Decision Simulator">
+<meta property="og:description" content="Run what-if scenarios for your startup. Simulate pricing changes, hiring plans, fundraising outcomes, and market downturns with AI-powered analysis.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://founderconsole.ai">
+```
+
+### Test:
+```bash
+curl -s http://localhost:5000/ | grep -c "og:title"
+```
+
+## FIX 6: ADD DASHBOARD/METRICS SUMMARY ENDPOINT
+
+Add a public (no-auth) endpoint that returns sample metrics for the demo experience:
+
+```python
+@router.get("/demo/metrics")
+async def get_demo_metrics():
+    return {
+        "company": "SampleCo (Demo)",
+        "metrics": {
+            "mrr": 15000, "mrr_growth": 0.08,
+            "arr": 180000,
+            "burn_rate": 45000,
+            "runway_months": 14,
+            "cac": 850, "ltv": 12000,
+            "ltv_cac_ratio": 14.1,
+            "gross_margin": 0.82,
+            "net_revenue_retention": 1.15,
+            "customers": 45, "churn_rate": 0.03
+        },
+        "is_demo": True,
+        "message": "Sign up to see your real metrics"
+    }
+```
+
+### Test:
+```bash
+curl -s http://localhost:8001/demo/metrics | python3 -c "import sys,json; d=json.load(sys.stdin); print('MRR:', d['metrics']['mrr']); assert d['is_demo']==True"
+```
+
+## LOOP PROTOCOL
+
+After completing ALL fixes:
+1. Restart the server: `kill $(lsof -t -i:8001) 2>/dev/null; sleep 3`
+2. Wait for server to come up
+3. Run ALL tests:
+```bash
+echo "=== FULL TEST SUITE ==="
+echo "1. Health:" && curl -s http://localhost:8001/health
+echo "2. DB:" && curl -s http://localhost:8001/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('database','MISSING'))"
+echo "3. Plans:" && curl -s http://localhost:8001/billing/plans | python3 -c "import sys,json; print(len(json.load(sys.stdin)['plans']), 'plans')"
+echo "4. Subscription:" && curl -s http://localhost:8001/billing/subscription | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])"
+echo "5. Stripe:" && curl -s http://localhost:8001/integrations/available | python3 -c "import sys,json; print(json.load(sys.stdin).get('payments',[]))"
+echo "6. Onboarding:" && curl -s http://localhost:8001/onboarding/steps | python3 -c "import sys,json; print(json.load(sys.stdin)['total_steps'], 'steps')"
+echo "7. Industries:" && curl -s http://localhost:8001/onboarding/industries | python3 -c "import sys,json; print(len(json.load(sys.stdin)['industries']), 'industries')"
+echo "8. Templates:" && curl -s http://localhost:8001/templates/ | python3 -c "import sys,json; print(len(json.load(sys.stdin)['templates']), 'templates')"
+echo "9. Demo:" && curl -s http://localhost:8001/demo/metrics | python3 -c "import sys,json; print('MRR:', json.load(sys.stdin)['metrics']['mrr'])"
+echo "10. Meta:" && curl -s http://localhost:5000/ | grep -c "og:title"
+echo "=== DONE ==="
+```
+
+4. If ANY test fails, fix it and re-test
+5. Keep looping until ALL 10 tests pass
+6. Do NOT stop until everything works

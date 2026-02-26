@@ -83,3 +83,13 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **StrategyCard burn warning**: Cards with `burnChange > 50%` show a red warning with phased execution advice. `data-testid="warning-high-burn-{strategyId}"`.
 -   **"Run Another Scenario" button**: Now resets `selectedScenarioId` to null (clears previous results), clears input, and scrolls to top. Previously only cleared input.
 -   **KPI source labels**: Metrics now properly distinguish user-provided data ("Verified") from backend-computed ("Computed") and AI-estimated ("Estimated"). Only marks as "reported" when data comes from truth scan or manual user entry, not from seed/demo data.
+-   **Phased startup**: Critical routes (auth, billing, onboarding) register in <1s. Remaining modules (simulation, connectors, copilot) load in a background thread. Connectors lazy-load via `load_all_connectors()`.
+-   **SIGHUP resilience**: Node process ignores SIGHUP signals (lets workflow manager handle restarts instead of shutting down).
+-   **Database reliability**: `pool_pre_ping=True`, `pool_recycle=1800` for automatic connection recovery.
+-   **Password validation**: Simplified to 8 chars + 1 number (frontend and backend aligned).
+-   **Billing API**: `/billing/plans` (Free/Pro/Team), `/billing/subscription`, `/billing/subscribe/{plan_id}`, `/billing/cancel`. Registered as critical route.
+-   **Onboarding API**: `/onboarding/steps` (4 steps), `/onboarding/industries` (7 industries with benchmark flags). Registered as critical route.
+-   **Demo metrics**: `/demo/metrics` returns sample SaaS KPIs (MRR, ARR, burn, runway, CAC, LTV, etc.) for unauthenticated demo experience.
+-   **Stripe integration listing**: `/integrations/available` now includes `payments` category with Stripe connector.
+-   **Proxy error message**: Changed from "simulation engine temporarily unavailable" to "Our servers are warming up" with retry guidance.
+-   **401 redirect**: Only fires on mutation 401s (POST/PUT/PATCH/DELETE), not GET queries. Prevents infinite redirect loops.
