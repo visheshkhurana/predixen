@@ -354,6 +354,47 @@ def validate_scenario_inputs(
     }
 
 
+def _validate_simulation_output(inputs: 'EnhancedSimulationInputs', outputs: Dict[str, Any]) -> List[str]:
+    warnings = []
+    try:
+        total_costs = inputs.opex + inputs.payroll + inputs.other_costs
+        net_burn = total_costs - inputs.baseline_revenue
+        simple_runway = inputs.cash_balance / net_burn if net_burn > 0 else 120
+        sim_runway_p50 = outputs.get("runway", {}).get("p50", 0)
+
+        burn_change = inputs.burn_reduction_pct
+        is_adverse = burn_change < -20 or inputs.cac_change_pct > 15 or inputs.churn_change_pct > 5
+
+        if is_adverse and sim_runway_p50 > simple_runway * 1.3 and sim_runway_p50 < 900:
+            warnings.append(
+                f"Adverse scenario shows {sim_runway_p50:.1f}mo runway vs "
+                f"{simple_runway:.1f}mo simple calculation. "
+                f"Revenue growth assumptions may be offsetting the adverse inputs."
+            )
+
+        if burn_change < -30:
+            expected_burn = total_costs * (1 - burn_change / 100)
+            expected_runway = inputs.cash_balance / max(expected_burn - inputs.baseline_revenue, 1)
+            if sim_runway_p50 > expected_runway * 1.5 and sim_runway_p50 < 900:
+                warnings.append(
+                    f"Burn increased {abs(burn_change)}% but runway ({sim_runway_p50:.1f}mo) "
+                    f"exceeds simple estimate ({expected_runway:.1f}mo). "
+                    f"Growth projections may be overly optimistic."
+                )
+
+        if inputs.cac_change_pct > 15:
+            eff_score = outputs.get("summary", {}).get("capital_efficiency_score", 0)
+            if eff_score and eff_score >= 8:
+                warnings.append(
+                    f"CAC increased {inputs.cac_change_pct}% but capital efficiency "
+                    f"score is {eff_score}/10. Verify growth assumptions justify higher acquisition costs."
+                )
+    except Exception as e:
+        logger.warning(f"Simulation sanity check error: {e}")
+
+    return warnings
+
+
 @router.post("/scenarios/{scenario_id}/simulate", response_model=Dict[str, Any])
 def run_simulation(
     scenario_id: int,
@@ -426,6 +467,10 @@ def run_simulation(
     )
     
     outputs = run_enhanced_monte_carlo(enhanced_inputs, sim_config)
+    
+    sanity_warnings = _validate_simulation_output(enhanced_inputs, outputs)
+    if sanity_warnings:
+        outputs["sanity_warnings"] = sanity_warnings
     
     counter_moves_results = _run_counter_moves(scenario, metrics, latest_record)
     outputs["counter_moves"] = counter_moves_results

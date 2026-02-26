@@ -979,6 +979,45 @@ export default function OverviewPage() {
     };
   }, [baseData]);
 
+  const metrics = truthScan?.metrics || {};
+  const flags = truthScan?.flags || [];
+  const confidence = truthScan?.data_confidence_score || 0;
+  const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
+
+  const confidenceComponents = useMemo(() => {
+    const m = metrics;
+    const eb = m.expense_breakdown || {};
+    const revScore = (m.monthly_revenue > 0 ? 10 : 0) + (m.revenue_growth_mom != null && m.revenue_growth_mom !== 0 ? 5 : 0);
+    const revMax = 15;
+    const expScore = (eb.payroll > 0 ? 3 : 0) + (eb.cogs > 0 ? 3 : 0) + (eb.marketing > 0 ? 3 : 0) + (eb.operating > 0 ? 3 : 0) + (eb.other > 0 ? 3 : 0) + (m.gross_margin != null ? 5 : 0);
+    const expMax = 20;
+    const cashScore = m.cash_balance > 0 ? 10 : 0;
+    const cashMax = 10;
+    const custScore = (m.concentration_top5 != null ? 5 : 0) + (m.logo_retention_12m != null ? 5 : 0);
+    const custMax = 10;
+
+    const nextSteps: string[] = [];
+    if (revScore < revMax) nextSteps.push('Add revenue data to increase confidence');
+    if (expScore < 10) nextSteps.push('Add expense breakdown details');
+    if (cashScore === 0) nextSteps.push('Add cash balance data');
+    if (custScore < 5) nextSteps.push('Connect customer data source (e.g. Stripe, HubSpot)');
+    if (nextSteps.length === 0) nextSteps.push('All major data categories covered');
+
+    return {
+      revenue: { score: revScore, max: revMax, pct: Math.round((revScore / revMax) * 100) },
+      expenses: { score: expScore, max: expMax, pct: Math.round((expScore / expMax) * 100) },
+      cash: { score: cashScore, max: cashMax, pct: Math.round((cashScore / cashMax) * 100) },
+      customers: { score: custScore, max: custMax, pct: Math.round((custScore / custMax) * 100) },
+      nextSteps,
+    };
+  }, [metrics]);
+
+  const [liveNow, setLiveNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setLiveNow(new Date()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   if (!currentCompany) {
     return (
       <div className="p-6 max-w-7xl mx-auto">
@@ -1064,11 +1103,6 @@ export default function OverviewPage() {
     );
   }
 
-  const metrics = truthScan?.metrics || {};
-  const flags = truthScan?.flags || [];
-  const confidence = truthScan?.data_confidence_score || 0;
-  const qualityOfGrowth = truthScan?.quality_of_growth_index || 0;
-  
   const formatCurrency = (value: number | null | undefined) => {
     if (value == null || isNaN(value)) return 'N/A';
     const rawValue = value * scaleMultiplier;
@@ -1085,28 +1119,65 @@ export default function OverviewPage() {
     const clean = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed;
     return clean + suffix;
   };
-  
+
   const getConfidenceBadge = () => {
-    if (confidence < 60) {
-      return (
-        <Badge variant="destructive" data-testid="badge-confidence">
-          <XCircle className="h-3 w-3 mr-1" />
-          Low Confidence ({confidence})
-        </Badge>
-      );
-    } else if (confidence < 80) {
-      return (
-        <Badge variant="secondary" data-testid="badge-confidence">
-          <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
-          Medium Confidence ({confidence})
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="secondary" data-testid="badge-confidence">
-        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
-        High Confidence ({confidence})
+    const badgeContent = confidence < 60 ? (
+      <Badge variant="destructive" data-testid="badge-confidence" className="cursor-pointer">
+        <XCircle className="h-3 w-3 mr-1" />
+        Low Confidence ({confidence}%)
       </Badge>
+    ) : confidence < 80 ? (
+      <Badge variant="secondary" data-testid="badge-confidence" className="cursor-pointer">
+        <AlertCircle className="h-3 w-3 mr-1 text-amber-500" />
+        Medium Confidence ({confidence}%)
+      </Badge>
+    ) : (
+      <Badge variant="secondary" data-testid="badge-confidence" className="cursor-pointer">
+        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-500" />
+        High Confidence ({confidence}%)
+      </Badge>
+    );
+
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          {badgeContent}
+        </HoverCardTrigger>
+        <HoverCardContent className="w-72" data-testid="card-confidence-breakdown">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confidence Breakdown</p>
+            {[
+              { label: 'Revenue', ...confidenceComponents.revenue },
+              { label: 'Expenses', ...confidenceComponents.expenses },
+              { label: 'Cash Position', ...confidenceComponents.cash },
+              { label: 'Customers', ...confidenceComponents.customers },
+            ].map((item) => (
+              <div key={item.label} className="space-y-1" data-testid={`confidence-component-${item.label.toLowerCase().replace(/\s/g, '-')}`}>
+                <div className="flex justify-between text-xs">
+                  <span>{item.label}</span>
+                  <span className="font-mono">{item.pct}%</span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${item.pct >= 80 ? 'bg-emerald-500' : item.pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                    style={{ width: `${item.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            <Separator />
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-muted-foreground">Next Steps</p>
+              {confidenceComponents.nextSteps.slice(0, 2).map((step, i) => (
+                <p key={i} className="text-[11px] text-muted-foreground flex items-start gap-1">
+                  <ArrowRight className="h-3 w-3 shrink-0 mt-0.5" />
+                  {step}
+                </p>
+              ))}
+            </div>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
     );
   };
   
@@ -1124,11 +1195,6 @@ export default function OverviewPage() {
     { name: 'Payback', value: baseData.paybackPeriod > 0 ? baseData.paybackPeriod : null, metric: 'paybackPeriod', tooltip: { formula: 'CAC / (ARPU × Gross Margin)', goodRange: '< 12 months', badRange: '> 18 months' } },
   ];
   
-  const [liveNow, setLiveNow] = useState(() => new Date());
-  useEffect(() => {
-    const interval = setInterval(() => setLiveNow(new Date()), 60000);
-    return () => clearInterval(interval);
-  }, []);
   const briefingDate = liveNow.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const briefingHour = liveNow.getHours();
   const briefingGreeting = briefingHour < 12 ? 'Good Morning' : briefingHour < 17 ? 'Good Afternoon' : 'Good Evening';

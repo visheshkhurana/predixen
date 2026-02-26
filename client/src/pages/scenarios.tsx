@@ -1555,6 +1555,90 @@ export default function ScenariosPage() {
               </div>
             </div>
 
+            {(() => {
+              const simBurn = simulation.summary?.monthly_burn ?? simulation.summary?.monthly_burn_p50 ?? simulation.summary?.avg_burn_p50 ?? 0;
+              const simCash = baseMetrics?.cashOnHand ?? 0;
+              const simRunwayP50 = simulation.runway?.p50 ?? 0;
+              const simpleMathRunway = simBurn > 0 ? simCash / simBurn : 0;
+              const dashboardRunway = baseMetrics?.currentRunway ?? 0;
+              const runwayDiff = Math.abs(simRunwayP50 - dashboardRunway);
+              const burnPctInput = (() => {
+                const sel = scenarios?.find((s: any) => s.id === selectedScenarioId);
+                const inp = sel?.inputs || sel?.overrides_json || sel?.overrides || {};
+                return inp.burn_reduction_pct || 0;
+              })();
+              const modifiedBurn = simBurn > 0 ? simBurn : (baseMetrics ? (baseMetrics.monthlyExpenses - baseMetrics.monthlyRevenue) * (1 - burnPctInput / 100) : 0);
+              const modifiedRunway = modifiedBurn > 0 ? simCash / modifiedBurn : 0;
+
+              const hasContradiction = burnPctInput < -20 && simRunwayP50 > dashboardRunway + 3;
+              const cacInput = (() => {
+                const sel = scenarios?.find((s: any) => s.id === selectedScenarioId);
+                const inp = sel?.inputs || sel?.overrides_json || sel?.overrides || {};
+                return inp.cac_change_pct || 0;
+              })();
+              const hasEfficiencyContradiction = cacInput > 15 && simulation.summary?.capital_efficiency_score && simulation.summary.capital_efficiency_score >= 8;
+
+              return (
+                <Card className="mb-4 border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10" data-testid="card-math-check">
+                  <CardContent className="pt-3 pb-3 px-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Shield className="h-4 w-4 text-blue-500" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-400">Math Check</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-muted-foreground">Simple Math</span>
+                        <span className="font-mono font-medium" data-testid="text-math-simple">
+                          {formatCurrencyAbbrev(simCash)} &divide; {formatCurrencyAbbrev(Math.abs(modifiedBurn))}/mo = {modifiedBurn > 0 ? `${modifiedRunway.toFixed(1)} mo` : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-muted-foreground">Dashboard Runway</span>
+                        <span className="font-mono font-medium" data-testid="text-math-dashboard">
+                          {isRunwaySustainable(dashboardRunway) ? 'Sustainable' : `${dashboardRunway.toFixed(1)} months`}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-muted-foreground">Simulation P50</span>
+                        <span className="font-mono font-medium" data-testid="text-math-sim-p50">
+                          {isRunwaySustainable(simRunwayP50) ? 'Sustainable' : `${simRunwayP50.toFixed(1)} months`}
+                          {runwayDiff > 5 && !isRunwaySustainable(simRunwayP50) && !isRunwaySustainable(dashboardRunway) && (
+                            <span className="text-amber-600 dark:text-amber-400 ml-1">
+                              ({simRunwayP50 > dashboardRunway ? '+' : ''}{(simRunwayP50 - dashboardRunway).toFixed(1)} vs dashboard)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    {runwayDiff > 10 && !isRunwaySustainable(simRunwayP50) && !isRunwaySustainable(dashboardRunway) && (
+                      <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1.5" data-testid="text-math-note">
+                        <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
+                        Dashboard uses simple Cash &divide; Burn. Simulation projects 24 months with growth, churn, and volatility — differences are expected when revenue growth is factored in.
+                      </p>
+                    )}
+                    {hasContradiction && (
+                      <p className="text-[11px] text-red-600 dark:text-red-400 mt-2 flex items-start gap-1.5" data-testid="text-math-contradiction">
+                        <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                        This adverse scenario shows improved runway — review assumptions. Burn increase of {Math.abs(burnPctInput)}% should typically reduce runway.
+                      </p>
+                    )}
+                    {hasEfficiencyContradiction && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 flex items-start gap-1.5" data-testid="text-math-efficiency-warn">
+                        <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                        CAC increased {cacInput}% but capital efficiency shows high score — verify growth assumptions justify higher acquisition costs.
+                      </p>
+                    )}
+                    {simulation.sanity_warnings && simulation.sanity_warnings.length > 0 && simulation.sanity_warnings.map((w: string, i: number) => (
+                      <p key={i} className="text-[11px] text-amber-600 dark:text-amber-400 mt-2 flex items-start gap-1.5" data-testid={`text-sanity-warning-${i}`}>
+                        <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                        {w}
+                      </p>
+                    ))}
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             <div className="relative mb-4">
               <AIDecisionSummary
                 simulation={simulation}

@@ -1,0 +1,496 @@
+Here are best practices to reduce Replit rework based on every bug and issue I found during testing:
+
+---
+
+# FounderConsole.ai — Engineering Best Practices to Reduce Rework
+
+## 1. Single Source of Truth for Metrics
+
+**Problem found:** Burn rate showed $70K, $82.6K, and $107K in the same session across dashboard, KPI cards, and strategic briefing.
+
+**Fix:**
+```
+// BAD: Computing metrics in multiple places
+// dashboard.tsx: burn = expenses - revenue
+// briefing.tsx: burn = salaries + marketing + overhead
+// simulator.tsx: burn = totalCosts / months
+
+// GOOD: One computed metrics service
+// services/metrics.ts
+export function computeBurnRate(company: Company): MetricResult {
+  const burn = company.totalExpenses - company.monthlyRevenue;
+  return {
+    value: burn,
+    source: 'computed',
+    formula: 'Total Expenses - Monthly Revenue',
+    computedAt: new Date(),
+    confidence: determineConfidence(company),
+  };
+}
+
+// Every component pulls from the same function
+// Dashboard, Briefing, Simulator all call computeBurnRate()
+```
+
+**Rule:** Never compute a metric inline in a component. Every metric lives in `services/metrics.ts` and is called everywhere.
+
+---
+
+## 2. API Error Handling (Fix 422 Errors)
+
+**Problem found:** Custom simulation queries returned 422 errors repeatedly. No retry, no fallback, no user-facing error recovery.
+
+**Fix:**
+```typescript
+// services/simulation.ts
+
+// 1. Validate BEFORE sending to API
+function validateScenarioInput(query: string): ValidationResult {
+  const parsed = parseScenarioQuery(query);
+  
+  if (!parsed.actionType) {
+    return { valid: false, error: 'Could not identify a business action. Try: "What if we hire 5 engineers?"' };
+  }
+  
+  if (parsed.variables.length === 0) {
+    return { valid: false, error: 'No measurable changes detected. Include numbers like "25%" or "5 people".' };
+  }
+  
+  return { valid: true, parsed };
+}
+
+// 2. Retry with exponential backoff
+async function runSimulation(query: string, retries = 3): Promise<SimResult> {
+  const validation = validateScenarioInput(query);
+  if (!validation.valid) {
+    throw new UserFacingError(validation.error);
+  }
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const result = await api.post('/simulate', {
+        query: validation.parsed,
+        iterations: getIterationCount(),
+      });
+      return result.data;
+    } catch (err) {
+      if (err.status === 422) {
+        // Parse error, try simplified query
+        const simplified = simplifyQuery(validation.parsed);
+        if (simplified && attempt < retries - 1) continue;
+        
+        throw new UserFacingError(
+          'Could not parse this scenario. Try breaking it into simpler parts:\n' +
+          '• "What if we hire 10 engineers?"\n' +
+          '• "What if we hire 3 sales reps?"'
+        );
+      }
+      if (attempt === retries - 1) throw err;
+      await sleep(Math.pow(2, attempt) * 1000);
+    }
+  }
+}
+
+// 3. Show meaningful error in UI
+// components/SimulatorError.tsx
+function SimulatorError({ error }: { error: UserFacingError }) {
+  return (
+    <div className="error-panel">
+      <h3>Simulation couldn't run</h3>
+      <p>{error.message}</p>
+      <div className="suggestions">
+        <h4>Try these instead:</h4>
+        {error.suggestions.map(s => (
+          <button onClick={() => runScenario(s)}>{s}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## 3. Fix Broken Buttons (Event Handler Pattern)
+
+**Problem found:** "Run Another Scenario" button was visible but clicking did nothing — even via JavaScript `.click()`.
+
+**Root cause likely:** Event handler not attached, or conditional rendering prevents navigation.
+
+**Fix:**
+```typescript
+// BAD: Button rendered but handler is conditional or missing
+{showResults && (
+  <button onClick={simulationComplete ? handleRunAnother : undefined}>
+    Run Another Scenario
+  </button>
+)}
+
+// GOOD: Always attach handler, use router for navigation
+function SimulationResults() {
+  const router = useRouter(); // or useNavigate()
+  
+  const handleRunAnother = useCallback(() => {
+    // Reset state
+    setResults(null);
+    setQuery('');
+    setError(null);
+    
+    // Navigate to clean simulate page
+    router.push('/simulate');
+  }, [router]);
+
+  return (
+    <button 
+      onClick={handleRunAnother}
+      data-testid="run-another-scenario" // For testing
+    >
+      Run Another Scenario
+    </button>
+  );
+}
+
+// ALSO: Add automated test
+test('Run Another Scenario navigates to clean simulate page', async () => {
+  render(<SimulationResults results={mockResults} />);
+  await userEvent.click(screen.getByTestId('run-another-scenario'));
+  expect(mockRouter.push).toHaveBeenCalledWith('/simulate');
+});
+```
+
+**Rule:** Every button must have a `data-testid` and a corresponding integration test. If a button exists in the DOM, its `onClick` must always be defined.
+
+---
+
+## 4. Simulation Output Sanity Checking
+
+**Problem found:** External shock scenario (CAC +20%) showed runway EXTENDING by 100 months. Adverse inputs produced positive outputs.
+
+**Fix:**
+```typescript
+// services/simulationValidator.ts
+
+interface SanityCheck {
+  passed: boolean;
+  warnings: string[];
+}
+
+function validateSimulationOutput(
+  input: ParsedScenario, 
+  baseline: Metrics, 
+  result: SimResult
+): SanityCheck {
+  const warnings: string[] = [];
+
+  // Check 1: Adverse inputs shouldn't improve core metrics
+  if (input.isAdverse) {
+    if (result.runway > baseline.runway * 1.2) {
+      warnings.push(
+        `⚠️ Adverse scenario shows ${result.runway}mo runway vs ${baseline.runway}mo baseline. ` +
+        `This seems counterintuitive — verify assumptions.`
+      );
+    }
+  }
+
+  // Check 2: Math check on runway
+  const expectedRunway = result.cashOnHand / result.netBurn;
+  if (Math.abs(expectedRunway - result.runway) > 3) {
+    warnings.push(
+      `⚠️ Runway (${result.runway}mo) doesn't match Cash ÷ Burn ` +
+      `(${result.cashOnHand} ÷ ${result.netBurn} = ${expectedRunway.toFixed(1)}mo)`
+    );
+  }
+
+  // Check 3: Burn increase + runway increase = suspicious
+  if (result.burnChange > 0.2 && result.runwayChange > 0) {
+    warnings.push(
+      `⚠️ Burn increased ${(result.burnChange*100).toFixed(0)}% but runway also increased. ` +
+      `This assumes revenue growth offsets the burn — verify growth assumptions.`
+    );
+  }
+
+  return { passed: warnings.length === 0, warnings };
+}
+
+// Display warnings in UI alongside results
+```
+
+---
+
+## 5. Consistent Baseline Between Dashboard & Simulator
+
+**Problem found:** Dashboard showed 21.8 months runway, simulator baseline showed 120 months.
+
+**Fix:**
+```typescript
+// services/baseline.ts
+
+// ONE function to compute baseline, used by BOTH dashboard and simulator
+export function computeBaseline(company: Company): Baseline {
+  const burnRate = computeBurnRate(company);
+  const runway = company.cashOnHand / burnRate.value;
+  
+  return {
+    mrr: company.monthlyRevenue,
+    arr: company.monthlyRevenue * 12,
+    cashOnHand: company.cashOnHand,
+    burnRate: burnRate.value,
+    runway: runway, // Same number everywhere
+    computedAt: new Date(),
+    hash: computeHash(company), // Detect staleness
+  };
+}
+
+// Dashboard uses:
+const baseline = computeBaseline(company);
+
+// Simulator uses the SAME function:
+const simulatorBaseline = computeBaseline(company);
+
+// Assert they match (dev mode)
+if (process.env.NODE_ENV === 'development') {
+  assert(baseline.runway === simulatorBaseline.runway, 
+    'Baseline mismatch between dashboard and simulator');
+}
+```
+
+---
+
+## 6. Label Estimated vs Verified KPIs
+
+**Problem found:** CAC ($2.9K), LTV ($6.8K), Churn (3.2%), NRR (108%) appeared as "Verified" despite never being entered by the user.
+
+**Fix:**
+```typescript
+// types/metrics.ts
+type MetricSource = 
+  | 'user_input'      // User typed it in onboarding
+  | 'integration'     // Pulled from Stripe/QuickBooks
+  | 'computed'        // Calculated from other metrics (ARR = MRR * 12)
+  | 'ai_estimated';   // AI-generated assumption
+
+interface Metric {
+  value: number;
+  source: MetricSource;
+  confidence: number; // 0-100
+  assumptions?: string[]; // For ai_estimated
+  lastUpdated: Date;
+}
+
+// UI Component
+function MetricBadge({ metric }: { metric: Metric }) {
+  const badges = {
+    user_input: { label: 'Manual', color: 'blue', icon: '✏️' },
+    integration: { label: 'Connected', color: 'green', icon: '🔗' },
+    computed: { label: 'Computed', color: 'gray', icon: '🔢' },
+    ai_estimated: { label: 'AI Estimated', color: 'amber', icon: '🤖' },
+  };
+  
+  const badge = badges[metric.source];
+  
+  return (
+    <div>
+      <span className={`badge-${badge.color}`}>
+        {badge.icon} {badge.label}
+      </span>
+      {metric.source === 'ai_estimated' && (
+        <Tooltip content={
+          <>
+            <p>This metric was estimated by AI based on:</p>
+            <ul>{metric.assumptions.map(a => <li>{a}</li>)}</ul>
+            <p>Connect Stripe for actual data.</p>
+          </>
+        } />
+      )}
+      <span className="text-xs text-gray-500">
+        Updated {formatRelative(metric.lastUpdated)}
+      </span>
+    </div>
+  );
+}
+```
+
+---
+
+## 7. State Management — Prevent Stale Data
+
+**Problem found:** Navigating between pages showed inconsistent data; health scores showed "N/A" after visiting integrations.
+
+**Fix:**
+```typescript
+// Use a centralized store with staleness detection
+
+// store/companyStore.ts (Zustand example)
+import { create } from 'zustand';
+
+interface CompanyStore {
+  company: Company | null;
+  metrics: Baseline | null;
+  lastFetched: Date | null;
+  isStale: boolean;
+  
+  fetchCompany: () => Promise<void>;
+  invalidate: () => void;
+}
+
+export const useCompanyStore = create<CompanyStore>((set, get) => ({
+  company: null,
+  metrics: null,
+  lastFetched: null,
+  
+  get isStale() {
+    const { lastFetched } = get();
+    if (!lastFetched) return true;
+    return Date.now() - lastFetched.getTime() > 5 * 60 * 1000; // 5 min
+  },
+
+  fetchCompany: async () => {
+    const company = await api.get('/company');
+    const metrics = computeBaseline(company);
+    set({ company, metrics, lastFetched: new Date() });
+  },
+
+  invalidate: () => set({ lastFetched: null }),
+}));
+
+// Hook for auto-refresh
+function useMetrics() {
+  const { metrics, isStale, fetchCompany } = useCompanyStore();
+  
+  useEffect(() => {
+    if (isStale) fetchCompany();
+  }, [isStale]);
+  
+  return metrics;
+}
+
+// Every page uses the same hook — no independent fetches
+```
+
+---
+
+## 8. Strategic Briefing Performance
+
+**Problem found:** Briefing took 5+ minutes with no progress indicator.
+
+**Fix:**
+```typescript
+// Use streaming SSE instead of waiting for full response
+
+// Backend: Stream briefing sections as they complete
+app.get('/api/briefing/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  
+  // Step 1: Financial analysis (fast, local computation)
+  const financial = await analyzeFinancials(company);
+  res.write(`data: ${JSON.stringify({ step: 1, content: financial })}\n\n`);
+  
+  // Step 2: Growth trajectory (moderate, some AI)
+  const growth = await analyzeGrowth(company);
+  res.write(`data: ${JSON.stringify({ step: 2, content: growth })}\n\n`);
+  
+  // Step 3: Risks (AI-heavy)
+  const risks = await analyzeRisks(company);
+  res.write(`data: ${JSON.stringify({ step: 3, content: risks })}\n\n`);
+  
+  // Step 4: Compile briefing (AI synthesis)
+  const briefing = await compileBriefing(financial, growth, risks);
+  res.write(`data: ${JSON.stringify({ step: 4, content: briefing })}\n\n`);
+  
+  res.end();
+});
+
+// Frontend: Show each section as it arrives
+function BriefingStream() {
+  const [sections, setSections] = useState<Section[]>([]);
+  
+  useEffect(() => {
+    const source = new EventSource('/api/briefing/stream');
+    source.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      setSections(prev => [...prev, data]);
+    };
+    return () => source.close();
+  }, []);
+
+  return (
+    <div>
+      {sections.map(s => <BriefingSection key={s.step} {...s} />)}
+      {sections.length < 4 && (
+        <p>Generating section {sections.length + 1} of 4... (~30s remaining)</p>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## 9. Testing Strategy to Prevent Regressions
+
+```typescript
+// __tests__/simulation.integration.test.ts
+
+const SCENARIOS = [
+  'What happens if we cut marketing spend by 25%?',
+  'What happens if we hire 10 engineers?',
+  'What if we increase prices by 15% and churn rises by 1%?',
+  'What if CAC increases 20%?',
+  'What if we lose our biggest customer?',
+  'What happens if we raise a Series A at $10M?',
+];
+
+describe('Simulation Engine', () => {
+  SCENARIOS.forEach(scenario => {
+    it(`should successfully simulate: "${scenario}"`, async () => {
+      const result = await runSimulation(scenario);
+      
+      // Must not 422
+      expect(result.status).not.toBe(422);
+      
+      // Must return valid structure
+      expect(result.runway).toBeGreaterThan(0);
+      expect(result.survivalProbability).toBeGreaterThanOrEqual(0);
+      expect(result.survivalProbability).toBeLessThanOrEqual(100);
+      
+      // P10 <= P50 <= P90
+      expect(result.p10).toBeLessThanOrEqual(result.p50);
+      expect(result.p50).toBeLessThanOrEqual(result.p90);
+      
+      // Sanity check
+      const sanity = validateSimulationOutput(scenario, baseline, result);
+      expect(sanity.warnings).toHaveLength(0);
+    });
+  });
+  
+  it('baseline runway matches dashboard runway', () => {
+    const dashboardRunway = computeBaseline(company).runway;
+    const simBaseline = getSimulatorBaseline(company).runway;
+    expect(Math.abs(dashboardRunway - simBaseline)).toBeLessThan(0.5);
+  });
+});
+```
+
+---
+
+## 10. Quick Architecture Wins
+
+| Pattern | What It Fixes | Effort |
+|---|---|---|
+| **Centralized metrics service** | Inconsistent burn rates | 1 day |
+| **MetricSource enum on every KPI** | "Verified" labels on AI estimates | 1 day |
+| **Input validation before API call** | 422 errors | 2 days |
+| **SSE streaming for briefings** | 5-minute wait times | 2 days |
+| **Zustand/Redux store for company data** | N/A values, stale data | 2 days |
+| **Sanity check on simulation outputs** | Contradictory results | 1 day |
+| **Integration test suite for scenarios** | Regressions on every deploy | 3 days |
+| **Button handler audit** | Dead buttons | 0.5 day |
+
+**Total: ~12.5 days of focused engineering to fix every P0 and P1 issue I found.**
+
+---
+
+## Summary
+
+The core principle: **one source of truth, validate before sending, sanity-check after receiving, and test every user path.** Most of the bugs I found stem from metrics being computed in multiple places, API errors not being handled gracefully, and outputs not being validated against inputs. Fix the architecture once and you'll stop fixing symptoms repeatedly on Replit.
