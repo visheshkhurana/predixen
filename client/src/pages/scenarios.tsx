@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -136,6 +137,7 @@ export default function ScenariosPage() {
   // P0 FIX: Use scale-aware formatting from useCurrency hook
   const { format: formatCurrency, symbol: scaleCurrencySymbol } = useCurrency();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const params = useParams<{ id?: string }>();
   const { data: scenarios, isLoading: scenariosLoading, isError: scenariosError, error: scenariosErrorObj, refetch: refetchScenarios } = useScenarios(currentCompany?.id || null);
   const { data: truthScan, isLoading: truthScanLoading } = useTruthScan(currentCompany?.id || null);
@@ -143,8 +145,10 @@ export default function ScenariosPage() {
   const runSimulationMutation = useRunSimulation();
 
   const [selectedScenarioId, setSelectedScenarioId] = useState<number | null>(null);
+  const freshStartRef = useRef(false);
 
   useEffect(() => {
+    if (freshStartRef.current) return;
     if (params.id && scenarios) {
       const idFromUrl = parseInt(params.id, 10);
       if (!isNaN(idFromUrl) && scenarios.some((s: any) => s.id === idFromUrl)) {
@@ -1805,8 +1809,15 @@ export default function ScenariosPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setQuestionInput('');
+                        freshStartRef.current = true;
+                        queryClient.removeQueries({ queryKey: ['simulations', selectedScenarioId] });
+                        queryClient.removeQueries({ queryKey: ['timeseries', selectedScenarioId] });
                         setSelectedScenarioId(null);
+                        setQuestionInput('');
+                        setMultiSimResults(null);
+                        setSensitivityResults(null);
+                        setEnhancedResults(null);
+                        setDualPathMode({ active: false });
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                       data-testid="button-run-another"
