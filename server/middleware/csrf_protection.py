@@ -89,7 +89,14 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
     def _is_path_exempt(self, path: str) -> bool:
         """Check if the request path is exempt from CSRF protection."""
-        return any(path.startswith(exempt) for exempt in self.exempt_paths)
+        import fnmatch
+        for exempt in self.exempt_paths:
+            if '*' in exempt:
+                if fnmatch.fnmatch(path, exempt):
+                    return True
+            elif path.startswith(exempt):
+                return True
+        return False
 
     def _is_authenticated(self, request: Request) -> bool:
         """Check if the request has an Authorization header (is authenticated)."""

@@ -1075,8 +1075,13 @@ export default function OverviewPage() {
                       toast({ title: 'Sample data loaded!' });
                       setTimeout(() => window.location.reload(), 1200);
                     },
-                    onError: () => {
-                      toast({ title: 'Failed to load sample data', variant: 'destructive' });
+                    onError: (err: any) => {
+                      const msg = err?.message || '';
+                      if (msg.includes('401') || msg.includes('authentication') || msg.includes('credentials')) {
+                        toast({ title: 'Session expired', description: 'Please sign in again to load sample data.', variant: 'destructive' });
+                      } else {
+                        toast({ title: 'Failed to load sample data', description: msg || 'Please try again.', variant: 'destructive' });
+                      }
                     },
                   });
                 }}

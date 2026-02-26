@@ -219,7 +219,13 @@ print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stde
 from server.middleware.rate_limiter import RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
 
-app.add_middleware(CSRFProtectionMiddleware)
+app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
+    "/health",
+    "/auth/register",
+    "/auth/login",
+    "/auth/admin/login",
+    "/companies/*/seed-sample",
+])
 
 app.add_middleware(
     RateLimiterMiddleware,
