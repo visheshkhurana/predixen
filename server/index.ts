@@ -329,7 +329,9 @@ async function gracefulShutdown(signal: string) {
 // Register signal handlers
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
+process.on("SIGHUP", () => {
+  console.log("[SIGHUP] Received SIGHUP - ignoring (let workflow manager handle restart)");
+});
 
 fastapiProcess = startFastAPIServer();
 

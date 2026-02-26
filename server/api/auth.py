@@ -84,16 +84,10 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v):
-        if len(v) < 10:
-            raise ValueError("Password must be at least 10 characters")
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
         if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
-            raise ValueError("Password must contain at least one special character")
+            raise ValueError("Password must contain at least one number")
         return v
 
 class LoginRequest(BaseModel):
