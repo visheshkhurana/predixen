@@ -552,7 +552,7 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
           <p className="text-xs text-muted-foreground mb-2">Parameters Used:</p>
           <div className="flex flex-wrap gap-1.5">
             {params.burn_reduction_pct && (
-              <Badge variant="outline" className="text-xs">Burn -{params.burn_reduction_pct}%</Badge>
+              <Badge variant="outline" className="text-xs">{params.burn_reduction_pct < 0 ? `Burn Increase +${Math.abs(params.burn_reduction_pct)}%` : `Burn Cut ${params.burn_reduction_pct}%`}</Badge>
             )}
             {params.price_change_pct && (
               <Badge variant="outline" className="text-xs">Price {params.price_change_pct > 0 ? '+' : ''}{params.price_change_pct}%</Badge>
@@ -2232,7 +2232,7 @@ Type **help** for a full list of what I can do.`,
                       <>
                         <p className="font-medium text-foreground">{latestScenario.name}</p>
                         <p>Pricing: {latestScenario.pricing_change_pct > 0 ? '+' : ''}{latestScenario.pricing_change_pct}%</p>
-                        <p>Burn cut: {latestScenario.burn_reduction_pct}%</p>
+                        <p>{latestScenario.burn_reduction_pct < 0 ? `Burn Increase: +${Math.abs(latestScenario.burn_reduction_pct)}%` : `Burn Cut: ${latestScenario.burn_reduction_pct}%`}</p>
                       </>
                     ) : (
                       <div className="space-y-2">

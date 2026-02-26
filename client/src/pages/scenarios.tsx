@@ -635,7 +635,7 @@ export default function ScenariosPage() {
     if (totalHires > 0) {
       const salaryEstimate = 12000;
       params.burn_reduction_pct = Math.round(-(totalHires * salaryEstimate) / (baseMetrics?.monthlyExpenses || 50000) * 100);
-      params.growth_uplift_pct += totalHires * 3;
+      params.growth_uplift_pct += Math.min(totalHires * 1.5, 15);
       tags.push('growth');
       matched = true;
     } else if (q.includes('hire') || q.includes('engineer') || q.includes('team')) {
@@ -819,7 +819,6 @@ export default function ScenariosPage() {
     if (isDual) {
       console.log('[NLP] Dual-path detected:', pathA, 'OR', pathB);
       handleDualPathSubmit(pathA, pathB, questionInput.trim());
-      setQuestionInput('');
       return;
     }
 
@@ -839,7 +838,6 @@ export default function ScenariosPage() {
     console.log('[NLP] Tags:', tags);
 
     setDualPathMode({ active: false });
-    setQuestionInput('');
     handleWizardComplete(scenarioData);
   };
 
@@ -1701,8 +1699,8 @@ export default function ScenariosPage() {
                           </Badge>
                         )}
                         {burnPct !== 0 && (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            Burn Cut: {burnPct}%
+                          <Badge variant="outline" className={`font-mono text-xs ${burnPct < 0 ? 'border-red-500/50 text-red-400' : 'border-green-500/50 text-green-400'}`}>
+                            {burnPct < 0 ? `Burn Increase: +${Math.abs(burnPct)}%` : `Burn Cut: ${burnPct}%`}
                           </Badge>
                         )}
                         {gmPct !== 0 && (

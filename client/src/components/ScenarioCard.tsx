@@ -227,8 +227,8 @@ export function ScenarioCard({
                 {assumptions?.burn_reduction_pct !== undefined && assumptions.burn_reduction_pct !== 0 && (
                   <AssumptionItem
                     icon={Scissors}
-                    label="Burn Cut"
-                    value={`${assumptions.burn_reduction_pct > 0 ? '+' : ''}${assumptions.burn_reduction_pct}%`}
+                    label={assumptions.burn_reduction_pct < 0 ? "Burn Increase" : "Burn Cut"}
+                    value={assumptions.burn_reduction_pct < 0 ? `+${Math.abs(assumptions.burn_reduction_pct)}%` : `${assumptions.burn_reduction_pct}%`}
                     positive={assumptions.burn_reduction_pct > 0}
                   />
                 )}

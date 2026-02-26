@@ -710,6 +710,12 @@ export default function OnboardingPage() {
 
       markStepComplete(2);
       toast({ title: 'Financial snapshot saved!' });
+      setExpenseBreakdown(prev => ({
+        payroll: baselineData.payroll || prev.payroll,
+        marketing: prev.marketing,
+        operating: baselineData.opex || prev.operating,
+        cogs: prev.cogs,
+      }));
       setStep(3);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {

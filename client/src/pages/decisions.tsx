@@ -13,10 +13,10 @@ import { api } from '@/api/client';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 
 const LOADING_STEPS = [
-  { label: 'Analyzing financial data', duration: 3000 },
-  { label: 'Evaluating growth trajectory', duration: 4000 },
-  { label: 'Identifying key risks', duration: 5000 },
-  { label: 'Assessing risks & alternatives', duration: 4000 },
+  { label: 'Analyzing financial data', duration: 5000 },
+  { label: 'Evaluating growth trajectory', duration: 8000 },
+  { label: 'Identifying key risks', duration: 10000 },
+  { label: 'Generating strategic briefing', duration: 12000 },
 ];
 
 const TOC_SECTIONS = [

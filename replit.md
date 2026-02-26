@@ -1,7 +1,7 @@
 # FounderConsole
 
 ## Overview
-FounderConsole is an AI-powered financial intelligence platform designed for startups. Its primary goal is to enhance survival and growth while mitigating risk and dilution. The platform offers investor-grade diligence, probabilistic simulations, and ranked decision recommendations to support financial planning, enabling startups to understand their financial health, predict future outcomes, and make strategic decisions.
+FounderConsole is an AI-powered financial intelligence platform for startups, designed to enhance survival and growth while mitigating risk and dilution. It provides investor-grade diligence, probabilistic simulations, and ranked decision recommendations to support financial planning, helping startups understand financial health, predict outcomes, and make strategic decisions. The platform aims to revolutionize how startups manage their finances and interact with investors.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,7 +9,7 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Core Design Principles
-The platform utilizes a modern full-stack architecture, combining React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations through a modular design. Key architectural components include data ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities. Scalability is achieved using FastAPI and PostgreSQL, while UI/UX focuses on data visualization and interactive components built with Tailwind CSS and shadcn/ui. Data integrity is enforced via Zod, Pydantic, and Alembic, with security based on JWT authentication and RBAC.
+The platform uses a modern full-stack architecture with React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations through a modular design. Key architectural components include data ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities. Scalability is achieved using FastAPI and PostgreSQL, while UI/UX focuses on data visualization and interactive components built with Tailwind CSS and shadcn/ui. Data integrity is enforced via Zod, Pydantic, and Alembic, with security based on JWT authentication and RBAC.
 
 ### Frontend Architecture
 -   **Frameworks**: React 18 with TypeScript, Wouter, Zustand, TanStack React Query.
@@ -23,25 +23,21 @@ The platform utilizes a modern full-stack architecture, combining React/TypeScri
 -   **Validation**: Pydantic models.
 
 ### Key Features and Technical Implementations
-1.  **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, and multi-currency handling with industry-adaptive terminology.
-2.  **Truth Scan**: A multi-stage data validation layer ensuring data quality and provenance.
-3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, various probability distributions, asynchronous execution, and custom event modeling. Includes sensitivity analysis and scenario versioning.
-4.  **Optimization & Recommendations**: Features constrained multi-objective optimization and an automated recommendations engine with version history.
-5.  **AI Copilot System**: A Multi-Agent Fund Flow Copilot V2+ with a Router/Orchestrator Agent directing queries to specialized agents (CFO, Market, Strategy, Decision Advisor). It uses a Company Knowledge Base (CKB) for context, provides structured responses, and integrates multi-LLM for task-specific model selection.
+1.  **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, and multi-currency handling.
+2.  **Truth Scan**: A multi-stage data validation layer ensuring data quality.
+3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, asynchronous execution, custom event modeling, sensitivity analysis, and scenario versioning.
+4.  **Optimization & Recommendations**: Features constrained multi-objective optimization and an automated recommendations engine.
+5.  **AI Copilot System**: A Multi-Agent Fund Flow Copilot with a Router/Orchestrator Agent directing queries to specialized agents. Uses a Company Knowledge Base (CKB) for context, provides structured responses, and integrates multi-LLM for task-specific model selection.
 6.  **Real-Time Simulation Copilot**: AI guidance integrated into the simulation workflow, offering context-aware prompts and narrative summaries.
 7.  **Fundraising OS**: Module for cap table management, dilution calculations, fundraising round tracking, and an Investor Room.
 8.  **Forecasting & Alerts**: Utilizes Holt-Winters exponential smoothing and linear regression for forecasting, and Z-score anomaly detection, threshold monitoring, and runway warnings for alerts.
-9.  **Data Connectors**: Framework for payroll & ERP connectors and 37 production data connectors across various financial and operational categories.
-10. **Enhanced AI Interaction**: Includes a Copilot Trust Module for data veracity, natural conversational AI with context passing and diverse response modes, and web research capabilities via Perplexity for market benchmarks.
+9.  **Data Connectors**: Framework for payroll & ERP connectors and 37 production data connectors across financial and operational categories.
+10. **Enhanced AI Interaction**: Includes a Copilot Trust Module for data veracity, natural conversational AI, and web research capabilities for market benchmarks.
 11. **Consultant-Grade Copilot Persona**: System prompts are upgraded to provide structured, data-backed recommendations with a strategic persona.
 12. **Simulation Experience Upgrade**: Features Before/After Delta Cards, Payback Clock Widget, Risk Alert Banner, data-driven recommendations (GO/CONDITIONAL/NO-GO), second-order effects detection, and confidence scoring.
-13. **Automatic Counter-Move Simulation**: System automatically runs 3 counter-move simulations (Cost Cut 20%, Raise Prices 10%, Freeze Hiring) when a scenario is simulated, providing runway/survival deltas.
-14. **AI Decision Summary**: A gradient-bordered card at the top of simulation results providing a 1-2 sentence recommendation, Decision Score, verdict, and supporting bullet points.
-15. **Reorganized Simulation Results Hierarchy**: Presents results in a decision-intelligence-first order, starting with the AI Summary and proceeding through recommendations, comparisons, analyses, and forecasting.
-16. **Dual-Path "Or" Detection**: Detects "X or Y" / "X vs Y" in scenario inputs, running both Monte Carlo simulations in parallel for side-by-side comparison.
-17. **Cross-Page Intelligence Alerts**: Reusable component that fetches simulation data and generates contextual alerts across key pages based on financial metrics.
-18. **Narrative Strategic Briefing (Decisions Page Redesign v2)**: Transforms the Decisions page into a text-based "founder's briefing document" with sections covering the situation, recommendations, consequences of inaction, an execution playbook, and key risks with contingency plans.
-19. **Centralized Financial Metrics Hook**: Provides a single source of truth for all financial metrics, tracking provenance and supporting AI Estimated badges.
+13. **Automatic Counter-Move Simulation**: System automatically runs 3 counter-move simulations (Cost Cut 20%, Raise Prices 10%, Freeze Hiring) when a scenario is simulated.
+14. **AI Decision Summary**: Provides a 1-2 sentence recommendation, Decision Score, verdict, and supporting bullet points.
+15. **Narrative Strategic Briefing**: Transforms the Decisions page into a text-based "founder's briefing document" covering situation, recommendations, consequences, execution playbook, and risks.
 
 ### User Roles
 -   **Platform Admin**: Application owner.
@@ -58,35 +54,22 @@ The platform utilizes a modern full-stack architecture, combining React/TypeScri
 -   **Resend**: Email delivery service (verified sender: noreply@founderconsole.ai).
 -   **Twilio**: SMS/phone notifications (credentials configured).
 
-## Production Deployment Architecture
--   **Health Check**: Pre-setup middleware returns 200 at `/` and `/health` immediately when port opens, before async route/static setup completes. Uses `setupComplete` flag to transition to full app serving.
--   **FastAPI Supervision**: Node spawns uvicorn with piped stdio (`[fastapi:out]` / `[fastapi:err]` prefixed logs). Exponential backoff retry up to 10 attempts. Graceful shutdown via SIGTERM with 5s kill timeout.
--   **Environment Passing**: `NODE_ENV` is hardcoded to `"production"` at build time via esbuild define. `ENVIRONMENT` is preserved from Replit's `[userenv.production]` config, not overridden by Node.
--   **Config Safety**: Production config checks (SESSION_SECRET, CORS_ORIGINS, ADMIN_MASTER_PASSWORD_HASH) log critical warnings instead of raising RuntimeError, preventing silent crash-loops.
--   **Static Fallback**: If `dist/public` is missing, serves a minimal HTML page instead of crashing.
-
 ## Error Handling Architecture
 -   **`getErrorMessage()`**: Central utility in `client/src/lib/errors.ts` that safely extracts string messages from any error type, preventing React Error #185.
 -   **ErrorBoundary**: Supports both full-page and inline (`inline` prop) modes for component-level isolation. Error Details panel always visible (collapsed by default).
 -   **QueryClient**: `throwOnError: false` prevents query errors from propagating to ErrorBoundary. Smart retry skips 401/403/404.
--   **API errors**: All page/component files use `getErrorMessage()` for toast error display (billing, invites, scenarios, decisions, metrics, team, users, ShareModal).
--   **Runway display**: Values >=900 months rendered as "Sustainable" or "infinity" via `isRunwaySustainable()` / `formatRunway()` / `formatRunwayInline()` in `utils.ts`. Applied across all pages: scenarios, copilot, truth-scan, data-input, decisions, and all simulation components (AIDecisionSummary, CrossPageIntelligence, ScenarioVersionHistory, MultiScenarioSummary, MonthlyResultsTable, AISummaryCard, ImpactBar, StrategyCard, StressTestPanel). Sentinel value changed from 999->900 in ScenarioWizard, ScenarioSummarySidebar, StrategicScenarioBuilder.
--   **useFinancialMetrics**: Threshold changed from `< 999` to `< 900` to correctly identify sustainable runway values.
--   **Paginated API responses**: Backend list endpoints (`/companies`, `/companies/{id}/scenarios`) return paginated `{items, total, page, page_size}`. `api.companies.list()` and `api.scenarios.list()` in `client/src/api/client.ts` extract `.items` to return plain arrays. Onboarding page also handles both formats.
--   **Decisions page hooks order**: `handleGenerateDecisions` useCallback is defined before the useEffect that references it (prevents TDZ ReferenceError).
+-   **Runway display**: Values >=900 months rendered as "Sustainable" or "infinity" via `isRunwaySustainable()` / `formatRunway()` / `formatRunwayInline()` in `utils.ts`. RUNWAY_SUSTAINABLE constant = 900 everywhere.
+-   **useFinancialMetrics**: Threshold `< 900` to correctly identify sustainable runway values.
+-   **Paginated API responses**: Backend list endpoints return paginated `{items, total, page, page_size}`. `api.companies.list()` and `api.scenarios.list()` extract `.items` to return plain arrays.
 -   **Burn Rate**: Labeled as "Net Burn Rate" on Dashboard; dynamically labeled "Net Burn" or "Monthly Surplus" on Health Check.
--   **Churn Rate**: Truth scan backend populates `churn_rate` key; frontend normalizes percentage vs decimal values via fallback chain: `churn_rate_customer` -> `churn_rate_revenue` -> `churn_rate` -> `sharedMetrics.churnRate`.
--   **OAuth/Demo errors**: Auth page provides specific error feedback for OAuth failures (timeout, unconfigured), demo login failures, and backend-down scenarios with retry logic.
--   **Simulation 422 fix**: Backend `ScenarioCreate.burn_reduction_pct` validator now accepts -100 to 100 range (was 0-100), allowing scenarios that model spending increases (e.g., "hire 10 engineers"). INPUT_GUARDRAILS updated to match.
--   **Data consistency fix**: Dashboard KPIs API (`dashboard_kpis.py`) now reads actual `data_confidence_score` and `quality_of_growth_index` from truth scan outputs instead of hardcoding fallback values (was 75 for confidence, 72 for quality index). Sidebar `HealthScoreCard` no longer invents health scores via heuristic formula; shows actual truth scan values or 0.
--   **What-If Explorer fix**: Slider default values for `churnRate` and `grossMargin` now detect whether baseline values are already percentages (>1) vs decimals (<1) before applying *100 conversion, preventing display bugs like 320% churn and 7800% margin.
--   **BandsChart P50 tooltip fix**: Custom tooltip now reads values from the chart data entry object (`payload[0].payload`) as primary source, falling back to dataKey lookup, fixing P50 showing "N/A".
--   **Connectors catalog 500 fix**: `get_catalog_connector` endpoint was calling `list_catalog()` with wrong parameter signature (missing `company_id` and `db`). Fixed to pass all required parameters.
--   **NLP parser enhanced**: `parseNaturalLanguageScenario` now handles: (1) combined hiring ("hire 10 engineers and 3 sales") by summing all role-count matches, (2) CAC change parsing ("CAC increases 20%"), (3) churn direction detection ("churn rises" vs "churn drops"), (4) VC/funding decline macro scenarios. All patterns accumulate into a single params object.
--   **Monte Carlo P10/P50/P90 divergence fix**: All three simulation engines (`simulation_engine.py`, `enhanced_monte_carlo.py`, `enhanced_engine.py`) now use a 120-month cap instead of 48/60. Profitable companies get stochastic runway estimates with volatility noise (sigma 0.2-0.25) instead of identical hard-coded values, producing meaningful spread across percentiles.
--   **CompanySwitcher UX**: "Add New Company" moved to top of dropdown (was buried at bottom). Client-side deduplication added to filter duplicate company names. Dropdown has max-height with scroll for many companies.
--   **Burn Rate label consistency**: Dashboard and Health Check both now use "Net Burn Rate" label consistently.
--   **Churn Rate N/A fix**: Health Check (`truth-scan.tsx`) churn display now distinguishes between missing data (shows N/A) and actual 0% churn (shows "0.0%") — uses `hasChurnData` guard checking both truth scan metrics and `sharedMetrics.churnRatePct > 0`.
--   **CSRF token fix**: `api/client.ts` `request()` was missing `credentials: "include"`, preventing CSRF cookies from flowing between browser and backend through the Express proxy. This caused all scenario creation and simulation POST requests to fail with 403 "CSRF token validation failed". Both `request()` and `apiRequest()` now include automatic CSRF retry: if a 403 CSRF error occurs, they fetch `/api/health` to get a fresh cookie and retry once.
--   **RUNWAY_SUSTAINABLE constant**: Changed from 999 to 900 in `sensitivityAnalysis.ts` to match the global threshold used in `utils.ts`. Dashboard (`>=900`), AI Governance page (`<900`), and all sensitivity analysis functions now use the consistent 900 threshold.
--   **PageErrorFallback**: Dev-only error details now use `import.meta.env.DEV` instead of `process.env.NODE_ENV` for Vite compatibility.
+-   **Burn label clarity**: "Burn Cut: -96%" changed to "Burn Increase: +96%" with red styling when `burn_reduction_pct < 0`. Applied across: `scenarios.tsx`, `ScenarioCard.tsx`, `copilot.tsx`, `ScenarioWizard.tsx`.
+-   **Churn Rate**: Truth scan backend populates `churn_rate` key; frontend normalizes percentage vs decimal. Distinguishes missing data (N/A) from actual 0% churn.
+-   **CSRF token fix**: `api/client.ts` `request()` includes `credentials: "include"` + automatic CSRF retry (fetch `/api/health` to refresh cookie, retry once).
+-   **Simulation search bar**: Input text persists after clicking Simulate (removed `setQuestionInput('')` calls). Supports iteration on custom scenarios.
+-   **NLP parser**: Handles combined hiring, CAC changes, churn direction, VC funding decline. Growth uplift per hire = `Math.min(totalHires * 1.5, 15)` (was 3x, capped at 15%).
+-   **Monte Carlo P10/P50/P90**: All three engines use 120-month cap with stochastic volatility for meaningful percentile spread.
+-   **Decision engine calibration**: Escalating risk penalties for burn increases: >30% gets -0.10, >50% adds -0.15, >75% adds -0.10 more. Risk text warns about burn increases.
+-   **AI Decision Summary**: Burn-increase caveats added when actual burn increases >50% vs baseline. Score penalty: -0.75 for >50%, -1.5 for extreme. Uses actual burn data, not name heuristics.
+-   **Briefing progress indicator**: `LOADING_STEPS` in `decisions.tsx` total 35s (5+8+10+12). Fourth step: "Generating strategic briefing".
+-   **Onboarding Step 3 pre-fill**: Payroll and OpEx pre-filled from Step 2 baselineData when transitioning.
+-   **PageErrorFallback**: Uses `import.meta.env.DEV` for Vite compatibility.

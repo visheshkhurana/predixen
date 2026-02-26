@@ -102,6 +102,14 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
 
     const rwy = fmtRunway(runwayP50);
 
+    const burnIncreaseWarning = baselineSimulation
+      ? (() => {
+          const baseBurn = baselineSimulation.summary?.monthly_burn ?? baselineSimulation.summary?.monthly_burn_p50 ?? 0;
+          const burnIncreasePct = baseBurn > 0 ? Math.round(((monthlyBurn - baseBurn) / baseBurn) * 100) : 0;
+          return burnIncreasePct > 50 ? burnIncreasePct : 0;
+        })()
+      : 0;
+
     if (verdict === 'go') {
       if (bRunwayDelta > 2 && breakeven && breakeven <= 18) {
         headline = `${action}. Your unit economics support it \u2014 you gain ${bRunwayDelta.toFixed(0)} months of runway and hit breakeven by month ${breakeven}.`;
@@ -111,6 +119,9 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
         headline = `${action}. You end with ${fmtCurrency(endCash)} in the bank and ${rwy} months of runway \u2014 this is a strong position.`;
       } else {
         headline = `${action}. ${survival18m.toFixed(0)}% survival and ${rwy} months of runway give you room to execute. The data says go.`;
+      }
+      if (burnIncreaseWarning > 0) {
+        headline += ` Caution: this increases burn by ~${burnIncreaseWarning}%. Consider phased execution to validate growth assumptions before full commitment.`;
       }
     } else if (verdict === 'no-go') {
       if (cm && cm.runwayGain >= 3) {
@@ -129,6 +140,9 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
         headline = `${action}, but watch the timing. Breakeven at month ${breakeven} is achievable, but ${rwy} months of runway doesn't leave much margin for slippage.`;
       } else {
         headline = `${action} is possible but needs guardrails. ${rwy} months runway at ${survival18m.toFixed(0)}% survival \u2014 not enough conviction to go all-in without a backup plan.`;
+      }
+      if (burnIncreaseWarning > 0) {
+        headline += ` Note: burn increases ~${burnIncreaseWarning}% — consider phased hiring (2-3 per quarter) to validate growth before full commitment.`;
       }
     }
 
@@ -187,6 +201,8 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     else score += 0.5;
     if (bRunwayDelta > 0) score += Math.min(bRunwayDelta / 10, 1) * 0.5;
     if (bSurvDelta > 0) score += Math.min(bSurvDelta / 30, 1) * 0.5;
+    if (burnIncreaseWarning > 50) score -= 1.5;
+    else if (burnIncreaseWarning > 0) score -= 0.75;
     const decisionScore = Math.max(1, Math.min(10, Math.round(score)));
 
     let baselineDelta = '';

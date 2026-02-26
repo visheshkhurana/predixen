@@ -89,8 +89,15 @@ def score_action(
     if runway_p50 < 9 and len(scenario_deltas.get("hiring_plan", [])) > 0:
         risk_penalty += 0.10
     
-    if scenario_deltas.get("burn_reduction_pct", 0) > 25:
+    burn_change = scenario_deltas.get("burn_reduction_pct", 0)
+    if burn_change > 25:
         risk_penalty += 0.05
+    if burn_change < -30:
+        risk_penalty += 0.10
+    if burn_change < -50:
+        risk_penalty += 0.15
+    if burn_change < -75:
+        risk_penalty += 0.10
     
     pricing_change = scenario_deltas.get("pricing_change_pct", 0)
     if pricing_change >= 8:
@@ -217,6 +224,12 @@ def generate_risk_text(action: Dict, scored: Dict) -> List[str]:
     
     if deltas.get("burn_reduction_pct", 0) >= 20:
         risks.append("Aggressive cost cuts may impact team morale and velocity")
+    
+    burn_pct = deltas.get("burn_reduction_pct", 0)
+    if burn_pct < -50:
+        risks.append(f"Burn increases by {abs(burn_pct)}% — consider phased hiring to validate growth assumptions before full commitment")
+    elif burn_pct < -30:
+        risks.append(f"Significant burn increase ({abs(burn_pct)}%) will accelerate cash depletion and shorten runway")
     
     if deltas.get("pricing_change_pct", 0) >= 10:
         risks.append("Price increase may lead to customer churn")

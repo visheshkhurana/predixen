@@ -1003,9 +1003,9 @@ export function ScenarioWizard({
                     <div className="flex items-center gap-2">
                       <Scissors className="h-4 w-4 text-orange-500" />
                       <div>
-                        <span className="text-muted-foreground text-xs">Burn</span>
-                        <p className="font-mono font-medium">
-                          {params.burn_reduction_pct > 0 ? '+' : ''}{params.burn_reduction_pct}%
+                        <span className="text-muted-foreground text-xs">{params.burn_reduction_pct < 0 ? 'Burn Increase' : 'Burn Cut'}</span>
+                        <p className={`font-mono font-medium ${params.burn_reduction_pct < 0 ? 'text-red-400' : ''}`}>
+                          {params.burn_reduction_pct < 0 ? `+${Math.abs(params.burn_reduction_pct)}%` : `${params.burn_reduction_pct > 0 ? '+' : ''}${params.burn_reduction_pct}%`}
                         </p>
                       </div>
                     </div>

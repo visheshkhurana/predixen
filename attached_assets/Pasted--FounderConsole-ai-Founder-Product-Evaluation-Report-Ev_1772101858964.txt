@@ -1,0 +1,202 @@
+---
+
+# FounderConsole.ai — Founder Product Evaluation Report
+
+**Evaluator**: Alex Chen, CEO @ Acme Analytics (B2B SaaS, Seed Stage)
+**Date**: February 26, 2026
+**Session Duration**: ~45 minutes (signup through full exploration)
+
+---
+
+## A) Executive Satisfaction Scores (0–10)
+
+| Category | Score | Notes |
+|---|---|---|
+| **Onboarding** | 8/10 | Smooth 4-step wizard, smart defaults, clear progress |
+| **Data Confidence** | 7/10 | 62% score shown prominently but reasoning is opaque |
+| **Scenario Usefulness** | 7/10 | Monte Carlo results are rich; some outputs feel samey |
+| **Integrations** | 7/10 | Broad catalog, "Test with Sample Data" is brilliant; many "Coming Soon" |
+| **UI/UX** | 8.5/10 | Dark mode is polished, information density is well-managed |
+| **Reliability** | 6/10 | Search bar input clearing bug; briefing generation ~20s+ |
+| **Value** | 7.5/10 | Strong differentiator vs. pure analytics tools |
+| **Overall** | **7.3/10** | |
+
+---
+
+## B) Feature-By-Feature Review
+
+### 1. Onboarding
+
+**What worked:**
+The 4-step onboarding wizard (Company Basics → Financial Snapshot → Expense Breakdown → Data Sources) is one of the best founder onboarding flows I've seen in this category. Step 2 (Financial Snapshot) pre-fills realistic seed-stage defaults ($25K MRR, 75% gross margin, 8 employees, $1M cash) and shows a transparent "How Your Metrics Are Computed" section with actual formulas (Gross Profit = Revenue × Gross Margin % / 100, Runway = Cash Balance / Net Burn). That formula transparency immediately builds trust. The "Save & Continue Later" button at every step, plus the "Skip" option on the optional Expense Breakdown step, shows respect for the founder's time. The data source selection (Manual Entry, Upload Files, Connect Apps) with badges for Stripe/QuickBooks/Gusto is a great progressive disclosure pattern.
+
+**What didn't:**
+The Industry dropdown doesn't include a "B2B SaaS" subcategory — it just says "SaaS." For a tool targeting founders who think in terms like "B2B SaaS" vs "B2C SaaS" vs "PLG SaaS," this misses the mark on benchmarking specificity. The "Amount Scale" dropdown (Units) is confusing — I wasn't sure whether to choose "Units" or another option, and there was no tooltip explaining what it means. The Website field says "Used to detect your location for currency conversion," which is an odd UX — detecting location from a website domain is unreliable, and this should use browser geolocation or an explicit country selector instead. The Expense Breakdown (Step 3) fields start at 0 rather than pre-filling from Step 2's Payroll/Opex values, which creates a confusing duplication where you enter payroll in Step 2 and again in Step 3.
+
+**Star Rating**: ★★★★☆ (4/5)
+
+---
+
+### 2. Dashboard Metrics & Data Confidence
+
+**KPI Summary:**
+The dashboard is impressively dense without being overwhelming. The daily briefing banner ("Good Afternoon — Here's your daily briefing") immediately orients the founder with the key numbers: MRR at $45K, 10% growth, Burn at $79.9K/mo, Runway at 22.5 months. Below that, the Goal Tracker (Reach $100K MRR — Off Track, Extend Runway to 36 mo — In Progress, Churn Below 2% — Off Track) is auto-populated with relevant goals, which is surprisingly useful. The KPI cards show MRR ($45K), ARR ($540K), Cash on Hand ($1.8M), Burn Rate ($79.9K), CAC ($2.9K), and LTV ($7.3K), each with "Verified" badges, "Updated about 5 hours ago" timestamps, and benchmark comparisons (Above median / Below median). The secondary metrics row (ARPU: $300, Active Customers: 150, NRR: 108%, LTV:CAC: 2.6x) with percentile benchmarks is genuinely useful for investor conversations.
+
+**Confidence Score Evaluation:**
+The Data Confidence Score of 62/100 is prominently displayed in the top navigation bar and on the Health Check page, labeled "Good - could be improved." The Data Source Legend (Your Input = green, Calculated = blue, Connector Synced = purple, Hybrid = yellow) provides transparency about data provenance. However, the score feels somewhat arbitrary — I can't easily see which specific metrics are dragging the score down or what actions would increase it. A breakdown like "Revenue data: 85% confidence, Expense data: 45% confidence — connect QuickBooks to improve" would be far more actionable.
+
+**Three Specific Trust Signal Improvements:**
+
+**Improvement 1: Confidence Score Decomposition.** Show a breakdown of the 62% score by data category (Revenue: X%, Expenses: Y%, Customer metrics: Z%) with specific actions to improve each. Right now, 62% is a number without a clear "why" or "how to fix."
+
+**Improvement 2: Staleness Warnings.** The "Updated about 5 hours ago" label is good, but there's no escalating warning when data gets stale. If MRR hasn't been updated in 30+ days, the "Verified" badge should change to a "Stale — Last updated 32 days ago" warning in red. Currently, the badge system doesn't degrade visually over time.
+
+**Improvement 3: Assumption Audit Trail.** Several KPIs like NRR (108%) and Active Customers (150) appear with "Calculated" badges, but there's no easy way to see what formula or data source produced them. Clicking the (i) icon should show "NRR = (Starting MRR + Expansion - Contraction - Churn) / Starting MRR. Derived from: Stripe subscription data + manual input. Last verified: Feb 26, 2026."
+
+---
+
+### 3. Simulator
+
+**Scenarios Tested:**
+
+**Scenario A: Cost Optimization ("Cut marketing spend by 25% for 6 months")**
+- Result: 8/10 GO, +65.2 months runway (P10: 70mo, P90: 112mo)
+- The simulator correctly identified growth (+25%) and burn reduction (+20%) as the two input changes
+- Sensitivity ranking showed Revenue Growth as #1 lever (+20 months) and Burn Reduction as #2 (+12 months)
+- The P10-P90 spread of 41.8 months signals high variance, which the tool correctly flags
+- **Concern**: +65 months of runway from a 25% marketing cut seems unrealistically optimistic. If marketing spend is ~$18K/month and you cut 25% ($4.5K/month savings), that adds ~$54K over 6 months — nowhere near enough to extend runway by 65 months at $80K/mo burn. The model appears to be compounding growth effects too aggressively
+- **Usefulness**: ★★★★☆ (4/5)
+
+**Scenario B: Staff Scaling ("Hire 5 engineers" preset — closest to 10 engineers + 3 sales)**
+- Result: 8/10 GO, +55.5 months runway (P10: 63mo, P90: 98mo)
+- Inputs showed Growth: +30%, Burn Cut: -96% (meaning 96% burn *increase*)
+- **Major concern**: The tool gave an 8/10 GO with 9/10 Overall Decision Score for a scenario that *increases burn by 96%*. This seems like the model is overweighting the growth upside and underweighting the immediate cash drain. A seed-stage company with $1.8M cash that nearly doubles its burn rate should get a much more cautious recommendation
+- Break-even projected at month 6, which is unrealistic for a company going from $45K MRR to needing ~$160K/mo to break even after adding 5 engineers
+- **Usefulness**: ★★★☆☆ (3/5) — the outputs don't feel grounded in reality
+
+**Scenario C: Pricing Change ("Raise prices 20%")**
+- Result: 7/10 GO, +1.0 month runway (P10-P90 spread: 1.0 mo)
+- CONDITIONAL status, high confidence
+- This was the most conservative and believable result — a 20% price increase with no churn adjustment only adds 1 month of runway, which is realistic
+- Decision Score: 6/10 Overall, which correctly signals this is a minor lever
+- **Usefulness**: ★★★★☆ (4/5) — believable and well-calibrated
+
+**Scenario D: External Shock ("Churn hits 5%")**
+- Result: 5/10 CONDITIONAL GO, -2.0 months runway, -55% survival probability
+- NO-GO at scenario level
+- This was the most differentiated and useful result — correctly flagging 45% survival probability at 18 months as a danger zone
+- The language "one bad quarter could be fatal" is exactly the kind of insight a founder needs
+- **Missing**: No macro preset for "VC funding declines 30% + CAC increases 20%." The tool only offers individual-variable presets, not compound macroeconomic scenarios
+- **Usefulness**: ★★★★★ (5/5) — best scenario output
+
+**Overall Simulator Assessment:**
+The natural language input is compelling but has a significant UX bug: after running a simulation, the search bar clears to the placeholder, making it hard to run follow-up scenarios. I had to use preset buttons instead. The Monte Carlo approach with P10/P50/P90 distributions is the right methodology, but the outputs for Scenarios A and B were unrealistically optimistic. The sensitivity ranking and actionable recommendations ("Focus on sustainable growth initiatives with unit economics in mind") add real strategic value. The "Adopt This Strategy," "Export," "Discuss with Team," and "Run Another Scenario" action buttons are well-designed workflow elements.
+
+---
+
+### 4. Integrations
+
+**Ease of Use:**
+The integrations page has a smart "Quick Setup" section at the top showing the three most important connectors (QuickBooks, Gusto, Stripe) with connection status and estimated setup time. Below that, category tabs (Revenue & Payments, Accounting, HR & Payroll, Analytics, CRM & Sales) make it easy to find relevant integrations. The "Test with Sample Data" button on every integration card is an excellent low-commitment way to try before connecting real data.
+
+**Available Integrations:**
+Active: Stripe (Recommended), QuickBooks Online (Recommended), Xero, HubSpot, Salesforce, Plaid, Gusto (Recommended), RazorpayX Payroll, GreytHR, Tally ERP, Google Sheets.
+Coming Soon: Pipedrive, Zoho CRM, SAP Business One, Odoo, Marg ERP, PeopleStrong, Keka HR.
+
+**Data Freshness:**
+Both QuickBooks and Stripe showed as "Connected" after onboarding (using sample data). Dashboard KPIs showed "Updated about 5 hours ago," which is acceptable for a demo. However, I couldn't verify actual sync timing since I used sample data. There's no indication of webhook support or real-time sync frequency.
+
+**Gaps:**
+No HubSpot pipeline data visualization on the dashboard despite it being listed as an integration. Missing direct Baremetrics/ChartMogul import for founders already using those tools. No clear error states shown for failed connections or permissions issues — the happy path works, but I didn't see what happens when an OAuth token expires or a sync fails.
+
+---
+
+### 5. Decision Journal
+
+**Expectations vs Reality:**
+The "Notes & Annotations" section on the dashboard serves as a basic decision journal. I successfully added a journal entry dated 26/02/2026 that appeared under "Previous Notes." However, this is far from a true decision journal. Notes are free-text with no structure — there's no way to tag a note to a specific simulation, add a prediction ("I expect MRR to hit $60K by June"), or later mark that prediction as correct/incorrect. The notes feel more like sticky notes than a decision tracking system.
+
+**What a Real Decision Journal Should Look Like:**
+Each simulation should automatically create a journal entry with the scenario parameters, results, and your decision (Adopt/Reject/Defer). There should be a timeline view showing all decisions chronologically with outcomes tracked over time. Founders should be able to set "checkpoints" — e.g., "If MRR hasn't hit $55K by April 15, revisit the hiring plan" — that trigger notifications. The journal should support retrospective annotations ("We actually hired 3 engineers in March — here's what happened vs. what we predicted"). A "Decision Accuracy" score over time would gamify good decision-making and build a learning loop.
+
+---
+
+### 6. Stability & Performance
+
+**Observed Issues:**
+
+**Issue 1 (Severity: High)**: The simulation search bar clears after submitting a query and clicking Simulate. When typing a custom scenario like "What happens if we hire 10 engineers and 3 sales team members next quarter?" and clicking Simulate, the input resets to the placeholder text and the previous simulation results remain. I had to use JavaScript injection (React state setter) to get the value to stick, and even then the results didn't update. Preset buttons work correctly. This is a blocking bug for the core value proposition of natural language simulation.
+
+**Issue 2 (Severity: Medium)**: The Strategic Briefing generation took approximately 20+ seconds with no progress percentage or estimated time remaining. The four-step checklist (Analyzing financial data, Evaluating growth trajectory, Identifying key risks, Assessing risks & alternatives) all showed green checkmarks within 3 seconds, but the actual generation took much longer. The progress indicator is misleading — it should show real progress, not just check items immediately.
+
+**Issue 3 (Severity: Medium)**: The simulation results for the hiring scenario showed "Burn Cut: -96%" in the Scenario Inputs vs Baseline section, which is confusing. A "negative burn cut" means a burn increase, but the label "Burn Cut" implies reduction. This should be labeled "Burn Change: +96%" or "Burn Increase: 96%."
+
+**Issue 4 (Severity: Low)**: The Industry dropdown selected "SaaS" but the dashboard never asked about B2B vs B2C, which affects benchmark comparisons. ARPU of $300/user suggests B2B, but the benchmarks don't specify whether they're comparing against B2B or all SaaS companies.
+
+**Issue 5 (Severity: Low)**: On the onboarding Step 3 (Expense Breakdown), the fields start at 0 despite having entered Payroll ($85,000) and Opex ($22,000) in Step 2. This creates a confusing overlap where the same data might be entered twice, potentially doubling the burn calculation.
+
+**Page Load Performance**: Pages loaded within 1-2 seconds across all sections. No crashes or "something went wrong" screens observed. The Monte Carlo simulations (1,000 runs) completed in under 3 seconds, which is impressive. Overall stability is good — the main issues are UX bugs rather than infrastructure problems.
+
+---
+
+### 7. Billing & Value Proposition
+
+**Pricing Clarity:**
+I did not find a visible pricing page or billing section within the authenticated app. There's no "upgrade," "plan," or "billing" link in the settings sidebar. This is either a free tier, an early-access product, or the pricing is hidden until a usage threshold is hit. For a founder evaluating whether to commit, the absence of pricing information creates uncertainty.
+
+**Competitive Comparison:**
+
+Compared to **Baremetrics** ($108-$608/mo): FounderConsole goes beyond pure revenue analytics by adding simulation, strategic briefings, and decision support. Baremetrics excels at Stripe-specific revenue metrics but doesn't help you model "what if" scenarios.
+
+Compared to **ChartMogul** ($100-$15K/yr): Similar to Baremetrics — strong on subscription analytics, weak on forward-looking decision support. FounderConsole's Monte Carlo simulation is a genuine differentiator.
+
+Compared to **Causal** ($50-$800/mo): Causal is a more flexible financial modeling tool but requires significant manual setup. FounderConsole's AI-driven approach (natural language scenarios, auto-generated briefings) is far more accessible for non-finance founders.
+
+Compared to **Runway** ($plans vary): Runway is closer to FounderConsole in ambition (financial planning + forecasting) but is more spreadsheet-like. FounderConsole's AI Copilot, decision scoring, and Monte Carlo simulations are more opinionated and action-oriented.
+
+**Pricing Recommendation:**
+FounderConsole should price at $149-$299/month for seed/Series A companies, with a free "Explore" tier limited to 3 simulations/month and sample data. The AI briefing and simulation engine are the premium differentiators — those should be gated behind the paid tier. Given the value of a single good strategic decision ($50K-$500K impact at seed stage), the tool easily justifies $200/month if the simulation accuracy improves.
+
+---
+
+## C) Top 5 Product Priorities Before Paying
+
+**P0 — Fix the simulation search bar input bug.** This is the core product experience. If I can't type a custom scenario and get results, the "Simulate Any Scenario" promise is broken. The preset buttons work, but natural language input is the magic that differentiates this product. This is a ship-stopping bug.
+
+**P0 — Improve simulation output accuracy for high-burn scenarios.** The hiring scenario returned an 8/10 GO with +55 months runway despite a 96% burn increase. This undermines trust in every other simulation result. The model needs better calibration for scenarios that significantly increase expenses, and the recommendation engine should be more conservative when survival risk increases. A founder who follows an overly optimistic "GO" recommendation could run out of cash.
+
+**P1 — Add a real Decision Journal with prediction tracking.** Transform the Notes & Annotations section into a structured decision log that auto-captures simulation results, supports predictions with deadlines, and tracks accuracy over time. This is the retention hook — once a founder has 6 months of decisions tracked, they'll never leave.
+
+**P1 — Make the Data Confidence Score actionable.** Show exactly which metrics are driving the score down and provide specific "Connect Stripe to improve revenue confidence from 45% to 85%" recommendations. The current 62% is a number without a narrative.
+
+**P2 — Add compound/macro scenario presets.** Founders don't face single-variable changes. Add presets like "Market Downturn (CAC +20%, Churn +2%, Funding delay 6 months)" or "Aggressive Growth Mode (Hire 10, double marketing, raise prices 10%)." The individual presets are useful but real strategic planning requires modeling multiple simultaneous changes.
+
+---
+
+## D) Suggested Copy/UX Improvements
+
+**Onboarding Step 1 — "Amount Scale" dropdown:** Rename to "Display Numbers As" with options "Exact ($45,000)" / "Thousands ($45K)" / "Millions ($0.045M)" and add a tooltip: "Choose how numbers appear throughout the app."
+
+**Onboarding Step 2 — Pre-fill note:** Change from "Pre-filled with typical values for seed companies. Adjust to match your actuals." to "We've pre-filled with median seed-stage values from 2,400+ companies. Edit any field to match your actuals — the closer these are, the better your simulations."
+
+**Dashboard — Daily Briefing:** The line "No critical alerts — looking good" should be more specific: "No critical alerts. Your runway (22.5 mo) is above the 18-month safety threshold, and cash burn is stable month-over-month."
+
+**Simulator — Search bar placeholder:** Change from "What happens if we hire 3 engineers and raise prices 15%?" to rotate through 3-4 different examples to show the range of possible queries, such as "What if churn doubles next quarter?" or "What happens if we lose our biggest customer?"
+
+**Simulator — Burn Cut label:** When burn increases, change "Burn Cut: -96%" to "Burn Increase: +96%" with a red indicator. The current label is confusing and suggests the opposite of what's happening.
+
+**Confidence Badge:** Change "Medium Confidence (62)" to "Data Confidence: 62% — Connect 2 more sources to reach High" with a clickable link to the integrations page.
+
+**Simulation Results — GO/NO-GO language:** The hiring scenario's "Make the hire" recommendation should include a risk caveat when burn increase exceeds 50%: "Make the hire — but with caution. This nearly doubles your burn rate. Consider phased hiring (2-3 per quarter) to validate growth assumptions before full commitment."
+
+---
+
+## Summary
+
+FounderConsole.ai is a genuinely differentiated product in the founder tooling space. The combination of Monte Carlo simulation, AI-generated strategic briefings, and data confidence scoring creates a value proposition that no competitor currently matches. The onboarding is fast (~5 minutes), the dashboard is information-rich without being overwhelming, and the integration catalog is ambitious.
+
+However, two critical issues prevent me from paying today: the simulation search bar input bug makes custom scenarios impossible, and the simulation model's optimistic bias for high-burn scenarios could lead founders to make dangerously aggressive decisions. Fix those two issues, and this becomes a $200/month must-have for any seed-stage founder preparing for their Series A.
+
+The strategic briefing feature alone — with its situation analysis, recommendations, inaction consequences, risk assessment with pivot dates, and alternative paths considered — is worth the subscription price. It's the kind of document a $300/hour strategy consultant would produce, generated in 20 seconds.
+
+**Would I pay today?** Not yet. **Would I pay after the P0 fixes?** Yes, without hesitation.
