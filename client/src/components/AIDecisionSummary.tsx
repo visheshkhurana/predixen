@@ -72,20 +72,6 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     let verdictBg = 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200/50 dark:border-amber-800/30';
     let verdictIcon = <AlertTriangle className="h-5 w-5 text-amber-500" />;
 
-    if (survival18m >= 75 && runwayP50 >= 14) {
-      verdict = 'go';
-      verdictLabel = 'GO';
-      verdictColor = 'text-emerald-600 dark:text-emerald-400';
-      verdictBg = 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30';
-      verdictIcon = <CheckCircle className="h-5 w-5 text-emerald-500" />;
-    } else if (survival18m < 40 || runwayP50 < 8) {
-      verdict = 'no-go';
-      verdictLabel = 'NO-GO';
-      verdictColor = 'text-red-600 dark:text-red-400';
-      verdictBg = 'bg-red-50/80 dark:bg-red-950/30 border-red-200/50 dark:border-red-800/30';
-      verdictIcon = <Shield className="h-5 w-5 text-red-500" />;
-    }
-
     const action = inferAction(scenarioName);
     const cm = bestCounterMove(counterMoves ?? simulation.counter_moves, runwayP50);
 
@@ -98,8 +84,6 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       bSurvDelta = survival18m - bSurv;
     }
 
-    let headline = '';
-
     const rwy = fmtRunway(runwayP50);
 
     const burnIncreaseWarning = baselineSimulation
@@ -109,6 +93,30 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
           return burnIncreasePct > 50 ? burnIncreasePct : 0;
         })()
       : 0;
+
+    if (survival18m >= 75 && runwayP50 >= 14) {
+      if (burnIncreaseWarning >= 75) {
+        verdict = 'conditional';
+        verdictLabel = 'CONDITIONAL GO';
+      } else if (burnIncreaseWarning >= 50) {
+        verdict = 'conditional';
+        verdictLabel = 'CONDITIONAL GO';
+      } else {
+        verdict = 'go';
+        verdictLabel = 'GO';
+        verdictColor = 'text-emerald-600 dark:text-emerald-400';
+        verdictBg = 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30';
+        verdictIcon = <CheckCircle className="h-5 w-5 text-emerald-500" />;
+      }
+    } else if (survival18m < 40 || runwayP50 < 8) {
+      verdict = 'no-go';
+      verdictLabel = 'NO-GO';
+      verdictColor = 'text-red-600 dark:text-red-400';
+      verdictBg = 'bg-red-50/80 dark:bg-red-950/30 border-red-200/50 dark:border-red-800/30';
+      verdictIcon = <Shield className="h-5 w-5 text-red-500" />;
+    }
+
+    let headline = '';
 
     if (verdict === 'go') {
       if (bRunwayDelta > 2 && breakeven && breakeven <= 18) {
@@ -150,7 +158,11 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     const burnCoverage = monthlyBurn > 0 && endCash > 0 ? endCash / monthlyBurn : null;
 
     let keyRisk = '';
-    if (survival18m < 50) {
+    if (burnIncreaseWarning >= 75) {
+      keyRisk = `Burn nearly doubles (+${burnIncreaseWarning}%). If growth assumptions don't materialize within 2-3 months, you'll be in a cash crisis with no room to course-correct.`;
+    } else if (burnIncreaseWarning >= 50) {
+      keyRisk = `Burn increases ${burnIncreaseWarning}% \u2014 this bets the company on growth materializing fast. Phase the commitment to preserve optionality.`;
+    } else if (survival18m < 50) {
       keyRisk = `${survival18m.toFixed(0)}% survival probability at 18 months puts you in the danger zone \u2014 one bad quarter could be fatal.`;
     } else if (runwayP50 < 12) {
       keyRisk = `${runwayP50.toFixed(0)} months of runway is below the 12-month minimum \u2014 you'll be fundraising from a position of weakness.`;
@@ -201,8 +213,9 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     else score += 0.5;
     if (bRunwayDelta > 0) score += Math.min(bRunwayDelta / 10, 1) * 0.5;
     if (bSurvDelta > 0) score += Math.min(bSurvDelta / 30, 1) * 0.5;
-    if (burnIncreaseWarning > 50) score -= 1.5;
-    else if (burnIncreaseWarning > 0) score -= 0.75;
+    if (burnIncreaseWarning >= 75) score -= 3.5;
+    else if (burnIncreaseWarning >= 50) score -= 2.5;
+    else if (burnIncreaseWarning > 0) score -= 1.0;
     const decisionScore = Math.max(1, Math.min(10, Math.round(score)));
 
     let baselineDelta = '';

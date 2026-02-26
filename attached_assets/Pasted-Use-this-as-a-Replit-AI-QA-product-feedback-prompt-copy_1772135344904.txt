@@ -1,0 +1,49 @@
+Use this as a Replit AI “QA + product feedback” prompt (copy/paste, single block):
+
+---
+
+You are a paying SaaS founder testing FounderConsole ([https://founderconsole.ai](https://founderconsole.ai)) end-to-end. Act like an enterprise buyer with high standards. Your job: validate inputs → simulate scenarios → surface bugs, UX friction, and decision quality.
+
+Context / baseline currently visible:
+
+* Company: NimbusCRM (Business Health 75/100, Data Confidence 62%)
+* Data Input → Financials shows:
+
+  * Cash on hand: **$1,000,000**
+  * Monthly revenue: **$25,000**
+  * Total monthly expenses: **$61,250** (Payroll $35K / Operating $15K / COGS $6.25K / Other $5K / Marketing $0)
+  * Net burn: **$36.3K/mo** and runway **27.6 months**
+* Simulate → “Raise prices 20%” scenario currently shows:
+
+  * 1,000 Monte Carlo runs, **100% survival**
+  * P50 runway **24.0 months** vs baseline **23.0 months**
+  * Key risk text: P10 downside gives **only 24 months** (note: this risk statement seems inconsistent with the 24-month P50 shown)
+  * “Watch” metric says months to breakeven at **month 25**
+  * There’s a sentence: “Pair with 0 for another +2 months.” This looks like a placeholder bug (missing scenario name), but confirm whether any scenario chip matches this.
+
+Step-by-step test plan:
+
+1. Go to Data Input → Financials and attempt to “Save All Data.”
+
+   * If it fails, capture the exact toast/error message and hypothesize missing required fields (company tab not filled, growth rate decimals vs integers, etc.)
+   * Try switching Simple/Advanced modes if applicable and retry saving.
+2. Verify that any changes actually propagate to Simulate metrics (e.g., growth rate). Right now Simulate shows growth rate **0.0%** even though a “Use 5%” suggestion exists.
+3. Run at least 3 scenario chips:
+
+   * Raise prices 20% (baseline)
+   * Cut marketing 30%
+   * Churn hits 5%
+     For each: record P50 runway, P10 runway (if shown), survival rate, and the “Your Answer” recommendation. Check for contradictory or missing text.
+4. Validate math check consistency: Cash $1M / Burn $36.3K = 27.6 months should match all views.
+5. Evaluate decision quality:
+
+   * LTV:CAC is 2.8x (below typical “good” benchmark of 3x+), churn is high-ish (3.2%), NRR is slightly low (108%). Ensure the product flags these as risks and suggests clear remediation (retention, upsell, channel CAC reduction).
+   * Confirm “raise the round” recommendation is contextually sound (cash runway is long; raising may not be priority unless growth investments are planned).
+
+Deliverable (your output):
+
+* A crisp bug list (save failure, placeholder text, inconsistent risk messaging, any mismatch between Financials inputs vs Simulate displays).
+* UX friction list with severity (P0 trust breakers: any save errors; P1 confusing text; P2 polish).
+* A founder-friendly summary: “With $1M cash and $36.3K burn you’re at 27.6 runway; price increase adds ~1 month in simulation; model still says breakeven month 25; biggest operational priority is improving LTV:CAC via churn reduction + expansion, not just raising prices.”
+
+---

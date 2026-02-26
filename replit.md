@@ -72,8 +72,8 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **Monte Carlo burn handling**: `burn_reduction_pct` now properly handles negative values (burn increases). `clamped_burn_change = max(-100, min(100, value))`. A -50% burn reduction means costs increase by 50%.
 -   **Monte Carlo CAC impact**: CAC changes now affect net_cashflow. Incremental CAC cost = (new_customers × adjusted_cac) - (new_customers × baseline_cac). Higher CAC properly reduces runway.
 -   **VC funding decline NLP**: "VC funding declines 30%" now properly models: CAC +18% (60% of decline), growth -12% (40% of decline), burn increase +4.5% (15% of decline). Previously only affected CAC and growth without burn impact.
--   **Decision engine calibration**: Escalating risk penalties for burn increases: >30% gets -0.10, >50% adds -0.15, >75% adds -0.10 more. Risk text warns about burn increases.
--   **AI Decision Summary**: Burn-increase caveats added when actual burn increases >50% vs baseline. Score penalty: -0.75 for >50%, -1.5 for extreme. Uses actual burn data, not name heuristics.
+-   **Decision engine calibration**: Escalating risk penalties for burn increases: >30% gets -0.12, >50% adds -0.20, >75% adds -0.15 more (cumulative -0.47). Risk text warns about burn increases.
+-   **AI Decision Summary**: Burn-increase verdict override: GO downgrades to CONDITIONAL GO when burn increase ≥50%. Score penalty: -1.0 for >0%, -2.5 for ≥50%, -3.5 for ≥75%. Key Risk prioritizes burn warnings. Uses actual burn data, not name heuristics.
 -   **Briefing progress indicator**: `LOADING_STEPS` in `decisions.tsx` total 35s (5+8+10+12). Fourth step: "Generating strategic briefing".
 -   **Onboarding Step 3 pre-fill**: Payroll and OpEx pre-filled from Step 2 baselineData when transitioning.
 -   **PageErrorFallback**: Uses `import.meta.env.DEV` for Vite compatibility.
