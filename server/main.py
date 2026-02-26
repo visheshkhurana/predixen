@@ -27,14 +27,28 @@ print(f"[main.py] Core imports done (+{time.time()-_t0:.1f}s)", file=sys.stderr,
 _startup_state = {"ready": False, "error": None, "routers_loaded": False}
 
 
-def _register_all_routers(app: FastAPI):
+def _register_critical_routers(app: FastAPI):
     t0 = time.time()
-    logger.info("Loading API modules...")
+    logger.info("Loading critical API modules (auth, companies, health)...")
 
-    from server.api import auth, companies, datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration, scenarios
+    from server.api import auth, companies, admin as admin_api
+    from server.api import qa as qa_api
+
+    app.include_router(auth.router)
+    app.include_router(companies.router)
+    app.include_router(admin_api.router)
+    app.include_router(qa_api.router)
+
+    logger.info(f"Critical routes registered in {time.time() - t0:.1f}s")
+
+
+def _register_remaining_routers(app: FastAPI):
+    t0 = time.time()
+    logger.info("Loading remaining API modules in background...")
+
+    from server.api import datasets, truth_scan, simulations, decisions, copilot, investor, ingest, calibration, scenarios
     from server.api import forecasting as forecasting_api, alerts as alerts_api, integrations as integrations_api, templates as templates_api
     from server.api import imports as imports_api
-    from server.api import admin as admin_api
     from server.api import workspace as workspace_api, comments as comments_api
     from server.api import simulation_jobs as simulation_jobs_api
     from server.api import email_templates as email_templates_api
@@ -65,14 +79,11 @@ def _register_all_routers(app: FastAPI):
     from server.api import digest as digest_api
     from server.api import csv_import as csv_import_api
     from server.api import currency as currency_api
-    from server.api import qa as qa_api
     from server.api import leads as leads_api
     from server.api import events as events_api
 
-    logger.info(f"API modules imported in {time.time() - t0:.1f}s")
+    logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
-    app.include_router(auth.router)
-    app.include_router(companies.router)
     app.include_router(datasets.router)
     app.include_router(truth_scan.router)
     app.include_router(simulations.router)
@@ -86,7 +97,6 @@ def _register_all_routers(app: FastAPI):
     app.include_router(integrations_api.router)
     app.include_router(templates_api.router)
     app.include_router(imports_api.router)
-    app.include_router(admin_api.router)
     app.include_router(workspace_api.router)
     app.include_router(comments_api.router)
     app.include_router(simulation_jobs_api.router)
@@ -119,7 +129,6 @@ def _register_all_routers(app: FastAPI):
     app.include_router(digest_api.router)
     app.include_router(csv_import_api.router)
     app.include_router(currency_api.router)
-    app.include_router(qa_api.router)
     app.include_router(leads_api.router)
     app.include_router(events_api.router)
 
@@ -190,6 +199,7 @@ async def _run_deferred_startup():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
+    import threading
     logger.info(f"Starting FounderConsole v1.0.0")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     if settings.cors_origins_list:
@@ -198,9 +208,20 @@ async def lifespan(app: FastAPI):
         logger.warning("CORS origins list is empty! No cross-origin requests will be allowed.")
     logger.info(f"Config flags - CREATE_SCHEMA: {settings.should_create_schema}, RUN_MIGRATIONS: {settings.should_run_migrations}, SEED_BENCHMARKS: {settings.should_seed_benchmarks}, SEED_DEMO_DATA: {settings.should_seed_demo_data}")
 
-    _register_all_routers(app)
+    _register_critical_routers(app)
 
-    logger.info("Startup complete - FastAPI server ready (deferred tasks scheduled)")
+    def _load_remaining():
+        try:
+            _register_remaining_routers(app)
+            logger.info("Background module loading complete — all routes available")
+        except Exception as e:
+            logger.error(f"Error loading remaining routers: {e}")
+            _startup_state["error"] = str(e)
+
+    bg_thread = threading.Thread(target=_load_remaining, daemon=True, name="router-loader")
+    bg_thread.start()
+
+    logger.info("Startup complete - auth routes ready, remaining modules loading in background")
     asyncio.create_task(_run_deferred_startup())
     yield
     logger.info("Shutting down FastAPI server...")

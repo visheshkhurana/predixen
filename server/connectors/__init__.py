@@ -3,48 +3,44 @@ Payroll and ERP Connector Framework
 
 This module provides a unified interface for connecting to various payroll 
 and ERP providers to sync financial data into the FounderConsole platform.
+
+Connectors are lazy-loaded on first access to speed up server startup.
 """
 
 from .base import BaseConnector, ConnectorConfig, SyncResult
 from .registry import ConnectorRegistry
 
-from . import stripe
-from . import quickbooks
-from . import razorpayx
-from . import tally
-from . import zoho_books
-from . import keka
-from . import greythr
-from . import google_sheets
-from . import rest_api
-from . import plaid
-from . import hubspot
-from . import gusto
-from . import xero
-from . import salesforce
-from . import google_analytics
-from . import pipedrive
-from . import close_crm
-from . import mixpanel
-from . import mercury
-from . import brex
-from . import ramp
-from . import shopify
-from . import mysql_connector
-from . import freshbooks
-from . import wave
-from . import bench
-from . import chargebee
-from . import recurly
-from . import rippling
-from . import deel
-from . import netsuite
-from . import profitwell
-from . import amplitude
+_CONNECTOR_MODULES = [
+    "stripe", "quickbooks", "razorpayx", "tally", "zoho_books",
+    "keka", "greythr", "google_sheets", "rest_api", "plaid",
+    "hubspot", "gusto", "xero", "salesforce", "google_analytics",
+    "pipedrive", "close_crm", "mixpanel", "mercury", "brex",
+    "ramp", "shopify", "mysql_connector", "freshbooks", "wave",
+    "bench", "chargebee", "recurly", "rippling", "deel",
+    "netsuite", "profitwell", "amplitude",
+]
+
+_connectors_loaded = False
+
+def load_all_connectors():
+    global _connectors_loaded
+    if _connectors_loaded:
+        return
+    import importlib
+    import logging
+    logger = logging.getLogger(__name__)
+    for name in _CONNECTOR_MODULES:
+        try:
+            importlib.import_module(f".{name}", package=__name__)
+            logger.info(f"Registered connector: {name}")
+        except Exception as e:
+            logger.warning(f"Failed to load connector {name}: {e}")
+    _connectors_loaded = True
 
 __all__ = [
     "BaseConnector",
     "ConnectorConfig", 
     "SyncResult",
     "ConnectorRegistry",
+    "load_all_connectors",
 ]

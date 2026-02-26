@@ -27,10 +27,10 @@ from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
 
-from server.connectors import ConnectorRegistry, ConnectorConfig
+from server.connectors import ConnectorRegistry, ConnectorConfig, load_all_connectors
 from server.connectors.base import ProviderCategory
 
-import server.connectors
+load_all_connectors()
 
 logger = logging.getLogger(__name__)
 

@@ -557,7 +557,7 @@ const apiProxy = createProxyMiddleware({
         res.writeHead(502, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
           error: "Backend service unavailable",
-          detail: "The simulation engine is temporarily unavailable. Please try again in a few minutes.",
+          detail: "Our servers are warming up — this usually takes 2-3 minutes after a deployment. Please refresh and try again shortly.",
           status: 502,
           fastapi_status: fastapiStatus,
         }));
