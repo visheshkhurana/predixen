@@ -692,6 +692,7 @@ export default function MetricCatalog() {
   const { data: metrics, isLoading, refetch } = useQuery<MetricDefinition[]>({
     queryKey: [`/api/metrics?company_id=${companyId}`],
     enabled: !!companyId,
+    select: (data: any) => Array.isArray(data) ? data : (data?.items ?? []),
   });
   
   const autoInitCompanyRef = useRef<number | null>(null);
