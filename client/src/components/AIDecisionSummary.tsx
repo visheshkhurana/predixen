@@ -90,15 +90,12 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
       ? (() => {
           const baseBurn = baselineSimulation.summary?.monthly_burn ?? baselineSimulation.summary?.monthly_burn_p50 ?? 0;
           const burnIncreasePct = baseBurn > 0 ? Math.round(((monthlyBurn - baseBurn) / baseBurn) * 100) : 0;
-          return burnIncreasePct > 50 ? burnIncreasePct : 0;
+          return burnIncreasePct >= 40 ? burnIncreasePct : 0;
         })()
       : 0;
 
     if (survival18m >= 75 && runwayP50 >= 14) {
-      if (burnIncreaseWarning >= 75) {
-        verdict = 'conditional';
-        verdictLabel = 'CONDITIONAL GO';
-      } else if (burnIncreaseWarning >= 50) {
+      if (burnIncreaseWarning >= 40) {
         verdict = 'conditional';
         verdictLabel = 'CONDITIONAL GO';
       } else {

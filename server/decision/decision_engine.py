@@ -92,12 +92,19 @@ def score_action(
     burn_change = scenario_deltas.get("burn_reduction_pct", 0)
     if burn_change > 25:
         risk_penalty += 0.05
-    if burn_change < -30:
-        risk_penalty += 0.12
-    if burn_change < -50:
-        risk_penalty += 0.20
-    if burn_change < -75:
+    if burn_change < -20:
+        risk_penalty += 0.10
+    if burn_change < -40:
+        risk_penalty += 0.25
+    if burn_change < -60:
+        risk_penalty += 0.25
+    if burn_change < -80:
         risk_penalty += 0.15
+    
+    if runway_p50 < 12:
+        risk_penalty += 0.12
+    if runway_p50 < 9:
+        risk_penalty += 0.10
     
     pricing_change = scenario_deltas.get("pricing_change_pct", 0)
     if pricing_change >= 8:

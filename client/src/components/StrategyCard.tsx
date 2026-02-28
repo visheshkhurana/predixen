@@ -147,13 +147,15 @@ export function StrategyCard({
           </div>
         </div>
         
-        {strategy.burnChange > 50 && (
+        {strategy.burnChange >= 40 && (
           <div className="flex items-start gap-2 p-2 rounded-md bg-red-500/10 border border-red-500/20" data-testid={`warning-high-burn-${strategy.id}`}>
             <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-red-400">
-              {strategy.burnChange > 75
-                ? `This increases burn by ${strategy.burnChange}%. Consider phased execution or cost offsets before committing.`
-                : `This increases burn by ${strategy.burnChange}%. Consider phased hiring to validate growth assumptions first.`}
+              {strategy.burnChange >= 75
+                ? `Burn increases ${strategy.burnChange}% — nearly doubles your costs. Phase execution over 2+ quarters and validate ROI at each stage.`
+                : strategy.burnChange >= 50
+                  ? `Burn increases ${strategy.burnChange}%. Consider phased hiring (2-3 per quarter) to validate growth assumptions before full commitment.`
+                  : `Burn increases ${strategy.burnChange}%. Monitor closely — set monthly cost checkpoints and be ready to pause if growth doesn't materialize.`}
             </p>
           </div>
         )}

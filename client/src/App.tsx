@@ -258,6 +258,12 @@ function Router() {
       <Route path="/simulate">
         {() => <Redirect to="/scenarios" />}
       </Route>
+      <Route path="/help">
+        {() => <Redirect to="/docs" />}
+      </Route>
+      <Route path="/data-input">
+        {() => <Redirect to="/data" />}
+      </Route>
       <Route path="/scenarios">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
       </Route>

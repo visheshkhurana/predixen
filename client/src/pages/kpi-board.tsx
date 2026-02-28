@@ -165,17 +165,24 @@ export default function KPIBoardPage() {
       return fallback;
     };
 
+    const normalizeChurn = (val: number): number => {
+      if (val > 1) return val / 100;
+      return val;
+    };
+
     const runwayFallback = sharedMetrics.runway === Infinity ? 60 : sharedMetrics.runway;
+
+    const rawChurn = pick(latestSnapshot?.churn_rate, latestHistory?.churn_rate, sharedMetrics.churnRate);
 
     return {
       monthly_revenue: pick(latestSnapshot?.monthly_revenue, latestHistory?.monthly_revenue, sharedMetrics.mrr),
       mrr: pick(latestSnapshot?.mrr, latestHistory?.mrr, sharedMetrics.mrr),
       arr: pick(latestSnapshot?.arr, latestHistory?.arr, sharedMetrics.arr),
       cash_balance: pick(latestSnapshot?.cash_balance, latestHistory?.cash_balance, sharedMetrics.cashOnHand),
-      net_burn: latestSnapshot?.net_burn ?? latestHistory?.net_burn ?? sharedMetrics.netBurn,
-      runway_months: Math.max(0, Math.min(pick(latestSnapshot?.runway_months, latestHistory?.runway_months, runwayFallback), 120)),
+      net_burn: sharedMetrics.netBurn || latestSnapshot?.net_burn || latestHistory?.net_burn || 0,
+      runway_months: Math.max(0, Math.min(sharedMetrics.runway === Infinity ? 60 : (sharedMetrics.runway || pick(latestSnapshot?.runway_months, latestHistory?.runway_months, runwayFallback)), 60)),
       gross_margin: pick(latestSnapshot?.gross_margin, latestHistory?.gross_margin, sharedMetrics.grossMargin),
-      churn_rate: pick(latestSnapshot?.churn_rate, latestHistory?.churn_rate, sharedMetrics.churnRate),
+      churn_rate: normalizeChurn(rawChurn),
       cac: pick(latestSnapshot?.cac, latestHistory?.cac, sharedMetrics.cac),
       ltv: pick(latestSnapshot?.ltv, latestHistory?.ltv, sharedMetrics.ltv),
       ltv_cac_ratio: pick(latestSnapshot?.ltv_cac_ratio, latestHistory?.ltv_cac_ratio, sharedMetrics.ltvCacRatio),

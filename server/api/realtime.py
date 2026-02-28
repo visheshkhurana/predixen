@@ -97,6 +97,9 @@ def get_company_kpi_metrics(company_id: int, db: Session) -> dict:
             elif isinstance(val, dict) and "value" in val:
                 metrics[key] = val["value"]
         
+        if metrics.get("churn_rate", 0) > 1:
+            metrics["churn_rate"] = metrics["churn_rate"] / 100
+        
         # Apply sensibility bounds to derived metrics
         # CAC: minimum $100 (SaaS floor), max $50k
         if metrics.get("cac", 0) > 0:
@@ -269,6 +272,8 @@ def get_kpi_history(
         if isinstance(churn_val, dict):
             churn_val = churn_val.get("value", 0)
         churn_rate = churn_val if isinstance(churn_val, (int, float)) else 0.02
+        if churn_rate > 1:
+            churn_rate = churn_rate / 100
 
         cac_val = ts_metrics.get("cac")
         if isinstance(cac_val, dict):
