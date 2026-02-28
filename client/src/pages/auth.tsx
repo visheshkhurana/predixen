@@ -645,7 +645,7 @@ export default function AuthPage() {
           </div>
 
           <p className="text-center text-[11px] text-muted-foreground/60 mt-6">
-            SOC 2 Type II compliant &middot; 256-bit encryption &middot; GDPR ready
+            TLS encryption &middot; Secure cloud infrastructure &middot; Role-based access control
           </p>
         </div>
       </div>
