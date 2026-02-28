@@ -916,6 +916,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_team_members_table(engine)
     ensure_currency_tables(engine)
     ensure_company_amount_scale(engine)
+    ensure_user_oauth_columns(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -972,3 +973,35 @@ def ensure_currency_tables(engine: Engine) -> None:
         except Exception as e:
             logger.debug(f"Currency tables migration may already exist: {e}")
     logger.info("Currency tables migration complete")
+
+
+def ensure_user_oauth_columns(engine: Engine) -> None:
+    """Add OAuth columns to users table for social login support."""
+    columns = [
+        ('oauth_provider', 'VARCHAR(20)'),
+        ('oauth_id', 'VARCHAR(255)'),
+        ('avatar_url', 'VARCHAR(500)'),
+        ('display_name', 'VARCHAR(255)'),
+    ]
+    with engine.connect() as conn:
+        for col_name, col_type in columns:
+            try:
+                conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+                ))
+            except Exception as e:
+                logger.debug(f"Column users.{col_name} may already exist: {e}")
+        try:
+            conn.execute(text(
+                "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"
+            ))
+        except Exception as e:
+            logger.debug(f"password_hash nullable change may already be applied: {e}")
+        try:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_users_oauth_id ON users(oauth_id)"
+            ))
+        except Exception as e:
+            logger.debug(f"OAuth index may already exist: {e}")
+        conn.commit()
+    logger.info("User OAuth columns migration complete")

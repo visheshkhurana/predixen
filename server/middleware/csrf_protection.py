@@ -45,6 +45,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             "/auth/register",
             "/auth/login",
             "/auth/admin/login",
+            "/auth/google/*",
+            "/auth/github/*",
         ]
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:

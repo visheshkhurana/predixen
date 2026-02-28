@@ -53,6 +53,27 @@ export default function AuthPage() {
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get('error');
+    if (oauthError) {
+      const messages: Record<string, string> = {
+        google_denied: 'Google sign-in was cancelled.',
+        github_denied: 'GitHub sign-in was cancelled.',
+        google_token_failed: 'Could not complete Google sign-in. Please try again.',
+        github_token_failed: 'Could not complete GitHub sign-in. Please try again.',
+        google_no_email: 'No email found on your Google account.',
+        github_no_email: 'No email found on your GitHub account.',
+      };
+      toast({
+        title: 'Sign-in issue',
+        description: messages[oauthError] || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      });
+      window.history.replaceState({}, '', '/auth');
+    }
+  }, []);
+
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -197,97 +218,9 @@ export default function AuthPage() {
     }
   };
 
-  const SOCIAL_AUTH_ENDPOINTS: Record<'google' | 'github', string[]> = {
-    google: ['/auth/google/start', '/auth/google/login', '/auth/google'],
-    github: ['/auth/github/start', '/auth/github/login', '/auth/github'],
-  };
-
-  const tryStartOAuth = async (provider: 'google' | 'github'): Promise<boolean> => {
-    const endpoints = SOCIAL_AUTH_ENDPOINTS[provider];
-    let lastError: Error | null = null;
-    let hadNetworkError = false;
-
-    for (const endpoint of endpoints) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        const response = await fetch(`/api${endpoint}`, {
-          method: 'GET',
-          credentials: 'include',
-          redirect: 'manual',
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (response.status >= 300 && response.status < 400) {
-          const redirectTo = response.headers.get('location');
-          if (redirectTo) {
-            window.location.assign(redirectTo);
-          } else {
-            window.location.assign(`/api${endpoint}`);
-          }
-          return true;
-        }
-
-        if (!response.ok) {
-          continue;
-        }
-
-        if (response.redirected && response.url) {
-          window.location.assign(response.url);
-          return true;
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const payload = await response.json().catch(() => null);
-          const redirectTo = payload?.authorization_url || payload?.auth_url || payload?.url || payload?.redirect_url;
-          if (typeof redirectTo === 'string' && redirectTo.length > 0) {
-            window.location.assign(redirectTo);
-            return true;
-          }
-        }
-
-        window.location.assign(`/api${endpoint}`);
-        return true;
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          lastError = new Error('Request timed out. The server may be unavailable.');
-          hadNetworkError = true;
-        } else if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
-          hadNetworkError = true;
-          lastError = new Error('Unable to reach the server. Please check your connection.');
-        } else if (err instanceof Error) {
-          lastError = err;
-        }
-      }
-    }
-
-    if (hadNetworkError && lastError) {
-      throw lastError;
-    }
-    return false;
-  };
-
-  const handleSocialLogin = async (provider: 'google' | 'github') => {
-    const providerLabel = provider === 'google' ? 'Google' : 'GitHub';
+  const handleSocialLogin = (provider: 'google' | 'github') => {
     setSocialLoadingProvider(provider);
-    try {
-      const started = await tryStartOAuth(provider);
-      if (!started) {
-        throw new Error(`${providerLabel} OAuth is not configured on this deployment.`);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : `${providerLabel} login failed`;
-      toast({
-        title: `${providerLabel} sign-in unavailable`,
-        description: `${message} Use email/password or demo mode for now.`,
-        variant: 'destructive',
-      });
-    } finally {
-      setSocialLoadingProvider(null);
-    }
+    window.location.assign(`/api/auth/${provider}/start`);
   };
 
   const capabilities = [

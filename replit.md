@@ -54,6 +54,8 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **Google Fonts**: Inter, IBM Plex Mono.
 -   **Resend**: Email delivery service (verified sender: noreply@founderconsole.ai).
 -   **Twilio**: SMS/phone notifications (credentials configured).
+-   **Google OAuth**: Social login via Google. Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Callback: `/api/auth/google/callback`.
+-   **GitHub OAuth**: Social login via GitHub. Requires `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`. Callback: `/api/auth/github/callback`.
 
 ## Error Handling Architecture
 -   **`getErrorMessage()`**: Central utility in `client/src/lib/errors.ts` that safely extracts string messages from any error type, preventing React Error #185.

@@ -35,8 +35,10 @@ def _register_critical_routers(app: FastAPI):
     from server.api import qa as qa_api
     from server.api import billing as billing_api
     from server.api import onboarding as onboarding_api
+    from server.api import oauth as oauth_api
 
     app.include_router(auth.router)
+    app.include_router(oauth_api.router)
     app.include_router(companies.router)
     app.include_router(admin_api.router)
     app.include_router(qa_api.router)
