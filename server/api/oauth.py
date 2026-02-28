@@ -1,3 +1,4 @@
+import os
 import secrets
 import logging
 import requests
@@ -28,8 +29,26 @@ _oauth_states: dict = {}
 
 
 def _get_base_url(request: Request) -> str:
-    proto = request.headers.get("x-forwarded-proto", "https")
+    replit_domain = os.environ.get("REPLIT_DEV_DOMAIN")
+    if replit_domain:
+        return f"https://{replit_domain}"
+
+    repl_slug = os.environ.get("REPL_SLUG")
+    repl_owner = os.environ.get("REPL_OWNER")
+    if repl_slug and repl_owner:
+        return f"https://{repl_slug}.{repl_owner}.repl.co"
+
+    replit_deployment = os.environ.get("REPLIT_DEPLOYMENT")
+    if replit_deployment:
+        repl_id = os.environ.get("REPL_ID", "")
+        return f"https://{repl_id}.replit.app"
+
     host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:5000")
+    if ":" in host:
+        port = host.split(":")[-1]
+        if port in ("8001", "8000"):
+            host = host.replace(f":{port}", ":5000")
+    proto = request.headers.get("x-forwarded-proto", "https")
     return f"{proto}://{host}"
 
 
