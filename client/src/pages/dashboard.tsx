@@ -268,8 +268,48 @@ export default function Dashboard() {
     }
   };
 
+  const { user } = useFounderStore();
+  const [verificationSending, setVerificationSending] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const showVerificationBanner = user && user.is_email_verified === false;
+
+  const handleResendVerification = async () => {
+    setVerificationSending(true);
+    try {
+      const token = localStorage.getItem('founderconsole-token');
+      await fetch('/api/auth/send-verification', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setVerificationSent(true);
+    } catch { /* silent */ } finally {
+      setVerificationSending(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {showVerificationBanner && (
+        <Alert className="border-amber-500/50 bg-amber-500/5">
+          <Mail className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-500">Verify your email address</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+            <span className="text-sm text-muted-foreground">
+              Please verify your email to unlock all features. Check your inbox for a verification link.
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={verificationSending || verificationSent}
+              onClick={handleResendVerification}
+              data-testid="button-resend-verification"
+            >
+              {verificationSending ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <Send className="h-3 w-3 mr-1.5" />}
+              {verificationSent ? 'Sent!' : 'Resend Verification'}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <CrossPageIntelligence context="dashboard" className="mb-2" testId="dashboard-intelligence" />
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

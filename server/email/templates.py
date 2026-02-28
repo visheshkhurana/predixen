@@ -570,6 +570,38 @@ def render_password_reset_template(
     return get_email_wrapper(content)
 
 
+def render_email_verification_template(
+    verify_url: str
+) -> str:
+    content = f"""
+    {get_header_html("EMAIL VERIFICATION")}
+    <tr>
+        <td class="body-content" style="padding: 40px;">
+            <h2 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: {COLORS['navy']}; letter-spacing: -0.3px; font-family: {FONT_STACK};">Verify Your Email</h2>
+            <p style="font-size: 15px; color: {COLORS['gray_600']}; margin: 0 0 16px 0; line-height: 1.7; font-family: {FONT_STACK};">Thanks for signing up for FounderConsole. Please click the button below to verify your email address and activate your account.</p>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 32px 0;">
+                <tr>
+                    <td align="center">
+                        {get_cta_button(verify_url, "Verify Email")}
+                    </td>
+                </tr>
+            </table>
+            
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: {COLORS['gray_50']}; border-radius: 8px; margin: 24px 0;">
+                <tr>
+                    <td style="padding: 16px 20px;">
+                        <p style="margin: 0; color: {COLORS['gray_600']}; font-size: 14px; font-family: {FONT_STACK};">This link expires in 24 hours. If you didn't create an account, please ignore this email.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    {get_footer_html()}
+    """
+    return get_email_wrapper(content)
+
+
 def render_copilot_pitch_template(
     recipient_name: Optional[str] = None,
     cta_url: str = "https://founderconsole.ai"

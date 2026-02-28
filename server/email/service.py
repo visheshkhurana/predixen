@@ -329,6 +329,25 @@ async def send_password_reset_email(
     return await send_email(to_email, subject, html_content)
 
 
+async def send_email_verification(
+    to_email: str,
+    verification_token: str,
+    template_html: Optional[str] = None
+) -> dict:
+    from server.email.templates import render_email_verification_template
+    
+    base_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
+    verify_url = f"{base_url}/verify-email?token={verification_token}"
+    
+    html_content = template_html or render_email_verification_template(
+        verify_url=verify_url
+    )
+    
+    subject = "Verify Your FounderConsole Email"
+    
+    return await send_email(to_email, subject, html_content)
+
+
 async def send_platform_update_email(
     to_email: str,
     updates: list,

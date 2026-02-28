@@ -263,6 +263,7 @@ app.add_middleware(
     rate_limit_admin_login=settings.RATE_LIMIT_ADMIN_LOGIN,
     rate_limit_api=settings.RATE_LIMIT_API,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
+    rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
 )
 
 app.add_middleware(

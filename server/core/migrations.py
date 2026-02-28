@@ -917,6 +917,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_currency_tables(engine)
     ensure_company_amount_scale(engine)
     ensure_user_oauth_columns(engine)
+    ensure_auth_tokens_tables(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1005,3 +1006,44 @@ def ensure_user_oauth_columns(engine: Engine) -> None:
             logger.debug(f"OAuth index may already exist: {e}")
         conn.commit()
     logger.info("User OAuth columns migration complete")
+
+
+def ensure_auth_tokens_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE"
+            ))
+        except Exception as e:
+            logger.debug(f"is_email_verified column may already exist: {e}")
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                token VARCHAR NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                token VARCHAR NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_verification_token ON email_verification_tokens(token)"))
+        except Exception as e:
+            logger.debug(f"Token indexes may already exist: {e}")
+
+        conn.commit()
+    logger.info("Auth tokens tables migration complete")

@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
-from datetime import timedelta
+from datetime import timedelta, datetime
 from server.core.db import get_db
-from server.core.security import get_password_hash, verify_password, create_access_token
+from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user
 from server.core.config import settings
-from server.models.user import User
+from server.models.user import User, PasswordResetToken, EmailVerificationToken
 from server.models.login_history import LoginHistory
 import re
 import bcrypt
+import uuid
+import asyncio
 import logging
 
 auth_logger = logging.getLogger(__name__)
@@ -101,9 +103,26 @@ class TokenResponse(BaseModel):
     email: str
     role: str = "viewer"
     is_platform_admin: bool = False
+    is_email_verified: bool = True
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one number")
+        return v
 
 @router.post("/register", response_model=TokenResponse)
-def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     # Normalize email to lowercase
     normalized_email = req.email.lower().strip()
     existing = db.query(User).filter(User.email == normalized_email).first()
@@ -117,13 +136,28 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     
     user = User(
         email=normalized_email,
-        password_hash=get_password_hash(req.password)
+        password_hash=get_password_hash(req.password),
+        is_email_verified=False
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
+    
+    try:
+        token = str(uuid.uuid4())
+        verification = EmailVerificationToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=24)
+        )
+        db.add(verification)
+        db.commit()
+        from server.email.service import send_email_verification
+        await send_email_verification(user.email, token)
+    except Exception as e:
+        auth_logger.warning(f"Failed to send verification email: {e}")
     
     access_token = create_access_token(
         data={"sub": str(user.id)},
@@ -138,7 +172,8 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
         user_id=user.id,
         email=user.email,
         role=user.role or "viewer",
-        is_platform_admin=is_platform_admin
+        is_platform_admin=is_platform_admin,
+        is_email_verified=False
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -184,7 +219,8 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         user_id=user.id,
         email=user.email,
         role=user.role or "viewer",
-        is_platform_admin=is_platform_admin
+        is_platform_admin=is_platform_admin,
+        is_email_verified=getattr(user, 'is_email_verified', True)
     )
 
 
@@ -264,3 +300,135 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
         role=user.role or "owner",
         is_platform_admin=True
     )
+
+
+@router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email.lower().strip()).first()
+    if not user:
+        return {"message": "If an account with that email exists, a reset link has been sent."}
+    
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used == False
+    ).update({"used": True})
+    db.commit()
+    
+    token = str(uuid.uuid4())
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(hours=1)
+    )
+    db.add(reset_token)
+    db.commit()
+    
+    try:
+        from server.email.service import send_password_reset_email
+        await send_password_reset_email(user.email, token)
+    except Exception as e:
+        auth_logger.warning(f"Failed to send password reset email: {e}")
+    
+    return {"message": "If an account with that email exists, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    token_record = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == req.token,
+        PasswordResetToken.used == False
+    ).first()
+    
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    if token_record.expires_at < datetime.utcnow():
+        token_record.used = True
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired. Please request a new one."
+        )
+    
+    user = db.query(User).filter(User.id == token_record.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+    
+    user.password_hash = get_password_hash(req.new_password)
+    token_record.used = True
+    db.commit()
+    
+    return {"message": "Password has been reset successfully. You can now log in with your new password."}
+
+
+@router.post("/send-verification")
+async def send_verification(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if getattr(current_user, 'is_email_verified', False):
+        return {"message": "Email is already verified."}
+    
+    db.query(EmailVerificationToken).filter(
+        EmailVerificationToken.user_id == current_user.id,
+        EmailVerificationToken.used == False
+    ).update({"used": True})
+    db.commit()
+    
+    token = str(uuid.uuid4())
+    verification = EmailVerificationToken(
+        user_id=current_user.id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    db.add(verification)
+    db.commit()
+    
+    try:
+        from server.email.service import send_email_verification
+        await send_email_verification(current_user.email, token)
+    except Exception as e:
+        auth_logger.warning(f"Failed to send verification email: {e}")
+    
+    return {"message": "Verification email sent. Check your inbox."}
+
+
+@router.get("/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    token_record = db.query(EmailVerificationToken).filter(
+        EmailVerificationToken.token == token,
+        EmailVerificationToken.used == False
+    ).first()
+    
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+    
+    if token_record.expires_at < datetime.utcnow():
+        token_record.used = True
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification token has expired. Please request a new one."
+        )
+    
+    user = db.query(User).filter(User.id == token_record.user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+    
+    user.is_email_verified = True
+    token_record.used = True
+    db.commit()
+    
+    return {"message": "Email verified successfully. You can now use all features."}

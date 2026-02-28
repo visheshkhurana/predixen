@@ -43,6 +43,8 @@ import { AskAIButton } from "@/components/AskAIButton";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import AuthPage from "@/pages/auth";
 import AuthCallback from "@/pages/auth-callback";
+import ResetPasswordPage from "@/pages/reset-password";
+import VerifyEmailPage from "@/pages/verify-email";
 import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
 import TruthScanPage from "@/pages/truth-scan";
@@ -225,6 +227,8 @@ function Router() {
         <Route path="/pricing" component={PricingPage} />
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>

@@ -48,6 +48,10 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
   
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', confirmPassword: '' });
@@ -85,6 +89,27 @@ export default function AuthPage() {
     return null;
   };
 
+  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!validateEmail(forgotPasswordEmail)) {
+      toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
+      return;
+    }
+    setIsForgotLoading(true);
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail })
+      });
+      setForgotPasswordSent(true);
+    } catch {
+      setForgotPasswordSent(true);
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrors({});
@@ -99,7 +124,7 @@ export default function AuthPage() {
       const result = await api.auth.login(loginForm.email, loginForm.password);
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
 
       let userCompanies: any[] = [];
@@ -162,7 +187,7 @@ export default function AuthPage() {
       const result = await api.auth.register(registerForm.email, registerForm.password);
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
@@ -187,7 +212,7 @@ export default function AuthPage() {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
-      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
+      setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       
       try {
@@ -426,7 +451,8 @@ export default function AuthPage() {
                     <button 
                       type="button"
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
-                      onClick={() => toast({ title: 'Password reset', description: 'Feature coming soon' })}
+                      onClick={() => { setShowForgotPassword(true); setForgotPasswordSent(false); setForgotPasswordEmail(loginForm.email); }}
+                      data-testid="link-forgot-password"
                     >
                       Forgot password?
                     </button>
@@ -649,6 +675,71 @@ export default function AuthPage() {
           </p>
         </div>
       </div>
+
+      {showForgotPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4">
+            <CardContent className="p-6">
+              {forgotPasswordSent ? (
+                <div className="text-center space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto">
+                    <Mail className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <h2 className="text-xl font-semibold" data-testid="text-reset-sent">Check your email</h2>
+                  <p className="text-sm text-muted-foreground">
+                    If an account exists for <strong>{forgotPasswordEmail}</strong>, we've sent a password reset link. The link expires in 1 hour.
+                  </p>
+                  <Button
+                    className="w-full"
+                    onClick={() => setShowForgotPassword(false)}
+                    data-testid="button-back-to-login"
+                  >
+                    Back to Sign In
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-xl font-semibold">Reset your password</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Enter your email address and we'll send you a link to reset your password.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="forgot-email">Email address</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                      <Input
+                        id="forgot-email"
+                        type="email"
+                        required
+                        placeholder="you@company.com"
+                        className="pl-10 h-11"
+                        value={forgotPasswordEmail}
+                        onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                        data-testid="input-forgot-email"
+                      />
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isForgotLoading} data-testid="button-send-reset">
+                    {isForgotLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Send Reset Link
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-sm"
+                    onClick={() => setShowForgotPassword(false)}
+                    data-testid="button-cancel-forgot"
+                  >
+                    Back to Sign In
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

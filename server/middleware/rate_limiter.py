@@ -72,10 +72,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     """
 
     # Endpoint category patterns
-    AUTH_PATHS = {"/auth/login", "/auth/register"}
+    AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}  # Stricter rate limiting for admin
     UPLOAD_PATHS = {"/csv-import", "/api/upload"}  # Endpoints containing upload operations
     HEALTH_PATHS = {"/health", "/"}
+    SIMULATION_PATHS = {"/api/simulations"}
 
     def __init__(
         self,
@@ -84,6 +85,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         rate_limit_api: int = 60,  # requests per minute
         rate_limit_upload: int = 10,  # requests per minute
         rate_limit_admin_login: int = 3,  # requests per minute (stricter)
+        rate_limit_simulation: int = 10,  # requests per minute (expensive Monte Carlo)
     ):
         """
         Initialize rate limiter middleware.
@@ -94,6 +96,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             rate_limit_api: API requests per minute (default: 60)
             rate_limit_upload: Upload requests per minute (default: 10)
             rate_limit_admin_login: Admin login requests per minute (default: 3)
+            rate_limit_simulation: Simulation requests per minute (default: 10)
         """
         super().__init__(app)
 
@@ -110,6 +113,9 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.rate_limit_upload = int(
             os.getenv("RATE_LIMIT_UPLOAD", str(rate_limit_upload))
         )
+        self.rate_limit_simulation = int(
+            os.getenv("RATE_LIMIT_SIMULATION", str(rate_limit_simulation))
+        )
 
         # Store token buckets per identifier (IP or user)
         # Structure: {identifier: {category: TokenBucket}}
@@ -117,7 +123,8 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
         logger.info(
             f"Rate limiter initialized - Auth: {self.rate_limit_auth}/min, "
-            f"API: {self.rate_limit_api}/min, Upload: {self.rate_limit_upload}/min"
+            f"API: {self.rate_limit_api}/min, Upload: {self.rate_limit_upload}/min, "
+            f"Simulation: {self.rate_limit_simulation}/min"
         )
 
     def _get_identifier(self, request: Request) -> str:
@@ -163,6 +170,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         # Check auth endpoints
         if path in self.AUTH_PATHS:
             return ("auth", self.rate_limit_auth)
+
+        # Check simulation endpoints (expensive Monte Carlo operations)
+        if path in self.SIMULATION_PATHS:
+            return ("simulation", self.rate_limit_simulation)
+        if "/simulate" in path and path.startswith("/api/scenarios"):
+            return ("simulation", self.rate_limit_simulation)
 
         # Check upload endpoints
         if any(upload_path in path for upload_path in self.UPLOAD_PATHS):
@@ -282,6 +295,7 @@ def get_rate_limiter_middleware(
     rate_limit_auth: Optional[int] = None,
     rate_limit_api: Optional[int] = None,
     rate_limit_upload: Optional[int] = None,
+    rate_limit_simulation: Optional[int] = None,
 ) -> RateLimiterMiddleware:
     """
     Factory function to create rate limiter middleware.
@@ -292,6 +306,7 @@ def get_rate_limiter_middleware(
         rate_limit_auth: Auth limit in requests/minute (default: 5)
         rate_limit_api: API limit in requests/minute (default: 60)
         rate_limit_upload: Upload limit in requests/minute (default: 10)
+        rate_limit_simulation: Simulation limit in requests/minute (default: 10)
 
     Returns:
         Middleware class (not instance) for FastAPI.add_middleware()
@@ -302,6 +317,7 @@ def get_rate_limiter_middleware(
             rate_limit_auth=rate_limit_auth or 5,
             rate_limit_api=rate_limit_api or 60,
             rate_limit_upload=rate_limit_upload or 10,
+            rate_limit_simulation=rate_limit_simulation or 10,
         )
 
     return middleware_factory

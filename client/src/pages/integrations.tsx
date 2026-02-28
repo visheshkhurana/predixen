@@ -27,7 +27,8 @@ import {
   Zap,
   TrendingUp,
   Settings,
-  Briefcase
+  Briefcase,
+  Bell
 } from "lucide-react";
 import { SiQuickbooks, SiXero, SiSalesforce, SiHubspot, SiStripe } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
@@ -857,6 +858,21 @@ export default function IntegrationsPage() {
     return allProviders.filter((p) => shouldShowConnector(p, category));
   };
 
+  const getActiveConnectors = (category: ConnectorCategory) => {
+    return getConnectorsByCategory(category).filter((p) => !p.comingSoon);
+  };
+
+  const getUpcomingConnectors = (category: ConnectorCategory) => {
+    return getConnectorsByCategory(category).filter((p) => p.comingSoon);
+  };
+
+  const handleRequestAccess = (providerName: string) => {
+    toast({
+      title: "Access Requested",
+      description: `You'll be notified when ${providerName} becomes available`,
+    });
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -937,7 +953,7 @@ export default function IntegrationsPage() {
         </div>
       </div>
 
-      {/* Unified Connector Grid */}
+      {/* Active Integrations Grid */}
       <div className="space-y-4">
         {selectedConnectorCategory !== "all" && (
           <div className="p-3 bg-muted/50 rounded-lg">
@@ -945,17 +961,71 @@ export default function IntegrationsPage() {
           </div>
         )}
         <div className="grid md:grid-cols-2 gap-4">
-          {getConnectorsByCategory(selectedConnectorCategory).map((provider) =>
+          {getActiveConnectors(selectedConnectorCategory).map((provider) =>
             renderProviderCard(provider, getProviderType(provider.id))
           )}
         </div>
-        {getConnectorsByCategory(selectedConnectorCategory).length === 0 && (
+        {getActiveConnectors(selectedConnectorCategory).length === 0 && getUpcomingConnectors(selectedConnectorCategory).length === 0 && (
           <div className="text-center py-12">
             <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">No connectors available in this category</p>
           </div>
         )}
       </div>
+
+      {/* Upcoming Integrations Section */}
+      {getUpcomingConnectors(selectedConnectorCategory).length > 0 && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold" data-testid="text-upcoming-integrations-heading">Upcoming Integrations</h2>
+            <p className="text-sm text-muted-foreground">
+              These integrations are currently in development. Request early access to be notified when they launch.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {getUpcomingConnectors(selectedConnectorCategory).map((provider) => {
+              return (
+                <Card key={provider.id} className="opacity-80" data-testid={`card-upcoming-${provider.id}`}>
+                  <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="p-2 bg-muted rounded-lg">
+                      {providerIcons[provider.id] || <Link2 className="h-6 w-6" />}
+                    </div>
+                    <div className="flex-1">
+                      <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+                        {provider.name}
+                        <Badge variant="secondary" className="text-xs">
+                          In Development
+                        </Badge>
+                      </CardTitle>
+                      <CardDescription>{provider.description}</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {provider.features.map((feature) => (
+                        <Badge key={feature} variant="secondary" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRequestAccess(provider.name)}
+                        data-testid={`button-request-access-${provider.id}`}
+                      >
+                        <Bell className="h-4 w-4 mr-2" />
+                        Request Access
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <Separator className="my-8" />
 

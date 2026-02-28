@@ -6,6 +6,7 @@ interface User {
   email: string;
   role?: string;
   is_platform_admin?: boolean;
+  is_email_verified?: boolean;
 }
 
 interface Company {
