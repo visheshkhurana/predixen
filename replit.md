@@ -40,6 +40,8 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 15. **User Roles**: Platform Admin and Company Level Roles (`owner`, `admin`, `analyst`, `viewer`).
 16. **Phased Startup**: Critical routes (auth, billing, onboarding) register quickly, with other modules loading in the background.
 
+17. **Simulator Edge Case Guardrails**: Comprehensive input validation on both frontend (Zod) and backend (Pydantic). Hiring plan: count 0-500, monthly cost 0-$1M, max 20 roles. Scenario inputs: growth -30% to +50%, pricing -50% to +100%, burn reduction -100% to +80%, fundraise $0-$100M within months 1-24. Runtime: baseline revenue/cash floored at 0, negative costs floored at 0, revenue never goes negative in Monte Carlo loop. Simulation iterations bounded 100-10,000.
+
 ## External Dependencies
 
 -   **OpenAI**: For financial analysis, metrics extraction, and vision tasks.

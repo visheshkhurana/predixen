@@ -219,7 +219,7 @@ def run_enhanced_monte_carlo(
             
             revenue = revenue * (1 + growth_rate)
             revenue = revenue * (1 - churn)
-            revenue = min(revenue, inputs.baseline_revenue * 1000)
+            revenue = max(0, min(revenue, inputs.baseline_revenue * 1000))
             
             if fundraise_month and month + 1 == fundraise_month:
                 cash += fundraise_amount

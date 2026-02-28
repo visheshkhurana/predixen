@@ -55,6 +55,18 @@ class HiringPlan(BaseModel):
     start_month: int
     monthly_cost: float
 
+    @validator('count')
+    def validate_count(cls, v):
+        return max(0, min(v, 500))
+
+    @validator('start_month')
+    def validate_start_month(cls, v):
+        return max(1, min(v, 24))
+
+    @validator('monthly_cost')
+    def validate_monthly_cost(cls, v):
+        return max(0, min(v, 1000000))
+
 class ScenarioCreate(BaseModel):
     name: str
     pricing_change_pct: float = 0
@@ -71,7 +83,7 @@ class ScenarioCreate(BaseModel):
 
     @validator('fundraise_amount')
     def validate_fundraise_amount(cls, v):
-        return max(0, v)
+        return max(0, min(v, 100000000))
 
     @validator('burn_reduction_pct')
     def validate_burn_reduction(cls, v):
@@ -95,13 +107,27 @@ class ScenarioCreate(BaseModel):
 
     @validator('fundraise_month')
     def validate_fundraise_month(cls, v):
-        if v is not None and v < 1:
-            return 1
+        if v is not None:
+            return max(1, min(v, 24))
         return v
+
+    @validator('hiring_plan')
+    def validate_hiring_plan_size(cls, v):
+        if len(v) > 20:
+            return v[:20]
+        return v
+
+    @validator('gross_margin_delta_pct')
+    def validate_gross_margin_delta(cls, v):
+        return max(-85, min(85, v))
 
 class SimulateRequest(BaseModel):
     n_sims: int = 500
     seed: Optional[int] = None
+
+    @validator('n_sims')
+    def validate_n_sims(cls, v):
+        return max(100, min(v, 10000))
 
 @router.post("/companies/{company_id}/scenarios", response_model=Dict[str, Any])
 def create_scenario(
@@ -203,9 +229,16 @@ INPUT_GUARDRAILS = {
     "growth_uplift_pct": {"min": -30, "max": 50, "label": "Growth uplift", "unit": "%"},
     "burn_reduction_pct": {"min": -100, "max": 80, "label": "Burn reduction", "unit": "%"},
     "churn_rate": {"min": 0, "max": 30, "label": "Monthly churn rate", "unit": "%"},
+    "churn_change_pct": {"min": -20, "max": 30, "label": "Churn change", "unit": "%"},
     "gross_margin": {"min": 10, "max": 95, "label": "Gross margin", "unit": "%"},
+    "gross_margin_delta_pct": {"min": -85, "max": 85, "label": "Gross margin change", "unit": "%"},
     "cac": {"min": 0, "max": 50000, "label": "Customer acquisition cost", "unit": "$"},
+    "cac_change_pct": {"min": -50, "max": 200, "label": "CAC change", "unit": "%"},
     "fundraise_amount": {"min": 0, "max": 100000000, "label": "Fundraise amount", "unit": "$"},
+    "fundraise_month": {"min": 1, "max": 24, "label": "Fundraise month", "unit": ""},
+    "hiring_count": {"min": 0, "max": 500, "label": "Hiring count per role", "unit": ""},
+    "hiring_monthly_cost": {"min": 0, "max": 1000000, "label": "Monthly cost per hire", "unit": "$"},
+    "n_sims": {"min": 100, "max": 10000, "label": "Simulation iterations", "unit": ""},
 }
 
 
@@ -454,16 +487,28 @@ def run_simulation(
         
         ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
         fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-        baseline_revenue = ts_revenue if ts_revenue > 0 else fr_revenue
+        baseline_revenue = max(0, ts_revenue if ts_revenue > 0 else fr_revenue)
         
         ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
         fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-        baseline_cash = ts_cash if ts_cash > 0 else fr_cash
+        baseline_cash = max(0, ts_cash if ts_cash > 0 else fr_cash)
         
         fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
-        fr_opex = float(latest_record.opex) if latest_record and latest_record.opex else 0
-        fr_payroll = float(latest_record.payroll) if latest_record and latest_record.payroll else 0
-        fr_other = float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0
+        fr_opex = max(0, float(latest_record.opex) if latest_record and latest_record.opex else 0)
+        fr_payroll = max(0, float(latest_record.payroll) if latest_record and latest_record.payroll else 0)
+        fr_other = max(0, float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0)
+        
+        hiring_costs = 0
+        hiring_plan = scenario_inputs.get("hiring_plan", [])
+        for hire in hiring_plan:
+            hiring_costs += hire.get("count", 0) * hire.get("monthly_cost", 0)
+        
+        total_monthly_costs = fr_opex + fr_payroll + fr_other + hiring_costs
+        if baseline_cash > 0 and total_monthly_costs > baseline_cash:
+            logger.warning(
+                f"Scenario {scenario_id}: monthly costs (${total_monthly_costs:,.0f}) exceed "
+                f"cash balance (${baseline_cash:,.0f}). Runway will be < 1 month."
+            )
         
         enhanced_inputs = EnhancedSimulationInputs(
             baseline_revenue=baseline_revenue,
