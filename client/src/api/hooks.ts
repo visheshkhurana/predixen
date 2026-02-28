@@ -208,7 +208,7 @@ export function useStrategicDiagnosisQuery(companyId: number | null, enabled: bo
   return useQuery({
     queryKey: ['strategic-diagnosis', companyId],
     queryFn: async () => {
-      const result = await api.decisions.strategicDiagnosis(companyId!);
+      const result = await api.decisions.strategicDiagnosis(companyId!, true);
       return result;
     },
     enabled: !!companyId && enabled,

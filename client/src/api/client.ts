@@ -533,8 +533,8 @@ export const api = {
       request<any>(`/simulation/${runId}/decisions/generate`, { method: 'POST' }),
     latest: (companyId: number) =>
       request<any>(`/companies/${companyId}/decisions/latest`),
-    strategicDiagnosis: (companyId: number) =>
-      request<any>(`/companies/${companyId}/strategic-diagnosis`),
+    strategicDiagnosis: (companyId: number, autoGenerate: boolean = false) =>
+      request<any>(`/companies/${companyId}/strategic-diagnosis${autoGenerate ? '?auto_generate=true' : ''}`),
     regenerateDiagnosis: (companyId: number) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);

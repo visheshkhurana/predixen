@@ -342,6 +342,7 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
 @router.get("/companies/{company_id}/strategic-diagnosis")
 def get_strategic_diagnosis(
     company_id: int,
+    auto_generate: bool = Query(False, description="Auto-generate briefing if none exists"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -351,6 +352,9 @@ def get_strategic_diagnosis(
     saved = meta.get("strategic_diagnosis")
     if saved:
         return saved
+
+    if auto_generate:
+        return generate_strategic_diagnosis(company_id, db, current_user)
 
     return {
         "status": "not_generated",
