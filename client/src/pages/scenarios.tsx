@@ -1449,20 +1449,20 @@ export default function ScenariosPage() {
         )}
 
         {!scenariosLoading && !scenariosError && (!scenarios || scenarios.length === 0) && (
-          <Card className="max-w-4xl mx-auto mt-4 border-primary/30 bg-primary/5">
-            <CardContent className="py-5">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-primary/10">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-sm">Get started instantly</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Create a baseline scenario to see simulation results right away
-                    </p>
-                  </div>
-                </div>
+          <Card className="max-w-4xl mx-auto mt-4 border-dashed" data-testid="card-empty-scenarios">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="p-4 rounded-full bg-primary/10 mb-4">
+                <FlaskConical className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="font-semibold text-lg mb-2" data-testid="text-empty-scenarios-title">Create your first scenario</h3>
+              <p className="text-muted-foreground text-sm text-center max-w-md mb-2" data-testid="text-empty-scenarios-description">
+                Create your first scenario to simulate growth, hiring, and fundraising outcomes.
+                Run Monte Carlo simulations to see projected runway, survival probability, and cash flow.
+              </p>
+              <p className="text-muted-foreground text-xs text-center max-w-sm mb-6">
+                Use the scenario builder above to type a natural language question like "What if we raise $2M?" or start with a baseline.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap justify-center">
                 <Button
                   onClick={handleCreateBaselineScenario}
                   disabled={isCreatingBaseline}
@@ -1471,7 +1471,7 @@ export default function ScenariosPage() {
                   {isCreatingBaseline ? (
                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating...</>
                   ) : (
-                    <><Play className="h-4 w-4 mr-2" />Create Baseline</>
+                    <><Play className="h-4 w-4 mr-2" />Create Baseline Scenario</>
                   )}
                 </Button>
               </div>

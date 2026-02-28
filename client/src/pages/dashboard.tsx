@@ -534,13 +534,37 @@ export default function Dashboard() {
                   </Tooltip>
                 </div>
                 <div className="mt-2">
-                  <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="text-qog-value">
-                    {overviewKpis.qualityOfGrowthIndex !== null ? overviewKpis.qualityOfGrowthIndex : "N/A"}
-                  </span>
-                  <span className="text-sm text-muted-foreground ml-1">/100</span>
+                  {overviewKpis.qualityOfGrowthIndex !== null ? (
+                    <>
+                      <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="text-qog-value">
+                        {overviewKpis.qualityOfGrowthIndex}
+                      </span>
+                      <span className="text-sm text-muted-foreground ml-1">/100</span>
+                    </>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-2xl font-semibold font-mono tracking-tight text-muted-foreground/40 cursor-help" data-testid="text-qog-value">
+                          N/A<span className="text-sm text-muted-foreground/40 ml-1">/100</span>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>Quality of Growth requires revenue, expense, and growth data. Upload financial data to see this score.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2" data-testid="text-top-concentration">
-                  Top 5 concentration: {overviewKpis.topConcentration !== null ? `${overviewKpis.topConcentration}%` : "N/A"}
+                  Top 5 concentration: {overviewKpis.topConcentration !== null ? `${overviewKpis.topConcentration}%` : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help">N/A</span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p>Customer concentration data is not yet available. Add customer revenue data to see this metric.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </p>
               </CardContent>
             </Card>
@@ -712,23 +736,180 @@ export default function Dashboard() {
           )}
         </>
       ) : (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="p-4 rounded-full bg-muted mb-4">
-              <FlaskConical className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="font-semibold text-lg mb-2">No simulations yet</h3>
-            <p className="text-muted-foreground text-sm text-center max-w-md mb-4">
-              Create your first scenario to see projected cash flow, runway, and financial metrics
-            </p>
-            <Button asChild data-testid="button-create-first-scenario">
-              <Link href="/scenarios">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Scenario
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="lg:col-span-1 lg:row-span-2 border-dashed" data-testid="ghost-card-runway">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Runway (P50)</CardTitle>
+                <div className="h-8 w-8 rounded-md bg-muted/50 flex items-center justify-center">
+                  <Calendar className="h-5 w-5 text-muted-foreground/50" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-2xl font-bold text-muted-foreground/40 cursor-help" data-testid="ghost-value-runway">N/A</div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>Runway will appear after you upload financial data and run your first simulation.</p>
+                  </TooltipContent>
+                </Tooltip>
+                <p className="text-xs text-muted-foreground mt-2">Upload financials to see your projected runway</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-cash">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Cash on Hand</CardTitle>
+                <div className="h-8 w-8 rounded-md bg-muted/50 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-muted-foreground/40" data-testid="ghost-value-cash">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Connect a bank account or upload financial data</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-burn">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Net Burn Rate</CardTitle>
+                <div className="h-8 w-8 rounded-md bg-muted/50 flex items-center justify-center">
+                  <Flame className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-muted-foreground/40" data-testid="ghost-value-burn">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Revenue and expense data will populate this metric</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-mrr">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">MRR</CardTitle>
+                <div className="h-8 w-8 rounded-md bg-muted/50 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-muted-foreground/40" data-testid="ghost-value-mrr">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Revenue data will appear after uploading financials</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-margin">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Gross Margin</CardTitle>
+                <div className="h-8 w-8 rounded-md bg-muted/50 flex items-center justify-center">
+                  <Percent className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-muted-foreground/40" data-testid="ghost-value-margin">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Add COGS and revenue data to calculate margin</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="border-dashed" data-testid="ghost-card-growth">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Revenue Growth (YoY)</span>
+                  <BarChart3 className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="text-2xl font-bold text-muted-foreground/40 mt-2" data-testid="ghost-value-growth">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Needs at least 2 months of revenue data</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-burn-multiple">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Burn Multiple</span>
+                  <Target className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="text-2xl font-bold text-muted-foreground/40 mt-2" data-testid="ghost-value-burn-multiple">N/A</div>
+                <p className="text-xs text-muted-foreground mt-1">Upload burn and ARR data to calculate efficiency</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-dashed" data-testid="ghost-card-health">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Quality of Growth</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-muted-foreground cursor-help" data-testid="tooltip-trigger-health-empty">
+                        <Info className="h-3 w-3" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>Business Health score requires financial data including revenue, expenses, and growth metrics. Upload your financials to see this score.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="cursor-help">
+                      <span className="text-2xl font-semibold text-muted-foreground/40" data-testid="ghost-value-health">N/A</span>
+                      <span className="text-sm text-muted-foreground/40 ml-1">/100</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p>This composite score reflects growth efficiency, unit economics, and capital efficiency. It requires uploaded financial data to compute.</p>
+                  </TooltipContent>
+                </Tooltip>
+                <p className="text-xs text-muted-foreground mt-2">Upload financial data to see your health score</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {!overviewKpis && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div 
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/50 w-fit cursor-help"
+                  data-testid="indicator-data-confidence-empty"
+                >
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground/60">
+                    Data Confidence: N/A
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p>Data confidence measures how complete and accurate your financial inputs are. Upload financial data such as P&L statements, bank statements, or connect integrations to build your confidence score.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <div className="p-4 rounded-full bg-muted mb-4">
+                <FlaskConical className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="font-semibold text-lg mb-2" data-testid="text-no-data-title">Get started with your dashboard</h3>
+              <p className="text-muted-foreground text-sm text-center max-w-md mb-4" data-testid="text-no-data-description">
+                Upload your financial data or connect an integration to populate these metrics. Then create your first scenario to see projected cash flow, runway, and financial forecasts.
+              </p>
+              <div className="flex items-center gap-3 flex-wrap justify-center">
+                <Button asChild variant="outline" data-testid="button-upload-data">
+                  <Link href="/data-input">
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Upload Data
+                  </Link>
+                </Button>
+                <Button asChild data-testid="button-create-first-scenario">
+                  <Link href="/scenarios">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Scenario
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
           <Card data-testid="card-digest-preferences">

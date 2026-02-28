@@ -55,7 +55,9 @@ import {
   ChevronRight,
   MessageSquare,
   Globe,
-  AlertCircle
+  AlertCircle,
+  Info,
+  Clock
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useFounderStore } from '@/store/founderStore';
@@ -1928,6 +1930,14 @@ Type **help** for a full list of what I can do.`,
           </div>
         </div>
         
+        {/* AI Disclaimer Banner */}
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2" data-testid="banner-ai-disclaimer">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            AI insights are informational only. Verify with financial advisors before making decisions.
+          </p>
+        </div>
+
         {/* Chat Messages - Centered with max width */}
         <ScrollArea className="flex-1" ref={scrollAreaRef}>
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
@@ -2030,6 +2040,41 @@ Type **help** for a full list of what I can do.`,
                     </Button>
                   )}
                   
+                  {message.role === 'assistant' && i > 0 && message.structuredResponse?.citations && message.structuredResponse.citations.length > 0 && (
+                    <Collapsible className="mt-3">
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid={`trigger-sources-${i}`}>
+                        <ChevronDown className="h-3 w-3 transition-transform" />
+                        <Link2 className="h-3 w-3" />
+                        Sources ({message.structuredResponse.citations.length})
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 pl-5 space-y-1.5">
+                        {message.structuredResponse.citations.map((citation, ci) => (
+                          <div key={ci} className="flex items-start gap-2 text-xs" data-testid={`source-item-${i}-${ci}`}>
+                            <Badge variant="outline" className="text-[10px] shrink-0">
+                              {citation.kind === 'pdf' ? 'PDF' : citation.kind === 'web' ? 'Web' : 'Data'}
+                            </Badge>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium">{citation.label}</span>
+                              {citation.snippet && (
+                                <p className="text-muted-foreground mt-0.5 italic truncate">"{citation.snippet}"</p>
+                              )}
+                              {citation.url && (
+                                <a href={citation.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">View source</a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  {message.role === 'assistant' && i > 0 && message.timestamp && (
+                    <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground" data-testid={`text-data-date-${i}`}>
+                      <Clock className="h-3 w-3" />
+                      Based on data as of {new Date(message.timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </div>
+                  )}
+
                   {message.role === 'assistant' && i > 0 && (
                     <div className="mt-3 pt-2 border-t border-border/50">
                       <FeedbackButton testId={`feedback-${i}`} />
