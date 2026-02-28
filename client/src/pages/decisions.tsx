@@ -20,11 +20,11 @@ const LOADING_STEPS = [
 ];
 
 const TOC_SECTIONS = [
-  { id: 'section-situation', label: 'The Situation', num: 1 },
-  { id: 'section-recommendation', label: 'What We Recommend', num: 2 },
-  { id: 'section-inaction', label: 'If You Do Nothing', num: 3 },
-  { id: 'section-key-risks', label: 'Key Risks', num: 4 },
-  { id: 'section-alt-paths', label: 'Alternative Paths', num: 5 },
+  { id: 'section-situation', label: 'Executive Summary', num: 1 },
+  { id: 'section-metrics', label: 'Key Metrics Overview', num: 2 },
+  { id: 'section-key-risks', label: 'Risk Assessment', num: 3 },
+  { id: 'section-recommendation', label: 'Recommended Actions', num: 4 },
+  { id: 'section-milestones', label: 'Upcoming Milestones', num: 5 },
 ];
 
 function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRetry?: () => void }) {
@@ -142,10 +142,12 @@ function LoadingProgress({ onTimeout, onRetry }: { onTimeout?: () => void; onRet
   );
 }
 
-function StickyTOC({ activeSection }: { activeSection: string }) {
+function StickyTOC({ activeSection, visibleSections }: { activeSection: string; visibleSections: typeof TOC_SECTIONS }) {
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  if (visibleSections.length === 0) return null;
 
   return (
     <nav className="hidden xl:block fixed right-8 top-32 w-52 z-50" data-testid="toc-sidebar">
@@ -154,7 +156,7 @@ function StickyTOC({ activeSection }: { activeSection: string }) {
         <div className="relative pl-[7px]">
           <div className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
           <div className="space-y-0">
-            {TOC_SECTIONS.map((s) => {
+            {visibleSections.map((s) => {
               const isActive = activeSection === s.id;
               return (
                 <button
@@ -384,36 +386,70 @@ export default function DecisionsPage() {
     });
   };
 
-  const handleEmailFullBriefing = () => {
-    if (!diagnosisData) return;
+  const _buildBriefingSections = () => {
+    if (!diagnosisData) return [];
     const sections: Array<{title: string; text: string}> = [];
+    let num = 0;
     if (diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative) {
-      sections.push({ title: 'Section 1: The Situation', text: diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative });
+      num++;
+      let text = diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative;
+      if (diagnosisData.urgency_text) text += '\n\nUrgency: ' + diagnosisData.urgency_text;
+      sections.push({ title: `Section ${num}: Executive Summary`, text });
     }
-    if (diagnosisData.recommendation_headline) {
-      let recText = diagnosisData.recommendation_headline;
-      if (diagnosisData.recommendation_narrative) recText += '\n\n' + diagnosisData.recommendation_narrative;
-      if (diagnosisData.urgency_text) recText += '\n\nUrgency: ' + diagnosisData.urgency_text;
-      sections.push({ title: 'Section 2: What We Recommend', text: recText });
-    }
-    if (diagnosisData.inaction_narrative) {
-      sections.push({ title: 'Section 3: What Happens If You Do Nothing', text: diagnosisData.inaction_narrative });
+    if (diagnosisData.key_metrics_overview?.length) {
+      num++;
+      const metricsText = diagnosisData.key_metrics_overview.map((m: any) => {
+        let line = `${m.label}: ${m.value}`;
+        if (m.note) line += ` (${m.note})`;
+        return line;
+      }).join('\n');
+      sections.push({ title: `Section ${num}: Key Metrics Overview`, text: metricsText });
     }
     if (diagnosisData.key_risks?.length) {
+      num++;
       const riskText = diagnosisData.key_risks.map((item: any, i: number) => {
         let line = `${i + 1}. [${item.likelihood}] ${item.risk}`;
         if (item.contingency) line += `\n   If this happens: ${item.contingency}`;
         if (item.pivot_deadline) line += `\n   When to pivot: ${item.pivot_deadline}`;
         return line;
       }).join('\n\n');
-      sections.push({ title: 'Section 4: Key Risks', text: riskText });
+      sections.push({ title: `Section ${num}: Risk Assessment`, text: riskText });
+    }
+    if (diagnosisData.recommendation_headline || diagnosisData.recommendation_narrative) {
+      num++;
+      let recText = diagnosisData.recommendation_headline || '';
+      if (diagnosisData.recommendation_narrative) recText += '\n\n' + diagnosisData.recommendation_narrative;
+      if (diagnosisData.execution_playbook?.length) {
+        recText += '\n\nExecution Playbook:';
+        diagnosisData.execution_playbook.forEach((item: any, i: number) => {
+          recText += `\n${i + 1}. ${item.action} (${item.timeline || ''})`;
+        });
+      }
+      if (diagnosisData.inaction_narrative) {
+        recText += '\n\nIf you do nothing:\n' + diagnosisData.inaction_narrative;
+      }
+      sections.push({ title: `Section ${num}: Recommended Actions`, text: recText });
+    }
+    if (diagnosisData.milestones?.length) {
+      num++;
+      const milText = diagnosisData.milestones.map((item: any, i: number) => {
+        return `${i + 1}. ${item.title} — ${item.target_date}\n   ${item.description}`;
+      }).join('\n\n');
+      sections.push({ title: `Section ${num}: Upcoming Milestones`, text: milText });
     }
     if (diagnosisData.alternative_paths?.length) {
+      num++;
       const altText = diagnosisData.alternative_paths.map((item: any, i: number) => {
         return `${i + 1}. ${item.strategy}\n   Why not now: ${item.why_rejected}\n   Revisit if: ${item.when_it_might_work}`;
       }).join('\n\n');
-      sections.push({ title: 'Section 5: Alternative Paths', text: altText });
+      sections.push({ title: `Section ${num}: Alternative Paths`, text: altText });
     }
+    return sections;
+  };
+
+  const handleEmailFullBriefing = () => {
+    const sections = _buildBriefingSections();
+    if (sections.length === 0) return;
     openShareModal({
       contentType: 'full_briefing',
       subject: `Strategic Briefing - ${currentCompany?.name || 'Your Company'}`,
@@ -422,46 +458,17 @@ export default function DecisionsPage() {
   };
 
   const handleCopyBrief = async () => {
-    if (!diagnosisData) return;
+    const sections = _buildBriefingSections();
+    if (sections.length === 0) return;
     const parts: string[] = [];
     parts.push(`STRATEGIC BRIEFING — ${currentCompany?.name || ''}`);
-    parts.push(`Prepared ${diagnosisData.generated_at ? new Date(diagnosisData.generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'today'}`);
+    parts.push(`Prepared ${diagnosisData?.generated_at ? new Date(diagnosisData.generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'today'}`);
     parts.push('');
-
-    if (diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative) {
-      parts.push('1. THE SITUATION');
-      parts.push(diagnosisData.situation_narrative || diagnosisData.diagnosis_narrative);
+    sections.forEach(s => {
+      parts.push(s.title.toUpperCase());
+      parts.push(s.text);
       parts.push('');
-    }
-    if (diagnosisData.recommendation_headline) {
-      parts.push('2. WHAT WE RECOMMEND');
-      parts.push(diagnosisData.recommendation_headline);
-      if (diagnosisData.recommendation_narrative) parts.push(diagnosisData.recommendation_narrative);
-      if (diagnosisData.urgency_text) parts.push(`\nURGENCY: ${diagnosisData.urgency_text}`);
-      parts.push('');
-    }
-    if (diagnosisData.inaction_narrative) {
-      parts.push('3. WHAT HAPPENS IF YOU DO NOTHING');
-      parts.push(diagnosisData.inaction_narrative);
-      parts.push('');
-    }
-    if (diagnosisData.key_risks?.length) {
-      parts.push('4. KEY RISKS & CONTINGENCY PLANS');
-      diagnosisData.key_risks.forEach((item: any, i: number) => {
-        parts.push(`${i + 1}. [${item.likelihood}] ${item.risk}`);
-        if (item.contingency) parts.push(`   If this happens: ${item.contingency}`);
-        if (item.pivot_deadline) parts.push(`   When to pivot: ${item.pivot_deadline}`);
-      });
-      parts.push('');
-    }
-    if (diagnosisData.alternative_paths?.length) {
-      parts.push('5. ALTERNATIVE PATHS CONSIDERED');
-      diagnosisData.alternative_paths.forEach((item: any, i: number) => {
-        parts.push(`${i + 1}. ${item.strategy}`);
-        parts.push(`   Why rejected: ${item.why_rejected}`);
-        parts.push(`   When it might work: ${item.when_it_might_work}`);
-      });
-    }
+    });
 
     try {
       await navigator.clipboard.writeText(parts.join('\n'));
@@ -492,6 +499,12 @@ export default function DecisionsPage() {
   const inactionNarrative = diagnosisData?.inaction_narrative || null;
   const keyRisks: Array<{risk: string; likelihood: string; impact: string; contingency: string; pivot_deadline?: string}> | null = diagnosisData?.key_risks || null;
   const alternativePaths: Array<{strategy: string; why_rejected: string; when_it_might_work: string}> | null = diagnosisData?.alternative_paths || null;
+  const keyMetricsOverview: Array<{label: string; value: string; trend: string; note: string}> | null = diagnosisData?.key_metrics_overview || null;
+  const milestones: Array<{title: string; target_date: string; description: string; status: string}> | null = diagnosisData?.milestones || null;
+  const executionPlaybook: Array<{phase: string; action: string; owner: string; timeline: string; definition_of_done?: string}> | null = diagnosisData?.execution_playbook || null;
+  const healthScore: number | null = diagnosisData?.health_score || null;
+  const healthLabel: string | null = diagnosisData?.health_label || null;
+  const companyStageLabel: string | null = diagnosisData?.company_stage_label || null;
 
   const hasMeaningfulDiagnosis = !!(
     situationNarrative ||
@@ -499,12 +512,27 @@ export default function DecisionsPage() {
     recommendationNarrative ||
     inactionNarrative ||
     (keyRisks && keyRisks.length > 0) ||
-    (alternativePaths && alternativePaths.length > 0)
+    (alternativePaths && alternativePaths.length > 0) ||
+    (keyMetricsOverview && keyMetricsOverview.length > 0)
   );
+
+  const visibleSections = TOC_SECTIONS.filter(s => {
+    if (s.id === 'section-situation') return !!situationNarrative;
+    if (s.id === 'section-metrics') return !!(keyMetricsOverview && keyMetricsOverview.length > 0);
+    if (s.id === 'section-key-risks') return !!(keyRisks && keyRisks.length > 0);
+    if (s.id === 'section-recommendation') return !!(recommendationHeadline || recommendationNarrative || (executionPlaybook && executionPlaybook.length > 0));
+    if (s.id === 'section-milestones') return !!(milestones && milestones.length > 0);
+    return true;
+  }).map((s, i) => ({ ...s, num: i + 1 }));
+
+  const sectionNum = (id: string) => {
+    const found = visibleSections.find(s => s.id === id);
+    return found?.num ?? 0;
+  };
 
   return (
     <div className="p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
-      {hasMeaningfulDiagnosis && <StickyTOC activeSection={activeSection} />}
+      {hasMeaningfulDiagnosis && <StickyTOC activeSection={activeSection} visibleSections={visibleSections} />}
 
       <ShareModal
         open={shareModalOpen}
@@ -636,10 +664,29 @@ export default function DecisionsPage() {
 
           {situationNarrative && (
             <section id="section-situation" data-testid="section-situation">
-              <SectionDivider num={1} label="The Situation" />
+              <SectionDivider num={sectionNum('section-situation')} label="Executive Summary" />
               <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-1-title">
-                The Situation
+                Executive Summary
               </h2>
+              {(healthLabel || companyStageLabel) && (
+                <div className="flex items-center gap-2 mb-4 flex-wrap">
+                  {healthLabel && (
+                    <Badge variant="outline" className={
+                      healthLabel === 'Critical' ? 'border-red-500/50 text-red-400' :
+                      healthLabel === 'Concerning' ? 'border-amber-500/50 text-amber-400' :
+                      healthLabel === 'Stable' ? 'border-blue-500/50 text-blue-400' :
+                      'border-emerald-500/50 text-emerald-400'
+                    } data-testid="badge-health-label">
+                      {healthLabel}{healthScore ? ` (${healthScore}/100)` : ''}
+                    </Badge>
+                  )}
+                  {companyStageLabel && (
+                    <Badge variant="outline" className="text-muted-foreground" data-testid="badge-stage-label">
+                      {companyStageLabel}
+                    </Badge>
+                  )}
+                </div>
+              )}
               <div className="space-y-4">
                 {situationNarrative.split('\n\n').map((paragraph: string, i: number) => (
                   <p
@@ -651,76 +698,46 @@ export default function DecisionsPage() {
                   </p>
                 ))}
               </div>
-            </section>
-          )}
-
-          {(recommendationHeadline || recommendationNarrative) && (
-            <section id="section-recommendation" data-testid="section-recommendation">
-              <SectionDivider num={2} label="What We Recommend" />
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h2 className="text-lg font-semibold tracking-tight" data-testid="text-section-2-title">
-                  What We Recommend
-                </h2>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleShareRecommendation}
-                  data-testid="button-share-recommendation"
+              {urgencyText && (
+                <div
+                  className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+                  data-testid="callout-urgency"
                 >
-                  <Send className="h-3 w-3 mr-1.5" />
-                  Share
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {recommendationHeadline && (
-                  <p
-                    className="text-base font-semibold text-foreground"
-                    data-testid="text-recommendation-headline"
-                  >
-                    {recommendationHeadline}
-                  </p>
-                )}
-                {recommendationNarrative && recommendationNarrative.split('\n\n').map((paragraph: string, i: number) => (
-                  <p
-                    key={i}
-                    className="text-sm leading-relaxed text-muted-foreground"
-                    data-testid={`text-recommendation-p${i}`}
-                  >
-                    {paragraph}
-                  </p>
-                ))}
-                {urgencyText && (
-                  <div
-                    className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3"
-                    data-testid="callout-urgency"
-                  >
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm font-medium text-amber-300">
-                        {urgencyText}
-                      </p>
-                    </div>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm font-medium text-amber-300">
+                      {urgencyText}
+                    </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </section>
           )}
 
-          {inactionNarrative && (
-            <section id="section-inaction" data-testid="section-inaction">
-              <SectionDivider num={3} label="What Happens If You Do Nothing" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-3-title">
-                What Happens If You Do Nothing
+          {keyMetricsOverview && keyMetricsOverview.length > 0 && (
+            <section id="section-metrics" data-testid="section-metrics">
+              <SectionDivider num={sectionNum('section-metrics')} label="Key Metrics Overview" />
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-2-title">
+                Key Metrics Overview
               </h2>
-              <div className="space-y-4">
-                {inactionNarrative.split('\n\n').map((paragraph: string, i: number) => (
-                  <p
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {keyMetricsOverview.map((metric, i) => (
+                  <div
                     key={i}
-                    className="text-sm leading-relaxed text-muted-foreground"
-                    data-testid={`text-inaction-p${i}`}
+                    className="rounded-lg border border-border bg-card p-3"
+                    data-testid={`metric-card-${i}`}
                   >
-                    {paragraph}
-                  </p>
+                    <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-lg font-semibold text-foreground">{metric.value}</p>
+                      {metric.trend && metric.trend !== 'neutral' && metric.trend !== 'flat' && (
+                        <span className={`text-xs font-medium ${metric.trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {metric.trend === 'up' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                    {metric.note && <p className="text-xs text-muted-foreground mt-1">{metric.note}</p>}
+                  </div>
                 ))}
               </div>
             </section>
@@ -728,9 +745,9 @@ export default function DecisionsPage() {
 
           {keyRisks && keyRisks.length > 0 && (
             <section id="section-key-risks" data-testid="section-key-risks">
-              <SectionDivider num={4} label="Key Risks & Contingency Plans" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-4-title">
-                Key Risks & Contingency Plans
+              <SectionDivider num={sectionNum('section-key-risks')} label="Risk Assessment" />
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-3-title">
+                Risk Assessment
               </h2>
               <p className="text-xs text-muted-foreground mb-6">
                 The most significant risks facing your company, with specific action plans if they materialize.
@@ -782,60 +799,131 @@ export default function DecisionsPage() {
             </section>
           )}
 
-          {alternativePaths && alternativePaths.length > 0 && (
-            <section id="section-alt-paths" data-testid="section-alt-paths">
-              <SectionDivider num={5} label="Alternative Paths Considered" />
-              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-5-title">
-                Alternative Paths Considered
-              </h2>
-              <p className="text-xs text-muted-foreground mb-6">
-                Strategies we evaluated but did not recommend — and when they might become the right call.
-              </p>
-              <ol className="space-y-6 list-none p-0 m-0">
-                {alternativePaths.map((item, i) => (
-                  <li
-                    key={i}
-                    className="relative pl-8"
-                    data-testid={`alt-path-${i}`}
+          {(recommendationHeadline || recommendationNarrative || (executionPlaybook && executionPlaybook.length > 0)) && (
+            <section id="section-recommendation" data-testid="section-recommendation">
+              <SectionDivider num={sectionNum('section-recommendation')} label="Recommended Actions" />
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <h2 className="text-lg font-semibold tracking-tight" data-testid="text-section-4-title">
+                  Recommended Actions
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleShareRecommendation}
+                  data-testid="button-share-recommendation"
+                >
+                  <Send className="h-3 w-3 mr-1.5" />
+                  Share
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {recommendationHeadline && (
+                  <p
+                    className="text-base font-semibold text-foreground"
+                    data-testid="text-recommendation-headline"
                   >
-                    <span className="absolute left-0 top-0 text-sm font-semibold text-muted-foreground">
-                      {i + 1}.
-                    </span>
-                    <p className="text-sm font-medium text-foreground mb-2">
-                      {item.strategy}
-                    </p>
-                    <p className="text-sm leading-relaxed text-muted-foreground mb-2" data-testid={`alt-path-rejected-${i}`}>
-                      <span className="font-medium text-foreground/70">Why not now:</span> {item.why_rejected}
-                    </p>
-                    <p className="text-sm leading-relaxed text-muted-foreground" data-testid={`alt-path-when-${i}`}>
-                      <span className="font-medium text-foreground/70">Revisit if:</span> {item.when_it_might_work}
-                    </p>
-                  </li>
+                    {recommendationHeadline}
+                  </p>
+                )}
+                {recommendationNarrative && recommendationNarrative.split('\n\n').map((paragraph: string, i: number) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-relaxed text-muted-foreground"
+                    data-testid={`text-recommendation-p${i}`}
+                  >
+                    {paragraph}
+                  </p>
                 ))}
-              </ol>
+              </div>
+              {executionPlaybook && executionPlaybook.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold mb-3 text-foreground/80" data-testid="text-playbook-title">Execution Playbook</h3>
+                  <div className="space-y-3">
+                    {executionPlaybook.map((item, i) => (
+                      <div key={i} className="rounded-lg border border-border bg-card/50 p-3" data-testid={`playbook-item-${i}`}>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-sm font-medium text-foreground">{item.action}</p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {item.owner && <Badge variant="outline" className="text-xs">{item.owner}</Badge>}
+                          {item.timeline && <span className="text-xs text-muted-foreground">{item.timeline}</span>}
+                          {item.phase && <span className="text-xs text-muted-foreground/60">{item.phase}</span>}
+                        </div>
+                        {item.definition_of_done && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            <span className="font-medium text-foreground/60">Done when:</span> {item.definition_of_done}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {inactionNarrative && (
+                <div className="mt-6 rounded-md border border-red-500/20 bg-red-500/5 px-4 py-3" data-testid="section-inaction">
+                  <h3 className="text-sm font-semibold mb-2 text-red-400">What Happens If You Do Nothing</h3>
+                  <div className="space-y-3">
+                    {inactionNarrative.split('\n\n').map((paragraph: string, i: number) => (
+                      <p
+                        key={i}
+                        className="text-xs leading-relaxed text-muted-foreground"
+                        data-testid={`text-inaction-p${i}`}
+                      >
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
-          {!diagnosisData && rawRecommendations.length > 0 && (
-            <section data-testid="section-fallback">
-              <h2 className="text-lg font-semibold mb-4 tracking-tight">
-                The Situation
+          {milestones && milestones.length > 0 && (
+            <section id="section-milestones" data-testid="section-milestones">
+              <SectionDivider num={sectionNum('section-milestones')} label="Upcoming Milestones" />
+              <h2 className="text-lg font-semibold mb-4 tracking-tight" data-testid="text-section-5-title">
+                Upcoming Milestones
               </h2>
-              {rawRecommendations.map((rec: any, i: number) => {
-                const rationale = rec.rationale || rec.impact_summary || '';
-                return (
-                  <div key={rec.id || i} className="mb-6" data-testid={`text-recommendation-fallback-${i}`}>
-                    <p className="text-base font-semibold text-foreground mb-2">
-                      {i + 1}. {rec.title}
-                    </p>
-                    {rationale && (
-                      <p className="text-sm leading-relaxed text-muted-foreground">
-                        {rationale}
-                      </p>
-                    )}
+              <div className="space-y-4">
+                {milestones.map((item, i) => (
+                  <div key={i} className="flex gap-4" data-testid={`milestone-${i}`}>
+                    <div className="flex flex-col items-center">
+                      <div className={`w-3 h-3 rounded-full mt-1 ${
+                        item.status === 'completed' ? 'bg-emerald-500' :
+                        item.status === 'in_progress' ? 'bg-blue-500' :
+                        'bg-muted-foreground/30'
+                      }`} />
+                      {i < milestones.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+                    </div>
+                    <div className="pb-4 flex-1">
+                      <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                        <p className="text-sm font-medium text-foreground">{item.title}</p>
+                        <span className="text-xs text-muted-foreground">{item.target_date}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            </section>
+          )}
+
+          {alternativePaths && alternativePaths.length > 0 && (
+            <section data-testid="section-alt-paths">
+              <h3 className="text-sm font-semibold mb-3 text-foreground/80">Alternative Paths Considered</h3>
+              <div className="space-y-4">
+                {alternativePaths.map((item, i) => (
+                  <div key={i} className="rounded-lg border border-border bg-card/50 p-3" data-testid={`alt-path-${i}`}>
+                    <p className="text-sm font-medium text-foreground mb-1">{item.strategy}</p>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      <span className="font-medium text-foreground/60">Why not now:</span> {item.why_rejected}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/60">Revisit if:</span> {item.when_it_might_work}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </section>
           )}
 
@@ -844,6 +932,9 @@ export default function DecisionsPage() {
               This briefing was generated using your company's financial data and AI-powered analysis.
               {diagnosisData?.model_used && diagnosisData.model_used !== 'fallback' && (
                 <span> Model: {diagnosisData.model_used}.</span>
+              )}
+              {diagnosisData?.generated_at && (
+                <span> Generated: {new Date(diagnosisData.generated_at).toLocaleDateString()}.</span>
               )}
             </p>
           </footer>

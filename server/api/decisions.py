@@ -351,6 +351,9 @@ def get_strategic_diagnosis(
     meta = company.metadata_json or {}
     saved = meta.get("strategic_diagnosis")
     if saved:
+        needs_refresh = not saved.get("key_metrics_overview") or not saved.get("milestones")
+        if needs_refresh and auto_generate:
+            return generate_strategic_diagnosis(company_id, db, current_user)
         return saved
 
     if auto_generate:
@@ -457,6 +460,86 @@ def generate_strategic_diagnosis(
         if a >= 1e6: return f"${val/1e6:.1f}M"
         if a >= 1e3: return f"${val/1e3:.0f}K"
         return f"${val:.0f}"
+
+    def _build_metrics_and_milestones():
+        churn_rate = extract_metric_value(metrics.get("churn_rate"), 0)
+        cac_val = extract_metric_value(metrics.get("cac"), 0)
+        ltv_val = extract_metric_value(metrics.get("ltv"), 0)
+        ltv_cac = extract_metric_value(metrics.get("ltv_cac_ratio"), 0)
+        gross_margin_val = extract_metric_value(metrics.get("gross_margin"), 0)
+        arr = revenue * 12 * scale_mult
+        headcount = 0
+        if latest_record:
+            headcount = getattr(latest_record, 'headcount', 0) or 0
+
+        churn_display = churn_rate * 100 if 0 < churn_rate <= 1 else churn_rate
+        gross_margin_display = gross_margin_val * 100 if 0 < gross_margin_val <= 1 else gross_margin_val
+
+        kmo = [
+            {"label": "Monthly Revenue (MRR)", "value": _fmt(scaled_revenue), "trend": "up" if growth > 0 else ("flat" if growth == 0 else "down"), "note": f"{growth:.1f}% MoM growth"},
+            {"label": "Annual Run Rate (ARR)", "value": _fmt(arr), "trend": "up" if growth > 0 else "flat", "note": ""},
+            {"label": "Monthly Burn Rate", "value": _fmt(scaled_burn), "trend": "neutral", "note": f"Net burn: {_fmt(scaled_net_burn)}/mo"},
+            {"label": "Cash Balance", "value": _fmt(scaled_cash), "trend": "down" if net_burn > 0 else "up", "note": f"Runway: {runway_months:.1f} months"},
+            {"label": "Runway", "value": f"{runway_months:.1f} months", "trend": "up" if runway_months > 18 else ("down" if runway_months < 9 else "neutral"), "note": f"Cash exhaustion: {exhaustion_date}"},
+        ]
+        if gross_margin_display > 0:
+            kmo.append({"label": "Gross Margin", "value": f"{gross_margin_display:.1f}%", "trend": "up" if gross_margin_display > 60 else "neutral", "note": ""})
+        if churn_display > 0:
+            kmo.append({"label": "Churn Rate", "value": f"{churn_display:.1f}%", "trend": "up" if churn_display < 3 else "down", "note": "Monthly customer churn"})
+        if cac_val > 0:
+            kmo.append({"label": "CAC", "value": _fmt(cac_val * scale_mult), "trend": "neutral", "note": f"LTV/CAC: {ltv_cac:.1f}x" if ltv_cac > 0 else ""})
+        if ltv_val > 0:
+            kmo.append({"label": "LTV", "value": _fmt(ltv_val * scale_mult), "trend": "up" if ltv_cac >= 3 else "neutral", "note": ""})
+        if headcount > 0:
+            rev_per_emp = (scaled_revenue / headcount) if headcount > 0 else 0
+            kmo.append({"label": "Headcount", "value": str(headcount), "trend": "neutral", "note": f"Revenue/employee: {_fmt(rev_per_emp)}/mo"})
+
+        today = datetime.utcnow()
+        mil = []
+        if runway_months < 24:
+            mil.append({
+                "title": "Cash Runway Checkpoint",
+                "target_date": (today + timedelta(days=90)).strftime("%B %Y"),
+                "description": f"Review burn rate and runway. Target: maintain >{max(6, int(runway_months - 3))} months of runway.",
+                "status": "upcoming"
+            })
+        if revenue > 0 and net_burn > 0:
+            months_to_be = net_burn / max(revenue * max(growth / 100, 0.01), 1)
+            be_target = today + timedelta(days=int(min(months_to_be, 24) * 30))
+            mil.append({
+                "title": "Path to Breakeven",
+                "target_date": be_target.strftime("%B %Y"),
+                "description": f"Reach breakeven at {_fmt(scaled_burn)}/mo revenue. Requires {breakeven_growth_needed:.0f}% MoM growth." if breakeven_growth_needed > 0 else "Continue growing revenue to match expenses.",
+                "status": "in_progress"
+            })
+        mil.append({
+            "title": "Quarterly Business Review",
+            "target_date": (today + timedelta(days=90)).strftime("%B %Y"),
+            "description": "Present updated financials, growth metrics, and revised projections to stakeholders.",
+            "status": "upcoming"
+        })
+        if runway_months < 18:
+            mil.append({
+                "title": "Fundraising Preparation",
+                "target_date": (today + timedelta(days=60)).strftime("%B %Y"),
+                "description": f"Begin fundraising process. Update pitch deck, financial model, and target investor list. Current runway of {runway_months:.0f} months requires action within 2-3 months.",
+                "status": "upcoming"
+            })
+        mil.append({
+            "title": "Burn Rate Optimization Review",
+            "target_date": (today + timedelta(days=30)).strftime("%B %Y"),
+            "description": f"Audit all vendor contracts, subscriptions, and headcount costs. Target: 10-15% burn reduction from current {_fmt(scaled_burn)}/mo.",
+            "status": "upcoming"
+        })
+        if revenue > 0:
+            next_revenue_target = scaled_revenue * 1.5
+            mil.append({
+                "title": "Revenue Milestone",
+                "target_date": (today + timedelta(days=180)).strftime("%B %Y"),
+                "description": f"Reach {_fmt(next_revenue_target)}/mo MRR (50% growth from current {_fmt(scaled_revenue)}/mo).",
+                "status": "upcoming"
+            })
+        return kmo, mil
 
     company_context = f"""Today's Date: {today_date}
 Company: {company.name}
@@ -595,6 +678,12 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         diagnosis["company_name"] = company.name
         diagnosis["generated_at"] = datetime.utcnow().isoformat()
         diagnosis["model_used"] = result.get("model", "unknown")
+        kmo, mil = _build_metrics_and_milestones()
+        diagnosis["key_metrics_overview"] = kmo
+        diagnosis["milestones"] = mil
+        diagnosis.setdefault("health_score", min(100, max(10, int(runway_months * 5 + growth * 2))))
+        diagnosis.setdefault("health_label", "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"))
+        diagnosis.setdefault("company_stage_label", "Early Revenue" if revenue > 0 else "Pre-Revenue")
         
         meta = dict(company.metadata_json or {})
         meta["strategic_diagnosis"] = diagnosis
@@ -632,6 +721,8 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         inaction_p2 = f"The consequences begin well before cash actually hits zero. Within {max(1, crisis_months - 2)} months, your cash position will be visible to employees — expect your best people to start exploring other options. Within {crisis_months} months, you will have approximately ${cash_at_crisis:,.0f} remaining, which puts you below the threshold where investors consider you a viable investment. At that point, fundraising shifts from 'raising a round' to 'negotiating a rescue' — terms become punitive, dilution becomes severe, and board control may shift."
         inaction_p3 = f"By the time cash reserves approach zero, your options narrow to three: a distressed acquisition at a fraction of your peak valuation, a bridge round with onerous terms from existing investors, or an orderly wind-down. None of these outcomes are inevitable today — but they become increasingly likely with each month of inaction."
 
+        key_metrics_overview, milestones = _build_metrics_and_milestones()
+
         fallback = {
             "situation_narrative": f"{company.name} is currently burning {_fmt(scaled_burn)}/month against {_fmt(scaled_revenue)} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
             "recommendation_headline": rec_headline,
@@ -642,6 +733,8 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
             "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
             "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
             "health_label": "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"),
+            "key_metrics_overview": key_metrics_overview,
+            "milestones": milestones,
             "inaction_projection": {
                 "months_to_crisis": crisis_months,
                 "crisis_description": f"Cash reserves depleted at current burn rate of {_fmt(scaled_burn)}/month",
