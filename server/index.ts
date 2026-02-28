@@ -15,10 +15,14 @@ const httpServer = createServer(app);
 let setupComplete = false;
 
 app.use((req, res, next) => {
-  if (setupComplete) return next();
-  if (req.path === "/health") {
+  if (req.path === "/health" || req.path === "/__repl") {
+    if (setupComplete) return next();
     return res.status(200).json({ ok: true, status: "starting", fastapi: "starting" });
   }
+  if (req.path === "/" && req.method === "GET" && !setupComplete) {
+    return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>FounderConsole</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}.loader{text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:0.7}</style></head><body><div class="loader"><div class="spinner"></div><p>Loading FounderConsole...</p></div></body></html>`);
+  }
+  if (setupComplete) return next();
   if (req.method === "GET" && !req.path.startsWith("/api")) {
     return res.status(200).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>FounderConsole</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}.loader{text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:0.7}</style></head><body><div class="loader"><div class="spinner"></div><p>Loading FounderConsole...</p></div></body></html>`);
   }
