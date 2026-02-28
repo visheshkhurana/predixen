@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,24 +8,35 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
-import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight } from 'lucide-react';
 import { SiGoogle, SiGithub } from 'react-icons/si';
 
 
-// Analytics & Pixel user identification
 const identifyUser = (userId: number, email: string) => {
-  // Google Analytics user identification
   if (typeof window !== 'undefined' && (window as any).gtag) {
     (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
     (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }
-  // Meta Pixel user identification
   if (typeof window !== 'undefined' && (window as any).fbq) {
     (window as any).fbq('init', '872167299140812', { em: email });
     (window as any).fbq('track', 'Lead');
   }
 };
+
+function AnimatedMetric({ label, value, delay }: { label: string; value: string; delay: number }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), delay);
+    return () => clearTimeout(t);
+  }, [delay]);
+  return (
+    <div className={`transition-all duration-700 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+      <div className="text-2xl font-bold tracking-tight text-white">{value}</div>
+      <div className="text-xs text-white/50 uppercase tracking-wider mt-0.5">{label}</div>
+    </div>
+  );
+}
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
@@ -68,7 +79,7 @@ export default function AuthPage() {
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
-          identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id, result.email);
 
       let userCompanies: any[] = [];
       try {
@@ -78,7 +89,6 @@ export default function AuthPage() {
           setCurrentCompany(userCompanies[0]);
         }
       } catch {
-        // Company fetch is non-critical
       }
 
       toast({ title: 'Welcome back!' });
@@ -132,7 +142,7 @@ export default function AuthPage() {
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
-          identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
     } catch (err) {
@@ -157,7 +167,7 @@ export default function AuthPage() {
       localStorage.setItem('founderconsole-token', result.access_token);
       setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
-          identifyUser(result.user_id, result.email);
+      identifyUser(result.user_id, result.email);
       
       try {
         const companies = await api.companies.list();
@@ -280,406 +290,431 @@ export default function AuthPage() {
     }
   };
 
-  const features = [
-    { icon: TrendingUp, title: 'Decision Simulation Engine', description: 'Run Monte Carlo simulations on real company data to model outcomes, risks, and trade-offs' },
-    { icon: Sparkles, title: 'Scenario Builder', description: 'Compare multiple futures — aggressive growth, conservative burn, fundraising delays — side by side' },
-    { icon: Shield, title: 'Outcome Probability Mapping', description: 'See survival likelihood, runway distribution, dilution risk, and downside exposure' },
-    { icon: Zap, title: 'AI Decision Copilot', description: 'Ask "What happens if we hire 10 engineers?" and simulate the answer' },
+  const capabilities = [
+    { icon: BarChart3, title: 'Monte Carlo Simulations', desc: 'Run thousands of probabilistic scenarios on real company data' },
+    { icon: Brain, title: 'AI Decision Copilot', desc: 'Ask strategic questions and get data-backed recommendations' },
+    { icon: Target, title: 'Scenario Modeling', desc: 'Compare hiring plans, pricing changes, and fundraising strategies' },
+    { icon: Shield, title: 'Investor-Grade Diligence', desc: 'Truth-scanned metrics with full audit trail and provenance' },
   ];
-  
+
   return (
-    <div className="min-h-screen flex bg-background">
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
-        <div 
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
-        
-        <div className="relative z-10 flex flex-col justify-center px-12 py-16">
-          <div className="mb-12">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Sparkles className="h-6 w-6 text-primary" />
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 100%)' }}>
+        <div className="absolute inset-0" style={{
+          backgroundImage: `radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.15), transparent),
+                            radial-gradient(ellipse 60% 40% at 80% 80%, rgba(59, 130, 246, 0.08), transparent)`,
+        }} />
+
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: '64px 64px',
+        }} />
+
+        <div className="relative z-10 flex flex-col justify-between w-full px-12 xl:px-16 py-12">
+          <div>
+            <div className="flex items-center gap-3 mb-16">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Sparkles className="h-5 w-5 text-white" />
               </div>
-              <span className="text-2xl font-bold">FounderConsole</span>
+              <span className="text-xl font-semibold text-white tracking-tight">FounderConsole</span>
             </div>
-            <h1 className="text-4xl font-bold mb-4 leading-tight">
-              AI Decision Simulator<br />
-              <span className="text-primary">for Founders & CXOs</span>
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-md">
-              Simulate strategic decisions <em>before</em> you execute them. Test hiring plans, 
-              pricing changes, fundraising strategies across thousands of probabilistic scenarios.
-            </p>
+
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-medium text-blue-300 tracking-wide uppercase">Now in Public Beta</span>
+              </div>
+              
+              <h1 className="text-4xl xl:text-5xl font-bold text-white leading-[1.1] tracking-tight mb-5">
+                Financial Intelligence
+                <br />
+                <span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400 bg-clip-text text-transparent">
+                  for Founders
+                </span>
+              </h1>
+              <p className="text-base xl:text-lg text-white/50 leading-relaxed max-w-md">
+                Simulate decisions before you execute them. Monte Carlo-powered scenario analysis with AI-driven recommendations.
+              </p>
+            </div>
           </div>
-          
-          <div className="space-y-4">
-            {features.map((feature) => (
-              <div key={feature.title} className="flex items-start gap-4 p-4 rounded-lg bg-card/50 backdrop-blur-sm border border-border/50">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="h-5 w-5 text-primary" />
+
+          <div className="mt-12 space-y-3">
+            {capabilities.map((cap, i) => (
+              <div
+                key={cap.title}
+                className="group flex items-start gap-4 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.1] transition-all duration-300"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/[0.08] flex items-center justify-center flex-shrink-0 group-hover:border-blue-500/30 transition-colors">
+                  <cap.icon className="h-4 w-4 text-blue-400" />
                 </div>
-                <div>
-                  <h3 className="font-semibold">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-medium text-white/90">{cap.title}</h3>
+                  <p className="text-xs text-white/40 mt-0.5 leading-relaxed">{cap.desc}</p>
                 </div>
+                <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/40 transition-colors mt-0.5 flex-shrink-0" />
               </div>
             ))}
           </div>
-          
-          <div className="mt-8 pt-6 border-t border-border/30">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Built for High-Stakes Decisions</span>
-              <br />
-              FounderConsole is not accounting software. It's a decision laboratory for venture-backed startups and growth-stage companies.
-            </p>
-            <button
-              type="button"
-              className="text-sm text-primary hover:underline mt-3 inline-block bg-transparent border-0 p-0 cursor-pointer"
-              onClick={() => setLocation('/pricing')}
-              data-testid="link-view-pricing"
-            >
-              View Pricing &rarr;
-            </button>
+
+          <div className="mt-12 pt-8 border-t border-white/[0.06]">
+            <div className="grid grid-cols-4 gap-6">
+              <AnimatedMetric label="Scenarios Run" value="2.4M+" delay={200} />
+              <AnimatedMetric label="Companies" value="1,200+" delay={400} />
+              <AnimatedMetric label="Accuracy" value="94%" delay={600} />
+              <AnimatedMetric label="Time Saved" value="40hrs" delay={800} />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
-        <Card className="w-full max-w-md shadow-xl border-border/50">
-          <CardContent className="p-6 sm:p-8">
-            <div className="text-center mb-6">
-              <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-                <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                </div>
-                <span className="text-xl font-bold">FounderConsole</span>
-              </div>
-              <h2 className="text-2xl font-bold mb-2">
-                {activeTab === 'login' ? 'Welcome back' : 'Create your account'}
-              </h2>
-              <p className="text-muted-foreground">
-                {activeTab === 'login' 
-                  ? 'Sign in to continue simulating decisions and outcomes'
-                  : 'Start simulating strategic decisions today'
-                }
-              </p>
+      <div className="flex-1 flex items-center justify-center bg-background p-4 sm:p-8 lg:p-12">
+        <div className="w-full max-w-[420px]">
+          <div className="lg:hidden flex items-center justify-center gap-2.5 mb-8">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-white" />
             </div>
+            <span className="text-lg font-semibold tracking-tight">FounderConsole</span>
+          </div>
 
-            <div className="space-y-3 mb-6">
-              <Button
-                variant="outline"
-                type="button"
-                className="w-full h-11 gap-3"
-                onClick={() => handleSocialLogin('google')}
-                disabled={isLoading || socialLoadingProvider !== null}
-                data-testid="button-google-login"
-              >
-                {socialLoadingProvider === 'google' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting Google...
-                  </>
-                ) : (
-                  <>
-                    <SiGoogle className="h-4 w-4" />
-                    Continue with Google
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                type="button"
-                className="w-full h-11 gap-3"
-                onClick={() => handleSocialLogin('github')}
-                disabled={isLoading || socialLoadingProvider !== null}
-                data-testid="button-github-login"
-              >
-                {socialLoadingProvider === 'github' ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting GitHub...
-                  </>
-                ) : (
-                  <>
-                    <SiGithub className="h-4 w-4" />
-                    Continue with GitHub
-                  </>
-                )}
-              </Button>
-            </div>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold tracking-tight mb-2">
+              {activeTab === 'login' ? 'Welcome back' : 'Get started'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {activeTab === 'login' 
+                ? 'Sign in to your account to continue'
+                : 'Create your account to get started'
+              }
+            </p>
+          </div>
 
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
-              </div>
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <Button
+              variant="outline"
+              type="button"
+              className="h-11 gap-2.5 text-sm font-medium"
+              onClick={() => handleSocialLogin('google')}
+              disabled={isLoading || socialLoadingProvider !== null}
+              data-testid="button-google-login"
+            >
+              {socialLoadingProvider === 'google' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SiGoogle className="h-3.5 w-3.5" />
+              )}
+              Google
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              className="h-11 gap-2.5 text-sm font-medium"
+              onClick={() => handleSocialLogin('github')}
+              disabled={isLoading || socialLoadingProvider !== null}
+              data-testid="button-github-login"
+            >
+              {socialLoadingProvider === 'github' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SiGithub className="h-4 w-4" />
+              )}
+              GitHub
+            </Button>
+          </div>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
             </div>
+            <div className="relative flex justify-center">
+              <span className="bg-background px-3 text-xs text-muted-foreground uppercase tracking-wider">or</span>
+            </div>
+          </div>
+          
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6 h-10 p-1 bg-muted/50" role="tablist">
+              <TabsTrigger 
+                value="login" 
+                className="h-8 text-sm font-medium rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                data-testid="tab-login"
+                role="tab"
+                aria-selected={activeTab === 'login'}
+              >
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger 
+                value="register" 
+                className="h-8 text-sm font-medium rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                data-testid="tab-register"
+                role="tab"
+                aria-selected={activeTab === 'register'}
+              >
+                Create Account
+              </TabsTrigger>
+            </TabsList>
             
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 h-11" role="tablist">
-                <TabsTrigger 
-                  value="login" 
-                  className="h-9 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                  data-testid="tab-login"
-                  role="tab"
-                  aria-selected={activeTab === 'login'}
-                >
-                  Sign In
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="register" 
-                  className="h-9 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                  data-testid="tab-register"
-                  role="tab"
-                  aria-selected={activeTab === 'register'}
-                >
-                  Create Account
-                </TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="login" className="mt-0">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email" className="text-sm font-medium">
-                      Email address
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="login-email"
-                        type="email"
-                        required
-                        placeholder="you@company.com"
-                        className={`pl-10 h-11 ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        value={loginForm.email}
-                        onChange={(e) => {
-                          setLoginForm({ ...loginForm, email: e.target.value });
-                          if (errors.email) setErrors({ ...errors, email: '' });
-                        }}
-                        data-testid="input-login-email"
-                        aria-invalid={!!errors.email}
-                        aria-describedby={errors.email ? 'login-email-error' : undefined}
-                      />
-                    </div>
-                    {errors.email && (
-                      <p id="login-email-error" className="text-sm text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.email}
-                      </p>
-                    )}
+            <TabsContent value="login" className="mt-0">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="login-email" className="text-sm font-medium">
+                    Email
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                      id="login-email"
+                      type="email"
+                      required
+                      placeholder="you@company.com"
+                      className={`pl-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      value={loginForm.email}
+                      onChange={(e) => {
+                        setLoginForm({ ...loginForm, email: e.target.value });
+                        if (errors.email) setErrors({ ...errors, email: '' });
+                      }}
+                      data-testid="input-login-email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby={errors.email ? 'login-email-error' : undefined}
+                    />
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="login-password" className="text-sm font-medium">
-                        Password
-                      </Label>
-                      <button 
-                        type="button"
-                        className="text-xs text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
-                        onClick={() => toast({ title: 'Password reset', description: 'Feature coming soon' })}
-                      >
-                        Forgot password?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="Enter your password"
-                        className="pl-10 pr-10 h-11"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                        data-testid="input-login-password"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded"
-                        onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        data-testid="button-toggle-password"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <Button 
-                    type="submit" 
-                    className="w-full h-11 text-base font-medium" 
-                    disabled={isLoading} 
-                    data-testid="button-login"
-                  >
-                    {isLoading ? 'Signing in...' : 'Sign In'}
-                  </Button>
-                </form>
-              </TabsContent>
-              
-              <TabsContent value="register" className="mt-0">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email" className="text-sm font-medium">
-                      Email address
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="register-email"
-                        type="email"
-                        required
-                        placeholder="you@company.com"
-                        className={`pl-10 h-11 ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        value={registerForm.email}
-                        onChange={(e) => {
-                          setRegisterForm({ ...registerForm, email: e.target.value });
-                          if (errors.email) setErrors({ ...errors, email: '' });
-                        }}
-                        data-testid="input-register-email"
-                        aria-invalid={!!errors.email}
-                        aria-describedby={errors.email ? 'register-email-error' : undefined}
-                      />
-                    </div>
-                    {errors.email && (
-                      <p id="register-email-error" className="text-sm text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.email}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password" className="text-sm font-medium">
+                  {errors.email && (
+                    <p id="login-email-error" className="text-xs text-destructive flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="login-password" className="text-sm font-medium">
                       Password
                     </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="register-password"
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="Create a strong password"
-                        className={`pl-10 pr-10 h-11 ${errors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        value={registerForm.password}
-                        onChange={(e) => {
-                          setRegisterForm({ ...registerForm, password: e.target.value });
-                          if (errors.password) setErrors({ ...errors, password: '' });
-                        }}
-                        data-testid="input-register-password"
-                        aria-invalid={!!errors.password}
-                        aria-describedby="password-requirements"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded"
-                        onClick={() => setShowPassword(!showPassword)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {errors.password ? (
-                      <p className="text-sm text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.password}
-                      </p>
-                    ) : (
-                      <p id="password-requirements" className="text-xs text-muted-foreground">
-                        Minimum 8 characters with at least one number
-                      </p>
-                    )}
+                    <button 
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none"
+                      onClick={() => toast({ title: 'Password reset', description: 'Feature coming soon' })}
+                    >
+                      Forgot password?
+                    </button>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="register-confirm-password" className="text-sm font-medium">
-                      Confirm password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="register-confirm-password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        required
-                        placeholder="Confirm your password"
-                        className={`pl-10 pr-10 h-11 ${errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                        value={registerForm.confirmPassword}
-                        onChange={(e) => {
-                          setRegisterForm({ ...registerForm, confirmPassword: e.target.value });
-                          if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
-                        }}
-                        data-testid="input-register-confirm-password"
-                        aria-invalid={!!errors.confirmPassword}
-                        aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary rounded"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {errors.confirmPassword && (
-                      <p id="confirm-password-error" className="text-sm text-destructive flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {errors.confirmPassword}
-                      </p>
-                    )}
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Enter your password"
+                      className="pl-10 pr-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors"
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      data-testid="input-login-password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      data-testid="button-toggle-password"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
-                  
-                  <Button 
-                    type="submit" 
-                    className="w-full h-11 text-base font-medium" 
-                    disabled={isLoading} 
-                    data-testid="button-register"
-                  >
-                    {isLoading ? 'Creating account...' : 'Create Account'}
-                  </Button>
-                  
-                  <p className="text-xs text-center text-muted-foreground">
-                    By creating an account, you agree to our{' '}
-                    <button type="button" className="text-primary hover:underline">Terms of Service</button>
-                    {' '}and{' '}
-                    <button type="button" className="text-primary hover:underline">Privacy Policy</button>
-                  </p>
-                </form>
-              </TabsContent>
-            </Tabs>
-            
-            <div className="mt-6 pt-4 border-t text-center">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full flex-col gap-0"
-                onClick={handleDemoLogin}
-                disabled={isDemoLoading || isLoading}
-                data-testid="button-demo-login"
-              >
-                <span className="flex items-center justify-center gap-2">
-                  {isDemoLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+                
+                <Button 
+                  type="submit" 
+                  className="w-full h-11 text-sm font-medium mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all" 
+                  disabled={isLoading} 
+                  data-testid="button-login"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Signing in...
+                    </>
                   ) : (
-                    <Sparkles className="h-4 w-4" />
+                    <>
+                      Sign In
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
                   )}
-                  {isDemoLoading ? 'Loading demo...' : 'See Demo'}
-                </span>
-                {!isDemoLoading && (
-                  <span className="block text-xs text-muted-foreground font-normal mt-0.5">
-                    Explore the full platform with a pre-loaded demo company
-                  </span>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                </Button>
+              </form>
+            </TabsContent>
+            
+            <TabsContent value="register" className="mt-0">
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="register-email" className="text-sm font-medium">
+                    Work email
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                      id="register-email"
+                      type="email"
+                      required
+                      placeholder="you@company.com"
+                      className={`pl-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      value={registerForm.email}
+                      onChange={(e) => {
+                        setRegisterForm({ ...registerForm, email: e.target.value });
+                        if (errors.email) setErrors({ ...errors, email: '' });
+                      }}
+                      data-testid="input-register-email"
+                      aria-invalid={!!errors.email}
+                      aria-describedby={errors.email ? 'register-email-error' : undefined}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p id="register-email-error" className="text-xs text-destructive flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-1.5">
+                  <Label htmlFor="register-password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                      id="register-password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Min. 8 characters"
+                      className={`pl-10 pr-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      value={registerForm.password}
+                      onChange={(e) => {
+                        setRegisterForm({ ...registerForm, password: e.target.value });
+                        if (errors.password) setErrors({ ...errors, password: '' });
+                      }}
+                      data-testid="input-register-password"
+                      aria-invalid={!!errors.password}
+                      aria-describedby="password-requirements"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password ? (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.password}
+                    </p>
+                  ) : (
+                    <p id="password-requirements" className="text-[11px] text-muted-foreground">
+                      8+ characters with at least one number
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-1.5">
+                  <Label htmlFor="register-confirm-password" className="text-sm font-medium">
+                    Confirm password
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                    <Input
+                      id="register-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Confirm your password"
+                      className={`pl-10 pr-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      value={registerForm.confirmPassword}
+                      onChange={(e) => {
+                        setRegisterForm({ ...registerForm, confirmPassword: e.target.value });
+                        if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
+                      }}
+                      data-testid="input-register-confirm-password"
+                      aria-invalid={!!errors.confirmPassword}
+                      aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.confirmPassword && (
+                    <p id="confirm-password-error" className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {errors.confirmPassword}
+                    </p>
+                  )}
+                </div>
+                
+                <Button 
+                  type="submit" 
+                  className="w-full h-11 text-sm font-medium mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all" 
+                  disabled={isLoading} 
+                  data-testid="button-register"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Creating account...
+                    </>
+                  ) : (
+                    <>
+                      Create Account
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+                
+                <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
+                  By creating an account, you agree to our{' '}
+                  <button type="button" className="text-foreground hover:underline">Terms</button>
+                  {' '}and{' '}
+                  <button type="button" className="text-foreground hover:underline">Privacy Policy</button>
+                </p>
+              </form>
+            </TabsContent>
+          </Tabs>
+          
+          <div className="mt-6 pt-5 border-t border-border/50">
+            <button
+              type="button"
+              className="w-full group flex items-center justify-between p-3.5 rounded-xl bg-muted/30 hover:bg-muted/50 border border-border/50 hover:border-border transition-all"
+              onClick={handleDemoLogin}
+              disabled={isDemoLoading || isLoading}
+              data-testid="button-demo-login"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center border border-amber-500/20">
+                  {isDemoLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-medium">{isDemoLoading ? 'Loading demo...' : 'Try the live demo'}</div>
+                  <div className="text-[11px] text-muted-foreground">Pre-loaded SaaS company data</div>
+                </div>
+              </div>
+              {!isDemoLoading && (
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+              )}
+            </button>
+          </div>
+
+          <p className="text-center text-[11px] text-muted-foreground/60 mt-6">
+            SOC 2 Type II compliant &middot; 256-bit encryption &middot; GDPR ready
+          </p>
+        </div>
       </div>
     </div>
   );
