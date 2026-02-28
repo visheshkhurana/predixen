@@ -20,10 +20,6 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
-GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
-GITHUB_USER_URL = "https://api.github.com/user"
-GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
 
 _oauth_states: dict = {}
 
@@ -182,95 +178,3 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     return _build_auth_redirect(request, user)
 
 
-@router.get("/github/start")
-def github_start(request: Request):
-    if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_SECRET:
-        raise HTTPException(status_code=501, detail="GitHub OAuth is not configured")
-
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = "github"
-
-    base = _get_base_url(request)
-    redirect_uri = f"{base}/api/auth/github/callback"
-
-    params = urlencode({
-        "client_id": settings.GITHUB_CLIENT_ID,
-        "redirect_uri": redirect_uri,
-        "scope": "read:user user:email",
-        "state": state,
-    })
-    return RedirectResponse(url=f"{GITHUB_AUTH_URL}?{params}", status_code=302)
-
-
-@router.get("/github/callback")
-def github_callback(request: Request, code: str = None, state: str = None, error: str = None,
-                    db: Session = Depends(get_db)):
-    if error:
-        logger.warning(f"GitHub OAuth error: {error}")
-        base = _get_base_url(request)
-        return RedirectResponse(url=f"{base}/auth?error=github_denied", status_code=302)
-
-    if not code or not state:
-        raise HTTPException(status_code=400, detail="Missing code or state")
-
-    stored = _oauth_states.pop(state, None)
-    if stored != "github":
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-
-    base = _get_base_url(request)
-
-    try:
-        token_resp = requests.post(GITHUB_TOKEN_URL, data={
-            "client_id": settings.GITHUB_CLIENT_ID,
-            "client_secret": settings.GITHUB_CLIENT_SECRET,
-            "code": code,
-        }, headers={"Accept": "application/json"}, timeout=10)
-        token_resp.raise_for_status()
-        tokens = token_resp.json()
-    except Exception as e:
-        logger.error(f"GitHub token exchange failed: {e}")
-        return RedirectResponse(url=f"{base}/auth?error=github_token_failed", status_code=302)
-
-    access_token = tokens.get("access_token")
-    if not access_token:
-        return RedirectResponse(url=f"{base}/auth?error=github_no_token", status_code=302)
-
-    gh_headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-    }
-
-    try:
-        user_resp = requests.get(GITHUB_USER_URL, headers=gh_headers, timeout=10)
-        user_resp.raise_for_status()
-        profile = user_resp.json()
-    except Exception as e:
-        logger.error(f"GitHub user profile failed: {e}")
-        return RedirectResponse(url=f"{base}/auth?error=github_profile_failed", status_code=302)
-
-    email = profile.get("email")
-    if not email:
-        try:
-            emails_resp = requests.get(GITHUB_EMAILS_URL, headers=gh_headers, timeout=10)
-            emails_resp.raise_for_status()
-            emails = emails_resp.json()
-            primary = next((e for e in emails if e.get("primary") and e.get("verified")), None)
-            if primary:
-                email = primary["email"]
-            elif emails:
-                email = emails[0].get("email")
-        except Exception as e:
-            logger.error(f"GitHub emails fetch failed: {e}")
-
-    if not email:
-        return RedirectResponse(url=f"{base}/auth?error=github_no_email", status_code=302)
-
-    user = _get_or_create_oauth_user(
-        db,
-        email=email.lower().strip(),
-        provider="github",
-        oauth_id=str(profile.get("id", "")),
-        display_name=profile.get("name") or profile.get("login"),
-        avatar_url=profile.get("avatar_url"),
-    )
-    return _build_auth_redirect(request, user)

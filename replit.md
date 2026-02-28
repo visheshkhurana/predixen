@@ -59,5 +59,4 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 -   **Google Fonts**: Inter, IBM Plex Mono.
 -   **Resend**: Email delivery service.
 -   **Twilio**: SMS/phone notifications.
--   **Google OAuth**: Social login.
--   **GitHub OAuth**: Social login.
+-   **Google OAuth**: Social login (GitHub OAuth removed for launch).

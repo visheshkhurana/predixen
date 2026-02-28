@@ -51,6 +51,16 @@ export default function AdminBilling() {
 
   return (
     <div className="p-6 space-y-6">
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-3" data-testid="banner-free-beta">
+        <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+          <DollarSign className="h-4 w-4 text-emerald-500" />
+        </div>
+        <div>
+          <p className="font-medium text-emerald-500">Free Beta — All Features Unlocked</p>
+          <p className="text-sm text-muted-foreground">All features are free for early users during our public beta. No billing required.</p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-3">
         <CreditCard className="h-8 w-8 text-primary" />
         <div>

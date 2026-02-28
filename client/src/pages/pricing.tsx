@@ -12,45 +12,21 @@ import { apiRequest } from "@/lib/queryClient";
 
 const tiers = [
   {
-    name: "Free",
+    name: "Beta",
     price: { monthly: 0, annual: 0 },
-    description: "For early-stage founders exploring their first scenarios.",
+    description: "All features unlocked free during public beta.",
     features: [
-      "Demo + sample data",
-      "3 basic scenarios",
-      "Community support",
-    ],
-    cta: "Get Started",
-    ctaVariant: "outline" as const,
-    highlighted: false,
-  },
-  {
-    name: "Founder",
-    price: { monthly: 199, annual: 159 },
-    description: "For founders running serious financial simulations.",
-    features: [
-      "Unlimited scenarios",
+      "Unlimited scenarios & simulations",
+      "AI Decision Copilot",
       "Saved scenarios & exports",
       "Email briefings",
+      "Data connectors & integrations",
+      "Team collaboration",
       "Priority support",
     ],
-    cta: "Request Beta Access",
+    cta: "Get Started Free",
     ctaVariant: "default" as const,
     highlighted: true,
-  },
-  {
-    name: "Growth",
-    price: { monthly: 399, annual: 319 },
-    description: "For growing teams needing integrations and collaboration.",
-    features: [
-      "Everything in Founder",
-      "Team seats (up to 5)",
-      "Integrations (Stripe, QuickBooks)",
-      "Custom alerts & automations",
-    ],
-    cta: "Request Beta Access",
-    ctaVariant: "outline" as const,
-    highlighted: false,
   },
 ];
 
@@ -64,13 +40,8 @@ export default function PricingPage() {
   const [betaCompany, setBetaCompany] = useState("");
   const [betaSubmitting, setBetaSubmitting] = useState(false);
 
-  const handleTierClick = (tier: typeof tiers[number]) => {
-    if (tier.cta === "Get Started") {
-      navigate("/auth");
-    } else {
-      setBetaPlan(tier.name);
-      setBetaOpen(true);
-    }
+  const handleTierClick = () => {
+    navigate("/auth");
   };
 
   const handleBetaSubmit = async (e: React.FormEvent) => {
@@ -122,45 +93,18 @@ export default function PricingPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-16">
         <div className="text-center mb-12">
+          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-beta">
+            Free During Public Beta
+          </Badge>
           <h1 className="text-4xl font-bold mb-3" data-testid="text-pricing-title">
-            Simple, transparent pricing
+            Everything free, no credit card required
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl mx-auto" data-testid="text-pricing-subtitle">
-            Start free and scale as your decision-making needs grow. No hidden fees.
+            All features are unlocked during our public beta. Sign up and start making smarter financial decisions today.
           </p>
-
-          <div className="flex items-center justify-center gap-3 mt-8" data-testid="toggle-billing-period">
-            <span className={`text-sm font-medium ${!isAnnual ? "text-foreground" : "text-muted-foreground"}`}>
-              Monthly
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isAnnual}
-              onClick={() => setIsAnnual(!isAnnual)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isAnnual ? "bg-primary" : "bg-muted"
-              }`}
-              data-testid="switch-billing-period"
-            >
-              <span
-                className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                  isAnnual ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-            <span className={`text-sm font-medium ${isAnnual ? "text-foreground" : "text-muted-foreground"}`}>
-              Annual
-            </span>
-            {isAnnual && (
-              <Badge variant="secondary" className="text-xs" data-testid="badge-annual-savings">
-                Save 20%
-              </Badge>
-            )}
-          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 max-w-md mx-auto gap-6">
           {tiers.map((tier) => {
             const price = isAnnual ? tier.price.annual : tier.price.monthly;
 
@@ -175,30 +119,17 @@ export default function PricingPage() {
                 <CardHeader className="gap-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <CardTitle className="text-xl">{tier.name}</CardTitle>
-                    {tier.highlighted && (
-                      <Badge variant="secondary" data-testid="badge-recommended">
-                        Recommended
-                      </Badge>
-                    )}
+                    <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20" data-testid="badge-free">
+                      Free
+                    </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{tier.description}</p>
                 </CardHeader>
 
                 <CardContent className="flex-1">
                   <div className="mb-6" data-testid={`text-price-${tier.name.toLowerCase()}`}>
-                    {price === 0 ? (
-                      <span className="text-3xl font-bold">Free</span>
-                    ) : (
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold">${price}</span>
-                        <span className="text-sm text-muted-foreground">/mo</span>
-                      </div>
-                    )}
-                    {isAnnual && price > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Billed annually at ${price * 12}/yr
-                      </p>
-                    )}
+                    <span className="text-3xl font-bold">$0</span>
+                    <span className="text-sm text-muted-foreground ml-1">during beta</span>
                   </div>
 
                   <ul className="space-y-3">
@@ -215,7 +146,7 @@ export default function PricingPage() {
                   <Button
                     variant={tier.ctaVariant}
                     className="w-full gap-2"
-                    onClick={() => handleTierClick(tier)}
+                    onClick={() => handleTierClick()}
                     data-testid={`button-cta-${tier.name.toLowerCase()}`}
                   >
                     {tier.cta}
@@ -240,7 +171,7 @@ export default function PricingPage() {
 
         <div className="text-center mt-16">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All plans include SSL encryption, daily backups, and 99.9% uptime SLA.
+            All features include SSL encryption, daily backups, and 99.9% uptime SLA. Free during beta — no credit card required.
           </p>
         </div>
       </main>

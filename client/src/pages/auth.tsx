@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight } from 'lucide-react';
-import { SiGoogle, SiGithub } from 'react-icons/si';
+import { SiGoogle } from 'react-icons/si';
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -44,7 +44,7 @@ export default function AuthPage() {
   const { setToken, setUser, setCurrentCompany, setCompanies } = useFounderStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
-  const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | 'github' | null>(null);
+  const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
@@ -63,11 +63,8 @@ export default function AuthPage() {
     if (oauthError) {
       const messages: Record<string, string> = {
         google_denied: 'Google sign-in was cancelled.',
-        github_denied: 'GitHub sign-in was cancelled.',
         google_token_failed: 'Could not complete Google sign-in. Please try again.',
-        github_token_failed: 'Could not complete GitHub sign-in. Please try again.',
         google_no_email: 'No email found on your Google account.',
-        github_no_email: 'No email found on your GitHub account.',
       };
       toast({
         title: 'Sign-in issue',
@@ -243,7 +240,7 @@ export default function AuthPage() {
     }
   };
 
-  const handleSocialLogin = (provider: 'google' | 'github') => {
+  const handleSocialLogin = (provider: 'google') => {
     setSocialLoadingProvider(provider);
     window.location.assign(`/api/auth/${provider}/start`);
   };
@@ -347,11 +344,11 @@ export default function AuthPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="mb-6">
             <Button
               variant="outline"
               type="button"
-              className="h-11 gap-2.5 text-sm font-medium"
+              className="w-full h-11 gap-2.5 text-sm font-medium"
               onClick={() => handleSocialLogin('google')}
               disabled={isLoading || socialLoadingProvider !== null}
               data-testid="button-google-login"
@@ -361,22 +358,7 @@ export default function AuthPage() {
               ) : (
                 <SiGoogle className="h-3.5 w-3.5" />
               )}
-              Google
-            </Button>
-            <Button
-              variant="outline"
-              type="button"
-              className="h-11 gap-2.5 text-sm font-medium"
-              onClick={() => handleSocialLogin('github')}
-              disabled={isLoading || socialLoadingProvider !== null}
-              data-testid="button-github-login"
-            >
-              {socialLoadingProvider === 'github' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <SiGithub className="h-4 w-4" />
-              )}
-              GitHub
+              Continue with Google
             </Button>
           </div>
 
