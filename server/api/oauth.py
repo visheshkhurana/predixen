@@ -1,3 +1,4 @@
+import os
 import secrets
 import logging
 import requests
@@ -28,9 +29,25 @@ _oauth_states: dict = {}
 
 
 def _get_base_url(request: Request) -> str:
-    proto = request.headers.get("x-forwarded-proto", "https")
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:5000")
-    return f"{proto}://{host}"
+    replit_domain = os.environ.get("REPLIT_DEV_DOMAIN") or os.environ.get("REPLIT_DOMAINS", "").split(",")[0].strip()
+    if replit_domain:
+        return f"https://{replit_domain}"
+
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if forwarded_host:
+        proto = request.headers.get("x-forwarded-proto", "https")
+        return f"{proto}://{forwarded_host}"
+
+    host = request.headers.get("host", "")
+    if host and "localhost" not in host and "127.0.0.1" not in host:
+        proto = request.headers.get("x-forwarded-proto", "https")
+        return f"{proto}://{host}"
+
+    override = os.environ.get("OAUTH_BASE_URL")
+    if override:
+        return override.rstrip("/")
+
+    return "https://localhost:5000"
 
 
 def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: str,
@@ -90,6 +107,7 @@ def google_start(request: Request):
 
     base = _get_base_url(request)
     redirect_uri = f"{base}/api/auth/google/callback"
+    logger.info(f"Google OAuth start - base_url: {base}, redirect_uri: {redirect_uri}")
 
     params = urlencode({
         "client_id": settings.GOOGLE_CLIENT_ID,
