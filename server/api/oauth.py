@@ -29,12 +29,8 @@ _oauth_states: dict = {}
 
 
 def _get_base_url(request: Request) -> str:
-    replit_domain = os.environ.get("REPLIT_DEV_DOMAIN") or os.environ.get("REPLIT_DOMAINS", "").split(",")[0].strip()
-    if replit_domain:
-        return f"https://{replit_domain}"
-
     forwarded_host = request.headers.get("x-forwarded-host")
-    if forwarded_host:
+    if forwarded_host and "localhost" not in forwarded_host and "127.0.0.1" not in forwarded_host:
         proto = request.headers.get("x-forwarded-proto", "https")
         return f"{proto}://{forwarded_host}"
 
@@ -42,6 +38,10 @@ def _get_base_url(request: Request) -> str:
     if host and "localhost" not in host and "127.0.0.1" not in host:
         proto = request.headers.get("x-forwarded-proto", "https")
         return f"{proto}://{host}"
+
+    replit_domain = os.environ.get("REPLIT_DEV_DOMAIN") or os.environ.get("REPLIT_DOMAINS", "").split(",")[0].strip()
+    if replit_domain:
+        return f"https://{replit_domain}"
 
     override = os.environ.get("OAUTH_BASE_URL")
     if override:
