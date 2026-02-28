@@ -85,6 +85,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import currency as currency_api
     from server.api import leads as leads_api
     from server.api import events as events_api
+    from server.api import cap_table as cap_table_api
 
     logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
@@ -135,6 +136,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(currency_api.router)
     app.include_router(leads_api.router)
     app.include_router(events_api.router)
+    app.include_router(cap_table_api.router)
 
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
@@ -147,6 +149,7 @@ async def _run_deferred_startup():
     try:
         if settings.should_create_schema:
             logger.info("Creating database tables...")
+            import server.models.cap_table  # noqa: F401 - ensure cap table models registered
             Base.metadata.create_all(bind=engine)
             logger.info("Database tables created successfully")
         else:

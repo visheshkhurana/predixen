@@ -1,0 +1,64 @@
+You are an expert senior software architect and full-stack engineer with deep experience building **cap table and equity management systems** like Carta.
+
+Using industry best practices from top products (e.g., Carta, Pulley, Ledgy), produce a detailed implementation plan to **build a Carta-like Cap Table Management System** inside FounderConsole.ai.
+
+Start by reading the following core requirements:
+- Cap table database schema
+- Equity issuance and transfer workflows
+- Shareholder and investor management
+- Scenario modeling for dilution
+- 409A valuation stub support
+- Compliance and audit reporting workflows
+- Integrations with existing user/company models
+
+Your output must include:
+
+1) **Data Model Design**
+   - Database schema (PostgreSQL) for Cap Table, EquityInstrument, ShareHolder, FundingRound, OptionGrant, VestingSchedule, TransactionHistory
+   - Relationships between tables
+   - Sample seed data
+
+2) **API Design**
+   - REST endpoints (or GraphQL) with route names, methods, request/response bodies
+   - Authorization rules
+   - Versioning strategy
+
+3) **Backend Logic**
+   - Equity issuance workflows
+   - Equity transfer workflows (with checks for sufficient balance)
+   - Scenario modeling logic for future rounds and dilution
+   - Draft functions for stock option vesting, SAFEs conversion, and cap table snapshots
+
+4) **Frontend UI Components**
+   - Cap Table viewer (sortable, filterable table)
+   - Modals for issuing/transfer equity
+   - Scenario modeling dashboard
+   - Visualizations for ownership % and dilution over time
+
+5) **Reports and Export**
+   - PDF/CSV export of cap table
+   - Snapshot at latest funding round
+   - Audit history of equity transactions
+
+6) **Compliance & Valuations**
+   - Schema and API for 409A valuations (stubbed initially)
+   - Integration points for future external valuation services
+
+7) **Test Plan**
+   - Unit tests for backend logic
+   - Integration tests for API
+   - End-to-end tests for equity issuance and modeling
+
+8) **Security & Edge Cases**
+   - Access controls
+   - Prevent double issuance or negative shares
+   - Safe rollback on failures
+
+9) **Priority Roadmap**
+   - MVP tasks (first 2 weeks)
+   - Mid-term (next 4 weeks)
+   - Long-term enhancements
+
+Structure your response with diagrams (ASCII where useful), sample SQL and TypeScript/React code, and clear implementation steps. Prioritize clarity, maintainability, and scalability.
+
+Use real market reference concepts from Carta’s equity management features for inspiration.  [oai_citation:7‡Carta](https://carta.com/equity-management/cap-table/?utm_source=chatgpt.com)

@@ -51,6 +51,7 @@ import {
   UsersRound,
   Command,
   ChevronRight,
+  PieChart,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -432,6 +433,18 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/cap-table"}
+                  data-testid="nav-cap-table"
+                >
+                  <Link href="/cap-table">
+                    <PieChart className="h-4 w-4" />
+                    <span>Cap Table</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
