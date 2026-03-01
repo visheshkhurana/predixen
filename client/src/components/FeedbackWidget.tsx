@@ -110,11 +110,7 @@ export function FeedbackWidget() {
                 id="feedback-msg"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder={
-                  type === 'bug' ? 'Describe the bug and steps to reproduce...'
-                    : type === 'feature' ? 'Describe the feature you would like...'
-                    : 'Share your thoughts...'
-                }
+                placeholder="Tell us what you think..."
                 className="min-h-[100px] text-sm resize-none"
                 data-testid="input-feedback-message"
               />
