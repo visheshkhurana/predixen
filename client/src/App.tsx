@@ -255,6 +255,9 @@ function Router() {
         <Route path="/truth">
         {() => <AuthenticatedRoute component={TruthScanPage} />}
       </Route>
+      <Route path="/health-check">
+        {() => <AuthenticatedRoute component={TruthScanPage} />}
+      </Route>
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
