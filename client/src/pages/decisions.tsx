@@ -482,7 +482,7 @@ export default function DecisionsPage() {
 
   if (!currentCompany) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="p-4 md:p-6 max-w-3xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground" data-testid="text-no-company">Select a company to view your strategic briefing.</p>
@@ -531,7 +531,7 @@ export default function DecisionsPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
       {hasMeaningfulDiagnosis && <StickyTOC activeSection={activeSection} visibleSections={visibleSections} />}
 
       <ShareModal

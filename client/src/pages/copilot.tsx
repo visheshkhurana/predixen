@@ -1830,7 +1830,7 @@ Type **help** for a full list of what I can do.`,
   
   if (!currentCompany) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Select a company to use Copilot</p>
@@ -1844,7 +1844,7 @@ Type **help** for a full list of what I can do.`,
     <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
       {/* Conversation History Sidebar */}
       {showConversationSidebar && (
-        <div className="w-64 border-r border-border/50 flex flex-col bg-muted/30">
+        <div className="hidden md:flex w-64 border-r border-border/50 flex-col bg-muted/30">
           <div className="p-3 border-b border-border/50 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Conversations</span>
             <Button 
@@ -2198,7 +2198,7 @@ Type **help** for a full list of what I can do.`,
       </div>
       
       {/* Sliding Panel - Hidden by default */}
-      <div className={`fixed right-0 top-0 h-full w-80 bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out z-40 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed right-0 top-0 h-full w-[85vw] md:w-80 bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out z-40 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex gap-2">
             <Button 

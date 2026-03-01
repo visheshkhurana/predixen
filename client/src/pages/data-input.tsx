@@ -1121,7 +1121,7 @@ export default function DataInput() {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <CrossPageIntelligence context="data-input" className="mb-4" testId="data-input-intelligence" />
       <div className="mb-6 flex items-center justify-between">
         <div>

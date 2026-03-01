@@ -501,7 +501,7 @@ export default function AlertsPage() {
   const isInsufficientData = healthData?.overall_status === "insufficient_data";
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Alerts & Monitoring</h1>

@@ -1020,7 +1020,7 @@ export default function OverviewPage() {
 
   if (!currentCompany) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <h2 className="text-xl font-semibold mb-2">No Company Selected</h2>
@@ -1036,7 +1036,7 @@ export default function OverviewPage() {
 
   if (isEmptyState && currentCompany) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="p-4 md:p-6 max-w-3xl mx-auto">
         <Card>
           <CardHeader className="text-center pb-2">
             <div className="flex justify-center mb-3">

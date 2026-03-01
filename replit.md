@@ -52,6 +52,7 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 26. **Help & Documentation Page**: Collapsible sections with real content for Getting Started, Simulation Engine, AI Copilot, and Integrations guides. No placeholder text. Component: `client/src/pages/docs.tsx`.
 
 27. **PostHog Analytics**: Product analytics via `posthog-js`. Initialized in `AppLayout` only when `VITE_POSTHOG_KEY` env var is set (no-ops gracefully without it). Host configurable via `VITE_POSTHOG_HOST` (default: `https://us.i.posthog.com`). Tracks: page views on route changes, user identification on login (user_id, email, role), and custom events: `simulation_run`, `copilot_message`, `feedback_submitted`, `integration_connected`. Provider: `client/src/lib/posthog.ts`.
+28. **Mobile Responsiveness**: All inner app pages are fully responsive down to 375px width. Sidebar collapses to hamburger Sheet drawer on mobile (<768px) via shadcn/ui. All page wrappers use `p-4 md:p-6` responsive padding. Dashboard/overview grids use `grid-cols-1` base with `md:` and `lg:` breakpoints for stacking. Tables wrapped in `mobile-table-scroll` divs (CSS class in `index.css`) for horizontal scrolling on mobile. Copilot conversation sidebar hidden on mobile (`hidden md:flex`), data panel uses `w-[85vw] md:w-80`. Header confidence badge hidden on small screens (`hidden sm:inline-flex`). Stepper hidden below `sm` breakpoint.
 
 ## External Dependencies
 

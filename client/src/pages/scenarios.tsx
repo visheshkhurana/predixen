@@ -413,7 +413,7 @@ export default function ScenariosPage() {
 
   if (!currentCompany) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 max-w-7xl mx-auto">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground" data-testid="text-no-company">Select a company to manage scenarios</p>

@@ -208,7 +208,7 @@ export default function KPIBoardPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold" data-testid="page-title-kpi-board">KPI Board</h1>

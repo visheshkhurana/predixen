@@ -610,7 +610,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const getConfidenceBadge = () => {
     if (!truthScan) return null;
-    const badgeClass = "text-xs whitespace-nowrap shrink-0 cursor-pointer";
+    const badgeClass = "text-xs whitespace-nowrap shrink-0 cursor-pointer hidden sm:inline-flex";
     const handleClick = () => navigate('/data');
     if (confidence < 60) {
       return <Badge variant="destructive" className={badgeClass} onClick={handleClick} data-testid="badge-confidence">Confidence: {confidence}%</Badge>;

@@ -380,7 +380,7 @@ export default function DataVerification() {
   const hasErrors = (verifyData?.errors?.length || 0) > 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate("/data")} data-testid="button-back">
