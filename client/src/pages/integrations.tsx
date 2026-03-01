@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { trackEvent } from "@/lib/posthog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -547,6 +548,7 @@ export default function IntegrationsPage() {
 
   const handleOAuthConnect = (integrationId: string, selectedDataPoints: string[]) => {
     setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
+    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'oauth2', name: selectedIntegration?.name });
     toast({
       title: "Integration Connected",
       description: `Successfully connected ${selectedIntegration?.name}. Data will sync shortly.`,
@@ -562,6 +564,7 @@ export default function IntegrationsPage() {
 
   const handleApiKeyConnect = (integrationId: string, credentials: Record<string, string>, selectedDataPoints: string[]) => {
     setConnectedNewIntegrations(prev => new Set(prev).add(integrationId));
+    trackEvent('integration_connected', { integration_id: integrationId, auth_type: 'api_key', name: selectedIntegration?.name });
     toast({
       title: "Integration Connected",
       description: `Successfully connected ${selectedIntegration?.name}. Initial sync started.`,

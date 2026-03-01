@@ -51,6 +51,8 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 25. **In-App Feedback Widget**: Floating "Feedback" button (purple gradient, bottom-right) visible on all authenticated pages. Opens a panel with type selection (Bug/Feature/General), message textarea, and submit. Stores in `beta_feedback` table via `POST /api/feedback`. Uses CSRF double-submit cookie pattern. Component: `client/src/components/FeedbackWidget.tsx`, API: `server/api/feedback.py`.
 26. **Help & Documentation Page**: Collapsible sections with real content for Getting Started, Simulation Engine, AI Copilot, and Integrations guides. No placeholder text. Component: `client/src/pages/docs.tsx`.
 
+27. **PostHog Analytics**: Product analytics via `posthog-js`. Initialized in `AppLayout` only when `VITE_POSTHOG_KEY` env var is set (no-ops gracefully without it). Host configurable via `VITE_POSTHOG_HOST` (default: `https://us.i.posthog.com`). Tracks: page views on route changes, user identification on login (user_id, email, role), and custom events: `simulation_run`, `copilot_message`, `feedback_submitted`, `integration_connected`. Provider: `client/src/lib/posthog.ts`.
+
 ## External Dependencies
 
 -   **OpenAI**: For financial analysis, metrics extraction, and vision tasks.

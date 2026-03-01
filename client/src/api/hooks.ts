@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { useFounderStore } from '../store/founderStore';
+import { trackEvent } from '@/lib/posthog';
 
 export function useCompanies() {
   return useQuery({
@@ -133,10 +134,11 @@ export function useRunSimulation() {
   return useMutation({
     mutationFn: ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) =>
       api.simulations.run(scenarioId, nSims, seed),
-    onSuccess: (_, { scenarioId }) => {
+    onSuccess: (_, { scenarioId, nSims }) => {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      trackEvent('simulation_run', { scenario_id: scenarioId, n_sims: nSims || 1000 });
     },
   });
 }

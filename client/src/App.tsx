@@ -18,6 +18,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { useFounderStore } from "@/store/founderStore";
+import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -429,6 +430,7 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
         sources: data.sources_used,
         followups: data.suggested_followups,
       }]);
+      trackEvent('copilot_message', { company_id: currentCompany?.id, source: 'drawer' });
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t process that right now. Try again or visit the full Copilot page.' }]);
     } finally {
@@ -550,12 +552,28 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const { token, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
-  const [, navigate] = useLocation();
+  const { token, user, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
+  const [location, navigate] = useLocation();
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const { metrics: liveMetrics } = useFinancialMetrics();
   const confidence = truthScan?.data_confidence_score || 0;
+
+  useEffect(() => {
+    initPostHog();
+  }, []);
+
+  useEffect(() => {
+    trackPageView(location);
+  }, [location]);
+
+  useEffect(() => {
+    if (user && token) {
+      identifyUser(user.id, user.email, user.role);
+    } else if (!token) {
+      resetUser();
+    }
+  }, [user, token]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

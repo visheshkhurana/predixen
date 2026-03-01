@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { isRunwaySustainable } from '@/lib/utils';
+import { trackEvent } from '@/lib/posthog';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1673,6 +1674,7 @@ Type **help** for a full list of what I can do.`,
         setMessages((prev) => [...prev, response]);
       }, 1500);
     }
+    trackEvent('copilot_message', { company_id: currentCompany?.id, source: 'copilot_page' });
     setIsTyping(false);
   };
 

@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
+import { trackEvent } from '@/lib/posthog';
 
 function getCSRFToken(): string | null {
   const name = 'X-CSRF-Token=';
@@ -48,6 +49,7 @@ export function FeedbackWidget() {
         body: JSON.stringify({ type, message: message.trim(), page: window.location.pathname }),
       });
       if (!res.ok) throw new Error('Failed to send feedback');
+      trackEvent('feedback_submitted', { type, page: window.location.pathname });
       toast({ title: 'Thanks for your feedback!' });
       setOpen(false);
       setMessage('');
