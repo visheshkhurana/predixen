@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Check, Sparkles, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 
 const tiers = [
   {
@@ -66,31 +67,7 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
-          <button
-            type="button"
-            className="flex items-center gap-2 cursor-pointer bg-transparent border-0 p-0"
-            onClick={() => navigate("/")}
-            data-testid="link-home"
-          >
-            <div className="h-8 w-8 rounded-md bg-primary/20 flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-lg font-bold" data-testid="text-brand">FounderConsole</span>
-          </button>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="ghost" onClick={() => navigate("/auth")} data-testid="button-login">
-              Sign In
-            </Button>
-            <Button onClick={() => navigate("/auth")} data-testid="button-signup">
-              Get Started
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <MarketingLayout>
       <main className="max-w-6xl mx-auto px-4 py-16">
         <div className="text-center mb-12">
           <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-beta">
@@ -220,6 +197,6 @@ export default function PricingPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </MarketingLayout>
   );
 }

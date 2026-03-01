@@ -97,6 +97,12 @@ import GoalsPage from "@/pages/goals";
 import SharedScenarioPage from "@/pages/shared-scenario";
 import QAFrontPage from "@/pages/qa";
 import PricingPage from "@/pages/pricing";
+const LandingPage = lazy(() => import("@/pages/landing"));
+const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
+const AboutPage = lazy(() => import("@/pages/about"));
+const ContactPage = lazy(() => import("@/pages/contact"));
+const BlogPage = lazy(() => import("@/pages/blog"));
+const FAQPage = lazy(() => import("@/pages/faq"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
   const user = useFounderStore((s) => s.user);
@@ -219,6 +225,33 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   );
 }
 
+function PublicOrAuthHome() {
+  const user = useFounderStore((s) => s.user);
+  const currentCompany = useFounderStore((s) => s.currentCompany);
+
+  if (!user) {
+    return (
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+        <LandingPage />
+      </Suspense>
+    );
+  }
+
+  if (!currentCompany) {
+    return <Redirect to="/onboarding" />;
+  }
+
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => (
+        <PageErrorFallback error={error} reset={reset} pageName="Dashboard" />
+      )}
+    >
+      <OverviewPage />
+    </ErrorBoundary>
+  );
+}
+
 function Router() {
   return (
     <ErrorBoundary
@@ -229,6 +262,11 @@ function Router() {
     >
       <Switch>
         <Route path="/pricing" component={PricingPage} />
+        <Route path="/features">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><MarketingFeaturesPage /></Suspense>}</Route>
+        <Route path="/about">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AboutPage /></Suspense>}</Route>
+        <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
+        <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
+        <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
@@ -242,7 +280,7 @@ function Router() {
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
       </Route>
       <Route path="/">
-        {() => <AuthenticatedRoute component={OverviewPage} />}
+        {() => <PublicOrAuthHome />}
       </Route>
       <Route path="/overview">
         {() => <AuthenticatedRoute component={OverviewPage} />}

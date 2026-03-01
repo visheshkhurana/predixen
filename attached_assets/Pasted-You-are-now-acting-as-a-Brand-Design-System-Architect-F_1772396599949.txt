@@ -1,0 +1,96 @@
+You are now acting as a **Brand & Design System Architect + Full-Stack UI Engineer**. I want you to generate a **complete branded design system** for the FounderConsole.ai website, and then apply it to the web pages and UI components I’m building in Replit.
+
+My product is FounderConsole.ai — a financial intelligence and decision simulation platform for SaaS founders and early-stage startups. The target audience is founders, operators, and investors.
+
+Your job is to produce:
+
+1) **Brand Identity Tokens**
+   - Primary, secondary, accent, neutral, success, warning, error color palettes with HEX/RGB values.
+   - Typography scale (font families, weights, sizes, line-heights).
+   - Spacing scale (units, margins, paddings).
+   - Elevation/shadow rules.
+   - Radius/border styles.
+   - Iconography guidance (recommended icon library & usage).
+
+2) **Tailwind CSS Design System**
+   - Custom `tailwind.config.js` with brand tokens wired into Tailwind theme.
+   - Utility classes for spacing, typography, colors, focus states, buttons, inputs, cards, modals.
+   - Example design tokens mapped to Tailwind variables.
+
+3) **UI Component Library**
+   Generate React components styled with Tailwind for:
+   - Buttons (primary, secondary, outline, disabled).
+   - Inputs/Text fields (with labels, error state).
+   - Selects, checkboxes, radio groups.
+   - Cards (metrics, features).
+   - Hero sections.
+   - Navigation (header with logo, sticky nav).
+   - Footer with social links.
+   - Modals.
+   - Alert/Notification toasts.
+   - Tables (for KPI or cap table display).
+
+4) **Page Templates with Branding Applied**
+   Using this design system, generate full page code for:
+   - `pages/index.tsx` (branded homepage)
+   - `pages/features.tsx`
+   - `pages/pricing.tsx`
+   - `pages/integrations.tsx`
+   - `pages/about.tsx`
+   - `pages/contact.tsx`
+   - `/docs/getting-started.tsx`
+   - `/docs/faq.tsx`
+   - Example blog templates (`blog/index.tsx`, `blog/[slug].tsx`)
+
+   Each page must use the design components above and follow the brand visual system.
+
+5) **Responsive Design**
+   - Mobile, tablet, and desktop breakpoints.
+   - Navigation behavior on mobile (hamburger menu).
+   - Grid systems for content sections.
+
+6) **Copywriting With Brand Voice**
+   - Provide branded copy for each major section:
+     Hero headline & subheadline.
+     Benefit statements with tone suitable for founders.
+     CTA button text guided by conversion research.
+
+7) **Visual Assets Guidance**
+   - Suggested logo variants (light/dark).
+   - Placeholder illustrations/icons.
+   - Suggested imagery style.
+
+8) **Accessibility**
+   - Include aria attributes.
+   - High contrast color suggestions.
+   - Keyboard focus states for components.
+
+9) **Full Example Usage**
+   - Show example of how to combine components on a page:
+     e.g., Hero + Features + Testimonials + CTA + Footer.
+
+10) **Deployment Instructions**
+    - Instructions on putting this into the existing Replit Next.js project.
+    - Any Tailwind config tweaks needed.
+    - How to verify branded styles deploy correctly.
+
+---
+
+### ADDITIONAL REQUIREMENTS
+
+✔ All code must be **Next.js + React + TypeScript + Tailwind CSS**  
+✔ Include comments explaining design choices and how to customize tokens  
+✔ All HEX/RGB values should be exportable in `tailwind.config.js` theme  
+✔ Provide example exportable constants for colors/typography  
+✔ Provide usage snippets for React components
+
+---
+
+### BEGIN BY OUTPUTTING
+
+1) **Brand Identity Tokens & Description**
+2) **Branded Tailwind Config**
+3) **Component Library Code**
+4) **Homepage with branding applied**
+
+Make the system **professional, cohesive, and launch-ready**, tailored for SaaS founders and investors visiting `https://founderconsole.com`.
