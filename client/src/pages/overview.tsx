@@ -1221,7 +1221,7 @@ export default function OverviewPage() {
     : `Your metrics look healthy. Try simulating "What if we raise prices by 15%?" to explore upside scenarios.`;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       {!briefingDismissed && (
         <Card className="relative border-primary/20" data-testid="card-morning-briefing">
           <Button

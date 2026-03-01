@@ -288,7 +288,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {showVerificationBanner && (
         <Alert className="border-amber-500/50 bg-amber-500/5">
           <Mail className="h-4 w-4 text-amber-500" />

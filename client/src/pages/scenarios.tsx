@@ -1128,7 +1128,7 @@ export default function ScenariosPage() {
   }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-8">
       {/* STEP 1: "What's the question?" */}
       <section data-testid="section-question">
         <div className="text-center mb-6">

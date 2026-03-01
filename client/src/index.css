@@ -287,6 +287,16 @@
   }
 }
 
+@media (max-width: 767px) {
+  .mobile-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-table-scroll table {
+    min-width: 500px;
+  }
+}
+
 @media print {
   .no-print { display: none !important; }
   body { background: white !important; color: black !important; }

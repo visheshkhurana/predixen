@@ -387,7 +387,7 @@ export default function CapTablePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -539,6 +539,7 @@ export default function CapTablePage() {
                   <CardDescription>All shareholders sorted by ownership</CardDescription>
                 </CardHeader>
                 <CardContent>
+                  <div className="mobile-table-scroll">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -559,6 +560,7 @@ export default function CapTablePage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -587,6 +589,7 @@ export default function CapTablePage() {
           ) : (
             <Card>
               <CardContent className="pt-4">
+                <div className="mobile-table-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -611,6 +614,7 @@ export default function CapTablePage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -638,6 +642,7 @@ export default function CapTablePage() {
           ) : (
             <Card>
               <CardContent className="pt-4">
+                <div className="mobile-table-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -679,6 +684,7 @@ export default function CapTablePage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -728,6 +734,7 @@ export default function CapTablePage() {
           ) : (
             <Card>
               <CardContent className="pt-4">
+                <div className="mobile-table-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -758,6 +765,7 @@ export default function CapTablePage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -861,6 +869,7 @@ export default function CapTablePage() {
                             <CardTitle className="text-sm">Ownership Impact</CardTitle>
                           </CardHeader>
                           <CardContent>
+                            <div className="mobile-table-scroll">
                             <Table>
                               <TableHeader>
                                 <TableRow>
@@ -884,6 +893,7 @@ export default function CapTablePage() {
                                 })}
                               </TableBody>
                             </Table>
+                            </div>
                           </CardContent>
                         </Card>
                       )}
