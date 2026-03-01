@@ -1,4 +1,4 @@
-import { FileText, AlertTriangle, Scale, Ban, ShieldCheck, UserX, Gavel, Mail } from 'lucide-react';
+import { FileText, AlertTriangle, Scale, Ban, ShieldCheck, UserX, Gavel, Mail, UserCheck, Database, Bell } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
 
@@ -56,6 +56,17 @@ export default function TermsOfServicePage() {
           </ul>
         </Section>
 
+        <Section icon={UserCheck} title="Account Terms" testId="section-account-terms">
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li>You must be at least <strong className="text-foreground">18 years of age</strong> to use the Service.</li>
+            <li>You are responsible for maintaining the confidentiality of your login credentials.</li>
+            <li>You are responsible for all activity that occurs under your account.</li>
+            <li>You must provide accurate and complete information when creating your account.</li>
+            <li>You must notify us immediately of any unauthorized use of your account.</li>
+            <li>One person or legal entity may not maintain more than one account.</li>
+          </ul>
+        </Section>
+
         <Section icon={ShieldCheck} title="Acceptable Use" testId="section-acceptable-use">
           <p>You agree to:</p>
           <ul className="list-disc pl-5 space-y-1.5">
@@ -80,6 +91,16 @@ export default function TermsOfServicePage() {
           </ul>
         </Section>
 
+        <Section icon={Database} title="Data Rights" testId="section-data-rights">
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong className="text-foreground">Your Data:</strong> You retain full ownership of all data you upload to the Service, including financial records, documents, and company information.</li>
+            <li><strong className="text-foreground">Our License:</strong> By using the Service, you grant us a limited license to process, store, and analyze your data solely to provide the Service to you.</li>
+            <li>We will not sell, rent, or share your data with third parties except as described in our <a href="/privacy" className="text-indigo-400 hover:underline">Privacy Policy</a>.</li>
+            <li>You may export your data at any time using the built-in export features.</li>
+            <li>We may use anonymized, aggregate data to improve the Service.</li>
+          </ul>
+        </Section>
+
         <Section icon={Scale} title="Intellectual Property" testId="section-ip">
           <ul className="list-disc pl-5 space-y-1.5">
             <li><strong className="text-foreground">Our IP:</strong> The Service, including its design, code, algorithms, and AI models, is owned by FounderConsole. You may not copy, modify, or distribute any part of the Service.</li>
@@ -98,8 +119,17 @@ export default function TermsOfServicePage() {
           </ul>
         </Section>
 
+        <Section icon={Bell} title="Changes to Terms" testId="section-changes">
+          <ul className="list-disc pl-5 space-y-1.5">
+            <li>We may update these Terms from time to time to reflect changes in the Service or legal requirements.</li>
+            <li>We will notify you of material changes by email at least 30 days before they take effect.</li>
+            <li>Continued use of the Service after changes take effect constitutes acceptance of the updated Terms.</li>
+            <li>If you do not agree to the updated Terms, you may terminate your account before they take effect.</li>
+          </ul>
+        </Section>
+
         <Section icon={Gavel} title="Governing Law" testId="section-governing-law">
-          <p>These Terms are governed by and construed in accordance with the laws of the State of Delaware, United States, without regard to conflict of law principles. Any disputes arising from these Terms shall be resolved in the courts of Delaware.</p>
+          <p>These Terms are governed by and construed in accordance with the laws of the State of California, United States, without regard to conflict of law principles. Any disputes arising from these Terms shall be resolved in the state or federal courts located in San Francisco County, California.</p>
         </Section>
 
         <Section icon={Mail} title="Contact" testId="section-terms-contact">
