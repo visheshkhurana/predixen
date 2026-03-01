@@ -25,10 +25,17 @@ app.get("/__repl", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+app.get("/", (_req, res, next) => {
+  if (!setupComplete) {
+    return res.status(200).type("html").send(LOADING_HTML);
+  }
+  next();
+});
+
 app.use((req, res, next) => {
   if (setupComplete) return next();
   if (req.method === "GET" && !req.path.startsWith("/api")) {
-    return res.status(200).send(LOADING_HTML);
+    return res.status(200).type("html").send(LOADING_HTML);
   }
   next();
 });
