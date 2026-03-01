@@ -82,6 +82,13 @@ def log_login_attempt(db: Session, email: str, user_id: int = None, success: boo
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    name: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def sanitize_name(cls, v):
+        sanitized = re.sub(r'<[^>]*>', '', v).strip()
+        return sanitized
 
     @field_validator("password")
     @classmethod
@@ -134,9 +141,12 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
             detail="Email already registered"
         )
     
+    sanitized_name = req.name if req.name else None
+    
     user = User(
         email=normalized_email,
         password_hash=get_password_hash(req.password),
+        display_name=sanitized_name,
         is_email_verified=False
     )
     db.add(user)
