@@ -284,6 +284,40 @@ function SettingsDrawer() {
               </Button>
             </div>
           </div>
+
+          <div className="border-t pt-3 mt-2">
+            <p className="text-xs font-medium text-muted-foreground px-3 mb-1 uppercase tracking-wider">
+              Legal
+            </p>
+            <div className="space-y-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleNavigate("/privacy")}
+                className={cn(
+                  "w-full justify-start gap-2.5",
+                  isActive("/privacy") && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                )}
+                data-testid="settings-nav-privacy"
+              >
+                <Shield className="h-4 w-4 shrink-0" />
+                <span>Privacy Policy</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleNavigate("/terms")}
+                className={cn(
+                  "w-full justify-start gap-2.5",
+                  isActive("/terms") && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                )}
+                data-testid="settings-nav-terms"
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                <span>Terms of Service</span>
+              </Button>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
