@@ -192,11 +192,14 @@ function startFastAPIServer(): ChildProcess {
   
   console.log(`[fastapi] Starting uvicorn: ${cmd.join(" ")}`);
   
-  const nodeEnv = process.env.NODE_ENV || process.env.ENVIRONMENT || "development";
-  const childEnv = { ...process.env, NODE_ENV: nodeEnv, PYTHONUNBUFFERED: "1" };
-  if (!process.env.ENVIRONMENT) {
-    childEnv.ENVIRONMENT = nodeEnv;
+  const nodeEnv = process.env["ENVIRONMENT"] || process.env["NODE_ENV"] || "production";
+  const childEnv: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined) childEnv[k] = v;
   }
+  childEnv.NODE_ENV = nodeEnv;
+  childEnv.ENVIRONMENT = nodeEnv;
+  childEnv.PYTHONUNBUFFERED = "1";
   const child = spawn(pythonCommand, ["-u", "-m", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", port], {
     stdio: ["ignore", "pipe", "pipe"],
     shell: false,
@@ -700,7 +703,8 @@ app.use((req, res, next) => {
     console.error(`[error] ${status} ${message}`, err.stack || err);
   });
 
-  if (process.env.NODE_ENV === "production") {
+  const isProd = process.env["NODE_ENV"] === "production" || process.env["ENVIRONMENT"] === "production";
+  if (isProd) {
     try {
       serveStatic(app);
       console.log("[startup] Static file serving configured");
