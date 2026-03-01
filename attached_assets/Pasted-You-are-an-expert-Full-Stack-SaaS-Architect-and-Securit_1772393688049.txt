@@ -1,0 +1,85 @@
+You are an expert **Full-Stack SaaS Architect and Security Engineer**. I want you to generate a **production-ready implementation** for FounderConsole.ai on **Replit Reserved VM**, including:
+
+➤ A complete **Next.js + Tailwind CSS** frontend  
+➤ A robust **FastAPI (Python)** backend API  
+➤ A **PostgreSQL database** schema compatible with Supabase  
+➤ **Realtime updates** via Supabase Realtime  
+➤ Secure authentication using **httpOnly secure cookies** and refresh token rotation  
+➤ Unified KPI metrics API used consistently across all pages  
+➤ Integration of **Plausible Analytics** for product usage tracking  
+➤ Full **security hardening** with appropriate headers, CSRF protections, and rate limiting  
+➤ A responsive UI with mobile support and a floating feedback widget  
+➤ End-to-end **Playwright tests** for core workflows  
+➤ Replit deployment configurations and environment variables  
+➤ Monitoring setup (health endpoint, UptimeRobot/Netdata)  
+➤ CI with GitHub Actions
+
+Your output must include:
+
+1) **Project structure + explanation**
+2) **All config files:**
+   - `package.json`
+   - `next.config.js`
+   - `tailwind.config.js`
+   - `postcss.config.js`
+   - `replit.nix`
+   - `playwright.config.ts`
+   - GitHub Actions CI yaml
+3) **Frontend pages/components:**
+   - `/pages/index.tsx` (landing)
+   - `/pages/auth.tsx` (login/signup)
+   - `/pages/dashboard.tsx`
+   - `/pages/metrics.tsx`
+   - Shared UI components: Navbar, Sidebar, KPI cards, Modal, Feedback widget
+   - Full Tailwind UI examples
+4) **Backend FastAPI code:**
+   - `main.py`
+   - Routers: `auth.py`, `metrics.py`, `simulations.py`, `decisions.py`
+   - Security middleware for headers, rate limiting
+   - secure cookie auth (httpOnly)
+   - refresh token logic
+   - unified KPI retrieval and storage
+5) **Supabase SQL schema** for tables:
+   - users
+   - companies
+   - metrics
+   - scenarios
+   - decisions
+   - cap_table
+   - tokens (refresh)
+6) **Realtime subscription code**
+   - Example Supabase client subscription in Next.js
+   - Backend integration for emitting updates
+7) **Security hardening**
+   - Example code for CSP, HSTS, X-Frame-Options, X-Content-Type-Options
+   - Rate limiting annotations
+   - CSRF protection strategy
+8) **Analytics integration**
+   - Embed Plausible Analytics snippet
+   - Tag pages to capture funnels and retention events
+9) **Playwright test suite**
+   - tests/auth.spec.ts
+   - tests/dashboard.spec.ts
+   - tests/metrics.spec.ts
+   - tests/responsive.spec.ts
+   - tests/security.spec.ts
+10) **Deployment instructions for Replit**
+    - How to configure environment variables
+    - How to run both frontend and backend processes
+    - How to map `founderconsole.com` custom domain
+    - Health check endpoint and uptime monitoring
+11) **Monitoring & Logging**
+    - Example Netdata setup
+    - Logging format for backend
+    - UptimeRobot config
+12) **CI pipeline**
+    - GitHub Actions file that runs Playwright tests, linting, builds, and deploy previews
+
+For every code file you generate:
+✔ Include file path at the top  
+✔ Full code content below  
+✔ Step-by-step instructions to connect pieces  
+✔ Example responses (API sample JSON responses)
+✔ Comments in code explaining why each part is there
+
+Do not output multiple prompts or ideas — generate everything in this single comprehensive response that I can apply directly for a complete Replit production deployment of FounderConsole.ai.
