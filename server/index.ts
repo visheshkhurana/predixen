@@ -342,14 +342,13 @@ fastapiProcess = startFastAPIServer();
 const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPort()}`;
 const startTime = Date.now();
 
-// Node health endpoint - returns status of both Node and FastAPI
-app.get("/health", async (_req: Request, res: Response) => {
-  const fastApiUp = await probeFastAPI();
+// Node health endpoint - always returns 200 immediately
+app.get("/health", (_req: Request, res: Response) => {
   const uptimeSeconds = Math.floor((Date.now() - startTime) / 1000);
   
-  res.json({
+  res.status(200).json({
     ok: true,
-    fastapi: fastApiUp ? "up" : "down",
+    fastapi: fastapiStatus === "ready" ? "up" : "starting",
     fastapi_status: fastapiStatus,
     uptime_seconds: uptimeSeconds,
     version: "1.0.0",

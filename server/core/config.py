@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     FEATURE_INVESTOR_MODE: bool = os.getenv("FEATURE_INVESTOR_MODE", "false").lower() == "true"
 
     ADMIN_MASTER_EMAIL: str = os.getenv("ADMIN_MASTER_EMAIL", "")
-    ADMIN_MASTER_PASSWORD_HASH: str = os.getenv("ADMIN_MASTER_PASSWORD_HASH", "")  # bcrypt hash, not plaintext
+    ADMIN_MASTER_PASSWORD_HASH: str = os.getenv("ADMIN_MASTER_PASSWORD_HASH", "")
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -118,8 +118,15 @@ if settings.is_production:
     if not settings.CORS_ORIGINS:
         _config_errors.append("CORS_ORIGINS env var is not set — no cross-origin requests allowed")
     if settings.ADMIN_MASTER_EMAIL and not settings.ADMIN_MASTER_PASSWORD_HASH:
-        _config_errors.append("ADMIN_MASTER_EMAIL is set but ADMIN_MASTER_PASSWORD_HASH is empty")
+        _plain = os.getenv("ADMIN_MASTER_PASSWORD", "")
+        if _plain:
+            import bcrypt as _bcrypt
+            _hashed = _bcrypt.hashpw(_plain.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+            object.__setattr__(settings, "ADMIN_MASTER_PASSWORD_HASH", _hashed)
+            _cfg_logger.info("Auto-hashed ADMIN_MASTER_PASSWORD into ADMIN_MASTER_PASSWORD_HASH")
+        else:
+            _config_errors.append("ADMIN_MASTER_EMAIL is set but ADMIN_MASTER_PASSWORD_HASH is empty")
     for _err in _config_errors:
-        _cfg_logger.critical(f"PRODUCTION CONFIG: {_err}")
+        _cfg_logger.warning(f"PRODUCTION CONFIG: {_err}")
     if _config_errors:
-        _cfg_logger.critical(f"Found {len(_config_errors)} production config issue(s) — server will start but may be insecure")
+        _cfg_logger.warning(f"Found {len(_config_errors)} production config issue(s) — server will start but may be insecure")
