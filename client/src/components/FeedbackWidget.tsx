@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquare, X, Send, Loader2, CheckCircle, Bug, Lightbulb, MessageCircle, HelpCircle } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2, Bug, Lightbulb, MessageCircle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,6 @@ export function FeedbackWidget() {
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
   const { toast } = useToast();
   const { token } = useFounderStore();
 
@@ -49,29 +48,16 @@ export function FeedbackWidget() {
         body: JSON.stringify({ type, message: message.trim(), page: window.location.pathname }),
       });
       if (!res.ok) throw new Error('Failed to send feedback');
-      setSent(true);
-      setTimeout(() => {
-        setOpen(false);
-        setSent(false);
-        setMessage('');
-        setType('general');
-      }, 1800);
+      toast({ title: 'Thanks for your feedback!' });
+      setOpen(false);
+      setMessage('');
+      setType('general');
     } catch {
       toast({ title: 'Could not send feedback', description: 'Please try again later.', variant: 'destructive' });
     } finally {
       setSending(false);
     }
   };
-
-  if (sent) {
-    return (
-      <div className="fixed bottom-24 right-6 z-40 w-80 rounded-xl border bg-background shadow-2xl p-6 text-center space-y-3" data-testid="feedback-success">
-        <CheckCircle className="h-10 w-10 text-emerald-500 mx-auto" />
-        <p className="text-sm font-medium">Thanks for your feedback!</p>
-        <p className="text-xs text-muted-foreground">We read every submission and use it to improve FounderConsole.</p>
-      </div>
-    );
-  }
 
   return (
     <>
