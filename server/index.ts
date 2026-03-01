@@ -10,6 +10,7 @@ import { existsSync } from "fs";
 import path from "path";
 
 const app = express();
+app.disable("x-powered-by");
 const httpServer = createServer(app);
 
 let setupComplete = false;
