@@ -83,7 +83,7 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
     horizon = inputs.horizon_months
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
-    adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
+    adjusted_margin = max(0, min(100, inputs.gross_margin + inputs.gross_margin_delta_pct))
     
     burn_reduction_mult = 1 - (inputs.burn_reduction_pct / 100)
     base_opex = inputs.opex * burn_reduction_mult
@@ -277,7 +277,7 @@ def run_multi_scenario_simulation(
         scenario_inputs = SimulationInputs(
             baseline_revenue=base_inputs.baseline_revenue,
             baseline_growth_rate=base_inputs.baseline_growth_rate,
-            gross_margin=base_inputs.gross_margin + scenario_params.get("gross_margin_delta_pct", 0),
+            gross_margin=max(0, min(100, base_inputs.gross_margin + scenario_params.get("gross_margin_delta_pct", 0))),
             opex=base_inputs.opex,
             payroll=base_inputs.payroll,
             other_costs=base_inputs.other_costs,

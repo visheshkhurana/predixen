@@ -431,7 +431,7 @@ async def run_sensitivity_analysis(
         "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
         "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
         "runway_months": truth_scan.get("raw_values", {}).get("runway_months", 0),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "gross_margin": max(0, min(100, truth_scan.get("raw_values", {}).get("gross_margin", 0))),
         "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
@@ -549,7 +549,7 @@ async def generate_recommendations(
         "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
         "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
         "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "gross_margin": max(0, min(100, truth_scan.get("raw_values", {}).get("gross_margin", 0))),
         "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
@@ -712,7 +712,7 @@ async def run_constrained_optimization(
         "cash_balance": truth_scan.get("raw_values", {}).get("cash_balance", 0),
         "monthly_revenue": truth_scan.get("raw_values", {}).get("monthly_revenue", 0),
         "burn_rate": truth_scan.get("raw_values", {}).get("burn_rate", 0),
-        "gross_margin": truth_scan.get("raw_values", {}).get("gross_margin", 0),
+        "gross_margin": max(0, min(100, truth_scan.get("raw_values", {}).get("gross_margin", 0))),
         "churn_rate": truth_scan.get("raw_values", {}).get("churn_rate", 0)
     }
     
