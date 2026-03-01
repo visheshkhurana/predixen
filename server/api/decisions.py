@@ -339,6 +339,67 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
     return playbook
 
 
+def _get_current_metrics(company, db):
+    truth_scan = db.query(TruthScan).filter(
+        TruthScan.company_id == company.id
+    ).order_by(TruthScan.created_at.desc()).first()
+    
+    metrics = {}
+    if truth_scan and truth_scan.outputs_json:
+        metrics = truth_scan.outputs_json.get("metrics", {})
+    
+    latest_record = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company.id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+    
+    burn = extract_metric_value(metrics.get("monthly_burn"), 0)
+    if not burn and latest_record:
+        burn = float(latest_record.opex or 0) + float(latest_record.payroll or 0)
+    cash = extract_metric_value(metrics.get("cash_balance"), 0)
+    if not cash and latest_record and latest_record.cash_balance:
+        cash = float(latest_record.cash_balance)
+    runway = cash / burn if burn > 0 else 24
+    return {"burn": burn, "cash": cash, "runway": runway}
+
+
+def _is_diagnosis_stale(saved, current_metrics):
+    kmo = saved.get("key_metrics_overview", [])
+    if not kmo:
+        return True
+    cached_burn = None
+    cached_runway = None
+    for item in kmo:
+        label = (item.get("label") or "").lower()
+        if "burn" in label and "rate" in label:
+            cached_burn = item.get("value", "")
+        if label == "runway":
+            cached_runway = item.get("value", "")
+    
+    cur_burn = current_metrics["burn"]
+    cur_runway = current_metrics["runway"]
+    
+    if cached_burn and cur_burn > 0:
+        try:
+            cached_val = float(cached_burn.replace("$", "").replace(",", "").replace("K", "e3").replace("M", "e6").replace("B", "e9"))
+            if abs(cached_val - cur_burn) / max(cur_burn, 1) > 0.25:
+                return True
+        except (ValueError, TypeError):
+            pass
+    
+    if cached_runway and cur_runway > 0:
+        try:
+            cached_rw = float(cached_runway.split()[0])
+            if abs(cached_rw - cur_runway) / max(cur_runway, 1) > 0.25:
+                return True
+        except (ValueError, TypeError):
+            pass
+    
+    return False
+
+
 @router.get("/companies/{company_id}/strategic-diagnosis")
 def get_strategic_diagnosis(
     company_id: int,
@@ -352,8 +413,18 @@ def get_strategic_diagnosis(
     saved = meta.get("strategic_diagnosis")
     if saved:
         needs_refresh = not saved.get("key_metrics_overview") or not saved.get("milestones")
+        if not needs_refresh:
+            try:
+                current_metrics = _get_current_metrics(company, db)
+                if _is_diagnosis_stale(saved, current_metrics):
+                    needs_refresh = True
+                    logger.info(f"Diagnosis stale for company {company_id}: cached metrics don't match current data")
+            except Exception as e:
+                logger.warning(f"Staleness check failed: {e}")
         if needs_refresh and auto_generate:
             return generate_strategic_diagnosis(company_id, db, current_user)
+        if needs_refresh:
+            saved["_stale"] = True
         return saved
 
     if auto_generate:
