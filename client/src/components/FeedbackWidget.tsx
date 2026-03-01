@@ -64,7 +64,7 @@ export function FeedbackWidget() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-6 z-40 w-80 rounded-xl border bg-background shadow-2xl" data-testid="feedback-panel">
+        <div className="fixed bottom-16 right-6 z-40 w-80 rounded-xl border bg-background shadow-2xl" data-testid="feedback-panel">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="text-sm font-semibold">Send Feedback</h3>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)} data-testid="button-feedback-close">
@@ -124,7 +124,7 @@ export function FeedbackWidget() {
 
       <Button
         onClick={() => setOpen(!open)}
-        className="fixed bottom-24 right-6 z-30 rounded-full shadow-lg h-12 px-4 gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+        className="fixed bottom-6 right-6 z-30 rounded-full shadow-lg h-10 px-4 gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
         data-testid="button-feedback"
       >
         <MessageSquare className="h-4 w-4" />
