@@ -104,7 +104,10 @@ const adminSettingsItems: SettingsNavItem[] = [
   { title: "Metrics", url: "/admin/metrics", icon: BarChart3 },
 ];
 
+const NON_DATA_PATHS = ["/docs", "/help", "/privacy", "/terms", "/integrations", "/settings"];
+
 function HealthScoreCard() {
+  const [location] = useLocation();
   const { truthScan } = useFounderStore();
   const confidence = truthScan?.data_confidence_score ?? 0;
   const qualityIndex = truthScan?.quality_of_growth_index ?? 0;
@@ -112,6 +115,9 @@ function HealthScoreCard() {
   const healthScore = hasData
     ? (qualityIndex > 0 ? Math.min(Math.round(qualityIndex), 100) : 0)
     : null;
+
+  const isNonDataPage = NON_DATA_PATHS.some((p) => location.startsWith(p));
+  if (!hasData || isNonDataPage) return null;
 
   const getHealthColor = (score: number) => {
     if (score >= 70) return "text-emerald-400";
