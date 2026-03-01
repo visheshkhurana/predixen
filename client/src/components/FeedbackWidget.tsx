@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageSquare, X, Send, Loader2, CheckCircle, Bug, Lightbulb, MessageCircle } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2, CheckCircle, Bug, Lightbulb, MessageCircle, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -16,12 +16,13 @@ function getCSRFToken(): string | null {
   return null;
 }
 
-type FeedbackType = 'bug' | 'feature' | 'general';
+type FeedbackType = 'bug' | 'feature' | 'general' | 'question';
 
 const TYPES: { value: FeedbackType; label: string; icon: any }[] = [
-  { value: 'bug', label: 'Bug', icon: Bug },
-  { value: 'feature', label: 'Feature', icon: Lightbulb },
+  { value: 'bug', label: 'Bug Report', icon: Bug },
+  { value: 'feature', label: 'Feature Request', icon: Lightbulb },
   { value: 'general', label: 'General', icon: MessageCircle },
+  { value: 'question', label: 'Question', icon: HelpCircle },
 ];
 
 export function FeedbackWidget() {
@@ -85,7 +86,7 @@ export function FeedbackWidget() {
           <div className="p-4 space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Type</Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {TYPES.map((t) => (
                   <button
                     key={t.value}

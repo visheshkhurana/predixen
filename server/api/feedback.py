@@ -11,7 +11,7 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 
 class FeedbackCreate(BaseModel):
-    type: str = Field(..., pattern="^(bug|feature|general)$")
+    type: str = Field(..., pattern="^(bug|feature|general|question)$")
     message: str = Field(..., min_length=1, max_length=5000)
     page: str = Field("", max_length=500)
 
