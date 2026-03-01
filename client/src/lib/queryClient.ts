@@ -17,11 +17,9 @@ async function throwIfResNotOk(res: Response) {
         }
       }
     } catch (parseError) {
-      // If safeParseJSON already threw an ApiError, re-throw it
       if (parseError instanceof ApiError) {
         throw parseError;
       }
-      // Otherwise continue with statusText as message
       message = res.statusText || 'Request failed';
     }
 
@@ -30,32 +28,6 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-// Helper to get token from localStorage or Zustand persisted storage
-function getAuthToken(): string | null {
-  // First try direct localStorage key
-  let token = localStorage.getItem('founderconsole-token');
-
-  // Fallback: try to get from Zustand persisted storage
-  if (!token) {
-    try {
-      const zustandStorage = localStorage.getItem('founderconsole-founder-storage');
-      if (zustandStorage) {
-        const parsed = JSON.parse(zustandStorage);
-        token = parsed?.state?.token || null;
-        // Sync back to direct key if found
-        if (token) {
-          localStorage.setItem('founderconsole-token', token);
-        }
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-  }
-
-  return token;
-}
-
-// Helper to get CSRF token from cookies
 function getCSRFToken(): string | null {
   const name = 'X-CSRF-Token=';
   const decodedCookie = decodeURIComponent(document.cookie);
@@ -77,14 +49,10 @@ export async function apiRequest(
   let res: Response;
 
   const makeRequest = async () => {
-    const token = getAuthToken();
     const headers: Record<string, string> = {};
 
     if (data) {
       headers["Content-Type"] = "application/json";
-    }
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
     }
 
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
@@ -134,16 +102,8 @@ export const getQueryFn = <T>(options: {
     let res: Response;
 
     try {
-      const token = getAuthToken();
-      const headers: Record<string, string> = {};
-
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
       res = await fetch(queryKey.join("/") as string, {
         credentials: "include",
-        headers,
       });
     } catch (error) {
       const networkError = error instanceof Error ? error.message : String(error);

@@ -68,30 +68,21 @@ export async function fetchConnectorCatalog(params?: {
   if (params?.companyId) searchParams.set("company_id", String(params.companyId));
   
   const url = `/api/connectors/catalog${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
-  const token = localStorage.getItem("founderconsole-token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, { credentials: 'include' });
   if (!response.ok) throw new Error("Failed to fetch connector catalog");
   const data = await response.json();
   return snakeToCamel(data);
 }
 
 export async function fetchConnectorDetail(connectorId: string): Promise<CatalogConnector> {
-  const token = localStorage.getItem("founderconsole-token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const response = await fetch(`/api/connectors/catalog/${connectorId}`, { headers });
+  const response = await fetch(`/api/connectors/catalog/${connectorId}`, { credentials: 'include' });
   if (!response.ok) throw new Error(`Failed to fetch connector ${connectorId}`);
   const data = await response.json();
   return snakeToCamel(data);
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  const token = localStorage.getItem("founderconsole-token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const response = await fetch("/api/connectors/categories", { headers });
+  const response = await fetch("/api/connectors/categories", { credentials: 'include' });
   if (!response.ok) throw new Error("Failed to fetch categories");
   return response.json();
 }

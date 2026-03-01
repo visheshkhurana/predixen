@@ -123,8 +123,8 @@ export default function OnboardingPage() {
   const loadSampleCompany = async () => {
     if (isSubmitting || isSeedingInProgress) return;
 
-    const { token } = useFounderStore.getState();
-    if (!token) {
+    const { user } = useFounderStore.getState();
+    if (!user) {
       toast({
         title: 'Session expired',
         description: 'Please log in again to continue.',
@@ -180,8 +180,8 @@ export default function OnboardingPage() {
 
     if (isSubmitting || createCompanyMutation.isPending) return;
 
-    const { token } = useFounderStore.getState();
-    if (!token) {
+    const { user } = useFounderStore.getState();
+    if (!user) {
       toast({
         title: 'Session expired',
         description: 'Please log in again to continue.',
@@ -268,8 +268,8 @@ export default function OnboardingPage() {
   };
 
   const handleFinishSetup = async () => {
-    const { token } = useFounderStore.getState();
-    if (!token) {
+    const { user: currentUser } = useFounderStore.getState();
+    if (!currentUser) {
       toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
       setLocation('/auth');
       return;

@@ -230,9 +230,8 @@ export default function Dashboard() {
   const { data: trendData } = useQuery<{ days: number; data: Array<{ date: string; runway_p50?: number; runway_p10?: number; runway_p90?: number }> }>({
     queryKey: ["/api/companies", selectedCompany?.id, "trends"],
     queryFn: async () => {
-      const token = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${selectedCompany?.id}/trends?days=90`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
       });
       if (!res.ok) return { days: 90, data: [] };
       return res.json();
@@ -245,9 +244,8 @@ export default function Dashboard() {
   const { data: digestPrefs } = useQuery<{ monthly_digest: boolean }>({
     queryKey: ["/api/companies", selectedCompany?.id, "digest/preferences"],
     queryFn: async () => {
-      const t = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${selectedCompany?.id}/digest/preferences`, {
-        headers: { 'Authorization': `Bearer ${t}` },
+        credentials: 'include',
       });
       if (!res.ok) return { monthly_digest: true };
       return res.json();
@@ -276,10 +274,9 @@ export default function Dashboard() {
   const handleResendVerification = async () => {
     setVerificationSending(true);
     try {
-      const token = localStorage.getItem('founderconsole-token');
       await fetch('/api/auth/send-verification', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
       });
       setVerificationSent(true);
     } catch { /* silent */ } finally {
@@ -367,11 +364,10 @@ export default function Dashboard() {
               <TooltipTrigger asChild>
                 <Select
                   onValueChange={async (format) => {
-                    const { token } = useFounderStore.getState();
                     const url = `/api/companies/${selectedCompany.id}/financials/export?format=${format}`;
                     try {
                       const res = await fetch(url, {
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                        credentials: 'include',
                       });
                       if (!res.ok) {
                         if (res.status === 404) {
@@ -967,10 +963,10 @@ export default function Dashboard() {
                   onCheckedChange={async (checked) => {
                     if (!selectedCompany) return;
                     try {
-                      const t = localStorage.getItem('founderconsole-token');
                       const res = await fetch(`/api/companies/${selectedCompany.id}/digest/preferences`, {
                         method: 'PUT',
-                        headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify({ monthly_digest: checked }),
                       });
                       if (!res.ok) throw new Error();
@@ -990,11 +986,10 @@ export default function Dashboard() {
                   onClick={async () => {
                     if (!selectedCompany) return;
                     setDigestSending(true);
-                    const t = localStorage.getItem('founderconsole-token');
                     try {
                       await fetch(`/api/companies/${selectedCompany.id}/digest/send`, {
                         method: 'POST',
-                        headers: { 'Authorization': `Bearer ${t}` },
+                        credentials: 'include',
                       });
                     } catch {}
                     setDigestSending(false);

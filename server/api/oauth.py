@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.config import settings
-from server.core.security import create_access_token
+from server.core.security import create_access_token, set_auth_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
 from server.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -84,13 +84,23 @@ def _build_auth_redirect(request: Request, user: User) -> RedirectResponse:
     is_admin = bool(admin_email and user.email.lower().strip() == admin_email)
     base = _get_base_url(request)
     params = urlencode({
-        "token": access_token,
         "user_id": user.id,
         "email": user.email,
         "role": user.role or "viewer",
         "is_platform_admin": "true" if is_admin else "false",
     })
-    return RedirectResponse(url=f"{base}/auth/callback?{params}", status_code=302)
+    resp = RedirectResponse(url=f"{base}/auth/callback?{params}", status_code=302)
+    is_prod = settings.ENVIRONMENT == "production"
+    resp.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=AUTH_COOKIE_MAX_AGE,
+        path="/",
+    )
+    return resp
 
 
 @router.get("/google/start")

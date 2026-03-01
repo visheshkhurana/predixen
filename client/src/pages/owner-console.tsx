@@ -28,7 +28,7 @@ const CHART_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#e
 
 export default function OwnerConsole() {
   const [, navigate] = useLocation();
-  const { token, user, logout } = useFounderStore();
+  const { user, logout } = useFounderStore();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -36,68 +36,68 @@ export default function OwnerConsole() {
   const { data: meData, isLoading: meLoading } = useQuery({
     queryKey: ["/api/admin/me"],
     queryFn: () => api.admin.me(),
-    enabled: !!token,
+    enabled: !!user,
   });
 
   const { data: dashboard, isLoading: dashLoading, refetch: refetchDashboard } = useQuery({
     queryKey: ["/api/admin/dashboard"],
     queryFn: () => api.admin.dashboard(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: metrics, refetch: refetchMetrics } = useQuery({
     queryKey: ["/api/admin/metrics/aggregate"],
     queryFn: () => api.admin.metrics(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: users, refetch: refetchUsers } = useQuery({
     queryKey: ["/api/admin/users"],
     queryFn: () => api.admin.users.list(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: companies, refetch: refetchCompanies } = useQuery({
     queryKey: ["/api/admin/companies"],
     queryFn: () => api.admin.companies.list(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: subscriptions, refetch: refetchSubscriptions } = useQuery({
     queryKey: ["/api/admin/subscriptions"],
     queryFn: () => api.admin.subscriptions.list(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: activityStats, refetch: refetchActivity } = useQuery({
     queryKey: ["/api/admin/stats/activity"],
     queryFn: () => api.admin.activityStats(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: loginHistory, refetch: refetchLogins } = useQuery({
     queryKey: ["/api/admin/login-history"],
     queryFn: () => api.admin.loginHistory(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: auditLogs, refetch: refetchAudit } = useQuery({
     queryKey: ["/api/admin/audit-logs"],
     queryFn: () => api.admin.auditLogs(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   const { data: notifications, refetch: refetchNotifications } = useQuery({
     queryKey: ["/api/admin/notifications"],
     queryFn: () => api.admin.notifications(),
-    enabled: !!token && meData?.is_admin,
+    enabled: !!user && meData?.is_admin,
   });
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       navigate("/auth");
     }
-  }, [token, navigate]);
+  }, [user, navigate]);
 
   useEffect(() => {
     if (meData && meData.role !== "owner") {
@@ -136,7 +136,7 @@ export default function OwnerConsole() {
     navigate("/auth");
   };
 
-  if (!token || meLoading) {
+  if (!user || meLoading) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b">

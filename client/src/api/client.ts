@@ -3,32 +3,6 @@ export { ApiError };
 
 const API_BASE = '/api';
 
-// Helper to get token from localStorage or Zustand persisted storage
-function getAuthToken(): string | null {
-  // First try direct localStorage key
-  let token = localStorage.getItem('founderconsole-token');
-
-  // Fallback: try to get from Zustand persisted storage
-  if (!token) {
-    try {
-      const zustandStorage = localStorage.getItem('founderconsole-founder-storage');
-      if (zustandStorage) {
-        const parsed = JSON.parse(zustandStorage);
-        token = parsed?.state?.token || null;
-        // Sync back to direct key if found
-        if (token) {
-          localStorage.setItem('founderconsole-token', token);
-        }
-      }
-    } catch {
-      // Ignore JSON parse errors
-    }
-  }
-
-  return token;
-}
-
-// Helper to get CSRF token from cookies
 function getCSRFToken(): string | null {
   const name = 'X-CSRF-Token=';
   const decodedCookie = decodeURIComponent(document.cookie);
@@ -60,18 +34,11 @@ async function request<T>(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const token = getAuthToken();
-
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...((options.headers as Record<string, string>) || {}),
       };
 
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      // Include CSRF token for state-changing requests (POST, PUT, PATCH, DELETE)
       const method = (options.method || 'GET').toUpperCase();
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
         const csrfToken = getCSRFToken();
@@ -159,17 +126,13 @@ async function request<T>(
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
 
     if (response.status === 401 && !endpoint.startsWith('/auth/')) {
-      const method = (options.method || 'GET').toUpperCase();
-      const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
-      if (isMutation && !window.location.pathname.startsWith('/auth') && !_redirecting401) {
+      if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
         _redirecting401 = true;
-        localStorage.removeItem('founderconsole-token');
         try {
           const raw = localStorage.getItem('founderconsole-founder-storage');
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed?.state) {
-              parsed.state.token = null;
               parsed.state.user = null;
               localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
             }
@@ -242,14 +205,13 @@ export const api = {
     upload: async (companyId: number, type: string, file: File) => {
       let response: Response;
       try {
-        const token = getAuthToken();
         const formData = new FormData();
         formData.append('file', file);
 
         response = await fetch(`${API_BASE}/companies/${companyId}/datasets/upload?dataset_type=${type}`, {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
+          credentials: 'include',
         });
       } catch (error) {
         const networkError = error instanceof Error ? error.message : String(error);
@@ -299,7 +261,6 @@ export const api = {
     uploadTerminaPdf: async (companyId: number, file: File, saveAsBaseline = true) => {
       let response: Response;
       try {
-        const token = getAuthToken();
         const formData = new FormData();
         formData.append('file', file);
 
@@ -307,8 +268,8 @@ export const api = {
           `${API_BASE}/companies/${companyId}/datasets/termina-pdf?save_as_baseline=${saveAsBaseline}`,
           {
             method: 'POST',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
             body: formData,
+            credentials: 'include',
           }
         );
       } catch (error) {
@@ -346,7 +307,6 @@ export const api = {
     uploadTerminaExcel: async (companyId: number, file: File, saveAsBaseline = true) => {
       let response: Response;
       try {
-        const token = getAuthToken();
         const formData = new FormData();
         formData.append('file', file);
 
@@ -354,8 +314,8 @@ export const api = {
           `${API_BASE}/companies/${companyId}/datasets/termina-excel?save_as_baseline=${saveAsBaseline}`,
           {
             method: 'POST',
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
             body: formData,
+            credentials: 'include',
           }
         );
       } catch (error) {

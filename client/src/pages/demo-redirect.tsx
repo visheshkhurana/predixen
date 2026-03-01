@@ -9,7 +9,7 @@ import { Loader2, RefreshCw, UserPlus } from 'lucide-react';
 export default function DemoRedirectPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { setToken, setUser, setCompanies, setCurrentCompany } = useFounderStore();
+  const { setUser, setCompanies, setCurrentCompany } = useFounderStore();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,8 +19,6 @@ export default function DemoRedirectPage() {
     try {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
 
-      localStorage.setItem('founderconsole-token', result.access_token);
-      setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
 
       if (typeof window !== 'undefined' && (window as any).gtag) {
@@ -50,7 +48,7 @@ export default function DemoRedirectPage() {
       setError(message);
       setLoading(false);
     }
-  }, [setToken, setUser, setCompanies, setCurrentCompany, setLocation, toast]);
+  }, [setUser, setCompanies, setCurrentCompany, setLocation, toast]);
 
   useEffect(() => {
     loginDemo();

@@ -76,28 +76,8 @@ const EMPTY_METRICS: FinancialMetrics = {
   warnings: [],
 };
 
-function getToken(): string | null {
-  let token = localStorage.getItem('founderconsole-token');
-  if (!token) {
-    try {
-      const raw = localStorage.getItem('founderconsole-founder-storage');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        token = parsed?.state?.token || null;
-        if (token) {
-          localStorage.setItem('founderconsole-token', token);
-        }
-      }
-    } catch {}
-  }
-  return token;
-}
-
 async function fetchJson(url: string): Promise<any> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(url, { headers, credentials: 'include' });
+  const res = await fetch(url, { credentials: 'include' });
   if (!res.ok) {
     throw new Error(`${res.status} ${res.statusText}`);
   }

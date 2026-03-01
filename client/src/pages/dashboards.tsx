@@ -47,7 +47,7 @@ interface Dashboard {
 
 export default function DashboardsPage() {
   const [, setLocation] = useLocation();
-  const { currentCompany, token } = useFounderStore();
+  const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -57,7 +57,7 @@ export default function DashboardsPage() {
 
   const { data: dashboards = [], isLoading } = useQuery<Dashboard[]>({
     queryKey: [`/api/dashboards?company_id=${currentCompany?.id}`],
-    enabled: !!currentCompany && !!token,
+    enabled: !!currentCompany,
   });
 
   const createMutation = useMutation({

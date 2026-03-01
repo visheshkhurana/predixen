@@ -30,7 +30,7 @@ interface MetricTimeSeriesValue {
 }
 
 export function MetricTimeSeriesEditor() {
-  const { currentCompany, token } = useFounderStore();
+  const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const { format } = useCurrency();
   const companyId = currentCompany?.id;
@@ -57,12 +57,12 @@ export function MetricTimeSeriesEditor() {
     queryKey: ['/api/metrics', companyId],
     queryFn: async () => {
       const res = await fetch(`/api/metrics?company_id=${companyId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch metrics');
       return res.json();
     },
-    enabled: !!companyId && !!token,
+    enabled: !!companyId,
   });
 
   const formatValue = (value: number | null, formatType: string) => {
@@ -84,7 +84,7 @@ export function MetricTimeSeriesEditor() {
   };
 
   const handleSave = async () => {
-    if (!companyId || !token) return;
+    if (!companyId) return;
     setIsSaving(true);
 
     try {

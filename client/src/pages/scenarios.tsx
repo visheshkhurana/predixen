@@ -274,10 +274,10 @@ export default function ScenariosPage() {
     const currentScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
     setShareModal({ open: true, url: '', loading: true });
     try {
-      const token = localStorage.getItem('founderconsole-token');
       const res = await fetch(`/api/companies/${currentCompany.id}/scenarios/share`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           scenario_name: currentScenario?.name || currentScenarioName,
           scenario_description: currentScenario?.description || '',

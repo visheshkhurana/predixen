@@ -3,7 +3,7 @@ from typing import Optional, Union, Set
 from jose import JWTError, jwt
 import bcrypt
 import uuid
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Response, Cookie
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from server.core.config import settings
@@ -12,9 +12,11 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-# In-memory token revocation list (use Redis in production for multi-process)
+AUTH_COOKIE_NAME = "auth_token"
+AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+
 _revoked_tokens: Set[str] = set()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -64,13 +66,45 @@ class MasterUser:
         self.is_platform_admin = True
         self._is_master_user = True
 
+def set_auth_cookie(response: Response, token: str):
+    is_prod = settings.ENVIRONMENT == "production"
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=AUTH_COOKIE_MAX_AGE,
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response):
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+    )
+
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ):
     from server.models.user import User
 
-    token = credentials.credentials
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    if not token:
+        token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     payload = decode_token(token)
     if payload is None:
         raise HTTPException(
@@ -79,7 +113,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check token revocation
     jti = payload.get("jti")
     if jti and is_token_revoked(jti):
         raise HTTPException(
@@ -111,7 +144,6 @@ async def get_current_user(
             detail="User not found",
         )
 
-    # Mark regular users as not platform admin
     user.is_platform_admin = False
     user._is_master_user = False
     return user

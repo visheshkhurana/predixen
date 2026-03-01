@@ -32,8 +32,6 @@ export function FeedbackWidget() {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
-  const { token } = useFounderStore();
-
   const handleSubmit = async () => {
     if (!message.trim()) return;
     setSending(true);
@@ -43,9 +41,9 @@ export function FeedbackWidget() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
         },
+        credentials: 'include',
         body: JSON.stringify({ type, message: message.trim(), page: window.location.pathname }),
       });
       if (!res.ok) throw new Error('Failed to send feedback');

@@ -1086,7 +1086,7 @@ function StructuredResponseDisplay({ response, messageIndex, showSources, onTryP
 
 export default function CopilotPage() {
   const [, setLocation] = useLocation();
-  const { currentCompany, token } = useFounderStore();
+  const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const { data: truthScan, isLoading: truthLoading } = useTruthScan(currentCompany?.id || null);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
@@ -1519,15 +1519,7 @@ Type **help** for a full list of what I can do.`,
     setInput('');
     setIsTyping(true);
     
-    const effectiveToken = token || localStorage.getItem('founderconsole-token') || (() => {
-      try {
-        const raw = localStorage.getItem('founderconsole-founder-storage');
-        if (raw) { const p = JSON.parse(raw); return p?.state?.token || null; }
-      } catch { }
-      return null;
-    })();
-    
-    if (useApiMode && effectiveToken) {
+    if (useApiMode) {
       try {
         const recentHistory = messages
           .filter(m => m.role === 'user' || m.role === 'assistant')

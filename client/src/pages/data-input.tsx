@@ -177,7 +177,6 @@ export default function DataInput() {
   const { toast } = useToast();
   const { 
     currentCompany, 
-    token,
     financialBaseline,
     lastExtraction,
     extractionInProgress,
@@ -389,7 +388,7 @@ export default function DataInput() {
   }, [financialBaseline, form, hasLoadedFromBackend, backendBaseline]);
 
   const handleFileUpload = async (file: File, type: 'pdf' | 'excel') => {
-    if (!currentCompany || !token) {
+    if (!currentCompany) {
       toast({
         title: "Please select a company",
         description: "You need to select a company before uploading files",
@@ -412,9 +411,7 @@ export default function DataInput() {
         const endpoint = type === 'pdf' ? '/api/imports/pdf' : '/api/imports/excel';
         const response = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          credentials: 'include',
           body: formData,
         });
 
@@ -446,9 +443,7 @@ export default function DataInput() {
 
       const response = await fetch('/api/ingest/financials', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
         body: formData,
       });
 
@@ -580,7 +575,7 @@ export default function DataInput() {
   };
 
   const doSave = async (values: DataInputValues) => {
-    if (!currentCompany || !token) {
+    if (!currentCompany) {
       toast({
         title: "Please select a company",
         description: "You need to select a company before saving",
@@ -602,7 +597,8 @@ export default function DataInput() {
       console.log('[SAVE] Attempting company PUT to', putUrl, JSON.stringify(putBody));
       const res = await fetch(putUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(putBody)
       });
       console.log('[SAVE] Company PUT response:', res.status, res.statusText);
@@ -652,8 +648,8 @@ export default function DataInput() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify(baseline),
       });
 
@@ -1062,13 +1058,13 @@ export default function DataInput() {
   };
 
   const handleCsvDetect = async (file: File) => {
-    if (!currentCompany || !token) return;
+    if (!currentCompany) return;
     const formData = new FormData();
     formData.append('file', file);
     try {
       const res = await fetch(`/api/companies/${currentCompany.id}/financials/csv-detect`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
         body: formData,
       });
       if (res.ok) {
@@ -1087,7 +1083,7 @@ export default function DataInput() {
   };
 
   const handleCsvImport = async () => {
-    if (!currentCompany || !token || !csvDetection) return;
+    if (!currentCompany || !csvDetection) return;
     const activeMappings: Record<string, string> = {};
     for (const [k, v] of Object.entries(csvMappings)) {
       if (v && v !== "__none__") activeMappings[k] = v;
@@ -1100,7 +1096,8 @@ export default function DataInput() {
     try {
       const res = await fetch(`/api/companies/${currentCompany.id}/financials/import-csv`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ mappings: activeMappings, rows: csvRawRows }),
       });
       if (res.ok) {

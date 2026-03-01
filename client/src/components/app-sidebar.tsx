@@ -277,8 +277,8 @@ function SettingsDrawer() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  localStorage.removeItem('founderconsole-token');
+                onClick={async () => {
+                  try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                   logout();
                   window.location.href = '/auth';
                 }}
@@ -344,7 +344,7 @@ export function AppSidebar() {
     queryFn: async () => {
       if (!currentCompany?.id) return [];
       const res = await fetch(`/api/companies/${currentCompany.id}/decisions`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('founderconsole-token')}` },
+        credentials: 'include',
       });
       if (!res.ok) return [];
       const data = await res.json();
@@ -574,8 +574,8 @@ export function AppSidebar() {
           variant="ghost"
           size="sm"
           className="w-full justify-start"
-          onClick={() => {
-            localStorage.removeItem('founderconsole-token');
+          onClick={async () => {
+            try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
             useFounderStore.getState().logout();
             window.location.href = '/auth';
           }}

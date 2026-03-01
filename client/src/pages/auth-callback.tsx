@@ -7,13 +7,12 @@ import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation();
-  const { setToken, setUser, setCurrentCompany, setCompanies } = useFounderStore();
+  const { setUser, setCurrentCompany, setCompanies } = useFounderStore();
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
     const userId = params.get('user_id');
     const email = params.get('email');
     const role = params.get('role');
@@ -37,14 +36,12 @@ export default function AuthCallback() {
       return;
     }
 
-    if (!token || !userId || !email) {
+    if (!userId || !email) {
       setError('Invalid callback. Missing authentication data.');
       setTimeout(() => setLocation('/auth'), 2000);
       return;
     }
 
-    localStorage.setItem('founderconsole-token', token);
-    setToken(token);
     setUser({
       id: parseInt(userId),
       email,

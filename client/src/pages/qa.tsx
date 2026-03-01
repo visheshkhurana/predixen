@@ -63,14 +63,13 @@ const StatusBadge = ({ status }: { status: CheckStatus }) => {
 };
 
 async function apiFetch(path: string, options?: RequestInit): Promise<any> {
-  const token = useFounderStore.getState().token;
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },
+    credentials: 'include',
   });
   const data = await res.json().catch(() => null);
   return { status: res.status, ok: res.ok, data };
@@ -217,12 +216,12 @@ async function runSmokeChecks(): Promise<CheckResult[]> {
     });
   }
 
-  const token = useFounderStore.getState().token;
+  const currentUser = useFounderStore.getState().user;
   results.push({
     name: "Session active",
-    status: token ? "pass" : "fail",
-    details: token ? "Auth token present" : "No auth token found",
-    fixHint: token ? undefined : "User is not logged in",
+    status: currentUser ? "pass" : "fail",
+    details: currentUser ? "User session active" : "No active session",
+    fixHint: currentUser ? undefined : "User is not logged in",
   });
 
   try {
@@ -765,9 +764,7 @@ async function runBriefingChecks(): Promise<CheckResult[]> {
     const res = await fetch(
       `/api/companies/${companyId}/strategic-diagnosis`,
       {
-        headers: {
-          Authorization: `Bearer ${useFounderStore.getState().token}`,
-        },
+        credentials: 'include',
         signal: controller.signal,
       }
     );

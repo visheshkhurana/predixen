@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
 from server.core.db import get_db
-from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user
+from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie
 from server.core.config import settings
 from server.models.user import User, PasswordResetToken, EmailVerificationToken
 from server.models.login_history import LoginHistory
@@ -129,7 +129,7 @@ class ResetPasswordRequest(BaseModel):
         return v
 
 @router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+async def register(req: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     # Normalize email to lowercase
     normalized_email = req.email.lower().strip()
     existing = db.query(User).filter(User.email == normalized_email).first()
@@ -174,6 +174,8 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
+    set_auth_cookie(response, access_token)
+    
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
     
@@ -187,7 +189,7 @@ async def register(req: RegisterRequest, request: Request, db: Session = Depends
     )
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == req.email).first()
     if not user or not verify_password(req.password, user.password_hash):
         log_login_attempt(db, req.email, user.id if user else None, success=False,
@@ -221,6 +223,8 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
+    set_auth_cookie(response, access_token)
+    
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
     
@@ -235,7 +239,7 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/admin/login", response_model=TokenResponse)
-def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def admin_login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Admin-only login endpoint with master credentials support."""
     
     admin_email_config = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
@@ -302,6 +306,8 @@ def admin_login(req: LoginRequest, request: Request, db: Session = Depends(get_d
         data={"sub": str(user.id), "admin": True},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
+    
+    set_auth_cookie(response, access_token)
     
     return TokenResponse(
         access_token=access_token,
@@ -442,3 +448,9 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Email verified successfully. You can now use all features."}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"message": "Logged out successfully."}

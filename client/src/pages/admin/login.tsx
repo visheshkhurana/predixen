@@ -12,7 +12,7 @@ import { Eye, EyeOff, Shield, Lock, Mail } from 'lucide-react';
 export default function AdminLoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { setToken, setUser } = useFounderStore();
+  const { setUser } = useFounderStore();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '' });
@@ -40,9 +40,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.adminLogin(form.email, form.password);
-      localStorage.setItem('founderconsole-token', result.access_token);
       localStorage.setItem('founderconsole-admin-session', 'true');
-      setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin });
       toast({ title: 'Welcome, Administrator' });
       setLocation('/admin');

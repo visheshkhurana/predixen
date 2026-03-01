@@ -49,32 +49,12 @@ export function useRealtimeKPI(
     setIsConnected(false);
   }, []);
 
-  const getToken = useCallback(() => {
-    let token = localStorage.getItem('founderconsole-token');
-    if (!token) {
-      try {
-        const zustandStorage = localStorage.getItem('founderconsole-founder-storage');
-        if (zustandStorage) {
-          const parsed = JSON.parse(zustandStorage);
-          token = parsed?.state?.token || null;
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-    return token;
-  }, []);
-
   const fetchKPIData = useCallback(async () => {
-    const token = getToken();
-    if (!token || !companyId) return;
+    if (!companyId) return;
     
     try {
       const response = await fetch(`/api/realtime/kpi/${companyId}/snapshot`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        credentials: 'include',
       });
       
       if (!response.ok) {

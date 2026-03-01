@@ -90,24 +90,20 @@ async function fetchTeam(params?: Record<string, string>) {
       if (v) url.searchParams.set(k, v);
     });
   }
-  const token = localStorage.getItem('founderconsole-token');
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include',
   });
   if (!res.ok) throw new Error('Failed to fetch team');
   return res.json();
 }
 
 async function saveTeamMember(data: any, id?: number) {
-  const token = localStorage.getItem('founderconsole-token');
   const url = id ? `/api/admin/team/${id}` : '/api/admin/team';
   const method = id ? 'PUT' : 'POST';
   const res = await fetch(url, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to save team member');
@@ -115,10 +111,9 @@ async function saveTeamMember(data: any, id?: number) {
 }
 
 async function deleteTeamMember(id: number) {
-  const token = localStorage.getItem('founderconsole-token');
   const res = await fetch(`/api/admin/team/${id}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    credentials: 'include',
   });
   if (!res.ok) throw new Error('Failed to remove team member');
   return res.json();

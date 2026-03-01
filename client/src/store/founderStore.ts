@@ -84,7 +84,6 @@ interface LatestRun {
 }
 
 interface FounderState {
-  token: string | null;
   user: User | null;
   currentCompany: Company | null;
   companies: Company[];
@@ -99,7 +98,6 @@ interface FounderState {
   lastExtraction: ExtractionResult | null;
   extractionInProgress: boolean;
   
-  setToken: (token: string | null) => void;
   setUser: (user: User | null) => void;
   setCurrentCompany: (company: Company | null) => void;
   setCompanies: (companies: Company[]) => void;
@@ -138,7 +136,6 @@ const EMPTY_BASELINE: FinancialBaseline = {
 export const useFounderStore = create<FounderState>()(
   persist(
     (set, get) => ({
-      token: null,
       user: null,
       currentCompany: null,
       companies: [],
@@ -153,7 +150,6 @@ export const useFounderStore = create<FounderState>()(
       lastExtraction: null,
       extractionInProgress: false,
       
-      setToken: (token) => set({ token }),
       setUser: (user) => set({ user }),
       setCurrentCompany: (company) => set({ 
         currentCompany: company,
@@ -170,7 +166,6 @@ export const useFounderStore = create<FounderState>()(
       setCurrentScenario: (scenario) => set({ currentScenario: scenario }),
       setLatestRun: (run) => set({ latestRun: run }),
       logout: () => set({ 
-        token: null, 
         user: null, 
         currentCompany: null, 
         companies: [], 
@@ -227,7 +222,6 @@ export const useFounderStore = create<FounderState>()(
     {
       name: 'founderconsole-founder-storage',
       partialize: (state) => ({
-        token: state.token,
         user: state.user,
         currentCompany: state.currentCompany,
         financialBaseline: state.financialBaseline,

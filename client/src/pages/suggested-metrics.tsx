@@ -311,10 +311,7 @@ export default function SuggestedMetrics() {
     queryFn: async () => {
       const params = new URLSearchParams({ company_id: String(companyId) });
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
-      const token = localStorage.getItem('founderconsole-token');
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`/api/suggestions?${params}`, { headers, credentials: 'include' });
+      const res = await fetch(`/api/suggestions?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error("Failed to fetch suggestions");
       return res.json();
     },
@@ -324,13 +321,9 @@ export default function SuggestedMetrics() {
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error("No company selected");
-      const token = localStorage.getItem('founderconsole-token');
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      headers['Content-Type'] = 'application/json';
       const res = await fetch(`/api/suggestions/generate?company_id=${companyId}`, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ force_refresh: false }),
       });

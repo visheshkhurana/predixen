@@ -351,7 +351,7 @@ export default function DashboardBuilderPage() {
   const params = useParams<{ id: string }>();
   const dashboardId = params.id ? parseInt(params.id) : null;
   const [, setLocation] = useLocation();
-  const { currentCompany, token } = useFounderStore();
+  const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -362,12 +362,12 @@ export default function DashboardBuilderPage() {
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery<Dashboard>({
     queryKey: [`/api/dashboards/${dashboardId}`],
-    enabled: !!dashboardId && !!token,
+    enabled: !!dashboardId,
   });
 
   const { data: metrics = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[]>({
     queryKey: [`/api/metrics?company_id=${currentCompany?.id}`],
-    enabled: !!currentCompany && !!token,
+    enabled: !!currentCompany,
   });
 
   const initRef = useRef(false);

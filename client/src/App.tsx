@@ -99,10 +99,10 @@ import QAFrontPage from "@/pages/qa";
 import PricingPage from "@/pages/pricing";
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
-  const token = useFounderStore((s) => s.token);
+  const user = useFounderStore((s) => s.user);
   const currentCompany = useFounderStore((s) => s.currentCompany);
 
-  if (!token) {
+  if (!user) {
     return <Redirect to="/auth" />;
   }
 
@@ -131,7 +131,6 @@ function AuthenticatedRoute({ component: Component, allowWithoutCompany = false 
 }
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
-  const token = useFounderStore((s) => s.token);
   const user = useFounderStore((s) => s.user);
   const setUser = useFounderStore((s) => s.setUser);
   const isAdmin = useFounderStore((s) => s.isAdmin);
@@ -139,7 +138,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   const [accessDenied, setAccessDenied] = useState(false);
   
   useEffect(() => {
-    if (token && !user?.role) {
+    if (user && !user?.role) {
       api.admin.me()
         .then((data) => {
           if (user) {
@@ -160,7 +159,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
         setAccessDenied(true);
       }
     }
-  }, [token, user?.role]);
+  }, [user, user?.role]);
 
   // Identify user for Analytics & Remarketing when already logged in
   useEffect(() => {
@@ -176,7 +175,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   }, [user]);
 
   
-  if (!token) {
+  if (!user) {
     return <Redirect to="/admin/login" />;
   }
   
@@ -560,7 +559,7 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const { token, user, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
+  const { user, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
   const [location, navigate] = useLocation();
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -576,12 +575,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   }, [location]);
 
   useEffect(() => {
-    if (user && token) {
+    if (user) {
       identifyUser(user.id, user.email, user.role);
-    } else if (!token) {
+    } else {
       resetUser();
     }
-  }, [user, token]);
+  }, [user]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -612,7 +611,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
      window.location.pathname.startsWith('/admin') ||
      window.location.pathname.startsWith('/scenarios/shared/'));
   
-  if (!token || isStandalonePage) {
+  if (!user || isStandalonePage) {
     return <>{children}</>;
   }
   

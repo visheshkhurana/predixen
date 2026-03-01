@@ -41,7 +41,7 @@ function AnimatedMetric({ label, value, delay }: { label: string; value: string;
 export default function AuthPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { setToken, setUser, setCurrentCompany, setCompanies } = useFounderStore();
+  const { setUser, setCurrentCompany, setCompanies } = useFounderStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | null>(null);
@@ -119,8 +119,6 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.login(loginForm.email, loginForm.password);
-      localStorage.setItem('founderconsole-token', result.access_token);
-      setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
 
@@ -182,8 +180,6 @@ export default function AuthPage() {
     setIsLoading(true);
     try {
       const result = await api.auth.register(registerForm.email, registerForm.password);
-      localStorage.setItem('founderconsole-token', result.access_token);
-      setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       toast({ title: 'Account created!' });
@@ -207,8 +203,6 @@ export default function AuthPage() {
     setIsDemoLoading(true);
     try {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
-      localStorage.setItem('founderconsole-token', result.access_token);
-      setToken(result.access_token);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       
