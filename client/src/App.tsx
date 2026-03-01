@@ -47,6 +47,8 @@ import AuthPage from "@/pages/auth";
 import AuthCallback from "@/pages/auth-callback";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyEmailPage from "@/pages/verify-email";
+import PrivacyPolicyPage from "@/pages/privacy";
+import TermsOfServicePage from "@/pages/terms";
 import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
 import TruthScanPage from "@/pages/truth-scan";
@@ -231,6 +233,8 @@ function Router() {
         <Route path="/auth" component={AuthPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
+        <Route path="/privacy" component={PrivacyPolicyPage} />
+        <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>

@@ -617,9 +617,9 @@ export default function AuthPage() {
                 
                 <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
                   By creating an account, you agree to our{' '}
-                  <button type="button" className="text-foreground hover:underline">Terms</button>
+                  <a href="/terms" className="text-foreground hover:underline" data-testid="link-auth-terms">Terms</a>
                   {' '}and{' '}
-                  <button type="button" className="text-foreground hover:underline">Privacy Policy</button>
+                  <a href="/privacy" className="text-foreground hover:underline" data-testid="link-auth-privacy">Privacy Policy</a>
                 </p>
               </form>
             </TabsContent>
