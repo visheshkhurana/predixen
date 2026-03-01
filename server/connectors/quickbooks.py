@@ -354,8 +354,93 @@ class QuickBooksConnector(BaseConnector):
                     },
                 ))
 
-        logger.info(f"QuickBooks: fetched {len(records)} ledger entries ({len(journal_entries)} journal entries, {len(purchases)} purchases)")
+        pnl_data = await self._api_get("reports/ProfitAndLoss", params={
+            "start_date": start_str,
+            "end_date": end_str,
+            "accounting_method": "Accrual",
+            "minorversion": "65",
+        })
+
+        if pnl_data:
+            pnl_metrics = self._parse_pnl_to_metrics(pnl_data, start_date, end_date)
+            records.extend(pnl_metrics)
+
+        logger.info(f"QuickBooks: fetched {len(records)} ledger entries ({len(journal_entries)} journal entries, {len(purchases)} purchases, P&L summary included)")
         return records
+
+    def _parse_pnl_to_metrics(
+        self, data: Dict[str, Any], start_date: datetime, end_date: datetime
+    ) -> List[LedgerEntry]:
+        metrics: List[LedgerEntry] = []
+        totals = {
+            "revenue": 0.0,
+            "cogs": 0.0,
+            "operating_expenses": 0.0,
+            "net_income": 0.0,
+            "gross_profit": 0.0,
+        }
+
+        rows = data.get("Rows", {}).get("Row", [])
+        for section in rows:
+            group = (section.get("group", "") or "").lower().replace(" ", "")
+            summary = section.get("Summary", {})
+            col_data = summary.get("ColData", [])
+            section_total = self._extract_amount(col_data)
+
+            header_label = ""
+            if "Header" in section:
+                hdr_cols = section["Header"].get("ColData", [])
+                if hdr_cols:
+                    header_label = (hdr_cols[0].get("value", "") or "").lower().replace(" ", "")
+
+            if group in ("income", "totalincome") or header_label in ("income", "totalincome"):
+                totals["revenue"] = section_total
+            elif group in ("otherincome",) or header_label in ("otherincome",):
+                totals["revenue"] += section_total
+            elif group in ("cogs", "costofgoodssold", "costofgoods") or header_label in ("costofgoodssold", "cogs"):
+                totals["cogs"] = section_total
+            elif group in ("expenses", "totalexpenses", "expense") or header_label in ("expenses", "totalexpenses"):
+                totals["operating_expenses"] = section_total
+            elif group in ("otherexpenses", "otherexpense") or header_label in ("otherexpenses", "otherexpense"):
+                totals["operating_expenses"] += section_total
+            elif group in ("grossprofit",) or header_label in ("grossprofit",):
+                totals["gross_profit"] = section_total
+            elif group in ("netincome", "netoperatingincome", "netincomeloss") or header_label in ("netincome", "netoperatingincome"):
+                totals["net_income"] = section_total
+
+        if totals["gross_profit"] == 0.0 and totals["revenue"] > 0:
+            totals["gross_profit"] = totals["revenue"] - totals["cogs"]
+
+        metric_map = {
+            "revenue": ("PNL_REVENUE", "Total Revenue (P&L Report)"),
+            "cogs": ("PNL_COGS", "Cost of Goods Sold (P&L Report)"),
+            "operating_expenses": ("PNL_OPEX", "Operating Expenses (P&L Report)"),
+            "net_income": ("PNL_NET_INCOME", "Net Income (P&L Report)"),
+            "gross_profit": ("PNL_GROSS_PROFIT", "Gross Profit (P&L Report)"),
+        }
+
+        for metric_key, (account_code, account_name) in metric_map.items():
+            amount = totals[metric_key]
+            is_income = metric_key in ("revenue", "gross_profit", "net_income")
+            metrics.append(LedgerEntry(
+                external_id=f"pnl-{metric_key}-{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}",
+                date=end_date,
+                account_code=account_code,
+                account_name=account_name,
+                debit=0.0 if is_income else abs(amount),
+                credit=amount if is_income else 0.0,
+                description=f"{account_name} for {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+                category=metric_key,
+                metadata={
+                    "source": "ProfitAndLoss_report",
+                    "period_start": start_date.isoformat(),
+                    "period_end": end_date.isoformat(),
+                    "amount": amount,
+                },
+            ))
+
+        logger.info(f"QuickBooks P&L metrics: revenue={totals['revenue']}, cogs={totals['cogs']}, opex={totals['operating_expenses']}, net_income={totals['net_income']}")
+        return metrics
 
     async def fetch_invoices(
         self,
