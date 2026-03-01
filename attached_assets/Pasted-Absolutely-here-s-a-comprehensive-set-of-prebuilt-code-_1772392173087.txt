@@ -1,0 +1,329 @@
+Absolutely — here’s a comprehensive set of prebuilt code suggestions that directly implement the fixes and best practices from your QA/Audit. These are concrete, copy-paste ready modules, configuration files, middleware, API endpoints, components, and integration scaffolding.
+
+This batch includes:
+
+✅ Security hardening (cookies, headers, CSRF)
+✅ JWT cookie auth flow
+✅ Rate limiting
+✅ Input sanitization & validation
+✅ Responsive sidebar
+✅ Floating feedback widget
+✅ Decision Journal modal
+✅ Unified metrics API
+✅ Playwright test snippets
+✅ Third-party tools integration snippets
+
+⸻
+
+📦 1) AUTHENTICATION — HttpOnly Cookie JWT
+
+Backend: FastAPI (auth token endpoint)
+
+# app/auth.py
+from fastapi import APIRouter, Response, HTTPException
+from datetime import timedelta
+import jwt
+
+router = APIRouter(prefix="/auth")
+
+SECRET = "your_secret_key"
+ALGORITHM = "HS256"
+
+@router.post("/login")
+async def login(response: Response, username: str, password: str):
+    # Authenticate user
+    user = authenticate_user(username, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = jwt.encode({"sub": str(user.id)}, SECRET, algorithm=ALGORITHM)
+    response.set_cookie(
+        key="auth_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7,
+    )
+    return {"success": True, "message": "Logged in"}
+
+Frontend: Auth Fetch
+
+fetch("/auth/login", {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ username, password })
+});
+
+
+⸻
+
+🔒 2) SECURITY HEADERS — Helmet & FastAPI Middleware
+
+Express / Node (Proxy Routes)
+
+// server/proxy.js
+import helmet from "helmet";
+
+app.use(helmet());
+app.use(helmet.hsts({ maxAge: 31536000 }));
+app.disable("x-powered-by");
+
+FastAPI Security Middleware
+
+# app/main.py
+from starlette.middleware import Middleware
+from starlette.middleware.security import SecurityMiddleware
+
+middleware = [
+    Middleware(SecurityMiddleware,
+        content_security_policy="default-src 'self';",
+        frame_options="DENY",
+        referrer_policy="strict-origin-when-cross-origin",
+    )
+]
+
+app = FastAPI(middleware=middleware)
+
+
+⸻
+
+🛡️ 3) RATE LIMITING
+
+FastAPI — slowapi / slowapi middleware
+
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.get("/api/some-endpoint")
+@limiter.limit("10/minute")
+async def my_api():
+    return {"status": "ok"}
+
+Express — express-rate-limit
+
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: "Too many requests, try again later.",
+});
+
+app.use("/api", limiter);
+
+
+⸻
+
+📐 4) INPUT SANITIZATION
+
+Zod Schema (Frontend & Backend)
+
+import { z } from "zod";
+
+export const signupSchema = z.object({
+  name: z.string().min(3).max(100).regex(/^[A-Za-z0-9 ]*$/),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+
+⸻
+
+📊 5) UNIFIED KPI METRICS API
+
+FastAPI Endpoint
+
+@router.get("/metrics/latest")
+async def get_latest_metrics(db=Depends(get_db)):
+    # single source of truth
+    return {
+       "mrr": compute_mrr(),
+       "burn_rate": compute_burn(),
+       "runway": compute_runway(),
+       "cash": compute_cash(),
+       ...
+    }
+
+Frontend Usage
+
+const data = await fetch("/api/metrics/latest", { credentials: "include" })
+  .then((r) => r.json());
+
+
+⸻
+
+📱 6) RESPONSIVE SIDEBAR
+
+React + Tailwind Sidebar
+
+const Sidebar = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        className="md:hidden p-2 fixed top-4 left-4"
+        onClick={() => setOpen(!open)}
+      >☰</button>
+      <aside className={`${open ? "block" : "hidden"} md:block`}>
+        {/* nav links */}
+      </aside>
+    </>
+  );
+};
+
+
+⸻
+
+❤️ 7) FLOATING FEEDBACK WIDGET
+
+Simple Floating Button
+
+export function FeedbackWidget() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="fixed bottom-4 right-4 z-50">
+      <button
+        className="bg-purple-600 text-white p-3 rounded-full shadow-lg"
+        onClick={() => setOpen(!open)}
+      >✉️</button>
+      {open && <FeedbackForm onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+
+⸻
+
+📓 8) DECISION JOURNAL — OPEN NEW ENTRY
+
+React + Modal
+
+const Journal = () => {
+  const [showModal, setShowModal] = useState(false);
+  return (
+    <>
+      <button onClick={() => setShowModal(true)}>+ New Entry</button>
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)}>
+          <DecisionForm />
+        </Modal>
+      )}
+    </>
+  );
+};
+
+
+⸻
+
+🧪 9) PLAYWRIGHT TEST SNIPPETS
+
+Unified KPI Test
+
+test("Metrics match across pages", async ({ page }) => {
+  await page.goto("/");
+  const dashRunway = await page.locator("text=Runway").first().textContent();
+  
+  await page.goto("/decisions");
+  const decRunway = await page.locator("text=Runway").first().textContent();
+
+  expect(dashRunway).toEqual(decRunway);
+});
+
+Cookie Consent Test
+
+test("Cookie consent banner respects decline", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("text=Decline").click();
+  await expect(page.locator("text=Decline")).toBeHidden();
+});
+
+
+⸻
+
+🛠️ 10) THIRD-PARTY TOOLS YOU SHOULD ADD
+
+Category	Tool	Why
+Error Monitoring	Sentry	Capture frontend & backend errors with stack traces
+Security Scanning	OWASP ZAP	Automated penetration testing
+Performance Tests	Lighthouse CI	Ensures regressions don’t degrade performance
+Analytics	PostHog	Event tracking, funnels, retention
+Rate Limit Storage	Redis	Central store for rate limiting across servers
+Logging	Logflare / ELK	Centralized logs with structured search
+CI/CD	GitHub Actions	Run tests + Playwright suite on push
+
+
+⸻
+
+📈 11) DEPLOYMENT & MONITORING
+
+CI with GitHub Actions
+
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: npm ci
+      - run: npx playwright install
+      - run: npx playwright test
+
+Health Endpoint
+
+@app.get("/health")
+async def health():
+  return {"status": "ok"}
+
+Use UptimeRobot to ping /health.
+
+⸻
+
+📅 12) PRIORITY ACTION PLAN (4 Weeks)
+
+Week 1
+
+✔ Move JWT to cookie
+✔ Add security headers
+✔ Add rate limiting
+✔ Sanitize inputs
+
+Week 2
+
+✔ Fixed unified KPI API
+✔ Sync all pages to stable metrics
+✔ Playwright tests for metrics
+
+Week 3
+
+✔ Responsive sidebar
+✔ Feedback widget rework
+✔ Decision Journal modal
+
+Week 4
+
+✔ Add third-party tools
+✔ Groom CI/CD tests
+✔ Final QA & staging launch
+
+⸻
+
+🎯 VALIDATION CHECKLIST
+	•	✅ No JWT in localStorage
+	•	✅ 429 rate limits
+	•	✅ CSP + XFO + HSTS headers
+	•	✅ Unified metrics everywhere
+	•	✅ Responsive UI at 375px
+	•	✅ Decision Journal flows work
+	•	✅ Cookie & feedback banners don’t overlap
+	•	✅ Playwright regressions pass
+
+⸻
+
+If you want, I can now generate full file templates for each of these modules (complete auth.ts, full middleware config, test suites, CI config, and Tailwind layout). Just tell me which one to expand first!
