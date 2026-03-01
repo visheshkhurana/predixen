@@ -253,8 +253,8 @@ export default function AuthPage() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
-      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 100%)' }}>
+    <div className="min-h-screen flex flex-col md:flex-row">
+      <div className="hidden md:flex md:w-[55%] relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0e1a 0%, #111827 40%, #0f172a 100%)' }}>
         <div className="absolute inset-0" style={{
           backgroundImage: `radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.15), transparent),
                             radial-gradient(ellipse 60% 40% at 80% 80%, rgba(59, 130, 246, 0.08), transparent)`,
@@ -265,7 +265,7 @@ export default function AuthPage() {
           backgroundSize: '64px 64px',
         }} />
 
-        <div className="relative z-10 flex flex-col justify-between w-full px-12 xl:px-16 py-12">
+        <div className="relative z-10 flex flex-col justify-between w-full px-8 lg:px-12 xl:px-16 py-10 lg:py-12">
           <div>
             <div className="flex items-center gap-3 mb-16">
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
@@ -323,9 +323,9 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center bg-background p-4 sm:p-8 lg:p-12">
+      <div className="flex-1 flex items-center justify-center bg-background px-5 py-8 sm:p-8 md:p-12">
         <div className="w-full max-w-[420px]">
-          <div className="lg:hidden flex items-center justify-center gap-2.5 mb-8">
+          <div className="md:hidden flex items-center justify-center gap-2.5 mb-8">
             <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
               <Sparkles className="h-4 w-4 text-white" />
             </div>

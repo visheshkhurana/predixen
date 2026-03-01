@@ -348,7 +348,7 @@ app.get("/health", (_req: Request, res: Response) => {
   
   res.status(200).json({
     ok: true,
-    fastapi: fastapiStatus === "ready" ? "up" : "starting",
+    fastapi: fastapiStatus === "up" ? "up" : "starting",
     fastapi_status: fastapiStatus,
     uptime_seconds: uptimeSeconds,
     version: "1.0.0",
