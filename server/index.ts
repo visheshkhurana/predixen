@@ -145,6 +145,7 @@ const wss = setupWebSocketServer(httpServer);
 
 // Global state for graceful shutdown and supervision
 let fastapiProcess: ChildProcess | null = null;
+let workerProcess: ChildProcess | null = null;
 let shuttingDown = false;
 let restartCount = 0;
 const MAX_RESTARTS = 10;
@@ -284,6 +285,70 @@ function startFastAPIServer(): ChildProcess {
   return child;
 }
 
+function startSimulationWorker(): ChildProcess {
+  const pythonCommand = resolvePythonCommand();
+  const workerModule = "server.workers.simulation_worker";
+
+  console.log(`[worker] Starting simulation worker: ${pythonCommand} -u -m ${workerModule}`);
+
+  const nodeEnv = process.env["ENVIRONMENT"] || process.env["NODE_ENV"] || "production";
+  const childEnv: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v !== undefined) childEnv[k] = v;
+  }
+  childEnv.NODE_ENV = nodeEnv;
+  childEnv.ENVIRONMENT = nodeEnv;
+  childEnv.PYTHONUNBUFFERED = "1";
+
+  const child = spawn(pythonCommand, ["-u", "-m", workerModule], {
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: false,
+    env: childEnv,
+  });
+
+  if (child.stdout) {
+    child.stdout.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.log(`[worker:out] ${line}`);
+      }
+    });
+  }
+  if (child.stderr) {
+    child.stderr.on("data", (data: Buffer) => {
+      const lines = data.toString().trim().split("\n");
+      for (const line of lines) {
+        if (line) console.error(`[worker:err] ${line}`);
+      }
+    });
+  }
+
+  console.log(`[worker] Spawned with PID: ${child.pid}`);
+
+  child.on("error", (err) => {
+    console.error("[worker] Failed to start:", err);
+  });
+
+  child.on("exit", (code, signal) => {
+    if (shuttingDown) {
+      console.log(`[worker] Exited during shutdown (code: ${code}, signal: ${signal})`);
+      return;
+    }
+
+    if (code !== 0 && code !== null) {
+      console.error(`[worker] Exited unexpectedly with code ${code}`);
+      setTimeout(() => {
+        if (!shuttingDown) {
+          console.log("[worker] Restarting simulation worker...");
+          workerProcess = startSimulationWorker();
+        }
+      }, 5000);
+    }
+  });
+
+  return child;
+}
+
 async function probeFastAPI(): Promise<boolean> {
   try {
     const url = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPort()}`;
@@ -345,6 +410,16 @@ async function gracefulShutdown(signal: string) {
     console.log("[shutdown] HTTP server closed");
   });
   
+  // Terminate simulation worker
+  if (workerProcess && workerProcess.pid) {
+    console.log(`[shutdown] Terminating simulation worker (PID: ${workerProcess.pid})...`);
+    try {
+      workerProcess.kill("SIGTERM");
+    } catch (e) {
+      // Process may have already exited
+    }
+  }
+
   // Terminate FastAPI process
   if (fastapiProcess && fastapiProcess.pid) {
     console.log(`[shutdown] Terminating FastAPI (PID: ${fastapiProcess.pid})...`);
@@ -745,6 +820,7 @@ app.use((req, res, next) => {
   waitForFastAPI(600, 2000).then((ready) => {
     if (ready) {
       log("FastAPI backend is ready");
+      workerProcess = startSimulationWorker();
     } else {
       log("FastAPI backend not ready yet - API requests will be proxied when available");
     }

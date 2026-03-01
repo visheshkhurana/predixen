@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
@@ -188,7 +188,6 @@ def _execute_simulation_job(job_id: str, db: Session):
 @router.post("/run")
 async def run_simulation(
     request: RunSimulationRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     skip_truth_check: bool = False,
@@ -248,11 +247,10 @@ async def run_simulation(
     db.refresh(job)
     
     if request.async_execution:
-        background_tasks.add_task(run_simulation_job_async, job_id)
         return {
             "jobId": job_id,
             "status": "pending",
-            "message": "Simulation job queued"
+            "message": "Simulation job queued for worker processing"
         }
     else:
         run_simulation_job_sync(job_id, db)
