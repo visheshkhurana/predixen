@@ -1041,9 +1041,23 @@ def ensure_auth_tokens_tables(engine: Engine) -> None:
             )
         """))
 
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                token VARCHAR NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                revoked BOOLEAN DEFAULT FALSE,
+                replaced_by VARCHAR,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
         try:
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_token ON password_reset_tokens(token)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_email_verification_token ON email_verification_tokens(token)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_refresh_token ON refresh_tokens(token)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_refresh_token_user ON refresh_tokens(user_id)"))
         except Exception as e:
             logger.debug(f"Token indexes may already exist: {e}")
 

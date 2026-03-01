@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import timedelta, datetime
 from server.core.db import get_db
-from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie
+from server.core.security import get_password_hash, verify_password, create_access_token, get_current_user, set_auth_cookie, clear_auth_cookie, set_refresh_cookie, REFRESH_COOKIE_NAME
 from server.core.config import settings
-from server.models.user import User, PasswordResetToken, EmailVerificationToken
+from server.models.user import User, PasswordResetToken, EmailVerificationToken, RefreshToken
 from server.models.login_history import LoginHistory
 import re
 import bcrypt
@@ -78,6 +78,29 @@ def log_login_attempt(db: Session, email: str, user_id: int = None, success: boo
         db.commit()
     except Exception:
         db.rollback()
+
+def _issue_refresh_token(db: Session, user_id: int) -> str:
+    token = str(uuid.uuid4())
+    refresh = RefreshToken(
+        user_id=user_id,
+        token=token,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(refresh)
+    db.commit()
+    return token
+
+
+def _issue_tokens(response: Response, db: Session, user_id: int):
+    access_token = create_access_token(
+        data={"sub": str(user_id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    set_auth_cookie(response, access_token)
+    refresh = _issue_refresh_token(db, user_id)
+    set_refresh_cookie(response, refresh)
+    return access_token
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -169,12 +192,7 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
     except Exception as e:
         auth_logger.warning(f"Failed to send verification email: {e}")
     
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    set_auth_cookie(response, access_token)
+    access_token = _issue_tokens(response, db, user.id)
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
@@ -209,7 +227,6 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
-    # Only seed demo data if explicitly enabled via config (not on every login in production)
     if user.email == "demo@founderconsole.ai" and settings.should_seed_demo_data:
         try:
             from server.seed.seed_demo import seed_demo_data
@@ -218,12 +235,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
             import logging
             logging.getLogger(__name__).warning(f"Demo seed on login failed: {e}")
     
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    set_auth_cookie(response, access_token)
+    access_token = _issue_tokens(response, db, user.id)
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
@@ -302,12 +314,7 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
     
     log_login_attempt(db, user.email, user.id, success=True, request=request)
     
-    access_token = create_access_token(
-        data={"sub": str(user.id), "admin": True},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    set_auth_cookie(response, access_token)
+    access_token = _issue_tokens(response, db, user.id)
     
     return TokenResponse(
         access_token=access_token,
@@ -315,6 +322,71 @@ def admin_login(req: LoginRequest, request: Request, response: Response, db: Ses
         email=user.email,
         role=user.role or "owner",
         is_platform_admin=True
+    )
+
+
+@router.post("/refresh")
+def refresh_token(request: Request, response: Response, db: Session = Depends(get_db)):
+    old_token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if not old_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No refresh token")
+
+    record = db.query(RefreshToken).filter(
+        RefreshToken.token == old_token,
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    if record.revoked:
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == record.user_id,
+            RefreshToken.revoked == False,
+        ).update({"revoked": True})
+        db.commit()
+        clear_auth_cookie(response)
+        auth_logger.warning(f"Refresh token reuse detected for user {record.user_id} — all tokens revoked")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token reuse detected. Please log in again.")
+
+    if record.expires_at < datetime.utcnow():
+        record.revoked = True
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+
+    user = db.query(User).filter(User.id == record.user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or suspended")
+
+    record.revoked = True
+    new_refresh = str(uuid.uuid4())
+    record.replaced_by = new_refresh
+    db.commit()
+
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    set_auth_cookie(response, access_token)
+
+    refresh_record = RefreshToken(
+        user_id=user.id,
+        token=new_refresh,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(refresh_record)
+    db.commit()
+    set_refresh_cookie(response, new_refresh)
+
+    admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
+    is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
+
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        email=user.email,
+        role=user.role or "viewer",
+        is_platform_admin=is_platform_admin,
+        is_email_verified=getattr(user, 'is_email_verified', True),
     )
 
 
@@ -451,6 +523,12 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    rt = request.cookies.get(REFRESH_COOKIE_NAME)
+    if rt:
+        record = db.query(RefreshToken).filter(RefreshToken.token == rt, RefreshToken.revoked == False).first()
+        if record:
+            record.revoked = True
+            db.commit()
     clear_auth_cookie(response)
     return {"message": "Logged out successfully."}

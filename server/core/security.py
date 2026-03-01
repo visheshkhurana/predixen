@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 AUTH_COOKIE_NAME = "auth_token"
-AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+REFRESH_COOKIE_NAME = "refresh_token"
+AUTH_COOKIE_MAX_AGE = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 
 _revoked_tokens: Set[str] = set()
 
@@ -79,10 +81,27 @@ def set_auth_cookie(response: Response, token: str):
     )
 
 
+def set_refresh_cookie(response: Response, token: str):
+    is_prod = settings.ENVIRONMENT == "production"
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        path="/api/auth",
+    )
+
+
 def clear_auth_cookie(response: Response):
     response.delete_cookie(
         key=AUTH_COOKIE_NAME,
         path="/",
+    )
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path="/api/auth",
     )
 
 

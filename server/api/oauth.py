@@ -9,8 +9,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from server.core.db import get_db
 from server.core.config import settings
-from server.core.security import create_access_token, set_auth_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
-from server.models.user import User
+from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
+from server.models.user import User, RefreshToken
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
     return user
 
 
-def _build_auth_redirect(request: Request, user: User) -> RedirectResponse:
+def _build_auth_redirect(request: Request, user: User, db: Session = None) -> RedirectResponse:
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -90,16 +90,18 @@ def _build_auth_redirect(request: Request, user: User) -> RedirectResponse:
         "is_platform_admin": "true" if is_admin else "false",
     })
     resp = RedirectResponse(url=f"{base}/auth/callback?{params}", status_code=302)
-    is_prod = settings.ENVIRONMENT == "production"
-    resp.set_cookie(
-        key=AUTH_COOKIE_NAME,
-        value=access_token,
-        httponly=True,
-        secure=is_prod,
-        samesite="lax",
-        max_age=AUTH_COOKIE_MAX_AGE,
-        path="/",
-    )
+    set_auth_cookie(resp, access_token)
+    if db:
+        import uuid as _uuid
+        from datetime import datetime as _dt
+        rt = str(_uuid.uuid4())
+        db.add(RefreshToken(
+            user_id=user.id,
+            token=rt,
+            expires_at=_dt.utcnow() + timedelta(days=7),
+        ))
+        db.commit()
+        set_refresh_cookie(resp, rt)
     return resp
 
 
@@ -185,6 +187,6 @@ def google_callback(request: Request, code: str = None, state: str = None, error
         display_name=profile.get("name"),
         avatar_url=profile.get("picture"),
     )
-    return _build_auth_redirect(request, user)
+    return _build_auth_redirect(request, user, db)
 
 

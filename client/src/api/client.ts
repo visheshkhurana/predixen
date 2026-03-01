@@ -17,9 +17,28 @@ function getCSRFToken(): string | null {
 }
 
 let _redirecting401 = false;
+let _refreshingToken: Promise<boolean> | null = null;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
+
+async function attemptTokenRefresh(): Promise<boolean> {
+  if (_refreshingToken) return _refreshingToken;
+  _refreshingToken = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      _refreshingToken = null;
+    }
+  })();
+  return _refreshingToken;
+}
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -126,6 +145,31 @@ async function request<T>(
     console.error(`API Error: ${response.status} ${endpoint}`, errorMessage);
 
     if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+      const refreshed = await attemptTokenRefresh();
+      if (refreshed) {
+        const retryHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...((options.headers as Record<string, string>) || {}),
+        };
+        const retryMethod = (options.method || 'GET').toUpperCase();
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(retryMethod)) {
+          const csrfToken = getCSRFToken();
+          if (csrfToken) retryHeaders['X-CSRF-Token'] = csrfToken;
+        }
+        const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
+          headers: retryHeaders,
+          credentials: 'include',
+        });
+        if (retryResponse.ok) {
+          try {
+            return await safeParseJSON(retryResponse, 'Failed to parse response') as T;
+          } catch (e) {
+            if (e instanceof ApiError) throw e;
+            throw new ApiError(retryResponse.status, 'Failed to parse response body');
+          }
+        }
+      }
       if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
         _redirecting401 = true;
         try {

@@ -25,6 +25,8 @@ from server.core.db import engine, Base, SessionLocal
 print(f"[main.py] Core imports done (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 
 _startup_state = {"ready": False, "error": None, "routers_loaded": False}
+_process_start_time = time.time()
+APP_VERSION = "1.0.0"
 
 
 def _register_critical_routers(app: FastAPI):
@@ -251,12 +253,25 @@ app = FastAPI(
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from server.middleware.rate_limiter import RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+import uuid as _uuid_mod
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        request_id = request.headers.get("x-request-id") or str(_uuid_mod.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+app.add_middleware(RequestIDMiddleware)
 
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
     "/auth/register",
     "/auth/login",
     "/auth/admin/login",
+    "/auth/refresh",
     "/companies/*/seed-sample",
 ])
 
@@ -274,12 +289,13 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-CSRF-Token", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 @app.get("/")
 def root():
-    return {"message": "FounderConsole API", "version": "1.0.0"}
+    return {"message": "FounderConsole API", "version": APP_VERSION}
 
 @app.get("/demo/metrics")
 def demo_metrics():
@@ -302,6 +318,7 @@ def demo_metrics():
 
 @app.get("/health")
 def health():
+    import datetime as _dt
     db_healthy = False
     try:
         db = SessionLocal()
@@ -314,6 +331,10 @@ def health():
     overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
     return {
         "status": overall_status,
+        "version": APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "uptime_seconds": round(time.time() - _process_start_time, 1),
+        "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "ready": _startup_state["ready"],
         "routers_loaded": _startup_state["routers_loaded"],
         "database": "connected" if db_healthy else "unavailable",

@@ -8,9 +8,17 @@ import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
 import { existsSync } from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 
 const app = express();
 app.disable("x-powered-by");
+
+app.use((req, res, next) => {
+  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
+  req.headers["x-request-id"] = requestId;
+  res.setHeader("X-Request-ID", requestId);
+  next();
+});
 
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
@@ -40,7 +48,19 @@ const appStartTime = Date.now();
 
 const LOADING_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FounderConsole</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0a;color:#e5e7eb;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}.loader{text-align:center}.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:0.7}</style></head><body><div class="loader"><div class="spinner"></div><p>Loading FounderConsole...</p></div></body></html>`;
 
-app.get("/health", (_req, res) => {
+app.get("/health", async (req, res) => {
+  if (fastapiProcess && setupComplete) {
+    try {
+      const backendRes = await fetch("http://127.0.0.1:8001/health", {
+        headers: { "x-request-id": req.headers["x-request-id"] as string || "" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (backendRes.ok) {
+        const data = await backendRes.json();
+        return res.status(200).json(data);
+      }
+    } catch {}
+  }
   res.status(200).json({ ok: true, status: setupComplete ? "ready" : "starting" });
 });
 
