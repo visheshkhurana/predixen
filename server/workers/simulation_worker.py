@@ -36,7 +36,15 @@ _shutdown = threading.Event()
 
 
 def _init_db():
-    from server.core.db import SessionLocal
+    from server.core.db import SessionLocal, Base, engine
+    import importlib
+    import pkgutil
+    import server.models as models_pkg
+    for _, name, _ in pkgutil.iter_modules(models_pkg.__path__):
+        try:
+            importlib.import_module(f"server.models.{name}")
+        except Exception:
+            pass
     return SessionLocal
 
 
