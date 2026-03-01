@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatCurrencyAbbrev } from '@/lib/utils';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -36,13 +37,12 @@ interface ScenarioComparisonViewProps {
   baselineScenarioName?: string;
   onSelectScenario?: (name: string) => void;
   selectedScenario?: string;
+  currency?: string;
   testId?: string;
 }
 
-function formatCurrency(value: number): string {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+function makeFormatCurrency(currency: string = 'USD') {
+  return (value: number): string => formatCurrencyAbbrev(value, currency);
 }
 
 function getDeltaIndicator(value: number | undefined, baseline: number | undefined, higherIsBetter: boolean = true) {
@@ -79,8 +79,10 @@ export function ScenarioComparisonView({
   baselineScenarioName = 'Baseline',
   onSelectScenario,
   selectedScenario,
+  currency = 'USD',
   testId = 'scenario-comparison' 
 }: ScenarioComparisonViewProps) {
+  const formatCurrency = makeFormatCurrency(currency);
   const baseline = scenarios.find(s => s.name.toLowerCase().includes('baseline')) || scenarios[0];
   
   const sortedScenarios = [...scenarios].sort((a, b) => {

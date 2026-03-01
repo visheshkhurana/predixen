@@ -17,12 +17,14 @@ interface ScenarioData {
 interface ScenarioComparisonTableProps {
   scenarios: ScenarioData[];
   baselineId?: number;
+  currency?: string;
   testId?: string;
 }
 
 export function ScenarioComparisonTable({ 
   scenarios, 
   baselineId,
+  currency = 'USD',
   testId = 'comparison-table' 
 }: ScenarioComparisonTableProps) {
   if (scenarios.length === 0) {
@@ -31,7 +33,7 @@ export function ScenarioComparisonTable({
 
   const baseline = scenarios.find(s => s.id === baselineId) || scenarios[0];
 
-  const formatCurrency = (value: number | undefined) => formatCurrencyAbbrev(value);
+  const formatCurrency = (value: number | undefined) => formatCurrencyAbbrev(value, currency);
 
   const getDelta = (current: number | undefined, base: number | undefined) => {
     if (current === undefined || base === undefined) return null;

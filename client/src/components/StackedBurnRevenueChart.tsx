@@ -27,12 +27,14 @@ interface MonthlyData {
 interface StackedBurnRevenueChartProps {
   data: MonthlyData[];
   scenarioName?: string;
+  currency?: string;
   testId?: string;
 }
 
 export function StackedBurnRevenueChart({
   data,
   scenarioName = 'Scenario',
+  currency = 'USD',
   testId = 'stacked-burn-revenue-chart',
 }: StackedBurnRevenueChartProps) {
   const chartData = useMemo(() => {
@@ -50,7 +52,7 @@ export function StackedBurnRevenueChart({
   const totalBurn = chartData.reduce((sum, d) => sum + Math.max(0, d.burn - d.revenue), 0);
   const endingRevenue = chartData[chartData.length - 1]?.revenue || 0;
   
-  const formatCurrency = (value: number) => formatCurrencyAbbrev(value);
+  const formatCurrency = (value: number) => formatCurrencyAbbrev(value, currency);
   
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
