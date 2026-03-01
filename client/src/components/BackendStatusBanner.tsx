@@ -18,7 +18,7 @@ export function BackendStatusBanner() {
       const res = await fetch('/health', { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const data = await res.json();
-        if (data.fastapi === 'up') {
+        if (data.ok || data.status === 'ready' || data.fastapi === 'up') {
           setConsecutiveFailures(0);
           if (isDown) {
             setIsDown(false);
