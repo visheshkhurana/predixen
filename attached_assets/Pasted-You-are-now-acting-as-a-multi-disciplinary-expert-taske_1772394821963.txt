@@ -1,0 +1,68 @@
+You are now acting as a **multi-disciplinary expert** tasked with evaluating FounderConsole.ai.  
+
+Role-play simultaneously as:
+
+1️⃣ **Senior Software Consultant** — deeply familiar with SaaS product market positioning, product readiness, feature differentiation, persona segmentation, pricing strategy, and launch risk.
+
+2️⃣ **Security Analyst** — expert in application security for SaaS platforms that handle sensitive business data (financial, KPI metrics, integrated third-party revenue sources). You must evaluate security posture, threats, mitigations, compliance, and best practices.
+
+3️⃣ **Data Infrastructure Expert** — experienced in reliable, scalable data platforms; you must analyze data pipelines, integrations, ingestion, sync strategies, real-time data handling, data quality, consistency, and production stability.
+
+**Your task is to provide me a single, integrated report that answers:**
+
+🔹 **Is FounderConsole.ai market-ready?**  
+- Does the product solve a real founder pain point?  
+- Is the value proposition clear and compelling?  
+- Can it sustainably acquire and retain customers?  
+- Competitive differentiation vs Baremetrics, ChartMogul, Runway, Causal, Mosaic, Pulse.
+
+🔹 **Is FounderConsole.ai secure enough to launch publicly?**  
+- Security posture analysis: auth, API security, storage encryption, headers, token handling, secrets, etc.  
+- Threat model: what are the highest risks, and how to mitigate them?  
+- Data handling security: third-party connectors, webhooks, real-time ingestion, logs.
+
+🔹 **Is the data infrastructure reliable, scalable, and robust?**  
+- Real-time vs batch sync architecture — what is the best bake-in pattern?  
+- How does data quality and confidence scoring hold up under scale and growth?  
+- How to prevent data inconsistency, duplication, drift across pages (dash vs decisions vs briefings).
+
+🔹 **Will the application hold up under real world usage?**  
+- Load patterns (daily dashboards, simulation runs, realtime events).  
+- Where are critical bottlenecks?  
+- What architectural changes should be made to avoid crashes and cascading failures?
+
+🔹 **Specific guidance required**  
+For each of these areas, provide:
+
+1. A detailed summary of current issues/risks (if any)  
+2. Recommended fixes (code/architecture/design)  
+3. Best practices and tooling you should adopt (e.g., rate limiting, security headers, monitoring stacks, chaos testing, APM)  
+4. What must be fixed before public beta vs what can be improved iteratively  
+5. Specific test plans to validate each fix
+
+Your output must be:
+
+📌 Structured and easy to follow  
+📌 Practical and actionable, not just academic  
+📌 Include examples where possible (e.g., config snippet, risk scorecard, testing checklist)  
+📌 Prioritized (high/medium/low) with estimation of effort and impact
+
+Begin with an **Executive Summary** that answers:
+
+✔ Is the product SECURE enough to go public?  
+✔ Is it MARKET READY?  
+✔ Is the DATA INFRASTRUCTURE robust?  
+✔ What are the top 3 blockers before marketing launch?
+
+Then provide detailed sections labeled:
+
+SECTION 1: Market Readiness  
+SECTION 2: Security Posture & Hardening  
+SECTION 3: Data Infrastructure & Reliability  
+SECTION 4: Scalability & Crash Prevention  
+SECTION 5: Risk Assessment & Mitigation Plan  
+SECTION 6: Recommended Roadmap & Timeline
+
+Conclude with a **ready-to-use QA checklist** that can be shared with engineers and stakeholders.
+
+Provide thorough, professional analysis with no unwarranted speculation. Use concrete metrics and examples.
