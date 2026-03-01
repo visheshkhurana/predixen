@@ -124,7 +124,7 @@ export function FeedbackWidget() {
               {sending ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Sending...</>
               ) : (
-                <><Send className="h-4 w-4 mr-2" /> Send Feedback</>
+                <><Send className="h-4 w-4 mr-2" /> Submit Feedback</>
               )}
             </Button>
             <p className="text-[10px] text-muted-foreground/60 text-center">
