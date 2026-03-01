@@ -77,6 +77,7 @@ class QuickBooksConnector(BaseConnector):
         self.base_url = QB_ENVIRONMENTS.get(self.environment, QB_ENVIRONMENTS["production"])
         self.client: Optional[httpx.AsyncClient] = None
         self._token_refreshed = False
+        self._ar_summary: Dict[str, Any] = {}
 
     def _company_url(self, path: str) -> str:
         return f"{self.base_url}/company/{self.realm_id}/{path}"
@@ -445,19 +446,27 @@ class QuickBooksConnector(BaseConnector):
     async def fetch_invoices(
         self,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
+        last_sync: Optional[datetime] = None,
     ) -> List[InvoiceRecord]:
-        if not start_date:
-            start_date = datetime.now() - timedelta(days=90)
-        if not end_date:
-            end_date = datetime.now()
+        if last_sync:
+            sync_str = last_sync.strftime("%Y-%m-%dT%H:%M:%S%z") if last_sync.tzinfo else last_sync.strftime("%Y-%m-%dT%H:%M:%S")
+            query = f"SELECT * FROM Invoice WHERE MetaData.LastUpdatedTime > '{sync_str}'"
+        else:
+            if not start_date:
+                start_date = datetime.now() - timedelta(days=90)
+            if not end_date:
+                end_date = datetime.now()
+            start_str = start_date.strftime("%Y-%m-%d")
+            end_str = end_date.strftime("%Y-%m-%d")
+            query = f"SELECT * FROM Invoice WHERE TxnDate >= '{start_str}' AND TxnDate <= '{end_str}'"
 
-        start_str = start_date.strftime("%Y-%m-%d")
-        end_str = end_date.strftime("%Y-%m-%d")
-
-        query = f"SELECT * FROM Invoice WHERE TxnDate >= '{start_str}' AND TxnDate <= '{end_str}'"
         invoices_data = await self._api_query(query)
         records: List[InvoiceRecord] = []
+
+        total_ar = 0.0
+        total_overdue_ar = 0.0
+        now = datetime.now()
 
         for inv in invoices_data:
             txn_date_str = inv.get("TxnDate", "")
@@ -486,6 +495,16 @@ class QuickBooksConnector(BaseConnector):
                 status = "partial"
             else:
                 status = "pending"
+
+            if balance > 0:
+                total_ar += balance
+                if due_date and due_date < now:
+                    total_overdue_ar += balance
+                    days_overdue = (now - due_date).days
+                else:
+                    days_overdue = 0
+            else:
+                days_overdue = 0
 
             line_items = []
             for line in inv.get("Line", []):
@@ -517,12 +536,22 @@ class QuickBooksConnector(BaseConnector):
                     "qb_id": inv.get("Id"),
                     "doc_number": inv.get("DocNumber"),
                     "balance": balance,
+                    "days_overdue": days_overdue,
                     "email_status": inv.get("EmailStatus"),
                     "ship_date": inv.get("ShipDate"),
+                    "last_updated": inv.get("MetaData", {}).get("LastUpdatedTime"),
                 },
             ))
 
-        logger.info(f"QuickBooks: fetched {len(records)} invoices")
+        self._ar_summary = {
+            "accounts_receivable": total_ar,
+            "overdue_ar": total_overdue_ar,
+            "total_invoices": len(records),
+            "open_invoices": sum(1 for r in records if r.status in ("pending", "partial")),
+            "paid_invoices": sum(1 for r in records if r.status == "paid"),
+        }
+
+        logger.info(f"QuickBooks: fetched {len(records)} invoices (AR={total_ar:.2f}, overdue={total_overdue_ar:.2f})")
         return records
 
     def _categorize_account(self, account_name: str) -> str:
@@ -787,6 +816,10 @@ class QuickBooksConnector(BaseConnector):
             if any(kw in label.lower() for kw in ["payroll", "salary", "wages", "compensation"]):
                 payroll_cost += amount
 
+        ar_from_invoices = getattr(self, "_ar_summary", {})
+        ar_balance = ar_from_invoices.get("accounts_receivable", 0)
+        ar_from_balance_sheet = balance.get("accounts_receivable", 0)
+
         return {
             "source_type": "connector_quickbooks",
             "extraction_summary": f"Synced from QuickBooks Online",
@@ -797,12 +830,16 @@ class QuickBooksConnector(BaseConnector):
             "net_income": pnl.get("net_income", 0),
             "gross_profit": pnl.get("gross_profit", 0),
             "cash_balance": balance.get("cash_and_equivalents", 0),
-            "accounts_receivable": balance.get("accounts_receivable", 0),
+            "accounts_receivable": ar_from_balance_sheet if ar_from_balance_sheet > 0 else ar_balance,
+            "accounts_receivable_from_invoices": ar_balance,
+            "overdue_ar": ar_from_invoices.get("overdue_ar", 0),
             "accounts_payable": balance.get("accounts_payable", 0),
             "total_assets": balance.get("total_assets", 0),
             "total_liabilities": balance.get("total_liabilities", 0),
             "headcount": len(employees) if employees else None,
             "invoices_count": len(invoices),
+            "open_invoices": ar_from_invoices.get("open_invoices", 0),
+            "paid_invoices": ar_from_invoices.get("paid_invoices", 0),
             "transactions_count": len(ledger_entries),
             "income_breakdown": pnl.get("income_breakdown", {}),
             "expense_breakdown": pnl.get("expense_breakdown", {}),
