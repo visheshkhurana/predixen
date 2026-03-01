@@ -919,6 +919,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_user_oauth_columns(engine)
     ensure_auth_tokens_tables(engine)
     ensure_beta_feedback_table(engine)
+    ensure_rate_limits_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1048,6 +1049,28 @@ def ensure_auth_tokens_tables(engine: Engine) -> None:
 
         conn.commit()
     logger.info("Auth tokens tables migration complete")
+
+
+def ensure_rate_limits_table(engine: Engine) -> None:
+    """Create rate_limits table for database-backed rate limiting."""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS rate_limits (
+                id SERIAL PRIMARY KEY,
+                key VARCHAR(255) NOT NULL,
+                endpoint VARCHAR(100) NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                window_start TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                UNIQUE(key, endpoint)
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rate_limits_key_endpoint ON rate_limits(key, endpoint)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_rate_limits_window_start ON rate_limits(window_start)"))
+        except Exception as e:
+            logger.debug(f"Rate limits indexes may already exist: {e}")
+        conn.commit()
+    logger.info("Rate limits table migration complete")
 
 
 def ensure_beta_feedback_table(engine: Engine) -> None:

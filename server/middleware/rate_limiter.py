@@ -1,125 +1,88 @@
 """
 Rate limiting middleware for FastAPI application.
 
-Implements token bucket algorithm with in-memory storage for rate limiting.
-No external dependencies required (uses Python standard library only).
+Uses PostgreSQL-backed persistent storage with fixed window algorithm.
+Stale entries are cleaned up by a background task every 5 minutes.
 """
 
-import time
 import os
-from typing import Dict, Tuple, Optional
-from collections import defaultdict
+import asyncio
+import time
+from typing import Tuple, Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import text
 import logging
 
 logger = logging.getLogger(__name__)
 
+_cleanup_task_started = False
 
-class TokenBucket:
-    """Token bucket implementation for rate limiting."""
 
-    def __init__(self, capacity: int, refill_rate: float):
-        """
-        Initialize token bucket.
+def _get_engine():
+    from server.core.db import engine
+    return engine
 
-        Args:
-            capacity: Maximum number of tokens in the bucket
-            refill_rate: Tokens per second to refill
-        """
-        self.capacity = capacity
-        self.refill_rate = refill_rate
-        self.tokens = capacity
-        self.last_refill = time.time()
 
-    def is_allowed(self) -> bool:
-        """Check if request is allowed and consume a token if available."""
-        current_time = time.time()
-        time_passed = current_time - self.last_refill
-
-        # Add tokens based on time passed
-        tokens_to_add = time_passed * self.refill_rate
-        self.tokens = min(self.capacity, self.tokens + tokens_to_add)
-        self.last_refill = current_time
-
-        if self.tokens >= 1:
-            self.tokens -= 1
-            return True
-        return False
-
-    def get_retry_after(self) -> int:
-        """Calculate seconds until next token is available."""
-        if self.tokens >= 1:
-            return 0
-
-        time_to_next_token = (1 - self.tokens) / self.refill_rate
-        return max(1, int(time_to_next_token) + 1)
+async def _cleanup_stale_entries():
+    """Background task that deletes rate_limit rows older than 10 minutes every 5 minutes."""
+    while True:
+        try:
+            await asyncio.sleep(300)
+            engine = _get_engine()
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+            with engine.connect() as conn:
+                result = conn.execute(
+                    text("DELETE FROM rate_limits WHERE window_start < :cutoff"),
+                    {"cutoff": cutoff}
+                )
+                deleted = result.rowcount
+                conn.commit()
+                if deleted > 0:
+                    logger.debug(f"Cleaned up {deleted} stale rate limit entries")
+        except Exception as e:
+            logger.warning(f"Rate limit cleanup error: {e}")
 
 
 class RateLimiterMiddleware(BaseHTTPMiddleware):
     """
-    Rate limiting middleware using token bucket algorithm.
+    Rate limiting middleware using PostgreSQL-backed fixed window algorithm.
 
     Supports different rate limits for different endpoint categories:
-    - Auth endpoints (login, register, admin/login)
+    - Auth endpoints (login, register, forgot-password)
+    - Admin auth endpoints (stricter)
     - Upload endpoints (file uploads)
+    - Simulation endpoints (expensive Monte Carlo)
     - General API endpoints
     - Health check endpoints (no limit)
-
-    Rate limits can be configured via environment variables or constructor parameters.
     """
 
-    # Endpoint category patterns
     AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
-    ADMIN_AUTH_PATHS = {"/auth/admin/login"}  # Stricter rate limiting for admin
-    UPLOAD_PATHS = {"/csv-import", "/api/upload"}  # Endpoints containing upload operations
+    ADMIN_AUTH_PATHS = {"/auth/admin/login"}
+    UPLOAD_PATHS = {"/csv-import", "/api/upload"}
     HEALTH_PATHS = {"/health", "/"}
     SIMULATION_PATHS = {"/api/simulations"}
+
+    WINDOW_SECONDS = 60
 
     def __init__(
         self,
         app,
-        rate_limit_auth: int = 5,  # requests per minute
-        rate_limit_api: int = 60,  # requests per minute
-        rate_limit_upload: int = 10,  # requests per minute
-        rate_limit_admin_login: int = 3,  # requests per minute (stricter)
-        rate_limit_simulation: int = 10,  # requests per minute (expensive Monte Carlo)
+        rate_limit_auth: int = 5,
+        rate_limit_api: int = 60,
+        rate_limit_upload: int = 10,
+        rate_limit_admin_login: int = 3,
+        rate_limit_simulation: int = 10,
     ):
-        """
-        Initialize rate limiter middleware.
-
-        Args:
-            app: FastAPI application
-            rate_limit_auth: Auth requests per minute (default: 5)
-            rate_limit_api: API requests per minute (default: 60)
-            rate_limit_upload: Upload requests per minute (default: 10)
-            rate_limit_admin_login: Admin login requests per minute (default: 3)
-            rate_limit_simulation: Simulation requests per minute (default: 10)
-        """
         super().__init__(app)
 
-        # Load from environment variables if set, otherwise use parameters
-        self.rate_limit_auth = int(
-            os.getenv("RATE_LIMIT_AUTH", str(rate_limit_auth))
-        )
-        self.rate_limit_admin_login = int(
-            os.getenv("RATE_LIMIT_ADMIN_LOGIN", str(rate_limit_admin_login))
-        )
-        self.rate_limit_api = int(
-            os.getenv("RATE_LIMIT_API", str(rate_limit_api))
-        )
-        self.rate_limit_upload = int(
-            os.getenv("RATE_LIMIT_UPLOAD", str(rate_limit_upload))
-        )
-        self.rate_limit_simulation = int(
-            os.getenv("RATE_LIMIT_SIMULATION", str(rate_limit_simulation))
-        )
-
-        # Store token buckets per identifier (IP or user)
-        # Structure: {identifier: {category: TokenBucket}}
-        self.buckets: Dict[str, Dict[str, TokenBucket]] = defaultdict(dict)
+        self.rate_limit_auth = int(os.getenv("RATE_LIMIT_AUTH", str(rate_limit_auth)))
+        self.rate_limit_admin_login = int(os.getenv("RATE_LIMIT_ADMIN_LOGIN", str(rate_limit_admin_login)))
+        self.rate_limit_api = int(os.getenv("RATE_LIMIT_API", str(rate_limit_api)))
+        self.rate_limit_upload = int(os.getenv("RATE_LIMIT_UPLOAD", str(rate_limit_upload)))
+        self.rate_limit_simulation = int(os.getenv("RATE_LIMIT_SIMULATION", str(rate_limit_simulation)))
 
         logger.info(
             f"Rate limiter initialized - Auth: {self.rate_limit_auth}/min, "
@@ -127,143 +90,122 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             f"Simulation: {self.rate_limit_simulation}/min"
         )
 
+    def _start_cleanup_task(self):
+        global _cleanup_task_started
+        if not _cleanup_task_started:
+            _cleanup_task_started = True
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(_cleanup_stale_entries())
+                logger.info("Rate limit cleanup task started (every 5 minutes)")
+            except RuntimeError:
+                logger.warning("Could not start rate limit cleanup task - no event loop")
+
     def _get_identifier(self, request: Request) -> str:
-        """
-        Get unique identifier for rate limiting (IP address or user ID).
-
-        Priority: user_id from token > X-Forwarded-For > client.host
-        """
-        # Try to get user_id from token if authenticated
-        try:
-            # Check for Authorization header and extract user context
-            auth_header = request.headers.get("Authorization", "")
-            if auth_header.startswith("Bearer "):
-                # Could decode JWT here, but using IP for now is simpler
-                # and works for public/private distinction
-                pass
-        except Exception:
-            pass
-
-        # Use X-Forwarded-For for load balanced environments, fallback to client IP
         if "X-Forwarded-For" in request.headers:
             return request.headers["X-Forwarded-For"].split(",")[0].strip()
-
         return request.client.host if request.client else "unknown"
 
     def _get_category(self, request: Request) -> Tuple[str, int]:
-        """
-        Determine rate limit category and get the limit.
-
-        Returns:
-            Tuple of (category_name, limit_per_minute)
-        """
         path = request.url.path
 
-        # Check health endpoints first (no limit)
         if path in self.HEALTH_PATHS:
             return ("health", float('inf'))
 
-        # Check admin auth endpoints (stricter limit)
         if path in self.ADMIN_AUTH_PATHS:
             return ("admin_auth", self.rate_limit_admin_login)
 
-        # Check auth endpoints
         if path in self.AUTH_PATHS:
             return ("auth", self.rate_limit_auth)
 
-        # Check simulation endpoints (expensive Monte Carlo operations)
         if path in self.SIMULATION_PATHS:
             return ("simulation", self.rate_limit_simulation)
         if "/simulate" in path and path.startswith("/api/scenarios"):
             return ("simulation", self.rate_limit_simulation)
 
-        # Check upload endpoints
         if any(upload_path in path for upload_path in self.UPLOAD_PATHS):
             return ("upload", self.rate_limit_upload)
 
-        # Default to API limit
         return ("api", self.rate_limit_api)
 
-    def _get_or_create_bucket(
-        self, identifier: str, category: str, limit: int
-    ) -> TokenBucket:
-        """Get existing bucket or create new one."""
-        if category not in self.buckets[identifier]:
-            # Convert requests per minute to requests per second
-            refill_rate = limit / 60.0
-            self.buckets[identifier][category] = TokenBucket(
-                capacity=limit,
-                refill_rate=refill_rate
-            )
-        return self.buckets[identifier][category]
-
-    def _cleanup_old_buckets(self):
+    def _check_rate_limit(self, key: str, endpoint: str, limit: int) -> Tuple[bool, int, int]:
         """
-        Periodically clean up buckets for identifiers with no activity.
-        Called on every request - only actually cleans every N requests to avoid overhead.
+        Atomically check and update rate limit in PostgreSQL.
+
+        Uses INSERT ... ON CONFLICT DO UPDATE to handle concurrency safely.
+        The CASE expression resets the window if expired, otherwise increments.
+        RETURNING gives us the post-update count for accurate remaining calculation.
+
+        Returns:
+            (allowed, remaining, retry_after_seconds)
         """
-        # Simple cleanup every 1000 requests (can be tuned)
-        if not hasattr(self, '_request_count'):
-            self._request_count = 0
+        engine = _get_engine()
+        now = datetime.now(timezone.utc)
+        window_cutoff = now - timedelta(seconds=self.WINDOW_SECONDS)
 
-        self._request_count += 1
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("""
+                    INSERT INTO rate_limits (key, endpoint, request_count, window_start)
+                    VALUES (:key, :endpoint, 1, :now)
+                    ON CONFLICT (key, endpoint) DO UPDATE SET
+                        request_count = CASE
+                            WHEN rate_limits.window_start < :cutoff THEN 1
+                            ELSE rate_limits.request_count + 1
+                        END,
+                        window_start = CASE
+                            WHEN rate_limits.window_start < :cutoff THEN :now
+                            ELSE rate_limits.window_start
+                        END
+                    RETURNING request_count, window_start
+                """),
+                {"key": key, "endpoint": endpoint, "now": now, "cutoff": window_cutoff}
+            ).fetchone()
+            conn.commit()
 
-        if self._request_count % 1000 == 0:
-            current_time = time.time()
-            # Remove buckets that haven't been accessed in 1 hour
-            identifiers_to_remove = []
+            request_count, window_start = row[0], row[1]
 
-            for identifier, categories in self.buckets.items():
-                for category, bucket in categories.items():
-                    # Simple heuristic: if last_refill is > 1 hour old
-                    if current_time - bucket.last_refill > 3600:
-                        identifiers_to_remove.append(identifier)
-                        break
+            if window_start.tzinfo is None:
+                window_start = window_start.replace(tzinfo=timezone.utc)
 
-            for identifier in identifiers_to_remove:
-                del self.buckets[identifier]
+            if request_count > limit:
+                elapsed = (now - window_start).total_seconds()
+                retry_after = max(1, int(self.WINDOW_SECONDS - elapsed) + 1)
+                return (False, 0, retry_after)
 
-            if identifiers_to_remove:
-                logger.debug(
-                    f"Cleaned up {len(identifiers_to_remove)} inactive rate limit buckets"
-                )
+            return (True, limit - request_count, 0)
 
     async def dispatch(self, request: Request, call_next):
-        """Process request through rate limiter."""
-        # Skip rate limiting for health checks
+        self._start_cleanup_task()
+
         if request.url.path in self.HEALTH_PATHS:
             try:
                 return await call_next(request)
             except BaseException as exc:
-                import logging
-                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                logger.error(f"Middleware error: {exc}")
                 return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
-        # Get identifier and category
         identifier = self._get_identifier(request)
         category, limit = self._get_category(request)
 
-        # Check if limit is infinite (health endpoints)
         if limit == float('inf'):
             try:
                 return await call_next(request)
             except BaseException as exc:
-                import logging
-                logging.getLogger(__name__).error(f"Middleware error: {exc}")
+                logger.error(f"Middleware error: {exc}")
                 return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
-        # Get or create bucket
-        bucket = self._get_or_create_bucket(identifier, category, int(limit))
+        try:
+            allowed, remaining, retry_after = self._check_rate_limit(identifier, category, int(limit))
+        except Exception as e:
+            logger.error(f"Rate limit DB error, allowing request: {e}")
+            allowed, remaining, retry_after = True, int(limit), 0
 
-        # Check if request is allowed
-        if not bucket.is_allowed():
-            retry_after = bucket.get_retry_after()
-
+        if not allowed:
             logger.warning(
                 f"Rate limit exceeded: {identifier} ({category}), "
                 f"retry_after={retry_after}s, limit={limit}/min"
             )
-
             return JSONResponse(
                 status_code=429,
                 content={
@@ -273,19 +215,14 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(retry_after)},
             )
 
-        # Perform cleanup occasionally
-        self._cleanup_old_buckets()
-
-        # Process request
         try:
             response = await call_next(request)
         except BaseException as exc:
-            import logging
-            logging.getLogger(__name__).error(f"Middleware error: {exc}")
+            logger.error(f"Middleware error: {exc}")
             response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
-        # Add rate limit info headers for visibility
         response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Category"] = category
 
         return response
@@ -297,20 +234,7 @@ def get_rate_limiter_middleware(
     rate_limit_upload: Optional[int] = None,
     rate_limit_simulation: Optional[int] = None,
 ) -> RateLimiterMiddleware:
-    """
-    Factory function to create rate limiter middleware.
-
-    Uses environment variables if provided, otherwise uses defaults.
-
-    Args:
-        rate_limit_auth: Auth limit in requests/minute (default: 5)
-        rate_limit_api: API limit in requests/minute (default: 60)
-        rate_limit_upload: Upload limit in requests/minute (default: 10)
-        rate_limit_simulation: Simulation limit in requests/minute (default: 10)
-
-    Returns:
-        Middleware class (not instance) for FastAPI.add_middleware()
-    """
+    """Factory function to create rate limiter middleware."""
     def middleware_factory(app):
         return RateLimiterMiddleware(
             app,
@@ -319,5 +243,4 @@ def get_rate_limiter_middleware(
             rate_limit_upload=rate_limit_upload or 10,
             rate_limit_simulation=rate_limit_simulation or 10,
         )
-
     return middleware_factory
