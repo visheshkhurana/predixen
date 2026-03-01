@@ -1329,6 +1329,7 @@ export default function TruthScanPage() {
                 testId="metric-revenue"
                 tooltip={METRIC_DEFINITIONS.mrr?.shortDescription}
                 trendData={trendData.monthly_revenue}
+                metricSource={sharedMetrics.sources?.['mrr']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('mrr') || null, 
                   value: formatCurrency(metrics.monthly_revenue) 
@@ -1341,6 +1342,7 @@ export default function TruthScanPage() {
                 tooltip={metrics.is_profitable ? "Monthly surplus (revenue exceeds expenses)" : METRIC_DEFINITIONS.net_burn?.shortDescription}
                 variant={metrics.is_profitable ? "success" : (extractValue(metrics.net_burn) || 0) > 0 ? "danger" : "default"}
                 trendData={trendData.net_burn}
+                metricSource={sharedMetrics.sources?.['netBurn']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
                   value: formatCurrency(metrics.is_profitable ? Math.abs(extractValue(metrics.net_burn) || 0) : extractValue(metrics.net_burn)) 
@@ -1352,6 +1354,7 @@ export default function TruthScanPage() {
                 testId="metric-cash"
                 tooltip={METRIC_DEFINITIONS.cash_balance?.shortDescription}
                 trendData={trendData.cash_balance}
+                metricSource={sharedMetrics.sources?.['cashOnHand']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('cash_balance') || null, 
                   value: formatCurrency(metrics.cash_balance) 
@@ -1367,6 +1370,7 @@ export default function TruthScanPage() {
                 })()} 
                 testId="metric-runway"
                 tooltip={metrics.runway_sustainable ? "Company is cash-flow positive and self-sustaining" : METRIC_DEFINITIONS.runway_months?.shortDescription}
+                metricSource={sharedMetrics.sources?.['runway']}
                 variant={(() => {
                   if (metrics.runway_sustainable) return "success" as const;
                   const tsRunway = extractValue(metrics.runway_p50);
@@ -1389,6 +1393,7 @@ export default function TruthScanPage() {
                 testId="metric-margin"
                 tooltip={METRIC_DEFINITIONS.gross_margin?.shortDescription}
                 trendData={trendData.gross_margin}
+                metricSource={sharedMetrics.sources?.['grossMargin']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('gross_margin') || null, 
                   value: formatPercent(metrics.gross_margin) 
@@ -1409,6 +1414,7 @@ export default function TruthScanPage() {
                 }
                 variant={extractValue(metrics.revenue_growth_mom) === 0 ? "default" : undefined}
                 trendData={trendData.revenue_growth}
+                metricSource={sharedMetrics.sources?.['monthlyGrowthRate']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('revenue_growth_mom') || null, 
                   value: formatPercent(metrics.revenue_growth_mom) 
@@ -1431,6 +1437,7 @@ export default function TruthScanPage() {
                   }
                   return METRIC_DEFINITIONS.burn_multiple?.shortDescription;
                 })()}
+                metricSource={sharedMetrics.sources?.['burnMultiple']}
                 variant={(() => {
                   const val = extractValue(metrics.burn_multiple);
                   if (metrics.runway_sustainable) return "success";
