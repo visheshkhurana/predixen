@@ -655,6 +655,11 @@ export default function AuthPage() {
           <p className="text-center text-[11px] text-muted-foreground/60 mt-6">
             TLS encryption &middot; Secure cloud infrastructure &middot; Role-based access control
           </p>
+          <p className="text-center text-[11px] text-muted-foreground/60 mt-2">
+            <a href="/privacy" className="hover:text-foreground hover:underline transition-colors" data-testid="link-footer-privacy">Privacy Policy</a>
+            <span className="mx-1.5">&middot;</span>
+            <a href="/terms" className="hover:text-foreground hover:underline transition-colors" data-testid="link-footer-terms">Terms of Service</a>
+          </p>
         </div>
       </div>
 
