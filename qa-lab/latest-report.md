@@ -1,7 +1,7 @@
 # FounderConsole QA Lab Report
 
-**Generated**: 2026-02-14 16:48:46
-**Duration**: 11.8s
+**Generated**: 2026-03-01 15:50:12
+**Duration**: 14.8s
 **Monte Carlo**: seed=42, iterations=1000
 
 ## Summary
@@ -165,19 +165,19 @@
 | Dataset | Company | Reproducible | Runway | Survival | P10 | P50 | P90 |
 |---------|---------|--------------|--------|----------|-----|-----|-----|
 | DS01 | FlowForge | PASS | {'p10': 9.0, 'p25': 9.0, 'p50': 10.0, 'p75': 10.0, 'p90': 10.0, 'mean': 9.7, 'stdDev': 0.5, 'min': 9.0, 'max': 11.0} | {'6m': np.float64(100.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
-| DS02 | CloudLedger | PASS | {'p10': 19.0, 'p25': 19.0, 'p50': 20.0, 'p75': 22.0, 'p90': 23.0, 'mean': 20.5, 'stdDev': 1.6, 'min': 16.0, 'max': 26.5} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(91.8), '24m': np.float64(1.0)} | None | None | None |
+| DS02 | CloudLedger | PASS | {'p10': 19.0, 'p25': 19.0, 'p50': 20.0, 'p75': 21.0, 'p90': 22.0, 'mean': 20.5, 'stdDev': 1.5, 'min': 17.0, 'max': 26.6} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(92.8), '24m': np.float64(1.1)} | None | None | None |
 | DS03 | GlowCart | PASS | {'p10': 5.0, 'p25': 5.0, 'p50': 5.0, 'p75': 5.0, 'p90': 6.0, 'mean': 5.2, 'stdDev': 0.5, 'min': 4.0, 'max': 7.0} | {'6m': np.float64(0.1), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS04 | BazaarBridge | PASS | {'p10': 5.0, 'p25': 5.0, 'p50': 6.0, 'p75': 6.0, 'p90': 6.0, 'mean': 5.7, 'stdDev': 0.5, 'min': 5.0, 'max': 6.0} | {'6m': np.float64(0.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
-| DS05 | Shadowbox Logistics | PASS | {'p10': 27.4, 'p25': 28.7, 'p50': 30.3, 'p75': 32.0, 'p90': 33.9, 'mean': 30.5, 'stdDev': 2.6, 'min': 24.1, 'max': 41.6} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(100.0)} | None | None | None |
+| DS05 | Shadowbox Logistics | PASS | {'p10': 27.4, 'p25': 28.6, 'p50': 30.1, 'p75': 31.9, 'p90': 33.9, 'mean': 30.5, 'stdDev': 2.7, 'min': 24.0, 'max': 42.3} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(99.9)} | None | None | None |
 | DS06 | CredPulse | PASS | {'p10': 5.0, 'p25': 5.0, 'p50': 5.0, 'p75': 5.0, 'p90': 5.0, 'mean': 5.0, 'stdDev': 0.1, 'min': 4.0, 'max': 6.0} | {'6m': np.float64(0.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS07 | ProtoFab | PASS | {'p10': 7.0, 'p25': 7.8, 'p50': 8.0, 'p75': 9.0, 'p90': 9.0, 'mean': 8.1, 'stdDev': 1.0, 'min': 6.0, 'max': 11.0} | {'6m': np.float64(97.8), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS08 | StudioSprint | PASS | {'p10': 3.0, 'p25': 3.0, 'p50': 3.0, 'p75': 3.0, 'p90': 3.0, 'mean': 3.0, 'stdDev': 0.1, 'min': 3.0, 'max': 4.0} | {'6m': np.float64(0.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS09 | ArenaNova | PASS | {'p10': 12.0, 'p25': 13.0, 'p50': 13.0, 'p75': 14.0, 'p90': 14.0, 'mean': 13.2, 'stdDev': 0.6, 'min': 12.0, 'max': 15.0} | {'6m': np.float64(100.0), '12m': np.float64(89.3), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS10 | CareArc Clinics | PASS | {'p10': 4.0, 'p25': 4.0, 'p50': 4.0, 'p75': 5.0, 'p90': 5.0, 'mean': 4.3, 'stdDev': 0.5, 'min': 4.0, 'max': 5.0} | {'6m': np.float64(0.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 | DS11 | TutorLoop | PASS | {'p10': 6.0, 'p25': 6.0, 'p50': 6.0, 'p75': 6.0, 'p90': 6.0, 'mean': 6.0, 'stdDev': 0.2, 'min': 6.0, 'max': 7.0} | {'6m': np.float64(2.7), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
-| DS12 | ApexExchange | PASS | {'p10': 24.0, 'p25': 25.3, 'p50': 26.9, 'p75': 28.8, 'p90': 30.8, 'mean': 27.2, 'stdDev': 2.6, 'min': 21.0, 'max': 40.1} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(90.2)} | None | None | None |
+| DS12 | ApexExchange | PASS | {'p10': 24.2, 'p25': 25.3, 'p50': 26.8, 'p75': 28.8, 'p90': 30.9, 'mean': 27.3, 'stdDev': 2.7, 'min': 22.0, 'max': 44.4} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(92.4)} | None | None | None |
 | DS13 | ZeroRev Labs | PASS | {'p10': 5.0, 'p25': 5.0, 'p50': 5.0, 'p75': 5.0, 'p90': 5.0, 'mean': 5.0, 'stdDev': 0.0, 'min': 5.0, 'max': 5.0} | {'6m': np.float64(0.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
-| DS14 | MaxGM Co | PASS | {'p10': 21.0, 'p25': 22.0, 'p50': 24.0, 'p75': 24.6, 'p90': 26.2, 'mean': 23.7, 'stdDev': 2.0, 'min': 19.0, 'max': 33.2} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(33.7)} | None | None | None |
+| DS14 | MaxGM Co | PASS | {'p10': 21.0, 'p25': 22.0, 'p50': 24.0, 'p75': 24.5, 'p90': 26.2, 'mean': 23.7, 'stdDev': 2.0, 'min': 19.0, 'max': 36.2} | {'6m': np.float64(100.0), '12m': np.float64(100.0), '18m': np.float64(100.0), '24m': np.float64(32.9)} | None | None | None |
 | DS15 | MinGM Co | PASS | {'p10': 9.0, 'p25': 9.0, 'p50': 9.0, 'p75': 9.0, 'p90': 9.0, 'mean': 9.0, 'stdDev': 0.0, 'min': 9.0, 'max': 9.0} | {'6m': np.float64(100.0), '12m': np.float64(0.0), '18m': np.float64(0.0), '24m': np.float64(0.0)} | None | None | None |
 
 ## Feature & UI/UX Improvement Ideas
@@ -300,4 +300,4 @@
 - **Key Insight**: Start fundraising conversations now, optimize burn
 
 ---
-*Report generated by FounderConsole QA Lab v1.0 on 2026-02-14 16:48:46*
+*Report generated by FounderConsole QA Lab v1.0 on 2026-03-01 15:50:12*
