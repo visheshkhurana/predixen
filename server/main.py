@@ -37,6 +37,8 @@ def _register_critical_routers(app: FastAPI):
     from server.api import onboarding as onboarding_api
     from server.api import oauth as oauth_api
 
+    from server.api import feedback as feedback_api
+
     app.include_router(auth.router)
     app.include_router(oauth_api.router)
     app.include_router(companies.router)
@@ -44,6 +46,7 @@ def _register_critical_routers(app: FastAPI):
     app.include_router(qa_api.router)
     app.include_router(billing_api.router)
     app.include_router(onboarding_api.router)
+    app.include_router(feedback_api.router)
 
     logger.info(f"Critical routes registered in {time.time() - t0:.1f}s")
 

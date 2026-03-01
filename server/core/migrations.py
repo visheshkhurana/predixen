@@ -918,6 +918,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_amount_scale(engine)
     ensure_user_oauth_columns(engine)
     ensure_auth_tokens_tables(engine)
+    ensure_beta_feedback_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1047,3 +1048,21 @@ def ensure_auth_tokens_tables(engine: Engine) -> None:
 
         conn.commit()
     logger.info("Auth tokens tables migration complete")
+
+
+def ensure_beta_feedback_table(engine: Engine) -> None:
+    """Create beta_feedback table for in-app feedback collection."""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS beta_feedback (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                email VARCHAR(255),
+                type VARCHAR(20) NOT NULL DEFAULT 'general',
+                message TEXT NOT NULL,
+                page VARCHAR(500) DEFAULT '',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.commit()
+    logger.info("Beta feedback table migration complete")

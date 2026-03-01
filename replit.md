@@ -48,6 +48,8 @@ The platform uses a modern full-stack architecture with React/TypeScript for the
 22. **Email Verification on Signup**: New users get `is_email_verified=false`, auto-sent verification email on register. Dashboard shows amber banner with "Resend Verification" button. `/verify-email?token=xxx` page verifies and updates Zustand store. Uses `EmailVerificationToken` model with 24-hour expiry. OAuth users default to verified.
 23. **Integrations Coming Soon Separation**: Active connectors shown first, then "Upcoming Integrations" section with "In Development" badge and "Request Access" button (shows toast confirmation). Filtered by `comingSoon` property.
 24. **Simulation API Rate Limiting**: Monte Carlo simulation endpoints (`/api/simulations`, `/api/scenarios/*/simulate`) rate-limited to 10 req/min per IP. Returns 429 with `Retry-After` header. Configurable via `RATE_LIMIT_SIMULATION` env var.
+25. **In-App Feedback Widget**: Floating "Feedback" button (purple gradient, bottom-right) visible on all authenticated pages. Opens a panel with type selection (Bug/Feature/General), message textarea, and submit. Stores in `beta_feedback` table via `POST /api/feedback`. Uses CSRF double-submit cookie pattern. Component: `client/src/components/FeedbackWidget.tsx`, API: `server/api/feedback.py`.
+26. **Help & Documentation Page**: Collapsible sections with real content for Getting Started, Simulation Engine, AI Copilot, and Integrations guides. No placeholder text. Component: `client/src/pages/docs.tsx`.
 
 ## External Dependencies
 

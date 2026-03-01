@@ -40,6 +40,7 @@ import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { formatCurrencyAbbrev } from "@/lib/utils";
 import GlobalLoadingBar from "@/components/GlobalLoadingBar";
 import { AskAIButton } from "@/components/AskAIButton";
+import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import AuthPage from "@/pages/auth";
 import AuthCallback from "@/pages/auth-callback";
@@ -747,6 +748,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1 overflow-auto bg-background">
             {children}
           </main>
+          <FeedbackWidget />
           <AskAIButton />
         </div>
       </div>
