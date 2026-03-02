@@ -8,36 +8,42 @@ const posts = [
     title: "How to Calculate Your True Runway",
     excerpt: "A single forecast is a trap. Learn how to build defensible runway scenarios using confidence intervals instead of gut feel, and why P10/P50/P90 bands matter.",
     category: "Financial Planning",
+    date: "Feb 24, 2026",
     readTime: "8 min",
   },
   {
     title: "Monte Carlo Simulations: A Founder's Guide",
     excerpt: "A plain-English explanation that turns Monte Carlo from intimidating to practical. No PhD required — just founders making better decisions under uncertainty.",
     category: "Product Updates",
+    date: "Feb 18, 2026",
     readTime: "5 min",
   },
   {
     title: "5 Cap Table Mistakes That Cost Founders Millions",
     excerpt: "From uncapped SAFEs to missing pro-rata rights — the most common equity mistakes early-stage founders make and how to avoid them before it's too late.",
     category: "Fundraising",
+    date: "Feb 10, 2026",
     readTime: "9 min",
   },
   {
     title: "When to Raise: Timing Your Series A",
     excerpt: "How confidence intervals help you avoid raising too early or too late. A data-driven approach to the most consequential timing decision founders face.",
     category: "Fundraising",
+    date: "Jan 29, 2026",
     readTime: "6 min",
   },
   {
     title: "Building a Data-Driven Culture",
     excerpt: "The best founders don't just track metrics — they build systems where every team member understands the numbers that matter and acts on them weekly.",
     category: "Founder Stories",
+    date: "Jan 15, 2026",
     readTime: "7 min",
   },
   {
     title: "The Founder's Guide to Unit Economics",
     excerpt: "LTV, CAC, payback period, and contribution margin explained with real startup examples. The metrics investors actually care about and how to improve them.",
     category: "Financial Planning",
+    date: "Jan 6, 2026",
     readTime: "6 min",
   },
 ];
@@ -71,7 +77,7 @@ export default function BlogPage() {
                 className="rounded-xl border bg-card overflow-hidden"
                 data-testid={`card-blog-${index}`}
               >
-                <div className="relative h-40 bg-gradient-to-br from-primary/20 to-purple-500/20">
+                <div className="relative h-40 bg-gradient-to-br from-primary/20 to-primary/5">
                   <Badge
                     variant="secondary"
                     className="absolute top-3 right-3"
@@ -91,6 +97,8 @@ export default function BlogPage() {
                     {post.excerpt}
                   </p>
                   <div className="mt-4 flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+                    <span data-testid={`text-blog-date-${index}`}>{post.date}</span>
+                    <span className="text-border">·</span>
                     <span className="flex items-center gap-1" data-testid={`text-blog-readtime-${index}`}>
                       <Clock className="h-3 w-3" />
                       {post.readTime}

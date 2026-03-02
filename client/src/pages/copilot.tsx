@@ -66,6 +66,43 @@ import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
+function safePercent(val: unknown): string | null {
+  if (val == null) return null;
+  const n = Number(val);
+  if (!Number.isFinite(n)) return null;
+  return n.toFixed(1);
+}
+
+function formatScenarioParams(scenario: any): { pricing: number; burn: number; growth: number } {
+  const inputs = scenario?.inputs || {};
+  const parse = (v: unknown): number => {
+    if (v == null) return 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  return {
+    pricing: parse(inputs.pricing_change_pct),
+    burn: parse(inputs.burn_reduction_pct),
+    growth: parse(inputs.growth_uplift_pct),
+  };
+}
+
+function getSimSurvival18(sim: any): number | null {
+  const survObj = sim?.survivalProbability || sim?.survival;
+  if (!survObj || typeof survObj !== 'object') return null;
+  const raw = survObj['18m'];
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getSimRunwayP50(sim: any): number | null {
+  const raw = sim?.runway?.p50;
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 type DataSource = 'truth_scan' | 'simulation' | 'scenario' | 'benchmark' | 'cfo_agent' | 'market_agent' | 'strategy_agent';
 
 interface CopilotApiResponse {
