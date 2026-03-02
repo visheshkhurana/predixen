@@ -441,18 +441,18 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     },
     {
       id: 'burn-rate',
-      label: sharedMetrics.isProfitable ? 'Net Cash Flow' : 'Net Burn Rate',
+      label: 'Gross Burn Rate',
       value: (() => {
-        const burn = sharedMetrics.netBurn;
-        if (burn == null || burn === 0) return 'N/A';
-        return burn < 0 ? `+${formatCurrency(Math.abs(burn))}` : formatCurrency(Math.abs(burn));
+        const expenses = sharedMetrics.totalMonthlyExpenses;
+        if (expenses == null || expenses === 0) return 'N/A';
+        return formatCurrency(expenses);
       })(),
       trend: undefined,
       trendValue: '/month',
       benchmark: '',
-      status: (sharedMetrics.isProfitable ? 'healthy' : 'warning') as any,
+      status: (sharedMetrics.totalMonthlyExpenses > 0 && sharedMetrics.totalMonthlyExpenses < sharedMetrics.mrr * 1.5 ? 'healthy' : 'warning') as any,
       source: 'calculated' as any,
-      tooltip: 'Monthly expenses minus revenue. Positive means cash is being consumed; negative (shown as +) means revenue exceeds expenses.',
+      tooltip: 'Total operating expenses before revenue offset. See Dashboard for Net Burn (expenses minus revenue).',
     },
     {
       id: 'mrr',
@@ -1336,16 +1336,16 @@ export default function TruthScanPage() {
                 })}
               />
               <MetricCard 
-                title={sharedMetrics.isProfitable ? "Monthly Surplus" : "Net Burn"} 
-                value={formatCurrency(sharedMetrics.isProfitable ? Math.abs(sharedMetrics.netBurn) : sharedMetrics.netBurn)} 
+                title="Gross Burn" 
+                value={formatCurrency(sharedMetrics.totalMonthlyExpenses)} 
                 testId="metric-burn"
-                tooltip={sharedMetrics.isProfitable ? "Monthly surplus (revenue exceeds expenses)" : "Monthly expenses minus revenue. Measures how fast cash is consumed."}
-                variant={sharedMetrics.isProfitable ? "success" : sharedMetrics.netBurn > 0 ? "danger" : "default"}
+                tooltip="Total operating expenses before revenue offset. See Dashboard for Net Burn (expenses minus revenue)."
+                variant={sharedMetrics.totalMonthlyExpenses > 0 && sharedMetrics.totalMonthlyExpenses < sharedMetrics.mrr * 1.5 ? "default" : "danger"}
                 trendData={trendData.net_burn}
                 metricSource={sharedMetrics.sources?.['netBurn']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
-                  value: formatCurrency(sharedMetrics.isProfitable ? Math.abs(sharedMetrics.netBurn) : sharedMetrics.netBurn) 
+                  value: formatCurrency(sharedMetrics.totalMonthlyExpenses) 
                 })}
               />
               <MetricCard 
