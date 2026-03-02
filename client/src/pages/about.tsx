@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
-import { Eye, BarChart3, Heart, ShieldCheck, ArrowRight } from "lucide-react";
+import { Eye, BarChart3, Rocket, Lock, ArrowRight } from "lucide-react";
 
 const values = [
   {
@@ -16,15 +16,22 @@ const values = [
     description: "Confidence intervals make risk measurable. Probability replaces intuition when the stakes are highest.",
   },
   {
-    icon: Heart,
+    icon: Rocket,
     title: "Founder-First",
     description: "Built by founders who've lived the uncertainty. Every feature exists because we needed it ourselves.",
   },
   {
-    icon: ShieldCheck,
+    icon: Lock,
     title: "Privacy-First",
     description: "Your financial data is encrypted at rest and in transit. Read-only integrations. No data resale. Ever.",
   },
+];
+
+const team = [
+  { initials: "NK", name: "Nikita Kapoor", role: "CEO & Co-Founder" },
+  { initials: "AR", name: "Arjun Rao", role: "CTO & Co-Founder" },
+  { initials: "PS", name: "Priya Sharma", role: "Head of Product" },
+  { initials: "DM", name: "Dev Mehta", role: "Lead Engineer" },
 ];
 
 export default function AboutPage() {
@@ -75,12 +82,31 @@ export default function AboutPage() {
             {values.map((v) => (
               <div
                 key={v.title}
-                className="rounded-xl border bg-card p-6"
+                className="rounded-xl border bg-card/50 p-6"
                 data-testid={`card-value-${v.title.toLowerCase()}`}
               >
                 <v.icon className="h-5 w-5 text-primary" />
                 <h3 className="mt-3 text-base font-semibold text-foreground">{v.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{v.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-team-heading">
+            Our team
+          </h2>
+          <div className="mt-8 grid grid-cols-2 gap-6 md:grid-cols-4">
+            {team.map((member) => (
+              <div key={member.name} className="flex flex-col items-center text-center" data-testid={`card-team-${member.initials.toLowerCase()}`}>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                  <span className="text-lg font-semibold text-muted-foreground">{member.initials}</span>
+                </div>
+                <h3 className="mt-3 text-sm font-semibold text-foreground">{member.name}</h3>
+                <p className="text-sm text-muted-foreground">{member.role}</p>
               </div>
             ))}
           </div>
@@ -95,15 +121,12 @@ export default function AboutPage() {
           <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
             We're building the financial intelligence layer for the next generation of startups.
           </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Button size="lg" asChild data-testid="button-about-get-started">
-              <Link href="/auth">
-                Get Started Free
+          <div className="mt-6 flex justify-center gap-3 flex-wrap">
+            <Button size="lg" asChild data-testid="button-about-contact">
+              <Link href="/contact">
+                Join Us
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild data-testid="button-about-contact">
-              <Link href="/contact">Contact Us</Link>
             </Button>
           </div>
         </div>

@@ -56,17 +56,17 @@ const faqSections = [
       {
         question: "How is my financial data protected?",
         answer:
-          "All data is encrypted at rest and in transit. Integrations use OAuth2 with read-only access where possible. Credentials are stored encrypted. We never sell or share your data with third parties.",
+          "All data is encrypted using AES-256 at rest and TLS in transit. Integrations use OAuth2 with read-only access where possible. Credentials are stored with envelope encryption. We never sell or share your data with third parties.",
       },
       {
-        question: "Which integrations are available?",
+        question: "Where is my data stored?",
         answer:
-          "We support 37 integrations including QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, Xero, FreshBooks, Shopify, HubSpot, Salesforce, and many more. All use real API connections with OAuth2 authentication.",
+          "Your data is stored in US-based PostgreSQL databases with automated daily backups and point-in-time recovery. Infrastructure is hosted on secure, SOC2-compliant cloud providers with strict access controls and audit logging.",
       },
       {
-        question: "Can I export my data?",
+        question: "What compliance standards do you follow?",
         answer:
-          "Yes. You can export scenarios, simulations, investor memos, and reports. Your data always belongs to you.",
+          "We are fully GDPR compliant and are actively working toward SOC2 Type II certification. We conduct regular security audits, enforce role-based access controls, and maintain detailed audit logs of all data access. You can request a full data export or deletion at any time.",
       },
     ],
   },
@@ -138,7 +138,7 @@ export default function FAQPage() {
                     key={item.question}
                     value={`${section.title}-${i}`}
                     className="rounded-lg border bg-card px-4"
-                    data-testid={`accordion-faq-${i}`}
+                    data-testid={`accordion-faq-${section.title.toLowerCase().replace(/\s+/g, "-")}-${i}`}
                   >
                     <AccordionTrigger className="text-sm font-medium text-foreground hover:no-underline">
                       {item.question}

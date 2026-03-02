@@ -18,10 +18,6 @@ const identifyUser = (userId: number, email: string) => {
     (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }
-  if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('init', '872167299140812', { em: email });
-    (window as any).fbq('track', 'Lead');
-  }
 };
 
 function AnimatedMetric({ label, value, delay }: { label: string; value: string; delay: number }) {

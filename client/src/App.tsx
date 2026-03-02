@@ -176,9 +176,6 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
         (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
         (window as any).gtag('set', 'user_properties', { user_email: user.email });
       }
-      if ((window as any).fbq) {
-        (window as any).fbq('init', '872167299140812', { em: user.email });
-      }
     }
   }, [user]);
 

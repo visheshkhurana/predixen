@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu, Twitter, Linkedin, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -208,7 +208,39 @@ function MobileStickyCTA() {
   );
 }
 
+function useMetaPixel() {
+  const pixelLoaded = useRef(false);
+  const [location] = useLocation();
+
+  useEffect(() => {
+    if (pixelLoaded.current) {
+      if ((window as any).fbq) {
+        (window as any).fbq('track', 'PageView');
+      }
+      return;
+    }
+    pixelLoaded.current = true;
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    (window as any).fbq = function () {
+      (window as any).fbq.callMethod
+        ? (window as any).fbq.callMethod.apply((window as any).fbq, arguments)
+        : (window as any).fbq.queue.push(arguments);
+    };
+    (window as any).fbq.push = (window as any).fbq;
+    (window as any).fbq.loaded = true;
+    (window as any).fbq.version = '2.0';
+    (window as any).fbq.queue = [];
+    document.head.appendChild(script);
+    (window as any).fbq('init', '872167299140812');
+    (window as any).fbq('track', 'PageView');
+  }, [location]);
+}
+
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
+  useMetaPixel();
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />

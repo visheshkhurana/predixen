@@ -1,113 +1,104 @@
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
-import { ScenarioCompare } from "@/components/ScenarioCompare";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import {
   BarChart3,
-  Bot,
+  Sparkles,
   ShieldCheck,
-  PieChart,
-  Cable,
-  FileText,
+  DollarSign,
+  Plug,
+  Brain,
   ArrowRight,
   CheckCircle,
-  TrendingUp,
 } from "lucide-react";
 
 const features = [
   {
-    icon: TrendingUp,
-    title: "Real-time forecasting",
-    headline: "Your forecast stays current. Automatically.",
-    description:
-      "Connect revenue, expense, and payroll sources to reduce manual work and keep forecasts current. No more stale spreadsheets or quarterly updates.",
-    bullets: [
-      "Holt-Winters smoothing keeps projections accurate as data flows in",
-      "24-month forward view so you catch problems early",
-      "Multi-currency support — no manual conversion tables",
-      "Anomaly alerts flag deviations before they compound",
-    ],
-  },
-  {
     icon: BarChart3,
-    title: "Monte Carlo simulation",
+    title: "Simulation Engine",
     headline: "Probability replaces guesswork.",
     description:
-      "See P10/P50/P90 outcomes so risk becomes measurable. Run thousands of simulations to understand the range of what could happen — not just a single best guess.",
+      "Run thousands of Monte Carlo simulations to understand the full range of outcomes for your startup. See P10/P50/P90 confidence bands so risk becomes measurable, not hypothetical.",
     bullets: [
-      "100–10,000 iterations reveal the full distribution of outcomes",
-      "Sensitivity analysis shows which lever moves risk most",
-      "Tornado charts instantly identify your top 3 risk drivers",
-      "Before/after delta cards quantify the impact of each decision",
+      "Monte Carlo P10/P50/P90 confidence bands across all key metrics",
+      "Side-by-side scenario comparison with ranked recommendations",
+      "Sensitivity analysis reveals which levers move risk the most",
+      "24-month forward projections updated as new data flows in",
     ],
   },
   {
-    icon: PieChart,
-    title: "Scenario comparison",
-    headline: "Compare decisions with clear tradeoffs.",
+    icon: Sparkles,
+    title: "AI Copilot",
+    headline: "Defend every decision with data.",
     description:
-      "Compare decisions like hiring timing, fundraising size, pricing changes, and investment bets. See ranked recommendations with confidence scores so you know why one path beats another.",
+      "A multi-LLM copilot that routes queries across GPT-4, Claude, and Gemini to deliver the best answer. Perplexity-powered web research adds real-time market benchmarks and competitor context.",
     bullets: [
-      "Side-by-side comparison with GO / CONDITIONAL / NO-GO verdicts",
-      "Second-order effects detection catches downstream surprises",
-      "Risk-adjusted scoring lets you weigh speed vs. safety",
-      "Scenario versioning so you can revisit past analyses",
+      "Multi-LLM routing selects the best model for each query type",
+      "Perplexity web research surfaces live market data and benchmarks",
+      "Context-aware strategic recommendations grounded in your financials",
+      "Every answer shows its reasoning, assumptions, and data sources",
     ],
   },
   {
-    icon: Bot,
-    title: "Explainable AI copilot",
-    headline: "Defend choices to boards and investors.",
+    icon: ShieldCheck,
+    title: "Truth Scan",
+    headline: "Trust your numbers before sharing them.",
     description:
-      "Multi-LLM copilot uses GPT-4, Claude, and Gemini to answer strategic questions. Perplexity-powered web research adds market benchmarks. Every answer shows its reasoning.",
+      "Multi-stage data validation catches errors, inconsistencies, and anomalies before they reach your board deck. Z-score anomaly detection flags outliers automatically so nothing slips through.",
     bullets: [
-      "\"Why this answer\" — top drivers + assumptions are always visible",
-      "Data freshness indicator shows when sources last synced",
-      "Citations link back to the underlying data or market source",
-      "Conversational Q&A — ask in plain English, get structured output",
+      "Multi-stage data validation across all connected sources",
+      "Z-score anomaly detection surfaces statistical outliers instantly",
+      "Confidence scoring quantifies how reliable each metric is",
+      "Automated reconciliation between accounting and bank feeds",
     ],
   },
   {
-    icon: FileText,
-    title: "Investor-ready reporting",
-    headline: "Turn insight into consistent summaries.",
+    icon: DollarSign,
+    title: "Fundraising OS",
+    headline: "From cap table to term sheet, covered.",
     description:
-      "Reduce update-time drag. Generate investor memos, data room checklists, and fundraising materials that build trust through transparency and consistent language.",
+      "Manage your cap table, model SAFE and convertible note conversions, and understand dilution impact before you sign. Generate investor-ready materials and track your fundraising pipeline in one place.",
     bullets: [
-      "Automated investor memo generation from simulation results",
-      "Cap table management with dilution modeling and SAFE conversion",
-      "Data room checklist with completion tracking",
-      "Fundraising pipeline to track investor conversations",
+      "Cap table management with real-time ownership visualization",
+      "SAFE and convertible note conversion modeling",
+      "Dilution modeling shows impact of each fundraising scenario",
+      "Investor room with secure document sharing and activity tracking",
     ],
   },
   {
-    icon: Cable,
-    title: "37 data connectors",
+    icon: Plug,
+    title: "Data Connectors",
     headline: "Connect everything. Auto-sync.",
     description:
-      "QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and 31 more. Real OAuth2 integrations — not CSV imports or screen scraping.",
+      "37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.",
     bullets: [
-      "One-click OAuth connections with automatic data refresh",
+      "37 integrations with one-click OAuth connections",
+      "QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported",
+      "Auto-sync keeps your data fresh without manual intervention",
       "Multi-currency handling across all connected sources",
-      "Encrypted credential storage — your keys never leave our vault",
-      "New connectors added monthly based on founder requests",
     ],
   },
-];
-
-const fiveMinuteItems = [
-  "Baseline forecast from connected sources",
-  "One scenario simulation with P10/P50/P90 confidence bands",
-  "AI narrative explaining your top risk drivers",
-  "An investor-ready summary draft you can share immediately",
+  {
+    icon: Brain,
+    title: "Decision Engine",
+    headline: "Strategic clarity, not just charts.",
+    description:
+      "Transform simulation results into narrative strategic briefings that boards and investors understand. Ranked recommendations with confidence scores explain why one path beats another.",
+    bullets: [
+      "Narrative strategic briefings written in plain English",
+      "Ranked recommendations with GO / CONDITIONAL / NO-GO verdicts",
+      "Risk assessment with second-order effects detection",
+      "Second-order effect analysis catches downstream surprises early",
+    ],
+  },
 ];
 
 export default function MarketingFeaturesPage() {
   useSEO({
     title: "Features | FounderConsole",
     description:
-      "Real-time forecasting, Monte Carlo simulation, explainable AI copilot, scenario comparison, and investor-ready reporting — built for founders.",
+      "Simulation engine, AI copilot, Truth Scan, Fundraising OS, 37 data connectors, and decision engine — built for startup founders.",
   });
 
   return (
@@ -117,11 +108,8 @@ export default function MarketingFeaturesPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-features-title">
             Every tool founders need to survive and scale
           </h1>
-          <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Know your runway confidence band and the tradeoffs of hiring, fundraising, and pricing — in minutes.
-          </p>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            2-minute setup &middot; Connect Stripe &middot; Get a baseline forecast
+          <p className="mt-3 max-w-2xl text-lg text-muted-foreground" data-testid="text-features-subtitle">
+            From Monte Carlo simulations to AI-powered strategic briefings — know your runway, your risks, and your next move.
           </p>
         </div>
       </section>
@@ -163,48 +151,8 @@ export default function MarketingFeaturesPage() {
       </section>
 
       <section className="border-t">
-        <div className="mx-auto max-w-6xl px-4 py-12">
-          <div className="rounded-xl border bg-card p-6 md:p-8">
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Real example</p>
-            <h3 className="mt-2 text-lg font-semibold text-foreground" data-testid="text-case-snippet">
-              Delay a hire by 3 weeks → risk drops from 42% to 18%
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
-              A seed-stage SaaS team used FounderConsole to compare hiring timelines. The simulation showed that
-              pushing a senior hire by 3 weeks extended runway past their next fundraise milestone, cutting negative-runway
-              probability by more than half — without slowing product velocity.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="border-t">
-        <ScenarioCompare />
-      </section>
-
-      <section className="border-t">
-        <div className="mx-auto max-w-6xl px-4 py-12">
-          <div className="max-w-3xl">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-five-min-heading">
-              What you get in the first 5 minutes
-            </h2>
-            <p className="mt-2 text-muted-foreground">Connect one source. Get a complete picture.</p>
-          </div>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-            {fiveMinuteItems.map((item) => (
-              <li key={item} className="flex gap-2 text-sm text-muted-foreground">
-                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
-          <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
-          <h2 className="mt-4 text-2xl font-semibold text-foreground" data-testid="text-features-cta">
+          <h2 className="text-2xl font-semibold text-foreground" data-testid="text-features-cta">
             Start using FounderConsole today — it's free during beta
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-muted-foreground">

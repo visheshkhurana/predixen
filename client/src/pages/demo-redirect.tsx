@@ -26,9 +26,6 @@ export default function DemoRedirectPage() {
         (window as any).gtag('set', 'user_properties', { user_email: result.email });
         (window as any).gtag('event', 'login', { method: 'demo' });
       }
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('init', '872167299140812', { em: result.email });
-      }
 
       try {
         const companies = await api.companies.list();
