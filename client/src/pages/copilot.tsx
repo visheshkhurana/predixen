@@ -2286,16 +2286,17 @@ Type **help** for a full list of what I can do.`,
                     {latestScenario ? (
                       (() => {
                         const inputs = latestScenario.inputs || latestScenario;
-                        const pricing = inputs.pricing_change_pct;
-                        const burn = inputs.burn_reduction_pct;
-                        const growth = inputs.growth_uplift_pct;
+                        const pricing = Number(inputs.pricing_change_pct) || 0;
+                        const burn = Number(inputs.burn_reduction_pct) || 0;
+                        const growth = Number(inputs.growth_uplift_pct) || 0;
+                        const hasChanges = pricing !== 0 || burn !== 0 || growth !== 0;
                         return (
                           <>
                             <p className="font-medium text-foreground" data-testid="text-scenario-name">{latestScenario.name}</p>
-                            {pricing != null && <p data-testid="text-scenario-pricing">Pricing: {pricing > 0 ? '+' : ''}{pricing}%</p>}
-                            {burn != null && <p data-testid="text-scenario-burn">{burn < 0 ? `Burn Increase: +${Math.abs(burn)}%` : `Burn Cut: ${burn}%`}</p>}
-                            {growth != null && growth !== 0 && <p data-testid="text-scenario-growth">Growth: +{growth}%</p>}
-                            {pricing == null && burn == null && growth == null && <p className="text-xs">Custom scenario</p>}
+                            {pricing !== 0 && <p data-testid="text-scenario-pricing">Pricing: {pricing > 0 ? '+' : ''}{pricing}%</p>}
+                            {burn !== 0 && <p data-testid="text-scenario-burn">{burn < 0 ? `Burn Increase: +${Math.abs(burn)}%` : `Burn Cut: ${burn}%`}</p>}
+                            {growth !== 0 && <p data-testid="text-scenario-growth">Growth: {growth > 0 ? '+' : ''}{growth}%</p>}
+                            {!hasChanges && <p className="text-xs">Baseline scenario — no parameter changes</p>}
                           </>
                         );
                       })()
