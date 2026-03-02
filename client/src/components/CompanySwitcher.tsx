@@ -187,12 +187,17 @@ export function CompanySwitcher() {
             data-testid="button-company-switcher"
             aria-label="Switch company"
           >
-            {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400" /> : <Building2 className="h-4 w-4" />}
-            <span className="truncate max-w-[120px]">
-              {currentCompany?.name || 'Select Company'}
-            </span>
-            {isDemoUser && <Badge variant="outline" className="ml-0.5 border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4" data-testid="badge-demo-company">Demo</Badge>}
-            <ChevronDown className="h-4 w-4 opacity-50" />
+            {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" /> : <Building2 className="h-4 w-4 shrink-0" />}
+            <div className="flex flex-col items-start min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="truncate max-w-[120px]">
+                  {currentCompany?.name || 'Select Company'}
+                </span>
+                {isDemoUser && <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0" data-testid="badge-demo-company">Demo</Badge>}
+              </div>
+              {isDemoUser && <span className="text-[10px] text-amber-400/70 leading-3" data-testid="text-demo-subtitle">Simulated data only</span>}
+            </div>
+            <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
