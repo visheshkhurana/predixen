@@ -32,6 +32,7 @@ import { generateMockTrendData } from '@/components/Sparkline';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/posthog';
 
 const STATUS_EXPLANATIONS = {
   critical: {
@@ -867,6 +868,7 @@ export default function TruthScanPage() {
   const runwayP50Value = extractValue(metrics.runway_p50);
   
   const handleRefresh = async () => {
+    trackEvent('truth_scan_refreshed', {});
     if (!currentCompany) return;
     await runTruthScanMutation.mutateAsync(currentCompany.id);
   };

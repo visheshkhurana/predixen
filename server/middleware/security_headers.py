@@ -19,7 +19,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: blob: https:",
-        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://*.replit.dev wss://*.replit.dev",
+        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://*.replit.dev wss://*.replit.dev https://us.i.posthog.com https://us.posthog.com",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",

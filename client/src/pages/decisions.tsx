@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { api } from '@/api/client';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
+import { trackEvent } from '@/lib/posthog';
 
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 8000 },
@@ -249,6 +250,7 @@ export default function DecisionsPage() {
   const isUpdating = isDiagnosisFetching && !!diagnosisData;
 
   const handleGenerateDecisions = useCallback(async () => {
+    trackEvent('decision_generated', { company_id: currentCompany?.id });
     if (!currentCompany) return;
     setIsGenerating(true);
     setGenerationError(null);
@@ -361,6 +363,7 @@ export default function DecisionsPage() {
   };
 
   const handleShareRisk = (item: any) => {
+    trackEvent('decision_shared', { type: 'risk', company_id: currentCompany?.id });
     openShareModal({
       contentType: 'risk',
       subject: `Risk Alert from ${currentCompany?.name || 'Your Company'}`,
@@ -374,6 +377,7 @@ export default function DecisionsPage() {
   };
 
   const handleShareRecommendation = () => {
+    trackEvent('decision_shared', { type: 'recommendation', company_id: currentCompany?.id });
     if (!diagnosisData) return;
     openShareModal({
       contentType: 'recommendation',
@@ -448,6 +452,7 @@ export default function DecisionsPage() {
   };
 
   const handleEmailFullBriefing = () => {
+    trackEvent('decision_emailed', { company_id: currentCompany?.id });
     const sections = _buildBriefingSections();
     if (sections.length === 0) return;
     openShareModal({
@@ -458,6 +463,7 @@ export default function DecisionsPage() {
   };
 
   const handleCopyBrief = async () => {
+    trackEvent('decision_copied', { company_id: currentCompany?.id });
     const sections = _buildBriefingSections();
     if (sections.length === 0) return;
     const parts: string[] = [];

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { EmptyStateCard } from '@/components/ui/empty-state';
 import {
+import { trackEvent } from '@/lib/posthog';
   PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
 
@@ -281,6 +282,7 @@ export default function CapTablePage() {
       return res.json();
     },
     onSuccess: () => {
+      trackEvent('captable_createShareholder', {});
       queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'cap-table'] });
       toast({ title: 'Shareholder Added' });
       setShowShareholderDialog(false);
@@ -295,6 +297,7 @@ export default function CapTablePage() {
       return res.json();
     },
     onSuccess: () => {
+      trackEvent('captable_issueEquity', {});
       queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'cap-table'] });
       toast({ title: 'Equity Issued' });
       setShowIssueDialog(false);
@@ -352,6 +355,7 @@ export default function CapTablePage() {
       return res.json();
     },
     onSuccess: () => {
+      trackEvent('captable_valuation', {});
       queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'cap-table'] });
       toast({ title: '409A Valuation Recorded' });
       setShowValuationDialog(false);
@@ -366,6 +370,7 @@ export default function CapTablePage() {
       return res.json();
     },
     onSuccess: (data: any) => {
+      trackEvent('captable_dilution', {});
       setDilutionResult(data);
       toast({ title: 'Dilution Model Complete' });
     },

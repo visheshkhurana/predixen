@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { trackEvent } from "@/lib/posthog";
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -213,6 +214,7 @@ export default function ScenariosPage() {
   };
 
   const handleShareSimulationResults = () => {
+    trackEvent('scenario_shared', { type: 'results' });
     if (!simulation || !currentCompany) return;
     const s18 = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
     const s12 = simulation.survivalProbability?.['12m'] ?? simulation.survival?.['12m'] ?? 0;
@@ -235,6 +237,7 @@ export default function ScenariosPage() {
   };
 
   const handleShareAIDecision = (analysis: any) => {
+    trackEvent('scenario_shared', { type: 'ai_decision' });
     if (!currentCompany) return;
     openEmailShare({
       contentType: 'ai_decision',
@@ -430,6 +433,7 @@ export default function ScenariosPage() {
   };
 
   const handleWizardComplete = async (scenarioData: any) => {
+    trackEvent('scenario_created', {});
     if (!currentCompany) return;
     const existingId = checkForDuplicate(scenarioData.name);
     if (existingId) {
@@ -471,6 +475,7 @@ export default function ScenariosPage() {
   };
 
   const handleRunScenario = async (scenarioId: number) => {
+    trackEvent('scenario_run', { scenario_id: scenarioId });
     setSelectedScenarioId(scenarioId);
     setIsRunning(true);
     try {
@@ -495,6 +500,7 @@ export default function ScenariosPage() {
   };
 
   const handleApplyCounterMove = async (move: any) => {
+    trackEvent('scenario_counter_applied', {});
     if (!currentCompany || !selectedScenarioId) return;
     const currentScenario = scenarios?.find((s: any) => s.id === selectedScenarioId);
     if (!currentScenario) return;

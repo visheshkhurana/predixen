@@ -71,6 +71,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
 import { MetricTimeSeriesEditor } from "@/components/MetricTimeSeriesEditor";
+import { trackEvent } from '@/lib/posthog';
 
 const dataInputSchema = z.object({
   companyName: z.string().min(1, "Company name is required").or(z.literal("")).default(""),
@@ -388,6 +389,7 @@ export default function DataInput() {
   }, [financialBaseline, form, hasLoadedFromBackend, backendBaseline]);
 
   const handleFileUpload = async (file: File, type: 'pdf' | 'excel') => {
+    trackEvent('data_file_uploaded', { type: file.type });
     if (!currentCompany) {
       toast({
         title: "Please select a company",
@@ -571,6 +573,7 @@ export default function DataInput() {
   };
 
   const handleSave = async (values: DataInputValues) => {
+    trackEvent('data_saved', {});
     await doSave(values);
   };
 
@@ -1083,6 +1086,7 @@ export default function DataInput() {
   };
 
   const handleCsvImport = async () => {
+    trackEvent('data_csv_imported', {});
     if (!currentCompany || !csvDetection) return;
     const activeMappings: Record<string, string> = {};
     for (const [k, v] of Object.entries(csvMappings)) {

@@ -21,6 +21,7 @@ import {
   Calculator, Play, FileText, Building2, Percent
 } from 'lucide-react';
 import { EmptyStateCard } from '@/components/ui/empty-state';
+import { trackEvent } from '@/lib/posthog';
 
 interface CapTable {
   id: string;
@@ -163,6 +164,7 @@ export default function FundraisingPage() {
   }
 
   const handleCreateRound = () => {
+    trackEvent('fundraising_round_created', {});
     createRoundMutation.mutate({
       name: newRound.name,
       target_raise: newRound.target_raise ? parseFloat(newRound.target_raise) : null,
@@ -175,6 +177,7 @@ export default function FundraisingPage() {
   };
 
   const handleSimulate = () => {
+    trackEvent('fundraising_simulated', {});
     if (!simulationConfig.cap_table_id) {
       toast({ title: 'Error', description: 'Please select a cap table', variant: 'destructive' });
       return;
