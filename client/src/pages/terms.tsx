@@ -26,7 +26,7 @@ export default function TermsOfServicePage() {
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 space-y-6">
         <div className="space-y-2 text-center mb-8" data-testid="terms-header">
           <h1 className="text-3xl font-bold tracking-tight">Terms of Service</h1>
-          <p className="text-muted-foreground">Last updated: January 2026</p>
+          <p className="text-muted-foreground">Last updated: February 2026</p>
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
