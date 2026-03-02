@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation, Link } from "wouter";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,7 +20,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
-import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2 } from "lucide-react";
+import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -680,6 +680,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <BackendStatusBanner />
+          {user?.email === 'demo@founderconsole.ai' && (
+            <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
+              <FlaskConical className="h-3.5 w-3.5 shrink-0" />
+              <span>Demo Mode — You are viewing simulated sample data. <Link href="/auth" className="underline hover:text-amber-300">Sign up free</Link> to use your own.</span>
+            </div>
+          )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
