@@ -174,6 +174,9 @@ async def upload_excel(
     
     try:
         content = await file.read()
+        max_upload_size = 50 * 1024 * 1024
+        if len(content) > max_upload_size:
+            raise HTTPException(status_code=413, detail="File too large. Maximum upload size is 50MB.")
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
             tmp_file.write(content)
@@ -224,6 +227,8 @@ async def upload_excel(
         finally:
             os.unlink(tmp_path)
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing Excel file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
@@ -251,6 +256,9 @@ async def upload_pdf(
     
     try:
         content = await file.read()
+        max_upload_size = 50 * 1024 * 1024
+        if len(content) > max_upload_size:
+            raise HTTPException(status_code=413, detail="File too large. Maximum upload size is 50MB.")
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
             tmp_file.write(content)
@@ -301,6 +309,8 @@ async def upload_pdf(
         finally:
             os.unlink(tmp_path)
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing PDF file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")

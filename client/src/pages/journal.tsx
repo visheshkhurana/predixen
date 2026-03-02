@@ -1,9 +1,15 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { BookOpen, Plus, Calendar, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useFounderStore } from "@/store/founderStore";
+import { useToast } from "@/hooks/use-toast";
 
 interface JournalEntry {
   id: number;
@@ -69,9 +75,65 @@ const impactColors = {
   low: "text-emerald-400",
 };
 
+const STORAGE_KEY = "founderconsole-journal";
+
+function loadEntries(companyId: number | null): JournalEntry[] {
+  if (!companyId) return demoEntries;
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY}-${companyId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return demoEntries;
+}
+
+function saveEntries(companyId: number | null, entries: JournalEntry[]) {
+  if (!companyId) return;
+  localStorage.setItem(`${STORAGE_KEY}-${companyId}`, JSON.stringify(entries));
+}
+
 export default function JournalPage() {
   const { currentCompany } = useFounderStore();
-  const [entries] = useState<JournalEntry[]>(demoEntries);
+  const { toast } = useToast();
+  const [entries, setEntries] = useState<JournalEntry[]>(() => loadEntries(currentCompany?.id ?? null));
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDecision, setNewDecision] = useState("");
+  const [newReasoning, setNewReasoning] = useState("");
+  const [newImpact, setNewImpact] = useState<"high" | "medium" | "low">("medium");
+
+  useEffect(() => {
+    setEntries(loadEntries(currentCompany?.id ?? null));
+  }, [currentCompany?.id]);
+
+  const handleCreate = () => {
+    if (!newTitle.trim() || !newDecision.trim()) {
+      toast({ title: "Missing fields", description: "Title and decision are required.", variant: "destructive" });
+      return;
+    }
+
+    const entry: JournalEntry = {
+      id: Date.now(),
+      title: newTitle.trim(),
+      decision: newDecision.trim(),
+      reasoning: newReasoning.trim(),
+      status: "pending",
+      date: new Date().toISOString().split("T")[0],
+      impact: newImpact,
+    };
+
+    const updated = [entry, ...entries];
+    setEntries(updated);
+    saveEntries(currentCompany?.id ?? null, updated);
+    setDialogOpen(false);
+    setNewTitle("");
+    setNewDecision("");
+    setNewReasoning("");
+    setNewImpact("medium");
+    toast({ title: "Entry added", description: "Your decision has been recorded." });
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
@@ -85,7 +147,7 @@ export default function JournalPage() {
             Track decisions, reasoning, and outcomes to improve decision quality over time.
           </p>
         </div>
-        <Button data-testid="button-new-entry">
+        <Button onClick={() => setDialogOpen(true)} data-testid="button-new-entry">
           <Plus className="h-4 w-4 mr-2" />
           New Entry
         </Button>
@@ -154,6 +216,65 @@ export default function JournalPage() {
           );
         })}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="dialog-new-entry">
+          <DialogHeader>
+            <DialogTitle>New Decision Entry</DialogTitle>
+            <DialogDescription>Record a decision, your reasoning, and its expected impact.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="entry-title">Title</Label>
+              <Input
+                id="entry-title"
+                placeholder="e.g. Hire a second engineer"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                data-testid="input-entry-title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="entry-decision">Decision</Label>
+              <Textarea
+                id="entry-decision"
+                placeholder="What did you decide?"
+                value={newDecision}
+                onChange={e => setNewDecision(e.target.value)}
+                className="min-h-[80px]"
+                data-testid="input-entry-decision"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="entry-reasoning">Reasoning</Label>
+              <Textarea
+                id="entry-reasoning"
+                placeholder="Why did you make this decision?"
+                value={newReasoning}
+                onChange={e => setNewReasoning(e.target.value)}
+                className="min-h-[80px]"
+                data-testid="input-entry-reasoning"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Impact Level</Label>
+              <Select value={newImpact} onValueChange={(v) => setNewImpact(v as "high" | "medium" | "low")}>
+                <SelectTrigger data-testid="select-entry-impact">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">High Impact</SelectItem>
+                  <SelectItem value="medium">Medium Impact</SelectItem>
+                  <SelectItem value="low">Low Impact</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleCreate} className="w-full" data-testid="button-submit-entry">
+              Save Entry
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

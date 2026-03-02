@@ -61,13 +61,17 @@ export default function InvestorRoomPage() {
   const [investorRoomData, setInvestorRoomData] = useState<InvestorRoomData | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, Record<string, boolean>>>({});
 
-  const { data: roundsData, isLoading: roundsLoading } = useQuery<FundraisingRoundsResponse>({
+  const { data: roundsData, isLoading: roundsLoading, error: roundsError } = useQuery<FundraisingRoundsResponse>({
     queryKey: ['/api/companies', selectedCompany?.id, 'fundraising/rounds'],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/companies/${selectedCompany?.id}/fundraising/rounds`);
       return res.json() as Promise<FundraisingRoundsResponse>;
     },
     enabled: !!selectedCompany?.id,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes('401') || error?.status === 401) return false;
+      return failureCount < 2;
+    },
   });
 
   const generateMutation = useMutation({
@@ -103,6 +107,28 @@ export default function InvestorRoomPage() {
             <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Company Selected</h3>
             <p className="text-muted-foreground">Please select a company to access the investor room.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (roundsError) {
+    const isAuthError = (roundsError as any)?.message?.includes('401') || (roundsError as any)?.status === 401;
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <Card className="max-w-md" data-testid="card-investor-room-error">
+          <CardContent className="pt-6 text-center">
+            <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">{isAuthError ? 'Session Expired' : 'Unable to Load Data'}</h3>
+            <p className="text-muted-foreground mb-4">
+              {isAuthError
+                ? 'Your session has expired. Please sign in again to access the investor room.'
+                : 'There was a problem loading fundraising data. Please try again.'}
+            </p>
+            <Button onClick={() => isAuthError ? window.location.href = '/auth' : window.location.reload()} data-testid="button-investor-room-retry">
+              {isAuthError ? 'Sign In' : 'Retry'}
+            </Button>
           </CardContent>
         </Card>
       </div>

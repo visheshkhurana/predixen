@@ -9,6 +9,7 @@ import { registerTwilioRoutes } from "./twilio/routes";
 import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import compression from "compression";
 
 const app = express();
 app.disable("x-powered-by");
@@ -26,20 +27,20 @@ app.use((_req, res, next) => {
   res.setHeader("X-XSS-Protection", "0");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  if (process.env.NODE_ENV === "production") {
-    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-    res.setHeader("Content-Security-Policy", [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://www.google-analytics.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://us.posthog.com",
-      "connect-src 'self' https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
-      "frame-src https://accounts.google.com",
-    ].join("; "));
-  }
+  res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com",
+    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
+    "frame-src https://accounts.google.com",
+  ].join("; "));
   next();
 });
+
+app.use(compression());
 
 const httpServer = createServer(app);
 
@@ -744,13 +745,14 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: '10mb',
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ContextBar } from "@/components/ContextBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageErrorFallback } from "@/components/PageErrorFallback";
@@ -601,7 +602,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const [briefingOpen, setBriefingOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
-  const { metrics: liveMetrics } = useFinancialMetrics();
+  const { metrics: liveMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const confidence = truthScan?.data_confidence_score || 0;
 
   useEffect(() => {
@@ -749,6 +750,17 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                {metricsLoading ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {[1,2,3,4].map(i => (
+                      <div key={i} className="space-y-2 p-3 rounded-md bg-muted/50">
+                        <Skeleton className="h-3 w-12" />
+                        <Skeleton className="h-6 w-20" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1 p-3 rounded-md bg-muted/50">
                     <div className="flex items-center gap-1.5 flex-wrap text-xs text-muted-foreground">
@@ -783,7 +795,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     <p className={`text-xs ${liveMetrics.ltvCacRatio >= 3 ? 'text-emerald-500' : liveMetrics.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'}`} data-testid="text-briefing-modal-ltvcac-status">{liveMetrics.ltvCacRatio >= 3 ? 'Healthy' : liveMetrics.ltvCacRatio >= 2 ? 'Fair' : 'Needs attention'}</p>
                   </div>
                 </div>
+                )}
                 <Separator />
+                {metricsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : (
                 <div className="space-y-2">
                   <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
                     <Sparkles className="h-4 w-4 text-primary" />
@@ -794,6 +813,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     {liveMetrics.churnRatePct > 2 ? ` Your churn is above target at ${liveMetrics.churnRatePct.toFixed(1)}% \u2014 addressing this could add 4+ months of runway.` : liveMetrics.churnRatePct > 0 ? ` Churn at ${liveMetrics.churnRatePct.toFixed(1)}% is within healthy range.` : ''}
                   </p>
                 </div>
+                )}
                 <Separator />
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button size="sm" onClick={() => { setBriefingOpen(false); navigate('/scenarios'); }} data-testid="button-briefing-modal-simulate">
