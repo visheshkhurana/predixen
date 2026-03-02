@@ -554,13 +554,13 @@ function SimulationResultCard({ response, onAction, onTryPrompt }: { response: C
         <div className="mb-4">
           <p className="text-xs text-muted-foreground mb-2">Parameters Used:</p>
           <div className="flex flex-wrap gap-1.5">
-            {params.burn_reduction_pct && (
+            {params.burn_reduction_pct != null && (
               <Badge variant="outline" className="text-xs">{params.burn_reduction_pct < 0 ? `Burn Increase +${Math.abs(params.burn_reduction_pct)}%` : `Burn Cut ${params.burn_reduction_pct}%`}</Badge>
             )}
-            {params.price_change_pct && (
+            {params.price_change_pct != null && (
               <Badge variant="outline" className="text-xs">Price {params.price_change_pct > 0 ? '+' : ''}{params.price_change_pct}%</Badge>
             )}
-            {params.revenue_growth_pct && (
+            {params.revenue_growth_pct != null && (
               <Badge variant="outline" className="text-xs">Growth +{params.revenue_growth_pct}%</Badge>
             )}
             {params.hiring_freeze_months && (
@@ -756,11 +756,11 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                   <Badge 
                     variant="outline" 
                     className={`text-xs ${
-                      sim.survival['18m'] >= 80 ? 'text-emerald-400' :
-                      sim.survival['18m'] >= 60 ? 'text-amber-400' : 'text-red-400'
+                      (sim.survival?.['18m'] ?? 0) >= 80 ? 'text-emerald-400' :
+                      (sim.survival?.['18m'] ?? 0) >= 60 ? 'text-amber-400' : 'text-red-400'
                     }`}
                   >
-                    {typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}% @ 18m
+                    {sim.survival?.['18m'] != null ? `${typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}%` : 'N/A'} @ 18m
                   </Badge>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -778,9 +778,9 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                   </div>
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                  <span>12m: {typeof sim.survival['12m'] === 'number' ? Number(sim.survival['12m']).toFixed(1) : sim.survival['12m']}%</span>
-                  <span>18m: {typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}%</span>
-                  <span>24m: {typeof sim.survival['24m'] === 'number' ? Number(sim.survival['24m']).toFixed(1) : sim.survival['24m']}%</span>
+                  <span>12m: {sim.survival?.['12m'] != null ? `${typeof sim.survival['12m'] === 'number' ? Number(sim.survival['12m']).toFixed(1) : sim.survival['12m']}%` : 'N/A'}</span>
+                  <span>18m: {sim.survival?.['18m'] != null ? `${typeof sim.survival['18m'] === 'number' ? Number(sim.survival['18m']).toFixed(1) : sim.survival['18m']}%` : 'N/A'}</span>
+                  <span>24m: {sim.survival?.['24m'] != null ? `${typeof sim.survival['24m'] === 'number' ? Number(sim.survival['24m']).toFixed(1) : sim.survival['24m']}%` : 'N/A'}</span>
                 </div>
               </div>
             ))}
@@ -808,7 +808,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
                       {lever.feasibility}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      {lever.change_percent > 0 ? '+' : ''}{lever.change_percent}%
+                      {lever.change_percent != null ? `${lever.change_percent > 0 ? '+' : ''}${lever.change_percent}%` : 'N/A'}
                     </Badge>
                   </div>
                 </div>
