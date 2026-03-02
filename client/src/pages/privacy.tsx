@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 space-y-6">
         <div className="space-y-2 text-center mb-8" data-testid="privacy-header">
           <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-          <p className="text-muted-foreground">Last updated: January 2026</p>
+          <p className="text-muted-foreground">Last updated: March 2026</p>
         </div>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
@@ -58,6 +58,8 @@ export default function PrivacyPolicyPage() {
         <Section icon={ExternalLink} title="Third-Party Services" testId="section-third-party">
           <p>We use the following third-party services:</p>
           <ul className="list-disc pl-5 space-y-1.5">
+            <li><strong className="text-foreground">Google Analytics:</strong> Website traffic measurement and visitor behavior analysis. Google may use cookies and collect IP addresses, browser type, pages visited, and session duration. Data is processed by Google LLC under their <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a>.</li>
+            <li><strong className="text-foreground">Meta (Facebook) Pixel:</strong> Conversion tracking and audience measurement on our marketing pages. Meta may collect page visit data, browser information, and IP addresses. Data is processed by Meta Platforms, Inc. under their <a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Privacy Policy</a>. You can opt out via <a href="https://www.facebook.com/settings?tab=ads" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Facebook Ad Settings</a>.</li>
             <li><strong className="text-foreground">PostHog:</strong> Product analytics to understand feature usage (anonymized).</li>
             <li><strong className="text-foreground">Google OAuth:</strong> Social login authentication.</li>
             <li><strong className="text-foreground">QuickBooks Online:</strong> Sync accounting data (P&L, balance sheet, invoices) when you connect your account.</li>
@@ -106,6 +108,8 @@ export default function PrivacyPolicyPage() {
           <p>We use the following cookies:</p>
           <ul className="list-disc pl-5 space-y-1.5">
             <li><strong className="text-foreground">Session Cookies:</strong> Essential for authentication and CSRF protection.</li>
+            <li><strong className="text-foreground">Google Analytics (_ga, _gid):</strong> Traffic measurement and visitor behavior analysis. Retained for up to 2 years. Can be blocked without affecting functionality.</li>
+            <li><strong className="text-foreground">Meta Pixel (_fbp):</strong> Conversion tracking on marketing pages. Retained for up to 90 days. Only active on public marketing pages, not inside the app. Can be blocked without affecting functionality.</li>
             <li><strong className="text-foreground">PostHog Analytics:</strong> Anonymous usage tracking to improve the platform. Can be blocked without affecting functionality.</li>
           </ul>
         </Section>
