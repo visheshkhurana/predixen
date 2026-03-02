@@ -279,6 +279,15 @@ function Router() {
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
+      <Route path="/signup">
+        {() => <Redirect to="/auth" />}
+      </Route>
+      <Route path="/register">
+        {() => <Redirect to="/auth" />}
+      </Route>
+      <Route path="/join">
+        {() => <Redirect to="/auth" />}
+      </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
       </Route>
