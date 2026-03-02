@@ -30,7 +30,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, ChevronDown, Plus, Check, Pencil, Trash2 } from 'lucide-react';
+import { Building2, ChevronDown, Plus, Check, Pencil, Trash2, FlaskConical } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useFounderStore } from '@/store/founderStore';
 import { useCompanies, useUpdateCompany, useDeleteCompany } from '@/api/hooks';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -88,7 +89,8 @@ const CURRENCY_LABELS: Record<string, string> = {
 };
 
 export function CompanySwitcher() {
-  const { currentCompany, setCurrentCompany } = useFounderStore();
+  const { currentCompany, setCurrentCompany, user } = useFounderStore();
+  const isDemoUser = user?.email === 'demo@founderconsole.ai';
   const { data: companies, isLoading } = useCompanies();
   const updateCompany = useUpdateCompany();
   const deleteCompany = useDeleteCompany();
@@ -185,10 +187,11 @@ export function CompanySwitcher() {
             data-testid="button-company-switcher"
             aria-label="Switch company"
           >
-            <Building2 className="h-4 w-4" />
+            {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400" /> : <Building2 className="h-4 w-4" />}
             <span className="truncate max-w-[120px]">
               {currentCompany?.name || 'Select Company'}
             </span>
+            {isDemoUser && <Badge variant="outline" className="ml-0.5 border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4" data-testid="badge-demo-company">Demo</Badge>}
             <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
