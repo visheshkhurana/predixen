@@ -441,25 +441,16 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     },
     {
       id: 'burn-rate',
-      label: (() => {
-        const tsBurn = extractValue(metrics.net_burn);
-        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
-        return burn != null && burn < 0 ? 'Net Cash Flow' : 'Net Burn Rate';
-      })(),
+      label: sharedMetrics.isProfitable ? 'Net Cash Flow' : 'Net Burn Rate',
       value: (() => {
-        const tsBurn = extractValue(metrics.net_burn);
-        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
-        if (burn == null) return 'N/A';
+        const burn = sharedMetrics.netBurn;
+        if (burn == null || burn === 0) return 'N/A';
         return burn < 0 ? `+${formatCurrency(Math.abs(burn))}` : formatCurrency(Math.abs(burn));
       })(),
       trend: undefined,
       trendValue: '/month',
       benchmark: '',
-      status: (() => {
-        const tsBurn = extractValue(metrics.net_burn);
-        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
-        return burn != null && burn <= 0 ? 'healthy' : 'warning';
-      })() as any,
+      status: (sharedMetrics.isProfitable ? 'healthy' : 'warning') as any,
       source: 'calculated' as any,
       tooltip: 'Monthly expenses minus revenue. Positive means cash is being consumed; negative (shown as +) means revenue exceeds expenses.',
     },
@@ -1345,16 +1336,16 @@ export default function TruthScanPage() {
                 })}
               />
               <MetricCard 
-                title={metrics.is_profitable ? "Monthly Surplus" : "Net Burn"} 
-                value={formatCurrency(metrics.is_profitable ? Math.abs(extractValue(metrics.net_burn) || 0) : extractValue(metrics.net_burn))} 
+                title={sharedMetrics.isProfitable ? "Monthly Surplus" : "Net Burn"} 
+                value={formatCurrency(sharedMetrics.isProfitable ? Math.abs(sharedMetrics.netBurn) : sharedMetrics.netBurn)} 
                 testId="metric-burn"
-                tooltip={metrics.is_profitable ? "Monthly surplus (revenue exceeds expenses)" : METRIC_DEFINITIONS.net_burn?.shortDescription}
-                variant={metrics.is_profitable ? "success" : (extractValue(metrics.net_burn) || 0) > 0 ? "danger" : "default"}
+                tooltip={sharedMetrics.isProfitable ? "Monthly surplus (revenue exceeds expenses)" : "Monthly expenses minus revenue. Measures how fast cash is consumed."}
+                variant={sharedMetrics.isProfitable ? "success" : sharedMetrics.netBurn > 0 ? "danger" : "default"}
                 trendData={trendData.net_burn}
                 metricSource={sharedMetrics.sources?.['netBurn']}
                 onClick={() => setSelectedMetric({ 
                   definition: getMetricDefinition('net_burn') || null, 
-                  value: formatCurrency(metrics.is_profitable ? Math.abs(extractValue(metrics.net_burn) || 0) : extractValue(metrics.net_burn)) 
+                  value: formatCurrency(sharedMetrics.isProfitable ? Math.abs(sharedMetrics.netBurn) : sharedMetrics.netBurn) 
                 })}
               />
               <MetricCard 
