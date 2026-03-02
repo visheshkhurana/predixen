@@ -305,6 +305,7 @@ export function RiskAlertBanner({
   scenarioSimulation: SimulationData;
   scenarioName?: string;
 }) {
+  const [dismissed, setDismissed] = useState(false);
   const alert = useMemo(() => {
     const bSurvival = getSurvival(baselineSimulation, '18m');
     const sSurvival = getSurvival(scenarioSimulation, '18m');
@@ -331,7 +332,7 @@ export function RiskAlertBanner({
     };
   }, [baselineSimulation, scenarioSimulation]);
 
-  if (!alert) return null;
+  if (!alert || dismissed) return null;
 
   const isCritical = alert.level === 'critical';
 
@@ -376,6 +377,14 @@ export function RiskAlertBanner({
               {alert.scenarioSurvival < 50 && ' Immediate corrective action recommended.'}
             </p>
           </div>
+          <button
+            onClick={() => setDismissed(true)}
+            className={`shrink-0 p-1 rounded-md transition-colors ${isCritical ? 'hover:bg-red-200 dark:hover:bg-red-800/40 text-red-500' : 'hover:bg-amber-200 dark:hover:bg-amber-800/40 text-amber-500'}`}
+            aria-label="Dismiss alert"
+            data-testid="button-dismiss-risk-alert"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </CardContent>
     </Card>
