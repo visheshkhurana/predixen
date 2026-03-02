@@ -481,16 +481,31 @@ def generate_strategic_diagnosis(
         revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
         if not revenue and latest_record and latest_record.revenue:
             revenue = float(latest_record.revenue)
-        burn = extract_metric_value(metrics.get("monthly_burn"), 0)
-        if not burn and latest_record:
-            opex = float(latest_record.opex or 0)
-            payroll = float(latest_record.payroll or 0)
-            burn = opex + payroll
+
+        net_burn = 0.0
+        fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0
+        ts_net_burn = extract_metric_value(metrics.get("net_burn"), 0)
+        if fr_net_burn:
+            net_burn = fr_net_burn
+        elif ts_net_burn:
+            net_burn = ts_net_burn
+        elif latest_record:
+            total_expenses = (
+                float(latest_record.payroll or 0) +
+                float(latest_record.marketing_expense or 0) +
+                float(latest_record.opex or 0) +
+                float(latest_record.cogs or 0) +
+                float(latest_record.other_costs or 0)
+            )
+            net_burn = total_expenses - revenue
+
+        burn = net_burn + revenue if net_burn > 0 else revenue
+
         cash = extract_metric_value(metrics.get("cash_balance"), 0)
         if not cash and latest_record and latest_record.cash_balance:
             cash = float(latest_record.cash_balance)
         growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
-        runway_months = cash / burn if burn > 0 else 24
+        runway_months = cash / net_burn if net_burn > 0 else 24
         
         from server.models.scenario import Scenario
         scenarios = db.query(Scenario).filter(Scenario.company_id == company_id).all()
@@ -509,7 +524,6 @@ def generate_strategic_diagnosis(
             survival = sim_data.get("survival", {})
             survival_prob = survival.get("probability_18m") or survival.get("probability_12m")
         
-        net_burn = burn - revenue
         months_to_zero = cash / net_burn if net_burn > 0 else 99
         exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"
         breakeven_growth_needed = ((burn / revenue) - 1) * 100 if revenue > 0 else 0
