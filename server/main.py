@@ -253,6 +253,7 @@ app = FastAPI(
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 from server.middleware.rate_limiter import RateLimiterMiddleware
 from server.middleware.csrf_protection import CSRFProtectionMiddleware
+from server.middleware.security_headers import SecurityHeadersMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uuid as _uuid_mod
 
@@ -265,6 +266,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
