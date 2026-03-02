@@ -97,7 +97,10 @@ def generate_decisions(
         raise HTTPException(status_code=400, detail="Run a truth scan first")
     
     metrics = truth_scan.outputs_json.get("metrics", {})
-    confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
+    try:
+        confidence = int(float(truth_scan.outputs_json.get("data_confidence_score", 50)))
+    except (ValueError, TypeError):
+        confidence = 50
     
     latest_record = (
         db.query(FinancialRecord)
@@ -469,7 +472,10 @@ def generate_strategic_diagnosis(
         confidence = 50
         if truth_scan and truth_scan.outputs_json:
             metrics = truth_scan.outputs_json.get("metrics", {})
-            confidence = truth_scan.outputs_json.get("data_confidence_score", 50)
+            try:
+                confidence = int(float(truth_scan.outputs_json.get("data_confidence_score", 50)))
+            except (ValueError, TypeError):
+                confidence = 50
         
         latest_record = (
             db.query(FinancialRecord)

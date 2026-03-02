@@ -8,14 +8,23 @@ def load_action_library() -> List[Dict]:
     with open(lib_path, "r") as f:
         return json.load(f)
 
+def _safe_float(val, default=0):
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
 def select_candidates(truth_metrics: Dict, confidence: int) -> List[Dict]:
     actions = load_action_library()
     candidates = []
     
-    runway_p50 = truth_metrics.get("runway_p50", 12)
-    concentration = truth_metrics.get("concentration_top5") or 0
-    retention = truth_metrics.get("logo_retention_12m") or 80
-    gross_margin = truth_metrics.get("gross_margin", 70)
+    confidence = _safe_float(confidence, 50)
+    runway_p50 = _safe_float(truth_metrics.get("runway_p50", 12), 12)
+    concentration = _safe_float(truth_metrics.get("concentration_top5"), 0)
+    retention = _safe_float(truth_metrics.get("logo_retention_12m"), 80)
+    gross_margin = _safe_float(truth_metrics.get("gross_margin", 70), 70)
     
     for action in actions:
         applicability = action.get("applicability", [])
@@ -61,10 +70,11 @@ def score_action(
     truth_metrics: Dict,
     confidence: int
 ) -> Dict[str, Any]:
-    survival_18m = simulation_outputs.get("survival", {}).get("18m", 0) / 100
+    confidence = _safe_float(confidence, 50)
+    survival_18m = _safe_float(simulation_outputs.get("survival", {}).get("18m", 0), 0) / 100
     survival_score = survival_18m
     
-    runway_p50 = simulation_outputs.get("runway", {}).get("p50", 0)
+    runway_p50 = _safe_float(simulation_outputs.get("runway", {}).get("p50", 0), 0)
     runway_score = min(1.0, runway_p50 / 24)
     
     baseline_rev_18m = baseline_outputs.get("summary", {}).get("revenue_18m_median", 1)
@@ -89,7 +99,7 @@ def score_action(
     if runway_p50 < 9 and len(scenario_deltas.get("hiring_plan", [])) > 0:
         risk_penalty += 0.10
     
-    burn_change = scenario_deltas.get("burn_reduction_pct", 0)
+    burn_change = _safe_float(scenario_deltas.get("burn_reduction_pct", 0), 0)
     if burn_change > 25:
         risk_penalty += 0.05
     if burn_change < -20:
@@ -106,9 +116,9 @@ def score_action(
     if runway_p50 < 9:
         risk_penalty += 0.10
     
-    pricing_change = scenario_deltas.get("pricing_change_pct", 0)
+    pricing_change = _safe_float(scenario_deltas.get("pricing_change_pct", 0), 0)
     if pricing_change >= 8:
-        if not (confidence > 75 and truth_metrics.get("logo_retention_12m", 0) > 85):
+        if not (confidence > 75 and _safe_float(truth_metrics.get("logo_retention_12m", 0), 0) > 85):
             risk_penalty += 0.05
     
     total_score = (
@@ -229,22 +239,22 @@ def generate_risk_text(action: Dict, scored: Dict) -> List[str]:
     risks = []
     deltas = action.get("scenario_deltas", {})
     
-    if deltas.get("burn_reduction_pct", 0) >= 20:
+    if _safe_float(deltas.get("burn_reduction_pct", 0), 0) >= 20:
         risks.append("Aggressive cost cuts may impact team morale and velocity")
     
-    burn_pct = deltas.get("burn_reduction_pct", 0)
+    burn_pct = _safe_float(deltas.get("burn_reduction_pct", 0), 0)
     if burn_pct < -50:
-        risks.append(f"Burn increases by {abs(burn_pct)}% — consider phased hiring to validate growth assumptions before full commitment")
+        risks.append(f"Burn increases by {abs(burn_pct):.0f}% — consider phased hiring to validate growth assumptions before full commitment")
     elif burn_pct < -30:
-        risks.append(f"Significant burn increase ({abs(burn_pct)}%) will accelerate cash depletion and shorten runway")
+        risks.append(f"Significant burn increase ({abs(burn_pct):.0f}%) will accelerate cash depletion and shorten runway")
     
-    if deltas.get("pricing_change_pct", 0) >= 10:
+    if _safe_float(deltas.get("pricing_change_pct", 0), 0) >= 10:
         risks.append("Price increase may lead to customer churn")
     
-    if deltas.get("fundraise_amount", 0) > 0:
+    if _safe_float(deltas.get("fundraise_amount", 0), 0) > 0:
         risks.append("Fundraising outcome is uncertain in current market")
     
-    if deltas.get("growth_uplift_pct", 0) >= 5:
+    if _safe_float(deltas.get("growth_uplift_pct", 0), 0) >= 5:
         risks.append("Growth acceleration requires execution excellence")
     
     if not risks:
@@ -255,13 +265,13 @@ def generate_risk_text(action: Dict, scored: Dict) -> List[str]:
 def generate_assumption_text(action: Dict) -> str:
     deltas = action.get("scenario_deltas", {})
     
-    if deltas.get("fundraise_amount", 0) > 0:
+    if _safe_float(deltas.get("fundraise_amount", 0), 0) > 0:
         return "Assumes successful fundraise at target terms"
     
-    if deltas.get("burn_reduction_pct", 0) >= 20:
+    if _safe_float(deltas.get("burn_reduction_pct", 0), 0) >= 20:
         return "Assumes team can maintain productivity with reduced resources"
     
-    if deltas.get("pricing_change_pct", 0) >= 5:
+    if _safe_float(deltas.get("pricing_change_pct", 0), 0) >= 5:
         return "Assumes customer retention remains stable despite price change"
     
     return "Assumes current market conditions persist"

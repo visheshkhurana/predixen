@@ -39,14 +39,24 @@ def extract_metric_value(metric: Any, default: float = 0) -> float:
     Extract the raw numeric value from a metric.
     Metrics can be either:
     - A raw number (int or float)
+    - A string representation of a number
     - A dict with {value, benchmark_percentile} structure
     """
     if metric is None:
         return default
     if isinstance(metric, dict):
-        return float(metric.get("value", default))
+        raw = metric.get("value", default)
+        try:
+            return float(raw)
+        except (ValueError, TypeError):
+            return default
     if isinstance(metric, (int, float)):
         return float(metric)
+    if isinstance(metric, str):
+        try:
+            return float(metric)
+        except (ValueError, TypeError):
+            return default
     return default
 
 class HiringPlan(BaseModel):
