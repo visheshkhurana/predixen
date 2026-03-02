@@ -1091,7 +1091,8 @@ export default function CopilotPage() {
   const { data: truthScan, isLoading: truthLoading } = useTruthScan(currentCompany?.id || null);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
   const latestScenario = scenarios?.[0];
-  const { data: simulation } = useSimulation(latestScenario?.id || null);
+  const { data: rawSimulation } = useSimulation(latestScenario?.id || null);
+  const simulation = rawSimulation || latestScenario?.latest_simulation || null;
   
   const handleSuggestionAction = (action: string) => {
     const actionPrompts: Record<string, string> = {
@@ -2331,12 +2332,15 @@ Type **help** for a full list of what I can do.`,
                   <CardContent className="text-sm">
                     {simulation ? (
                       (() => {
-                        const survival = simulation.survival || simulation.survivalProbability;
-                        const s18 = survival?.['18m'];
+                        const survObj = simulation.survivalProbability || simulation.survival || {};
+                        const rawS18 = survObj['18m'];
+                        const s18 = typeof rawS18 === 'number' && Number.isFinite(rawS18) ? rawS18 : (typeof rawS18 === 'string' && rawS18.trim() !== '' ? Number(rawS18) : null);
+                        const p50 = simulation.runway?.p50;
+                        const p50Valid = typeof p50 === 'number' && Number.isFinite(p50);
                         return (
                           <>
-                            <p data-testid="text-sim-runway">Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50 != null && isRunwaySustainable(simulation.runway.p50) ? 'Sustainable' : `${simulation.runway?.p50?.toFixed(1) ?? 'N/A'} mo`}</span></p>
-                            <p data-testid="text-sim-survival">Survival 18m: <span className="font-mono font-medium">{s18 != null ? `${typeof s18 === 'number' ? s18.toFixed(1) : s18}%` : 'N/A'}</span></p>
+                            <p data-testid="text-sim-runway">Runway P50: <span className="font-mono font-medium">{p50Valid && isRunwaySustainable(p50) ? 'Sustainable' : p50Valid ? `${p50.toFixed(1)} mo` : 'N/A'}</span></p>
+                            <p data-testid="text-sim-survival">Survival 18m: <span className="font-mono font-medium">{s18 != null && Number.isFinite(s18) ? `${s18.toFixed(1)}%` : 'N/A'}</span></p>
                           </>
                         );
                       })()
