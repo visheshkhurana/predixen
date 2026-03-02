@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Menu, Twitter, Linkedin, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,14 +23,13 @@ const footerProduct = [
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
-  { label: "Contact", href: "/contact" },
+  { label: "Demo", href: "/demo" },
 ];
 
 const footerCompany = [
   { label: "About", href: "/about" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
-  { label: "Careers", href: "#" },
 ];
 
 const footerLegal = [
@@ -46,10 +45,8 @@ function NavLink({ href, label, onClick }: { href: string; label: string; onClic
       href={href}
       onClick={onClick}
       data-testid={`nav-link-${label.toLowerCase()}`}
-      className={`text-sm font-medium transition-colors ${
-        isActive
-          ? "text-foreground"
-          : "text-muted-foreground"
+      className={`text-sm font-medium transition-colors hover:text-foreground ${
+        isActive ? "text-foreground" : "text-muted-foreground"
       }`}
     >
       {label}
@@ -59,13 +56,18 @@ function NavLink({ href, label, onClick }: { href: string; label: string; onClic
 
 function Header() {
   const [open, setOpen] = useState(false);
+  const [location] = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
 
   return (
     <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" data-testid="link-logo" className="flex items-center gap-2">
           <img src={logo} alt="FounderConsole" className="h-8 w-8 rounded-md" />
-          <span className="text-lg font-semibold text-foreground">FounderConsole</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">FounderConsole</span>
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex" data-testid="nav-desktop">
@@ -75,10 +77,10 @@ function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" asChild data-testid="button-sign-in">
-            <Link href="/auth">Sign In</Link>
+          <Button variant="outline" size="sm" asChild data-testid="button-watch-demo">
+            <Link href="/demo">Watch Demo</Link>
           </Button>
-          <Button asChild data-testid="button-get-started">
+          <Button size="sm" asChild data-testid="button-get-started">
             <Link href="/auth">Get Started Free</Link>
           </Button>
         </div>
@@ -86,7 +88,7 @@ function Header() {
         <div className="md:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button size="icon" variant="ghost" data-testid="button-mobile-menu">
+              <Button size="icon" variant="ghost" aria-label="Open menu" data-testid="button-mobile-menu">
                 <Menu />
               </Button>
             </SheetTrigger>
@@ -115,8 +117,8 @@ function Header() {
                 ))}
               </nav>
               <div className="mt-8 flex flex-col gap-2">
-                <Button variant="ghost" asChild data-testid="button-mobile-sign-in">
-                  <Link href="/auth" onClick={() => setOpen(false)}>Sign In</Link>
+                <Button variant="outline" asChild data-testid="button-mobile-watch-demo">
+                  <Link href="/demo" onClick={() => setOpen(false)}>Watch Demo</Link>
                 </Button>
                 <Button asChild data-testid="button-mobile-get-started">
                   <Link href="/auth" onClick={() => setOpen(false)}>Get Started Free</Link>
@@ -140,7 +142,7 @@ function FooterLinkGroup({ title, links }: { title: string; links: { label: stri
             <Link
               href={link.href}
               data-testid={`footer-link-${link.label.toLowerCase().replace(/\s+/g, "-")}`}
-              className="text-sm text-muted-foreground transition-colors"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {link.label}
             </Link>
@@ -154,7 +156,7 @@ function FooterLinkGroup({ title, links }: { title: string; links: { label: stri
 function Footer() {
   return (
     <footer className="border-t bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-12">
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
           <FooterLinkGroup title="Product" links={footerProduct} />
           <FooterLinkGroup title="Company" links={footerCompany} />
@@ -162,47 +164,33 @@ function Footer() {
           <div>
             <h3 className="mb-3 text-sm font-semibold text-foreground">Connect</h3>
             <div className="flex items-center gap-3 flex-wrap">
-              <a
-                href="https://twitter.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Twitter"
-                data-testid="footer-link-twitter"
-                className="text-muted-foreground transition-colors"
-              >
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter" data-testid="footer-link-twitter" className="text-muted-foreground transition-colors hover:text-foreground">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a
-                href="https://linkedin.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn"
-                data-testid="footer-link-linkedin"
-                className="text-muted-foreground transition-colors"
-              >
+              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" data-testid="footer-link-linkedin" className="text-muted-foreground transition-colors hover:text-foreground">
                 <Linkedin className="h-5 w-5" />
               </a>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="GitHub"
-                data-testid="footer-link-github"
-                className="text-muted-foreground transition-colors"
-              >
+              <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub" data-testid="footer-link-github" className="text-muted-foreground transition-colors hover:text-foreground">
                 <Github className="h-5 w-5" />
               </a>
             </div>
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col items-center gap-2 border-t pt-6 text-center sm:flex-row sm:justify-between">
-          <p className="text-xs text-muted-foreground" data-testid="text-copyright">
-            &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
-          </p>
-          <p className="text-xs text-muted-foreground italic" data-testid="text-tagline">
-            Built for founders, by founders.
-          </p>
+        <div className="mt-10 border-t pt-6">
+          <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Financial clarity for founders through real-time forecasting, Monte Carlo simulation, and explainability.
+            </p>
+          </div>
+          <div className="mt-4 flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between">
+            <p className="text-xs text-muted-foreground" data-testid="text-copyright">
+              &copy; {new Date().getFullYear()} FounderConsole. All rights reserved.
+            </p>
+            <p className="text-xs text-muted-foreground italic" data-testid="text-tagline">
+              Built for founders, by founders.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

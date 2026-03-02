@@ -1,184 +1,172 @@
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useSEO } from "@/lib/seo";
 import {
   BarChart3,
   Bot,
   ShieldCheck,
-  PiggyBank,
+  PieChart,
   Cable,
-  BrainCircuit,
-  CheckCircle2,
+  FileText,
   ArrowRight,
+  CheckCircle,
 } from "lucide-react";
 
 const features = [
   {
     icon: BarChart3,
-    title: "Simulation Engine",
+    title: "Real-time forecasting",
+    headline: "Your forecast stays current. Automatically.",
     description:
-      "Run thousands of Monte Carlo simulations to stress-test your financial plan. See P10, P50, and P90 outcomes so you can plan for the best case, the base case, and the worst case.",
+      "Connect revenue, expense, and payroll sources to reduce manual work and keep forecasts current. No more stale spreadsheets or quarterly updates.",
     bullets: [
-      "Monte Carlo with P10/P50/P90 confidence bands",
+      "Holt-Winters exponential smoothing + linear regression",
+      "24-month forward projections updated in real time",
+      "Multi-currency support with automatic conversion",
+      "Anomaly alerts when actuals deviate from forecast",
+    ],
+  },
+  {
+    icon: BarChart3,
+    title: "Monte Carlo confidence intervals",
+    headline: "Probability replaces guesswork.",
+    description:
+      "See P10/P50/P90 outcomes so risk becomes measurable. Run thousands of simulations to understand the range of what could happen — not just a single best guess.",
+    bullets: [
+      "100–10,000 iteration simulations",
+      "Custom event modeling and sensitivity analysis",
+      "Scenario versioning and comparison",
+      "Before/after delta cards with payback calculations",
+    ],
+  },
+  {
+    icon: PieChart,
+    title: "Scenario comparison",
+    headline: "Compare decisions with clear tradeoffs.",
+    description:
+      "Compare decisions like hiring timing, fundraising size, pricing changes, and investment bets. See ranked recommendations with confidence scores.",
+    bullets: [
       "Side-by-side scenario comparison",
-      "Sensitivity analysis on every key driver",
-      "Tornado charts to identify top-risk levers",
+      "GO / CONDITIONAL / NO-GO verdicts",
+      "Second-order effects detection",
+      "Risk-adjusted decision scoring",
     ],
   },
   {
     icon: Bot,
-    title: "AI Copilot",
+    title: "Explainable AI decisions",
+    headline: "Defend choices to boards and investors.",
     description:
-      "Ask questions in plain English and get grounded, data-backed answers. The Copilot draws on your financials, market benchmarks, and real-time web research to advise you like a seasoned CFO.",
+      "Narratives explain what drives risk so you can defend choices. Multi-LLM copilot uses GPT-4, Claude, and Gemini with web research via Perplexity.",
     bullets: [
-      "Multi-LLM routing (GPT-4, Claude, Gemini)",
-      "Web research powered by Perplexity",
-      "Strategic recommendations with citations",
-      "Conversation memory across sessions",
+      "Strategic briefings with executive summaries",
+      "Data-backed recommendations with citations",
+      "Conversational Q&A about your financials",
+      "Market benchmark comparisons via web research",
     ],
   },
   {
-    icon: ShieldCheck,
-    title: "Truth Scan",
+    icon: FileText,
+    title: "Investor-ready reporting",
+    headline: "Turn insight into consistent summaries.",
     description:
-      "Validate every data point before it enters your model. Truth Scan flags anomalies, missing fields, and inconsistencies so your simulations start from a foundation of clean data.",
+      "Reduce update-time drag. Generate investor memos, data room checklists, and fundraising materials that build trust through transparency.",
     bullets: [
-      "Automated data validation pipeline",
-      "Z-score anomaly detection on every metric",
-      "Confidence scoring for each data source",
-      "Actionable fix suggestions for flagged items",
-    ],
-  },
-  {
-    icon: PiggyBank,
-    title: "Fundraising OS",
-    description:
-      "Model your next round from term sheet to cap table. Simulate SAFE conversions, priced rounds, and dilution scenarios to walk into negotiations fully prepared.",
-    bullets: [
-      "Cap table management with full history",
-      "SAFE and convertible note conversion modeling",
-      "Dilution impact analysis for every scenario",
-      "Investor pipeline tracking and outreach",
+      "Automated investor memo generation",
+      "Data room checklist with completion tracking",
+      "Cap table management with dilution modeling",
+      "SAFE/Note conversion modeling",
     ],
   },
   {
     icon: Cable,
-    title: "Data Connectors",
+    title: "37 data connectors",
+    headline: "Connect everything. Auto-sync.",
     description:
-      "Connect your accounting, banking, payroll, and product analytics tools in minutes. FounderConsole pulls live data so your dashboards and simulations are always current.",
+      "QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and 31 more. One-click connections with real API integrations — not CSV imports.",
     bullets: [
-      "37 integrations including QuickBooks, Stripe, and Gusto",
-      "Automatic daily sync with change detection",
-      "Multi-currency normalization built in",
-      "One-click OAuth for most platforms",
-    ],
-  },
-  {
-    icon: BrainCircuit,
-    title: "Decision Engine",
-    description:
-      "Move from data to action. The Decision Engine synthesizes your financials, simulations, and market context into ranked strategic recommendations with clear risk assessments.",
-    bullets: [
-      "Strategic briefings tailored to your stage",
-      "Ranked recommendations with confidence scores",
-      "Risk assessment with second-order effects",
-      "Decision journal to track outcomes over time",
+      "Real OAuth2 integrations (not screen scraping)",
+      "Automatic data refresh and sync",
+      "Multi-currency handling across sources",
+      "Encrypted credential storage",
     ],
   },
 ];
 
 export default function MarketingFeaturesPage() {
+  useSEO({
+    title: "Features | FounderConsole",
+    description:
+      "FounderConsole features: real-time forecasting, Monte Carlo confidence intervals, scenario comparison, explainability, and investor-ready reporting.",
+  });
+
   return (
     <MarketingLayout>
-      <section className="py-20 px-4" data-testid="section-features-hero">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1
-            className="text-4xl md:text-5xl font-bold tracking-tight mb-6"
-            data-testid="text-features-headline"
-          >
-            Every Tool Founders Need to Survive and Scale
+      <section>
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-features-title">
+            Every tool founders need to survive and scale
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            From Monte Carlo simulations to AI-powered strategic advice,
-            FounderConsole gives you the financial intelligence stack that
-            used to require a full finance team.
+          <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Built for founders who make decisions under uncertainty. Forecast, simulate, compare, explain, and report — all in one place.
           </p>
         </div>
       </section>
 
-      <section
-        className="pb-24 px-4"
-        data-testid="section-feature-details"
-      >
-        <div className="max-w-5xl mx-auto space-y-20">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            const isReversed = index % 2 === 1;
-            return (
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-10">
+          <div className="space-y-12">
+            {features.map((f, i) => (
               <div
-                key={feature.title}
-                className={`flex flex-col gap-8 md:flex-row md:items-center ${
-                  isReversed ? "md:flex-row-reverse" : ""
-                }`}
-                data-testid={`feature-block-${index}`}
+                key={f.title}
+                className={`flex flex-col gap-8 md:flex-row md:items-start ${i % 2 === 1 ? "md:flex-row-reverse" : ""}`}
+                data-testid={`section-feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary/10">
-                      <Icon className="w-5 h-5 text-foreground" />
-                    </div>
-                    <h2 className="text-2xl font-semibold">{feature.title}</h2>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 text-primary">
+                    <f.icon className="h-5 w-5" />
+                    <span className="text-xs font-semibold uppercase tracking-wide">{f.title}</span>
                   </div>
-                  <p className="text-muted-foreground mb-5 leading-relaxed">
-                    {feature.description}
-                  </p>
-                  <ul className="space-y-2">
-                    {feature.bullets.map((bullet) => (
-                      <li
-                        key={bullet}
-                        className="flex items-start gap-2 text-sm"
-                      >
-                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-chart-2 shrink-0" />
-                        <span>{bullet}</span>
+                  <h2 className="mt-2 text-xl font-semibold text-foreground">{f.headline}</h2>
+                  <p className="mt-3 text-sm text-muted-foreground">{f.description}</p>
+                  <ul className="mt-4 space-y-2">
+                    {f.bullets.map((b) => (
+                      <li key={b} className="flex gap-2 text-sm text-muted-foreground">
+                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
+                        <span>{b}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
-
-                <Card className="flex-1 min-w-0">
-                  <CardContent className="p-8 flex items-center justify-center min-h-[200px]">
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                      <Icon className="w-12 h-12 opacity-20" />
-                      <span className="text-xs uppercase tracking-widest opacity-40">
-                        {feature.title}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="flex-1">
+                  <div className="rounded-xl border bg-card/50 p-8 flex items-center justify-center min-h-[180px]">
+                    <f.icon className="h-16 w-16 text-primary/20" />
+                  </div>
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </section>
 
-      <section
-        className="py-20 px-4 border-t"
-        data-testid="section-features-cta"
-      >
-        <div className="max-w-3xl mx-auto text-center space-y-6">
-          <h2 className="text-3xl font-bold">
-            Start using FounderConsole today
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 text-primary" />
+          <h2 className="mt-4 text-2xl font-semibold text-foreground" data-testid="text-features-cta">
+            Start using FounderConsole today — it's free during beta
           </h2>
-          <p className="text-muted-foreground text-lg">
-            It's free during beta. No credit card required.
+          <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
+            All features are unlocked. No credit card required. Connect your data and get your first forecast in under 5 minutes.
           </p>
-          <Link href="/auth">
-            <Button data-testid="button-features-cta">
-              Get Started Free
-              <ArrowRight className="w-4 h-4" />
+          <div className="mt-6">
+            <Button size="lg" asChild data-testid="button-features-get-started">
+              <Link href="/auth">
+                Get Started Free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
-          </Link>
+          </div>
         </div>
       </section>
     </MarketingLayout>

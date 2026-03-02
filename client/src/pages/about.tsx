@@ -1,141 +1,111 @@
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Eye, BarChart3, Heart, ShieldCheck } from "lucide-react";
+import { useSEO } from "@/lib/seo";
+import { Eye, BarChart3, Heart, ShieldCheck, ArrowRight } from "lucide-react";
 
 const values = [
   {
     icon: Eye,
     title: "Transparency",
-    description:
-      "Every metric, every assumption, every projection is traceable back to its source. No black boxes, no hidden logic.",
+    description: "Every recommendation comes with an explanation. No black boxes. You should always understand why.",
   },
   {
     icon: BarChart3,
     title: "Data-Driven",
-    description:
-      "Decisions should be grounded in evidence, not gut feelings. We surface the signal in your financial noise.",
+    description: "Confidence intervals make risk measurable. Probability replaces intuition when the stakes are highest.",
   },
   {
     icon: Heart,
     title: "Founder-First",
-    description:
-      "Built by operators who've lived the fundraising grind. Every feature is designed for the people actually running the company.",
+    description: "Built by founders who've lived the uncertainty. Every feature exists because we needed it ourselves.",
   },
   {
     icon: ShieldCheck,
     title: "Privacy-First",
-    description:
-      "Your financial data is sacred. End-to-end encryption, SOC 2 practices, and zero data selling. Period.",
+    description: "Your financial data is encrypted at rest and in transit. Read-only integrations. No data resale. Ever.",
   },
 ];
 
-const team = [
-  { name: "Nikita Sharma", role: "Founder & CEO" },
-  { name: "Arjun Mehta", role: "CTO" },
-  { name: "Priya Kapoor", role: "Head of Product" },
-  { name: "Ravi Anand", role: "Head of Data Science" },
-];
-
 export default function AboutPage() {
+  useSEO({
+    title: "About | FounderConsole",
+    description: "Why FounderConsole exists: founders need explainable financial clarity under uncertainty.",
+  });
+
   return (
     <MarketingLayout>
-      <section className="py-20 sm:py-28" data-testid="section-about-hero">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-          <h1
-            className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl"
-            data-testid="text-about-headline"
-          >
+      <section>
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-about-title">
             Built by Founders, for Founders
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground" data-testid="text-about-subheadline">
-            We believe every startup deserves the same financial intelligence that billion-dollar companies take for
-            granted.
+          <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
+            Founders are asked to be CFO + CEO at once. That's why we built this.
           </p>
         </div>
       </section>
 
-      <section className="pb-20" data-testid="section-mission">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-semibold mb-6" data-testid="text-mission-title">
-            Our Mission
-          </h2>
-          <div className="space-y-4 text-muted-foreground leading-relaxed">
-            <p data-testid="text-mission-p1">
-              The startup ecosystem has a fundamental information asymmetry problem. Investors have decades of pattern
-              recognition, proprietary benchmarks, and armies of analysts. Founders have a spreadsheet and a dream.
-              FounderConsole exists to close that gap.
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <div className="max-w-3xl space-y-5 text-muted-foreground">
+            <p>
+              FounderConsole exists because uncertainty shouldn't force founders into gut decisions or fragile spreadsheets.
+              Forecasting should be real-time. Risk should be measurable. Decisions should be explainable.
             </p>
-            <p data-testid="text-mission-p2">
-              We&apos;re building the financial intelligence layer that every startup deserves — one that combines
-              real-time data ingestion, Monte Carlo simulations, and AI-driven insights to give founders the clarity
-              they need to make confident decisions about hiring, fundraising, and growth.
+            <p>
+              Monte Carlo simulation + explainability is our north star. When you can show investors and board members the
+              range of outcomes and the drivers behind them, you can defend decisions and move faster without adding hidden risk.
             </p>
-            <p data-testid="text-mission-p3">
-              Our platform doesn&apos;t just show you what happened. It shows you what&apos;s likely to happen next,
-              across thousands of simulated futures, so you can plan for the best case while preparing for the worst.
+            <p>
+              We believe every founder deserves the same financial intelligence that well-funded companies get from expensive
+              consultants and CFOs. That means investor-grade diligence, probabilistic simulations, and ranked decision
+              recommendations — accessible to everyone, not just those who can afford a finance team.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="pb-20" data-testid="section-values">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-semibold mb-8 text-center" data-testid="text-values-title">
-            Our Values
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-values-heading">
+            Our values
           </h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-6 sm:grid-cols-2">
             {values.map((v) => (
-              <Card key={v.title} data-testid={`card-value-${v.title.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
-                <CardContent className="pt-6">
-                  <v.icon className="h-8 w-8 text-primary mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">{v.title}</h3>
-                  <p className="text-sm text-muted-foreground">{v.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="pb-20" data-testid="section-team">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-semibold mb-8 text-center" data-testid="text-team-title">
-            The Team
-          </h2>
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-            {team.map((member) => (
               <div
-                key={member.name}
-                className="flex flex-col items-center text-center"
-                data-testid={`card-team-${member.name.toLowerCase().replace(/\s+/g, "-")}`}
+                key={v.title}
+                className="rounded-xl border bg-card p-6"
+                data-testid={`card-value-${v.title.toLowerCase()}`}
               >
-                <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-muted text-muted-foreground text-xl font-semibold">
-                  {member.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </div>
-                <h3 className="text-sm font-semibold">{member.name}</h3>
-                <p className="text-xs text-muted-foreground">{member.role}</p>
+                <v.icon className="h-5 w-5 text-primary" />
+                <h3 className="mt-3 text-base font-semibold text-foreground">{v.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{v.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="pb-20" data-testid="section-about-cta">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl font-semibold mb-4" data-testid="text-about-cta-title">
-            Join Us on Our Mission
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
+          <h2 className="text-2xl font-semibold text-foreground" data-testid="text-about-cta">
+            Join us on our mission
           </h2>
-          <p className="mb-6 text-muted-foreground">
-            Want to help democratize financial intelligence for startups?
+          <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
+            We're building the financial intelligence layer for the next generation of startups.
           </p>
-          <Button asChild data-testid="button-about-contact">
-            <Link href="/contact">Get in Touch</Link>
-          </Button>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button size="lg" asChild data-testid="button-about-get-started">
+              <Link href="/auth">
+                Get Started Free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild data-testid="button-about-contact">
+              <Link href="/contact">Contact Us</Link>
+            </Button>
+          </div>
         </div>
       </section>
     </MarketingLayout>

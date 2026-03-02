@@ -104,6 +104,7 @@ const AboutPage = lazy(() => import("@/pages/about"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const FAQPage = lazy(() => import("@/pages/faq"));
+const DemoPage = lazy(() => import("@/pages/demo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
   const user = useFounderStore((s) => s.user);
@@ -268,6 +269,7 @@ function Router() {
         <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
+        <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
@@ -427,7 +429,6 @@ function Router() {
       </Route>
         <Route path="/scenarios/shared/:uuid" component={SharedScenarioPage} />
         <Route path="/owner-console" component={OwnerConsole} />
-        <Route path="/demo" component={DemoRedirectPage} />
         <Route component={NotFound} />
       </Switch>
     </ErrorBoundary>

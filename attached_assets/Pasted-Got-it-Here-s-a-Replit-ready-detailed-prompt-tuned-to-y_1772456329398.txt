@@ -1,0 +1,887 @@
+Got it. Here’s a **Replit-ready detailed prompt** tuned to your stack (React 18 + TS, Vite, Wouter, Tailwind + shadcn/ui, SPA) plus the **code bundle** you can paste into Replit to implement the redesign and content. I’m keeping the new pieces drop-in friendly and focused on marketing-page UX + accessibility + SEO-ish improvements (SPA still limits crawler indexing, but this sets you up well and can be paired with prerendering later).
+
+---
+
+## 1) Detailed prompt for Replit AI (paste this into Ghostwriter/Replit AI)
+
+You are a React 18 + TypeScript developer in a Vite SPA. The stack is:
+
+* React 18 + TypeScript
+* Vite
+* Wouter for client-side routing
+* Tailwind + shadcn/ui
+* No SSR; everything is client-side
+
+### Goal
+
+Implement a redesigned marketing site with clear CTA hierarchy, accessibility, consistent components, and better SEO signals (titles/descriptions + JSON-LD FAQ).
+
+### Required pages/routes
+
+* `/`
+* `/features`
+* `/pricing`
+* `/about`
+* `/blog`
+* `/faq`
+* `/demo`
+* `/auth` (placeholder/page-level CTA target)
+
+### Components + structure
+
+Create or update:
+
+* `src/router.tsx` (Wouter routes)
+* `src/pages/marketing/*` page components
+* `src/components/layout/*` (Navbar, Footer, PageContainer, Section)
+* `src/seo.tsx` + `useSEO` hook for document title/meta description and optional JSON-LD
+* Add FAQ JSON-LD on `/faq`
+
+### CTA rules
+
+* Primary CTA: “Get Started Free” -> `/auth`
+* Secondary CTA: “Watch Demo” -> `/demo`
+* Make primary button visually dominant (solid) and secondary subordinate (outline).
+
+### Design/content requirements
+
+Home hero:
+
+* H1: “Financial Intelligence for Founders”
+* Trust tagline: “Trusted by 500+ startups”
+* Subheadline: “AI-powered simulation, forecasting, and decision support that gives founders the financial clarity to build with confidence.”
+* Integrations row showing: Stripe, QuickBooks, Gusto, Mercury, Brex, Plaid
+
+Features page: communicate modes/outcomes (forecast, simulate, compare, explain, report).
+
+Pricing page: transparent tiers + “What you get in the first 5 minutes”.
+
+Blog page: pillars (runway, fundraising timing, hiring decisions under uncertainty, Monte Carlo explainers, investor reporting templates).
+
+### Accessibility
+
+* One H1 per page
+* Logical heading order
+* Meaningful alt text
+* Focus/scroll restoration on route change (optional but preferred)
+
+If `react-helmet-async` already exists, use it. If not, use `document.title` + a small head management helper.
+
+---
+
+## 2) Code bundle (paste into Replit)
+
+### `src/main.tsx`
+
+```tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+### `src/App.tsx`
+
+```tsx
+import React from 'react';
+import { Router } from 'wouter';
+import { AppRouter } from './router';
+
+export default function App() {
+  return (
+    <Router>
+      <AppRouter />
+    </Router>
+  );
+}
+```
+
+### `src/router.tsx`
+
+```tsx
+import React from 'react';
+import { Switch, Route } from 'wouter';
+
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
+
+import HomePage from './pages/marketing/HomePage';
+import FeaturesPage from './pages/marketing/FeaturesPage';
+import PricingPage from './pages/marketing/PricingPage';
+import AboutPage from './pages/marketing/AboutPage';
+import BlogPage from './pages/marketing/BlogPage';
+import FAQPage from './pages/marketing/FAQPage';
+import DemoPage from './pages/marketing/DemoPage';
+import AuthPage from './pages/marketing/AuthPage';
+
+export function AppRouter() {
+  return (
+    <div className="flex min-h-screen flex-col bg-white">
+      <Navbar />
+      <div className="flex-1">
+        <Switch>
+          <Route path="/" component={HomePage} />
+          <Route path="/features" component={FeaturesPage} />
+          <Route path="/pricing" component={PricingPage} />
+          <Route path="/about" component={AboutPage} />
+          <Route path="/blog" component={BlogPage} />
+          <Route path="/faq" component={FAQPage} />
+          <Route path="/demo" component={DemoPage} />
+          <Route path="/auth" component={AuthPage} />
+          <Route>404</Route>
+        </Switch>
+      </div>
+      <Footer />
+    </div>
+  );
+}
+```
+
+---
+
+# SEO helper
+
+### `src/seo.tsx`
+
+```tsx
+import { useEffect } from 'react';
+
+type SEOProps = {
+  title: string;
+  description?: string;
+  jsonLd?: object;
+};
+
+export function useSEO({ title, description, jsonLd }: SEOProps) {
+  useEffect(() => {
+    document.title = title;
+
+    const name = 'description';
+    const head = document.querySelector('head');
+    if (!head) return;
+
+    let descTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!descTag) {
+      descTag = document.createElement('meta');
+      descTag.setAttribute('name', name);
+      head.appendChild(descTag);
+    }
+    if (description) descTag.setAttribute('content', description);
+
+    let ldTag = document.querySelector('#seo-jsonld') as HTMLScriptElement | null;
+    if (jsonLd) {
+      if (!ldTag) {
+        ldTag = document.createElement('script');
+        ldTag.id = 'seo-jsonld';
+        ldTag.type = 'application/ld+json';
+        head.appendChild(ldTag);
+      }
+      ldTag.text = JSON.stringify(jsonLd);
+    } else if (ldTag) {
+      head.removeChild(ldTag);
+    }
+
+    return () => {};
+  }, [title, description, jsonLd]);
+}
+```
+
+---
+
+# Layout components
+
+### `src/components/layout/PageContainer.tsx`
+
+```tsx
+export function PageContainer({ children }: { children: React.ReactNode }) {
+  return <div className="mx-auto w-full max-w-6xl px-4 py-10 md:py-12">{children}</div>;
+}
+```
+
+### `src/components/layout/Section.tsx`
+
+```tsx
+export function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="py-10 md:py-12">
+      <div className="mx-auto w-full max-w-6xl px-4">
+        <div className="max-w-3xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h2>
+          {subtitle ? <p className="mt-2 text-slate-600">{subtitle}</p> : null}
+        </div>
+        <div className="mt-8">{children}</div>
+      </div>
+    </section>
+  );
+}
+```
+
+### `src/components/layout/Navbar.tsx`
+
+```tsx
+import { Link, useLocation } from 'wouter';
+
+const nav = [
+  { href: '/features', label: 'Features' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/about', label: 'About' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/faq', label: 'FAQ' },
+];
+
+export function Navbar() {
+  const [location] = useLocation();
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-slate-100 bg-white/70 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
+        <Link href="/" className="text-lg font-semibold tracking-tight text-slate-900">
+          FounderConsole
+        </Link>
+
+        <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
+          {nav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`transition hover:text-slate-900 ${location === item.href ? 'text-slate-900' : ''}`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-3">
+          <Link
+            href="/demo"
+            className="hidden items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 sm:inline-flex"
+          >
+            Watch Demo
+          </Link>
+          <Link
+            href="/auth"
+            className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          >
+            Get Started Free
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+### `src/components/layout/Footer.tsx`
+
+```tsx
+import { Link } from 'wouter';
+
+export function Footer() {
+  return (
+    <footer className="border-t border-slate-100 bg-white">
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 md:py-12">
+        <div className="grid gap-8 md:grid-cols-2">
+          <div>
+            <p className="font-semibold text-slate-900">FounderConsole</p>
+            <p className="mt-2 text-sm text-slate-600">
+              Financial clarity for founders through real-time forecasting, Monte Carlo simulation, and explainability.
+            </p>
+          </div>
+
+          <div className="md:text-right">
+            <div className="space-x-4 text-sm text-slate-600">
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/security">Security</Link>
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-8 text-xs text-slate-500">© {new Date().getFullYear()} FounderConsole. All rights reserved.</p>
+      </div>
+    </footer>
+  );
+}
+```
+
+---
+
+# Shared sections
+
+### `src/components/IntegrationsRow.tsx`
+
+```tsx
+export function IntegrationsRow() {
+  const items = ['Stripe', 'QuickBooks', 'Gusto', 'Mercury', 'Brex', 'Plaid'];
+
+  return (
+    <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Powering insights from</p>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {items.map((x) => (
+          <div key={x} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm">
+            <span className="text-slate-500">*</span>
+            <span className="ml-2">{x}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+### `src/components/PricingCards.tsx`
+
+```tsx
+import { Link } from 'wouter';
+
+const tiers = [
+  {
+    name: 'Free Beta',
+    price: '$0',
+    period: '',
+    bullet: 'Best for founders who want immediate insight.',
+    features: ['Connect key integrations', 'Baseline forecast', 'One scenario simulation', 'AI explanation summary'],
+  },
+  {
+    name: 'Startup',
+    price: '$49',
+    period: '/month',
+    bullet: 'Best for teams who make weekly decisions.',
+    features: ['All free beta features', 'Unlimited scenarios', 'Investor report templates', 'Priority support'],
+  },
+  {
+    name: 'Growth',
+    price: '$129',
+    period: '/month',
+    bullet: 'Best for revenue-finance collaboration.',
+    features: ['All startup features', 'Advanced scenario compare', 'Team access', 'Custom reporting'],
+  },
+];
+
+export function PricingCards() {
+  return (
+    <div className="grid gap-6 md:grid-cols-3">
+      {tiers.map((tier) => (
+        <div key={tier.name} className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-900">{tier.name}</h3>
+          <p className="mt-1 text-sm text-slate-600">{tier.bullet}</p>
+
+          <div className="mt-6">
+            <div className="text-3xl font-bold text-slate-900">{tier.price}</div>
+            <div className="text-sm text-slate-500">{tier.period}</div>
+          </div>
+
+          <ul className="mt-6 space-y-2 text-sm text-slate-700">
+            {tier.features.map((f) => (
+              <li key={f} className="flex gap-2">
+                <span className="mt-1 text-blue-600">•</span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+
+          <Link href="/auth" className="mt-8 inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+            Get Started Free
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+# Pages
+
+### `src/pages/marketing/HomePage.tsx`
+
+```tsx
+import { Link } from 'wouter';
+import { useSEO } from '../../seo';
+import { IntegrationsRow } from '../../components/IntegrationsRow';
+import { Section } from '../../components/layout/Section';
+
+export default function HomePage() {
+  useSEO({
+    title: 'Financial Intelligence for Founders | FounderConsole',
+    description:
+      'AI-powered simulation, forecasting, and decision support that gives founders the financial clarity to build with confidence.',
+  });
+
+  return (
+    <>
+      <section className="bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Trusted by 500+ startups</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-900 md:text-5xl">
+            Financial Intelligence
+            <br />
+            for Founders
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg text-slate-700">
+            AI-powered simulation, forecasting, and decision support that gives founders the financial clarity to build with confidence.
+          </p>
+
+          <div className="mt-8 flex flex-wrap gap-4">
+            <Link href="/auth" className="inline-flex items-center rounded-md bg-blue-600 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-blue-700">
+              Get Started Free
+            </Link>
+            <Link href="/demo" className="inline-flex items-center rounded-md border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+              Watch Demo
+            </Link>
+          </div>
+
+          <IntegrationsRow />
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {[
+              {
+                title: 'Runway in real time',
+                desc: 'Connect key systems and see runway with explainable context.',
+              },
+              {
+                title: 'Confidence intervals',
+                desc: 'Monte Carlo simulation gives you P10/P50/P90 outcomes so risk becomes measurable.',
+              },
+              {
+                title: 'Decisions, not dashboards',
+                desc: 'Compare scenarios like hiring timing or fundraising targets with clear tradeoffs.',
+              },
+            ].map((c) => (
+              <div key={c.title} className="rounded-lg border border-slate-100 bg-white p-6 shadow-sm">
+                <h3 className="text-base font-semibold text-slate-900">{c.title}</h3>
+                <p className="mt-2 text-sm text-slate-700">{c.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <Section title="How it works" subtitle="Minimal setup. Maximum clarity.">
+        <div className="grid gap-6 md:grid-cols-4">
+          {[
+            { title: 'Connect', desc: 'Stripe/QuickBooks/Gusto/Mercury and more.' },
+            { title: 'Forecast', desc: 'Baseline forecast that stays current.' },
+            { title: 'Simulate', desc: 'Confidence intervals show a range of outcomes.' },
+            { title: 'Decide', desc: 'Recommendations and explainability you can defend.' },
+          ].map((s, i) => (
+            <div key={s.title} className="rounded-xl border border-slate-100 bg-slate-50 p-6">
+              <p className="text-xs font-semibold text-blue-700">Step {i + 1}</p>
+              <h3 className="mt-2 text-base font-semibold text-slate-900">{s.title}</h3>
+              <p className="mt-2 text-sm text-slate-700">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Pricing preview" subtitle="Transparent tiers + fast time-to-value.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900">What you get in the first 5 minutes</h3>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {[
+                'Baseline forecast from connected sources',
+                'One scenario simulation with confidence bands',
+                'AI narrative explaining risk drivers',
+                'An investor-ready summary draft',
+              ].map((x) => (
+                <li key={x} className="flex gap-2">
+                  <span className="mt-1 text-blue-600">•</span>
+                  <span>{x}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900">Risk reduction matters</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              The value isn’t a prettier chart. It’s defendable decisions. Confidence intervals + explainability help you move fast without adding hidden risk.
+            </p>
+            <div className="mt-6 flex gap-4">
+              <Link href="/pricing" className="inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                See pricing
+              </Link>
+              <Link href="/faq" className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50">
+                Read FAQ
+              </Link>
+            </div>
+          </div>
+        </div>
+      </Section>
+    </>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/FeaturesPage.tsx`
+
+```tsx
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+export default function FeaturesPage() {
+  useSEO({
+    title: 'Features | FounderConsole',
+    description:
+      'FounderConsole features: real-time forecasting, Monte Carlo confidence intervals, scenario comparison, explainability, and investor-ready reporting.',
+  });
+
+  return (
+    <div className="pb-10">
+      <Section title="Features" subtitle="Built for founders who make decisions under uncertainty.">
+        <div className="grid gap-6 md:grid-cols-2">
+          {[
+            {
+              title: 'Real-time forecasting',
+              desc: 'Connect revenue, expense, and payroll sources to reduce manual work and keep forecasts current.',
+            },
+            {
+              title: 'Monte Carlo confidence intervals',
+              desc: 'See P10/P50/P90 outcomes so probability replaces guesswork.',
+            },
+            {
+              title: 'Scenario comparison',
+              desc: 'Compare decisions like hiring timing, fundraising size, pricing changes, and investment bets.',
+            },
+            {
+              title: 'Explainable decisions',
+              desc: 'Narratives explain what drives risk so you can defend choices to boards and investors.',
+            },
+            {
+              title: 'Investor-ready reporting',
+              desc: 'Turn insight into consistent summaries and reduce update-time drag.',
+            },
+            {
+              title: 'Transparent security posture',
+              desc: 'Add security specifics here as your implementation and policy mature.',
+            },
+          ].map((f) => (
+            <div key={f.title} className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+              <h3 className="text-base font-semibold text-slate-900">{f.title}</h3>
+              <p className="mt-2 text-sm text-slate-700">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+    </div>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/PricingPage.tsx`
+
+```tsx
+import { PricingCards } from '../../components/PricingCards';
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+export default function PricingPage() {
+  useSEO({
+    title: 'Pricing | FounderConsole',
+    description: 'FounderConsole pricing tiers with fast time-to-value. See what you get in the first 5 minutes.',
+  });
+
+  return (
+    <>
+      <Section title="Pricing" subtitle="Choose the plan that matches how often you make hard decisions.">
+        <PricingCards />
+      </Section>
+
+      <Section title="What you get in 5 minutes" subtitle="Designed to reduce risk, not add complexity.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-6">
+            <h3 className="text-base font-semibold text-slate-900">Immediate deliverables</h3>
+            <ul className="mt-3 space-y-2 text-sm text-slate-700">
+              {[
+                'Baseline forecast from connected sources',
+                'Confidence interval simulation band',
+                'AI narrative summarizing key risk drivers',
+                'Investor-ready summary draft',
+              ].map((x) => (
+                <li key={x} className="flex gap-2">
+                  <span className="mt-1 text-blue-600">•</span>
+                  <span>{x}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-6">
+            <h3 className="text-base font-semibold text-slate-900">What this does for founders</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              Founders can’t waste hours building spreadsheets and making decisions off a single outcome. The value is turning uncertainty into an explainable, defensible decision language.
+            </p>
+          </div>
+        </div>
+      </Section>
+    </>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/AboutPage.tsx`
+
+```tsx
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+export default function AboutPage() {
+  useSEO({
+    title: 'About | FounderConsole',
+    description: 'Why FounderConsole exists: founders need explainable financial clarity under uncertainty.',
+  });
+
+  return (
+    <Section title="About FounderConsole" subtitle="Founders are asked to be CFO + CEO at once. That’s why we built this.">
+      <div className="max-w-3xl space-y-4 text-sm text-slate-700">
+        <p>
+          FounderConsole exists because uncertainty shouldn’t force founders into gut decisions or fragile spreadsheets.
+          Forecasting should be real-time. Risk should be measurable. Decisions should be explainable.
+        </p>
+        <p>
+          Monte Carlo simulation + explainability is our north star. When you can show investors and board members the
+          range of outcomes and the drivers behind them, you can defend decisions and move faster without adding hidden risk.
+        </p>
+        <p>
+          These marketing pages are designed to be accessible, consistent, and conversion-focused. You can layer in your
+          existing shadcn/ui components and refine copy to match your brand voice.
+        </p>
+      </div>
+    </Section>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/BlogPage.tsx`
+
+```tsx
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+export default function BlogPage() {
+  useSEO({
+    title: 'Blog | FounderConsole',
+    description:
+      'FounderConsole blog: runway planning, fundraising timing, hiring decisions under uncertainty, Monte Carlo explainers, investor reporting templates.',
+  });
+
+  return (
+    <Section title="Blog" subtitle="Practical decision science for founders.">
+      <div className="grid gap-6 md:grid-cols-2">
+        {[
+          {
+            title: 'Runway planning (without lying to yourself)',
+            desc: 'Why a single forecast is a trap, and how to build defensible runway scenarios.',
+          },
+          {
+            title: 'Fundraising timing under uncertainty',
+            desc: 'How confidence intervals help you avoid raising too early or too late.',
+          },
+          {
+            title: 'Hiring decisions with measurable downside',
+            desc: 'Hiring is the biggest leverage point. Compare timing decisions like April vs June.',
+          },
+          {
+            title: 'Monte Carlo for founders (plain-English)',
+            desc: 'A simple explanation that turns Monte Carlo from intimidating to practical.',
+          },
+          {
+            title: 'Investor reporting templates that build trust',
+            desc: 'Present risk, assumptions, and decisions in a way investors respect.',
+          },
+        ].map((p) => (
+          <article key={p.title} className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900">{p.title}</h3>
+            <p className="mt-2 text-sm text-slate-700">{p.desc}</p>
+            <p className="mt-3 text-xs text-slate-500">
+              Add real blog posts or connect to your CMS later. This page structure is SEO-friendly for publishing.
+            </p>
+          </article>
+        ))}
+      </div>
+    </Section>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/FAQPage.tsx`
+
+```tsx
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+const faq = [
+  {
+    question: 'What problem does FounderConsole solve?',
+    answer:
+      'FounderConsole helps founders make explainable financial decisions under uncertainty using real-time forecasting and Monte Carlo confidence intervals.',
+  },
+  {
+    question: 'How is this different from a spreadsheet forecast?',
+    answer:
+      'Spreadsheets typically show one outcome. Monte Carlo simulation shows the range of possible outcomes and the probability of hitting key targets, while explainability tells you why.',
+  },
+  {
+    question: 'Why do confidence intervals matter?',
+    answer:
+      'Confidence intervals make risk measurable. Instead of hoping, you can quantify probability and decide with clearer tradeoffs.',
+  },
+  {
+    question: 'What do I get in the first 5 minutes?',
+    answer:
+      'Baseline forecast, one scenario simulation with confidence bands, an AI narrative explaining risk drivers, and an investor-ready summary draft.',
+  },
+];
+
+export default function FAQPage() {
+  useSEO({
+    title: 'FAQ | FounderConsole',
+    description: 'FounderConsole FAQ: product, data, pricing, accuracy, and explainability.',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faq.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: item.answer,
+        },
+      })),
+    },
+  });
+
+  return (
+    <Section title="FAQ" subtitle="Clear answers, organized by what founders actually ask.">
+      <div className="space-y-4">
+        {faq.map((item) => (
+          <div key={item.question} className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-slate-900">{item.question}</h3>
+            <p className="mt-2 text-sm text-slate-700">{item.answer}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 rounded-xl border border-slate-100 bg-slate-50 p-6">
+        <h3 className="text-base font-semibold text-slate-900">Data & security posture</h3>
+        <p className="mt-2 text-sm text-slate-700">
+          Trust is earned. Add your security implementation specifics here (read-only integrations, encryption, key management) as they’re finalized.
+        </p>
+      </div>
+    </Section>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/DemoPage.tsx`
+
+```tsx
+import { Section } from '../../components/layout/Section';
+import { useSEO } from '../../seo';
+
+export default function DemoPage() {
+  useSEO({
+    title: 'Demo | FounderConsole',
+    description: 'Watch the FounderConsole demo: connect data, forecast, simulate confidence intervals, decide.',
+  });
+
+  return (
+    <Section title="Watch Demo" subtitle="A fast walkthrough for founders.">
+      <div className="rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+        <h3 className="text-base font-semibold text-slate-900">Chaptering</h3>
+        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+          {[
+            '0:00 – Connect data (Stripe/QuickBooks/Gusto/Mercury)',
+            '0:20 – Baseline forecast in real time',
+            '0:40 – Monte Carlo confidence intervals (P10/P50/P90)',
+            '1:05 – Explainability: what drives the risk',
+            '1:30 – Next step: investor-ready summary',
+          ].map((x) => (
+            <li key={x} className="flex gap-2">
+              <span className="mt-1 text-blue-600">•</span>
+              <span>{x}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-6 text-sm text-slate-700">
+          Embed your real demo video here (iframe or native video). This placeholder is conversion-oriented and ready for content.
+        </p>
+      </div>
+    </Section>
+  );
+}
+```
+
+---
+
+### `src/pages/marketing/AuthPage.tsx`
+
+```tsx
+import { useSEO } from '../../seo';
+
+export default function AuthPage() {
+  useSEO({
+    title: 'Get Started | FounderConsole',
+    description: 'Sign up or sign in to FounderConsole.',
+  });
+
+  return (
+    <div className="mx-auto max-w-lg px-4 py-16">
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Get started</h1>
+      <p className="mt-2 text-sm text-slate-700">
+        Add your real auth flows here (OAuth/magic links/passwordless) depending on your backend and proxy setup.
+      </p>
+      <div className="mt-8 rounded-xl border border-slate-100 bg-slate-50 p-6">
+        <h2 className="text-base font-semibold text-slate-900">Onboarding path (recommended)</h2>
+        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+          {[
+            'Minimal onboarding: connect data sources',
+            'Show immediate deliverable: baseline forecast + confidence band',
+            'Explain next best action clearly',
+          ].map((x) => (
+            <li key={x} className="flex gap-2">
+              <span className="mt-1 text-blue-600">•</span>
+              <span>{x}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## Vite + prerender (optional but strongly recommended for SEO)
+
+SPA head tags help a little, but crawlers often still struggle. If you want, I can generate an add-on prompt + code to integrate a Vite prerender plugin to output static HTML snapshots for marketing routes (best practice for SPAs). Just tell me if you’re willing to add a build plugin and which you prefer: `vite-plugin-prerender` or `react-snap` style build step.
