@@ -2285,10 +2285,11 @@ Type **help** for a full list of what I can do.`,
                   <CardContent className="text-sm text-muted-foreground">
                     {latestScenario ? (
                       (() => {
-                        const inputs = latestScenario.inputs || latestScenario;
-                        const pricing = Number(inputs.pricing_change_pct) || 0;
-                        const burn = Number(inputs.burn_reduction_pct) || 0;
-                        const growth = Number(inputs.growth_uplift_pct) || 0;
+                        const inputs = latestScenario.inputs || {};
+                        const safeNum = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+                        const pricing = safeNum(inputs.pricing_change_pct ?? latestScenario.pricing_change_pct);
+                        const burn = safeNum(inputs.burn_reduction_pct ?? latestScenario.burn_reduction_pct);
+                        const growth = safeNum(inputs.growth_uplift_pct ?? latestScenario.growth_uplift_pct);
                         const hasChanges = pricing !== 0 || burn !== 0 || growth !== 0;
                         return (
                           <>
