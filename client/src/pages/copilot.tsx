@@ -66,25 +66,10 @@ import { useTruthScan, useSimulation, useScenarios } from '@/api/hooks';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
-function safePercent(val: unknown): string | null {
-  if (val == null) return null;
-  const n = Number(val);
-  if (!Number.isFinite(n)) return null;
-  return n.toFixed(1);
-}
-
-function formatScenarioParams(scenario: any): { pricing: number; burn: number; growth: number } {
-  const inputs = scenario?.inputs || {};
-  const parse = (v: unknown): number => {
-    if (v == null) return 0;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-  return {
-    pricing: parse(inputs.pricing_change_pct),
-    burn: parse(inputs.burn_reduction_pct),
-    growth: parse(inputs.growth_uplift_pct),
-  };
+function safeNum(v: unknown): number {
+  if (v == null) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function getSimSurvival18(sim: any): number | null {
@@ -2324,7 +2309,6 @@ Type **help** for a full list of what I can do.`,
                     {latestScenario ? (
                       (() => {
                         const inputs = latestScenario.inputs || {};
-                        const safeNum = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
                         const pricing = safeNum(inputs.pricing_change_pct ?? latestScenario.pricing_change_pct);
                         const burn = safeNum(inputs.burn_reduction_pct ?? latestScenario.burn_reduction_pct);
                         const growth = safeNum(inputs.growth_uplift_pct ?? latestScenario.growth_uplift_pct);
@@ -2369,15 +2353,12 @@ Type **help** for a full list of what I can do.`,
                   <CardContent className="text-sm">
                     {simulation ? (
                       (() => {
-                        const survObj = simulation.survivalProbability || simulation.survival || {};
-                        const rawS18 = survObj['18m'];
-                        const s18 = typeof rawS18 === 'number' && Number.isFinite(rawS18) ? rawS18 : (typeof rawS18 === 'string' && rawS18.trim() !== '' ? Number(rawS18) : null);
-                        const p50 = simulation.runway?.p50;
-                        const p50Valid = typeof p50 === 'number' && Number.isFinite(p50);
+                        const s18 = getSimSurvival18(simulation);
+                        const p50 = getSimRunwayP50(simulation);
                         return (
                           <>
-                            <p data-testid="text-sim-runway">Runway P50: <span className="font-mono font-medium">{p50Valid && isRunwaySustainable(p50) ? 'Sustainable' : p50Valid ? `${p50.toFixed(1)} mo` : 'N/A'}</span></p>
-                            <p data-testid="text-sim-survival">Survival 18m: <span className="font-mono font-medium">{s18 != null && Number.isFinite(s18) ? `${s18.toFixed(1)}%` : 'N/A'}</span></p>
+                            <p data-testid="text-sim-runway">Runway P50: <span className="font-mono font-medium">{p50 != null && isRunwaySustainable(p50) ? 'Sustainable' : p50 != null ? `${p50.toFixed(1)} mo` : 'N/A'}</span></p>
+                            <p data-testid="text-sim-survival">Survival 18m: <span className="font-mono font-medium">{s18 != null ? `${s18.toFixed(1)}%` : 'N/A'}</span></p>
                           </>
                         );
                       })()

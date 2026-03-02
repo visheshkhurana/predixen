@@ -441,18 +441,27 @@ function buildTier2KeyMetrics(metrics: any, sharedMetrics: any, extractValue: (v
     },
     {
       id: 'burn-rate',
-      label: 'Net Burn Rate',
+      label: (() => {
+        const tsBurn = extractValue(metrics.net_burn);
+        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
+        return burn != null && burn < 0 ? 'Net Cash Flow' : 'Net Burn Rate';
+      })(),
       value: (() => {
         const tsBurn = extractValue(metrics.net_burn);
         const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
-        return burn !== null && burn !== undefined ? formatCurrency(Math.abs(burn)) : 'N/A';
+        if (burn == null) return 'N/A';
+        return burn < 0 ? `+${formatCurrency(Math.abs(burn))}` : formatCurrency(Math.abs(burn));
       })(),
       trend: undefined,
       trendValue: '/month',
       benchmark: '',
-      status: 'healthy' as any,
+      status: (() => {
+        const tsBurn = extractValue(metrics.net_burn);
+        const burn = tsBurn !== null ? tsBurn : sharedMetrics.netBurn;
+        return burn != null && burn <= 0 ? 'healthy' : 'warning';
+      })() as any,
       source: 'calculated' as any,
-      tooltip: 'Net monthly cash outflow (total expenses minus revenue). Shows how much cash is consumed each month after accounting for revenue.',
+      tooltip: 'Monthly expenses minus revenue. Positive means cash is being consumed; negative (shown as +) means revenue exceeds expenses.',
     },
     {
       id: 'mrr',
