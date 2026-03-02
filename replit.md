@@ -1,7 +1,7 @@
 # FounderConsole
 
 ## Overview
-FounderConsole is an AI-powered financial intelligence platform for startups, designed to enhance survival and growth while mitigating risk and dilution. It provides investor-grade diligence, probabilistic simulations, and ranked decision recommendations to support financial planning, helping startups understand financial health, predict outcomes, and make strategic decisions. The platform aims to revolutionize how startups manage their finances and interact with investors.
+FounderConsole is an AI-powered financial intelligence platform for startups. Its purpose is to enhance survival and growth, mitigate risk and dilution, and support strategic financial planning through investor-grade diligence, probabilistic simulations, and ranked decision recommendations. The platform aims to revolutionize how startups manage their finances and interact with investors by providing tools to understand financial health, predict outcomes, and make informed decisions.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -9,68 +9,49 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Core Design Principles
-The platform uses a modern full-stack architecture with React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations through a modular design. Key architectural components include data ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities. Scalability is achieved using FastAPI and PostgreSQL, while UI/UX focuses on data visualization and interactive components built with Tailwind CSS and shadcn/ui. Data integrity is enforced via Zod, Pydantic, and Alembic, with security based on JWT authentication and RBAC.
+The platform employs a modern full-stack architecture, utilizing React/TypeScript for the frontend and FastAPI/Python for the backend. It emphasizes data-driven insights, probabilistic modeling, and AI-powered recommendations through a modular design. Key architectural components include data ingestion, truth scanning, simulation, decision-making, and AI copilot functionalities. Scalability is achieved using FastAPI and PostgreSQL, while UI/UX focuses on data visualization and interactive components built with Tailwind CSS and shadcn/ui. Data integrity is enforced via Zod, Pydantic, and Alembic, with security based on JWT authentication and RBAC. All inner app pages are fully responsive. Critical routes (auth, billing, onboarding) register quickly, with other modules loading in the background.
 
-### Frontend Architecture
+### Frontend
 -   **Frameworks**: React 18 with TypeScript, Wouter, Zustand, TanStack React Query.
 -   **UI/UX**: Tailwind CSS (dark mode default), shadcn/ui, Recharts for data visualization.
 -   **Forms**: React Hook Form with Zod validation.
+-   **Marketing Site**: Redesigned public marketing site with shared `MarketingLayout` for pages like Landing, Features, About, Contact, Blog, FAQ, Demo.
 
-### Backend Architecture
+### Backend
 -   **Framework**: FastAPI (Python 3.11).
 -   **Database**: PostgreSQL with SQLAlchemy ORM, Alembic for migrations.
--   **Authentication**: JWT-based.
+-   **Authentication**: JWT-based with refresh token rotation.
 -   **Validation**: Pydantic models.
+-   **Security**: HSTS and CSP headers, body parser limits, file upload size limits.
 
-### Key Features and Technical Implementations
-1.  **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, and multi-currency handling.
-2.  **Truth Scan**: A multi-stage data validation layer ensuring data quality.
-3.  **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, asynchronous execution, custom event modeling, sensitivity analysis, and scenario versioning. Includes automatic counter-move simulations and Monte Carlo P10/P50/P90.
-4.  **Optimization & Recommendations**: Features constrained multi-objective optimization and an automated recommendations engine.
-5.  **AI Copilot System**: A Multi-Agent Fund Flow Copilot with a Router/Orchestrator Agent directing queries to specialized agents. Uses a Company Knowledge Base (CKB) for context, provides structured responses, and integrates multi-LLM for task-specific model selection.
-6.  **Real-Time Simulation Copilot**: AI guidance integrated into the simulation workflow, offering context-aware prompts and narrative summaries.
-7.  **Fundraising OS**: Module for cap table management, dilution calculations, fundraising round tracking, and an Investor Room. Features full equity management with shareholder registry, equity issuance, share transfers, option grants, transaction audit log, 409A valuation tracking, dilution scenario modeling, and ownership visualization.
-8.  **Forecasting & Alerts**: Utilizes Holt-Winters exponential smoothing and linear regression for forecasting, and Z-score anomaly detection, threshold monitoring, and runway warnings for alerts.
-9.  **Data Connectors**: Framework for payroll & ERP connectors and 37 production data connectors across financial and operational categories. QuickBooks Online connector (`server/connectors/quickbooks.py`) is fully implemented with real Intuit API v3 calls: OAuth2 token refresh, P&L/Balance Sheet/Cash Flow report parsing, invoice fetching with line items, journal entry + purchase ledger syncing, employee list, and account categorization heuristics. Stripe and Gusto connectors are also fully real. Credentials stored encrypted in `companies.metadata_json`.
-10. **Enhanced AI Interaction**: Includes a Copilot Trust Module for data veracity, natural conversational AI, and web research capabilities for market benchmarks.
-11. **Consultant-Grade Copilot Persona**: System prompts are upgraded to provide structured, data-backed recommendations with a strategic persona.
-12. **Simulation Experience Upgrade**: Features Before/After Delta Cards, Payback Clock Widget, Risk Alert Banner, data-driven recommendations (GO/CONDITIONAL/NO-GO), second-order effects detection, and confidence scoring.
-13. **AI Decision Summary**: Provides a 1-2 sentence recommendation, Decision Score, verdict, and supporting bullet points, with burn-increase verdict overrides.
-14. **Narrative Strategic Briefing**: Transforms the Decisions page into a 5-section strategic briefing: Executive Summary, Key Metrics Overview, Risk Assessment, Recommended Actions, and Upcoming Milestones.
-15. **User Roles**: Platform Admin and Company Level Roles (`owner`, `admin`, `analyst`, `viewer`).
-16. **Phased Startup**: Critical routes (auth, billing, onboarding) register quickly, with other modules loading in the background.
-
-17. **Simulator Edge Case Guardrails**: Comprehensive input validation on both frontend (Zod) and backend (Pydantic). Hiring plan: count 0-500, monthly cost 0-$1M, max 20 roles. Scenario inputs: growth -30% to +50%, pricing -50% to +100%, burn reduction -100% to +80%, fundraise $0-$100M within months 1-24. Runtime: baseline revenue/cash floored at 0, negative costs floored at 0, revenue never goes negative in Monte Carlo loop. Simulation iterations bounded 100-10,000.
-18. **Onboarding Wizard**: 3-step wizard (Welcome → Connect Data → First Insight) with visual progress bar, localStorage completion tracking (`founderConsoleOnboardingComplete`), and "Recommended" badge on manual entry. Step 3 shows computed metrics (runway, burn, health) and Run Simulation CTA.
-19. **AI Copilot Disclaimers**: Amber disclaimer banner ("AI insights are informational only"), collapsible Sources section after each response showing citations/data sources used, and "Based on data as of [date]" footer on each response.
-20. **Enhanced Empty States**: Dashboard shows ghost metric cards with descriptive helper text when no data exists, tooltips on N/A values explaining what's needed. Scenarios page has descriptive empty state with CTA. Cap Table and Fundraising pages have existing comprehensive empty states.
-21. **Password Reset Flow**: Full forgot-password modal on auth page → email with reset link via Resend → `/reset-password?token=xxx` page to set new password. Uses `PasswordResetToken` model with 1-hour expiry. Forgot-password endpoint rate-limited under AUTH_PATHS (5/min).
-22. **Email Verification on Signup**: New users get `is_email_verified=false`, auto-sent verification email on register. Dashboard shows amber banner with "Resend Verification" button. `/verify-email?token=xxx` page verifies and updates Zustand store. Uses `EmailVerificationToken` model with 24-hour expiry. OAuth users default to verified.
-23. **Integrations Coming Soon Separation**: Active connectors shown first, then "Upcoming Integrations" section with "In Development" badge and "Request Access" button (shows toast confirmation). Filtered by `comingSoon` property.
-24. **Simulation API Rate Limiting**: Monte Carlo simulation endpoints (`/api/simulations`, `/api/scenarios/*/simulate`) rate-limited to 10 req/min per IP. Returns 429 with `Retry-After` header. Configurable via `RATE_LIMIT_SIMULATION` env var. Uses PostgreSQL-backed persistent storage (`rate_limits` table) with fixed window algorithm. Background cleanup task runs every 5 minutes to delete stale entries older than 10 minutes. Table schema: `rate_limits(id, key, endpoint, request_count, window_start)` with unique constraint on `(key, endpoint)`. Response headers include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Category`.
-25. **In-App Feedback Widget**: Floating "Feedback" button (purple gradient, bottom-right) visible on all authenticated pages. Opens a panel with type selection (Bug/Feature/General), message textarea, and submit. Stores in `beta_feedback` table via `POST /api/feedback`. Uses CSRF double-submit cookie pattern. Component: `client/src/components/FeedbackWidget.tsx`, API: `server/api/feedback.py`.
-26. **Help & Documentation Page**: Collapsible sections with real content for Getting Started, Simulation Engine, AI Copilot, and Integrations guides. No placeholder text. Component: `client/src/pages/docs.tsx`.
-
-27. **PostHog Analytics**: Product analytics via `posthog-js`. Initialized in `AppLayout` only when `VITE_POSTHOG_KEY` env var is set (no-ops gracefully without it). Host configurable via `VITE_POSTHOG_HOST` (default: `https://us.i.posthog.com`). Tracks: page views on route changes, user identification on login (user_id, email, role), and custom events: `simulation_run`, `copilot_message`, `feedback_submitted`, `integration_connected`. Provider: `client/src/lib/posthog.ts`.
-28. **Mobile Responsiveness**: All inner app pages are fully responsive down to 375px width. Sidebar collapses to hamburger Sheet drawer on mobile (<768px) via shadcn/ui. All page wrappers use `p-4 md:p-6` responsive padding. Dashboard/overview grids use `grid-cols-1` base with `md:` and `lg:` breakpoints for stacking. Tables wrapped in `mobile-table-scroll` divs (CSS class in `index.css`) for horizontal scrolling on mobile. Copilot conversation sidebar hidden on mobile (`hidden md:flex`), data panel uses `w-[85vw] md:w-80`. Header confidence badge hidden on small screens (`hidden sm:inline-flex`). Stepper hidden below `sm` breakpoint.
-29. **Refresh Token Rotation**: Dual-cookie auth with `auth_token` (15 min, HttpOnly, path=/) and `refresh_token` (7 days, HttpOnly, path=/api/auth). `POST /api/auth/refresh` rotates refresh tokens (revokes old, issues new pair). Frontend auto-retries on 401 via `attemptTokenRefresh()` in `client/src/api/client.ts` before redirecting to /auth. Logout revokes refresh token. OAuth flow also issues refresh tokens. `RefreshToken` model in `server/models/user.py`, `refresh_tokens` table migration in `server/core/migrations.py`.
-30. **Enhanced Health Endpoint**: `/health` returns `status`, `version`, `environment`, `uptime_seconds`, `timestamp`, `ready`, `routers_loaded`, `database`, `startup_error`. Express proxies to FastAPI's health endpoint when backend is ready.
-31. **Request ID Tracing**: Every request gets a unique `X-Request-ID` UUID header. Generated in Express middleware (`server/index.ts`), forwarded to FastAPI via `RequestIDMiddleware` in `server/main.py`, returned in response headers. CORS `expose-headers` includes `X-Request-ID`.
-32. **Marketing Website**: Redesigned public marketing site with shared `MarketingLayout` (sticky nav + footer) in `client/src/components/marketing/MarketingLayout.tsx`. Pages: Landing (`/`, `landing.tsx`), Features (`/features`, `marketing-features.tsx`), About (`/about`, `about.tsx`), Contact (`/contact`, `contact.tsx`), Blog (`/blog`, `blog.tsx`), FAQ (`/faq`, `faq.tsx`), Demo (`/demo`, `demo.tsx`). Pricing (`/pricing`) also uses MarketingLayout. All pages are public (no auth required), lazy-loaded via `React.lazy()`, dark-mode-first, responsive 375px–1440px+. `PublicOrAuthHome` component in `App.tsx` shows LandingPage for unauthenticated users and OverviewPage for authenticated users at `/`. CTA hierarchy: "Get Started Free" (primary solid) → `/auth`, "Watch Demo" (secondary outline) → `/demo`. SEO: `useSEO` hook (`client/src/lib/seo.ts`) sets document title, meta description, OG tags, and optional JSON-LD structured data. FAQ page includes FAQPage JSON-LD schema. Scroll restoration on route change via MarketingLayout. Navigation links only point to public routes.
-37. **Facebook Pixel Scoping**: Meta Pixel (ID 872167299140812) removed from global `index.html` and scoped to `MarketingLayout` only. Loads dynamically via `useMetaPixel` hook in `MarketingLayout.tsx`. Fires `PageView` on marketing route changes. Removed from auth.tsx, demo-redirect.tsx, and App.tsx user identification. Only fires on public marketing pages (/, /features, /pricing, /about, /blog, /faq, /contact, /demo).
-33. **Decision Journal**: Full journal page (`client/src/pages/journal.tsx`) with "New Entry" dialog form (title, decision, reasoning, impact level). Entries persist via localStorage keyed by company ID. Demo entries shown when no saved data exists. Stats cards show total, resolved, and open counts.
-34. **Security Hardening**: HSTS and CSP headers applied in all environments (not just production). CSP allows websocket connections (`ws:`, `wss:`). Express body parser limited to 10MB. File uploads (Excel, PDF) validated with 50MB max size guard. HTTPException re-raise pattern prevents 413→500 masking in upload error handlers.
-35. **Response Compression**: `compression` npm middleware added to Express for gzip responses on all routes.
-36. **Investor Room Error Handling**: Fundraising rounds query has retry logic that stops on 401 errors. Dedicated error state UI shows "Session Expired" (with Sign In button) or "Unable to Load Data" (with Retry button) depending on error type.
+### Key Features
+-   **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, multi-currency handling.
+-   **Truth Scan**: Multi-stage data validation layer.
+-   **Simulation Engine**: Enhanced Monte Carlo simulations with 24-month projections, asynchronous execution, custom event modeling, sensitivity analysis, and scenario versioning. Includes automatic counter-move simulations and Monte Carlo P10/P50/P90. Features comprehensive input validation and runtime guardrails.
+-   **Optimization & Recommendations**: Constrained multi-objective optimization and an automated recommendations engine.
+-   **AI Copilot System**: Multi-Agent Fund Flow Copilot with a Router/Orchestrator Agent, Company Knowledge Base (CKB) for context, structured responses, and multi-LLM integration. Includes a Real-Time Simulation Copilot for context-aware prompts and narrative summaries. Provides consultant-grade, data-backed recommendations with a strategic persona, a Decision Summary, and a Narrative Strategic Briefing.
+-   **Fundraising OS**: Cap table management, dilution calculations, fundraising round tracking, and an Investor Room. Features full equity management with shareholder registry, equity issuance, share transfers, option grants, transaction audit log, 409A valuation tracking, dilution scenario modeling, and ownership visualization.
+-   **Forecasting & Alerts**: Holt-Winters exponential smoothing, linear regression for forecasting, Z-score anomaly detection, threshold monitoring, and runway warnings.
+-   **Data Connectors**: Framework for payroll & ERP connectors, with 37 production data connectors. Implemented QuickBooks Online, Stripe, and Gusto connectors.
+-   **Enhanced AI Interaction**: Copilot Trust Module for data veracity, natural conversational AI, and web research capabilities for market benchmarks. AI insights include disclaimers, collapsible sources, and data currency footers.
+-   **Simulation Experience Upgrade**: Before/After Delta Cards, Payback Clock Widget, Risk Alert Banner, data-driven recommendations (GO/CONDITIONAL/NO-GO), second-order effects detection, and confidence scoring.
+-   **User Roles**: Platform Admin and Company Level Roles (`owner`, `admin`, `analyst`, `viewer`).
+-   **Onboarding Wizard**: 3-step wizard (Welcome → Connect Data → First Insight) with visual progress and localStorage tracking.
+-   **User Management**: Password reset flow and email verification on signup.
+-   **In-App Feedback Widget**: Floating button for submitting bugs, features, or general feedback.
+-   **Help & Documentation Page**: Collapsible sections for Getting Started, Simulation Engine, AI Copilot, and Integrations guides.
+-   **Analytics**: PostHog analytics for page views, user identification, and custom events.
+-   **API Rate Limiting**: Monte Carlo simulation endpoints are rate-limited to 10 req/min per IP.
+-   **Request ID Tracing**: Unique `X-Request-ID` header for every request for tracing.
 
 ## External Dependencies
 
--   **OpenAI**: For financial analysis, metrics extraction, and vision tasks.
--   **Anthropic**: For complex reasoning, coding, and strategy.
--   **Google Gemini**: For general chat and high-volume tasks.
--   **Perplexity**: For real-time web search, market research, and benchmark data in the copilot.
+-   **OpenAI**: Financial analysis, metrics extraction, vision tasks.
+-   **Anthropic**: Complex reasoning, coding, strategy.
+-   **Google Gemini**: General chat, high-volume tasks.
+-   **Perplexity**: Real-time web search, market research, benchmark data.
 -   **PostgreSQL**: Primary relational database.
 -   **Google Fonts**: Inter, IBM Plex Mono.
 -   **Resend**: Email delivery service.
 -   **Twilio**: SMS/phone notifications.
--   **Google OAuth**: Social login (GitHub OAuth removed for launch).
+-   **Google OAuth**: Social login.

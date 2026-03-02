@@ -2102,29 +2102,29 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway}</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p90-runway">{scenarioP90?.runway ?? 'N/A'}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-revenue">{formatCurrency(scenarioP90?.revenue18m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-revenue">{formatCurrency(scenarioP90?.revenue18m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-cash">{formatCurrency(scenarioP90?.cash12m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-cash">{formatCurrency(scenarioP90?.cash12m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Break-even</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-breakeven">{scenarioP90?.breakeven}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p90-breakeven">{scenarioP90?.breakeven ?? 'N/A'}</span>
                       </div>
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival}%</span>
+                          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400" data-testid="text-p90-survival">{scenarioP90?.survival != null ? `${scenarioP90.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-emerald-500 rounded-full transition-all"
-                            style={{ width: `${Math.min(100, parseFloat(scenarioP90?.survival || '0'))}%` }}
+                            style={{ width: `${Math.min(100, parseFloat(String(scenarioP90?.survival ?? 0)))}%` }}
                           />
                         </div>
                       </div>
@@ -2141,29 +2141,29 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway}</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p50-runway">{scenarioP50?.runway ?? 'N/A'}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-revenue">{formatCurrency(scenarioP50?.revenue18m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-revenue">{formatCurrency(scenarioP50?.revenue18m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-cash">{formatCurrency(scenarioP50?.cash12m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-cash">{formatCurrency(scenarioP50?.cash12m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Break-even</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-breakeven">{scenarioP50?.breakeven}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p50-breakeven">{scenarioP50?.breakeven ?? 'N/A'}</span>
                       </div>
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival}%</span>
+                          <span className="text-sm font-bold text-primary" data-testid="text-p50-survival">{scenarioP50?.survival != null ? `${scenarioP50.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${Math.min(100, parseFloat(scenarioP50?.survival || '0'))}%` }}
+                            style={{ width: `${Math.min(100, parseFloat(String(scenarioP50?.survival ?? 0)))}%` }}
                           />
                         </div>
                       </div>
@@ -2180,29 +2180,29 @@ export default function ScenariosPage() {
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Runway</span>
-                        <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway}</span>
+                        <span className="text-sm font-bold font-mono" data-testid="text-p10-runway">{scenarioP10?.runway ?? 'N/A'}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Revenue @18mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-revenue">{formatCurrency(scenarioP10?.revenue18m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-revenue">{formatCurrency(scenarioP10?.revenue18m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Cash @12mo</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-cash">{formatCurrency(scenarioP10?.cash12m || 0)}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-cash">{formatCurrency(scenarioP10?.cash12m ?? 0)}</span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">Break-even</span>
-                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-breakeven">{scenarioP10?.breakeven}</span>
+                        <span className="text-sm font-semibold font-mono" data-testid="text-p10-breakeven">{scenarioP10?.breakeven ?? 'N/A'}</span>
                       </div>
                       <div className="mt-2 pt-2 border-t">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Survival</span>
-                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival}%</span>
+                          <span className="text-sm font-bold text-red-600 dark:text-red-400" data-testid="text-p10-survival">{scenarioP10?.survival != null ? `${scenarioP10.survival}%` : 'N/A'}</span>
                         </div>
                         <div className="w-full h-1.5 bg-muted rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-red-500 rounded-full transition-all"
-                            style={{ width: `${Math.min(100, parseFloat(scenarioP10?.survival || '0'))}%` }}
+                            style={{ width: `${Math.min(100, parseFloat(String(scenarioP10?.survival ?? 0)))}%` }}
                           />
                         </div>
                       </div>

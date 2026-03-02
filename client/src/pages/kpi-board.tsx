@@ -257,10 +257,10 @@ export default function KPIBoardPage() {
         />
         <KPITile
           title="Runway"
-          value={isLoading ? '—' : metrics.runway_months >= 120 ? '\u221E' : `${metrics.runway_months.toFixed(1)} mo`}
+          value={isLoading ? '—' : (metrics.runway_months != null && metrics.runway_months >= 120) ? '\u221E' : metrics.runway_months != null ? `${metrics.runway_months.toFixed(1)} mo` : 'N/A'}
           icon={<Clock className="h-4 w-4" />}
-          trend={metrics.runway_months < 6 ? 'down' : 'neutral'}
-          subtitle={metrics.runway_months >= 120 ? 'Profitable' : metrics.runway_months < 6 ? 'Low runway' : ''}
+          trend={metrics.runway_months != null && metrics.runway_months < 6 ? 'down' : 'neutral'}
+          subtitle={metrics.runway_months != null && metrics.runway_months >= 120 ? 'Profitable' : metrics.runway_months != null && metrics.runway_months < 6 ? 'Low runway' : ''}
           isLive={isConnected}
           isLoading={isLoading}
         />
@@ -281,7 +281,7 @@ export default function KPIBoardPage() {
           title="Gross Margin"
           value={isLoading ? '—' : formatPercent(metrics.gross_margin)}
           icon={<Percent className="h-4 w-4" />}
-          trend={metrics.gross_margin >= 0.7 ? 'up' : 'neutral'}
+          trend={metrics.gross_margin != null && metrics.gross_margin >= 0.7 ? 'up' : 'neutral'}
           isLive={isConnected}
           isLoading={isLoading}
         />
@@ -289,7 +289,7 @@ export default function KPIBoardPage() {
           title="Churn Rate"
           value={isLoading ? '—' : formatPercent(metrics.churn_rate)}
           icon={<Activity className="h-4 w-4" />}
-          trend={metrics.churn_rate <= 0.03 ? 'up' : metrics.churn_rate > 0.05 ? 'down' : 'neutral'}
+          trend={metrics.churn_rate != null && metrics.churn_rate <= 0.03 ? 'up' : metrics.churn_rate != null && metrics.churn_rate > 0.05 ? 'down' : 'neutral'}
           isLive={isConnected}
           isLoading={isLoading}
         />

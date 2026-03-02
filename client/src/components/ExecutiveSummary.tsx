@@ -135,18 +135,18 @@ export function ExecutiveSummary({
               <span className="font-medium">Best Scenario</span>
             </div>
             <div className="space-y-2">
-              <p className="text-lg font-semibold">{analysis.best.name}</p>
+              <p className="text-lg font-semibold">{analysis.best?.name ?? 'N/A'}</p>
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-mono">{analysis.best.runway_p50.toFixed(1)} mo</span>
+                  <span className="font-mono">{analysis.best?.runway_p50 != null ? `${analysis.best.runway_p50.toFixed(1)} mo` : 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Target className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-mono">{Math.round(analysis.best.survival_rate * 100)}%</span>
+                  <span className="font-mono">{analysis.best?.survival_rate != null ? `${Math.round(analysis.best.survival_rate * 100)}%` : 'N/A'}</span>
                 </div>
               </div>
-              {analysis.runwayImprovement !== 0 && (
+              {analysis.runwayImprovement != null && analysis.runwayImprovement !== 0 && (
                 <Badge variant={analysis.runwayImprovement > 0 ? 'default' : 'destructive'} className="text-xs">
                   {analysis.runwayImprovement > 0 ? '+' : ''}{analysis.runwayImprovement.toFixed(1)} months vs baseline
                 </Badge>
@@ -174,13 +174,13 @@ export function ExecutiveSummary({
             <div className="space-y-3">
               <div className="text-center">
                 <p className="text-3xl font-mono font-bold">
-                  {analysis.best.runway_p10?.toFixed(0) || (analysis.best.runway_p50 - 3).toFixed(0)}
+                  {analysis.best?.runway_p10 != null ? analysis.best.runway_p10.toFixed(0) : analysis.best?.runway_p50 != null ? (analysis.best.runway_p50 - 3).toFixed(0) : 'N/A'}
                   {' - '}
-                  {analysis.best.runway_p90?.toFixed(0) || (analysis.best.runway_p50 + 5).toFixed(0)}
+                  {analysis.best?.runway_p90 != null ? analysis.best.runway_p90.toFixed(0) : analysis.best?.runway_p50 != null ? (analysis.best.runway_p50 + 5).toFixed(0) : 'N/A'}
                 </p>
                 <p className="text-sm text-muted-foreground">months (P10 - P90)</p>
               </div>
-              <RiskGauge survivalProbability={analysis.best.survival_rate} size="sm" showLabel={false} />
+              <RiskGauge survivalProbability={analysis.best?.survival_rate ?? 0} size="sm" showLabel={false} />
             </div>
           </div>
           
@@ -219,8 +219,8 @@ export function ExecutiveSummary({
                 </p>
                 <p className="text-sm">
                   {analysis.recommendations.join(' and ')} to achieve{' '}
-                  <span className="font-semibold">{analysis.best.runway_p50.toFixed(1)} months</span> of runway
-                  with <span className="font-semibold">{Math.round(analysis.best.survival_rate * 100)}%</span> survival probability.
+                  <span className="font-semibold">{analysis.best?.runway_p50 != null ? `${analysis.best.runway_p50.toFixed(1)} months` : 'N/A'}</span> of runway
+                  with <span className="font-semibold">{analysis.best?.survival_rate != null ? `${Math.round(analysis.best.survival_rate * 100)}%` : 'N/A'}</span> survival probability.
                 </p>
               </div>
             </div>
@@ -230,31 +230,31 @@ export function ExecutiveSummary({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
             <p className="text-2xl font-mono font-bold text-primary">
-              {formatCurrency(analysis.best.end_cash_p50)}
+              {analysis.best?.end_cash_p50 != null ? formatCurrency(analysis.best.end_cash_p50) : 'N/A'}
             </p>
             <p className="text-xs text-muted-foreground">Projected End Cash</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-mono font-bold">
-              {formatCurrency(analysis.best.monthly_burn_p50)}
+              {analysis.best?.monthly_burn_p50 != null ? formatCurrency(analysis.best.monthly_burn_p50) : 'N/A'}
             </p>
             <p className="text-xs text-muted-foreground">Monthly Burn</p>
           </div>
           <div className="text-center">
             <p className={cn(
               'text-2xl font-mono font-bold',
-              analysis.survivalImprovement > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+              (analysis.survivalImprovement ?? 0) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
             )}>
-              {analysis.survivalImprovement > 0 ? '+' : ''}{analysis.survivalImprovement.toFixed(0)}%
+              {analysis.survivalImprovement != null ? `${analysis.survivalImprovement > 0 ? '+' : ''}${analysis.survivalImprovement.toFixed(0)}%` : 'N/A'}
             </p>
             <p className="text-xs text-muted-foreground">Survival Improvement</p>
           </div>
           <div className="text-center">
             <p className={cn(
               'text-2xl font-mono font-bold',
-              analysis.runwayImprovement > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+              (analysis.runwayImprovement ?? 0) > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
             )}>
-              {analysis.runwayImprovement > 0 ? '+' : ''}{analysis.runwayImprovement.toFixed(1)}
+              {analysis.runwayImprovement != null ? `${analysis.runwayImprovement > 0 ? '+' : ''}${analysis.runwayImprovement.toFixed(1)}` : 'N/A'}
             </p>
             <p className="text-xs text-muted-foreground">Runway Gain (months)</p>
           </div>

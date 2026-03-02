@@ -37,8 +37,8 @@ export function EnhancedKPICard({
   testId = "enhanced-kpi-card",
   currency = "USD",
 }: EnhancedKPICardProps) {
-  const formatValue = (value: number | null): string => {
-    if (value === null || value === undefined) return "N/A";
+  const formatValue = (value: number | null | undefined): string => {
+    if (value == null || isNaN(value)) return "N/A";
     switch (format) {
       case "currency":
         return formatCurrencyAbbrev(value, currency);
@@ -237,7 +237,7 @@ export function EnhancedKPICard({
           </span>
         </div>
 
-        {data.changePercent !== null && (
+        {data.changePercent != null && !isNaN(data.changePercent) && (
           <div className={cn("flex items-center gap-1 mt-1 text-xs", getTrendColor())}>
             {getTrendIcon()}
             <span>{data.changePercent > 0 ? "+" : ""}{data.changePercent.toFixed(1)}% vs last month</span>

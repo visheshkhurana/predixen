@@ -69,7 +69,7 @@ export function ActualVsSimulatedComparison({
 }: ActualVsSimulatedComparisonProps) {
   const comparisonData = useMemo(() => {
     return data.map((item) => {
-      if (item.actual === undefined || item.simulated === undefined) {
+      if (item.actual == null || item.simulated == null) {
         return { ...item, variance: null, status: 'pending' };
       }
       const { status, variance } = getVarianceStatus(item.actual, item.simulated, thresholdPct);
@@ -79,7 +79,7 @@ export function ActualVsSimulatedComparison({
 
   const overallAccuracy = useMemo(() => {
     const validPoints = comparisonData.filter(
-      (d) => d.actual !== undefined && d.simulated !== undefined
+      (d) => d.actual != null && d.simulated != null
     );
     if (validPoints.length === 0) return null;
 
@@ -180,7 +180,7 @@ export function ActualVsSimulatedComparison({
                   {row.simulated !== undefined ? formatValue(row.simulated) : '—'}
                 </TableCell>
                 <TableCell className="text-right">
-                  {row.variance !== null ? (
+                  {row.variance != null ? (
                     <span className={row.variance >= 0 ? 'text-green-600' : 'text-red-600'}>
                       {row.variance >= 0 ? '+' : ''}
                       {row.variance.toFixed(1)}%
@@ -231,7 +231,7 @@ export function MultiMetricComparison({ metrics }: MultiMetricComparisonProps) {
   const summaryData = useMemo(() => {
     return metrics.map((metric) => {
       const validPoints = metric.data.filter(
-        (d) => d.actual !== undefined && d.simulated !== undefined
+        (d) => d.actual != null && d.simulated != null
       );
 
       if (validPoints.length === 0) {
@@ -268,12 +268,11 @@ export function MultiMetricComparison({ metrics }: MultiMetricComparisonProps) {
                 {metric.trend === 'down' && <TrendingDown className="h-4 w-4 text-red-500" />}
                 {metric.trend === 'neutral' && <Minus className="h-4 w-4 text-muted-foreground" />}
               </div>
-              {metric.accuracy !== null ? (
+              {metric.accuracy != null ? (
                 <>
                   <div className="text-2xl font-bold">{metric.accuracy.toFixed(0)}%</div>
                   <div className="text-xs text-muted-foreground">
-                    {metric.variance && metric.variance >= 0 ? '+' : ''}
-                    {metric.variance?.toFixed(1)}% variance
+                    {metric.variance != null ? `${metric.variance >= 0 ? '+' : ''}${metric.variance.toFixed(1)}% variance` : 'N/A'}
                   </div>
                 </>
               ) : (

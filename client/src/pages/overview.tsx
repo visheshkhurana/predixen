@@ -199,7 +199,7 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
     });
   }
   
-  if (metrics.ltvCacRatio > 0 && metrics.ltvCacRatio < 2 && metrics.cac > 0 && metrics.ltv > 0) {
+  if (metrics.ltvCacRatio != null && metrics.ltvCacRatio > 0 && metrics.ltvCacRatio < 2 && metrics.cac > 0 && metrics.ltv > 0) {
     alerts.push({
       id: 'ltv-cac-low',
       type: 'warning',
@@ -210,7 +210,7 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
     });
   }
   
-  if (metrics.churnRate > 10) {
+  if (metrics.churnRate != null && metrics.churnRate > 10) {
     alerts.push({
       id: 'churn-high',
       type: 'critical',
