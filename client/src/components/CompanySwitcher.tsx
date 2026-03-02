@@ -213,7 +213,13 @@ export function CompanySwitcher() {
             Add New Company
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Your Companies</DropdownMenuLabel>
+          {isDemoUser && (
+            <div className="px-2 py-1.5 mb-1">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-amber-400" data-testid="text-demo-companies-label">Sample Companies</p>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">These are simulated for demo purposes</p>
+            </div>
+          )}
+          {!isDemoUser && <DropdownMenuLabel>Your Companies</DropdownMenuLabel>}
           {companyList.length === 0 ? (
             <DropdownMenuItem disabled>
               <span className="text-muted-foreground">No companies yet</span>
@@ -237,7 +243,7 @@ export function CompanySwitcher() {
                 data-testid={`company-option-${company.id}`}
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400/60 flex-shrink-0" /> : <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                   <span className="truncate">{company.name}</span>
                   {currentCompany?.id === company.id && (
                     <Check className="h-4 w-4 text-primary flex-shrink-0" />
