@@ -462,7 +462,7 @@ export default function DecisionsPage() {
     if (sections.length === 0) return;
     const parts: string[] = [];
     parts.push(`STRATEGIC BRIEFING — ${currentCompany?.name || ''}`);
-    parts.push(`Prepared ${diagnosisData?.generated_at ? new Date(diagnosisData.generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'today'}`);
+    parts.push(`Last updated: ${diagnosisData?.generated_at ? new Date(diagnosisData.generated_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'today'}`);
     parts.push('');
     sections.forEach(s => {
       parts.push(s.title.toUpperCase());
@@ -551,13 +551,30 @@ export default function DecisionsPage() {
             <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
               {currentCompany.name}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1" data-testid="text-briefing-timestamp">
               {diagnosisData?.generated_at
-                ? `Prepared ${new Date(diagnosisData.generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                ? (() => {
+                    const gen = new Date(diagnosisData.generated_at);
+                    const now = new Date();
+                    const diffMs = now.getTime() - gen.getTime();
+                    const diffMin = Math.floor(diffMs / 60000);
+                    const diffHrs = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+                    const relativeTime = diffMin < 1 ? 'just now' : diffMin < 60 ? `${diffMin}m ago` : diffHrs < 24 ? `${diffHrs}h ago` : `${diffDays}d ago`;
+                    const fullDate = gen.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                    const fullTime = gen.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    return `Last updated ${relativeTime} · ${fullDate} at ${fullTime}`;
+                  })()
                 : 'Founder\u2019s Briefing Document'}
               {isUpdating && (
                 <Badge variant="secondary" className="ml-2 text-[10px]" data-testid="badge-updating">Updating</Badge>
               )}
+              {diagnosisData?.generated_at && !isUpdating && (() => {
+                const diffHrs = Math.floor((Date.now() - new Date(diagnosisData.generated_at).getTime()) / 3600000);
+                return diffHrs >= 24 ? (
+                  <Badge variant="outline" className="ml-2 text-[10px] border-amber-500/50 text-amber-600 dark:text-amber-400" data-testid="badge-stale">Stale</Badge>
+                ) : null;
+              })()}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -604,7 +621,7 @@ export default function DecisionsPage() {
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  {hasBriefing || hasMeaningfulDiagnosis ? 'Regenerate Briefing' : 'Generate Briefing'}
+                  {hasBriefing || hasMeaningfulDiagnosis ? 'Recalculate' : 'Generate Briefing'}
                 </>
               )}
             </Button>
