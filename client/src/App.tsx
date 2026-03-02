@@ -82,7 +82,6 @@ import AdminTeam from "@/pages/admin/team";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
-import CapTablePage from "@/pages/cap-table";
 import InvestorRoomPage from "@/pages/investor-room";
 import KPIBoardPage from "@/pages/kpi-board";
 import ConnectorMarketplacePage from "@/pages/connector-marketplace";
@@ -358,7 +357,7 @@ function Router() {
         {() => <AdminRoute component={MessagingPage} />}
       </Route>
       <Route path="/cap-table">
-        {() => <AuthenticatedRoute component={CapTablePage} />}
+        {() => { window.location.replace("/fundraising"); return null; }}
       </Route>
       <Route path="/fundraising">
         {() => <AuthenticatedRoute component={FundraisingPage} />}

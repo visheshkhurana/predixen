@@ -476,10 +476,10 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/cap-table"}
+                  isActive={location === "/fundraising"}
                   data-testid="nav-cap-table"
                 >
-                  <Link href="/cap-table">
+                  <Link href="/fundraising">
                     <PieChart className="h-4 w-4" />
                     <span>Cap Table</span>
                   </Link>
