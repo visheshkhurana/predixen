@@ -2286,8 +2286,8 @@ Type **help** for a full list of what I can do.`,
                     {latestScenario ? (
                       <>
                         <p className="font-medium text-foreground">{latestScenario.name}</p>
-                        <p>Pricing: {latestScenario.pricing_change_pct > 0 ? '+' : ''}{latestScenario.pricing_change_pct}%</p>
-                        <p>{latestScenario.burn_reduction_pct < 0 ? `Burn Increase: +${Math.abs(latestScenario.burn_reduction_pct)}%` : `Burn Cut: ${latestScenario.burn_reduction_pct}%`}</p>
+                        <p>Pricing: {latestScenario.pricing_change_pct != null ? `${latestScenario.pricing_change_pct > 0 ? '+' : ''}${latestScenario.pricing_change_pct}%` : 'N/A'}</p>
+                        <p>{latestScenario.burn_reduction_pct != null ? (latestScenario.burn_reduction_pct < 0 ? `Burn Increase: +${Math.abs(latestScenario.burn_reduction_pct)}%` : `Burn Cut: ${latestScenario.burn_reduction_pct}%`) : 'Burn: N/A'}</p>
                       </>
                     ) : (
                       <div className="space-y-2">
@@ -2319,7 +2319,7 @@ Type **help** for a full list of what I can do.`,
                     {simulation ? (
                       <>
                         <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50 != null && isRunwaySustainable(simulation.runway.p50) ? 'Sustainable' : `${simulation.runway?.p50?.toFixed(1)} mo`}</span></p>
-                        <p>Survival 18m: <span className="font-mono font-medium">{typeof simulation.survival?.['18m'] === 'number' ? Number(simulation.survival['18m']).toFixed(1) : simulation.survival?.['18m']}%</span></p>
+                        <p>Survival 18m: <span className="font-mono font-medium">{simulation.survival?.['18m'] != null ? `${typeof simulation.survival['18m'] === 'number' ? Number(simulation.survival['18m']).toFixed(1) : simulation.survival['18m']}%` : 'N/A'}</span></p>
                       </>
                     ) : (
                       <p className="text-muted-foreground">No simulation run yet</p>
