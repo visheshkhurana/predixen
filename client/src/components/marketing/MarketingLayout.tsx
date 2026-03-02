@@ -45,6 +45,7 @@ function NavLink({ href, label, onClick }: { href: string; label: string; onClic
       href={href}
       onClick={onClick}
       data-testid={`nav-link-${label.toLowerCase()}`}
+      aria-current={isActive ? "page" : undefined}
       className={`text-sm font-medium transition-colors hover:text-foreground ${
         isActive ? "text-foreground" : "text-muted-foreground"
       }`}
@@ -197,12 +198,23 @@ function Footer() {
   );
 }
 
+function MobileStickyCTA() {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-[9998] border-t bg-background/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden" data-testid="mobile-sticky-cta">
+      <Button className="w-full" size="lg" asChild>
+        <Link href="/auth">Get Started Free</Link>
+      </Button>
+    </div>
+  );
+}
+
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <Header />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 pb-16 md:pb-0">{children}</main>
       <Footer />
+      <MobileStickyCTA />
     </div>
   );
 }

@@ -1,0 +1,139 @@
+Here’s a fresh audit of FounderConsole (based on what I’m seeing across the marketing pages, including **Features** as the “deepest” content). I’m focusing on **UI hierarchy, conversion, content clarity, and performance/structure**.
+
+## 1) Navigation & CTA strategy (site-wide)
+
+**What’s good**
+
+* Clean nav items: Features / Pricing / About / Blog / FAQ.
+* Clear CTAs: **Sign In** vs **Get Started Free**.
+
+**Opportunities**
+
+* Decide a single “primary outcome” on all marketing pages:
+
+  * If PLG-first: primary is **Get Started Free**, secondary **Watch Demo**.
+* Consider a persistent “sticky CTA strip” on mobile (one button only) to reduce friction.
+
+**Fix**
+
+* Make primary button visually dominant; secondary low-contrast outline.
+* If `/auth` is the gate, use guardrails: “2-minute setup • Connect Stripe • baseline forecast”.
+
+---
+
+## 2) Features page audit (current state)
+
+### 2.1 Hero / lead section
+
+**Current**
+
+* Headline: “Every Tool Founders Need to Survive and Scale”
+* Supporting copy: positions as a full financial intelligence stack.
+
+**Issue**
+
+* This sounds like “full platform” but doesn’t immediately translate into “I can make a decision right now” (runway date, hiring timing, fundraising size).
+
+**Fix**
+Add a single outcome-oriented sentence right after the headline:
+
+* “Know your runway confidence band and the tradeoffs of hiring/fundraising in minutes.”
+
+### 2.2 Simulation Engine section
+
+**Current**
+
+* Strong promise: “Run thousands of Monte Carlo simulations… See P10, P50, P90.”
+* Feature bullets: scenario comparison, sensitivity analysis, tornado charts, etc.
+
+**Issues**
+
+* “Simulation Engine” appears twice in the DOM (possibly duplicated headings/cards). That can confuse users and hurts readability/accessibility.
+* All bullets are “power features”—most founders need the “why should I care?” framing.
+
+**Fix**
+
+* Remove duplicate headings; if it’s meant to be tabs/cards, make them visually distinct.
+* Rephrase each bullet as a benefit:
+
+  * “Tornado charts: instantly identify the top 3 risk drivers.”
+
+### 2.3 AI Copilot section
+
+**Current**
+
+* Positioning: “plain English… grounded, data-backed answers… seasoned CFO.”
+
+**Issues**
+
+* Content claims “real-time web research.” That’s a high-stakes claim for accuracy/trust; needs a credibility anchor and boundary (sources, limitations, update cadence).
+* Copilot should have explicit “audit trail” design: “why did we recommend X?” and “what assumptions changed?”
+
+**Fix**
+Add explainability UX:
+
+* “Why this answer: #1 driver, #2 driver”
+* “Data freshness: last sync”
+
+---
+
+## 3) Content balance: signal vs noise
+
+**Issue**
+
+* You have lots of high-value features, but the page may feel like “feature supermarket.”
+* Founders decide emotionally first: “Do I trust you?” and “Will this reduce my risk?”
+
+**Fix**
+
+* Add 1–2 case snippets:
+
+  * “Delay hire by 3 weeks → risk reduced from 42% to 18% (demo example)”
+* Add “What’s included in 5 minutes” on Features too (not just Pricing/Home).
+
+---
+
+## 4) Storytelling & persuasion gaps (site-wide)
+
+**Missing**
+
+* Visual proof: dashboard screenshot/animation.
+* “Before/After” founder narrative:
+
+  * Before: spreadsheets, noisy board conversations.
+  * After: confidence bands + explainability + consistent decision language.
+
+**Fix**
+
+* Add a single high-quality product preview above the fold (no stock imagery).
+* Add an interactive block (Scenario Compare demo) on Home/Features to show the “aha” moment.
+
+---
+
+## 5) Technical/performance & crawlability
+
+**Observed**
+
+* The site feels heavy/slow at times. That often correlates with:
+
+  * Large bundle, too many animations, expensive scripts, or heavy background assets.
+
+**Fix**
+
+* Audit bundle size & perf:
+
+  * Lazy-load non-critical sections (blog list, footer, heavy visuals).
+  * Compress images & avoid large video auto-load.
+* For SEO in an SPA: prerendering marketing routes is a high-ROI step (we can integrate in your Vite config).
+
+---
+
+## Quick “highest ROI” punch list
+
+1. Remove duplicate headings and tighten feature sections.
+2. Add outcome framing: “P10/P50/P90 → defendable decisions.”
+3. Ship a product preview + interactive Scenario Compare.
+4. Add explainability by design: “why this recommendation” + assumptions.
+5. Optimize performance and prerender marketing routes for crawling.
+
+If you want, tell me your **current hero screenshot availability** (yes/no) and your **top 2 competitor sites** you want to benchmark against—I’ll re-audit the home/feature layout against those benchmarks and produce a conversion-focused rewrite section-by-section.

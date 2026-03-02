@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { ScenarioCompare } from "@/components/ScenarioCompare";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import {
@@ -11,33 +12,34 @@ import {
   FileText,
   ArrowRight,
   CheckCircle,
+  TrendingUp,
 } from "lucide-react";
 
 const features = [
   {
-    icon: BarChart3,
+    icon: TrendingUp,
     title: "Real-time forecasting",
     headline: "Your forecast stays current. Automatically.",
     description:
       "Connect revenue, expense, and payroll sources to reduce manual work and keep forecasts current. No more stale spreadsheets or quarterly updates.",
     bullets: [
-      "Holt-Winters exponential smoothing + linear regression",
-      "24-month forward projections updated in real time",
-      "Multi-currency support with automatic conversion",
-      "Anomaly alerts when actuals deviate from forecast",
+      "Holt-Winters smoothing keeps projections accurate as data flows in",
+      "24-month forward view so you catch problems early",
+      "Multi-currency support — no manual conversion tables",
+      "Anomaly alerts flag deviations before they compound",
     ],
   },
   {
     icon: BarChart3,
-    title: "Monte Carlo confidence intervals",
+    title: "Monte Carlo simulation",
     headline: "Probability replaces guesswork.",
     description:
       "See P10/P50/P90 outcomes so risk becomes measurable. Run thousands of simulations to understand the range of what could happen — not just a single best guess.",
     bullets: [
-      "100–10,000 iteration simulations",
-      "Custom event modeling and sensitivity analysis",
-      "Scenario versioning and comparison",
-      "Before/after delta cards with payback calculations",
+      "100–10,000 iterations reveal the full distribution of outcomes",
+      "Sensitivity analysis shows which lever moves risk most",
+      "Tornado charts instantly identify your top 3 risk drivers",
+      "Before/after delta cards quantify the impact of each decision",
     ],
   },
   {
@@ -45,25 +47,25 @@ const features = [
     title: "Scenario comparison",
     headline: "Compare decisions with clear tradeoffs.",
     description:
-      "Compare decisions like hiring timing, fundraising size, pricing changes, and investment bets. See ranked recommendations with confidence scores.",
+      "Compare decisions like hiring timing, fundraising size, pricing changes, and investment bets. See ranked recommendations with confidence scores so you know why one path beats another.",
     bullets: [
-      "Side-by-side scenario comparison",
-      "GO / CONDITIONAL / NO-GO verdicts",
-      "Second-order effects detection",
-      "Risk-adjusted decision scoring",
+      "Side-by-side comparison with GO / CONDITIONAL / NO-GO verdicts",
+      "Second-order effects detection catches downstream surprises",
+      "Risk-adjusted scoring lets you weigh speed vs. safety",
+      "Scenario versioning so you can revisit past analyses",
     ],
   },
   {
     icon: Bot,
-    title: "Explainable AI decisions",
+    title: "Explainable AI copilot",
     headline: "Defend choices to boards and investors.",
     description:
-      "Narratives explain what drives risk so you can defend choices. Multi-LLM copilot uses GPT-4, Claude, and Gemini with web research via Perplexity.",
+      "Multi-LLM copilot uses GPT-4, Claude, and Gemini to answer strategic questions. Perplexity-powered web research adds market benchmarks. Every answer shows its reasoning.",
     bullets: [
-      "Strategic briefings with executive summaries",
-      "Data-backed recommendations with citations",
-      "Conversational Q&A about your financials",
-      "Market benchmark comparisons via web research",
+      "\"Why this answer\" — top drivers + assumptions are always visible",
+      "Data freshness indicator shows when sources last synced",
+      "Citations link back to the underlying data or market source",
+      "Conversational Q&A — ask in plain English, get structured output",
     ],
   },
   {
@@ -71,12 +73,12 @@ const features = [
     title: "Investor-ready reporting",
     headline: "Turn insight into consistent summaries.",
     description:
-      "Reduce update-time drag. Generate investor memos, data room checklists, and fundraising materials that build trust through transparency.",
+      "Reduce update-time drag. Generate investor memos, data room checklists, and fundraising materials that build trust through transparency and consistent language.",
     bullets: [
-      "Automated investor memo generation",
+      "Automated investor memo generation from simulation results",
+      "Cap table management with dilution modeling and SAFE conversion",
       "Data room checklist with completion tracking",
-      "Cap table management with dilution modeling",
-      "SAFE/Note conversion modeling",
+      "Fundraising pipeline to track investor conversations",
     ],
   },
   {
@@ -84,21 +86,28 @@ const features = [
     title: "37 data connectors",
     headline: "Connect everything. Auto-sync.",
     description:
-      "QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and 31 more. One-click connections with real API integrations — not CSV imports.",
+      "QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and 31 more. Real OAuth2 integrations — not CSV imports or screen scraping.",
     bullets: [
-      "Real OAuth2 integrations (not screen scraping)",
-      "Automatic data refresh and sync",
-      "Multi-currency handling across sources",
-      "Encrypted credential storage",
+      "One-click OAuth connections with automatic data refresh",
+      "Multi-currency handling across all connected sources",
+      "Encrypted credential storage — your keys never leave our vault",
+      "New connectors added monthly based on founder requests",
     ],
   },
+];
+
+const fiveMinuteItems = [
+  "Baseline forecast from connected sources",
+  "One scenario simulation with P10/P50/P90 confidence bands",
+  "AI narrative explaining your top risk drivers",
+  "An investor-ready summary draft you can share immediately",
 ];
 
 export default function MarketingFeaturesPage() {
   useSEO({
     title: "Features | FounderConsole",
     description:
-      "FounderConsole features: real-time forecasting, Monte Carlo confidence intervals, scenario comparison, explainability, and investor-ready reporting.",
+      "Real-time forecasting, Monte Carlo simulation, explainable AI copilot, scenario comparison, and investor-ready reporting — built for founders.",
   });
 
   return (
@@ -109,14 +118,17 @@ export default function MarketingFeaturesPage() {
             Every tool founders need to survive and scale
           </h1>
           <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Built for founders who make decisions under uncertainty. Forecast, simulate, compare, explain, and report — all in one place.
+            Know your runway confidence band and the tradeoffs of hiring, fundraising, and pricing — in minutes.
+          </p>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            2-minute setup &middot; Connect Stripe &middot; Get a baseline forecast
           </p>
         </div>
       </section>
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="space-y-12">
+          <div className="space-y-16">
             {features.map((f, i) => (
               <div
                 key={f.title}
@@ -147,6 +159,45 @@ export default function MarketingFeaturesPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-12">
+          <div className="rounded-xl border bg-card p-6 md:p-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Real example</p>
+            <h3 className="mt-2 text-lg font-semibold text-foreground" data-testid="text-case-snippet">
+              Delay a hire by 3 weeks → risk drops from 42% to 18%
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground max-w-2xl">
+              A seed-stage SaaS team used FounderConsole to compare hiring timelines. The simulation showed that
+              pushing a senior hire by 3 weeks extended runway past their next fundraise milestone, cutting negative-runway
+              probability by more than half — without slowing product velocity.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t">
+        <ScenarioCompare />
+      </section>
+
+      <section className="border-t">
+        <div className="mx-auto max-w-6xl px-4 py-12">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-five-min-heading">
+              What you get in the first 5 minutes
+            </h2>
+            <p className="mt-2 text-muted-foreground">Connect one source. Get a complete picture.</p>
+          </div>
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+            {fiveMinuteItems.map((item) => (
+              <li key={item} className="flex gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 

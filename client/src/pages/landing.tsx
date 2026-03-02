@@ -101,6 +101,9 @@ export default function LandingPage() {
               <Link href="/demo">Watch Demo</Link>
             </Button>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground" data-testid="text-hero-guardrail">
+            2-minute setup &middot; Connect Stripe &middot; Baseline forecast
+          </p>
 
           <div className="mt-10 rounded-lg border bg-card/50 p-4" data-testid="section-integrations">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Powering insights from</p>
@@ -141,6 +144,40 @@ export default function LandingPage() {
                 <p className="mt-2 text-sm text-muted-foreground">{f.description}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t bg-card/30">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-before-after-heading">
+              Before &amp; after FounderConsole
+            </h2>
+          </div>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6" data-testid="card-before">
+              <p className="text-xs font-semibold uppercase tracking-wide text-destructive">Before</p>
+              <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+                {["Runway lives in a spreadsheet nobody trusts", "Board conversations driven by gut feeling", "Fundraising timing based on anecdote", "Every scenario is a new tab in Google Sheets"].map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-0.5 shrink-0 text-destructive/60" aria-hidden="true">✕</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-6" data-testid="card-after">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">After</p>
+              <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+                {["Confidence bands replace single-point guesses", "Decisions backed by explainable AI narratives", "Simulation shows the cost of waiting vs. acting now", "Consistent decision language across board, team, investors"].map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
