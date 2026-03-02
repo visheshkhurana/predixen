@@ -2284,11 +2284,22 @@ Type **help** for a full list of what I can do.`,
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
                     {latestScenario ? (
-                      <>
-                        <p className="font-medium text-foreground">{latestScenario.name}</p>
-                        <p>Pricing: {latestScenario.pricing_change_pct != null ? `${latestScenario.pricing_change_pct > 0 ? '+' : ''}${latestScenario.pricing_change_pct}%` : 'N/A'}</p>
-                        <p>{latestScenario.burn_reduction_pct != null ? (latestScenario.burn_reduction_pct < 0 ? `Burn Increase: +${Math.abs(latestScenario.burn_reduction_pct)}%` : `Burn Cut: ${latestScenario.burn_reduction_pct}%`) : 'Burn: N/A'}</p>
-                      </>
+                      (() => {
+                        const inputs = latestScenario.inputs || latestScenario;
+                        const pricing = inputs.pricing_change_pct;
+                        const burn = inputs.burn_reduction_pct;
+                        const growth = inputs.growth_uplift_pct;
+                        return (
+                          <>
+                            <p className="font-medium text-foreground" data-testid="text-scenario-name">{latestScenario.name}</p>
+                            {pricing != null && <p data-testid="text-scenario-pricing">Pricing: {pricing > 0 ? '+' : ''}{pricing}%</p>}
+                            {burn != null && <p data-testid="text-scenario-burn">{burn < 0 ? `Burn Increase: +${Math.abs(burn)}%` : `Burn Cut: ${burn}%`}</p>}
+                            {growth != null && growth !== 0 && <p data-testid="text-scenario-growth">Growth: +{growth}%</p>}
+                            {pricing == null && burn == null && growth == null && <p className="text-xs">Custom scenario</p>}
+                          </>
+                        );
+                      })()
+                    
                     ) : (
                       <div className="space-y-2">
                         <p className="text-amber-600 dark:text-amber-400 font-medium">No scenario selected</p>
@@ -2317,10 +2328,16 @@ Type **help** for a full list of what I can do.`,
                   </CardHeader>
                   <CardContent className="text-sm">
                     {simulation ? (
-                      <>
-                        <p>Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50 != null && isRunwaySustainable(simulation.runway.p50) ? 'Sustainable' : `${simulation.runway?.p50?.toFixed(1)} mo`}</span></p>
-                        <p>Survival 18m: <span className="font-mono font-medium">{simulation.survival?.['18m'] != null ? `${typeof simulation.survival['18m'] === 'number' ? Number(simulation.survival['18m']).toFixed(1) : simulation.survival['18m']}%` : 'N/A'}</span></p>
-                      </>
+                      (() => {
+                        const survival = simulation.survival || simulation.survivalProbability;
+                        const s18 = survival?.['18m'];
+                        return (
+                          <>
+                            <p data-testid="text-sim-runway">Runway P50: <span className="font-mono font-medium">{simulation.runway?.p50 != null && isRunwaySustainable(simulation.runway.p50) ? 'Sustainable' : `${simulation.runway?.p50?.toFixed(1) ?? 'N/A'} mo`}</span></p>
+                            <p data-testid="text-sim-survival">Survival 18m: <span className="font-mono font-medium">{s18 != null ? `${typeof s18 === 'number' ? s18.toFixed(1) : s18}%` : 'N/A'}</span></p>
+                          </>
+                        );
+                      })()
                     ) : (
                       <p className="text-muted-foreground">No simulation run yet</p>
                     )}
