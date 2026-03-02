@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { ScenarioCompare } from "@/components/ScenarioCompare";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import {
@@ -179,6 +180,10 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
+      </section>
+
+      <section className="border-t">
+        <ScenarioCompare />
       </section>
 
       <section className="border-t">

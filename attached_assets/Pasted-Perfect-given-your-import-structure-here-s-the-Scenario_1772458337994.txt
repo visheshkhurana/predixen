@@ -1,0 +1,196 @@
+Perfect—given your import structure, here’s the **ScenarioCompare** component wired to **shadcn/ui** paths and the `cn` helper exactly as you described. You can drop this into `src/components/ScenarioCompare.tsx` and it’ll align with your existing imports.
+
+## `src/components/ScenarioCompare.tsx`
+
+```tsx
+import React from "react";
+import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+
+type Scenario = {
+  id: string;
+  label: string;
+  description: string;
+  baselineRisk: number; // probability of negative runway by month 12
+  bestCaseRisk: number;
+};
+
+const scenarios: Scenario[] = [
+  {
+    id: "hire-april",
+    label: "Hire in April",
+    description: "Faster execution, higher burn earlier.",
+    baselineRisk: 0.42,
+    bestCaseRisk: 0.22,
+  },
+  {
+    id: "hire-june",
+    label: "Hire in June",
+    description: "Delay headcount to reduce risk; speed slows slightly.",
+    baselineRisk: 0.30,
+    bestCaseRisk: 0.16,
+  },
+  {
+    id: "raise-now",
+    label: "Raise now",
+    description: "Liquidity increases immediately; risk drops quickly.",
+    baselineRisk: 0.18,
+    bestCaseRisk: 0.10,
+  },
+];
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+function pct(n: number) {
+  return `${Math.round(n * 100)}%`;
+}
+
+export function ScenarioCompare() {
+  const [scenarioId, setScenarioId] = React.useState<Scenario["id"]>("hire-april");
+  const [confidence, setConfidence] = React.useState<number>(0.6); // P50 default
+
+  const scenario = scenarios.find((s) => s.id === scenarioId)!;
+  const risk = lerp(scenario.baselineRisk, scenario.bestCaseRisk, confidence);
+
+  const confidenceLabel = React.useMemo(() => {
+    if (confidence < 0.2) return "P10 (cautious worst-case)";
+    if (confidence < 0.6) return "P50 (most likely)";
+    return "P90 (optimistic best-case)";
+  }, [confidence]);
+
+  return (
+    <section className="py-10 md:py-12">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="max-w-3xl">
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Scenario compare demo</h2>
+          <p className="mt-2 text-slate-600">
+            Drag the confidence to see how risk changes. This is a simplified demo—your real model will use live data and full simulations.
+          </p>
+        </div>
+
+        <div className="mt-8 grid gap-6 md:grid-cols-[1fr,1.2fr]">
+          {/* Left column */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Pick a scenario</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  One click to compare decisions. Great for founders evaluating headcount + fundraising timing.
+                </p>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {scenarios.map((s) => {
+                  const active = s.id === scenario.id;
+                  return (
+                    <button
+                      key={s.id}
+                      className={cn(
+                        "w-full rounded-xl border px-4 py-3 text-left transition",
+                        active
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-border bg-background hover:border-slate-300"
+                      )}
+                      onClick={() => setScenarioId(s.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-900">{s.label}</span>
+                        <Badge variant={active ? "default" : "outline"}>{active ? "Active" : "Compare"}</Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">{s.description}</p>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Confidence slider</CardTitle>
+                <p className="text-sm text-muted-foreground">{confidenceLabel}</p>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <Slider
+                  defaultValue={[confidence * 100]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={(vals) => setConfidence((vals[0] ?? 0) / 100)}
+                  aria-label="Confidence level"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Risk output</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Estimated probability of running negative runway by month 12 (demo).
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg border bg-slate-50 p-4">
+                    <p className="text-slate-500">Baseline</p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-900">{pct(scenario.baselineRisk)}</p>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                    <p className="text-slate-500">Current (demo)</p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-900">{pct(risk)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-lg border bg-slate-50 p-4">
+                  <p className="text-sm text-slate-700">
+                    In the real product, this section becomes investor-ready explainability: “this scenario is risky
+                    because burn accelerates before revenue, headcount timing increases volatility, and runway confidence drops.”
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="pt-6">
+                <h3 className="text-base font-semibold text-slate-900">Try it with real data</h3>
+                <p className="mt-2 text-sm text-slate-700">
+                  Connect Stripe/QuickBooks/Gusto to run real simulations and get an investor-ready summary.
+                </p>
+                <div className="mt-4 flex gap-3">
+                  <Button asChild>
+                    <Link href="/auth">Get Started Free</Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/demo">Watch Demo</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+```
+
+### Wire it into the Home page
+
+```tsx
+import { ScenarioCompare } from "@/components/ScenarioCompare";
+
+// later in the page:
+<ScenarioCompare />
+```
+
+---
+
+If you want, tell me your **primary home page layout component** (e.g., `Hero`, `Section`, `PageContainer`) and I’ll slot this in precisely with consistent spacing + titles, and build a matching **Feature tabs** block using shadcn `Tabs` + `Card`.
