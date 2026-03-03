@@ -18,10 +18,13 @@ import { CrossPageIntelligence } from '@/components/CrossPageIntelligence';
 import { apiRequest } from '@/lib/queryClient';
 import { 
   Plus, DollarSign, Users, TrendingUp, PieChart, 
-  Calculator, Play, FileText, Building2, Percent
+  Calculator, Play, FileText, Building2, Percent, Target
 } from 'lucide-react';
 import { EmptyStateCard } from '@/components/ui/empty-state';
 import { trackEvent } from '@/lib/posthog';
+import { ReadinessScore } from '@/components/fundraising/ReadinessScore';
+import { RecommendationsList } from '@/components/fundraising/RecommendationsList';
+import { RaiseWindow } from '@/components/fundraising/RaiseWindow';
 
 interface CapTable {
   id: string;
@@ -95,6 +98,11 @@ export default function FundraisingPage() {
       const res = await apiRequest('GET', `/api/companies/${selectedCompany?.id}/fundraising/rounds`);
       return res.json();
     },
+    enabled: !!selectedCompany?.id,
+  });
+
+  const { data: readinessData, isLoading: readinessLoading } = useQuery<any>({
+    queryKey: ['/api/companies', selectedCompany?.id, 'fundraising', 'readiness'],
     enabled: !!selectedCompany?.id,
   });
 
@@ -222,6 +230,10 @@ export default function FundraisingPage() {
           <TabsTrigger value="simulate" data-testid="tab-simulate">
             <Calculator className="h-4 w-4 mr-2" />
             Simulate
+          </TabsTrigger>
+          <TabsTrigger value="readiness" data-testid="tab-readiness">
+            <Target className="h-4 w-4 mr-2" />
+            Readiness
           </TabsTrigger>
         </TabsList>
 
@@ -370,6 +382,39 @@ export default function FundraisingPage() {
                 </Card>
               ))}
             </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="readiness" className="space-y-6" data-testid="tab-content-readiness">
+          {readinessLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-48 w-full" />
+              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </div>
+          ) : readinessData ? (
+            <div className="space-y-6">
+              <ReadinessScore data={{
+                overall: readinessData.overall ?? 0,
+                breakdown: readinessData.breakdown ?? { runway: 0, growth: 0, unit_economics: 0, market_timing: 60, narrative_quality: 0 },
+                status: readinessData.status ?? 'not-ready',
+              }} />
+              <RecommendationsList recommendations={readinessData.recommendations ?? []} />
+              {readinessData.raiseWindow && selectedCompany && (
+                <RaiseWindow
+                  raiseWindow={readinessData.raiseWindow}
+                  companyId={selectedCompany.id}
+                />
+              )}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                <Target className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">Readiness Score Unavailable</h3>
+                <p>Upload financial data and run a Truth Scan to generate your fundraising readiness score.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useFounderStore } from "@/store/founderStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,22 +10,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { 
-  AlertTriangle, 
-  AlertCircle, 
-  Info, 
-  CheckCircle, 
-  TrendingUp, 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  CheckCircle,
+  TrendingUp,
   TrendingDown,
   Activity,
   RefreshCw,
@@ -34,21 +32,42 @@ import {
   ArrowRight,
   HelpCircle,
   Minus,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Loader2,
+  Zap,
+  Eye,
+  FlaskConical,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
-interface Alert {
+interface SmartAlert {
   id: string;
   type: string;
-  severity: "info" | "warning" | "critical";
-  metric: string;
+  severity: "critical" | "warning" | "info" | "success";
+  title: string;
   message: string;
-  details: Record<string, unknown>;
-  created_at: string;
-  is_active: boolean;
+  metric: string;
+  currentValue: number;
+  previousValue: number;
+  changePercent: number;
+  timestamp: string;
+  acknowledged: boolean;
+  suggestedAction: string;
+}
+
+interface AlertRule {
+  id: string;
+  type: string;
+  enabled: boolean;
+  threshold: number;
+  label: string;
+  description: string;
 }
 
 interface DriverHealth {
@@ -63,43 +82,32 @@ interface DriverHealth {
 }
 
 interface AlertsResponse {
-  alerts: Alert[];
+  alerts: SmartAlert[];
+  total: number;
+  unacknowledged: number;
+}
+
+interface OldAlertsResponse {
+  alerts: { id: string; type: string; severity: "info" | "warning" | "critical"; metric: string; message: string; details: Record<string, unknown>; created_at: string; is_active: boolean }[];
   health: Record<string, DriverHealth>;
   total_alerts: number;
   critical_count: number;
   warning_count: number;
 }
 
-interface AlertThreshold {
-  id: string;
-  metric: string;
-  operator: "lt" | "gt" | "lte" | "gte";
-  value: number;
-  severity: "warning" | "critical";
-  enabled: boolean;
-}
-
 const severityIcons = {
   info: <Info className="h-4 w-4" />,
+  success: <CheckCircle className="h-4 w-4" />,
   warning: <AlertTriangle className="h-4 w-4" />,
   critical: <AlertCircle className="h-4 w-4" />,
 };
 
 const severityColors = {
   info: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  success: "bg-green-500/10 text-green-500 border-green-500/20",
   warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
   critical: "bg-red-500/10 text-red-500 border-red-500/20",
 };
-
-const DEFAULT_THRESHOLDS: AlertThreshold[] = [
-  { id: "1", metric: "runway_months", operator: "lt", value: 6, severity: "critical", enabled: true },
-  { id: "2", metric: "runway_months", operator: "lt", value: 12, severity: "warning", enabled: true },
-  { id: "3", metric: "burn_multiple", operator: "gt", value: 2.0, severity: "warning", enabled: true },
-  { id: "4", metric: "burn_multiple", operator: "gt", value: 3.0, severity: "critical", enabled: true },
-  { id: "5", metric: "revenue_growth_mom", operator: "lt", value: 5, severity: "warning", enabled: true },
-  { id: "6", metric: "gross_margin", operator: "lt", value: 0.5, severity: "warning", enabled: true },
-  { id: "7", metric: "churn_rate", operator: "gt", value: 0.05, severity: "warning", enabled: true },
-];
 
 const METRIC_DISPLAY_NAMES: Record<string, string> = {
   runway_months: "Runway (Months)",
@@ -110,28 +118,33 @@ const METRIC_DISPLAY_NAMES: Record<string, string> = {
   net_burn: "Net Burn",
   mrr: "Monthly Recurring Revenue",
   arr: "Annual Recurring Revenue",
+  burn_rate: "Burn Rate",
+  monthly_burn: "Monthly Burn",
+  growth_rate: "Growth Rate",
 };
 
-const OPERATOR_LABELS: Record<string, string> = {
-  lt: "less than",
-  gt: "greater than",
-  lte: "less than or equal to",
-  gte: "greater than or equal to",
-};
+const DEFAULT_ALERT_RULES: AlertRule[] = [
+  { id: "burn-spike", type: "burn_spike", enabled: true, threshold: 15, label: "Burn Spike", description: "Alert when monthly burn increases by more than threshold %" },
+  { id: "mrr-drop", type: "mrr_drop", enabled: true, threshold: 5, label: "MRR Drop", description: "Alert when MRR drops by more than threshold %" },
+  { id: "churn-spike", type: "churn_spike", enabled: true, threshold: 50, label: "Churn Spike", description: "Alert when churn increases by more than threshold %" },
+  { id: "runway-warning", type: "runway_warning", enabled: true, threshold: 12, label: "Runway Warning", description: "Alert when runway drops below threshold months" },
+  { id: "runway-caution", type: "runway_caution", enabled: true, threshold: 18, label: "Runway Caution", description: "Alert when runway drops below threshold months" },
+  { id: "growth-slowdown", type: "growth_slowdown", enabled: true, threshold: 30, label: "Growth Slowdown", description: "Alert when growth rate drops by more than threshold %" },
+];
 
 function Sparkline({ data, color = "currentColor", height = 24 }: { data: number[]; color?: string; height?: number }) {
   if (!data || data.length < 2) return null;
-  
+
   const chartData = data.map((value, index) => ({ value, index }));
-  
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData}>
-        <Line 
-          type="monotone" 
-          dataKey="value" 
-          stroke={color} 
-          strokeWidth={1.5} 
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke={color}
+          strokeWidth={1.5}
           dot={false}
         />
       </LineChart>
@@ -168,7 +181,7 @@ function UnknownStatusCard() {
         <div className="space-y-2">
           <h3 className="text-lg font-semibold">Status Unknown</h3>
           <p className="text-muted-foreground max-w-md mx-auto">
-            We need financial data to assess your company's health. 
+            We need financial data to assess your company's health.
             Complete the Data Input or run a Truth Scan to get started.
           </p>
         </div>
@@ -221,7 +234,7 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
       {keyMetrics.map((metric) => {
         const health = drivers[metric.key];
         const hasData = health && health.status !== "unknown";
-        
+
         return (
           <Card key={metric.key} data-testid={`health-metric-${metric.key}`}>
             <CardContent className="py-4">
@@ -233,7 +246,7 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
                   <Badge variant="secondary" className="text-xs">No data</Badge>
                 )}
               </div>
-              
+
               {hasData ? (
                 <>
                   <div className="flex items-end justify-between gap-4">
@@ -255,11 +268,11 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
                       )}
                     </div>
                   </div>
-                  
+
                   {health.history && health.history.length >= 2 && (
                     <div className="mt-3 h-6">
-                      <Sparkline 
-                        data={health.history} 
+                      <Sparkline
+                        data={health.history}
                         color={getSparklineColor(health.status)}
                       />
                     </div>
@@ -280,157 +293,243 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
   );
 }
 
-function ThresholdConfigModal({ thresholds, onSave }: { thresholds: AlertThreshold[]; onSave: (thresholds: AlertThreshold[]) => void }) {
-  const [localThresholds, setLocalThresholds] = useState<AlertThreshold[]>(thresholds);
-  const { toast } = useToast();
+function AlertCard({ alert, companyId, onAcknowledge }: { alert: SmartAlert; companyId: number; onAcknowledge: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
 
-  const handleToggle = (id: string) => {
-    setLocalThresholds(prev => 
-      prev.map(t => t.id === id ? { ...t, enabled: !t.enabled } : t)
-    );
-  };
-
-  const handleValueChange = (id: string, value: string) => {
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      setLocalThresholds(prev =>
-        prev.map(t => t.id === id ? { ...t, value: numValue } : t)
-      );
-    }
-  };
-
-  const handleSave = () => {
-    onSave(localThresholds);
-    toast({
-      title: "Thresholds Saved",
-      description: "Your alert thresholds have been updated.",
-    });
-  };
-
-  const handleReset = () => {
-    setLocalThresholds(DEFAULT_THRESHOLDS);
+  const formatMetricChange = (current: number, previous: number, changePercent: number) => {
+    const direction = changePercent >= 0 ? "+" : "";
+    return `${direction}${changePercent.toFixed(1)}%`;
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" data-testid="button-configure-thresholds">
-          <Settings className="h-4 w-4 mr-2" />
-          Configure Thresholds
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Alert Threshold Configuration</DialogTitle>
-          <DialogDescription>
-            Customize when alerts are triggered based on your specific needs. 
-            Configure thresholds for key metrics to receive timely warnings.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Info className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">How it works</span>
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <Card className={cn("border", severityColors[alert.severity])} data-testid={`card-alert-${alert.id}`}>
+        <CardContent className="py-4">
+          <div className="flex items-start gap-4">
+            <div className={cn("mt-0.5 shrink-0", severityColors[alert.severity].split(" ")[1])}>
+              {severityIcons[alert.severity]}
             </div>
-            <p className="text-sm text-muted-foreground">
-              When a metric crosses a threshold, an alert is created. Critical alerts indicate 
-              urgent issues requiring immediate attention. Warning alerts highlight potential concerns.
-            </p>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Badge
+                  variant={alert.severity === "critical" ? "destructive" : "outline"}
+                  className={cn(
+                    "text-xs",
+                    alert.severity === "warning" && "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+                    alert.severity === "info" && "bg-blue-500/10 text-blue-500 border-blue-500/20",
+                    alert.severity === "success" && "bg-green-500/10 text-green-500 border-green-500/20"
+                  )}
+                >
+                  {alert.severity}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {alert.type.replace(/_/g, " ")}
+                </Badge>
+                {alert.acknowledged && (
+                  <Badge variant="secondary" className="text-xs bg-muted">
+                    Acknowledged
+                  </Badge>
+                )}
+              </div>
+              <p className="font-medium" data-testid={`text-alert-title-${alert.id}`}>{alert.title}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{alert.message}</p>
+              <div className="flex items-center gap-4 mt-2 flex-wrap">
+                <span className="text-xs text-muted-foreground" data-testid={`text-alert-time-${alert.id}`}>
+                  {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                </span>
+                {alert.currentValue !== undefined && alert.previousValue !== undefined && (
+                  <span className={cn(
+                    "text-xs font-mono font-medium",
+                    alert.changePercent >= 0 ? "text-green-500" : "text-red-500"
+                  )} data-testid={`text-alert-change-${alert.id}`}>
+                    {formatMetricChange(alert.currentValue, alert.previousValue, alert.changePercent)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {!alert.acknowledged && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onAcknowledge(alert.id)}
+                  data-testid={`button-acknowledge-${alert.id}`}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Acknowledge
+                </Button>
+              )}
+              <CollapsibleTrigger asChild>
+                <Button size="icon" variant="ghost" data-testid={`button-expand-${alert.id}`}>
+                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {localThresholds.map((threshold) => (
-              <div 
-                key={threshold.id} 
+          <CollapsibleContent>
+            <div className="mt-4 pt-4 border-t space-y-3">
+              <div>
+                <p className="text-sm font-medium mb-1">Metric Details</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Current:</span>{" "}
+                    <span className="font-mono font-medium">{alert.currentValue?.toLocaleString() ?? "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Previous:</span>{" "}
+                    <span className="font-mono font-medium">{alert.previousValue?.toLocaleString() ?? "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+              {alert.suggestedAction && (
+                <div>
+                  <p className="text-sm font-medium mb-1">Suggested Action</p>
+                  <p className="text-sm text-muted-foreground">{alert.suggestedAction}</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link href="/scenarios">
+                  <Button size="sm" variant="outline" data-testid={`button-run-scenario-${alert.id}`}>
+                    <FlaskConical className="h-4 w-4 mr-1" />
+                    Run Scenario
+                  </Button>
+                </Link>
+                <Link href="/truth">
+                  <Button size="sm" variant="outline" data-testid={`button-view-details-${alert.id}`}>
+                    <Eye className="h-4 w-4 mr-1" />
+                    View Details
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </CardContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
+function AlertSettingsSection({ companyId }: { companyId: number }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [localRules, setLocalRules] = useState<AlertRule[]>(DEFAULT_ALERT_RULES);
+  const { toast } = useToast();
+
+  const { data: rules } = useQuery<AlertRule[]>({
+    queryKey: ["/api/companies", companyId, "smart-alerts", "rules"],
+    enabled: !!companyId,
+  });
+
+  const displayRules = rules && rules.length > 0 ? rules : localRules;
+
+  const saveRulesMutation = useMutation({
+    mutationFn: async (updatedRule: AlertRule) => {
+      const res = await apiRequest("PUT", `/api/companies/${companyId}/smart-alerts/rules/${updatedRule.id}`, updatedRule);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId, "smart-alerts", "rules"] });
+      toast({ title: "Rule Updated", description: "Alert rule has been saved." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to save rule. Changes saved locally.", variant: "destructive" });
+    },
+  });
+
+  const handleToggle = (id: string) => {
+    const updated = displayRules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r);
+    setLocalRules(updated);
+    const rule = updated.find(r => r.id === id);
+    if (rule) saveRulesMutation.mutate(rule);
+  };
+
+  const handleThresholdChange = (id: string, value: string) => {
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue)) {
+      const updated = displayRules.map(r => r.id === id ? { ...r, threshold: numValue } : r);
+      setLocalRules(updated);
+    }
+  };
+
+  const handleSaveThreshold = (id: string) => {
+    const rule = localRules.find(r => r.id === id);
+    if (rule) saveRulesMutation.mutate(rule);
+  };
+
+  return (
+    <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <Card data-testid="card-alert-settings">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg">Alert Settings</CardTitle>
+              <CardDescription>Configure alert rules and notification preferences</CardDescription>
+            </div>
+            <CollapsibleTrigger asChild>
+              <Button size="icon" variant="ghost" data-testid="button-toggle-settings">
+                {settingsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent className="space-y-4">
+            {displayRules.map((rule) => (
+              <div
+                key={rule.id}
                 className={cn(
                   "flex items-center gap-4 p-3 rounded-lg border",
-                  threshold.enabled ? "bg-card" : "bg-muted/30"
+                  rule.enabled ? "bg-card" : "bg-muted/30"
                 )}
-                data-testid={`threshold-${threshold.id}`}
+                data-testid={`rule-${rule.id}`}
               >
                 <Switch
-                  checked={threshold.enabled}
-                  onCheckedChange={() => handleToggle(threshold.id)}
-                  data-testid={`switch-threshold-${threshold.id}`}
+                  checked={rule.enabled}
+                  onCheckedChange={() => handleToggle(rule.id)}
+                  data-testid={`switch-rule-${rule.id}`}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge 
-                      variant={threshold.severity === "critical" ? "destructive" : "outline"}
-                      className={threshold.severity === "warning" ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : ""}
-                    >
-                      {threshold.severity}
-                    </Badge>
-                    <span className="text-sm">
-                      {METRIC_DISPLAY_NAMES[threshold.metric] || threshold.metric.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {OPERATOR_LABELS[threshold.operator]}
-                    </span>
-                  </div>
+                  <p className="text-sm font-medium">{rule.label}</p>
+                  <p className="text-xs text-muted-foreground">{rule.description}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={threshold.value}
-                    onChange={(e) => handleValueChange(threshold.id, e.target.value)}
-                    className="w-24"
-                    disabled={!threshold.enabled}
-                    data-testid={`input-threshold-${threshold.id}`}
+                    value={rule.threshold}
+                    onChange={(e) => handleThresholdChange(rule.id, e.target.value)}
+                    onBlur={() => handleSaveThreshold(rule.id)}
+                    className="w-20"
+                    disabled={!rule.enabled}
+                    data-testid={`input-rule-threshold-${rule.id}`}
                   />
+                  <span className="text-xs text-muted-foreground">
+                    {rule.type.includes("runway") ? "mo" : "%"}
+                  </span>
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="rounded-lg border border-dashed p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              <span className="text-sm font-medium">Sample Alert Preview</span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-start gap-3 p-2 rounded bg-yellow-500/10 text-sm">
-                <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
-                <span>
-                  <strong>Warning:</strong> Runway is below 12 months (currently 10.5 months). 
-                  Consider reducing burn or accelerating revenue growth.
-                </span>
-              </div>
-              <div className="flex items-start gap-3 p-2 rounded bg-red-500/10 text-sm">
-                <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                <span>
-                  <strong>Critical:</strong> Runway has dropped below 6 months (currently 5.2 months). 
-                  Immediate action required to extend runway or secure funding.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={handleReset} data-testid="button-reset-thresholds">
-            Reset to Defaults
-          </Button>
-          <DialogClose asChild>
-            <Button variant="ghost" data-testid="button-cancel-thresholds">Cancel</Button>
-          </DialogClose>
-          <DialogClose asChild>
-            <Button onClick={handleSave} data-testid="button-save-thresholds">Save Changes</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
 
 export default function AlertsPage() {
   const { currentCompany } = useFounderStore();
   const companyId = currentCompany?.id;
-  const [thresholds, setThresholds] = useState<AlertThreshold[]>(DEFAULT_THRESHOLDS);
+  const { toast } = useToast();
 
-  const { data: alertsData, isLoading, refetch } = useQuery<AlertsResponse>({
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
+
+  const { data: smartAlertsData, isLoading: smartAlertsLoading } = useQuery<AlertsResponse>({
+    queryKey: ["/api/companies", companyId, "smart-alerts"],
+    enabled: !!companyId,
+  });
+
+  const { data: oldAlertsData, isLoading: oldAlertsLoading } = useQuery<OldAlertsResponse>({
     queryKey: ["/api/alerts/companies", companyId, "alerts"],
     enabled: !!companyId,
   });
@@ -443,6 +542,67 @@ export default function AlertsPage() {
     queryKey: ["/api/alerts/companies", companyId, "analyze"],
     enabled: !!companyId,
   });
+
+  const evaluateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/companies/${companyId}/smart-alerts/evaluate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId, "smart-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies", companyId, "alerts"] });
+      const newAlerts = data?.new_alerts ?? 0;
+      toast({
+        title: "Alert Check Complete",
+        description: newAlerts > 0 ? `${newAlerts} new alert(s) detected.` : "No new alerts found.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Check Failed", description: "Could not evaluate alerts. Try again.", variant: "destructive" });
+    },
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await apiRequest("PUT", `/api/companies/${companyId}/smart-alerts/${alertId}/acknowledge`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId, "smart-alerts"] });
+      toast({ title: "Alert Acknowledged" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to acknowledge alert.", variant: "destructive" });
+    },
+  });
+
+  const weeklyBriefingMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/companies/${companyId}/smart-alerts/weekly-briefing`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Weekly Briefing Sent", description: "Check your email for the briefing." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to send weekly briefing.", variant: "destructive" });
+    },
+  });
+
+  const alerts = smartAlertsData?.alerts ?? [];
+  const isLoading = smartAlertsLoading || oldAlertsLoading;
+
+  const filteredAlerts = alerts.filter((alert) => {
+    if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
+    if (typeFilter !== "all" && alert.type !== typeFilter) return false;
+    if (!showAcknowledged && alert.acknowledged) return false;
+    return true;
+  });
+
+  const alertTypes = Array.from(new Set(alerts.map((a) => a.type)));
+  const unacknowledgedCount = alerts.filter(a => !a.acknowledged).length;
+  const criticalCount = alerts.filter(a => a.severity === "critical" && !a.acknowledged).length;
+  const warningCount = alerts.filter(a => a.severity === "warning" && !a.acknowledged).length;
 
   const formatValue = (value: number, metric: string) => {
     if (metric.includes("margin") || metric.includes("rate")) {
@@ -510,8 +670,40 @@ export default function AlertsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ThresholdConfigModal thresholds={thresholds} onSave={setThresholds} />
-          <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
+          <Button
+            onClick={() => evaluateMutation.mutate()}
+            disabled={evaluateMutation.isPending || !companyId}
+            data-testid="button-check-now"
+          >
+            {evaluateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4 mr-2" />
+            )}
+            Check Now
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => weeklyBriefingMutation.mutate()}
+            disabled={weeklyBriefingMutation.isPending || !companyId}
+            data-testid="button-send-briefing"
+          >
+            {weeklyBriefingMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Mail className="h-4 w-4 mr-2" />
+            )}
+            Send Weekly Briefing
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId, "smart-alerts"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies", companyId, "alerts"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies", companyId, "analyze"] });
+            }}
+            data-testid="button-refresh"
+          >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -549,7 +741,7 @@ export default function AlertsPage() {
               <div className="flex-1">
                 <p className="font-medium">Data Required for Monitoring</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  To enable alerts and health monitoring, we need your company's financial data. 
+                  To enable alerts and health monitoring, we need your company's financial data.
                   Upload your data or run a Truth Scan to get personalized insights and alerts.
                 </p>
               </div>
@@ -583,9 +775,9 @@ export default function AlertsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm text-muted-foreground">Total Alerts</p>
+                <p className="text-sm text-muted-foreground">Unread Alerts</p>
                 <p className="text-2xl font-bold" data-testid="text-total-alerts">
-                  {alertsData?.total_alerts || 0}
+                  {unacknowledgedCount}
                 </p>
               </div>
               <AlertCircle className="h-8 w-8 text-muted-foreground" />
@@ -599,7 +791,7 @@ export default function AlertsPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Critical</p>
                 <p className="text-2xl font-bold text-red-500" data-testid="text-critical-count">
-                  {alertsData?.critical_count || 0}
+                  {criticalCount}
                 </p>
               </div>
               <AlertCircle className="h-8 w-8 text-red-500" />
@@ -613,7 +805,7 @@ export default function AlertsPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Warnings</p>
                 <p className="text-2xl font-bold text-yellow-500" data-testid="text-warning-count">
-                  {alertsData?.warning_count || 0}
+                  {warningCount}
                 </p>
               </div>
               <AlertTriangle className="h-8 w-8 text-yellow-500" />
@@ -622,19 +814,69 @@ export default function AlertsPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="health">
+      <Tabs defaultValue="alerts">
         <TabsList data-testid="tabs-view">
+          <TabsTrigger value="alerts" data-testid="tab-alerts">
+            Active Alerts
+            {unacknowledgedCount > 0 && (
+              <Badge variant="destructive" className="ml-2 text-[10px] px-1.5 py-0 h-4 border-0">
+                {unacknowledgedCount}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="health" data-testid="tab-health">Health Dashboard</TabsTrigger>
-          <TabsTrigger value="alerts" data-testid="tab-alerts">Active Alerts</TabsTrigger>
           <TabsTrigger value="drivers" data-testid="tab-drivers">Driver Details</TabsTrigger>
+          <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
           <TabsTrigger value="recommendations" data-testid="tab-recommendations">Recommendations</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="health" className="space-y-4">
-          <HealthDashboard drivers={healthData?.drivers || {}} />
-        </TabsContent>
-
         <TabsContent value="alerts" className="space-y-4">
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                  <SelectTrigger className="w-[150px]" data-testid="select-severity-filter">
+                    <SelectValue placeholder="Severity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Severities</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="warning">Warning</SelectItem>
+                    <SelectItem value="info">Info</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-[170px]" data-testid="select-type-filter">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {alertTypes.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type.replace(/_/g, " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={showAcknowledged}
+                    onCheckedChange={setShowAcknowledged}
+                    data-testid="switch-show-acknowledged"
+                  />
+                  <span className="text-sm text-muted-foreground">Show acknowledged</span>
+                </div>
+
+                <span className="text-sm text-muted-foreground ml-auto">
+                  {filteredAlerts.length} alert{filteredAlerts.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
           {isLoading ? (
             <div className="space-y-3">
               {Array(3).fill(0).map((_, i) => (
@@ -656,35 +898,15 @@ export default function AlertsPage() {
                 </Card>
               ))}
             </div>
-          ) : alertsData?.alerts && alertsData.alerts.length > 0 ? (
+          ) : filteredAlerts.length > 0 ? (
             <div className="space-y-3">
-              {alertsData.alerts.map((alert) => (
-                <Card key={alert.id} className={`border ${severityColors[alert.severity]}`} data-testid={`card-alert-${alert.id}`}>
-                  <CardContent className="py-4">
-                    <div className="flex items-start gap-4">
-                      <div className={severityColors[alert.severity].split(" ")[1]}>
-                        {severityIcons[alert.severity]}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <Badge variant="outline" className="text-xs">
-                            {alert.type.replace(/_/g, " ")}
-                          </Badge>
-                          <Badge variant="secondary" className="text-xs">
-                            {METRIC_DISPLAY_NAMES[alert.metric] || alert.metric.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                          </Badge>
-                        </div>
-                        <p className="font-medium">{alert.message}</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
-                        </p>
-                      </div>
-                      <Button size="sm" variant="ghost" data-testid={`button-acknowledge-${alert.id}`}>
-                        Acknowledge
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+              {filteredAlerts.map((alert) => (
+                <AlertCard
+                  key={alert.id}
+                  alert={alert}
+                  companyId={companyId!}
+                  onAcknowledge={(id) => acknowledgeMutation.mutate(id)}
+                />
               ))}
             </div>
           ) : (
@@ -693,9 +915,11 @@ export default function AlertsPage() {
                 <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
                 <p className="text-lg font-medium">No Active Alerts</p>
                 <p className="text-muted-foreground">
-                  {isStatusUnknown 
-                    ? "Add your financial data to enable alert monitoring." 
-                    : "All metrics are within normal ranges"}
+                  {isStatusUnknown
+                    ? "Add your financial data to enable alert monitoring."
+                    : alerts.length > 0 && filteredAlerts.length === 0
+                    ? "No alerts match the current filters."
+                    : "All metrics are within normal ranges. Click 'Check Now' to evaluate."}
                 </p>
                 {isStatusUnknown && (
                   <Link href="/data">
@@ -708,6 +932,10 @@ export default function AlertsPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="health" className="space-y-4">
+          <HealthDashboard drivers={healthData?.drivers || {}} />
         </TabsContent>
 
         <TabsContent value="drivers" className="space-y-4">
@@ -779,6 +1007,10 @@ export default function AlertsPage() {
           ) : (
             <UnknownStatusCard />
           )}
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          {companyId && <AlertSettingsSection companyId={companyId} />}
         </TabsContent>
 
         <TabsContent value="recommendations" className="space-y-4">

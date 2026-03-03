@@ -93,6 +93,10 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import leads as leads_api
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
+    from server.api import hiring_planner as hiring_planner_api
+    from server.api import fundraising_readiness as fundraising_readiness_api
+    from server.api import board_export as board_export_api
+    from server.api import smart_alerts as smart_alerts_api
 
     logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
@@ -144,6 +148,10 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(leads_api.router)
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
+    app.include_router(hiring_planner_api.router)
+    app.include_router(fundraising_readiness_api.router)
+    app.include_router(board_export_api.router)
+    app.include_router(smart_alerts_api.router)
 
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")

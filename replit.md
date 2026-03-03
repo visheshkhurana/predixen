@@ -43,6 +43,10 @@ The platform employs a modern full-stack architecture, utilizing React/TypeScrip
 -   **Analytics**: PostHog analytics for page views, user identification, and custom events.
 -   **API Rate Limiting**: Monte Carlo simulation endpoints are rate-limited to 10 req/min per IP.
 -   **Request ID Tracing**: Unique `X-Request-ID` header for every request for tracing.
+-   **Board Deck Export**: Generate AI-powered board deck presentations (Monthly Update, Fundraising Prep, Scenario Analysis) with PDF download. Backend: `server/api/board_export.py`. Frontend: `client/src/components/board-export/`. Export button on Dashboard and Scenarios pages.
+-   **Hiring Planner**: Plan hires by role/department/location with salary modeling, cost summaries, runway impact analysis, and Monte Carlo simulation. Backend: `server/api/hiring_planner.py` (data in `metadata_json["hiring_plans"]`). Frontend: `client/src/pages/hiring-planner.tsx`. Sidebar route: `/hiring-planner`.
+-   **Fundraising Readiness Score**: Weighted scoring system (Runway 25%, Growth 25%, Unit Economics 20%, Market 15%, Narrative 15%) with radar chart, recommendations, raise window timeline, and AI-generated investment one-pager. Backend: `server/api/fundraising_readiness.py`. Frontend: `client/src/components/fundraising/` + Readiness tab in `/fundraising`.
+-   **Smart Alerts Enhancement**: Automated metric monitoring (Burn Spike, MRR Drop, Churn Spike, Runway Warning/Caution, Growth Slowdown) with severity-based filtering, alert acknowledgment, custom rules, weekly AI briefings via email, and notification bell in sidebar. Backend: `server/api/smart_alerts.py` (data in `metadata_json["smart_alerts"]`). Frontend: enhanced `client/src/pages/alerts.tsx`.
 
 ## External Dependencies
 

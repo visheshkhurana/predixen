@@ -85,6 +85,7 @@ import { SourceBadge } from '@/components/ui/source-badge';
 import { FieldHelp } from '@/components/ui/field-help';
 import { IOLegend } from '@/components/ui/io-legend';
 import { getFieldHelp } from '@/lib/field-help-data';
+import { BoardExportButton } from '@/components/board-export/ExportButton';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1342,6 +1343,7 @@ export default function OverviewPage() {
         </div>
         <div className="flex items-center gap-2">
           {getConfidenceBadge()}
+          <BoardExportButton companyId={currentCompany.id} />
           <Sheet open={assumptionsPanelOpen} onOpenChange={setAssumptionsPanelOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" data-testid="button-open-assumptions">

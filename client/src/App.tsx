@@ -94,6 +94,7 @@ import DocsPage from "@/pages/docs";
 import MessagingPage from "@/pages/messaging";
 import JournalPage from "@/pages/journal";
 import GoalsPage from "@/pages/goals";
+import HiringPlannerPage from "@/pages/hiring-planner";
 import SharedScenarioPage from "@/pages/shared-scenario";
 import QAFrontPage from "@/pages/qa";
 import PricingPage from "@/pages/pricing";
@@ -383,6 +384,9 @@ function Router() {
       </Route>
       <Route path="/goals">
         {() => <AuthenticatedRoute component={GoalsPage} />}
+      </Route>
+      <Route path="/hiring-planner">
+        {() => <AuthenticatedRoute component={HiringPlannerPage} />}
       </Route>
       <Route path="/billing">
         {() => <Redirect to="/admin/billing" />}

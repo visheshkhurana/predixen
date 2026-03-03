@@ -52,6 +52,8 @@ import {
   Command,
   ChevronRight,
   PieChart,
+  Bell,
+  AlertTriangle,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -353,6 +355,13 @@ export function AppSidebar() {
     enabled: !!currentCompany?.id,
   });
 
+  const { data: smartAlertsData } = useQuery<{ alerts: any[]; total: number; unacknowledged: number }>({
+    queryKey: ["/api/companies", currentCompany?.id, "smart-alerts"],
+    enabled: !!currentCompany?.id,
+  });
+
+  const unreadAlertCount = smartAlertsData?.unacknowledged ?? smartAlertsData?.alerts?.filter((a: any) => !a.acknowledged)?.length ?? 0;
+
   const scenarioCount = scenarios?.length ?? 0;
   const pendingDecisionCount = decisions?.filter((d: any) => d.status === "pending" || d.status === "open")?.length ?? 0;
 
@@ -448,6 +457,18 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
+                  isActive={location === "/hiring-planner"}
+                  data-testid="nav-hiring"
+                >
+                  <Link href="/hiring-planner">
+                    <Users className="h-4 w-4" />
+                    <span>Hiring</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
                   isActive={location === "/decisions"}
                   data-testid="nav-decisions"
                 >
@@ -457,6 +478,23 @@ export function AppSidebar() {
                     {pendingDecisionCount > 0 && (
                       <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-decision-count">
                         {pendingDecisionCount}
+                      </Badge>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/alerts"}
+                  data-testid="nav-alerts"
+                >
+                  <Link href="/alerts">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="flex-1">Alerts</span>
+                    {unreadAlertCount > 0 && (
+                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
+                        {unreadAlertCount}
                       </Badge>
                     )}
                   </Link>
@@ -560,6 +598,27 @@ export function AppSidebar() {
           <span className="text-xs text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
+        <Link href="/alerts">
+          <div
+            className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
+            data-testid="link-notification-bell"
+          >
+            <div className="relative">
+              <Bell className="h-4 w-4" />
+              {unreadAlertCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5" data-testid="badge-bell-count">
+                  {unreadAlertCount > 99 ? "99+" : unreadAlertCount}
+                </span>
+              )}
+            </div>
+            <span>Notifications</span>
+            {unreadAlertCount > 0 && (
+              <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0">
+                {unreadAlertCount}
+              </Badge>
+            )}
+          </div>
+        </Link>
         <SettingsDrawer />
         <Link href="/docs">
           <div

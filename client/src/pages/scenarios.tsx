@@ -66,6 +66,7 @@ import { ScenarioComments } from '@/components/ScenarioComments';
 import { DistributionView } from '@/components/DistributionView';
 import { useScenarioComments, useAddComment, useEditComment, useDeleteComment } from '@/api/workspace';
 import { useToast } from '@/hooks/use-toast';
+import { BoardExportButton } from '@/components/board-export/ExportButton';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
 import { formatSimulationForExport, downloadSimulationPDF, type SimulationPDFData } from '@/lib/exportUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1150,6 +1151,7 @@ export default function ScenariosPage() {
               {founderMode ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
               Founder Mode
             </Button>
+            {currentCompany && <BoardExportButton companyId={currentCompany.id} />}
           </div>
           <p className="text-muted-foreground mt-1">
             {founderMode
