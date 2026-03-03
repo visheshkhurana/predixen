@@ -39,7 +39,7 @@ export function RaiseWindow({ raiseWindow, companyId }: { raiseWindow: RaiseWind
       return res.json();
     },
     onSuccess: (data: any) => {
-      setOnePagerContent(data.content || data.one_pager || '');
+      setOnePagerContent(data.markdown || data.content || data.one_pager || '');
       toast({ title: 'One-Pager Generated', description: 'Your investment memo has been generated.' });
     },
     onError: (error: unknown) => {
