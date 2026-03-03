@@ -9,6 +9,14 @@ from server.core.db import Base
 JSONType = JSONB
 
 
+class SecurityType(str, enum.Enum):
+    COMMON = "common"
+    PREFERRED = "preferred"
+    SAFE = "safe"
+    CONVERTIBLE_NOTE = "convertible_note"
+    WARRANT = "warrant"
+
+
 class ShareClass(str, enum.Enum):
     COMMON = "common"
     PREFERRED = "preferred"
@@ -54,12 +62,15 @@ class Shareholder(Base):
     type = Column(String, nullable=False, default="founder")
     relationship_type = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
+    tax_id = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     equity_holdings = relationship("EquityHolding", back_populates="shareholder")
     option_grants = relationship("OptionGrant", back_populates="shareholder")
+    convertible_securities = relationship("ConvertibleSecurity", back_populates="shareholder")
     transactions_from = relationship("EquityTransaction", foreign_keys="EquityTransaction.from_shareholder_id", back_populates="from_shareholder")
     transactions_to = relationship("EquityTransaction", foreign_keys="EquityTransaction.to_shareholder_id", back_populates="to_shareholder")
 
@@ -76,6 +87,8 @@ class Shareholder(Base):
             "type": self.type,
             "relationship_type": self.relationship_type,
             "notes": self.notes,
+            "tax_id": self.tax_id,
+            "address": self.address,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -95,6 +108,10 @@ class EquityHolding(Base):
     issue_date = Column(Date, nullable=True)
     board_approval_date = Column(Date, nullable=True)
     certificate_number = Column(String, nullable=True)
+    liquidation_preference_multiple = Column(Float, nullable=True, default=1.0)
+    participation_cap = Column(Float, nullable=True)
+    is_participating = Column(Boolean, nullable=True, default=False)
+    seniority = Column(Integer, nullable=True, default=1)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -118,6 +135,10 @@ class EquityHolding(Base):
             "issue_date": self.issue_date.isoformat() if self.issue_date else None,
             "board_approval_date": self.board_approval_date.isoformat() if self.board_approval_date else None,
             "certificate_number": self.certificate_number,
+            "liquidation_preference_multiple": self.liquidation_preference_multiple,
+            "participation_cap": self.participation_cap,
+            "is_participating": self.is_participating,
+            "seniority": self.seniority,
             "notes": self.notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -260,4 +281,129 @@ class Valuation409A(Base):
             "status": self.status,
             "notes": self.notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ConversionStatus(str, enum.Enum):
+    OUTSTANDING = "outstanding"
+    CONVERTED = "converted"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class ConvertibleSecurity(Base):
+    __tablename__ = "convertible_securities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    shareholder_id = Column(UUID(as_uuid=True), ForeignKey("shareholders.id"), nullable=False, index=True)
+    type = Column(String, nullable=False)
+    holder = Column(String, nullable=False)
+    principal = Column(Float, nullable=False, default=0)
+    valuation_cap = Column(Float, nullable=True)
+    discount_rate = Column(Float, nullable=True, default=0)
+    interest_rate = Column(Float, nullable=True, default=0)
+    maturity_date = Column(Date, nullable=True)
+    conversion_status = Column(String, nullable=False, default=ConversionStatus.OUTSTANDING.value)
+    converted_to_holding_id = Column(UUID(as_uuid=True), ForeignKey("equity_holdings.id"), nullable=True)
+    terms_json = Column(JSONType, nullable=True)
+    issue_date = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    shareholder = relationship("Shareholder", back_populates="convertible_securities")
+    converted_to_holding = relationship("EquityHolding", foreign_keys=[converted_to_holding_id])
+
+    __table_args__ = (
+        Index("ix_convertible_securities_company", "company_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "company_id": self.company_id,
+            "shareholder_id": str(self.shareholder_id),
+            "shareholder_name": self.shareholder.name if self.shareholder else None,
+            "type": self.type,
+            "holder": self.holder,
+            "principal": self.principal,
+            "valuation_cap": self.valuation_cap,
+            "discount_rate": self.discount_rate,
+            "interest_rate": self.interest_rate,
+            "maturity_date": self.maturity_date.isoformat() if self.maturity_date else None,
+            "conversion_status": self.conversion_status,
+            "converted_to_holding_id": str(self.converted_to_holding_id) if self.converted_to_holding_id else None,
+            "terms_json": self.terms_json,
+            "issue_date": self.issue_date.isoformat() if self.issue_date else None,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ScenarioType(str, enum.Enum):
+    NEW_ROUND = "new_round"
+    OPTION_POOL = "option_pool"
+    EXIT_WATERFALL = "exit_waterfall"
+    SECONDARY_SALE = "secondary_sale"
+
+
+class CapTableScenario(Base):
+    __tablename__ = "cap_table_scenarios"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    scenario_type = Column(String, nullable=False)
+    inputs_json = Column(JSONType, nullable=True)
+    results_json = Column(JSONType, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_cap_table_scenarios_company", "company_id"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "company_id": self.company_id,
+            "name": self.name,
+            "description": self.description,
+            "scenario_type": self.scenario_type,
+            "inputs_json": self.inputs_json,
+            "results_json": self.results_json,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class AuditLogEntry(Base):
+    __tablename__ = "cap_table_audit_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(String, nullable=False)
+    action = Column(String, nullable=False)
+    user_id = Column(String, nullable=True)
+    changes_json = Column(JSONType, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_cap_table_audit_log_company", "company_id", "timestamp"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "company_id": self.company_id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "action": self.action,
+            "user_id": self.user_id,
+            "changes_json": self.changes_json,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }

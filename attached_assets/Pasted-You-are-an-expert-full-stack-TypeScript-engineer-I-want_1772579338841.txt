@@ -1,0 +1,92 @@
+You are an expert full-stack TypeScript engineer. I want you to build ONLY the "Cap Table & Ownership Management" module as a self-contained, production-ready feature inside my existing Next.js 15 (App Router) application.
+
+Tech stack to use (must match my project):
+- Next.js 15 App Router + React 19 + TypeScript (strict)
+- Tailwind CSS + shadcn/ui components
+- Prisma ORM + PostgreSQL
+- TanStack Table v8 + TanStack Query
+- Recharts for charts
+- Zod for validation
+- Server Actions + API routes where needed
+- lucide-react icons
+
+The module must implement exactly these requirements (no more, no less):
+
+1. Real-time automated cap table
+   - Live views: By Stakeholder, By Security Class, Fully Diluted Ownership, As-Converted, As-Exercised
+   - Automatic recalculation after every transaction
+
+2. Track all events
+   - Issuances (Common, Preferred, Options, RSUs, SAFEs, Convertible Notes, Warrants)
+   - Transfers
+   - Vesting schedule events (with cliff, monthly/quarterly vesting)
+   - Exercises (cashless, cash)
+   - Cancellations / Forfeitures
+
+3. Pro forma / Scenario Modeling
+   - Create unlimited "What-if" scenarios (new funding round, option pool increase, exit waterfall, secondary sale, etc.)
+   - Real-time dilution calculator, pre/post-money ownership, new share issuance, option pool top-up
+   - Waterfall analysis (liquidation preferences, participating vs non-participating, cap, etc.)
+   - Save scenarios for later comparison
+
+4. Support for securities & structures
+   - All common US securities (Common, Preferred Series A/B/C with custom liquidation prefs, Options, RSUs, SAFEs (YC + custom), Convertible Notes, Warrants)
+   - Basic LLC support (custom membership classes + waterfall rules via JSON field)
+   - Multi-entity ready (future-proof schema)
+   - International note (tax ID fields)
+
+5. Exportable reports & audit trails
+   - Full audit log of every change (who, what, when, before/after)
+   - Export cap table as CSV, PDF (beautiful formatted), and JSON (OCF compatible)
+   - 409A-ready summary report
+
+Deliver the feature in this exact order (step-by-step, one file/group at a time, wait for my "next" before continuing):
+
+Phase 1 – Database
+- Extend my existing prisma/schema.prisma with new models based on the Open Cap Table Format (OCF) standard.
+- Include: Company, Stakeholder, StockClass, EquitySecurity (polymorphic or separate tables), VestingTerms, Transaction (with enum type), Scenario, AuditLog.
+- Add proper relations, indexes, and triggers for real-time recalculation where possible.
+- Provide migration command and seed data (10 stakeholders, 3 rounds, options pool, etc.).
+
+Phase 2 – Core Calculation Engine
+- Create lib/captable/calculations.ts with pure functions:
+  - calculateOwnership(currentCompanyId)
+  - calculateFullyDilutedShares()
+  - simulateRound(scenarioInput)
+  - runWaterfall(exitValue, scenario?)
+- Use BigInt for share quantities to avoid floating-point errors.
+- Include comprehensive unit tests (Vitest).
+
+Phase 3 – Backend APIs / Server Actions
+- All CRUD for stakeholders, issuances, transactions, scenarios.
+- Protected with current user + company context.
+- Automatic audit logging on every mutation.
+- Revalidation of cap table cache after changes.
+
+Phase 4 – UI (beautiful, modern, Carta-like)
+- Route: /captable (protected)
+- Sidebar navigation: Overview | Stakeholders | Securities | Transactions | Scenarios | Reports
+- Overview: Pie chart (ownership), key metrics cards, fully diluted table
+- TanStack Table everywhere with filtering, sorting, export
+- Modals for "Issue Securities", "Record Transfer", "Exercise", "Create Scenario", etc.
+- Real-time updates using optimistic UI + revalidatePath / query invalidation
+- Dark mode support
+
+Phase 5 – Extras
+- PDF export using @react-pdf/renderer (server component)
+- CSV export
+- Scenario comparison side-by-side view
+- Mobile responsive
+
+Constraints & Best Practices:
+- Make it modular so I can later integrate with my existing auth (Clerk/NextAuth) and company context.
+- Zero hard-coded company IDs — everything through context.
+- Follow OCF naming conventions where possible for future interoperability.
+- Comment every complex calculation.
+- Use Server Actions wherever possible for simplicity.
+- Add proper error handling and loading states.
+- Make the UI feel premium (clean cards, subtle animations, green accents like Carta).
+
+Start now with Phase 1: show me the complete updated prisma/schema.prisma models + migration steps + seed script. Do not add any extra features outside the list above. After I say "next", continue to Phase 2, etc.
+
+Begin.

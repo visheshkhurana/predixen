@@ -6,9 +6,11 @@ This module provides pure functions for cap table calculations:
 - Equity round modeling with option pool refresh
 - SAFE/Convertible note conversion
 - Ownership summary comparisons
+- Exit waterfall analysis (participating/non-participating preferred)
+- As-converted and as-exercised views
 """
 from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from copy import deepcopy
 
 
@@ -471,4 +473,301 @@ def simulate_round_scenarios(
         "best_for_founders": best_for_founders,
         "worst_for_founders": worst_for_founders,
         "total_scenarios": len(results)
+    }
+
+
+@dataclass
+class WaterfallTranche:
+    holder: str
+    share_class: str
+    series: str
+    shares: float
+    payout: float
+    payout_percent: float
+    method: str
+
+
+@dataclass
+class WaterfallResult:
+    exit_value: float
+    total_distributed: float
+    tranches: List[WaterfallTranche]
+    common_payout_per_share: float
+    preferred_total: float
+    common_total: float
+    remaining: float
+
+
+def run_waterfall(
+    exit_value: float,
+    cap_table: Dict[str, Any],
+    scenarios: Optional[List[Dict[str, Any]]] = None
+) -> WaterfallResult:
+    """
+    Run a liquidation preference waterfall analysis.
+
+    The waterfall proceeds in order:
+    1. Return preferences by seniority (highest seniority first)
+    2. Participation for participating preferred (with optional caps)
+    3. Remaining proceeds to common shareholders
+
+    Non-participating preferred holders choose the better of:
+    - Their liquidation preference, OR
+    - Converting to common and sharing pro-rata
+
+    Args:
+        exit_value: Total exit proceeds to distribute
+        cap_table: Cap table with holdings including liquidation preference fields
+        scenarios: Optional scenario overrides
+
+    Returns:
+        WaterfallResult with per-tranche payouts
+    """
+    remaining = exit_value
+    tranches = []
+
+    holdings = cap_table.get("holdings", [])
+    preferred_holdings = [h for h in holdings if h.get("share_class") == "preferred"]
+    common_holdings = [h for h in holdings if h.get("share_class") == "common"]
+
+    total_common_shares = sum(h.get("shares", 0) for h in common_holdings)
+    total_preferred_shares = sum(h.get("shares", 0) for h in preferred_holdings)
+    total_all_shares = total_common_shares + total_preferred_shares
+
+    seniority_groups = {}
+    for h in preferred_holdings:
+        sen = h.get("seniority", 1)
+        if sen not in seniority_groups:
+            seniority_groups[sen] = []
+        seniority_groups[sen].append(h)
+
+    preferred_payouts = {}
+    participating_holders = []
+
+    for seniority_level in sorted(seniority_groups.keys(), reverse=True):
+        group = seniority_groups[seniority_level]
+        for h in group:
+            holder = h.get("holder", "Unknown")
+            shares = h.get("shares", 0)
+            pps = h.get("price_per_share", 0) or 0
+            liq_mult = h.get("liquidation_preference_multiple", 1.0) or 1.0
+            is_participating = h.get("is_participating", False)
+
+            preference_amount = shares * pps * liq_mult
+
+            if is_participating:
+                payout = min(preference_amount, remaining)
+                remaining -= payout
+                preferred_payouts[holder] = payout
+                participating_holders.append(h)
+                tranches.append(WaterfallTranche(
+                    holder=holder,
+                    share_class="preferred",
+                    series=h.get("series", ""),
+                    shares=shares,
+                    payout=payout,
+                    payout_percent=round((payout / exit_value) * 100, 2) if exit_value > 0 else 0,
+                    method="liquidation_preference"
+                ))
+            else:
+                as_converted_shares = shares
+                as_converted_payout = (as_converted_shares / total_all_shares * exit_value) if total_all_shares > 0 else 0
+
+                if preference_amount >= as_converted_payout:
+                    payout = min(preference_amount, remaining)
+                    remaining -= payout
+                    preferred_payouts[holder] = payout
+                    tranches.append(WaterfallTranche(
+                        holder=holder,
+                        share_class="preferred",
+                        series=h.get("series", ""),
+                        shares=shares,
+                        payout=payout,
+                        payout_percent=round((payout / exit_value) * 100, 2) if exit_value > 0 else 0,
+                        method="liquidation_preference"
+                    ))
+                else:
+                    payout = min(as_converted_payout, remaining)
+                    remaining -= payout
+                    preferred_payouts[holder] = payout
+                    tranches.append(WaterfallTranche(
+                        holder=holder,
+                        share_class="preferred",
+                        series=h.get("series", ""),
+                        shares=shares,
+                        payout=payout,
+                        payout_percent=round((payout / exit_value) * 100, 2) if exit_value > 0 else 0,
+                        method="as_converted"
+                    ))
+
+    if remaining > 0 and participating_holders:
+        participating_shares = sum(h.get("shares", 0) for h in participating_holders)
+        shares_for_participation = total_common_shares + participating_shares
+
+        if shares_for_participation > 0:
+            for h in participating_holders:
+                holder = h.get("holder", "Unknown")
+                shares = h.get("shares", 0)
+                participation_cap = h.get("participation_cap")
+
+                pro_rata_share = (shares / shares_for_participation) * remaining
+                if participation_cap is not None:
+                    max_participation = participation_cap * shares * (h.get("price_per_share", 0) or 0)
+                    already_received = preferred_payouts.get(holder, 0)
+                    max_additional = max(0, max_participation - already_received)
+                    pro_rata_share = min(pro_rata_share, max_additional)
+
+                preferred_payouts[holder] = preferred_payouts.get(holder, 0) + pro_rata_share
+                for t in tranches:
+                    if t.holder == holder:
+                        t.payout += pro_rata_share
+                        t.payout_percent = round((t.payout / exit_value) * 100, 2) if exit_value > 0 else 0
+                        t.method = "participating"
+                        break
+
+            total_participation = sum(
+                (h.get("shares", 0) / shares_for_participation) * remaining
+                for h in participating_holders
+            )
+            remaining -= min(total_participation, remaining)
+
+    common_payout_per_share = (remaining / total_common_shares) if total_common_shares > 0 else 0
+
+    for h in common_holdings:
+        holder = h.get("holder", "Unknown")
+        shares = h.get("shares", 0)
+        payout = shares * common_payout_per_share
+
+        tranches.append(WaterfallTranche(
+            holder=holder,
+            share_class="common",
+            series="common",
+            shares=shares,
+            payout=round(payout, 2),
+            payout_percent=round((payout / exit_value) * 100, 2) if exit_value > 0 else 0,
+            method="pro_rata"
+        ))
+
+    common_total_payout = common_payout_per_share * total_common_shares
+    remaining_after = remaining - common_total_payout
+
+    preferred_total = sum(preferred_payouts.values())
+
+    return WaterfallResult(
+        exit_value=exit_value,
+        total_distributed=round(exit_value - max(0, remaining_after), 2),
+        tranches=tranches,
+        common_payout_per_share=round(common_payout_per_share, 4),
+        preferred_total=round(preferred_total, 2),
+        common_total=round(common_total_payout, 2),
+        remaining=round(max(0, remaining_after), 2)
+    )
+
+
+def calculate_as_converted(cap_table: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calculate as-converted ownership by converting all preferred shares to common equivalent.
+
+    This treats all preferred shares as if they had been converted to common stock,
+    showing what ownership would look like on an as-converted basis.
+
+    Args:
+        cap_table: Cap table with holdings data
+
+    Returns:
+        Dictionary with as-converted breakdown and totals
+    """
+    holdings = cap_table.get("holdings", [])
+    common_holdings = [h for h in holdings if h.get("share_class") == "common"]
+    preferred_holdings = [h for h in holdings if h.get("share_class") == "preferred"]
+
+    converted = []
+
+    for h in common_holdings:
+        converted.append({
+            "holder": h.get("holder", "Unknown"),
+            "original_class": "common",
+            "shares": h.get("shares", 0),
+            "conversion_ratio": 1.0,
+            "converted_shares": h.get("shares", 0),
+        })
+
+    for h in preferred_holdings:
+        conversion_ratio = h.get("conversion_ratio", 1.0)
+        shares = h.get("shares", 0)
+        converted_shares = shares * conversion_ratio
+        converted.append({
+            "holder": h.get("holder", "Unknown"),
+            "original_class": "preferred",
+            "series": h.get("series", ""),
+            "shares": shares,
+            "conversion_ratio": conversion_ratio,
+            "converted_shares": converted_shares,
+        })
+
+    total_converted = sum(c["converted_shares"] for c in converted)
+
+    for c in converted:
+        c["percent"] = round((c["converted_shares"] / total_converted) * 100, 2) if total_converted > 0 else 0
+
+    return {
+        "total_as_converted_shares": total_converted,
+        "breakdown": converted,
+    }
+
+
+def calculate_as_exercised(cap_table: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Calculate as-exercised ownership including all vested options as shares.
+
+    This shows what ownership would look like if all vested (but unexercised) options
+    were exercised and converted to common shares.
+
+    Args:
+        cap_table: Cap table with holdings and option grants data
+
+    Returns:
+        Dictionary with as-exercised breakdown and totals
+    """
+    holdings = cap_table.get("holdings", [])
+    options = cap_table.get("option_grants", [])
+
+    exercised = []
+
+    for h in holdings:
+        exercised.append({
+            "holder": h.get("holder", "Unknown"),
+            "type": h.get("share_class", "common"),
+            "series": h.get("series", ""),
+            "shares": h.get("shares", 0),
+            "source": "equity",
+        })
+
+    for og in options:
+        status = og.get("status", "active")
+        if status not in ("active", "draft"):
+            continue
+        vested = og.get("shares_vested", 0)
+        exercised_already = og.get("shares_exercised", 0)
+        exercisable = max(0, vested - exercised_already)
+
+        if exercisable > 0:
+            exercised.append({
+                "holder": og.get("holder", og.get("shareholder_name", "Unknown")),
+                "type": "common (from options)",
+                "series": "",
+                "shares": exercisable,
+                "source": "option_exercise",
+                "exercise_price": og.get("exercise_price", 0),
+                "grant_type": og.get("grant_type", ""),
+            })
+
+    total_shares = sum(e["shares"] for e in exercised)
+
+    for e in exercised:
+        e["percent"] = round((e["shares"] / total_shares) * 100, 2) if total_shares > 0 else 0
+
+    return {
+        "total_as_exercised_shares": total_shares,
+        "breakdown": exercised,
     }
