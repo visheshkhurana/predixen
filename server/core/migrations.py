@@ -887,6 +887,94 @@ def ensure_company_amount_scale(engine: Engine) -> None:
             logger.debug(f"amount_scale column may already exist: {e}")
 
 
+def ensure_cap_table_enhancements(engine: Engine) -> None:
+    """Add new cap table columns and tables for the Carta-like redesign."""
+    for col_name, col_type in [
+        ("tax_id", "VARCHAR(100)"),
+        ("address", "TEXT"),
+    ]:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(f"ALTER TABLE shareholders ADD COLUMN {col_name} {col_type}"))
+                conn.commit()
+        except Exception:
+            pass
+
+    for col_name, col_type in [
+        ("liquidation_preference_multiple", "FLOAT DEFAULT 1.0"),
+        ("participation_cap", "FLOAT"),
+        ("is_participating", "BOOLEAN DEFAULT FALSE"),
+        ("seniority", "INTEGER DEFAULT 1"),
+    ]:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(f"ALTER TABLE equity_holdings ADD COLUMN {col_name} {col_type}"))
+                conn.commit()
+        except Exception:
+            pass
+
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS convertible_securities (
+                id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                shareholder_id VARCHAR(36) REFERENCES shareholders(id),
+                type VARCHAR(30) NOT NULL,
+                holder VARCHAR(255) NOT NULL,
+                principal FLOAT NOT NULL,
+                valuation_cap FLOAT,
+                discount_rate FLOAT DEFAULT 0,
+                interest_rate FLOAT DEFAULT 0,
+                maturity_date DATE,
+                issue_date DATE DEFAULT CURRENT_DATE,
+                conversion_status VARCHAR(20) DEFAULT 'outstanding',
+                converted_to_holding_id VARCHAR(36),
+                terms_json JSONB DEFAULT '{}'::jsonb,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cap_table_scenarios (
+                id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                scenario_type VARCHAR(30) NOT NULL,
+                inputs_json JSONB DEFAULT '{}'::jsonb,
+                results_json JSONB,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cap_table_audit_log (
+                id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                entity_type VARCHAR(50) NOT NULL,
+                entity_id VARCHAR(100) NOT NULL,
+                action VARCHAR(30) NOT NULL,
+                user_id VARCHAR(100),
+                changes_json JSONB,
+                timestamp TIMESTAMP DEFAULT NOW()
+            )
+        """))
+
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_convertible_securities_company ON convertible_securities(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cap_table_scenarios_company ON cap_table_scenarios(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cap_table_audit_log_company ON cap_table_audit_log(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cap_table_audit_log_entity ON cap_table_audit_log(entity_type, entity_id)"))
+        except Exception:
+            pass
+
+        conn.commit()
+    logger.info("Cap table enhancements migration complete")
+
+
 def run_migrations(engine: Engine) -> None:
     """Run all pending migrations."""
     logger.info("Running database migrations...")
@@ -920,6 +1008,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_auth_tokens_tables(engine)
     ensure_beta_feedback_table(engine)
     ensure_rate_limits_table(engine)
+    ensure_cap_table_enhancements(engine)
     logger.info("Database migrations completed successfully")
 
 
