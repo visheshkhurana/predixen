@@ -4,6 +4,9 @@ export interface SlideData {
   content: string;
   metrics?: { label: string; value: string; delta?: string }[];
   narrativeHtml?: string;
+  modelUsed?: string;
+  providerUsed?: string;
+  imageBase64?: string;
 }
 
 export function generatePDF(slides: SlideData[], companyName: string) {
@@ -50,10 +53,22 @@ function buildPrintableHTML(slides: SlideData[], companyName: string): string {
       body += `<div style="margin-top:16px;line-height:1.7;color:#374151;font-size:14px;white-space:pre-wrap;">${slide.content}</div>`;
     }
 
+    if (slide.imageBase64) {
+      body += `<div style="margin-top:20px;text-align:center;">
+        <img src="data:image/png;base64,${slide.imageBase64}" style="max-width:100%;max-height:400px;border-radius:8px;border:1px solid #e5e7eb;" />
+      </div>`;
+    }
+
+    let modelBadge = '';
+    if (slide.modelUsed && slide.modelUsed !== 'fallback') {
+      modelBadge = `<span style="font-size:10px;color:#6366f1;background:#eef2ff;padding:2px 8px;border-radius:4px;font-weight:500;">${slide.modelUsed}</span>`;
+    }
+
     return `
       <div style="page-break-after:always;padding:40px;min-height:90vh;box-sizing:border-box;">
         <div style="border-bottom:2px solid #e5e7eb;padding-bottom:12px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:12px;color:#9ca3af;">Slide ${idx + 1} of ${slides.length}</span>
+          ${modelBadge}
         </div>
         <h2 style="font-size:22px;font-weight:700;color:#111827;margin-bottom:16px;">${slide.title}</h2>
         ${body}

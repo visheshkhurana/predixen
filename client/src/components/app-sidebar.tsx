@@ -54,6 +54,7 @@ import {
   PieChart,
   Bell,
   AlertTriangle,
+  Palette,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -582,6 +583,21 @@ export function AppSidebar() {
                   <Link href="/goals">
                     <Flag className="h-4 w-4" />
                     <span className="flex-1">Goals</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                      New
+                    </Badge>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/ai-graphics"}
+                  data-testid="nav-ai-graphics"
+                >
+                  <Link href="/ai-graphics">
+                    <Palette className="h-4 w-4" />
+                    <span className="flex-1">AI Graphics</span>
                     <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
                       New
                     </Badge>

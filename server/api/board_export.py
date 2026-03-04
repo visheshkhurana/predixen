@@ -304,18 +304,23 @@ def generate_board_export(
                 )
 
                 prompt = _build_narrative_prompt(request.templateId, section, data)
+                task_type = _get_section_task_type(section)
 
                 result = llm.chat(
                     messages=[{"role": "user", "content": prompt}],
-                    task_type=TaskType.FINANCIAL_ANALYSIS,
+                    task_type=task_type,
                     temperature=0.5,
                     max_tokens=1024,
                 )
 
                 section_out["narrative"] = result.get("content", "")
+                section_out["model_used"] = result.get("model", "unknown")
+                section_out["provider_used"] = result.get("provider", "unknown")
             except Exception as e:
                 logger.warning(f"AI narrative generation failed for section '{section['title']}': {e}")
                 section_out["narrative"] = _generate_fallback_narrative(section, data)
+                section_out["model_used"] = "fallback"
+                section_out["provider_used"] = "rule-based"
 
         sections_result.append(section_out)
 
@@ -325,6 +330,69 @@ def generate_board_export(
         "company": data["company"],
         "generated_at": datetime.utcnow().isoformat(),
     }
+
+
+def _get_section_task_type(section: Dict) -> "TaskType":
+    from server.lib.llm.llm_router import TaskType
+
+    title = section.get("title", "").lower()
+    section_type = section.get("type", "")
+
+    if any(kw in title for kw in ["executive", "overview", "vision", "strategy", "recommendation"]):
+        return TaskType.CREATIVE_WRITING
+    elif any(kw in title for kw in ["decision", "next steps", "milestone", "funds"]):
+        return TaskType.STRATEGY
+    elif section_type == "simulation" or any(kw in title for kw in ["runway", "survival", "projection"]):
+        return TaskType.FINANCIAL_ANALYSIS
+    elif section_type == "metrics" or any(kw in title for kw in ["metric", "traction", "unit economics", "growth"]):
+        return TaskType.FINANCIAL_ANALYSIS
+    elif section_type == "comparison" or any(kw in title for kw in ["scenario", "comparison", "sensitivity"]):
+        return TaskType.STRATEGY
+    else:
+        return TaskType.SIMPLE_TASK
+
+
+class GraphicRequest(BaseModel):
+    prompt: str
+    style: str = "professional"
+    aspect_ratio: str = "16:9"
+    section_context: Optional[str] = None
+
+
+@router.post("/companies/{company_id}/board-export/generate-graphic")
+def generate_board_graphic(
+    company_id: int,
+    request: GraphicRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = get_user_company(db, company_id, current_user)
+
+    from server.lib.llm.image_generator import NanoBananaImageGenerator
+
+    try:
+        generator = NanoBananaImageGenerator(
+            db_session=db,
+            company_id=company_id,
+            user_id=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    full_prompt = request.prompt
+    if request.section_context:
+        full_prompt = f"For a board deck section about '{request.section_context}': {request.prompt}"
+
+    result = generator.generate_image(
+        prompt=full_prompt,
+        style=request.style,
+        aspect_ratio=request.aspect_ratio,
+    )
+
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return result
 
 
 def _generate_fallback_narrative(section: Dict, data: Dict) -> str:

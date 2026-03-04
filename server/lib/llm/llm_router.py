@@ -52,6 +52,8 @@ class TaskType(str, Enum):
     COMPETITOR_ANALYSIS = "competitor_analysis"
     REAL_TIME_DATA = "real_time_data"
     NEWS_CURRENT_EVENTS = "news_current_events"
+    IMAGE_GENERATION = "image_generation"
+    CREATIVE_WRITING = "creative_writing"
 
 
 class Provider(str, Enum):
@@ -141,6 +143,12 @@ MODELS = {
         max_tokens=4096,
         description="Most capable web search for complex research"
     ),
+    "gpt-image-1": ModelConfig(
+        provider=Provider.OPENAI,
+        model_id="gpt-image-1",
+        max_tokens=0,
+        description="OpenAI image generation — creates professional graphics from text prompts"
+    ),
 }
 
 
@@ -161,6 +169,8 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
     TaskType.COMPETITOR_ANALYSIS: "perplexity-sonar-large",
     TaskType.REAL_TIME_DATA: "perplexity-sonar-small",
     TaskType.NEWS_CURRENT_EVENTS: "perplexity-sonar-small",
+    TaskType.IMAGE_GENERATION: "gpt-image-1",
+    TaskType.CREATIVE_WRITING: "claude-sonnet-4-5",
 }
 
 
@@ -176,6 +186,7 @@ FALLBACK_CHAIN: Dict[str, List[str]] = {
     "perplexity-sonar-small": ["perplexity-sonar-large", "gpt-4o"],
     "perplexity-sonar-large": ["perplexity-sonar-huge", "gpt-4o"],
     "perplexity-sonar-huge": ["perplexity-sonar-large", "claude-opus-4-5"],
+    "gpt-image-1": ["gpt-4o"],
 }
 
 
@@ -676,6 +687,29 @@ class LLMRouter:
         
         return result
     
+    def generate_image(
+        self,
+        prompt: str,
+        style: str = "professional",
+        aspect_ratio: str = "16:9",
+    ) -> Dict[str, Any]:
+        """
+        Generate an image using the image generation model (gpt-image-1).
+        This is a dedicated path — image models cannot go through chat completions.
+        """
+        from server.lib.llm.image_generator import NanoBananaImageGenerator
+
+        generator = NanoBananaImageGenerator(
+            db_session=self.db_session,
+            company_id=self.company_id,
+            user_id=self.user_id,
+        )
+        return generator.generate_image(
+            prompt=prompt,
+            style=style,
+            aspect_ratio=aspect_ratio,
+        )
+
     def get_routing_stats(self) -> Dict[str, Any]:
         """Get statistics about routing decisions."""
         if not self._routing_metrics:
@@ -735,6 +769,8 @@ TASK_DESCRIPTIONS = {
     TaskType.COMPETITOR_ANALYSIS: "Competitor analysis, competitive landscape",
     TaskType.REAL_TIME_DATA: "Current prices, live data, real-time statistics",
     TaskType.NEWS_CURRENT_EVENTS: "Recent news, announcements, current events",
+    TaskType.IMAGE_GENERATION: "AI image generation for graphics, diagrams, illustrations",
+    TaskType.CREATIVE_WRITING: "Creative narrative writing, executive summaries, storytelling",
 }
 
 

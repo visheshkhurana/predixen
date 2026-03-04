@@ -58,6 +58,11 @@ from server.lib.llm.anthropic_client import (
 from server.lib.llm.gemini_client import GeminiClient
 
 try:
+    from server.lib.llm.image_generator import NanoBananaImageGenerator
+except ImportError:
+    NanoBananaImageGenerator = None
+
+try:
     from server.lib.llm.perplexity_client import PerplexityClient
 except ImportError:
     PerplexityClient = None
@@ -86,6 +91,7 @@ __all__ = [
     "AuditedAnthropicClient",
     "get_audited_anthropic_client",
     "GeminiClient",
+    "NanoBananaImageGenerator",
     "PerplexityClient",
     "IntentClassifier",
     "IntentType",

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Dialog,
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Download } from 'lucide-react';
+import { Loader2, Download, ImageIcon } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { getTemplateById } from './templates';
 import { generatePDF, type SlideData } from './pdfGenerator';
@@ -23,6 +23,24 @@ function sanitizeText(text: string): string {
   });
 }
 
+function getModelDisplayName(model: string): string {
+  if (!model || model === 'unknown' || model === 'fallback') return '';
+  const lower = model.toLowerCase();
+  if (lower.includes('claude')) return 'Claude';
+  if (lower.includes('gpt-4o')) return 'GPT-4o';
+  if (lower.includes('gpt-4')) return 'GPT-4';
+  if (lower.includes('gemini')) return 'Gemini';
+  if (lower.includes('gpt-3')) return 'GPT-3.5';
+  return model;
+}
+
+function getModelBadgeVariant(model: string): 'default' | 'secondary' | 'outline' {
+  const lower = (model || '').toLowerCase();
+  if (lower.includes('claude')) return 'default';
+  if (lower.includes('gpt')) return 'secondary';
+  return 'outline';
+}
+
 interface PreviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,9 +48,21 @@ interface PreviewModalProps {
   templateId: string;
 }
 
+interface SectionData {
+  type: string;
+  title: string;
+  dataSource: string;
+  narrative?: string;
+  data?: any;
+  model_used?: string;
+  provider_used?: string;
+}
+
 export function PreviewModal({ open, onOpenChange, companyId, templateId }: PreviewModalProps) {
   const template = getTemplateById(templateId);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [slideImages, setSlideImages] = useState<Record<number, string>>({});
+  const [generatingImageIdx, setGeneratingImageIdx] = useState<number | null>(null);
 
   const { data: exportData, isLoading: dataLoading } = useQuery({
     queryKey: ['/api/companies', companyId, 'board-export', 'data'],
@@ -54,22 +84,57 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
     }
   }, [open, template]);
 
+  useEffect(() => {
+    if (!open) {
+      setSlideImages({});
+      setGeneratingImageIdx(null);
+    }
+  }, [open]);
+
   const narratives = narrativeMutation.data;
   const isLoading = dataLoading || narrativeMutation.isPending;
+  const sections: SectionData[] = (narratives as any)?.sections || [];
 
-  const companyName = (exportData as any)?.company_name || 'Company';
+  const companyName = (exportData as any)?.company_name || (narratives as any)?.company?.name || 'Company';
+
+  const handleGenerateGraphic = useCallback(async (slideIdx: number, sectionTitle: string) => {
+    setGeneratingImageIdx(slideIdx);
+    try {
+      const res = await apiRequest('POST', `/api/companies/${companyId}/board-export/generate-graphic`, {
+        prompt: `Create a professional business graphic for: ${sectionTitle}`,
+        style: 'professional',
+        aspect_ratio: '16:9',
+        section_context: sectionTitle,
+      });
+      const result = await res.json();
+      if (result.image_base64) {
+        setSlideImages(prev => ({ ...prev, [slideIdx]: result.image_base64 }));
+      }
+    } catch {
+    } finally {
+      setGeneratingImageIdx(null);
+    }
+  }, [companyId]);
 
   const buildSlides = (): SlideData[] => {
     if (!template || !exportData) return [];
     const data = exportData as any;
     const narr = (narratives as any)?.narratives || {};
 
-    return template.sections.map((section) => {
+    return template.sections.map((section, idx) => {
+      const backendSection = sections[idx];
+
       const slide: SlideData = {
         title: section.title,
         type: section.type,
         content: '',
+        modelUsed: backendSection?.model_used,
+        providerUsed: backendSection?.provider_used,
       };
+
+      if (slideImages[idx]) {
+        slide.imageBase64 = slideImages[idx];
+      }
 
       if (section.type === 'metrics' && data.metrics) {
         const m = data.metrics;
@@ -110,9 +175,10 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
         ];
       }
 
-      if (section.aiNarrative && narr[section.dataSource]) {
-        slide.narrativeHtml = sanitizeText(narr[section.dataSource]).replace(/\n/g, '<br/>');
-        slide.content = narr[section.dataSource];
+      const narrativeText = backendSection?.narrative || narr[section.dataSource];
+      if (section.aiNarrative && narrativeText) {
+        slide.narrativeHtml = sanitizeText(narrativeText).replace(/\n/g, '<br/>');
+        slide.content = narrativeText;
       }
 
       if (section.type === 'chart') {
@@ -173,58 +239,100 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
               </Badge>
             </div>
 
-            {buildSlides().map((slide, idx) => (
-              <Card key={idx} data-testid={`card-slide-${idx}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <CardTitle className="text-base" data-testid={`text-slide-title-${idx}`}>
-                      {slide.title}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs" data-testid={`badge-slide-type-${idx}`}>
-                      {slide.type}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {slide.metrics && slide.metrics.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {slide.metrics.map((m, mIdx) => (
-                        <div
-                          key={mIdx}
-                          className="bg-muted/50 rounded-md p-3 text-center"
-                          data-testid={`metric-${idx}-${mIdx}`}
+            {buildSlides().map((slide, idx) => {
+              const modelName = getModelDisplayName(slide.modelUsed || '');
+              const isGeneratingThisImage = generatingImageIdx === idx;
+
+              return (
+                <Card key={idx} data-testid={`card-slide-${idx}`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <CardTitle className="text-base" data-testid={`text-slide-title-${idx}`}>
+                          {slide.title}
+                        </CardTitle>
+                        {modelName && (
+                          <Badge
+                            variant={getModelBadgeVariant(slide.modelUsed || '')}
+                            className="text-xs"
+                            data-testid={`badge-model-${idx}`}
+                          >
+                            {modelName}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-xs" data-testid={`badge-slide-type-${idx}`}>
+                          {slide.type}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleGenerateGraphic(idx, slide.title)}
+                          disabled={isGeneratingThisImage}
+                          data-testid={`button-generate-graphic-${idx}`}
                         >
-                          <div className="text-xs text-muted-foreground">{m.label}</div>
-                          <div className="text-lg font-bold">{m.value}</div>
-                          {m.delta && (
-                            <div className={`text-xs ${m.delta.startsWith('-') ? 'text-red-500' : 'text-emerald-500'}`}>
-                              {m.delta}
-                            </div>
+                          {isGeneratingThisImage ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 mr-1" />
                           )}
-                        </div>
-                      ))}
+                          {isGeneratingThisImage ? 'Generating...' : 'Generate Graphic'}
+                        </Button>
+                      </div>
                     </div>
-                  )}
-                  {slide.narrativeHtml && (
-                    <div
-                      className="text-sm text-muted-foreground leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: slide.narrativeHtml }}
-                      data-testid={`narrative-${idx}`}
-                    />
-                  )}
-                  {slide.content && !slide.narrativeHtml && (
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid={`content-${idx}`}>
-                      {slide.content}
-                    </p>
-                  )}
-                  {(!slide.metrics || slide.metrics.length === 0) && !slide.narrativeHtml && !slide.content && (
-                    <p className="text-sm text-muted-foreground italic" data-testid={`empty-${idx}`}>
-                      No data available for this section
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                  </CardHeader>
+                  <CardContent>
+                    {slide.metrics && slide.metrics.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {slide.metrics.map((m, mIdx) => (
+                          <div
+                            key={mIdx}
+                            className="bg-muted/50 rounded-md p-3 text-center"
+                            data-testid={`metric-${idx}-${mIdx}`}
+                          >
+                            <div className="text-xs text-muted-foreground">{m.label}</div>
+                            <div className="text-lg font-bold">{m.value}</div>
+                            {m.delta && (
+                              <div className={`text-xs ${m.delta.startsWith('-') ? 'text-red-500' : 'text-emerald-500'}`}>
+                                {m.delta}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {slide.narrativeHtml && (
+                      <div
+                        className="text-sm text-muted-foreground leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: slide.narrativeHtml }}
+                        data-testid={`narrative-${idx}`}
+                      />
+                    )}
+                    {slide.content && !slide.narrativeHtml && (
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid={`content-${idx}`}>
+                        {slide.content}
+                      </p>
+                    )}
+                    {(!slide.metrics || slide.metrics.length === 0) && !slide.narrativeHtml && !slide.content && (
+                      <p className="text-sm text-muted-foreground italic" data-testid={`empty-${idx}`}>
+                        No data available for this section
+                      </p>
+                    )}
+                    {slide.imageBase64 && (
+                      <div className="mt-4" data-testid={`image-container-${idx}`}>
+                        <img
+                          src={`data:image/png;base64,${slide.imageBase64}`}
+                          alt={`Generated graphic for ${slide.title}`}
+                          className="w-full max-h-64 object-contain rounded-md border"
+                          data-testid={`image-graphic-${idx}`}
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button
