@@ -6,9 +6,11 @@ Supported Providers:
 - Anthropic: Claude Opus, Sonnet, Haiku (via Replit AI Integrations)
 - Google: Gemini Pro, Flash (via Replit AI Integrations)
 - Perplexity: Sonar models for web search with citations
+- OpenRouter: Grok (xAI) models for news, trends, fast reasoning
 
 Task Routing Logic:
-- Web search, real-time data, news → Perplexity Sonar (web-grounded)
+- News, current events, trends → Grok 4.1 Fast (xAI, real-time data access)
+- Web search, real-time data → Perplexity Sonar (web-grounded with citations)
 - Market research, competitor analysis → Perplexity (with citations)
 - Financial analysis, metrics extraction → GPT-4o (best at structured data)
 - Complex reasoning, coding → Claude Opus (deep reasoning)
@@ -30,6 +32,7 @@ from datetime import datetime
 
 from server.lib.llm.openai_client import AuditedOpenAIClient, get_audited_client as get_openai_client
 from server.lib.llm.anthropic_client import AuditedAnthropicClient, get_audited_anthropic_client
+from server.lib.llm.openrouter_client import OpenRouterClient, get_openrouter_client
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,7 @@ class Provider(str, Enum):
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
     PERPLEXITY = "perplexity"
+    OPENROUTER = "openrouter"
 
 
 @dataclass
@@ -149,6 +153,22 @@ MODELS = {
         max_tokens=0,
         description="OpenAI image generation — creates professional graphics from text prompts"
     ),
+    "grok-4.1-fast": ModelConfig(
+        provider=Provider.OPENROUTER,
+        model_id="x-ai/grok-4.1-fast",
+        max_tokens=8192,
+        cost_per_1k_input=0.0002,
+        cost_per_1k_output=0.0005,
+        description="Grok 4.1 Fast — excellent for news, trends, real-time analysis. 2M context, very cost-effective"
+    ),
+    "grok-3-mini": ModelConfig(
+        provider=Provider.OPENROUTER,
+        model_id="x-ai/grok-3-mini",
+        max_tokens=4096,
+        cost_per_1k_input=0.0003,
+        cost_per_1k_output=0.0005,
+        description="Grok 3 Mini — fast, cheap reasoning for quick analysis tasks"
+    ),
 }
 
 
@@ -168,7 +188,7 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
     TaskType.MARKET_RESEARCH: "perplexity-sonar-large",
     TaskType.COMPETITOR_ANALYSIS: "perplexity-sonar-large",
     TaskType.REAL_TIME_DATA: "perplexity-sonar-small",
-    TaskType.NEWS_CURRENT_EVENTS: "perplexity-sonar-small",
+    TaskType.NEWS_CURRENT_EVENTS: "grok-4.1-fast",
     TaskType.IMAGE_GENERATION: "gpt-image-1",
     TaskType.CREATIVE_WRITING: "claude-sonnet-4-5",
 }
@@ -187,6 +207,8 @@ FALLBACK_CHAIN: Dict[str, List[str]] = {
     "perplexity-sonar-large": ["perplexity-sonar-huge", "gpt-4o"],
     "perplexity-sonar-huge": ["perplexity-sonar-large", "claude-opus-4-5"],
     "gpt-image-1": ["gpt-4o"],
+    "grok-4.1-fast": ["perplexity-sonar-small", "gpt-4o"],
+    "grok-3-mini": ["grok-4.1-fast", "gemini-2.5-flash"],
 }
 
 
@@ -243,6 +265,7 @@ class LLMRouter:
         self._anthropic_client: Optional[AuditedAnthropicClient] = None
         self._gemini_client = None
         self._perplexity_client = None
+        self._openrouter_client: Optional[OpenRouterClient] = None
         self._intent_classifier = None
         
         self._routing_metrics: List[RoutingMetrics] = []
@@ -322,6 +345,27 @@ class LLMRouter:
     def perplexity_available(self) -> bool:
         """Check if Perplexity is available."""
         return self.perplexity_client is not None
+    
+    @property
+    def openrouter_client(self) -> Optional[OpenRouterClient]:
+        """Lazy-load OpenRouter client for Grok models. Returns None if not configured."""
+        if self._openrouter_client is None:
+            try:
+                self._openrouter_client = get_openrouter_client(
+                    db_session=self.db_session,
+                    company_id=self.company_id,
+                    user_id=self.user_id,
+                    pii_mode=self.pii_mode
+                )
+            except (ValueError, ImportError) as e:
+                logger.warning(f"OpenRouter client not available: {e}")
+                return None
+        return self._openrouter_client
+    
+    @property
+    def openrouter_available(self) -> bool:
+        """Check if OpenRouter (Grok) is available."""
+        return self.openrouter_client is not None
     
     @property
     def intent_classifier(self):
@@ -504,6 +548,27 @@ class LLMRouter:
             else:
                 logger.info("Perplexity not available, falling back to GPT-4o")
                 model = "gpt-4o"
+                model_config = MODELS.get(model) or MODELS["gemini-2.5-flash"]
+        
+        if model_config.provider == Provider.OPENROUTER:
+            openrouter = self.openrouter_client
+            if openrouter is not None:
+                if system:
+                    messages = [{"role": "system", "content": system}] + messages
+                
+                result = openrouter.chat_completion(
+                    messages=messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **kwargs
+                )
+                return result
+            else:
+                fallbacks = FALLBACK_CHAIN.get(model, ["gpt-4o"])
+                fallback_model = fallbacks[0] if fallbacks else "gpt-4o"
+                logger.info(f"OpenRouter not available, falling back to {fallback_model}")
+                model = fallback_model
                 model_config = MODELS.get(model) or MODELS["gemini-2.5-flash"]
         
         if model_config.provider == Provider.OPENAI:
@@ -768,7 +833,7 @@ TASK_DESCRIPTIONS = {
     TaskType.MARKET_RESEARCH: "Industry trends, market sizing, research",
     TaskType.COMPETITOR_ANALYSIS: "Competitor analysis, competitive landscape",
     TaskType.REAL_TIME_DATA: "Current prices, live data, real-time statistics",
-    TaskType.NEWS_CURRENT_EVENTS: "Recent news, announcements, current events",
+    TaskType.NEWS_CURRENT_EVENTS: "Recent news, announcements, current events (Grok)",
     TaskType.IMAGE_GENERATION: "AI image generation for graphics, diagrams, illustrations",
     TaskType.CREATIVE_WRITING: "Creative narrative writing, executive summaries, storytelling",
 }

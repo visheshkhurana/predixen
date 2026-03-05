@@ -2,7 +2,8 @@
 LLM Module - Unified interface for multiple LLM providers with intelligent routing.
 
 Features:
-- Classifier-based routing to optimal LLMs (OpenAI, Anthropic, Gemini, Perplexity)
+- Classifier-based routing to optimal LLMs (OpenAI, Anthropic, Gemini, Perplexity, OpenRouter/Grok)
+- Grok (xAI) via OpenRouter for news, trends, and real-time analysis
 - Perplexity integration for web search with citations
 - PII redaction and audit logging
 - Cost/latency tracking
@@ -68,6 +69,12 @@ except ImportError:
     PerplexityClient = None
 
 try:
+    from server.lib.llm.openrouter_client import OpenRouterClient, get_openrouter_client
+except ImportError:
+    OpenRouterClient = None
+    get_openrouter_client = None
+
+try:
     from server.lib.llm.intent_classifier import IntentClassifier, IntentType, ClassificationResult
 except ImportError:
     IntentClassifier = None
@@ -96,4 +103,6 @@ __all__ = [
     "IntentClassifier",
     "IntentType",
     "ClassificationResult",
+    "OpenRouterClient",
+    "get_openrouter_client",
 ]
