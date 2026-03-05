@@ -53,9 +53,10 @@ class PerplexityClient:
     - Current pricing and product information
     
     Models:
-    - sonar-small: Fast, cost-effective for most queries
-    - sonar-large: More detailed responses
-    - sonar-huge: Most capable for complex research
+    - sonar: Fast, cost-effective for most queries
+    - sonar-pro: Detailed web search with citations for in-depth research
+    - sonar-reasoning-pro: Step-by-step reasoning with web search for complex analysis
+    - sonar-deep-research: Multi-step deep research for comprehensive industry analysis
     """
     
     def __init__(
@@ -138,7 +139,7 @@ class PerplexityClient:
     def search(
         self,
         query: str,
-        model: str = "sonar-small",
+        model: str = "sonar",
         system_prompt: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 4096,
@@ -153,7 +154,7 @@ class PerplexityClient:
         
         Args:
             query: The search query
-            model: Model to use (sonar-small, sonar-large, sonar-huge)
+            model: Model to use (sonar, sonar-pro, sonar-reasoning-pro, sonar-deep-research)
             system_prompt: Optional system instruction
             temperature: Sampling temperature (0.0-1.0)
             max_tokens: Maximum tokens in response
@@ -266,7 +267,7 @@ class PerplexityClient:
     def chat(
         self,
         messages: List[Dict[str, str]],
-        model: str = "sonar-small",
+        model: str = "sonar",
         temperature: float = 0.2,
         max_tokens: int = 4096,
         search_recency_filter: Optional[str] = None,

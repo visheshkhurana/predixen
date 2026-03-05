@@ -333,7 +333,7 @@ class BaseAgent(ABC):
     def _web_search(
         self,
         query: str,
-        model: str = "sonar-small",
+        model: str = "sonar",
         system_prompt: Optional[str] = None,
         search_recency_filter: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -342,7 +342,7 @@ class BaseAgent(ABC):
         
         Args:
             query: Search query
-            model: Perplexity model (sonar-small, sonar-large, sonar-huge)
+            model: Perplexity model (sonar, sonar-pro, sonar-reasoning-pro)
             system_prompt: Optional system instruction
             search_recency_filter: Recency filter (day, week, month, year)
         

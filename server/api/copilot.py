@@ -471,7 +471,7 @@ async def _do_web_research(
 
         result = client.search(
             query=query,
-            model="sonar-small",
+            model="sonar",
             system_prompt="You are a financial research assistant. Provide concise, data-driven answers with specific numbers, benchmarks, and statistics relevant to startups and SaaS businesses. Focus on the most recent and reliable data.",
             temperature=0.2,
             max_tokens=1500,

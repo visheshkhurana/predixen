@@ -318,7 +318,7 @@ Use the financial data provided. Keep each section to 2-3 sentences. Be specific
 
         response = llm.chat(
             messages=[{"role": "user", "content": prompt}],
-            task_type=TaskType.FINANCIAL_ANALYSIS,
+            task_type=TaskType.CREATIVE_WRITING,
             temperature=0.7,
             max_tokens=2000,
         )

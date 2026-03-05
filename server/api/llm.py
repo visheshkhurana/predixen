@@ -227,7 +227,7 @@ async def smart_chat(
 
 class WebSearchRequest(BaseModel):
     query: str = Field(..., description="Search query")
-    model: str = Field("sonar-small", description="Perplexity model: sonar-small, sonar-large, sonar-huge")
+    model: str = Field("sonar", description="Perplexity model: sonar, sonar-pro, sonar-reasoning-pro, sonar-deep-research")
     system_prompt: Optional[str] = Field(None, description="Optional system instruction")
     search_recency_filter: Optional[str] = Field(None, description="Recency filter: day, week, month, year")
 

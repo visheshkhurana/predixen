@@ -338,15 +338,19 @@ def _get_section_task_type(section: Dict) -> "TaskType":
     title = section.get("title", "").lower()
     section_type = section.get("type", "")
 
-    if any(kw in title for kw in ["executive", "overview", "vision", "strategy", "recommendation"]):
+    if any(kw in title for kw in ["executive", "overview", "vision"]):
         return TaskType.CREATIVE_WRITING
+    elif any(kw in title for kw in ["strategy", "recommendation", "strategic"]):
+        return TaskType.STRATEGY
     elif any(kw in title for kw in ["decision", "next steps", "milestone", "funds"]):
         return TaskType.STRATEGY
-    elif section_type == "simulation" or any(kw in title for kw in ["runway", "survival", "projection"]):
+    elif section_type == "simulation" or any(kw in title for kw in ["runway", "survival", "projection", "monte carlo"]):
         return TaskType.FINANCIAL_ANALYSIS
-    elif section_type == "metrics" or any(kw in title for kw in ["metric", "traction", "unit economics", "growth"]):
+    elif section_type == "metrics" or any(kw in title for kw in ["metric", "traction", "unit economics", "growth", "revenue", "burn"]):
         return TaskType.FINANCIAL_ANALYSIS
-    elif section_type == "comparison" or any(kw in title for kw in ["scenario", "comparison", "sensitivity"]):
+    elif any(kw in title for kw in ["risk", "sensitivity", "analysis"]):
+        return TaskType.FINANCIAL_ANALYSIS
+    elif section_type == "comparison" or any(kw in title for kw in ["scenario", "comparison"]):
         return TaskType.STRATEGY
     else:
         return TaskType.SIMPLE_TASK

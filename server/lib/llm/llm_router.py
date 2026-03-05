@@ -57,6 +57,7 @@ class TaskType(str, Enum):
     NEWS_CURRENT_EVENTS = "news_current_events"
     IMAGE_GENERATION = "image_generation"
     CREATIVE_WRITING = "creative_writing"
+    DOCUMENT_ANALYSIS = "document_analysis"
 
 
 class Provider(str, Enum):
@@ -129,23 +130,29 @@ MODELS = {
         max_tokens=8192,
         description="Most powerful Gemini for agentic workflows"
     ),
-    "perplexity-sonar-small": ModelConfig(
+    "perplexity-sonar": ModelConfig(
         provider=Provider.PERPLEXITY,
-        model_id="llama-3.1-sonar-small-128k-online",
+        model_id="sonar",
         max_tokens=4096,
-        description="Fast web search with citations, cost-effective"
+        description="Fast web search with citations, cost-effective for general queries"
     ),
-    "perplexity-sonar-large": ModelConfig(
+    "perplexity-sonar-pro": ModelConfig(
         provider=Provider.PERPLEXITY,
-        model_id="llama-3.1-sonar-large-128k-online",
+        model_id="sonar-pro",
         max_tokens=4096,
-        description="Detailed web search with citations"
+        description="Detailed web search with citations for in-depth research"
     ),
-    "perplexity-sonar-huge": ModelConfig(
+    "perplexity-sonar-reasoning": ModelConfig(
         provider=Provider.PERPLEXITY,
-        model_id="llama-3.1-sonar-huge-128k-online",
-        max_tokens=4096,
-        description="Most capable web search for complex research"
+        model_id="sonar-reasoning-pro",
+        max_tokens=8192,
+        description="Step-by-step reasoning with web search — best for complex market research and analysis"
+    ),
+    "perplexity-sonar-deep-research": ModelConfig(
+        provider=Provider.PERPLEXITY,
+        model_id="sonar-deep-research",
+        max_tokens=8192,
+        description="Multi-step deep research — most thorough for comprehensive industry analysis"
     ),
     "gpt-image-1": ModelConfig(
         provider=Provider.OPENAI,
@@ -184,13 +191,14 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
     TaskType.SIMPLE_TASK: "gemini-2.5-flash",
     TaskType.VISION: "gpt-4o",
     TaskType.DATA_PROCESSING: "gemini-2.5-pro",
-    TaskType.WEB_SEARCH: "perplexity-sonar-small",
-    TaskType.MARKET_RESEARCH: "perplexity-sonar-large",
-    TaskType.COMPETITOR_ANALYSIS: "perplexity-sonar-large",
-    TaskType.REAL_TIME_DATA: "perplexity-sonar-small",
+    TaskType.WEB_SEARCH: "perplexity-sonar",
+    TaskType.MARKET_RESEARCH: "perplexity-sonar-reasoning",
+    TaskType.COMPETITOR_ANALYSIS: "perplexity-sonar-pro",
+    TaskType.REAL_TIME_DATA: "perplexity-sonar",
     TaskType.NEWS_CURRENT_EVENTS: "grok-4.1-fast",
     TaskType.IMAGE_GENERATION: "gpt-image-1",
     TaskType.CREATIVE_WRITING: "claude-sonnet-4-5",
+    TaskType.DOCUMENT_ANALYSIS: "claude-sonnet-4-5",
 }
 
 
@@ -203,11 +211,12 @@ FALLBACK_CHAIN: Dict[str, List[str]] = {
     "gemini-2.5-pro": ["claude-sonnet-4-5", "gpt-4o"],
     "gemini-3-flash-preview": ["gemini-2.5-flash", "claude-sonnet-4-5"],
     "gemini-3-pro-preview": ["gemini-2.5-pro", "claude-opus-4-5"],
-    "perplexity-sonar-small": ["perplexity-sonar-large", "gpt-4o"],
-    "perplexity-sonar-large": ["perplexity-sonar-huge", "gpt-4o"],
-    "perplexity-sonar-huge": ["perplexity-sonar-large", "claude-opus-4-5"],
+    "perplexity-sonar": ["perplexity-sonar-pro", "gpt-4o"],
+    "perplexity-sonar-pro": ["perplexity-sonar-reasoning", "gpt-4o"],
+    "perplexity-sonar-reasoning": ["perplexity-sonar-pro", "claude-sonnet-4-5"],
+    "perplexity-sonar-deep-research": ["perplexity-sonar-reasoning", "claude-opus-4-5"],
     "gpt-image-1": ["gpt-4o"],
-    "grok-4.1-fast": ["perplexity-sonar-small", "gpt-4o"],
+    "grok-4.1-fast": ["perplexity-sonar", "gpt-4o"],
     "grok-3-mini": ["grok-4.1-fast", "gemini-2.5-flash"],
 }
 
@@ -417,7 +426,7 @@ class LLMRouter:
                                      TaskType.COMPETITOR_ANALYSIS, TaskType.REAL_TIME_DATA,
                                      TaskType.NEWS_CURRENT_EVENTS]:
                     task_type = TaskType.WEB_SEARCH
-                    model = "perplexity-sonar-small"
+                    model = "perplexity-sonar"
             
             classification_latency = int((time.time() - start_time) * 1000)
             
@@ -441,7 +450,7 @@ class LLMRouter:
     def web_search(
         self,
         query: str,
-        model: str = "sonar-small",
+        model: str = "sonar",
         system_prompt: Optional[str] = None,
         search_recency_filter: Optional[str] = None,
         **kwargs
@@ -451,8 +460,9 @@ class LLMRouter:
         
         Args:
             query: Search query
-            model: Perplexity model (sonar-small, sonar-large, sonar-huge)
-                   Also accepts prefixed names like perplexity-sonar-small
+            model: Perplexity model (sonar, sonar-pro, sonar-reasoning-pro, sonar-deep-research)
+                   Also accepts prefixed names like perplexity-sonar-pro
+                   Legacy names like sonar-small/sonar-large are auto-mapped
             system_prompt: Optional system instruction
             search_recency_filter: Recency filter (day, week, month, year)
             **kwargs: Additional arguments
@@ -836,6 +846,7 @@ TASK_DESCRIPTIONS = {
     TaskType.NEWS_CURRENT_EVENTS: "Recent news, announcements, current events (Grok)",
     TaskType.IMAGE_GENERATION: "AI image generation for graphics, diagrams, illustrations",
     TaskType.CREATIVE_WRITING: "Creative narrative writing, executive summaries, storytelling",
+    TaskType.DOCUMENT_ANALYSIS: "Analyzing documents, contracts, reports, long-form content",
 }
 
 
