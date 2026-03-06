@@ -10,7 +10,7 @@ from datetime import datetime
 from server.email.service import _send_email_sync
 from server.api.email_tracking import create_tracked_link
 
-CAMPAIGN = "founderconsole_48hr_update_mar2026_v28"
+CAMPAIGN = "founderconsole_48hr_update_mar2026_v28b"
 
 BASE_URL = "https://fund-flow.replit.app"
 
@@ -324,7 +324,7 @@ FounderConsole
 
 
 def send_all():
-    sender = "Nikita from FounderConsole <noreply@founderconsole.ai>"
+    sender = "Nikita from FounderConsole <nikita@founderconsole.ai>"
 
     print(f"Sending 48-hour task update v28 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
