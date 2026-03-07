@@ -55,6 +55,7 @@ import {
   Bell,
   AlertTriangle,
   Palette,
+  FileStack,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -458,12 +459,15 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/hiring-planner"}
-                  data-testid="nav-hiring"
+                  isActive={location === "/doc-generator" || location.startsWith("/doc-generator/")}
+                  data-testid="nav-doc-generator"
                 >
-                  <Link href="/hiring-planner">
-                    <Users className="h-4 w-4" />
-                    <span>Hiring</span>
+                  <Link href="/doc-generator">
+                    <FileStack className="h-4 w-4" />
+                    <span className="flex-1">Doc Generator</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                      New
+                    </Badge>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

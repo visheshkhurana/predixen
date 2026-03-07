@@ -100,6 +100,7 @@ import SharedScenarioPage from "@/pages/shared-scenario";
 import QAFrontPage from "@/pages/qa";
 import PricingPage from "@/pages/pricing";
 import AIGraphicsPage from "@/pages/ai-graphics";
+import DocGeneratorPage from "@/pages/doc-generator";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -389,6 +390,9 @@ function Router() {
       </Route>
       <Route path="/hiring-planner">
         {() => <AuthenticatedRoute component={HiringPlannerPage} />}
+      </Route>
+      <Route path="/doc-generator">
+        {() => <AuthenticatedRoute component={DocGeneratorPage} />}
       </Route>
       <Route path="/ai-graphics">
         {() => <AuthenticatedRoute component={AIGraphicsPage} />}
