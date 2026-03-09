@@ -1,0 +1,59 @@
+Paste this into Replit AI:
+
+───
+
+Prompt (Replit): Fix www + enable gzip compression
+
+My site is deployed on Replit at https://founderconsole.ai.
+
+Current status:
+
+• robots.txt, sitemap.xml, and asset caching are fixed.
+Remaining problems:
+
+1. https://www.founderconsole.ai fails SSL / won’t connect. I want www to work and 301 redirect to the apex (https://founderconsole.ai).
+2. Static JS/CSS are not being gzip-compressed. Even with Accept-Encoding: gzip, responses do not include Content-Encoding: gzip. I want gzip enabled (Brotli optional).
+
+Please do the following:
+
+A) Fix www subdomain on Replit
+
+• Tell me exactly what to configure in Replit Deployments → Custom Domains:
+  • Add www.founderconsole.ai as an additional custom domain (alongside apex).
+• Tell me the exact DNS change required:
+  • Create a CNAME record for www pointing to the Replit deployment host target that Replit provides (or the correct A/ALIAS if Replit requires it).
+• Implement a 301 redirect in the app so any request hitting the www host redirects to the apex:
+  • https://www.founderconsole.ai/* → https://founderconsole.ai/*
+  • Preserve path + query string.
+
+B) Enable gzip compression for JS/CSS/HTML
+
+• Detect what server framework I’m using (Express / Fastify / Hono / etc.) by inspecting the codebase.
+• Implement gzip compression properly:
+  • Express: install and use compression middleware before express.static
+  • Fastify: use @fastify/compress
+  • If this is a pure static deployment with no server control, explain that and provide the best workaround on Replit.
+• Ensure compression is actually happening (don’t just add the dependency).
+
+C) Provide verification commands (must pass)
+
+Show me the expected output for:
+
+• curl -I https://www.founderconsole.ai
+(should connect and show a 301/308 redirect to https://founderconsole.ai/...)
+• curl -H 'Accept-Encoding: gzip' -I https://founderconsole.ai/assets/<some-hashed>.js
+(should include Content-Encoding: gzip)
+• curl -H 'Accept-Encoding: gzip' -I https://founderconsole.ai/
+(should include Content-Encoding: gzip as well, ideally)
+
+Implementation detail (redirect)
+
+Add a middleware/handler like:
+
+• if req.headers.host starts with www. → redirect to apex with 301.
+
+Make the changes directly in the correct server entry file (e.g. server.js, index.js, etc.) and update dependencies if needed.
+
+───
+
+If you want, tell me your server file name (server.js / index.js / main.ts) and I’ll tailor this prompt even more tightly (framework-specific, with exact code).
