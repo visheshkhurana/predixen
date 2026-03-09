@@ -21,6 +21,14 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  const host = req.hostname || req.headers.host || "";
+  if (host === "www.founderconsole.ai") {
+    return res.redirect(301, `https://founderconsole.ai${req.originalUrl}`);
+  }
+  next();
+});
+
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");

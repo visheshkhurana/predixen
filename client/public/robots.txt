@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /auth
+Disallow: /onboarding
+
+Sitemap: https://founderconsole.ai/sitemap.xml

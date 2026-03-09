@@ -10,10 +10,27 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  app.use("/assets", express.static(path.join(distPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+  }));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
+  app.use(express.static(distPath, {
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }));
+
+  app.use("*", (req, res) => {
+    const url = req.originalUrl;
+    if (url === "/robots.txt" || url === "/sitemap.xml") {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

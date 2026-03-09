@@ -1,0 +1,35 @@
+Copy/paste this into Replit AI (or the Replit “Agent”) as-is:
+
+───
+
+Prompt for Replit
+
+My app founderconsole.ai is a React/Vite-style SPA deployed on Replit. Production issues:
+
+1. https://founderconsole.ai/robots.txt and /sitemap.xml incorrectly return the SPA index.html (content-type: text/html). They must return real text/plain and application/xml.
+2. https://www.founderconsole.ai currently fails SSL / doesn’t resolve correctly. I want www to work and redirect to the apex domain.
+3. Hashed assets like /assets/index-*.js are served with cache-control: public, max-age=0. I want long-term caching for hashed assets (max-age=31536000, immutable) while keeping index.html no-cache.
+4. Enable HTTP compression for JS/CSS/HTML (gzip is fine).
+
+Please:
+
+• Identify how the app is served (Express/Fastify/etc.) and implement the fixes in the correct server entry file.
+• Add real robots.txt and sitemap.xml files (if this is Vite, put them in /public so they end up in /dist).
+• Ensure SPA fallback routing (e.g., app.get("*", ...)) does NOT catch /robots.txt or /sitemap.xml.
+• Update static file serving to set proper cache headers:
+  • /assets/* and other fingerprinted files: Cache-Control: public, max-age=31536000, immutable
+  • /index.html: Cache-Control: no-cache (or very short max-age)
+• Add gzip compression middleware.
+• For the www domain: explain exactly what DNS record to add and what to configure in Replit custom domains, and implement a 301 redirect from www → https://founderconsole.ai.
+
+Acceptance checks (show me how to verify with curl):
+
+• curl -I https://founderconsole.ai/robots.txt returns Content-Type: text/plain (and not HTML)
+• curl -I https://founderconsole.ai/sitemap.xml returns Content-Type: application/xml (or text/xml)
+• curl -I https://founderconsole.ai/assets/<hashed>.js returns Cache-Control: public, max-age=31536000, immutable
+• curl -I https://www.founderconsole.ai works and 301s to apex
+• Responses include Content-Encoding: gzip when requesting with Accept-Encoding: gzip
+
+───
+
+If you tell me what your server file is called on Replit (index.js, server.js, main.ts, etc.) and whether it’s Vite/React/Next, I can tailor the prompt even tighter (and give you the exact code patch).
