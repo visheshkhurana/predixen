@@ -71,17 +71,11 @@ export function useRealtimeKPI(
       setError(err);
       onErrorRef.current?.(err);
     }
-  }, [companyId, getToken]);
+  }, [companyId]);
 
   useEffect(() => {
     if (!companyId || !enabled) {
       disconnect();
-      return;
-    }
-
-    const token = getToken();
-    if (!token) {
-      setError(new Error('Not authenticated'));
       return;
     }
 
@@ -94,7 +88,7 @@ export function useRealtimeKPI(
       clearInterval(intervalId);
       setIsConnected(false);
     };
-  }, [companyId, enabled, getToken, fetchKPIData, disconnect]);
+  }, [companyId, enabled, fetchKPIData, disconnect]);
 
   const connect = useCallback(() => {
     fetchKPIData();

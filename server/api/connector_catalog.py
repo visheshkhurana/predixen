@@ -66,9 +66,9 @@ CONNECTOR_REGISTRY: List[ConnectorMetadata] = [
         documentation_url="https://stripe.com/docs/api",
         implemented=True,
         adapter_key="stripe",
-        metrics_unlocked=["MRR", "ARR", "Churn Rate", "Revenue", "Subscription Count", "ARPU"],
-        required_permissions=["Read payments", "Read subscriptions", "Read invoices"],
-        data_collected=["Payments", "Subscriptions", "Invoices", "Customers", "Refunds"]
+        metrics_unlocked=["MRR", "ARR", "Churn Rate", "Revenue", "Subscription Count", "ARPU", "Refund Amount", "Refund Count", "Customer Count", "New Customers (30d)", "Monthly Revenue Breakdown"],
+        required_permissions=["Read payments", "Read subscriptions", "Read invoices", "Read customers", "Read refunds"],
+        data_collected=["Payments", "Subscriptions", "Invoices", "Customers", "Refunds", "Charges", "Balance"]
     ),
     ConnectorMetadata(
         id="quickbooks",

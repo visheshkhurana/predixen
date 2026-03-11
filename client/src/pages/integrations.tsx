@@ -37,7 +37,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 
-import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal } from "@/components/integrations";
+import { IntegrationCard, OAuthConnectModal, ApiKeyConnectModal, GoogleSheetsConfigModal, StripeConnectModal } from "@/components/integrations";
 import { 
   IntegrationConfig, 
   integrationRegistry, 
@@ -520,6 +520,7 @@ export default function IntegrationsPage() {
   const [oauthModalOpen, setOauthModalOpen] = useState(false);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [sheetsConfigOpen, setSheetsConfigOpen] = useState(false);
+  const [stripeModalOpen, setStripeModalOpen] = useState(false);
   const [connectedNewIntegrations, setConnectedNewIntegrations] = useState<Set<string>>(new Set());
   const [sheetMappings, setSheetMappings] = useState<SheetMapping[]>([]);
 
@@ -816,7 +817,14 @@ export default function IntegrationsPage() {
               </>
             ) : (
               <>
-                <ConnectDialog provider={provider} type={type} companyId={companyId} />
+                {provider.id === 'stripe' ? (
+                  <Button size="sm" onClick={() => setStripeModalOpen(true)} data-testid={`button-connect-${provider.id}`}>
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Connect
+                  </Button>
+                ) : (
+                  <ConnectDialog provider={provider} type={type} companyId={companyId} />
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -1200,6 +1208,16 @@ export default function IntegrationsPage() {
         onClose={() => handleModalClose('sheets')}
         onSave={handleSaveSheetMappings}
         existingMappings={sheetMappings}
+      />
+
+      <StripeConnectModal
+        isOpen={stripeModalOpen}
+        onClose={() => setStripeModalOpen(false)}
+        companyId={companyId}
+        onConnected={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+        }}
       />
     </div>
   );

@@ -65,3 +65,9 @@ The platform employs a modern full-stack architecture, utilizing React/TypeScrip
 -   **Resend**: Email delivery service.
 -   **Twilio**: SMS/phone notifications.
 -   **Google OAuth**: Social login.
+
+## Klipfolio-Style Data Integrations (Phase 1)
+-   **Enhanced Stripe Connector**: `server/connectors/stripe.py` — Extended with paginated MRR calculation, refunds sync, customer count, churn metrics (using `canceled_at` timestamps), ARPU, and 12-month monthly revenue breakdown using calendar-accurate month boundaries.
+-   **Stripe Connect Modal**: `client/src/components/integrations/StripeConnectModal.tsx` — Dark-themed modal with API key input (show/hide), "Test Connection" button that calls the connector API, loading states, error handling, and post-connect sync trigger.
+-   **Klipfolio KPI Dashboard**: `client/src/pages/kpi-board.tsx` — Enhanced with: (A) Filter bar with functional date range selector driving query params and data source filter, (B) KPI cards with sparkline mini-charts, period-over-period delta arrows, data source badges, and hover tooltips, (C) Revenue Insights Panel with 4 Recharts widgets (MRR trend area, Revenue vs Expenses bar, Cash Flow & Runway line, Team & Customer Growth area), (D) Data Sources Status panel showing connected integrations with sync status dots, last sync time, record counts, and "Add Integration" button.
+-   **Connector Catalog**: Stripe entry updated with extended metrics_unlocked, required_permissions, and data_collected fields.

@@ -6,10 +6,15 @@ Provides:
 - Subscription MRR/ARR metrics
 - Customer payment data
 - Invoice and billing information
+- Refund tracking
+- Customer count and churn metrics
+- ARPU calculation
+- Monthly revenue breakdown (last 12 months)
 """
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+import calendar
 import logging
 import httpx
 import base64
@@ -172,11 +177,16 @@ class StripeConnector(BaseConnector):
 
     async def get_mrr(self) -> float:
         client = await self._get_client()
+        mrr = 0.0
         try:
-            response = await client.get("/subscriptions", params={"status": "active", "limit": 100})
-            if response.status_code == 200:
+            params: Dict[str, Any] = {"status": "active", "limit": 100}
+            has_more = True
+            while has_more:
+                response = await client.get("/subscriptions", params=params)
+                if response.status_code != 200:
+                    logger.warning(f"Stripe subscriptions fetch failed: {response.status_code}")
+                    break
                 data = response.json()
-                mrr = 0.0
                 for sub in data.get("data", []):
                     for item in sub.get("items", {}).get("data", []):
                         price = item.get("price", {})
@@ -189,38 +199,257 @@ class StripeConnector(BaseConnector):
                             mrr += amount * qty
                         elif interval == "week":
                             mrr += amount * qty * 4.33
-                return mrr
+                has_more = data.get("has_more", False)
+                if has_more and data.get("data"):
+                    params["starting_after"] = data["data"][-1]["id"]
+                else:
+                    has_more = False
         except Exception as e:
             logger.error(f"Error calculating Stripe MRR: {e}")
-        return 0.0
+        return mrr
 
     async def get_arr(self) -> float:
         return await self.get_mrr() * 12
 
+    async def get_refunds(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        client = await self._get_client()
+        params: Dict[str, Any] = {"limit": 100}
+        if start_date:
+            params["created[gte]"] = int(start_date.timestamp())
+        if end_date:
+            params["created[lte]"] = int(end_date.timestamp())
+
+        total_refund_amount = 0.0
+        refund_count = 0
+
+        try:
+            has_more = True
+            while has_more:
+                response = await client.get("/refunds", params=params)
+                if response.status_code != 200:
+                    logger.warning(f"Stripe refunds fetch failed: {response.status_code}")
+                    break
+                data = response.json()
+                for refund in data.get("data", []):
+                    total_refund_amount += (refund.get("amount", 0) or 0) / 100.0
+                    refund_count += 1
+                has_more = data.get("has_more", False)
+                if has_more and data.get("data"):
+                    params["starting_after"] = data["data"][-1]["id"]
+                else:
+                    has_more = False
+        except Exception as e:
+            logger.error(f"Error fetching Stripe refunds: {e}")
+
+        return {
+            "total_refund_amount": total_refund_amount,
+            "refund_count": refund_count,
+        }
+
+    async def get_customer_count(self) -> Dict[str, Any]:
+        client = await self._get_client()
+        total_customers = 0
+        new_customers_30d = 0
+        thirty_days_ago = int((datetime.utcnow() - timedelta(days=30)).timestamp())
+
+        try:
+            response = await client.get("/customers", params={"limit": 1})
+            if response.status_code == 200:
+                data = response.json()
+                total_customers = data.get("total_count", 0)
+                if total_customers == 0 and data.get("data"):
+                    params: Dict[str, Any] = {"limit": 100}
+                    has_more = True
+                    count = 0
+                    while has_more:
+                        resp = await client.get("/customers", params=params)
+                        if resp.status_code != 200:
+                            break
+                        d = resp.json()
+                        count += len(d.get("data", []))
+                        has_more = d.get("has_more", False)
+                        if has_more and d.get("data"):
+                            params["starting_after"] = d["data"][-1]["id"]
+                        else:
+                            has_more = False
+                    total_customers = count
+
+            new_resp = await client.get("/customers", params={
+                "limit": 100,
+                "created[gte]": thirty_days_ago,
+            })
+            if new_resp.status_code == 200:
+                new_data = new_resp.json()
+                new_customers_30d = len(new_data.get("data", []))
+                if new_data.get("has_more", False):
+                    has_more = True
+                    params_new: Dict[str, Any] = {
+                        "limit": 100,
+                        "created[gte]": thirty_days_ago,
+                    }
+                    while has_more:
+                        if new_data.get("data"):
+                            params_new["starting_after"] = new_data["data"][-1]["id"]
+                        resp = await client.get("/customers", params=params_new)
+                        if resp.status_code != 200:
+                            break
+                        new_data = resp.json()
+                        new_customers_30d += len(new_data.get("data", []))
+                        has_more = new_data.get("has_more", False)
+        except Exception as e:
+            logger.error(f"Error fetching Stripe customer count: {e}")
+
+        return {
+            "total_customers": total_customers,
+            "new_customers_30d": new_customers_30d,
+        }
+
+    async def get_churn_metrics(self) -> Dict[str, Any]:
+        client = await self._get_client()
+        canceled_count = 0
+        active_count = 0
+        thirty_days_ago = int((datetime.utcnow() - timedelta(days=30)).timestamp())
+
+        try:
+            params_c: Dict[str, Any] = {
+                "status": "canceled",
+                "limit": 100,
+            }
+            has_more = True
+            while has_more:
+                canceled_resp = await client.get("/subscriptions", params=params_c)
+                if canceled_resp.status_code != 200:
+                    break
+                canceled_data = canceled_resp.json()
+                for sub in canceled_data.get("data", []):
+                    canceled_at = sub.get("canceled_at") or sub.get("ended_at")
+                    if canceled_at and canceled_at >= thirty_days_ago:
+                        canceled_count += 1
+                has_more = canceled_data.get("has_more", False)
+                if has_more and canceled_data.get("data"):
+                    params_c["starting_after"] = canceled_data["data"][-1]["id"]
+                else:
+                    has_more = False
+
+            all_params: Dict[str, Any] = {"status": "active", "limit": 100}
+            has_more_a = True
+            while has_more_a:
+                a_resp = await client.get("/subscriptions", params=all_params)
+                if a_resp.status_code != 200:
+                    break
+                a_data = a_resp.json()
+                active_count += len(a_data.get("data", []))
+                has_more_a = a_data.get("has_more", False)
+                if has_more_a and a_data.get("data"):
+                    all_params["starting_after"] = a_data["data"][-1]["id"]
+                else:
+                    has_more_a = False
+        except Exception as e:
+            logger.error(f"Error fetching Stripe churn metrics: {e}")
+
+        total_base = active_count + canceled_count
+        churn_rate = (canceled_count / total_base * 100) if total_base > 0 else 0.0
+
+        return {
+            "canceled_subscriptions_30d": canceled_count,
+            "active_subscriptions": active_count,
+            "churn_rate_pct": round(churn_rate, 2),
+        }
+
+    async def get_monthly_revenue_breakdown(self, months: int = 12) -> List[Dict[str, Any]]:
+        client = await self._get_client()
+        breakdown: List[Dict[str, Any]] = []
+        now = datetime.utcnow()
+
+        try:
+            for i in range(months - 1, -1, -1):
+                month_offset = now.month - i
+                year = now.year + (month_offset - 1) // 12
+                month = ((month_offset - 1) % 12) + 1
+                _, last_day = calendar.monthrange(year, month)
+                start = datetime(year, month, 1)
+                end = datetime(year, month, last_day, 23, 59, 59)
+
+                params: Dict[str, Any] = {
+                    "limit": 100,
+                    "created[gte]": int(start.timestamp()),
+                    "created[lte]": int(end.timestamp()),
+                }
+
+                month_revenue = 0.0
+                month_count = 0
+                has_more = True
+                while has_more:
+                    response = await client.get("/charges", params=params)
+                    if response.status_code != 200:
+                        break
+                    data = response.json()
+                    for charge in data.get("data", []):
+                        if charge.get("paid") and not charge.get("refunded"):
+                            month_revenue += (charge.get("amount", 0) or 0) / 100.0
+                            month_count += 1
+                    has_more = data.get("has_more", False)
+                    if has_more and data.get("data"):
+                        params["starting_after"] = data["data"][-1]["id"]
+                    else:
+                        has_more = False
+
+                breakdown.append({
+                    "month": start.strftime("%Y-%m"),
+                    "revenue": round(month_revenue, 2),
+                    "transaction_count": month_count,
+                })
+        except Exception as e:
+            logger.error(f"Error fetching Stripe monthly revenue breakdown: {e}")
+
+        return breakdown
+
     async def get_revenue_metrics(self) -> Dict[str, Any]:
         client = await self._get_client()
-        metrics = {
+        metrics: Dict[str, Any] = {
             "mrr": 0.0,
             "arr": 0.0,
             "total_revenue": 0.0,
             "active_subscriptions": 0,
             "new_customers": 0,
+            "new_customers_30d": 0,
+            "total_customers": 0,
             "churned_customers": 0,
+            "churn_rate_pct": 0.0,
+            "arpu": 0.0,
+            "total_refund_amount": 0.0,
+            "refund_count": 0,
+            "monthly_revenue_breakdown": [],
         }
         try:
             mrr = await self.get_mrr()
             metrics["mrr"] = mrr
             metrics["arr"] = mrr * 12
 
-            bal_resp = await client.get("/balance")
-            if bal_resp.status_code == 200:
-                bal = bal_resp.json()
-                for avail in bal.get("available", []):
-                    metrics["total_revenue"] += (avail.get("amount", 0) or 0) / 100.0
+            churn_data = await self.get_churn_metrics()
+            metrics["churned_customers"] = churn_data["canceled_subscriptions_30d"]
+            metrics["churn_rate_pct"] = churn_data["churn_rate_pct"]
+            metrics["active_subscriptions"] = churn_data["active_subscriptions"]
 
-            sub_resp = await client.get("/subscriptions", params={"status": "active", "limit": 1})
-            if sub_resp.status_code == 200:
-                metrics["active_subscriptions"] = sub_resp.json().get("total_count", 0)
+            customer_data = await self.get_customer_count()
+            metrics["total_customers"] = customer_data["total_customers"]
+            metrics["new_customers"] = customer_data["new_customers_30d"]
+            metrics["new_customers_30d"] = customer_data["new_customers_30d"]
+
+            if metrics["total_customers"] > 0:
+                metrics["arpu"] = round(mrr / metrics["total_customers"], 2)
+
+            refund_data = await self.get_refunds()
+            metrics["total_refund_amount"] = refund_data["total_refund_amount"]
+            metrics["refund_count"] = refund_data["refund_count"]
+
+            monthly_breakdown = await self.get_monthly_revenue_breakdown()
+            metrics["monthly_revenue_breakdown"] = monthly_breakdown
+            metrics["total_revenue"] = sum(m["revenue"] for m in monthly_breakdown)
         except Exception as e:
             logger.error(f"Error getting Stripe revenue metrics: {e}")
         return metrics
@@ -248,12 +477,28 @@ class StripeConnector(BaseConnector):
 
             mrr = await self.get_mrr()
 
+            refund_data = await self.get_refunds()
+            total_records += refund_data["refund_count"]
+
+            customer_data = await self.get_customer_count()
+            churn_data = await self.get_churn_metrics()
+            monthly_breakdown = await self.get_monthly_revenue_breakdown()
+
             financials = self.map_to_financials(
                 invoices=invoices,
                 ledger_entries=ledger,
             )
             financials["mrr"] = mrr
             financials["arr"] = mrr * 12
+            financials["total_refund_amount"] = refund_data["total_refund_amount"]
+            financials["refund_count"] = refund_data["refund_count"]
+            financials["total_customers"] = customer_data["total_customers"]
+            financials["new_customers_30d"] = customer_data["new_customers_30d"]
+            financials["canceled_subscriptions_30d"] = churn_data["canceled_subscriptions_30d"]
+            financials["active_subscriptions"] = churn_data["active_subscriptions"]
+            financials["churn_rate_pct"] = churn_data["churn_rate_pct"]
+            financials["arpu"] = round(mrr / customer_data["total_customers"], 2) if customer_data["total_customers"] > 0 else 0.0
+            financials["monthly_revenue_breakdown"] = monthly_breakdown
 
             self._last_sync = datetime.utcnow()
 
