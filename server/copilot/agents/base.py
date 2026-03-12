@@ -25,6 +25,8 @@ class AgentType(Enum):
     MARKET = "market"
     STRATEGY = "strategy"
     DECISION_ADVISOR = "decision_advisor"
+    OPERATIONS = "operations"
+    REVIEW = "review"
 
 
 class ConfidenceLevel(Enum):

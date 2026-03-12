@@ -105,6 +105,7 @@ class RoutingDecision:
     call_market: bool = False
     call_strategy: bool = False
     call_decision_advisor: bool = False
+    call_operations: bool = False
     reasoning: str = ""
 
 
@@ -149,6 +150,14 @@ class RouterAgent(BaseAgent):
         "improve position", "is it worth", "trade-off", "tradeoff"
     ]
     
+    OPERATIONS_KEYWORDS = [
+        "execute", "implement", "operationalize", "action plan", "tasks",
+        "hiring plan", "who should", "timeline", "milestones",
+        "okr", "objectives", "sprint", "roadmap",
+        "marketing plan", "campaign", "experiment",
+        "pricing change", "rollout", "resource allocation",
+    ]
+    
     def __init__(self, llm_router=None):
         super().__init__(AgentType.ROUTER, llm_router)
     
@@ -175,7 +184,11 @@ class RouterAgent(BaseAgent):
             decision.call_strategy = True
             reasons.append("Strategy advice needed")
         
-        if not any([decision.call_cfo, decision.call_market, decision.call_strategy, decision.call_decision_advisor]):
+        if any(kw in query_lower for kw in self.OPERATIONS_KEYWORDS):
+            decision.call_operations = True
+            reasons.append("Operational execution planning needed")
+        
+        if not any([decision.call_cfo, decision.call_market, decision.call_strategy, decision.call_decision_advisor, decision.call_operations]):
             decision.call_cfo = True
             decision.call_strategy = True
             reasons.append("General advisory - using CFO + Strategy")
@@ -240,7 +253,27 @@ class RouterAgent(BaseAgent):
             if strategy_response.structured_output.get("strategy"):
                 ckb.strategy.update(strategy_response.structured_output.get("strategy", {}))
         
+        if routing.call_operations:
+            from .operations_agent import OperationsAgent
+            ops = OperationsAgent(llm_router=self.llm_router)
+            ops_response = await ops.process(query, ckb, context)
+            agent_responses.append(ops_response)
+        
         merged = self._merge_responses(agent_responses, ckb, context)
+        
+        if len(agent_responses) > 1:
+            try:
+                from .review_agent import ReviewAgent
+                reviewer = ReviewAgent(llm_router=self.llm_router)
+                review_report = await reviewer.review_outputs(agent_responses, ckb, context)
+                merged.structured_output["review"] = review_report
+                if review_report.get("overall_status") == "FAIL":
+                    merged.structured_output["review_warning"] = (
+                        "Some claims could not be verified against your data. "
+                        "Review flagged items for accuracy."
+                    )
+            except Exception as e:
+                self.logger.warning(f"Review agent failed: {e}")
         
         return merged
     

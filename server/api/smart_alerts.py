@@ -221,10 +221,26 @@ def evaluate_alerts(
     metadata["smart_alerts"] = existing_alerts
     _save_metadata(db, company, metadata)
 
+    auto_simulations = []
+    if new_alerts:
+        try:
+            from server.alerts.auto_simulate import process_alerts_for_simulation
+            existing_sim_types = set()
+            for sim in metadata.get("auto_simulations", []):
+                existing_sim_types.add(sim.get("alert_type"))
+            fresh_alerts = [a for a in new_alerts if a.get("type") not in existing_sim_types]
+            if fresh_alerts:
+                auto_simulations = process_alerts_for_simulation(
+                    db, company_id, fresh_alerts
+                )
+        except Exception as e:
+            logger.warning(f"Auto-simulation trigger failed: {e}")
+
     return {
         "new_alerts": len(new_alerts),
         "total_alerts": len(existing_alerts),
         "alerts": new_alerts,
+        "auto_simulations": auto_simulations,
     }
 
 

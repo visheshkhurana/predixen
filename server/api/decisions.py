@@ -1331,3 +1331,45 @@ def share_action_item(
     except Exception as e:
         logger.error(f"Failed to send share email: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/companies/{company_id}/decision-patterns")
+def get_decision_patterns(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = get_user_company(db, company_id, current_user)
+    from server.decision.pattern_engine import DecisionPatternEngine, build_company_profile
+
+    latest_fin = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(FinancialRecord.period_start.desc())
+        .first()
+    )
+
+    profile = build_company_profile({
+        "stage": company.stage if hasattr(company, "stage") else "unknown",
+        "industry": company.industry if hasattr(company, "industry") else "unknown",
+        "revenue": float(latest_fin.revenue or 0) if latest_fin else 0,
+        "headcount": int(latest_fin.headcount or 0) if latest_fin and hasattr(latest_fin, "headcount") else 0,
+    })
+
+    engine = DecisionPatternEngine(db)
+    patterns = engine.find_patterns(profile)
+
+    metadata = company.metadata_json or {}
+    alerts = metadata.get("smart_alerts", [])
+    challenges = []
+    for alert in alerts[:5]:
+        if not alert.get("acknowledged"):
+            challenges.append(alert.get("type", ""))
+
+    recommendations = engine.get_recommendations(profile, challenges if challenges else None)
+
+    return {
+        "company_profile": profile,
+        "patterns": patterns,
+        "recommendations": recommendations,
+    }
