@@ -1,0 +1,351 @@
+You are a senior systems architect and AI engineer helping extend the existing FounderConsole platform.
+
+The goal is to implement a **Founder Digital Twin system**.
+
+A Digital Twin is a continuously updated virtual representation of a real system that mirrors real-world data and enables simulation and prediction.
+
+For FounderConsole, the Digital Twin represents a startup company and continuously synchronizes:
+
+• financial state
+• operational metrics
+• customer metrics
+• strategic decisions
+• simulation outputs
+
+The twin should enable:
+
+• real-time company modeling
+• decision simulations
+• AI strategy recommendations
+• historical decision learning
+
+The architecture should follow these layers:
+
+LAYER 1 — DATA INGESTION
+LAYER 2 — COMPANY STATE MODEL
+LAYER 3 — SIMULATION ENGINE
+LAYER 4 — DECISION MEMORY
+LAYER 5 — AI STRATEGY AGENTS
+LAYER 6 — DIGITAL TWIN API
+
+The system must integrate with the existing FounderConsole architecture.
+
+----------------------------------------------------
+
+STEP 1 — CREATE DIGITAL TWIN DATABASE SCHEMA
+
+Create the following tables in Supabase/Postgres.
+
+Table: company_state
+
+Stores current company metrics.
+
+Columns:
+
+company_id uuid
+timestamp timestamptz
+mrr numeric
+revenue numeric
+expenses numeric
+burn_rate numeric
+cash_balance numeric
+runway_months numeric
+customer_count integer
+churn_rate numeric
+ltv numeric
+cac numeric
+headcount integer
+gross_margin numeric
+data_confidence numeric
+
+----------------------------------------------------
+
+Table: twin_events
+
+Stores updates to the twin.
+
+Columns:
+
+event_id uuid
+company_id uuid
+event_type text
+source text
+payload jsonb
+created_at timestamptz
+
+Examples:
+
+revenue_update
+expense_update
+customer_added
+employee_hired
+
+----------------------------------------------------
+
+Table: decision_history
+
+Stores founder decisions.
+
+Columns:
+
+decision_id uuid
+company_id uuid
+decision_type text
+description text
+simulation_result jsonb
+actual_outcome jsonb
+status text
+created_at timestamptz
+
+----------------------------------------------------
+
+Table: twin_simulations
+
+Stores simulation runs.
+
+Columns:
+
+simulation_id uuid
+company_id uuid
+scenario jsonb
+results jsonb
+p10_runway numeric
+p50_runway numeric
+p90_runway numeric
+survival_probability numeric
+created_at timestamptz
+
+----------------------------------------------------
+
+STEP 2 — BUILD DIGITAL TWIN SERVICE
+
+Create a service:
+
+services/digitalTwinService.ts
+
+Responsibilities:
+
+1) fetch latest company metrics
+2) update company state
+3) emit twin events
+4) trigger simulations
+
+Functions required:
+
+getCompanyTwin(companyId)
+
+updateCompanyState(companyId, metrics)
+
+emitTwinEvent(event)
+
+getTwinHistory(companyId)
+
+----------------------------------------------------
+
+STEP 3 — BUILD EVENT DRIVEN ARCHITECTURE
+
+Digital twins should update in real time when events occur.
+
+Every change in the system should generate an event:
+
+Examples:
+
+Stripe revenue update
+QuickBooks expense update
+Manual financial entry
+HR payroll update
+
+Add an event processor:
+
+workers/twinEventProcessor.ts
+
+Workflow:
+
+event received
+↓
+normalize payload
+↓
+update company_state
+↓
+emit new twin state
+
+----------------------------------------------------
+
+STEP 4 — INTEGRATE WITH SIMULATION ENGINE
+
+Extend the existing simulation engine to pull baseline data from company_state.
+
+Create a function:
+
+runTwinSimulation(companyId, scenario)
+
+Scenario examples:
+
+hire_engineers
+increase_marketing
+raise_prices
+fundraising_round
+
+Simulation should run 1000 Monte Carlo iterations.
+
+Output:
+
+runway_distribution
+cash_projection
+survival_probability
+
+Store results in twin_simulations.
+
+----------------------------------------------------
+
+STEP 5 — BUILD DECISION MEMORY
+
+Every strategic decision should be logged.
+
+Example workflow:
+
+Founder runs simulation
+↓
+Founder executes decision
+↓
+Decision stored in decision_history
+↓
+System later records outcome
+
+Add functions:
+
+logDecision()
+
+updateDecisionOutcome()
+
+This enables the twin to learn how past decisions affected the company.
+
+----------------------------------------------------
+
+STEP 6 — BUILD AI STRATEGY AGENTS
+
+Create an AI orchestration layer.
+
+Agents required:
+
+CFO Agent
+Simulation Agent
+Market Agent
+Strategy Agent
+
+Folder:
+
+ai_agents/
+
+Each agent should expose:
+
+analyze(company_state)
+recommend(simulation_results)
+
+Example workflow:
+
+Founder asks:
+
+"Should we hire 4 engineers?"
+
+System pipeline:
+
+getCompanyTwin()
+↓
+runTwinSimulation()
+↓
+CFO agent analyzes burn impact
+↓
+Strategy agent recommends action
+
+Return structured output:
+
+recommendation
+risk_level
+expected_runway
+confidence
+
+----------------------------------------------------
+
+STEP 7 — BUILD DIGITAL TWIN API
+
+Create endpoints:
+
+/api/twin/state
+/api/twin/events
+/api/twin/simulate
+/api/twin/decisions
+/api/twin/history
+
+Responses must return the current twin state plus simulation insights.
+
+----------------------------------------------------
+
+STEP 8 — FRONTEND DIGITAL TWIN DASHBOARD
+
+Add a new UI page:
+
+/dashboard/twin
+
+Components:
+
+Company Twin Overview
+Runway Distribution
+Risk Indicators
+Decision Timeline
+Simulation Explorer
+
+----------------------------------------------------
+
+STEP 9 — BUILD AUTONOMOUS MONITORING
+
+Create a monitoring worker:
+
+workers/twinMonitor.ts
+
+Runs every hour.
+
+Checks:
+
+runway risk
+churn spike
+burn increase
+
+If risk detected:
+
+run simulation
+generate AI recommendation
+send notification
+
+----------------------------------------------------
+
+STEP 10 — PERFORMANCE
+
+Digital twins must update in real time.
+
+Use:
+
+Redis cache for company_state
+BullMQ for event queue
+worker pool for simulations
+
+----------------------------------------------------
+
+FINAL GOAL
+
+FounderConsole should maintain a continuously updated digital twin of every startup using the platform.
+
+The twin should:
+
+mirror the company's current state
+simulate possible futures
+track decisions and outcomes
+power AI decision recommendations
+
+Implement clean modular architecture with clear separation between:
+
+data layer
+simulation engine
+AI agents
+API layer
+UI layer

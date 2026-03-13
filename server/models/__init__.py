@@ -69,6 +69,7 @@ from server.models.team_member import TeamMember, TeamMemberType, TeamMemberStat
 from server.models.shared_scenario import SharedScenario
 from server.models.metric_snapshot import MetricSnapshot
 from server.models.workspace import NotificationPreference
+from server.models.twin_event import TwinEvent
 
 __all__ = [
     "User",
@@ -152,4 +153,5 @@ __all__ = [
     "SharedScenario",
     "MetricSnapshot",
     "NotificationPreference",
+    "TwinEvent",
 ]

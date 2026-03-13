@@ -1009,6 +1009,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_beta_feedback_table(engine)
     ensure_rate_limits_table(engine)
     ensure_cap_table_enhancements(engine)
+    ensure_twin_events_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1192,3 +1193,27 @@ def ensure_beta_feedback_table(engine: Engine) -> None:
         """))
         conn.commit()
     logger.info("Beta feedback table migration complete")
+
+
+def ensure_twin_events_table(engine: Engine) -> None:
+    """Create twin_events table for Digital Twin event tracking."""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS twin_events (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                event_type VARCHAR(100) NOT NULL,
+                source VARCHAR(100) NOT NULL,
+                payload JSON,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_twin_events_company_id ON twin_events(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_twin_events_event_type ON twin_events(event_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_twin_events_company_type ON twin_events(company_id, event_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_twin_events_created ON twin_events(created_at)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Twin events table migration complete")

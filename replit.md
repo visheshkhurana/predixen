@@ -32,6 +32,8 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
     -   **Multi-LLM Routing**: Intelligent task-type routing to optimize LLM selection based on task requirements (e.g., financial analysis to GPT-4o, strategy to Claude Sonnet).
     -   **AI Graphics Studio**: Generates professional AI graphics via OpenAI's gpt-image-1, supporting various styles and aspect ratios.
     -   **Document Generator**: AI-powered generation for financial models, investor memos, KPI reports, and pitch deck outlines, leveraging multi-LLM routing and optional web research.
+    -   **Digital Twin**: A continuously updated virtual representation of the startup company. Mirrors real-time financial state, operational metrics, and strategic decisions. Integrates CompanyState, simulations, decisions, and alerts into a unified twin model with health scoring, risk indicators, event tracking, and an embedded Monte Carlo simulation explorer. Frontend dashboard at `/digital-twin`, API at `/companies/{id}/twin/*`.
+    -   **Extended Agent Architecture**: Operations Agent (execution planning), Review/Reflection Agent (output validation), Auto-Trigger Simulations (alert-driven Monte Carlo), Cross-Company Decision Pattern Engine, Slack Copilot (5 slash commands), Enhanced Connector Queue (priority-based sync scheduling).
 
 ## External Dependencies
 
