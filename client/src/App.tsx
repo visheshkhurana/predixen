@@ -102,6 +102,7 @@ import PricingPage from "@/pages/pricing";
 import AIGraphicsPage from "@/pages/ai-graphics";
 import DocGeneratorPage from "@/pages/doc-generator";
 import DigitalTwinPage from "@/pages/digital-twin";
+import IntelligenceGraphPage from "@/pages/intelligence-graph";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -400,6 +401,9 @@ function Router() {
       </Route>
       <Route path="/digital-twin">
         {() => <AuthenticatedRoute component={DigitalTwinPage} />}
+      </Route>
+      <Route path="/intelligence">
+        {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
       </Route>
       <Route path="/billing">
         {() => <Redirect to="/admin/billing" />}

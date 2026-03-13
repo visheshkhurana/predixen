@@ -57,6 +57,7 @@ import {
   Palette,
   FileStack,
   Cpu,
+  Network,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -498,6 +499,21 @@ export function AppSidebar() {
                   <Link href="/digital-twin">
                     <Cpu className="h-4 w-4" />
                     <span className="flex-1">Digital Twin</span>
+                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
+                      New
+                    </Badge>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/intelligence"}
+                  data-testid="nav-intelligence"
+                >
+                  <Link href="/intelligence">
+                    <Network className="h-4 w-4" />
+                    <span className="flex-1">Intelligence</span>
                     <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
                       New
                     </Badge>

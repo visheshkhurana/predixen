@@ -102,6 +102,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import doc_generator as doc_generator_api
     from server.api import slack_bot as slack_bot_api
     from server.api import digital_twin as digital_twin_api
+    from server.api import intelligence_graph as intelligence_graph_api
 
     logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
@@ -162,6 +163,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(doc_generator_api.router)
     app.include_router(slack_bot_api.router)
     app.include_router(digital_twin_api.router)
+    app.include_router(intelligence_graph_api.router)
 
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
