@@ -206,6 +206,7 @@ def seed_demo_data(db: Session):
                 _ensure_connector_metadata(db, demo_company)
                 _ensure_company_state(db, demo_company)
                 seed_team_members(db)
+                _seed_twin_intelligence_data(db, demo_company)
                 return demo_user
             existing_scenario = db.query(Scenario).filter(Scenario.company_id == company.id).first()
             if existing_scenario:
@@ -213,6 +214,7 @@ def seed_demo_data(db: Session):
                 _ensure_connector_metadata(db, demo_company)
                 _ensure_company_state(db, demo_company)
                 seed_team_members(db)
+                _seed_twin_intelligence_data(db, demo_company)
                 logger.info("Demo data extended successfully")
                 return demo_user
         else:
@@ -518,6 +520,7 @@ def seed_demo_data(db: Session):
     _seed_extended_demo_data(db, demo_company, demo_user)
     
     seed_team_members(db)
+    _seed_twin_intelligence_data(db, demo_company)
 
     logger.info("Demo data seeding completed successfully")
     return demo_user
@@ -1813,3 +1816,11 @@ def seed_team_members(db: Session):
     db.add_all(team_members)
     db.commit()
     logger.info("Seeded 5 team members")
+
+
+def _seed_twin_intelligence_data(db: Session, demo_company):
+    try:
+        from server.seed.seed_twin_intelligence import seed_twin_intelligence
+        seed_twin_intelligence(db, demo_company.id)
+    except Exception as e:
+        logger.warning(f"Twin/Intelligence seeding skipped: {e}")

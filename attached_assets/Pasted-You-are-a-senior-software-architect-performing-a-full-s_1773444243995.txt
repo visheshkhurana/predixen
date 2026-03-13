@@ -1,0 +1,266 @@
+You are a senior software architect performing a full system audit of this codebase.
+
+Your goal is to analyze the entire FounderConsole application and explain the CURRENT architecture and design so we can validate it before making changes.
+
+IMPORTANT:
+Do NOT propose changes immediately.
+First fully map and explain the current system.
+
+-------------------------------------
+
+STEP 1 — PROJECT STRUCTURE
+
+Scan the entire repository and explain:
+
+• directory structure
+• purpose of each folder
+• main application entry points
+• frontend vs backend separation
+
+Output a tree like:
+
+frontend/
+backend/
+services/
+database/
+workers/
+integrations/
+
+Explain what each contains.
+
+-------------------------------------
+
+STEP 2 — SYSTEM ARCHITECTURE
+
+Describe the current architecture layers.
+
+Example format:
+
+Frontend Layer
+API Layer
+Service Layer
+Data Layer
+Infrastructure Layer
+
+Explain which files implement each layer.
+
+-------------------------------------
+
+STEP 3 — FRONTEND UI STRUCTURE
+
+Identify all UI pages and routes.
+
+Explain:
+
+• navigation structure
+• sidebar/menu layout
+• dashboard components
+• simulation pages
+• data input screens
+• investor room
+• decision journal
+
+List all pages and their purpose.
+
+Example:
+
+/dashboard
+/simulate
+/decisions
+/data-input
+
+Explain the UI flow between pages.
+
+-------------------------------------
+
+STEP 4 — CORE SERVICES
+
+Find all business logic services.
+
+Explain what each service does.
+
+Examples to look for:
+
+metrics service
+simulation engine
+AI copilot
+decision system
+cap table
+fundraising
+
+Explain responsibilities of each service.
+
+-------------------------------------
+
+STEP 5 — DATA MODEL
+
+Identify all database tables and schemas.
+
+Explain:
+
+• companies
+• users
+• metrics
+• events
+• simulations
+• decisions
+• cap tables
+• fundraising
+
+Show relationships between tables.
+
+Explain how multi-tenancy is implemented.
+
+-------------------------------------
+
+STEP 6 — DIGITAL TWIN / STATE MODEL
+
+Determine whether the system currently has a:
+
+• company state model
+• digital twin representation
+• event ledger
+• metric aggregation layer
+
+Explain how company metrics are stored and updated.
+
+-------------------------------------
+
+STEP 7 — SIMULATION ENGINE
+
+Analyze the simulation system.
+
+Explain:
+
+• where simulations run
+• how scenarios are defined
+• how Monte Carlo runs are executed
+• how results are stored
+• how results are displayed in the UI
+
+-------------------------------------
+
+STEP 8 — AI SYSTEM
+
+Identify AI components.
+
+Explain:
+
+• AI Copilot architecture
+• agent system (if any)
+• prompts used
+• API integrations
+
+-------------------------------------
+
+STEP 9 — EVENT / JOB SYSTEM
+
+Explain background processing.
+
+Look for:
+
+• job queues
+• workers
+• cron jobs
+• webhooks
+
+Explain how async tasks run.
+
+-------------------------------------
+
+STEP 10 — INTEGRATIONS
+
+List all integrations supported:
+
+Stripe
+QuickBooks
+HubSpot
+CSV upload
+others
+
+Explain how integrations sync data.
+
+-------------------------------------
+
+STEP 11 — SECURITY
+
+Explain:
+
+authentication
+authorization
+API protection
+rate limiting
+data isolation
+
+-------------------------------------
+
+STEP 12 — CURRENT PRODUCT CAPABILITIES
+
+Summarize what the application currently supports:
+
+• dashboards
+• simulations
+• AI analysis
+• cap table
+• fundraising tools
+• investor room
+• integrations
+
+-------------------------------------
+
+STEP 13 — ARCHITECTURE DIAGRAM
+
+Produce a simplified architecture diagram of the current system.
+
+Example format:
+
+Frontend
+↓
+API
+↓
+Services
+↓
+Database
+↓
+Workers
+
+-------------------------------------
+
+STEP 14 — UX ANALYSIS
+
+Evaluate UI/UX:
+
+• navigation clarity
+• onboarding flow
+• dashboard readability
+• simulation usability
+
+-------------------------------------
+
+STEP 15 — IDENTIFY PROBLEMS
+
+Only after explaining everything, list:
+
+• architecture issues
+• missing layers
+• scalability risks
+• UX confusion points
+• technical debt
+
+-------------------------------------
+
+STEP 16 — RECOMMEND IMPROVEMENTS
+
+Finally suggest:
+
+• architecture improvements
+• service restructuring
+• UI improvements
+• missing components
+
+-------------------------------------
+
+IMPORTANT
+
+Do not modify code.
+Only analyze and explain the current system.

@@ -47,3 +47,13 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
 -   **Resend**: Handles email delivery services.
 -   **Twilio**: Used for SMS/phone notifications.
 -   **Google OAuth**: Provides social login functionality.
+
+## Demo Data & Seeding
+
+-   **Demo User**: `demo@founderconsole.ai` / `demo123` (owner role, platform admin).
+-   **Demo Company**: TechFlow Analytics (SaaS, Series A). Company ID varies (first in user's company list).
+-   **Seed Scripts**:
+    -   `server/seed/seed_demo.py`: Core demo data — financials, scenarios, decisions, cap table, team, connectors, metrics.
+    -   `server/seed/seed_twin_intelligence.py`: Digital Twin & Intelligence Graph data — 25 twin events per company, enriched CompanyState ($513K cash, $28K burn, $44K MRR), 12 months financial records, 8 peer SaaS companies with financial history, additional strategic decisions.
+    -   `server/seed/seed_benchmarks.py`: Industry benchmark data.
+-   **Startup Index Creation**: `ensure_graph_indexes()` runs on every startup (outside migrations branch) to create Intelligence Graph performance indexes.

@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "xt9QF9DygOVB7mkt77svk"
+uri = "file://attached_assets/SYSTEM_AUDIT.md"
+type = "text"
+title = "FounderConsole — Full System Audit Report"
