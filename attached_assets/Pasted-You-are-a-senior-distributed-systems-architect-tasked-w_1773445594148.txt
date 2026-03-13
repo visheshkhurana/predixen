@@ -1,0 +1,376 @@
+You are a senior distributed-systems architect tasked with upgrading the FounderConsole platform to a production-grade scalable architecture.
+
+The existing codebase already contains:
+
+- FastAPI backend
+- React frontend
+- PostgreSQL database
+- Digital Twin service
+- Monte Carlo simulation engine
+- AI Copilot multi-agent system
+- 33+ data connectors
+- Truth Scan pipeline
+
+However the system has major architectural problems:
+
+- no caching layer
+- no async job queue
+- simulations run in request cycle
+- token revocation stored in memory
+- excessive JSON columns
+- connector syncs run inline
+- no websocket layer
+- UI navigation complexity
+- too many pages
+- no observability
+- no backup strategy
+
+Your task is to redesign the system architecture and generate implementation scaffolding WITHOUT breaking existing features.
+
+--------------------------------
+
+PHASE 1 — INFRASTRUCTURE LAYER
+
+Introduce Redis as the central infrastructure service.
+
+Redis responsibilities:
+
+1. cache layer
+2. job queue
+3. rate limiter
+4. token revocation store
+5. websocket pub/sub
+
+Implement Redis integration in FastAPI.
+
+Create modules:
+
+server/infrastructure/
+    redis_client.py
+    cache.py
+    queue.py
+    pubsub.py
+
+Caching targets:
+
+- company_state
+- KPI calculations
+- digital twin state
+- scenario templates
+- benchmark data
+
+Use cache invalidation when:
+
+- financial records change
+- simulation finishes
+- connector sync completes
+
+
+--------------------------------
+
+PHASE 2 — JOB QUEUE SYSTEM
+
+Replace database polling workers with a Redis-backed job queue.
+
+Implement queues:
+
+simulation_queue
+connector_sync_queue
+ai_tasks_queue
+forecast_queue
+alert_queue
+
+Create worker services:
+
+server/workers/
+    simulation_worker.py
+    connector_worker.py
+    ai_worker.py
+    forecasting_worker.py
+
+Workers must support:
+
+- concurrency
+- retries
+- exponential backoff
+- dead letter queue
+- job status updates
+
+Simulations must run only in simulation_worker.
+
+
+--------------------------------
+
+PHASE 3 — WEB-QUEUE-WORKER ARCHITECTURE
+
+Refactor request flow.
+
+Current flow:
+
+API → run simulation → return result
+
+New flow:
+
+API
+  → enqueue simulation job
+  → return job id
+
+Worker
+  → process simulation
+  → store results
+  → publish websocket update
+
+Frontend subscribes to job updates.
+
+
+--------------------------------
+
+PHASE 4 — DIGITAL TWIN OPTIMIZATION
+
+Improve digital twin architecture.
+
+Current twin state is assembled dynamically.
+
+Add caching layer:
+
+cache key:
+twin_state:{company_id}
+
+Invalidate when:
+
+- new financial record
+- connector sync
+- simulation result
+- decision created
+
+Add event pipeline:
+
+Twin Event
+   → Redis stream
+   → Intelligence Graph processor
+
+
+--------------------------------
+
+PHASE 5 — DATABASE NORMALIZATION
+
+Reduce JSON blob usage.
+
+Refactor tables.
+
+Example changes:
+
+simulation_runs
+
+current:
+outputs_json
+
+new tables:
+
+simulation_outputs
+    id
+    run_id
+    metric
+    month
+    p10
+    p50
+    p90
+
+scenario_inputs
+
+scenario_events
+
+decision_options
+
+Only store flexible metadata as JSON.
+
+
+--------------------------------
+
+PHASE 6 — AI SYSTEM IMPROVEMENTS
+
+Optimize Copilot performance.
+
+Current issue:
+
+agents run sequentially.
+
+Implement parallel execution.
+
+New flow:
+
+Router Agent
+    → launch specialists concurrently
+
+CFO Agent
+Strategy Agent
+Market Agent
+
+Responses aggregated by synthesis agent.
+
+Add caching:
+
+copilot_context:{company_id}
+
+
+--------------------------------
+
+PHASE 7 — CONNECTOR SCALABILITY
+
+Move connector syncs into background workers.
+
+Connector API flow:
+
+POST /connectors/sync
+
+API enqueues job.
+
+Worker:
+
+fetch data
+normalize
+run Truth Scan
+store FinancialRecords
+emit twin event
+
+Add per-connector rate limits.
+
+
+--------------------------------
+
+PHASE 8 — WEBSOCKET LAYER
+
+Add real-time system.
+
+Use FastAPI WebSockets.
+
+Create:
+
+server/realtime/
+
+events supported:
+
+simulation progress
+alert triggers
+twin updates
+connector sync status
+
+Use Redis pub/sub to broadcast events.
+
+
+--------------------------------
+
+PHASE 9 — UI/UX SIMPLIFICATION
+
+Refactor navigation.
+
+Replace 50+ page structure with core modules.
+
+Sidebar must contain:
+
+Dashboard
+Simulate
+Decisions
+Copilot
+Data
+
+Secondary menu:
+
+Integrations
+Metrics
+Goals
+Admin
+
+Merge redundant pages:
+
+scenarios
+simulation copilot
+scenario builder
+
+into:
+
+Simulate Workspace
+
+
+--------------------------------
+
+PHASE 10 — OBSERVABILITY
+
+Add monitoring stack.
+
+Implement:
+
+structured logging
+request tracing
+error tracking
+
+Integrate:
+
+Sentry
+OpenTelemetry
+
+Track:
+
+simulation duration
+AI latency
+connector sync failures
+API response times
+
+
+--------------------------------
+
+PHASE 11 — BACKUP & DATA SAFETY
+
+Implement automated PostgreSQL backups.
+
+Add scripts:
+
+scripts/db_backup.py
+scripts/db_restore.py
+
+Schedule backups daily.
+
+Store encrypted backups.
+
+
+--------------------------------
+
+PHASE 12 — FINAL ARCHITECTURE
+
+Target architecture:
+
+Frontend (React)
+        │
+API Gateway (FastAPI)
+        │
+Redis
+  ├ cache
+  ├ queues
+  └ pub/sub
+        │
+Workers
+  ├ simulations
+  ├ connectors
+  ├ AI tasks
+  └ forecasting
+        │
+PostgreSQL
+
+
+--------------------------------
+
+PHASE 13 — OUTPUT
+
+Produce:
+
+1. updated folder structure
+2. redis integration code
+3. queue worker framework
+4. websocket service
+5. simulation job pipeline
+6. database migration plan
+7. UI navigation redesign
+
+Do NOT delete existing features.
+
+Refactor incrementally.
