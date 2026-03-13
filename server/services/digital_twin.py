@@ -230,6 +230,13 @@ def emit_twin_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    try:
+        from server.services.intelligence_graph import process_graph_event
+        process_graph_event(db, company_id, event_type, payload or {})
+    except Exception as e:
+        logger.debug(f"Graph event processing skipped: {e}")
+
     return event
 
 

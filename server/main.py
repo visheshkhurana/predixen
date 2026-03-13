@@ -190,6 +190,17 @@ async def _run_deferred_startup():
         else:
             logger.info("Skipping migrations (RUN_MIGRATIONS=false)")
 
+        try:
+            from server.services.intelligence_graph import ensure_graph_indexes
+            db_idx = SessionLocal()
+            try:
+                ensure_graph_indexes(db_idx)
+                logger.info("Intelligence Graph indexes ensured")
+            finally:
+                db_idx.close()
+        except Exception as e:
+            logger.warning(f"Intelligence Graph indexes skipped: {e}")
+
         db = SessionLocal()
         try:
             if settings.should_seed_benchmarks:
