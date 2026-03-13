@@ -17,6 +17,9 @@ from server.core.company_access import get_user_company
 from server.models import Company, CompanyState, Scenario, SimulationRun
 from server.models.company_state import compute_snapshot_id
 from server.models.user import User
+import logging
+
+logger = logging.getLogger(__name__)
 from server.schemas.canonical import (
     CompanyStateSchema,
     CompanyStateUpdate,
@@ -217,7 +220,22 @@ async def update_company_state(
     db.commit()
     db.refresh(state)
     
-    return state.to_dict()
+    state_dict = state.to_dict()
+    
+    try:
+        from server.services.digital_twin import emit_twin_event
+        changed_fields = []
+        if update.financials:
+            changed_fields = [k for k, v in update.financials.model_dump(exclude_none=True).items() if v is not None]
+        emit_twin_event(db, company_id, "state_update", "canonical_state", {
+            "changed_fields": changed_fields[:10],
+            "snapshot_id": state.snapshot_id,
+        })
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"Twin event emission skipped: {e}")
+    
+    return state_dict
 
 
 @router.get("/canonical/companies/{company_id}/scenarios")

@@ -127,11 +127,11 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
 
   const simMutation = useMutation({
     mutationFn: async (config: any) => {
-      const res = await apiRequest("POST", `/companies/${companyId}/twin/simulate`, config);
+      const res = await apiRequest("POST", `/api/companies/${companyId}/twin/simulate`, config);
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/companies", companyId, "twin"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/companies", companyId, "twin"] });
       toast({ title: "Simulation complete" });
     },
     onError: () => {
@@ -288,7 +288,7 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
 
 function DecisionTimeline({ companyId }: { companyId: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["/companies", companyId, "twin", "decisions"],
+    queryKey: ["/api/companies", companyId, "twin", "decisions"],
     enabled: !!companyId,
   });
 
@@ -347,7 +347,7 @@ function DecisionTimeline({ companyId }: { companyId: number }) {
 
 function EventLog({ companyId }: { companyId: number }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["/companies", companyId, "twin", "events"],
+    queryKey: ["/api/companies", companyId, "twin", "events"],
     enabled: !!companyId,
   });
 
@@ -404,7 +404,7 @@ export default function DigitalTwinPage() {
   const companyId = currentCompany?.id;
 
   const { data: twinState, isLoading, isError, refetch } = useQuery<any>({
-    queryKey: ["/companies", companyId, "twin", "state"],
+    queryKey: ["/api/companies", companyId, "twin", "state"],
     enabled: !!companyId,
     refetchInterval: 30000,
   });

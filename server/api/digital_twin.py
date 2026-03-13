@@ -28,6 +28,7 @@ ALLOWED_EVENT_TYPES = {
     "state_update", "revenue_update", "expense_update", "simulation_run",
     "decision_made", "decision_outcome", "alert_triggered", "connector_sync",
     "truth_scan_complete", "fundraising_update", "headcount_change",
+    "data_ingestion",
 }
 
 

@@ -35,6 +35,7 @@ EVENT_TYPES = [
     "truth_scan_complete",
     "fundraising_update",
     "headcount_change",
+    "data_ingestion",
 ]
 
 

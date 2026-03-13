@@ -505,6 +505,17 @@ async def ingest_financials(
                 db.commit()
                 
                 logger.info(f"Saved comprehensive financial record for company {companyId} with {len([v for v in [mrr_val, arr_val, headcount_val, ndr_val, ltv_val, cac_val] if v])} extended metrics")
+                
+                try:
+                    from server.services.digital_twin import emit_twin_event
+                    emit_twin_event(db, companyId, "data_ingestion", f"ingest:{fileType}", {
+                        "file_name": file.filename,
+                        "file_type": fileType,
+                        "has_revenue": revenue > 0,
+                        "has_cash": cash > 0,
+                    })
+                except Exception:
+                    db.rollback()
             
             return ExtractionResponse(
                 extracted=extracted_dict,

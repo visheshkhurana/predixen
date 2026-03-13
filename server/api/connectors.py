@@ -512,12 +512,20 @@ async def sync_provider(
             metadata["connectors"] = connectors
             company.metadata_json = metadata
 
-            # Add financial record if present
             if financial_record:
                 db.add(financial_record)
 
-            # Commit all changes together
             db.commit()
+
+            try:
+                from server.services.digital_twin import emit_twin_event
+                emit_twin_event(db, company_id, "connector_sync", f"connector:{provider_id}", {
+                    "provider": provider_id,
+                    "records_synced": result.records_synced,
+                    "has_financial_record": financial_record is not None,
+                })
+            except Exception:
+                db.rollback()
 
         except Exception as commit_error:
             # STEP 5: Rollback on commit error
