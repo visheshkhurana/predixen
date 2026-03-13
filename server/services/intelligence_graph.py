@@ -8,14 +8,20 @@ decisions, strategies, and outcomes to enable:
 - Company similarity matching
 - Decision pattern discovery
 - AI strategy recommendations
+- Event-driven graph ingestion pipeline
+- Digital Twin synchronization
+- AI-powered graph analysis
+- Graph-powered simulation recommendations
+- Network visualization data
 """
 import logging
+import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_, case
+from sqlalchemy import func, desc, and_, or_, case, text
 
 from server.models.company import Company
 from server.models.company_decision import CompanyDecision
@@ -26,6 +32,19 @@ from server.models.scenario import Scenario
 from server.models.twin_event import TwinEvent
 
 logger = logging.getLogger(__name__)
+
+GRAPH_EVENT_TYPES = [
+    "revenue_update",
+    "expense_update",
+    "decision_made",
+    "decision_outcome",
+    "simulation_run",
+    "state_update",
+    "connector_sync",
+    "data_ingestion",
+    "fundraising_update",
+    "headcount_change",
+]
 
 
 STRATEGY_TYPES = {
@@ -550,6 +569,11 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     total_companies = db.query(func.count(Company.id)).scalar() or 0
     total_decisions = db.query(func.count(CompanyDecision.id)).scalar() or 0
     total_records = db.query(func.count(FinancialRecord.id)).scalar() or 0
+    total_events = (
+        db.query(func.count(TwinEvent.id))
+        .filter(TwinEvent.company_id == company_id)
+        .scalar() or 0
+    )
 
     return {
         "company_profile": profile,
@@ -561,6 +585,598 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
             "total_companies": total_companies,
             "total_decisions": total_decisions,
             "total_financial_records": total_records,
+            "total_events": total_events,
             "similar_companies_found": len(similar),
         },
     }
+
+
+def process_graph_event(
+    db: Session, company_id: int, event_type: str, payload: dict
+) -> Dict[str, Any]:
+    if event_type not in GRAPH_EVENT_TYPES:
+        return {"processed": False, "reason": f"Event type '{event_type}' not tracked by intelligence graph"}
+
+    result = {"processed": True, "event_type": event_type, "entities_updated": []}
+
+    try:
+        if event_type in ("revenue_update", "expense_update", "data_ingestion", "state_update"):
+            profile = get_company_profile(db, company_id)
+            if profile:
+                result["entities_updated"].append({
+                    "type": "company_metrics",
+                    "company_id": company_id,
+                    "mrr": profile.get("mrr"),
+                    "growth_tier": profile.get("growth_tier"),
+                    "mrr_range": profile.get("mrr_range"),
+                })
+
+        elif event_type == "decision_made":
+            title = payload.get("title", "")
+            decision_type = _classify_decision_type(title)
+            result["entities_updated"].append({
+                "type": "decision_node",
+                "decision_type": decision_type,
+                "title": title,
+            })
+            result["entities_updated"].append({
+                "type": "strategy_link",
+                "strategy": decision_type,
+                "relationship": "USED_STRATEGY",
+            })
+
+        elif event_type == "decision_outcome":
+            decision_id = payload.get("decision_id")
+            impact = payload.get("impact", {})
+            result["entities_updated"].append({
+                "type": "outcome_node",
+                "decision_id": decision_id,
+                "revenue_change": impact.get("revenue_change"),
+                "growth_change": impact.get("growth_change"),
+                "relationship": "RESULTED_IN",
+            })
+
+        elif event_type == "simulation_run":
+            result["entities_updated"].append({
+                "type": "simulation_metric",
+                "survival_probability": payload.get("survival_probability"),
+                "median_runway": payload.get("median_runway"),
+            })
+
+        elif event_type == "fundraising_update":
+            result["entities_updated"].append({
+                "type": "investor_link",
+                "round_type": payload.get("round_type"),
+                "amount": payload.get("amount"),
+                "relationship": "INVESTED_BY",
+            })
+
+        elif event_type == "connector_sync":
+            result["entities_updated"].append({
+                "type": "data_source",
+                "provider": payload.get("provider"),
+                "records_synced": payload.get("records_synced"),
+            })
+
+        elif event_type == "headcount_change":
+            result["entities_updated"].append({
+                "type": "team_metric",
+                "headcount": payload.get("headcount"),
+                "change": payload.get("change"),
+            })
+
+        similar_count = len(find_similar_companies(db, company_id, limit=3))
+        result["similarity_recalculated"] = True
+        result["similar_companies_count"] = similar_count
+
+    except Exception as e:
+        logger.error(f"Graph event processing error: {e}")
+        result["processed"] = False
+        result["error"] = str(e)
+
+    return result
+
+
+def sync_twin_to_graph(db: Session, company_id: int) -> Dict[str, Any]:
+    from server.services.digital_twin import get_twin_state
+
+    twin_state = get_twin_state(db, company_id)
+    if "error" in twin_state:
+        return {"synced": False, "error": twin_state["error"]}
+
+    profile = get_company_profile(db, company_id)
+    if not profile:
+        return {"synced": False, "error": "Company profile not found"}
+
+    nodes = []
+
+    nodes.append({
+        "type": "Company",
+        "id": company_id,
+        "properties": {
+            "name": twin_state.get("company_name"),
+            "stage": profile.get("stage"),
+            "industry": profile.get("industry"),
+            "mrr": profile.get("mrr"),
+            "growth_rate": profile.get("growth_pct"),
+        },
+    })
+
+    financials = twin_state.get("financials", {})
+    metric_fields = {
+        "cash_balance": financials.get("cash_balance"),
+        "monthly_burn": financials.get("monthly_burn"),
+        "revenue_monthly": financials.get("revenue_monthly"),
+        "revenue_growth_rate": financials.get("revenue_growth_rate"),
+    }
+    for metric_name, value in metric_fields.items():
+        if value is not None:
+            nodes.append({
+                "type": "Metric",
+                "properties": {
+                    "metric_name": metric_name,
+                    "value": float(value) if value else 0,
+                    "timestamp": twin_state.get("last_updated"),
+                },
+            })
+
+    derived = twin_state.get("derived_metrics", {})
+    derived_fields = ["runway_months", "gross_margin", "ltv", "cac", "churn_rate"]
+    for field in derived_fields:
+        val = derived.get(field)
+        if val is not None:
+            nodes.append({
+                "type": "Metric",
+                "properties": {
+                    "metric_name": field,
+                    "value": float(val) if val else 0,
+                    "timestamp": twin_state.get("last_updated"),
+                },
+            })
+
+    relationships = []
+    for node in nodes:
+        if node["type"] == "Metric":
+            relationships.append({
+                "from": {"type": "Company", "id": company_id},
+                "to": node,
+                "relationship": "HAS_METRIC",
+            })
+
+    decisions = (
+        db.query(CompanyDecision)
+        .filter(CompanyDecision.company_id == company_id)
+        .order_by(CompanyDecision.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    for d in decisions:
+        dtype = _classify_decision_type(d.title)
+        dec_node = {
+            "type": "Decision",
+            "properties": {
+                "decision_type": dtype,
+                "description": d.title,
+                "status": d.status,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            },
+        }
+        nodes.append(dec_node)
+        relationships.append({
+            "from": {"type": "Company", "id": company_id},
+            "to": dec_node,
+            "relationship": "MADE_DECISION",
+        })
+        relationships.append({
+            "from": {"type": "Company", "id": company_id},
+            "to": {"type": "Strategy", "properties": {"strategy_name": dtype}},
+            "relationship": "USED_STRATEGY",
+        })
+
+    similar = find_similar_companies(db, company_id, limit=5)
+    for peer in similar:
+        relationships.append({
+            "from": {"type": "Company", "id": company_id},
+            "to": {"type": "Company", "peer_rank": peer["peer_rank"]},
+            "relationship": "SIMILAR_TO",
+            "properties": {"similarity_score": peer["similarity_score"]},
+        })
+
+    return {
+        "synced": True,
+        "company_id": company_id,
+        "nodes_count": len(nodes),
+        "relationships_count": len(relationships),
+        "nodes": nodes,
+        "relationships": relationships,
+        "twin_health": twin_state.get("health", {}),
+        "last_updated": twin_state.get("last_updated"),
+    }
+
+
+def generate_ai_strategy_insights(db: Session, company_id: int) -> Dict[str, Any]:
+    profile = get_company_profile(db, company_id)
+    if not profile:
+        return {"insights": [], "error": "Company not found"}
+
+    similar = find_similar_companies(db, company_id, limit=10)
+    patterns = get_decision_patterns(db, company_id)
+    strategies = get_strategy_insights(db, company_id)
+    benchmarks = get_growth_benchmarks(db, company_id)
+
+    insights = []
+
+    stage_data = benchmarks.get("stage_benchmarks", {}).get(profile.get("stage", ""), {})
+    if stage_data:
+        median_mrr = stage_data.get("median", 0)
+        your_mrr = profile.get("mrr", 0)
+        if median_mrr > 0:
+            percentile = "above median" if your_mrr > median_mrr else "below median"
+            ratio = your_mrr / median_mrr if median_mrr > 0 else 0
+            if ratio < 0.5:
+                insights.append({
+                    "type": "revenue_gap",
+                    "severity": "high",
+                    "title": "Revenue significantly below peers",
+                    "description": f"Your MRR (${your_mrr:,.0f}) is {(1-ratio)*100:.0f}% below the peer median (${median_mrr:,.0f}). Companies that closed this gap typically focused on pricing optimization and sales efficiency.",
+                    "recommended_strategies": ["pricing", "growth"],
+                })
+            elif ratio > 1.5:
+                insights.append({
+                    "type": "revenue_leader",
+                    "severity": "low",
+                    "title": "Revenue outperforming peers",
+                    "description": f"Your MRR (${your_mrr:,.0f}) is {(ratio-1)*100:.0f}% above the peer median. Consider this advantage when planning your next fundraise.",
+                    "recommended_strategies": ["fundraising"],
+                })
+
+    peer_strategies = strategies.get("strategies", [])
+    your_decisions = patterns.get("your_recent_decisions", [])
+    your_decision_types = set(d.get("type") for d in your_decisions)
+
+    for ps in peer_strategies[:3]:
+        if ps["strategy"] not in your_decision_types and ps["adoption_count"] >= 2:
+            insights.append({
+                "type": "strategy_gap",
+                "severity": "medium",
+                "title": f"Peers are adopting '{ps['strategy'].replace('_', ' ')}' strategy",
+                "description": f"{ps['adoption_count']} companies have implemented {ps['strategy'].replace('_', ' ')} decisions with {ps['high_confidence_rate']}% high-confidence outcomes. You haven't explored this strategy yet.",
+                "recommended_strategies": [ps["strategy"]],
+                "peer_evidence": {
+                    "adoption_count": ps["adoption_count"],
+                    "company_count": ps["company_count"],
+                    "confidence_rate": ps["high_confidence_rate"],
+                },
+            })
+
+    if similar:
+        avg_similarity = sum(s["similarity_score"] for s in similar) / len(similar)
+        most_common_traits = defaultdict(int)
+        for s in similar:
+            for trait in s.get("shared_traits", []):
+                most_common_traits[trait] += 1
+        top_traits = sorted(most_common_traits.items(), key=lambda x: x[1], reverse=True)[:3]
+        insights.append({
+            "type": "peer_network",
+            "severity": "info",
+            "title": f"Connected to {len(similar)} similar companies",
+            "description": f"Average similarity score: {avg_similarity*100:.0f}%. Strongest shared traits: {', '.join(t[0] for t in top_traits)}.",
+            "peer_count": len(similar),
+            "avg_similarity": round(avg_similarity, 3),
+            "top_shared_traits": [t[0] for t in top_traits],
+        })
+
+    growth_tier = profile.get("growth_tier", "moderate")
+    runway = profile.get("runway_months", 0)
+    if growth_tier == "declining" and runway < 12:
+        insights.append({
+            "type": "survival_risk",
+            "severity": "critical",
+            "title": "Critical: Declining growth with short runway",
+            "description": f"With {runway:.0f} months runway and declining growth, immediate action is needed. Similar companies that survived this phase cut costs by 20-30% and focused on their strongest revenue channel.",
+            "recommended_strategies": ["cost_reduction", "retention"],
+        })
+    elif growth_tier == "declining":
+        insights.append({
+            "type": "growth_warning",
+            "severity": "high",
+            "title": "Growth has turned negative",
+            "description": "Declining growth requires a strategic pivot. Peer data shows companies that acted within 2 months of decline onset had 3x better recovery rates.",
+            "recommended_strategies": ["growth", "product", "retention"],
+        })
+
+    insights.sort(key=lambda x: {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}.get(x.get("severity", "info"), 5))
+
+    return {
+        "company_id": company_id,
+        "insights": insights,
+        "profile": {
+            "stage": profile.get("stage"),
+            "industry": profile.get("industry"),
+            "mrr": profile.get("mrr"),
+            "growth_tier": growth_tier,
+            "runway_months": runway,
+        },
+        "peer_count": len(similar),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def get_simulation_graph_recommendations(
+    db: Session, company_id: int, simulation_result: Optional[Dict] = None
+) -> Dict[str, Any]:
+    profile = get_company_profile(db, company_id)
+    if not profile:
+        return {"recommendations": []}
+
+    similar = find_similar_companies(db, company_id, limit=10)
+    strategies = get_strategy_insights(db, company_id)
+    ai_insights = generate_ai_strategy_insights(db, company_id)
+
+    if not simulation_result:
+        latest_sim = (
+            db.query(SimulationRun)
+            .join(Scenario, SimulationRun.scenario_id == Scenario.id)
+            .filter(Scenario.company_id == company_id)
+            .order_by(SimulationRun.created_at.desc())
+            .first()
+        )
+        if latest_sim and latest_sim.outputs_json:
+            try:
+                simulation_result = json.loads(latest_sim.outputs_json) if isinstance(latest_sim.outputs_json, str) else latest_sim.outputs_json
+            except (json.JSONDecodeError, TypeError):
+                simulation_result = {}
+
+    recommendations = []
+
+    if simulation_result:
+        survival_prob = simulation_result.get("survival_probability", simulation_result.get("summary", {}).get("survival_probability"))
+        median_runway = simulation_result.get("median_runway_months", simulation_result.get("summary", {}).get("median_runway_months"))
+
+        if survival_prob is not None and survival_prob < 0.5:
+            recommendations.append({
+                "type": "survival_action",
+                "priority": "critical",
+                "title": "Low survival probability detected",
+                "description": f"Simulation shows {survival_prob*100:.0f}% survival probability. Peer companies that improved survival focused on cost reduction and revenue acceleration.",
+                "suggested_actions": ["Reduce burn by 20-30%", "Accelerate top revenue channel", "Consider bridge financing"],
+                "peer_evidence": f"{len(similar)} similar companies tracked",
+            })
+        elif survival_prob is not None and survival_prob > 0.8:
+            recommendations.append({
+                "type": "growth_opportunity",
+                "priority": "medium",
+                "title": "Strong survival — consider growth investments",
+                "description": f"With {survival_prob*100:.0f}% survival probability, you have room to invest in growth. Peers at this confidence level typically accelerate hiring and market expansion.",
+                "suggested_actions": ["Invest in sales team", "Explore new channels", "Consider fundraising"],
+                "peer_evidence": f"Based on {len(similar)} peer companies",
+            })
+
+    peer_strategies = strategies.get("strategies", [])
+    for ps in peer_strategies[:2]:
+        if ps["adoption_count"] >= 2:
+            recommendations.append({
+                "type": "peer_strategy",
+                "priority": "medium",
+                "title": f"Peer-validated strategy: {ps['strategy'].replace('_', ' ').title()}",
+                "description": ps.get("recommendation", f"{ps['adoption_count']} peer companies have successfully used this strategy."),
+                "adoption_count": ps["adoption_count"],
+                "confidence_rate": ps["high_confidence_rate"],
+            })
+
+    for insight in ai_insights.get("insights", []):
+        if insight.get("severity") in ("critical", "high"):
+            recommendations.append({
+                "type": "ai_insight",
+                "priority": insight["severity"],
+                "title": insight["title"],
+                "description": insight["description"],
+                "recommended_strategies": insight.get("recommended_strategies", []),
+            })
+
+    priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    recommendations.sort(key=lambda r: priority_order.get(r.get("priority", "low"), 4))
+
+    return {
+        "company_id": company_id,
+        "recommendations": recommendations[:8],
+        "simulation_available": simulation_result is not None,
+        "peer_count": len(similar),
+        "profile_summary": {
+            "stage": profile.get("stage"),
+            "mrr": profile.get("mrr"),
+            "growth_tier": profile.get("growth_tier"),
+        },
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def get_network_graph_data(db: Session, company_id: int) -> Dict[str, Any]:
+    profile = get_company_profile(db, company_id)
+    if not profile:
+        return {"nodes": [], "edges": []}
+
+    nodes = []
+    edges = []
+
+    nodes.append({
+        "id": f"company_{company_id}",
+        "type": "Company",
+        "label": profile.get("name", "Your Company"),
+        "properties": {
+            "stage": profile.get("stage"),
+            "industry": profile.get("industry"),
+            "mrr": profile.get("mrr"),
+            "growth_tier": profile.get("growth_tier"),
+        },
+        "is_self": True,
+    })
+
+    financials = profile.get("mrr", 0)
+    metric_data = [
+        ("MRR", profile.get("mrr")),
+        ("Growth", profile.get("growth_pct")),
+        ("Runway", profile.get("runway_months")),
+        ("Cash", profile.get("cash_balance")),
+        ("Burn Rate", profile.get("burn_rate")),
+    ]
+    for metric_name, value in metric_data:
+        if value is not None and value != 0:
+            node_id = f"metric_{metric_name.lower().replace(' ', '_')}"
+            nodes.append({
+                "id": node_id,
+                "type": "Metric",
+                "label": metric_name,
+                "properties": {"value": value},
+            })
+            edges.append({
+                "from": f"company_{company_id}",
+                "to": node_id,
+                "relationship": "HAS_METRIC",
+            })
+
+    decisions = (
+        db.query(CompanyDecision)
+        .filter(CompanyDecision.company_id == company_id)
+        .order_by(CompanyDecision.created_at.desc())
+        .limit(8)
+        .all()
+    )
+    strategy_nodes_added = set()
+    for d in decisions:
+        dtype = _classify_decision_type(d.title)
+        dec_id = f"decision_{d.id}"
+        nodes.append({
+            "id": dec_id,
+            "type": "Decision",
+            "label": d.title[:40],
+            "properties": {
+                "decision_type": dtype,
+                "status": d.status,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            },
+        })
+        edges.append({
+            "from": f"company_{company_id}",
+            "to": dec_id,
+            "relationship": "MADE_DECISION",
+        })
+
+        strat_id = f"strategy_{dtype}"
+        if dtype not in strategy_nodes_added:
+            strategy_nodes_added.add(dtype)
+            nodes.append({
+                "id": strat_id,
+                "type": "Strategy",
+                "label": dtype.replace("_", " ").title(),
+                "properties": {"strategy_name": dtype},
+            })
+            edges.append({
+                "from": f"company_{company_id}",
+                "to": strat_id,
+                "relationship": "USED_STRATEGY",
+            })
+
+        edges.append({
+            "from": dec_id,
+            "to": strat_id,
+            "relationship": "IMPLEMENTS",
+        })
+
+        if d.status in ("completed", "decided", "accepted", "implemented"):
+            outcome_id = f"outcome_{d.id}"
+            nodes.append({
+                "id": outcome_id,
+                "type": "Outcome",
+                "label": f"Result: {d.status}",
+                "properties": {"status": d.status},
+            })
+            edges.append({
+                "from": dec_id,
+                "to": outcome_id,
+                "relationship": "RESULTED_IN",
+            })
+
+    similar = find_similar_companies(db, company_id, limit=5)
+    for peer in similar:
+        peer_id = f"peer_{peer['peer_rank']}"
+        nodes.append({
+            "id": peer_id,
+            "type": "Company",
+            "label": f"Peer #{peer['peer_rank']}",
+            "properties": {
+                "industry": peer["industry"],
+                "stage": peer["stage"],
+                "mrr_range": peer["mrr_range"],
+                "similarity_score": peer["similarity_score"],
+            },
+            "is_self": False,
+        })
+        edges.append({
+            "from": f"company_{company_id}",
+            "to": peer_id,
+            "relationship": "SIMILAR_TO",
+            "properties": {"score": peer["similarity_score"]},
+        })
+
+    latest_sim = (
+        db.query(SimulationRun)
+        .join(Scenario, SimulationRun.scenario_id == Scenario.id)
+        .filter(Scenario.company_id == company_id)
+        .order_by(SimulationRun.created_at.desc())
+        .first()
+    )
+    if latest_sim:
+        sim_node_id = f"simulation_{latest_sim.id}"
+        nodes.append({
+            "id": sim_node_id,
+            "type": "Simulation",
+            "label": "Latest Simulation",
+            "properties": {
+                "created_at": latest_sim.created_at.isoformat() if latest_sim.created_at else None,
+            },
+        })
+        edges.append({
+            "from": f"company_{company_id}",
+            "to": sim_node_id,
+            "relationship": "RAN_SIMULATION",
+        })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "node_types": list(set(n["type"] for n in nodes)),
+        "relationship_types": list(set(e["relationship"] for e in edges)),
+    }
+
+
+def ensure_graph_indexes(db: Session) -> Dict[str, Any]:
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_financial_records_company_period ON financial_records(company_id, period_start DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_company_decisions_company ON company_decisions(company_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_company_decisions_status ON company_decisions(status)",
+        "CREATE INDEX IF NOT EXISTS idx_company_decisions_type_status ON company_decisions(status, company_id)",
+        "CREATE INDEX IF NOT EXISTS idx_twin_events_company_type ON twin_events(company_id, event_type)",
+        "CREATE INDEX IF NOT EXISTS idx_twin_events_created ON twin_events(company_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_industry ON companies(industry)",
+        "CREATE INDEX IF NOT EXISTS idx_companies_stage ON companies(stage)",
+        "CREATE INDEX IF NOT EXISTS idx_simulation_runs_created ON simulation_runs(created_at DESC)",
+    ]
+
+    results = []
+    for idx_sql in indexes:
+        try:
+            db.execute(text(idx_sql))
+            results.append({"sql": idx_sql, "status": "created"})
+        except Exception as e:
+            results.append({"sql": idx_sql, "status": "error", "error": str(e)})
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to commit indexes: {e}")
+
+    return {"indexes_processed": len(results), "results": results}

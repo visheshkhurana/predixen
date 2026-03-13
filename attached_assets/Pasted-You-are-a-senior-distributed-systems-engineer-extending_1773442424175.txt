@@ -1,0 +1,359 @@
+You are a senior distributed systems engineer extending the FounderConsole platform.
+
+Your task is to implement the **Founder Intelligence Graph**.
+
+The Founder Intelligence Graph connects:
+
+• companies
+• founders
+• metrics
+• decisions
+• strategies
+• outcomes
+
+This graph allows FounderConsole to analyze cross-company patterns and generate strategic insights.
+
+The graph must integrate with the existing:
+
+• Digital Twin architecture
+• Event Ledger
+• AI agents
+• Simulation engine
+
+--------------------------------------------------
+
+ARCHITECTURE
+
+FounderConsole Intelligence Stack
+
+Data Connectors
+↓
+Metrics Layer
+↓
+Event Ledger
+↓
+Digital Twin
+↓
+Simulation Engine
+↓
+AI Agents
+↓
+Founder Intelligence Graph
+↓
+Decision Engine
+
+--------------------------------------------------
+
+STEP 1 — ADD GRAPH DATABASE
+
+Add Neo4j as the graph database.
+
+Create service:
+
+services/graph/neo4jClient.ts
+
+Requirements:
+
+• initialize Neo4j connection
+• expose query function
+• retry logic
+• connection pooling
+
+Environment variables:
+
+NEO4J_URI
+NEO4J_USER
+NEO4J_PASSWORD
+
+--------------------------------------------------
+
+STEP 2 — DEFINE GRAPH SCHEMA
+
+Nodes:
+
+Founder
+Company
+Metric
+Decision
+Outcome
+Strategy
+Investor
+MarketSignal
+
+Example properties:
+
+Founder
+- founder_id
+- name
+- experience_level
+
+Company
+- company_id
+- stage
+- industry
+- mrr
+- growth_rate
+
+Metric
+- metric_name
+- value
+- timestamp
+
+Decision
+- decision_type
+- description
+- created_at
+
+Outcome
+- impact
+- revenue_change
+- growth_change
+
+Strategy
+- strategy_name
+
+--------------------------------------------------
+
+STEP 3 — DEFINE RELATIONSHIPS
+
+Edges:
+
+Founder -[:FOUNDED]-> Company
+
+Company -[:HAS_METRIC]-> Metric
+
+Company -[:MADE_DECISION]-> Decision
+
+Decision -[:RESULTED_IN]-> Outcome
+
+Company -[:USED_STRATEGY]-> Strategy
+
+Company -[:INVESTED_BY]-> Investor
+
+Company -[:SIMILAR_TO]-> Company
+
+--------------------------------------------------
+
+STEP 4 — BUILD GRAPH INGESTION PIPELINE
+
+Create worker:
+
+workers/graphIngestionWorker.ts
+
+This worker listens to Event Ledger events.
+
+Example events:
+
+revenue_update
+expense_update
+decision_logged
+simulation_completed
+
+Pipeline:
+
+event received
+↓
+extract entities
+↓
+update nodes
+↓
+create relationships
+
+--------------------------------------------------
+
+STEP 5 — CONNECT DIGITAL TWIN
+
+Extend digitalTwinService.
+
+Add function:
+
+syncTwinToGraph(companyId)
+
+Process:
+
+read company_state
+↓
+create/update Company node
+↓
+create Metric nodes
+↓
+create relationships
+
+Example:
+
+Company → HAS_METRIC → MRR
+
+--------------------------------------------------
+
+STEP 6 — DECISION GRAPH
+
+Every decision should become a graph node.
+
+Example:
+
+Decision: hire engineers
+
+Graph structure:
+
+Company
+→ MADE_DECISION
+→ Decision
+→ RESULTED_IN
+→ Outcome
+
+Add helper functions:
+
+createDecisionNode()
+linkDecisionOutcome()
+
+--------------------------------------------------
+
+STEP 7 — BUILD SIMILARITY ENGINE
+
+Create service:
+
+services/graph/similarityService.ts
+
+Purpose:
+
+find companies similar to the current company.
+
+Similarity criteria:
+
+MRR range
+growth rate
+team size
+industry
+
+Example Cypher query:
+
+MATCH (c:Company)
+WHERE c.mrr > $minMRR
+AND c.mrr < $maxMRR
+AND c.industry = $industry
+RETURN c
+
+--------------------------------------------------
+
+STEP 8 — ADD GRAPH INTELLIGENCE QUERIES
+
+Create API:
+
+/api/graph/insights
+
+Example queries:
+
+1. Find strategies used by successful companies
+
+MATCH (c:Company)-[:USED_STRATEGY]->(s:Strategy)
+WHERE c.growth_rate > 0.15
+RETURN s, count(*)
+
+2. Find most common decisions
+
+MATCH (d:Decision)
+RETURN d.decision_type, count(*)
+
+3. Find outcomes of hiring decisions
+
+MATCH (d:Decision)-[:RESULTED_IN]->(o:Outcome)
+WHERE d.decision_type = "hire_engineers"
+RETURN o
+
+--------------------------------------------------
+
+STEP 9 — BUILD AI GRAPH ANALYSIS
+
+Extend AI agents to query the graph.
+
+Add service:
+
+services/graph/graphAIService.ts
+
+Function:
+
+generateStrategyInsights(companyId)
+
+Process:
+
+find similar companies
+↓
+analyze their decisions
+↓
+evaluate outcomes
+↓
+return recommended strategies
+
+Example output:
+
+"Companies with similar metrics increased growth by 24% after hiring sales teams."
+
+--------------------------------------------------
+
+STEP 10 — GRAPH-POWERED RECOMMENDATIONS
+
+When a founder runs a simulation:
+
+system should also query the graph.
+
+Example flow:
+
+Founder runs simulation
+↓
+Digital Twin simulation result
+↓
+Graph analysis of similar companies
+↓
+AI strategy recommendation
+
+Return response:
+
+simulation_outcome
+peer_strategy_patterns
+recommended_action
+
+--------------------------------------------------
+
+STEP 11 — BUILD GRAPH DASHBOARD
+
+Add UI page:
+
+/dashboard/intelligence
+
+Sections:
+
+Similar Companies
+Successful Strategies
+Decision Patterns
+Growth Benchmarks
+
+Components:
+
+graph insights panel
+decision network visualization
+strategy leaderboard
+
+--------------------------------------------------
+
+STEP 12 — PERFORMANCE
+
+Use indexes on:
+
+Company.company_id
+Decision.decision_type
+Metric.metric_name
+
+Cache frequent graph queries in Redis.
+
+--------------------------------------------------
+
+FINAL GOAL
+
+FounderConsole should build a global intelligence network across all startups on the platform.
+
+The graph enables:
+
+• cross-company benchmarking
+• decision pattern discovery
+• AI strategy recommendations
+• predictive startup insights
