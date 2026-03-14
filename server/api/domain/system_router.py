@@ -1,13 +1,13 @@
 """
 Domain Router: /system
 Aggregates system-level endpoints — events, flags, autopilot, admin tools.
-All endpoints require authentication.
+All endpoints require platform admin authentication.
 """
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from sqlalchemy.orm import Session
 from server.core.db import get_db
-from server.core.security import get_current_user
+from server.api.admin import require_platform_admin
 
 router = APIRouter(prefix="/system", tags=["System Domain"])
 
@@ -18,7 +18,7 @@ def get_events(
     event_type: Optional[str] = None,
     aggregate_type: Optional[str] = None,
     limit: int = Query(50, le=500),
-    user=Depends(get_current_user),
+    user=Depends(require_platform_admin),
 ):
     from server.events.event_store import get_events as _get_events
     cid = company_id or _get_primary_company(user)
@@ -28,7 +28,7 @@ def get_events(
 
 
 @router.get("/events/stats")
-def get_event_stats(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def get_event_stats(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.events.event_store import get_event_stats
     cid = company_id or _get_primary_company(user)
     if not cid:
@@ -37,32 +37,32 @@ def get_event_stats(company_id: Optional[int] = None, user=Depends(get_current_u
 
 
 @router.get("/flags")
-def get_all_flags(user=Depends(get_current_user)):
+def get_all_flags(user=Depends(require_platform_admin)):
     from server.core.feature_flags import get_all_flags
     return {"flags": get_all_flags()}
 
 
 @router.post("/flags/{flag_key}")
-def toggle_flag(flag_key: str, enabled: bool = True, user=Depends(get_current_user)):
+def toggle_flag(flag_key: str, enabled: bool = True, user=Depends(require_platform_admin)):
     from server.core.feature_flags import set_feature_flag
     set_feature_flag(flag_key, enabled)
     return {"key": flag_key, "enabled": enabled}
 
 
 @router.get("/agents")
-def get_agents(user=Depends(get_current_user)):
+def get_agents(user=Depends(require_platform_admin)):
     from server.copilot.ai_governance import get_all_permissions
     return {"agents": get_all_permissions()}
 
 
 @router.get("/agents/stats")
-def agent_usage_stats(days: int = 7, user=Depends(get_current_user)):
+def agent_usage_stats(days: int = 7, user=Depends(require_platform_admin)):
     from server.copilot.ai_governance import get_agent_stats
     return get_agent_stats(days=days)
 
 
 @router.get("/autopilot/briefing")
-def get_briefing(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def get_briefing(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.services.founder_autopilot import get_latest_briefing
     cid = company_id or _get_primary_company(user)
     if not cid:
@@ -74,7 +74,7 @@ def get_briefing(company_id: Optional[int] = None, user=Depends(get_current_user
 
 
 @router.post("/autopilot/run")
-def run_autopilot_endpoint(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def run_autopilot_endpoint(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.services.founder_autopilot import run_autopilot
     cid = company_id or _get_primary_company(user)
     if not cid:
@@ -83,7 +83,7 @@ def run_autopilot_endpoint(company_id: Optional[int] = None, user=Depends(get_cu
 
 
 @router.get("/autopilot/history")
-def autopilot_history(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def autopilot_history(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.services.founder_autopilot import get_briefing_history
     cid = company_id or _get_primary_company(user)
     if not cid:
@@ -92,7 +92,7 @@ def autopilot_history(company_id: Optional[int] = None, user=Depends(get_current
 
 
 @router.get("/autopilot/risks")
-def detect_risks(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def detect_risks(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.services.founder_autopilot import detect_risks
     cid = company_id or _get_primary_company(user)
     if not cid:
@@ -101,7 +101,7 @@ def detect_risks(company_id: Optional[int] = None, user=Depends(get_current_user
 
 
 @router.get("/confidence")
-def get_confidence(company_id: Optional[int] = None, user=Depends(get_current_user)):
+def get_confidence(company_id: Optional[int] = None, user=Depends(require_platform_admin)):
     from server.services.data_confidence import compute_all_confidence
     cid = company_id or _get_primary_company(user)
     if not cid:
