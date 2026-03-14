@@ -50,6 +50,8 @@ import {
   Briefcase,
   Flag,
   BookOpen,
+  Brain,
+  Plug,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -67,29 +69,10 @@ interface SettingsNavItem {
 
 const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
   {
-    label: "Data & Integrations",
+    label: "Tools",
     items: [
-      { title: "Data Input", url: "/data", icon: Upload },
-      { title: "Integrations", url: "/integrations", icon: Link2 },
       { title: "Marketplace", url: "/marketplace", icon: Database },
-      { title: "Health Check", url: "/truth", icon: Activity },
-    ],
-  },
-  {
-    label: "Metrics & Reports",
-    items: [
-      { title: "Metric Catalog", url: "/metrics", icon: FileCode },
-      { title: "KPI Dashboards", url: "/dashboards", icon: LayoutGrid },
       { title: "Doc Generator", url: "/doc-generator", icon: FileText },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { title: "Cap Table", url: "/cap-table", icon: BarChart3 },
-      { title: "Fundraising", url: "/fundraising", icon: CreditCard },
-      { title: "Investor Room", url: "/investor-room", icon: Briefcase },
-      { title: "Hiring Planner", url: "/hiring-planner", icon: UsersRound },
     ],
   },
   {
@@ -97,7 +80,6 @@ const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
     items: [
       { title: "Journal", url: "/journal", icon: BookOpen },
       { title: "Goals", url: "/goals", icon: Flag },
-      { title: "Alerts", url: "/alerts", icon: AlertTriangle },
     ],
   },
 ];
@@ -389,7 +371,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 overflow-y-auto">
         <div className="px-2 py-2 mb-1">
           <p className="text-xs text-muted-foreground mb-2 px-2">Company</p>
           <CompanySwitcher />
@@ -422,7 +404,7 @@ export function AppSidebar() {
 
         <HealthScoreCard />
 
-        <div className="h-px bg-border/50 mx-3 my-3" />
+        <div className="h-px bg-border/50 mx-3 my-2" />
 
         <SidebarGroup className="py-0">
           <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -479,32 +461,168 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
+                  isActive={location === "/alerts"}
+                  data-testid="nav-alerts"
+                >
+                  <Link href="/alerts">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="flex-1">Alerts</span>
+                    {unreadAlertCount > 0 && (
+                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
+                        {unreadAlertCount}
+                      </Badge>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-0">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Finance
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/cap-table"}
+                  data-testid="nav-cap-table"
+                >
+                  <Link href="/cap-table">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Cap Table</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/fundraising"}
+                  data-testid="nav-fundraising"
+                >
+                  <Link href="/fundraising">
+                    <CreditCard className="h-4 w-4" />
+                    <span>Fundraising</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/investor-room"}
+                  data-testid="nav-investor-room"
+                >
+                  <Link href="/investor-room">
+                    <Briefcase className="h-4 w-4" />
+                    <span>Investor Room</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/hiring-planner"}
+                  data-testid="nav-hiring-planner"
+                >
+                  <Link href="/hiring-planner">
+                    <UsersRound className="h-4 w-4" />
+                    <span>Hiring Planner</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-0">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Intelligence
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/digital-twin"}
+                  data-testid="nav-digital-twin"
+                >
+                  <Link href="/digital-twin">
+                    <Brain className="h-4 w-4" />
+                    <span>Digital Twin</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/metrics" || location === "/dashboards"}
+                  data-testid="nav-metrics"
+                >
+                  <Link href="/dashboards">
+                    <LayoutGrid className="h-4 w-4" />
+                    <span>KPI Dashboards</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/truth"}
+                  data-testid="nav-health-check"
+                >
+                  <Link href="/truth">
+                    <Activity className="h-4 w-4" />
+                    <span>Health Check</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-0">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Data
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
                   isActive={location === "/data" || location.startsWith("/data/")}
                   data-testid="nav-data"
                 >
                   <Link href="/data">
-                    <Database className="h-4 w-4" />
-                    <span>Data</span>
+                    <Upload className="h-4 w-4" />
+                    <span>Data Input</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {unreadAlertCount > 0 && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === "/alerts"}
-                    data-testid="nav-alerts"
-                  >
-                    <Link href="/alerts">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="flex-1">Alerts</span>
-                      <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
-                        {unreadAlertCount}
-                      </Badge>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup className="py-0">
+          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Integrations
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/integrations"}
+                  data-testid="nav-integrations"
+                >
+                  <Link href="/integrations">
+                    <Plug className="h-4 w-4" />
+                    <span>Connectors</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
