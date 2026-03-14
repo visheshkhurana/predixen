@@ -1014,6 +1014,12 @@ def run_migrations(engine: Engine) -> None:
     ensure_scenario_inputs_table(engine)
     ensure_scenario_events_table(engine)
     ensure_decision_options_table(engine)
+    ensure_event_ledger_tables(engine)
+    ensure_feature_flags_tables(engine)
+    ensure_ai_governance_tables(engine)
+    ensure_data_confidence_table(engine)
+    ensure_graph_adjacency_tables(engine)
+    ensure_autopilot_tables(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1316,3 +1322,210 @@ def ensure_decision_options_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Decision options table migration complete")
+
+
+def ensure_event_ledger_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                user_id INTEGER,
+                event_type VARCHAR(100) NOT NULL,
+                aggregate_type VARCHAR(100) NOT NULL,
+                aggregate_id INTEGER,
+                timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                version INTEGER DEFAULT 1
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS event_payloads (
+                id SERIAL PRIMARY KEY,
+                event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                payload_json TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS event_consumers (
+                consumer_name VARCHAR(255) PRIMARY KEY,
+                last_event_id INTEGER DEFAULT 0
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS event_projections (
+                projection_name VARCHAR(255) PRIMARY KEY,
+                state_json TEXT NOT NULL
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_company ON events(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_type ON events(event_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_aggregate ON events(aggregate_type, aggregate_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_timestamp ON events(timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_event_payloads_event ON event_payloads(event_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Event ledger tables migration complete")
+
+
+def ensure_feature_flags_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS feature_flags (
+                key VARCHAR(255) PRIMARY KEY,
+                description TEXT,
+                enabled BOOLEAN DEFAULT FALSE
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS company_flags (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                flag_key VARCHAR(255) NOT NULL REFERENCES feature_flags(key),
+                enabled BOOLEAN DEFAULT FALSE,
+                UNIQUE(company_id, flag_key)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_flags (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                flag_key VARCHAR(255) NOT NULL REFERENCES feature_flags(key),
+                enabled BOOLEAN DEFAULT FALSE,
+                UNIQUE(user_id, flag_key)
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_company_flags_company ON company_flags(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_flags_user ON user_flags(user_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Feature flags tables migration complete")
+
+
+def ensure_ai_governance_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ai_agent_permissions (
+                agent_name VARCHAR(255) PRIMARY KEY,
+                allowed_actions TEXT,
+                max_daily_requests INTEGER DEFAULT 1000,
+                requires_human_approval BOOLEAN DEFAULT FALSE
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ai_agent_logs (
+                id SERIAL PRIMARY KEY,
+                agent_name VARCHAR(255) NOT NULL,
+                task VARCHAR(500),
+                input_json TEXT,
+                output_json TEXT,
+                cost FLOAT DEFAULT 0,
+                timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                company_id INTEGER
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ai_agent_budgets (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                agent_name VARCHAR(255) NOT NULL,
+                monthly_budget FLOAT DEFAULT 100.0,
+                usage FLOAT DEFAULT 0,
+                UNIQUE(company_id, agent_name)
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_logs_agent ON ai_agent_logs(agent_name)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_logs_timestamp ON ai_agent_logs(timestamp)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_logs_company ON ai_agent_logs(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ai_budgets_company ON ai_agent_budgets(company_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("AI governance tables migration complete")
+
+
+def ensure_data_confidence_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS data_confidence_scores (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                metric_name VARCHAR(100) NOT NULL,
+                freshness_score FLOAT DEFAULT 0,
+                coverage_score FLOAT DEFAULT 0,
+                accuracy_score FLOAT DEFAULT 0,
+                confidence_score FLOAT DEFAULT 0,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                UNIQUE(company_id, metric_name)
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_confidence_company ON data_confidence_scores(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_confidence_metric ON data_confidence_scores(metric_name)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Data confidence scores table migration complete")
+
+
+def ensure_graph_adjacency_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS graph_nodes (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                node_type VARCHAR(100) NOT NULL,
+                entity_id INTEGER,
+                label VARCHAR(500),
+                properties_json TEXT DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS graph_edges (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                source_node_id INTEGER NOT NULL REFERENCES graph_nodes(id),
+                target_node_id INTEGER NOT NULL REFERENCES graph_nodes(id),
+                relationship VARCHAR(100) NOT NULL,
+                weight FLOAT DEFAULT 1.0,
+                properties_json TEXT DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_nodes_company ON graph_nodes(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_nodes_type ON graph_nodes(node_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_nodes_entity ON graph_nodes(company_id, node_type, entity_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_edges_source ON graph_edges(source_node_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_edges_target ON graph_edges(target_node_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_edges_company ON graph_edges(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_graph_edges_rel ON graph_edges(relationship)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Graph adjacency tables migration complete")
+
+
+def ensure_autopilot_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS autopilot_runs (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                briefing_json TEXT,
+                risk_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_autopilot_company ON autopilot_runs(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_autopilot_created ON autopilot_runs(created_at)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Autopilot tables migration complete")

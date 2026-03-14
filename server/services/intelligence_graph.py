@@ -1180,3 +1180,101 @@ def ensure_graph_indexes(db: Session) -> Dict[str, Any]:
         logger.error(f"Failed to commit indexes: {e}")
 
     return {"indexes_processed": len(results), "results": results}
+
+
+def upsert_graph_node(
+    db: Session, company_id: int, node_type: str, entity_id: int,
+    label: str, properties: Optional[Dict] = None,
+) -> int:
+    import json as _json
+    existing = db.execute(
+        text("SELECT id FROM graph_nodes WHERE company_id = :cid AND node_type = :nt AND entity_id = :eid"),
+        {"cid": company_id, "nt": node_type, "eid": entity_id},
+    ).fetchone()
+    if existing:
+        db.execute(
+            text("UPDATE graph_nodes SET label = :label, properties_json = :props WHERE id = :id"),
+            {"label": label, "props": _json.dumps(properties or {}), "id": existing[0]},
+        )
+        db.commit()
+        return existing[0]
+    else:
+        result = db.execute(
+            text("""
+                INSERT INTO graph_nodes (company_id, node_type, entity_id, label, properties_json)
+                VALUES (:cid, :nt, :eid, :label, :props) RETURNING id
+            """),
+            {"cid": company_id, "nt": node_type, "eid": entity_id, "label": label, "props": _json.dumps(properties or {})},
+        )
+        db.commit()
+        return result.scalar()
+
+
+def add_graph_edge(
+    db: Session, company_id: int, source_node_id: int, target_node_id: int,
+    relationship: str, weight: float = 1.0, properties: Optional[Dict] = None,
+) -> int:
+    import json as _json
+    result = db.execute(
+        text("""
+            INSERT INTO graph_edges (company_id, source_node_id, target_node_id, relationship, weight, properties_json)
+            VALUES (:cid, :src, :tgt, :rel, :w, :props) RETURNING id
+        """),
+        {"cid": company_id, "src": source_node_id, "tgt": target_node_id, "rel": relationship, "w": weight, "props": _json.dumps(properties or {})},
+    )
+    db.commit()
+    return result.scalar()
+
+
+def get_related_metrics(db: Session, company_id: int, metric_node_id: int) -> List[Dict]:
+    rows = db.execute(
+        text("""
+            SELECT gn.id, gn.node_type, gn.label, gn.properties_json, ge.relationship, ge.weight
+            FROM graph_edges ge
+            JOIN graph_nodes gn ON gn.id = ge.target_node_id
+            WHERE ge.source_node_id = :nid AND ge.company_id = :cid
+            ORDER BY ge.weight DESC
+        """),
+        {"nid": metric_node_id, "cid": company_id},
+    ).fetchall()
+    return [
+        {"node_id": r[0], "type": r[1], "label": r[2], "properties": json.loads(r[3]) if r[3] else {}, "relationship": r[4], "weight": r[5]}
+        for r in rows
+    ]
+
+
+def get_decision_history(db: Session, company_id: int) -> List[Dict]:
+    rows = db.execute(
+        text("""
+            SELECT gn.id, gn.label, gn.properties_json, ge.relationship
+            FROM graph_nodes gn
+            LEFT JOIN graph_edges ge ON ge.source_node_id = gn.id OR ge.target_node_id = gn.id
+            WHERE gn.company_id = :cid AND gn.node_type = 'Decision'
+            ORDER BY gn.created_at DESC LIMIT 50
+        """),
+        {"cid": company_id},
+    ).fetchall()
+    return [
+        {"node_id": r[0], "label": r[1], "properties": json.loads(r[2]) if r[2] else {}, "relationship": r[3]}
+        for r in rows
+    ]
+
+
+def get_strategy_patterns(db: Session, company_id: int) -> Dict[str, Any]:
+    rows = db.execute(
+        text("""
+            SELECT ge.relationship, COUNT(*) as cnt, AVG(ge.weight) as avg_weight
+            FROM graph_edges ge
+            WHERE ge.company_id = :cid
+            GROUP BY ge.relationship
+            ORDER BY cnt DESC
+        """),
+        {"cid": company_id},
+    ).fetchall()
+    return {
+        "patterns": [
+            {"relationship": r[0], "count": r[1], "avg_weight": round(float(r[2]), 3) if r[2] else 0}
+            for r in rows
+        ],
+        "total_edges": sum(r[1] for r in rows),
+    }

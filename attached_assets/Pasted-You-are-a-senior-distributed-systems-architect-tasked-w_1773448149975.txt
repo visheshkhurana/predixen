@@ -1,0 +1,447 @@
+You are a senior distributed systems architect tasked with improving the architecture of the FounderConsole platform.
+
+You have access to the entire codebase. Your goal is to implement architectural improvements while maintaining backward compatibility.
+
+FounderConsole currently has:
+
+- FastAPI backend
+- React + Vite frontend
+- PostgreSQL database
+- Optional Redis caching
+- Monte Carlo simulation engine
+- AI Copilot (9 parallel agents)
+- Digital Twin service
+- Decision engine
+- 33 connectors
+- 466 API endpoints
+- WebSocket realtime layer
+- Worker queue system
+
+However several architectural improvements are required.
+
+You will implement the following improvements step by step.
+
+DO NOT break existing features.
+DO NOT remove working code unless replacing it.
+
+The improvements fall into 6 major areas:
+
+1. API DOMAIN RESTRUCTURING
+2. EVENT LEDGER SYSTEM
+3. FEATURE FLAG SYSTEM
+4. AI GOVERNANCE LAYER
+5. DATA CONFIDENCE ENGINE
+6. INTELLIGENCE GRAPH IMPROVEMENTS
+7. FOUNDER AUTOPILOT SERVICE
+8. UI/UX SIMPLIFICATION
+9. WEBSITE POSITIONING UPDATE
+10. INTERNAL TOOLING IMPROVEMENTS
+
+You will implement each system in a modular way.
+
+----------------------------------------
+
+SECTION 1 — API DOMAIN RESTRUCTURING
+
+Problem:
+The API layer currently has ~466 endpoints across ~67 route files.
+
+Goal:
+Reduce architectural complexity by grouping APIs into domain modules.
+
+New API domains:
+
+/api/company
+/api/finance
+/api/simulation
+/api/decisions
+/api/connectors
+/api/ai
+/api/system
+/api/admin
+
+Tasks:
+
+1. Create new domain routers under:
+
+server/api/domain/
+
+company_router.py
+finance_router.py
+simulation_router.py
+decision_router.py
+connector_router.py
+ai_router.py
+system_router.py
+
+2. Move existing endpoints into domain modules while keeping legacy endpoints as aliases.
+
+Example:
+
+OLD:
+GET /api/scenarios/run
+
+NEW:
+POST /api/simulation/run
+
+3. Implement API gateway style routing in:
+
+server/main.py
+
+4. Maintain backward compatibility using route aliases.
+
+----------------------------------------
+
+SECTION 2 — EVENT LEDGER SYSTEM
+
+FounderConsole needs an event sourcing system.
+
+This will allow:
+
+- system replay
+- auditing
+- AI training
+- workflow triggers
+
+Event sourcing stores all state changes as immutable events that can be replayed to rebuild system state.  [oai_citation:0‡Medium](https://paradigma-digital.medium.com/microservices-architecture-patterns-event-sourcing-and-event-driven-architecture-eda-2aa16f0e0ec8?utm_source=chatgpt.com)
+
+Create event ledger tables:
+
+events
+event_payloads
+event_consumers
+event_projections
+
+Database schema:
+
+events
+- id
+- company_id
+- user_id
+- event_type
+- aggregate_type
+- aggregate_id
+- timestamp
+- version
+
+event_payloads
+- event_id
+- payload_json
+
+event_consumers
+- consumer_name
+- last_event_id
+
+event_projections
+- projection_name
+- state_json
+
+Implement:
+
+server/events/event_store.py
+
+Functions:
+
+emit_event()
+get_events()
+replay_events()
+subscribe_consumer()
+
+Emit events for:
+
+financial_record_added
+scenario_created
+simulation_completed
+decision_created
+connector_synced
+copilot_request
+ai_recommendation_generated
+
+Update services to emit events.
+
+----------------------------------------
+
+SECTION 3 — FEATURE FLAG SYSTEM
+
+Implement feature flags for safe deployment.
+
+Feature flags allow teams to enable or disable features instantly without redeploying code.  [oai_citation:1‡LaunchDarkly](https://learn.launchdarkly.com/feature-flags/?utm_source=chatgpt.com)
+
+Create tables:
+
+feature_flags
+company_flags
+user_flags
+
+Schema:
+
+feature_flags
+- key
+- description
+- enabled
+
+company_flags
+- company_id
+- flag_key
+- enabled
+
+user_flags
+- user_id
+- flag_key
+- enabled
+
+Create service:
+
+server/core/feature_flags.py
+
+Functions:
+
+is_feature_enabled()
+set_feature_flag()
+get_company_flags()
+
+Integrate flags into:
+
+AI Copilot
+Simulation engine
+New UI modules
+
+----------------------------------------
+
+SECTION 4 — AI GOVERNANCE SYSTEM
+
+FounderConsole runs multiple AI agents.
+
+We need governance to prevent runaway AI behavior.
+
+Create tables:
+
+ai_agent_permissions
+ai_agent_logs
+ai_agent_budgets
+
+Permissions schema:
+
+agent_name
+allowed_actions
+max_daily_requests
+requires_human_approval
+
+Log schema:
+
+agent_name
+task
+input
+output
+cost
+timestamp
+
+Budget schema:
+
+company_id
+agent_name
+monthly_budget
+usage
+
+Implement middleware:
+
+server/copilot/ai_governance.py
+
+Responsibilities:
+
+- enforce budgets
+- enforce rate limits
+- record AI activity
+- require approval for risky actions
+
+----------------------------------------
+
+SECTION 5 — DATA CONFIDENCE ENGINE
+
+FounderConsole displays financial metrics.
+
+We need confidence scoring.
+
+Create table:
+
+data_confidence_scores
+
+Schema:
+
+company_id
+metric_name
+freshness_score
+coverage_score
+accuracy_score
+confidence_score
+updated_at
+
+Compute:
+
+confidence_score =
+  (freshness * 0.3) +
+  (coverage * 0.4) +
+  (accuracy * 0.3)
+
+Create service:
+
+server/services/data_confidence.py
+
+Expose API:
+
+GET /api/finance/confidence
+
+Display confidence badges in UI.
+
+----------------------------------------
+
+SECTION 6 — INTELLIGENCE GRAPH
+
+Current graph uses SQL relationships.
+
+We will enhance with graph modeling.
+
+Entities:
+
+Company
+Metric
+Scenario
+Decision
+Outcome
+Investor
+TeamMember
+
+Relationships:
+
+Company -> Metric
+Metric -> Scenario
+Scenario -> Decision
+Decision -> Outcome
+
+Create service:
+
+server/services/intelligence_graph.py
+
+Functions:
+
+get_related_metrics()
+get_decision_history()
+get_strategy_patterns()
+
+Use adjacency tables instead of raw joins.
+
+----------------------------------------
+
+SECTION 7 — FOUNDER AUTOPILOT SYSTEM
+
+Create new service:
+
+server/services/founder_autopilot.py
+
+Autopilot loop:
+
+1. Read Digital Twin state
+2. Detect risks
+3. Run simulations
+4. Generate decisions
+5. Notify founder
+
+Schedule:
+
+daily job
+
+Autopilot rules:
+
+if runway < 12 months
+→ simulate hiring slowdown
+
+if churn spike detected
+→ simulate pricing change
+
+if burn > revenue growth
+→ simulate cost reduction
+
+Autopilot outputs:
+
+- CEO briefing
+- risk alerts
+- strategy suggestions
+
+----------------------------------------
+
+SECTION 8 — UI SIMPLIFICATION
+
+Update sidebar to maintain:
+
+Dashboard
+Simulate
+Decisions
+Data
+AI Copilot
+
+Move secondary tools into:
+
+Settings Drawer
+
+----------------------------------------
+
+SECTION 9 — WEBSITE POSITIONING
+
+Update landing page messaging.
+
+Hero:
+
+"Run Your Startup Like a Flight Simulator"
+
+Subheadline:
+
+"Connect your data. Simulate decisions. Run your company with AI."
+
+Sections:
+
+How It Works
+Simulation Engine
+AI Copilot
+Founder Autopilot
+
+----------------------------------------
+
+SECTION 10 — INTERNAL TOOLING
+
+Add developer tools:
+
+/admin/system/events
+/admin/system/agents
+/admin/system/flags
+/admin/system/autopilot
+
+These allow admins to inspect system behavior.
+
+----------------------------------------
+
+IMPLEMENTATION ORDER
+
+1. Event Ledger
+2. Feature Flags
+3. AI Governance
+4. Data Confidence
+5. Intelligence Graph
+6. Founder Autopilot
+7. API Refactor
+8. UI Simplification
+9. Website Update
+10. Admin Tools
+
+----------------------------------------
+
+FINAL OUTPUT
+
+After implementation produce:
+
+1. Updated architecture diagram
+2. List of new files
+3. List of modified files
+4. Database migration scripts
+5. API documentation
+
+Ensure the system builds successfully.

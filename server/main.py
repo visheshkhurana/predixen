@@ -104,6 +104,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import digital_twin as digital_twin_api
     from server.api import intelligence_graph as intelligence_graph_api
     from server.realtime import routes as realtime_ws
+    from server.api.domain import company_router, finance_router, simulation_router, decision_router, connector_router, ai_router, system_router
 
     logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
@@ -167,6 +168,14 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(intelligence_graph_api.router)
     app.include_router(realtime_ws.router)
 
+    app.include_router(company_router.router)
+    app.include_router(finance_router.router)
+    app.include_router(simulation_router.router)
+    app.include_router(decision_router.router)
+    app.include_router(connector_router.router)
+    app.include_router(ai_router.router)
+    app.include_router(system_router.router)
+
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
 
@@ -224,6 +233,20 @@ async def _run_deferred_startup():
             logger.error(f"Error during seeding: {e}")
         finally:
             db.close()
+
+        try:
+            from server.core.feature_flags import ensure_default_flags
+            ensure_default_flags()
+            logger.info("Feature flags initialized")
+        except Exception as e:
+            logger.warning(f"Feature flags init skipped: {e}")
+
+        try:
+            from server.copilot.ai_governance import ensure_agent_permissions
+            ensure_agent_permissions()
+            logger.info("AI governance permissions initialized")
+        except Exception as e:
+            logger.warning(f"AI governance init skipped: {e}")
 
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")

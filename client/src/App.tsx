@@ -80,6 +80,7 @@ import AdminLLMAudit from "@/pages/admin/llm-audit";
 import AdminEvals from "@/pages/admin/evals";
 import AiGovernancePage from "@/pages/admin/ai-governance";
 import AdminTeam from "@/pages/admin/team";
+import AdminSystemTools from "@/pages/admin/system-tools";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
@@ -451,6 +452,9 @@ function Router() {
                 </Route>
       <Route path="/admin/team">
         {() => <AdminRoute component={AdminTeam} />}
+      </Route>
+      <Route path="/admin/system">
+        {() => <AdminRoute component={AdminSystemTools} />}
       </Route>
       <Route path="/qa">
         {() => <AdminRoute component={QAFrontPage} />}
