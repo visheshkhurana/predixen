@@ -105,6 +105,7 @@ import AIGraphicsPage from "@/pages/ai-graphics";
 import DocGeneratorPage from "@/pages/doc-generator";
 import DigitalTwinPage from "@/pages/digital-twin";
 import IntelligenceGraphPage from "@/pages/intelligence-graph";
+import SurvivalSimulatorPage from "@/pages/survival-simulator";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -267,6 +268,8 @@ function Router() {
       }}
     >
       <Switch>
+        <Route path="/survival-simulator" component={SurvivalSimulatorPage} />
+        <Route path="/survival/:simId" component={SurvivalSimulatorPage} />
         <Route path="/pricing" component={PricingPage} />
         <Route path="/features">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><MarketingFeaturesPage /></Suspense>}</Route>
         <Route path="/about">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AboutPage /></Suspense>}</Route>
@@ -681,7 +684,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
      window.location.pathname === '/demo' ||
      window.location.pathname === '/onboarding' ||
      window.location.pathname.startsWith('/admin') ||
-     window.location.pathname.startsWith('/scenarios/shared/'));
+     window.location.pathname.startsWith('/scenarios/shared/') ||
+     window.location.pathname === '/survival-simulator' ||
+     window.location.pathname.startsWith('/survival/'));
   
   if (!user || isStandalonePage) {
     return <>{children}</>;

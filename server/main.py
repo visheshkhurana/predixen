@@ -86,6 +86,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import suggestions as suggestions_api
     from server.api import email_tracking as email_tracking_api
     from server.api import shared_scenarios as shared_scenarios_api
+    from server.api import survival_simulator as survival_sim_api
     from server.api import metric_trends as metric_trends_api
     from server.api import digest as digest_api
     from server.api import csv_import as csv_import_api
@@ -149,6 +150,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(suggestions_api.router)
     app.include_router(email_tracking_api.router)
     app.include_router(shared_scenarios_api.router)
+    app.include_router(survival_sim_api.router)
     app.include_router(metric_trends_api.router)
     app.include_router(digest_api.router)
     app.include_router(csv_import_api.router)

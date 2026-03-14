@@ -1020,6 +1020,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_data_confidence_table(engine)
     ensure_graph_adjacency_tables(engine)
     ensure_autopilot_tables(engine)
+    ensure_survival_simulations_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1529,3 +1530,23 @@ def ensure_autopilot_tables(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Autopilot tables migration complete")
+
+
+def ensure_survival_simulations_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS survival_simulations (
+                id SERIAL PRIMARY KEY,
+                sim_id VARCHAR(20) UNIQUE NOT NULL,
+                inputs_json TEXT,
+                results_json TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_survival_sim_id ON survival_simulations(sim_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_survival_created ON survival_simulations(created_at)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Survival simulations table migration complete")

@@ -51,6 +51,7 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
     -   **Founder Autopilot**: Daily automated risk detection and briefing generation (`server/services/founder_autopilot.py`). Table: `autopilot_runs`. 5 risk detection rules (burn spike, low runway, MRR drop, churn spike, cash crisis). Generates natural language briefings with state snapshots.
     -   **API Domain Routers**: 7 domain routers in `server/api/domain/` (company, finance, simulation, decision, connector-domain, ai, system). Registered in `main.py`. Prefix pattern: `/system`, `/finance`, etc. (NO `/api` prefix — Express proxy strips it).
     -   **Internal Admin Tools**: Admin System Tools page at `/admin/system` (`client/src/pages/admin/system-tools.tsx`). 4-tab UI: Events (event ledger viewer), Agents (AI governance dashboard), Flags (feature flag toggles), Autopilot (briefing viewer + run trigger).
+    -   **Startup Survival Simulator**: Free viral tool at `/survival-simulator` (public, no auth). Uses existing Monte Carlo engine (1,000 simulations) to calculate survival probability. Features: input form (cash, revenue, expenses, growth, churn, hires, fundraising), grade system (A-D), survival gauges (6/12/18/24 months), runway distribution histogram, cash trajectory chart, AI recommendations, shareable results (`/survival/:simId`), export investor report (PDF via print), growth gating (1 free sim then signup prompt). Backend: `server/api/survival_simulator.py`, table: `survival_simulations`. SEO optimized with meta/OG tags.
 
 ## External Dependencies
 
