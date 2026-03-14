@@ -558,7 +558,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/metrics" || location === "/dashboards"}
+                  isActive={location === "/metrics" || location === "/dashboards" || location.startsWith("/dashboards/")}
                   data-testid="nav-metrics"
                 >
                   <Link href="/dashboards">
@@ -619,7 +619,7 @@ export function AppSidebar() {
                 >
                   <Link href="/integrations">
                     <Plug className="h-4 w-4" />
-                    <span>Connectors</span>
+                    <span>Integrations</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
