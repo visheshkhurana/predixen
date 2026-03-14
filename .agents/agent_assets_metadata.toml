@@ -6,3 +6,9 @@ id = "xt9QF9DygOVB7mkt77svk"
 uri = "file://attached_assets/SYSTEM_AUDIT.md"
 type = "text"
 title = "FounderConsole — Full System Audit Report"
+
+[[outputs]]
+id = "fM3t5LHwUsCG8frCuZ8Pc"
+uri = "file://attached_assets/SYSTEM_AUDIT_v2.md"
+type = "text"
+title = "FounderConsole System Audit v2 (Post-Restructuring)"
