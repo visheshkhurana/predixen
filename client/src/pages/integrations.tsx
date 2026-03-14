@@ -67,11 +67,11 @@ interface IntegrationStatus {
 
 interface ConnectorMetadata extends IntegrationProvider {
   setupTime: "~5 min" | "~10 min" | "~15 min";
-  category: "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "other";
+  category: "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
   isRecommended?: boolean;
 }
 
-type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "other";
+type ConnectorCategory = "all" | "recommended" | "revenue" | "accounting" | "hr" | "analytics" | "crm" | "captable" | "other";
 
 const providerIcons: Record<string, React.ReactNode> = {
   quickbooks: <SiQuickbooks className="h-6 w-6" />,
@@ -340,6 +340,11 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   sap_b1: { setupTime: "~15 min", category: "accounting" },
   odoo: { setupTime: "~15 min", category: "accounting" },
   marg: { setupTime: "~15 min", category: "accounting" },
+  carta: { setupTime: "~10 min", category: "captable" },
+  pulley: { setupTime: "~10 min", category: "captable" },
+  angellist_stack: { setupTime: "~10 min", category: "captable" },
+  shareworks: { setupTime: "~15 min", category: "captable" },
+  ledgy: { setupTime: "~10 min", category: "captable" },
 };
 
 const categoryLabels: Record<ConnectorCategory, { label: string; description: string; icon: React.ReactNode }> = {
@@ -350,6 +355,7 @@ const categoryLabels: Record<ConnectorCategory, { label: string; description: st
   hr: { label: "HR & Payroll", description: "Payroll and HR management systems", icon: <Users className="h-4 w-4" /> },
   analytics: { label: "Analytics", description: "Product and business analytics", icon: <TrendingUp className="h-4 w-4" /> },
   crm: { label: "CRM & Sales", description: "Customer relationship management", icon: <Briefcase className="h-4 w-4" /> },
+  captable: { label: "Cap Table", description: "Cap table and equity management platforms", icon: <FileText className="h-4 w-4" /> },
   other: { label: "Other", description: "Additional data sources", icon: <Link2 className="h-4 w-4" /> },
 };
 
@@ -479,6 +485,39 @@ const paymentsProviders: IntegrationProvider[] = [
   },
 ];
 
+const capTableProviders: IntegrationProvider[] = [
+  {
+    id: "carta",
+    name: "Carta",
+    description: "Leading cap table management and equity platform",
+    features: ["Shareholders", "Equity Plans", "409A Valuations", "Waterfall Analysis"],
+  },
+  {
+    id: "pulley",
+    name: "Pulley",
+    description: "Modern cap table management for startups",
+    features: ["Cap Table", "Equity Grants", "Scenario Modeling", "Tax Optimization"],
+  },
+  {
+    id: "angellist_stack",
+    name: "AngelList Stack",
+    description: "Equity management and fund administration",
+    features: ["Equity Management", "Fund Admin", "SAFEs & Convertibles", "Investor Updates"],
+  },
+  {
+    id: "shareworks",
+    name: "Shareworks (Morgan Stanley)",
+    description: "Enterprise equity compensation management",
+    features: ["Equity Compensation", "RSUs & Options", "Compliance", "Global Plans"],
+  },
+  {
+    id: "ledgy",
+    name: "Ledgy",
+    description: "Equity management platform for European startups",
+    features: ["Cap Table", "ESOP Management", "Scenario Modeling", "Investor Relations"],
+  },
+];
+
 function getConnectorCategory(providerId: string): ConnectorCategory {
   return connectorMetadata[providerId]?.category || "other";
 }
@@ -496,16 +535,12 @@ function shouldShowConnector(provider: IntegrationProvider, selectedCategory: Co
   return connectorCategory === selectedCategory;
 }
 
-function getProviderType(providerId: string): "accounting" | "crm" | "payments" | "payroll" | "erp" {
-  // Check payroll providers
+function getProviderType(providerId: string): "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable" {
+  if (capTableProviders.some(p => p.id === providerId)) return "captable";
   if (payrollProviders.some(p => p.id === providerId)) return "payroll";
-  // Check ERP providers
   if (erpProviders.some(p => p.id === providerId)) return "erp";
-  // Check payment providers
   if (paymentsProviders.some(p => p.id === providerId)) return "payments";
-  // Check CRM providers
   if (additionalCrmProviders.some(p => p.id === providerId)) return "crm";
-  // Default to accounting
   return "accounting";
 }
 
@@ -703,7 +738,7 @@ export default function IntegrationsPage() {
     ...additionalCrmProviders,
   ];
 
-  type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp";
+  type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   
   const getConnectorInfo = (providerId: string) => {
     return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
@@ -848,7 +883,7 @@ export default function IntegrationsPage() {
   };
 
   const providerMap: Record<string, IntegrationProvider> = {};
-  [...allAccountingProviders, ...payrollProviders, ...paymentsProviders].forEach((provider) => {
+  [...allAccountingProviders, ...payrollProviders, ...paymentsProviders, ...capTableProviders].forEach((provider) => {
     providerMap[provider.id] = provider;
   });
 
@@ -864,6 +899,7 @@ export default function IntegrationsPage() {
       ...erpProviders,
       ...allCrmProviders,
       ...paymentsProviders,
+      ...capTableProviders,
     ];
 
     return allProviders.filter((p) => shouldShowConnector(p, category));
@@ -949,7 +985,7 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Data Connectors</h2>
         <div className="flex flex-wrap gap-2">
-          {(["all", "recommended", "revenue", "accounting", "hr", "analytics", "crm"] as const).map((category) => (
+          {(["all", "recommended", "revenue", "accounting", "hr", "analytics", "crm", "captable"] as const).map((category) => (
             <Button
               key={category}
               variant={selectedConnectorCategory === category ? "default" : "outline"}
@@ -1098,7 +1134,7 @@ export default function IntegrationsPage() {
           <CardDescription>Overview of your connected data sources</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {status?.integrations.accounting.connected ? (
@@ -1179,6 +1215,25 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payments</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {status?.integrations.payments?.connected || "Not connected"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg" data-testid="status-captable">
+              <div className="p-2 bg-background rounded-full shrink-0">
+                {connectorStatus?.connectors?.some(c => 
+                  ["carta", "pulley", "angellist_stack", "shareworks", "ledgy"].includes(c.provider_id) && c.connected
+                ) ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">Cap Table</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {connectorStatus?.connectors?.find(c => 
+                    ["carta", "pulley", "angellist_stack", "shareworks", "ledgy"].includes(c.provider_id) && c.connected
+                  )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
             </div>
