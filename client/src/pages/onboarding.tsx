@@ -19,7 +19,9 @@ import type { AmountScale } from '@/lib/utils';
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
   { id: 2, title: 'Connect Data', description: 'Choose your data source' },
-  { id: 3, title: 'First Insight', description: 'See your key metrics' },
+  { id: 3, title: 'Health Check', description: 'Validate your financials' },
+  { id: 4, title: 'First Simulation', description: 'Run your first scenario' },
+  { id: 5, title: 'AI Copilot', description: 'Get strategic insights' },
 ];
 
 const STAGE_DEFAULTS: Record<string, { monthly_revenue: number; gross_margin_pct: number; opex: number; payroll: number; other_costs: number; cash_balance: number; headcount: number }> = {
@@ -267,7 +269,7 @@ export default function OnboardingPage() {
     setStep(3);
   };
 
-  const handleFinishSetup = async () => {
+  const handleRunHealthCheck = async () => {
     const { user: currentUser } = useFounderStore.getState();
     if (!currentUser) {
       toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
@@ -288,22 +290,32 @@ export default function OnboardingPage() {
       setTruthScan(truthScan);
       setStoreStep('truth');
       markStepComplete(3);
-      localStorage.setItem('founderConsoleOnboardingComplete', 'true');
-      toast({ title: 'Setup complete!', description: 'Your dashboard is ready.' });
-      setLocation('/');
+      setStep(4);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
         setLocation('/auth');
         return;
       }
-      const message = err instanceof ApiError ? err.message : 'Failed to run analysis. Redirecting to dashboard.';
+      const message = err instanceof ApiError ? err.message : 'Health check encountered an issue.';
       setScanError(message);
-      localStorage.setItem('founderConsoleOnboardingComplete', 'true');
-      setTimeout(() => setLocation('/'), 2000);
+      markStepComplete(3);
+      setStep(4);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGoToSimulate = () => {
+    markStepComplete(4);
+    setStep(5);
+  };
+
+  const handleFinishSetup = () => {
+    markStepComplete(5);
+    localStorage.setItem('founderConsoleOnboardingComplete', 'true');
+    toast({ title: 'Setup complete!', description: 'Your dashboard is ready.' });
+    setLocation('/');
   };
 
   const totalExpenses = baselineData.opex + baselineData.payroll + baselineData.other_costs;
@@ -759,8 +771,8 @@ export default function OnboardingPage() {
         {step === 3 && (
           <Card>
             <CardHeader>
-              <CardTitle data-testid="text-step3-title">Your First Insight</CardTitle>
-              <CardDescription>Here's a preview of the key metrics we'll track for {companyData.name || 'your company'}.</CardDescription>
+              <CardTitle data-testid="text-step3-title">Health Check</CardTitle>
+              <CardDescription>Let's validate your financial data and show key metrics for {companyData.name || 'your company'}.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -871,22 +883,160 @@ export default function OnboardingPage() {
                   <Button
                     type="button"
                     className="flex-1"
-                    onClick={handleFinishSetup}
+                    onClick={handleRunHealthCheck}
                     disabled={isSubmitting || runTruthScanMutation.isPending}
-                    data-testid="button-run-simulation"
+                    data-testid="button-run-health-check"
                   >
                     {isSubmitting || runTruthScanMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
+                        Validating data...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Run Simulation
+                        <Activity className="mr-2 h-4 w-4" />
+                        Run Health Check
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </>
                     )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 4 && (
+          <Card>
+            <CardHeader>
+              <CardTitle data-testid="text-step4-title">Your First Simulation</CardTitle>
+              <CardDescription>Now let's test a decision before you make it. This is where FounderConsole becomes your flight simulator.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div className="p-6 rounded-xl border bg-gradient-to-br from-violet-500/5 to-primary/5">
+                  <h4 className="font-semibold text-foreground mb-3">What Monte Carlo simulations do</h4>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                    Instead of guessing what might happen, we run thousands of scenarios with different assumptions. 
+                    You get P10 (pessimistic), P50 (likely), and P90 (optimistic) outcomes — the same analysis venture capitalists use.
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-3 rounded-lg bg-background/50 border">
+                      <p className="text-xs text-muted-foreground mb-1">P10 (Worst)</p>
+                      <p className="text-lg font-bold font-mono text-red-400">6 mo</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-background/50 border border-primary/20">
+                      <p className="text-xs text-muted-foreground mb-1">P50 (Likely)</p>
+                      <p className="text-lg font-bold font-mono text-foreground">14 mo</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-background/50 border">
+                      <p className="text-xs text-muted-foreground mb-1">P90 (Best)</p>
+                      <p className="text-lg font-bold font-mono text-emerald-400">24+ mo</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted/30 rounded-md border">
+                  <h4 className="font-medium text-sm mb-2">Try these scenarios after setup:</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      What if we hire 3 engineers next quarter?
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      What if we raise prices by 20%?
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="w-4 h-4 text-primary shrink-0" />
+                      When should we start fundraising?
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setStep(3)}
+                    data-testid="button-back-step4"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={handleGoToSimulate}
+                    data-testid="button-next-step4"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Continue to AI Copilot
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 5 && (
+          <Card>
+            <CardHeader>
+              <CardTitle data-testid="text-step5-title">Meet Your AI Copilot</CardTitle>
+              <CardDescription>Your AI-powered strategic advisor is ready. Ask anything about your company.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div className="p-6 rounded-xl border bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
+                      <Sparkles className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground">AI Founder Copilot</h4>
+                      <p className="text-xs text-muted-foreground">Powered by GPT-4o, Claude & Gemini</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                    Ask strategic questions in plain English. The copilot analyzes your financial data, 
+                    runs simulations, and provides recommendations backed by real numbers.
+                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Try asking:</p>
+                    {[
+                      "What's our biggest financial risk right now?",
+                      "Should we hire or extend runway first?",
+                      "How does our burn rate compare to similar startups?",
+                    ].map((q) => (
+                      <div key={q} className="p-2.5 rounded-lg bg-background/50 border text-sm text-foreground flex items-center gap-2">
+                        <span className="text-primary font-mono text-xs">&gt;</span>
+                        {q}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setStep(4)}
+                    data-testid="button-back-step5"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flex-1"
+                    onClick={handleFinishSetup}
+                    data-testid="button-finish-setup"
+                  >
+                    Launch Dashboard
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               </div>

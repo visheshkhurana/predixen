@@ -1,0 +1,522 @@
+You are a principal software architect and product designer tasked with upgrading the FounderConsole platform into a production-grade scalable system and simplifying the product into a clear market-leading product: 
+
+"The Flight Simulator for Founders."
+
+The platform already contains:
+
+- React + TypeScript frontend
+- FastAPI backend
+- PostgreSQL database
+- Digital Twin service
+- Monte Carlo simulation engine
+- AI Copilot multi-agent system
+- Truth Scan financial validation pipeline
+- 30+ connectors
+- Decision engine
+- KPI dashboards
+
+However the platform has architectural issues and UX complexity.
+
+Your task is to redesign architecture, simplify UX, add missing infrastructure, and update product positioning across the website and landing pages.
+
+Do NOT remove existing features permanently.
+
+Instead:
+
+- hide non-core features
+- refactor architecture
+- reorganize navigation
+- modernize landing page messaging
+
+-------------------------------------
+
+PHASE 1 — PRODUCT SIMPLIFICATION
+
+FounderConsole should revolve around 5 core modules.
+
+CORE PRODUCT:
+
+Dashboard
+Simulate
+Copilot
+Decisions
+Data
+
+SECONDARY MODULES:
+
+Integrations
+Metrics
+Goals
+Admin
+
+Hide or move the following features behind advanced menus:
+
+AI Graphics
+Marketing blog
+Advanced metric DSL
+Legacy scenario templates
+Experimental AI tools
+Internal QA pages
+Admin analytics tools
+Debug tools
+
+Goal: reduce visible product surface area from ~50 pages to ~15.
+
+-------------------------------------
+
+PHASE 2 — NAVIGATION REDESIGN
+
+Redesign sidebar navigation.
+
+PRIMARY NAVIGATION
+
+Dashboard
+Simulate
+Copilot
+Decisions
+Data
+
+SECONDARY NAVIGATION
+
+Integrations
+Metrics
+Goals
+Admin
+
+Merge these pages:
+
+scenarios
+scenario builder
+simulation copilot
+counter-move simulator
+
+into a single:
+
+Simulate Workspace.
+
+-------------------------------------
+
+PHASE 3 — SYSTEM ARCHITECTURE
+
+Move to Web-Queue-Worker architecture.
+
+TARGET SYSTEM
+
+React Frontend
+        │
+FastAPI API Gateway
+        │
+Redis
+ ├ Cache
+ ├ Queue
+ └ PubSub
+        │
+Workers
+ ├ Simulation Workers
+ ├ Connector Workers
+ ├ AI Workers
+ └ Forecast Workers
+        │
+PostgreSQL
+
+-------------------------------------
+
+PHASE 4 — REDIS INFRASTRUCTURE
+
+Introduce Redis infrastructure.
+
+Create folder:
+
+server/infrastructure/
+
+Modules:
+
+redis_client.py
+cache.py
+queue.py
+pubsub.py
+rate_limit.py
+
+Cache targets:
+
+Digital Twin state
+company KPIs
+scenario templates
+benchmark data
+copilot context
+financial summary
+
+Cache keys:
+
+twin:{company_id}
+kpi:{company_id}
+scenario:{scenario_id}
+copilot_context:{company_id}
+
+Invalidate cache when:
+
+financial data changes
+simulation completes
+connector sync finishes
+decision created
+
+-------------------------------------
+
+PHASE 5 — JOB QUEUE SYSTEM
+
+Implement Redis job queue.
+
+Queues:
+
+simulation_queue
+connector_queue
+ai_queue
+forecast_queue
+alerts_queue
+
+Create worker services:
+
+server/workers/
+
+simulation_worker.py
+connector_worker.py
+ai_worker.py
+forecast_worker.py
+alert_worker.py
+
+Workers must support:
+
+parallel processing
+retry policy
+exponential backoff
+dead letter queue
+job status reporting
+
+-------------------------------------
+
+PHASE 6 — SIMULATION PIPELINE
+
+Refactor Monte Carlo simulation pipeline.
+
+Current issue:
+
+simulations run in request cycle.
+
+New pipeline:
+
+API request
+→ enqueue simulation job
+→ return job id
+
+Worker executes simulation.
+
+Worker saves results.
+
+Worker emits websocket event.
+
+Frontend listens for completion.
+
+-------------------------------------
+
+PHASE 7 — DATABASE NORMALIZATION
+
+Reduce JSON blob usage.
+
+Refactor schema.
+
+Example:
+
+simulation_outputs table
+
+id
+run_id
+metric
+month
+p10
+p50
+p90
+
+Additional tables:
+
+scenario_inputs
+scenario_events
+decision_options
+
+-------------------------------------
+
+PHASE 8 — DIGITAL TWIN ENGINE
+
+Improve Digital Twin.
+
+Cache twin state.
+
+Cache key:
+
+twin_state:{company_id}
+
+Twin update triggers:
+
+financial record update
+connector sync
+simulation result
+decision created
+alert triggered
+
+Add event pipeline:
+
+Twin event
+→ Redis stream
+→ Intelligence Graph processor
+
+-------------------------------------
+
+PHASE 9 — AI COPILOT IMPROVEMENTS
+
+Optimize AI Copilot.
+
+Current problem:
+
+agents execute sequentially.
+
+Implement parallel execution.
+
+Router Agent
+→ launches specialists concurrently:
+
+CFO Agent
+Strategy Agent
+Market Agent
+
+Responses aggregated by synthesis agent.
+
+Add context caching.
+
+-------------------------------------
+
+PHASE 10 — CONNECTOR SYSTEM
+
+Move connector syncs to background workers.
+
+Connector flow:
+
+POST /connectors/sync
+
+API enqueues job.
+
+Worker:
+
+fetch connector data
+normalize data
+run Truth Scan
+store FinancialRecords
+emit twin event
+
+-------------------------------------
+
+PHASE 11 — WEBSOCKET REALTIME SYSTEM
+
+Add realtime event streaming.
+
+Create:
+
+server/realtime/
+
+Events:
+
+simulation progress
+simulation completed
+alert triggered
+twin updated
+connector sync finished
+
+Use Redis pub/sub.
+
+-------------------------------------
+
+PHASE 12 — OBSERVABILITY
+
+Add monitoring stack.
+
+Integrate:
+
+OpenTelemetry
+Sentry
+structured logging
+
+Track:
+
+simulation duration
+AI latency
+connector failures
+API response times
+
+-------------------------------------
+
+PHASE 13 — BACKUP SYSTEM
+
+Add automated database backups.
+
+Create scripts:
+
+scripts/db_backup.py
+scripts/db_restore.py
+
+Schedule daily encrypted backups.
+
+-------------------------------------
+
+PHASE 14 — LANDING PAGE REPOSITIONING
+
+Update marketing website.
+
+New positioning:
+
+FounderConsole
+
+"The Flight Simulator for Founders"
+
+Core messaging:
+
+Run your startup like a simulation.
+
+Understand your runway.
+Test decisions before making them.
+Get AI strategy advice.
+
+Landing page sections:
+
+Hero section
+
+Headline:
+The Flight Simulator for Founders
+
+Subheadline:
+Connect your company data, simulate the future, and get AI-powered decisions.
+
+CTA buttons:
+
+Start Simulation
+View Demo
+
+-------------------------------------
+
+SECTION 2 — HOW IT WORKS
+
+Step 1
+Connect your data
+
+Stripe
+QuickBooks
+CSV upload
+
+Step 2
+Your company becomes a Digital Twin
+
+Live model of your startup.
+
+Step 3
+Run simulations
+
+Hiring
+Pricing
+Fundraising
+Growth
+
+Step 4
+AI recommends decisions
+
+-------------------------------------
+
+SECTION 3 — CORE FEATURES
+
+Digital Twin
+
+Your company modeled in real time.
+
+Monte Carlo Simulator
+
+Test decisions before making them.
+
+AI Founder Copilot
+
+Ask questions about strategy.
+
+Decision Engine
+
+Track and learn from decisions.
+
+-------------------------------------
+
+SECTION 4 — PRODUCT DIFFERENTIATION
+
+Replace spreadsheets with simulations.
+
+Most financial tools show the past.
+
+FounderConsole predicts the future.
+
+-------------------------------------
+
+SECTION 5 — SOCIAL PROOF
+
+Example metrics display.
+
+Runway
+Growth
+Survival probability
+
+-------------------------------------
+
+SECTION 6 — CTA
+
+Run your startup like a simulation.
+
+Start Free Trial
+
+-------------------------------------
+
+PHASE 15 — ONBOARDING EXPERIENCE
+
+Create onboarding wizard.
+
+Step 1
+
+Connect Stripe or upload CSV.
+
+Step 2
+
+Truth Scan validates financial data.
+
+Step 3
+
+Dashboard shows company health.
+
+Step 4
+
+User runs first simulation.
+
+Step 5
+
+Copilot explains insights.
+
+-------------------------------------
+
+PHASE 16 — OUTPUT
+
+Produce:
+
+Updated folder structure
+Redis infrastructure layer
+Job queue framework
+Worker services
+WebSocket server
+Simulation job pipeline
+Database migration plan
+New sidebar navigation
+New landing page content
+Onboarding wizard
+Architecture diagram
+
+Do NOT remove features.
+
+Hide non-core modules instead.

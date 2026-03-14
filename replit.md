@@ -17,7 +17,11 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
 -   **Redis Layer** (optional, graceful fallback): `server/core/redis_client.py` provides caching (`cache.py`), job queues (`job_queue.py` — 4 named queues: SIMULATION, CONNECTOR_SYNC, AI_AGENT, NOTIFICATION), and pub/sub (`infrastructure/pubsub.py`). Cache keys follow `fc:<prefix>:<id>` pattern. Falls back to `_NullRedis` when Redis is unavailable.
 -   **WebSocket Layer**: `server/realtime/websocket_manager.py` provides company-scoped real-time connections. Routes registered in `server/realtime/routes.py`.
 -   **Background Workers**: `server/workers/worker_runner.py` — unified worker with ThreadPoolExecutor processing jobs from Redis queues. Handlers in `server/workers/handlers/`.
--   **Navigation**: Simplified 5-module sidebar (Dashboard, Simulate, Decisions, Copilot, Data) with Settings drawer for secondary tools. See `client/src/components/app-sidebar.tsx`.
+-   **Navigation**: Simplified 5-module sidebar (Dashboard, Simulate, Decisions, Copilot, Data) with Settings drawer for secondary tools. See `client/src/components/app-sidebar.tsx`. Simulate links to `/simulate` (unified workspace).
+-   **Simulate Workspace**: `client/src/pages/simulate-workspace.tsx` — unified tabbed interface with 4 tabs: Scenarios (lazy-loads `scenarios.tsx`), Stress Tests (tornado chart, reverse stress test, stress test panel), What-If Explorer (real-time variable adjustment), History (saved scenario grid). `/scenarios` redirects to `/simulate`.
+-   **Onboarding Wizard**: `client/src/pages/onboarding.tsx` — 5-step flow: Welcome → Connect Data → Health Check (Truth Scan) → First Simulation (educational) → AI Copilot intro → Launch Dashboard.
+-   **Observability**: `server/core/observability.py` — `track_duration(op)` context manager, `@track_operation(op)` decorator, in-process metrics store, `/metrics/internal` endpoint.
+-   **Landing Page**: `client/src/pages/landing.tsx` — "Flight Simulator for Founders" positioning with hero, how-it-works, features grid, differentiation, social proof, CTA sections.
 -   **Key Features**:
     -   **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, and multi-currency handling.
     -   **Truth Scan**: A multi-stage data validation layer ensures data accuracy.

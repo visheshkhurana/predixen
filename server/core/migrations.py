@@ -1010,6 +1010,10 @@ def run_migrations(engine: Engine) -> None:
     ensure_rate_limits_table(engine)
     ensure_cap_table_enhancements(engine)
     ensure_twin_events_table(engine)
+    ensure_simulation_outputs_table(engine)
+    ensure_scenario_inputs_table(engine)
+    ensure_scenario_events_table(engine)
+    ensure_decision_options_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1217,3 +1221,98 @@ def ensure_twin_events_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Twin events table migration complete")
+
+
+def ensure_simulation_outputs_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_outputs (
+                id SERIAL PRIMARY KEY,
+                run_id INTEGER NOT NULL,
+                metric VARCHAR(100) NOT NULL,
+                month INTEGER NOT NULL,
+                p10 FLOAT,
+                p50 FLOAT,
+                p90 FLOAT,
+                mean FLOAT,
+                std_dev FLOAT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_outputs_run_id ON simulation_outputs(run_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_outputs_metric ON simulation_outputs(run_id, metric)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Simulation outputs table migration complete")
+
+
+def ensure_scenario_inputs_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS scenario_inputs (
+                id SERIAL PRIMARY KEY,
+                scenario_id INTEGER NOT NULL,
+                input_type VARCHAR(100) NOT NULL,
+                parameter_name VARCHAR(200) NOT NULL,
+                parameter_value FLOAT,
+                parameter_text VARCHAR(500),
+                start_month INTEGER,
+                end_month INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_scenario_inputs_scenario ON scenario_inputs(scenario_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Scenario inputs table migration complete")
+
+
+def ensure_scenario_events_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS scenario_events (
+                id SERIAL PRIMARY KEY,
+                scenario_id INTEGER NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                event_month INTEGER NOT NULL,
+                description VARCHAR(500),
+                impact_metric VARCHAR(100),
+                impact_value FLOAT,
+                probability FLOAT DEFAULT 1.0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_scenario_events_scenario ON scenario_events(scenario_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Scenario events table migration complete")
+
+
+def ensure_decision_options_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS decision_options (
+                id SERIAL PRIMARY KEY,
+                decision_id INTEGER NOT NULL,
+                option_label VARCHAR(300) NOT NULL,
+                description TEXT,
+                estimated_impact FLOAT,
+                risk_level VARCHAR(50),
+                recommended BOOLEAN DEFAULT FALSE,
+                chosen BOOLEAN DEFAULT FALSE,
+                simulation_run_id INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_decision_options_decision ON decision_options(decision_id)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Decision options table migration complete")

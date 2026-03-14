@@ -351,6 +351,15 @@ def demo_metrics():
         "message": "Sign up to see your real metrics"
     }
 
+@app.get("/metrics/internal")
+def internal_metrics():
+    try:
+        from server.core.observability import get_metrics_summary
+        return {"metrics": get_metrics_summary()}
+    except Exception as e:
+        return {"metrics": {}, "error": str(e)}
+
+
 @app.get("/health")
 def health():
     import datetime as _dt

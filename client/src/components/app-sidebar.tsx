@@ -445,10 +445,10 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/scenarios" || location.startsWith("/scenarios/")}
+                  isActive={location === "/simulate" || location === "/scenarios" || location.startsWith("/scenarios/")}
                   data-testid="nav-simulate"
                 >
-                  <Link href="/scenarios">
+                  <Link href="/simulate">
                     <FlaskConical className="h-4 w-4" />
                     <span className="flex-1">Simulate</span>
                     {scenarioCount > 0 && (

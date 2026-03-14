@@ -55,6 +55,7 @@ import OnboardingPage from "@/pages/onboarding";
 import OverviewPage from "@/pages/overview";
 import TruthScanPage from "@/pages/truth-scan";
 import ScenariosPage from "@/pages/scenarios";
+import SimulateWorkspace from "@/pages/simulate-workspace";
 import DecisionsPage from "@/pages/decisions";
 import CopilotPage from "@/pages/copilot";
 import DataInputPage from "@/pages/data-input";
@@ -322,7 +323,7 @@ function Router() {
         {() => <AuthenticatedRoute component={DataVerificationPage} />}
       </Route>
       <Route path="/simulate">
-        {() => <Redirect to="/scenarios" />}
+        {() => <AuthenticatedRoute component={SimulateWorkspace} />}
       </Route>
       <Route path="/help">
         {() => <Redirect to="/docs" />}
@@ -331,7 +332,7 @@ function Router() {
         {() => <Redirect to="/data" />}
       </Route>
       <Route path="/scenarios">
-        {() => <AuthenticatedRoute component={ScenariosPage} />}
+        {() => <Redirect to="/simulate" />}
       </Route>
       <Route path="/scenarios/:id">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
@@ -850,7 +851,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
                 <Separator />
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button size="sm" onClick={() => { setBriefingOpen(false); navigate('/scenarios'); }} data-testid="button-briefing-modal-simulate">
+                  <Button size="sm" onClick={() => { setBriefingOpen(false); navigate('/simulate'); }} data-testid="button-briefing-modal-simulate">
                     Run Simulation
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => { setBriefingOpen(false); navigate('/overview'); }} data-testid="button-briefing-modal-overview">
