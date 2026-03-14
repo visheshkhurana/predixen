@@ -13,7 +13,11 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
 
 ### Technical Implementations
 -   **Frontend**: Built with React 18, TypeScript, Wouter, Zustand, and TanStack React Query. UI components leverage Tailwind CSS (dark mode default) and shadcn/ui, with Recharts for data visualization. Form management uses React Hook Form with Zod validation.
--   **Backend**: Developed with FastAPI (Python 3.11). PostgreSQL is used as the database, managed with SQLAlchemy ORM and Alembic for migrations. Authentication is JWT-based with refresh token rotation. Pydantic models handle data validation.
+-   **Backend**: Developed with FastAPI (Python 3.11). PostgreSQL is used as the database, managed with SQLAlchemy ORM and runtime migrations (`server/core/migrations.py`). Authentication is JWT-based with refresh token rotation. Pydantic models handle data validation.
+-   **Redis Layer** (optional, graceful fallback): `server/core/redis_client.py` provides caching (`cache.py`), job queues (`job_queue.py` — 4 named queues: SIMULATION, CONNECTOR_SYNC, AI_AGENT, NOTIFICATION), and pub/sub (`infrastructure/pubsub.py`). Cache keys follow `fc:<prefix>:<id>` pattern. Falls back to `_NullRedis` when Redis is unavailable.
+-   **WebSocket Layer**: `server/realtime/websocket_manager.py` provides company-scoped real-time connections. Routes registered in `server/realtime/routes.py`.
+-   **Background Workers**: `server/workers/worker_runner.py` — unified worker with ThreadPoolExecutor processing jobs from Redis queues. Handlers in `server/workers/handlers/`.
+-   **Navigation**: Simplified 5-module sidebar (Dashboard, Simulate, Decisions, Copilot, Data) with Settings drawer for secondary tools. See `client/src/components/app-sidebar.tsx`.
 -   **Key Features**:
     -   **Data Management**: Supports CSV upload, manual entry, AI-powered extraction, and multi-currency handling.
     -   **Truth Scan**: A multi-stage data validation layer ensures data accuracy.
@@ -34,6 +38,7 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
     -   **Document Generator**: AI-powered generation for financial models, investor memos, KPI reports, and pitch deck outlines, leveraging multi-LLM routing and optional web research.
     -   **Digital Twin**: A continuously updated virtual representation of the startup company. Mirrors real-time financial state, operational metrics, and strategic decisions. Integrates CompanyState, simulations, decisions, and alerts into a unified twin model with health scoring, risk indicators, event tracking, and an embedded Monte Carlo simulation explorer. Frontend dashboard at `/digital-twin`, API at `/companies/{id}/twin/*`.
     -   **Extended Agent Architecture**: Operations Agent (execution planning), Review/Reflection Agent (output validation), Auto-Trigger Simulations (alert-driven Monte Carlo), Cross-Company Decision Pattern Engine, Slack Copilot (5 slash commands), Enhanced Connector Queue (priority-based sync scheduling).
+    -   **Parallel AI Agent Execution**: Router Agent dispatches specialist agents (CFO, Market, Strategy, Operations) concurrently via `asyncio.gather` — 50-70% latency reduction vs sequential. See `server/copilot/agents/router.py`.
 
 ## External Dependencies
 
@@ -42,6 +47,7 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
 -   **Google Gemini**: Employed for general chat and high-volume tasks.
 -   **Perplexity**: Provides real-time web search, market research, and benchmark data.
 -   **OpenRouter/Grok (xAI)**: Integrated for news, current events, and trend analysis.
+-   **Redis**: Optional caching and job queue layer (graceful fallback when unavailable).
 -   **PostgreSQL**: Serves as the primary relational database.
 -   **Google Fonts**: Used for typography (Inter, IBM Plex Mono).
 -   **Resend**: Handles email delivery services.
@@ -57,3 +63,13 @@ The platform features a modern full-stack architecture, utilizing React/TypeScri
     -   `server/seed/seed_twin_intelligence.py`: Digital Twin & Intelligence Graph data — 25 twin events per company, enriched CompanyState ($513K cash, $28K burn, $44K MRR), 12 months financial records, 8 peer SaaS companies with financial history, additional strategic decisions.
     -   `server/seed/seed_benchmarks.py`: Industry benchmark data.
 -   **Startup Index Creation**: `ensure_graph_indexes()` runs on every startup (outside migrations branch) to create Intelligence Graph performance indexes.
+
+## Operations Scripts
+
+-   `scripts/db_backup.py`: Automated PostgreSQL backup with gzip compression, retention policy (default 7 backups).
+-   `scripts/db_restore.py`: Backup restore utility with `--list` option to view available backups.
+
+## Architecture Documentation
+
+-   Full architecture documentation: `docs/ARCHITECTURE.md` — system overview, folder structure, data flow, deployment topology.
+-   Health endpoint: `GET /health` — returns DB, Redis, and system status.

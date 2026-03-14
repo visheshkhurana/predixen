@@ -230,6 +230,13 @@ async def get_dashboard_kpis(
     
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    from server.core.cache import cache_get, cache_set, cache_key
+    period_str = period.value if period else "default"
+    ck = cache_key("kpis", f"{company_id}:{current_user.id}:{period_str}")
+    cached = cache_get(ck)
+    if cached:
+        return cached
     
     now = datetime.now()
     period_start = None
@@ -429,4 +436,5 @@ async def get_dashboard_kpis(
     kpis["metricDefinitions"] = METRIC_DEFINITIONS
     kpis["period"] = period.value if period else "last_12_months"
     
+    cache_set(ck, kpis, ttl=180)
     return kpis

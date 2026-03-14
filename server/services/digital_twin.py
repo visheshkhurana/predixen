@@ -40,6 +40,12 @@ EVENT_TYPES = [
 
 
 def get_twin_state(db: Session, company_id: int) -> dict:
+    from server.core.cache import cache_get, cache_set, cache_key
+    ck = cache_key("twin_state", str(company_id))
+    cached = cache_get(ck)
+    if cached:
+        return cached
+
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         return {"error": "Company not found"}
@@ -107,7 +113,7 @@ def get_twin_state(db: Session, company_id: int) -> dict:
         .all()
     )
 
-    return {
+    result = {
         "company_id": company_id,
         "company_name": company.name,
         "snapshot_id": snapshot_id,
@@ -133,6 +139,8 @@ def get_twin_state(db: Session, company_id: int) -> dict:
         "twin_health": _compute_twin_health(cs, history, recent_events),
         "auto_simulations": metadata.get("auto_simulations", []),
     }
+    cache_set(ck, result, ttl=120)
+    return result
 
 
 def _compute_risk_indicators(
@@ -230,6 +238,13 @@ def emit_twin_event(
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    try:
+        from server.core.cache import cache_delete, cache_key, cache_invalidate_pattern
+        cache_delete(cache_key("twin_state", str(company_id)))
+        cache_invalidate_pattern(f"kpis:{company_id}:*")
+    except Exception:
+        pass
 
     try:
         from server.services.intelligence_graph import process_graph_event

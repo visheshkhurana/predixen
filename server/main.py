@@ -103,6 +103,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import slack_bot as slack_bot_api
     from server.api import digital_twin as digital_twin_api
     from server.api import intelligence_graph as intelligence_graph_api
+    from server.realtime import routes as realtime_ws
 
     logger.info(f"Remaining API modules imported in {time.time() - t0:.1f}s")
 
@@ -164,6 +165,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(slack_bot_api.router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
+    app.include_router(realtime_ws.router)
 
     _startup_state["routers_loaded"] = True
     logger.info(f"All {len(app.routes)} routes registered in {time.time() - t0:.1f}s")
@@ -361,6 +363,14 @@ def health():
     except Exception as e:
         logger.warning(f"Health check DB probe failed: {e}")
 
+    redis_healthy = False
+    try:
+        from server.core.redis_client import get_redis
+        r = get_redis()
+        redis_healthy = bool(r.ping())
+    except Exception:
+        pass
+
     overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
     return {
         "status": overall_status,
@@ -371,6 +381,7 @@ def health():
         "ready": _startup_state["ready"],
         "routers_loaded": _startup_state["routers_loaded"],
         "database": "connected" if db_healthy else "unavailable",
+        "redis": "connected" if redis_healthy else "unavailable",
         "startup_error": _startup_state["error"],
     }
 

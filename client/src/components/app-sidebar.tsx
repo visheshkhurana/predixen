@@ -25,21 +25,14 @@ import {
   LayoutDashboard,
   FlaskConical,
   Target,
-  DollarSign,
-  Search,
-  BookOpen,
-  Flag,
   Settings,
   LogOut,
   HelpCircle,
   Sparkles,
   Upload,
   Link2,
-  Store,
   FileCode,
   LayoutGrid,
-  Briefcase,
-  Activity,
   Shield,
   Users,
   Building2,
@@ -51,13 +44,12 @@ import {
   UsersRound,
   Command,
   ChevronRight,
-  PieChart,
-  Bell,
   AlertTriangle,
-  Palette,
-  FileStack,
-  Cpu,
-  Network,
+  Database,
+  Activity,
+  Briefcase,
+  Flag,
+  BookOpen,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -75,25 +67,37 @@ interface SettingsNavItem {
 
 const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
   {
-    label: "Data & Setup",
+    label: "Data & Integrations",
     items: [
       { title: "Data Input", url: "/data", icon: Upload },
       { title: "Integrations", url: "/integrations", icon: Link2 },
+      { title: "Marketplace", url: "/marketplace", icon: Database },
+      { title: "Health Check", url: "/truth", icon: Activity },
     ],
   },
   {
-    label: "Metrics",
+    label: "Metrics & Reports",
     items: [
       { title: "Metric Catalog", url: "/metrics", icon: FileCode },
-      { title: "Suggested Metrics", url: "/suggested-metrics", icon: Sparkles },
       { title: "KPI Dashboards", url: "/dashboards", icon: LayoutGrid },
+      { title: "Doc Generator", url: "/doc-generator", icon: FileText },
     ],
   },
   {
-    label: "Stakeholders",
+    label: "Finance",
     items: [
+      { title: "Cap Table", url: "/cap-table", icon: BarChart3 },
+      { title: "Fundraising", url: "/fundraising", icon: CreditCard },
       { title: "Investor Room", url: "/investor-room", icon: Briefcase },
-      { title: "KPI Board", url: "/kpi-board", icon: Activity },
+      { title: "Hiring Planner", url: "/hiring-planner", icon: UsersRound },
+    ],
+  },
+  {
+    label: "Track",
+    items: [
+      { title: "Journal", url: "/journal", icon: BookOpen },
+      { title: "Goals", url: "/goals", icon: Flag },
+      { title: "Alerts", url: "/alerts", icon: AlertTriangle },
     ],
   },
 ];
@@ -188,7 +192,7 @@ function SettingsDrawer() {
           data-testid="button-settings"
         >
           <Settings className="h-4 w-4" />
-          <span className="flex-1 text-left">Settings</span>
+          <span className="flex-1 text-left">Settings & Tools</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>
       </SheetTrigger>
@@ -391,7 +395,6 @@ export function AppSidebar() {
           <CompanySwitcher />
         </div>
 
-        {/* AI Copilot - Gradient Button */}
         <div className="px-3 mb-2">
           <Link href="/copilot">
             <Button
@@ -417,12 +420,10 @@ export function AppSidebar() {
           </Link>
         </div>
 
-        {/* Health Score Card */}
         <HealthScoreCard />
 
         <div className="h-px bg-border/50 mx-3 my-3" />
 
-        {/* Core Section */}
         <SidebarGroup className="py-0">
           <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Core
@@ -461,21 +462,6 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/doc-generator" || location.startsWith("/doc-generator/")}
-                  data-testid="nav-doc-generator"
-                >
-                  <Link href="/doc-generator">
-                    <FileStack className="h-4 w-4" />
-                    <span className="flex-1">Doc Generator</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
                   isActive={location === "/decisions"}
                   data-testid="nav-decisions"
                 >
@@ -493,208 +479,42 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/digital-twin"}
-                  data-testid="nav-digital-twin"
+                  isActive={location === "/data" || location.startsWith("/data/")}
+                  data-testid="nav-data"
                 >
-                  <Link href="/digital-twin">
-                    <Cpu className="h-4 w-4" />
-                    <span className="flex-1">Digital Twin</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
+                  <Link href="/data">
+                    <Database className="h-4 w-4" />
+                    <span>Data</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/intelligence"}
-                  data-testid="nav-intelligence"
-                >
-                  <Link href="/intelligence">
-                    <Network className="h-4 w-4" />
-                    <span className="flex-1">Intelligence</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/alerts"}
-                  data-testid="nav-alerts"
-                >
-                  <Link href="/alerts">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="flex-1">Alerts</span>
-                    {unreadAlertCount > 0 && (
+              {unreadAlertCount > 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/alerts"}
+                    data-testid="nav-alerts"
+                  >
+                    <Link href="/alerts">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="flex-1">Alerts</span>
                       <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0" data-testid="badge-alert-count">
                         {unreadAlertCount}
                       </Badge>
-                    )}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Finance Section */}
-        <SidebarGroup className="py-0 mt-2">
-          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Finance
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/cap-table"}
-                  data-testid="nav-cap-table"
-                >
-                  <Link href="/cap-table">
-                    <PieChart className="h-4 w-4" />
-                    <span>Cap Table</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/fundraising"}
-                  data-testid="nav-fundraising"
-                >
-                  <Link href="/fundraising">
-                    <DollarSign className="h-4 w-4" />
-                    <span>Fundraising</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/truth" || location === "/truth-scan"}
-                  data-testid="nav-health-check"
-                >
-                  <Link href="/truth">
-                    <Search className="h-4 w-4" />
-                    <span>Health Check</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Track Section */}
-        <SidebarGroup className="py-0 mt-2">
-          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Track
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/journal"}
-                  data-testid="nav-journal"
-                >
-                  <Link href="/journal">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="flex-1">Decision Journal</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/goals"}
-                  data-testid="nav-goals"
-                >
-                  <Link href="/goals">
-                    <Flag className="h-4 w-4" />
-                    <span className="flex-1">Goals</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/ai-graphics"}
-                  data-testid="nav-ai-graphics"
-                >
-                  <Link href="/ai-graphics">
-                    <Palette className="h-4 w-4" />
-                    <span className="flex-1">AI Graphics</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                      New
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-3 space-y-1">
-        <div className="flex items-center justify-between gap-2 px-2 mb-1">
-          <span className="text-xs text-muted-foreground">Theme</span>
+      <SidebarFooter className="px-2 pb-3 space-y-1">
+        <SettingsDrawer />
+        <div className="flex items-center justify-between px-3 py-1">
           <ThemeToggle />
         </div>
-        <Link href="/alerts">
-          <div
-            className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
-            data-testid="link-notification-bell"
-          >
-            <div className="relative">
-              <Bell className="h-4 w-4" />
-              {unreadAlertCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-bold px-0.5" data-testid="badge-bell-count">
-                  {unreadAlertCount > 99 ? "99+" : unreadAlertCount}
-                </span>
-              )}
-            </div>
-            <span>Notifications</span>
-            {unreadAlertCount > 0 && (
-              <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 h-4 border-0">
-                {unreadAlertCount}
-              </Badge>
-            )}
-          </div>
-        </Link>
-        <SettingsDrawer />
-        <Link href="/docs">
-          <div
-            className="flex items-center gap-2 text-sm text-muted-foreground px-2 py-1.5 rounded-md hover-elevate cursor-pointer"
-            data-testid="link-help-docs"
-          >
-            <HelpCircle className="h-4 w-4" />
-            <span>Help & Docs</span>
-          </div>
-        </Link>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start"
-          onClick={async () => {
-            try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-            useFounderStore.getState().logout();
-            window.location.href = '/auth';
-          }}
-          data-testid="button-logout"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button>
       </SidebarFooter>
     </Sidebar>
   );

@@ -202,62 +202,81 @@ class RouterAgent(BaseAgent):
         ckb: CompanyKnowledgeBase,
         context: Dict[str, Any]
     ) -> AgentResponse:
-        """Process query by routing to appropriate agents and merging responses."""
+        """Process query by routing to appropriate agents and merging responses.
+        
+        Uses asyncio.gather for parallel agent execution when multiple
+        specialists are needed, reducing total latency significantly.
+        """
+        import asyncio
         
         has_document = context.get("has_document", False)
         routing = self.determine_routing(query, has_document)
         
         self.logger.info(f"Routing decision: {routing}")
         
-        agent_responses: List[AgentResponse] = []
+        parallel_tasks = []
+        task_labels = []
+        decision_task_index = None
         
         if routing.call_decision_advisor:
             from .decision_advisor import DecisionAdvisorAgent
             advisor = DecisionAdvisorAgent(llm_router=self.llm_router)
-            advisor_response = await advisor.process(query, ckb, context)
-            agent_responses.append(advisor_response)
-            
-            if advisor_response.structured_output.get("recommendation"):
-                ckb.decisions_v2.append({
-                    "query": query,
-                    "recommendation": advisor_response.structured_output.get("recommendation"),
-                    "simulations": advisor_response.structured_output.get("simulations", [])
-                })
+            decision_task_index = len(parallel_tasks)
+            parallel_tasks.append(advisor.process(query, ckb, context))
+            task_labels.append("decision_advisor")
         
         if routing.call_cfo and not routing.call_decision_advisor:
             from .cfo_agent import CFOAgent
             cfo = CFOAgent(llm_router=self.llm_router)
-            cfo_response = await cfo.process(query, ckb, context)
-            agent_responses.append(cfo_response)
-            
-            if cfo_response.structured_output.get("financials"):
-                ckb.financials.update(cfo_response.structured_output.get("financials", {}))
+            parallel_tasks.append(cfo.process(query, ckb, context))
+            task_labels.append("cfo")
         
         if routing.call_market:
             from .market_agent import MarketAgent
             market = MarketAgent(llm_router=self.llm_router)
-            market_response = await market.process(query, ckb, context)
-            agent_responses.append(market_response)
-            
-            if market_response.structured_output.get("competitors"):
-                ckb.competitors = market_response.structured_output.get("competitors", [])
-            if market_response.structured_output.get("icp"):
-                ckb.icp = market_response.structured_output.get("icp", {})
+            parallel_tasks.append(market.process(query, ckb, context))
+            task_labels.append("market")
         
         if routing.call_strategy and not routing.call_decision_advisor:
             from .strategy_agent import StrategyAgent
             strategy = StrategyAgent(llm_router=self.llm_router)
-            strategy_response = await strategy.process(query, ckb, context)
-            agent_responses.append(strategy_response)
-            
-            if strategy_response.structured_output.get("strategy"):
-                ckb.strategy.update(strategy_response.structured_output.get("strategy", {}))
+            parallel_tasks.append(strategy.process(query, ckb, context))
+            task_labels.append("strategy")
         
         if routing.call_operations:
             from .operations_agent import OperationsAgent
             ops = OperationsAgent(llm_router=self.llm_router)
-            ops_response = await ops.process(query, ckb, context)
-            agent_responses.append(ops_response)
+            parallel_tasks.append(ops.process(query, ckb, context))
+            task_labels.append("operations")
+        
+        if parallel_tasks:
+            self.logger.info(f"Launching {len(parallel_tasks)} agents in parallel: {task_labels}")
+            results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+        else:
+            results = []
+        
+        agent_responses: List[AgentResponse] = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                self.logger.error(f"Agent {task_labels[i]} failed: {result}")
+                continue
+            agent_responses.append(result)
+            
+            if task_labels[i] == "decision_advisor" and result.structured_output.get("recommendation"):
+                ckb.decisions_v2.append({
+                    "query": query,
+                    "recommendation": result.structured_output.get("recommendation"),
+                    "simulations": result.structured_output.get("simulations", [])
+                })
+            elif task_labels[i] == "cfo" and result.structured_output.get("financials"):
+                ckb.financials.update(result.structured_output.get("financials", {}))
+            elif task_labels[i] == "market":
+                if result.structured_output.get("competitors"):
+                    ckb.competitors = result.structured_output.get("competitors", [])
+                if result.structured_output.get("icp"):
+                    ckb.icp = result.structured_output.get("icp", {})
+            elif task_labels[i] == "strategy" and result.structured_output.get("strategy"):
+                ckb.strategy.update(result.structured_output.get("strategy", {}))
         
         merged = self._merge_responses(agent_responses, ckb, context)
         
