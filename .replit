@@ -73,3 +73,7 @@ CREATE_SCHEMA = "false"
 RUN_MIGRATIONS = "false"
 ENVIRONMENT = "production"
 NODE_ENV = "production"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
