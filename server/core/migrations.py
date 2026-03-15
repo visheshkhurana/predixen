@@ -1022,6 +1022,8 @@ def run_migrations(engine: Engine) -> None:
     ensure_autopilot_tables(engine)
     ensure_survival_simulations_table(engine)
     ensure_decision_outcome_columns(engine)
+    ensure_company_data_sharing_column(engine)
+    ensure_cross_company_patterns_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1596,3 +1598,46 @@ def ensure_survival_simulations_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Survival simulations table migration complete")
+
+
+def ensure_company_data_sharing_column(engine: Engine) -> None:
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE companies ADD COLUMN IF NOT EXISTS data_sharing_enabled BOOLEAN DEFAULT FALSE"
+            ))
+            conn.commit()
+            logger.info("Companies data_sharing_enabled column migration complete")
+        except Exception as e:
+            logger.debug(f"data_sharing_enabled column may already exist: {e}")
+
+
+def ensure_cross_company_patterns_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS cross_company_patterns (
+                id SERIAL PRIMARY KEY,
+                pattern_type VARCHAR(100) NOT NULL,
+                industry VARCHAR(100),
+                stage VARCHAR(100),
+                decision_type VARCHAR(100),
+                sample_size INTEGER DEFAULT 0,
+                success_rate FLOAT DEFAULT 0,
+                median_impact FLOAT DEFAULT 0,
+                p25_impact FLOAT DEFAULT 0,
+                p75_impact FLOAT DEFAULT 0,
+                metadata_json JSONB DEFAULT '{}'::jsonb,
+                contributing_companies INTEGER DEFAULT 0,
+                computed_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(pattern_type, industry, stage, decision_type)
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ccp_type ON cross_company_patterns(pattern_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ccp_industry ON cross_company_patterns(industry)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ccp_stage ON cross_company_patterns(stage)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_ccp_decision ON cross_company_patterns(decision_type)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Cross-company patterns table migration complete")

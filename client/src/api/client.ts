@@ -230,7 +230,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    update: (id: number, data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string }) =>
+    update: (id: number, data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string; data_sharing_enabled?: boolean }) =>
       request<any>(`/companies/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),

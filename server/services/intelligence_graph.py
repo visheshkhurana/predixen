@@ -556,6 +556,31 @@ def get_growth_benchmarks(db: Session, company_id: int) -> Dict[str, Any]:
     }
 
 
+def get_cross_company_patterns(db: Session, company_id: int) -> Dict[str, Any]:
+    profile = get_company_profile(db, company_id)
+    if not profile:
+        return {"patterns": [], "source": "no_profile"}
+
+    try:
+        from server.services.pattern_aggregator import get_relevant_patterns
+        patterns = get_relevant_patterns(
+            db,
+            industry=profile.get("industry", "unknown"),
+            stage=profile.get("stage", "unknown"),
+        )
+        if patterns:
+            return {
+                "patterns": patterns,
+                "source": "cross_company_aggregated",
+                "your_industry": profile.get("industry"),
+                "your_stage": profile.get("stage"),
+            }
+    except Exception as e:
+        logger.debug(f"Cross-company patterns lookup failed: {e}")
+
+    return {"patterns": [], "source": "insufficient_data"}
+
+
 def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     profile = get_company_profile(db, company_id)
     if not profile:
@@ -565,6 +590,7 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
     patterns = get_decision_patterns(db, company_id)
     strategies = get_strategy_insights(db, company_id)
     benchmarks = get_growth_benchmarks(db, company_id)
+    cross_company = get_cross_company_patterns(db, company_id)
 
     total_companies = db.query(func.count(Company.id)).scalar() or 0
     total_decisions = db.query(func.count(CompanyDecision.id)).scalar() or 0
@@ -575,18 +601,26 @@ def get_intelligence_summary(db: Session, company_id: int) -> Dict[str, Any]:
         .scalar() or 0
     )
 
+    contributing_companies = (
+        db.query(func.count(Company.id))
+        .filter(Company.data_sharing_enabled == True)
+        .scalar() or 0
+    )
+
     return {
         "company_profile": profile,
         "similar_companies": similar,
         "decision_patterns": patterns,
         "strategy_insights": strategies,
         "growth_benchmarks": benchmarks,
+        "cross_company_patterns": cross_company,
         "graph_stats": {
             "total_companies": total_companies,
             "total_decisions": total_decisions,
             "total_financial_records": total_records,
             "total_events": total_events,
             "similar_companies_found": len(similar),
+            "contributing_companies": contributing_companies,
         },
     }
 

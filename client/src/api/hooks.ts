@@ -36,7 +36,7 @@ export function useUpdateCompany() {
   const { currentCompany, setCurrentCompany } = useFounderStore();
   
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string } }) =>
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; website?: string; industry?: string; stage?: string; currency?: string; data_sharing_enabled?: boolean } }) =>
       api.companies.update(id, data),
     onSuccess: (updatedCompany) => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });

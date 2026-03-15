@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap } from "lucide-react";
+import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brain, TrendingUp, Users, Database } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,6 +42,23 @@ export default function SystemToolsPage() {
     queryKey: ["/api/system/autopilot/risks"],
   });
 
+  const { data: platformIntelData, isLoading: platformIntelLoading } = useQuery({
+    queryKey: ["/api/system/platform-intelligence"],
+  });
+
+  const runAggregation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/system/platform-intelligence/aggregate");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system/platform-intelligence"] });
+      toast({ title: "Aggregation complete", description: "Cross-company patterns have been recomputed." });
+    },
+    onError: () => {
+      toast({ title: "Aggregation failed", variant: "destructive" });
+    },
+  });
+
   const toggleFlag = useMutation({
     mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
       return apiRequest("POST", `/api/system/flags/${key}?enabled=${enabled}`);
@@ -71,7 +88,7 @@ export default function SystemToolsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4" data-testid="system-tools-tabs">
+        <TabsList className="grid w-full grid-cols-5" data-testid="system-tools-tabs">
           <TabsTrigger value="events" data-testid="tab-events">
             <Activity className="w-4 h-4 mr-2" /> Events
           </TabsTrigger>
@@ -83,6 +100,9 @@ export default function SystemToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="autopilot" data-testid="tab-autopilot">
             <Zap className="w-4 h-4 mr-2" /> Autopilot
+          </TabsTrigger>
+          <TabsTrigger value="intelligence" data-testid="tab-intelligence">
+            <Brain className="w-4 h-4 mr-2" /> Intelligence
           </TabsTrigger>
         </TabsList>
 
@@ -381,6 +401,118 @@ export default function SystemToolsPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="intelligence" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Platform Intelligence</h3>
+              <p className="text-sm text-muted-foreground">Cross-company learning metrics and pattern aggregation</p>
+            </div>
+            <Button
+              onClick={() => runAggregation.mutate()}
+              disabled={runAggregation.isPending}
+              data-testid="button-run-aggregation"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${runAggregation.isPending ? "animate-spin" : ""}`} />
+              {runAggregation.isPending ? "Aggregating..." : "Run Aggregation"}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Users className="w-4 h-4" /> Contributors
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-contributing-companies">
+                  {platformIntelData?.contributing_companies ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  of {platformIntelData?.total_companies ?? 0} total ({platformIntelData?.participation_rate ?? 0}%)
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Brain className="w-4 h-4" /> Patterns
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-patterns-discovered">
+                  {platformIntelData?.patterns_discovered ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">patterns discovered</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4" /> Decisions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-decisions-analyzed">
+                  {platformIntelData?.total_decisions_analyzed ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">decisions analyzed</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Database className="w-4 h-4" /> Data Points
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-financial-records">
+                  {platformIntelData?.total_financial_records ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">financial records</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Aggregation Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {platformIntelLoading ? (
+                <p className="text-muted-foreground">Loading platform intelligence data...</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div>
+                      <div className="font-medium">Last Computed</div>
+                      <div className="text-sm text-muted-foreground">
+                        {platformIntelData?.last_computed
+                          ? new Date(platformIntelData.last_computed).toLocaleString()
+                          : "Never — click 'Run Aggregation' to compute patterns"}
+                      </div>
+                    </div>
+                    <Badge variant={platformIntelData?.last_computed ? "default" : "secondary"} data-testid="badge-aggregation-status">
+                      {platformIntelData?.last_computed ? "Active" : "Pending"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                    <div>
+                      <div className="font-medium">Privacy</div>
+                      <div className="text-sm text-muted-foreground">
+                        Only statistical aggregates (medians, percentiles, success rates) are stored. Individual company data is never exposed.
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-green-500 border-green-500/30" data-testid="badge-privacy-status">
+                      <Shield className="w-3 h-3 mr-1" /> Protected
+                    </Badge>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

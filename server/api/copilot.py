@@ -411,6 +411,13 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
                 if isinstance(r, dict):
                     parts.append(f"  - {r.get('action', r.get('title', 'Action'))}: {r.get('rationale', r.get('description', ''))}")
 
+    platform_intel = context.get("platform_intelligence")
+    if platform_intel and platform_intel.get("insights"):
+        parts.append(f"\n--- Platform Intelligence (Aggregated Cross-Company Data) ---")
+        parts.append(f"  Source: {platform_intel.get('disclaimer', 'Anonymized aggregated data')}")
+        for insight in platform_intel.get("insights", []):
+            parts.append(f"  - [{insight.get('type', 'insight')}] {insight.get('insight', '')}")
+
     return "\n".join(parts)
 
 
@@ -565,6 +572,15 @@ async def copilot_quick_chat(
 
         if web_research_text:
             system_prompt += f"\n\n--- REAL-TIME WEB RESEARCH ---\n{web_research_text}\n--- END RESEARCH ---\n\nIMPORTANT: When using web research data, clearly distinguish between the company's own data and external benchmarks/market data."
+
+        platform_intel = context.get("platform_intelligence")
+        if platform_intel and platform_intel.get("insights"):
+            intel_lines = [f"\n--- PLATFORM INTELLIGENCE (Aggregated Cross-Company Data) ---"]
+            intel_lines.append(f"Source: {platform_intel.get('disclaimer', 'Anonymized aggregated data')}")
+            for insight in platform_intel["insights"]:
+                intel_lines.append(f"  - [{insight.get('type', 'insight')}] {insight.get('insight', '')}")
+            intel_lines.append("--- END PLATFORM INTELLIGENCE ---")
+            system_prompt += "\n".join(intel_lines)
 
         data_gaps = business_ctx.get("data_gaps", [])
         if data_gaps:

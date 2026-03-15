@@ -83,6 +83,7 @@ class CompanyResponse(BaseModel):
     currency: str
     amount_scale: str
     description: Optional[str] = None
+    data_sharing_enabled: bool = False
     
     class Config:
         from_attributes = True
@@ -196,7 +197,8 @@ class CompanyUpdate(BaseModel):
     stage: Optional[str] = None
     currency: Optional[str] = None
     amount_scale: Optional[str] = None
-    description: Optional[str] = None  # Business summary
+    description: Optional[str] = None
+    data_sharing_enabled: Optional[bool] = None
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
@@ -248,6 +250,8 @@ def update_company(
         company.description = request.description
     if request.amount_scale is not None:
         company.amount_scale = request.amount_scale
+    if request.data_sharing_enabled is not None:
+        company.data_sharing_enabled = request.data_sharing_enabled
 
     db.commit()
     db.refresh(company)

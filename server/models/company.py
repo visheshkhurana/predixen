@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from server.core.db import Base
@@ -17,6 +17,7 @@ class Company(Base):
     description = Column(String, nullable=True)
     metadata_json = Column(JSON, nullable=True, default=dict)
     latest_truth_dataset_id = Column(String(36), nullable=True, index=True)
+    data_sharing_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="companies")

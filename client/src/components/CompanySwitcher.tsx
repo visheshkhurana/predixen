@@ -30,7 +30,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, ChevronDown, Plus, Check, Pencil, Trash2, FlaskConical } from 'lucide-react';
+import { Building2, ChevronDown, Plus, Check, Pencil, Trash2, FlaskConical, Share2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useFounderStore } from '@/store/founderStore';
 import { useCompanies, useUpdateCompany, useDeleteCompany } from '@/api/hooks';
@@ -45,6 +46,7 @@ interface Company {
   stage?: string;
   currency: string;
   description?: string;
+  data_sharing_enabled?: boolean;
 }
 
 const INDUSTRIES = [
@@ -108,6 +110,7 @@ export function CompanySwitcher() {
     industry: '',
     stage: '',
     currency: 'USD',
+    data_sharing_enabled: false,
   });
 
   if (isLoading) {
@@ -125,6 +128,7 @@ export function CompanySwitcher() {
       industry: company.industry || '',
       stage: company.stage || '',
       currency: company.currency || 'USD',
+      data_sharing_enabled: company.data_sharing_enabled || false,
     });
     setEditDialogOpen(true);
     setOpen(false);
@@ -154,6 +158,7 @@ export function CompanySwitcher() {
           industry: editForm.industry || undefined,
           stage: editForm.stage || undefined,
           currency: editForm.currency,
+          data_sharing_enabled: editForm.data_sharing_enabled,
         },
       });
       toast({ title: 'Success', description: 'Company updated successfully' });
@@ -359,6 +364,21 @@ export function CompanySwitcher() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+              <div className="flex items-center gap-2">
+                <Share2 className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Label htmlFor="edit-data-sharing" className="text-sm font-medium">Data Sharing</Label>
+                  <p className="text-xs text-muted-foreground">Contribute anonymized metrics to help all companies get better insights</p>
+                </div>
+              </div>
+              <Switch
+                id="edit-data-sharing"
+                checked={editForm.data_sharing_enabled}
+                onCheckedChange={(checked) => setEditForm({ ...editForm, data_sharing_enabled: checked })}
+                data-testid="switch-data-sharing"
+              />
             </div>
           </div>
           <DialogFooter>

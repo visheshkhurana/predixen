@@ -175,5 +175,72 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
             "name": scenario.name,
             "inputs": scenario.inputs_json
         })
+
+    context["platform_intelligence"] = build_platform_intelligence(company.id, db)
     
     return context
+
+
+def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[str, Any]]:
+    try:
+        from server.services.pattern_aggregator import get_relevant_patterns
+        from server.models.company import Company
+
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not company:
+            return None
+
+        industry = (company.industry or "unknown").lower()
+        stage = (company.stage or "unknown").lower()
+
+        patterns = get_relevant_patterns(db, industry=industry, stage=stage)
+        if not patterns:
+            return None
+
+        decision_patterns = [p for p in patterns if p.get("pattern_type") == "decision_outcome"]
+        benchmark_patterns = [p for p in patterns if p.get("pattern_type") == "benchmark"]
+
+        insights = []
+        for p in decision_patterns[:5]:
+            dtype = p.get("decision_type", "general")
+            rate = p.get("success_rate", 0)
+            sample = p.get("sample_size", 0)
+            companies = p.get("contributing_companies", 0)
+            if sample >= 2:
+                insights.append({
+                    "type": "decision_pattern",
+                    "decision_type": dtype,
+                    "insight": f"{rate:.0f}% of similar companies ({sample} decisions across {companies} companies) saw positive outcomes from {dtype.replace('_', ' ')} decisions.",
+                    "success_rate": rate,
+                    "sample_size": sample,
+                })
+
+        for p in benchmark_patterns[:3]:
+            metric = p.get("decision_type", "")
+            median = p.get("median_impact", 0)
+            p25 = p.get("p25_impact", 0)
+            p75 = p.get("p75_impact", 0)
+            if median > 0:
+                insights.append({
+                    "type": "benchmark",
+                    "metric": metric,
+                    "insight": f"Peer {metric.replace('_', ' ')} benchmark: P25=${p25:,.0f}, Median=${median:,.0f}, P75=${p75:,.0f}",
+                    "p25": p25,
+                    "median": median,
+                    "p75": p75,
+                })
+
+        if not insights:
+            return None
+
+        return {
+            "source": "aggregated_cross_company_data",
+            "industry": industry,
+            "stage": stage,
+            "insights": insights,
+            "disclaimer": "Based on anonymized, aggregated data from opted-in companies. Individual company data is never exposed.",
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"Platform intelligence build failed: {e}")
+        return None

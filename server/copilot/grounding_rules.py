@@ -144,6 +144,35 @@ When explaining metric changes:
    3. Revenue ramp was delayed (-0.2 months)"
 """
 
+PLATFORM_INTELLIGENCE_RULES = """
+## PLATFORM INTELLIGENCE USAGE
+
+When the context pack includes a "Platform Intelligence" section:
+
+1. **CLEARLY LABEL EXTERNAL DATA**: Always distinguish between the company's own data
+   and cross-company aggregated insights. Use phrases like:
+   - "Based on aggregated data from similar companies..."
+   - "Across [N] companies in your industry/stage..."
+   - "Platform-wide patterns suggest..."
+
+2. **CITE SAMPLE SIZES**: Always mention the sample size when referencing platform
+   intelligence: "X% of N similar companies saw positive outcomes..."
+
+3. **DO NOT OVER-WEIGHT**: Platform intelligence is supplementary context, not a
+   replacement for the company's own simulation data and financial metrics.
+   The company's own data always takes precedence.
+
+4. **PRIVACY DISCLAIMER**: If asked about the source of platform intelligence,
+   explain that it comes from anonymized, aggregated data from opted-in companies.
+   Individual company identities are never revealed.
+
+5. **APPROPRIATE USE CASES**:
+   - Benchmarking: "Companies like yours typically have X% gross margin"
+   - Decision support: "X% of similar companies that made this type of decision saw positive outcomes"
+   - Risk context: "Companies at your stage commonly face [challenge]"
+"""
+
+
 def get_grounding_prompt_addition() -> str:
     """Get the full grounding rules to append to agent system prompts."""
-    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}\n\n{RESPONSE_MODE_RULES}\n\n{CAUSAL_EXPLANATION_RULES}"
+    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}\n\n{RESPONSE_MODE_RULES}\n\n{CAUSAL_EXPLANATION_RULES}\n\n{PLATFORM_INTELLIGENCE_RULES}"

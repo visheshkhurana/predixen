@@ -109,6 +109,29 @@ def get_confidence(company_id: Optional[int] = None, user=Depends(require_platfo
     return compute_all_confidence(cid)
 
 
+@router.get("/platform-intelligence")
+def get_platform_intelligence(
+    db: Session = Depends(get_db),
+    user=Depends(require_platform_admin),
+):
+    from server.services.pattern_aggregator import get_platform_intelligence_stats
+    return get_platform_intelligence_stats(db)
+
+
+@router.post("/platform-intelligence/aggregate")
+def trigger_aggregation(
+    db: Session = Depends(get_db),
+    user=Depends(require_platform_admin),
+):
+    from server.services.pattern_aggregator import aggregate_decision_patterns, aggregate_benchmark_updates
+    patterns_result = aggregate_decision_patterns(db)
+    benchmarks_result = aggregate_benchmark_updates(db)
+    return {
+        "patterns": patterns_result,
+        "benchmarks": benchmarks_result,
+    }
+
+
 def _get_primary_company(user) -> Optional[int]:
     try:
         from server.core.db import SessionLocal

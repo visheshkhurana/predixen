@@ -82,7 +82,8 @@ class DecisionPatternEngine:
 
     def collect_decision_outcomes(self) -> List[Dict[str, Any]]:
         """
-        Collect anonymized decision outcomes from all companies.
+        Collect anonymized decision outcomes from opted-in companies only.
+        Only companies with data_sharing_enabled=True contribute data.
         Returns list of {profile, decision_type, outcome, metrics_delta}.
         Uses real outcome_rating data when available, falls back to status-based inference.
         """
@@ -91,12 +92,22 @@ class DecisionPatternEngine:
             from server.models.company_decision import CompanyDecision
             from server.models.financial import FinancialRecord
 
-            decisions = (
-                self.db.query(CompanyDecision)
-                .filter(CompanyDecision.status.in_(["resolved", "accepted", "implemented"]))
-                .limit(500)
+            opted_in_ids = (
+                self.db.query(Company.id)
+                .filter(Company.data_sharing_enabled == True)
                 .all()
             )
+            opted_in_set = {c.id for c in opted_in_ids}
+
+            if not opted_in_set:
+                return []
+
+            query = self.db.query(CompanyDecision).filter(
+                CompanyDecision.status.in_(["resolved", "accepted", "implemented"]),
+                CompanyDecision.company_id.in_(opted_in_set)
+            )
+
+            decisions = query.limit(500).all()
 
             outcomes = []
             company_cache = {}
@@ -255,19 +266,33 @@ class DecisionPatternEngine:
     ) -> List[Dict[str, Any]]:
         """
         Get actionable recommendations based on decision patterns
-        from similar companies.
+        from similar companies, enriched with cross-company success rates.
         """
         patterns = self.find_patterns(company_profile)
 
+        cross_company_rates = self._get_cross_company_rates(company_profile)
+
         recommendations = []
         for pattern in patterns:
+            dtype = pattern["decision_type"]
+            cc_rate = cross_company_rates.get(dtype)
+
             rec = {
-                "decision_type": pattern["decision_type"],
+                "decision_type": dtype,
                 "confidence": "high" if pattern["sample_size"] >= 10 else "medium" if pattern["sample_size"] >= 5 else "low",
                 "based_on": f"{pattern['sample_size']} similar companies",
                 "success_rate": f"{pattern['success_rate']}%",
                 "recommendation": pattern["recommendation"],
             }
+
+            if cc_rate and cc_rate.get("sample_size", 0) >= 2:
+                rec["cross_company_success_rate"] = f"{cc_rate['success_rate']}%"
+                rec["cross_company_sample_size"] = cc_rate["sample_size"]
+                rec["cross_company_insight"] = (
+                    f"{cc_rate['success_rate']:.0f}% of similar companies saw positive outcomes "
+                    f"from {dtype.replace('_', ' ')} decisions (based on {cc_rate['sample_size']} decisions)."
+                )
+
             recommendations.append(rec)
 
         if current_challenges:
@@ -354,6 +379,23 @@ class DecisionPatternEngine:
         ]
 
         return defaults
+
+    def _get_cross_company_rates(self, company_profile: Dict[str, str]) -> Dict[str, Any]:
+        try:
+            from server.services.pattern_aggregator import get_relevant_patterns
+            industry = company_profile.get("industry", "unknown")
+            stage = company_profile.get("stage", "unknown")
+            patterns = get_relevant_patterns(self.db, industry=industry, stage=stage)
+            result = {}
+            for p in patterns:
+                if p.get("pattern_type") == "decision_outcome" and p.get("sample_size", 0) >= 2:
+                    result[p["decision_type"]] = {
+                        "success_rate": p["success_rate"],
+                        "sample_size": p["sample_size"],
+                    }
+            return result
+        except Exception:
+            return {}
 
     def _challenge_specific_recs(
         self,

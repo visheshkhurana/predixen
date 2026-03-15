@@ -208,10 +208,12 @@ def generate_recommendations(
     
     top_3 = scored_actions[:3]
     
+    cross_company_data = _get_cross_company_success_rates(truth_metrics)
+
     recommendations = []
     for i, scored in enumerate(top_3):
         action = scored["action"]
-        recommendations.append({
+        rec = {
             "rank": i + 1,
             "id": action["id"],
             "title": action["title"],
@@ -231,9 +233,63 @@ def generate_recommendations(
                 "growth": scored["growth_score"],
                 "risk_penalty": scored["risk_penalty"]
             }
-        })
+        }
+
+        bucket = action.get("bucket", "")
+        if bucket in cross_company_data:
+            cc = cross_company_data[bucket]
+            rec["cross_company_insight"] = {
+                "success_rate": cc["success_rate"],
+                "sample_size": cc["sample_size"],
+                "text": f"{cc['success_rate']:.0f}% of similar companies saw positive outcomes from this type of action (based on {cc['sample_size']} decisions).",
+            }
+            rec["rationale"] = (
+                action["description"] + f" {cc['success_rate']:.0f}% of similar companies that took this action saw positive outcomes."
+            )
+
+        recommendations.append(rec)
     
     return recommendations
+
+
+def _get_cross_company_success_rates(truth_metrics: Dict) -> Dict[str, Any]:
+    try:
+        from server.services.pattern_aggregator import get_relevant_patterns
+        from server.core.db import SessionLocal
+
+        db = SessionLocal()
+        try:
+            industry = str(truth_metrics.get("industry", "unknown")).lower()
+            stage = str(truth_metrics.get("stage", "unknown")).lower()
+            patterns = get_relevant_patterns(db, industry=industry, stage=stage)
+
+            result = {}
+            for p in patterns:
+                if p.get("pattern_type") == "decision_outcome" and p.get("sample_size", 0) >= 2:
+                    dtype = p.get("decision_type", "")
+                    bucket_mapping = {
+                        "cost_reduction": "efficiency",
+                        "hiring": "growth",
+                        "pricing": "revenue",
+                        "fundraising": "fundraising",
+                        "growth": "growth",
+                        "product": "growth",
+                        "retention": "efficiency",
+                    }
+                    bucket = bucket_mapping.get(dtype, dtype)
+                    result[bucket] = {
+                        "success_rate": p["success_rate"],
+                        "sample_size": p["sample_size"],
+                    }
+                    result[dtype] = {
+                        "success_rate": p["success_rate"],
+                        "sample_size": p["sample_size"],
+                    }
+            return result
+        finally:
+            db.close()
+    except Exception:
+        return {}
 
 def generate_risk_text(action: Dict, scored: Dict) -> List[str]:
     risks = []

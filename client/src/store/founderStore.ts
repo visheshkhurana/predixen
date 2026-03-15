@@ -17,6 +17,7 @@ interface Company {
   stage?: string;
   currency: string;
   description?: string;
+  data_sharing_enabled?: boolean;
 }
 
 interface TruthScan {
