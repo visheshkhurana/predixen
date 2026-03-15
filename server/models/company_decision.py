@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -25,9 +25,28 @@ class CompanyDecision(Base):
     created_from_message_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    metrics_snapshot_at_decision = Column(JSONType, nullable=True)
+    metrics_snapshot_at_followup = Column(JSONType, nullable=True)
+    outcome_recorded_at = Column(DateTime, nullable=True)
+    outcome_delta_json = Column(JSONType, nullable=True)
+    outcome_rating = Column(String(20), nullable=True)
+    followup_days = Column(Integer, default=60)
+
+    __table_args__ = (
+        CheckConstraint(
+            "outcome_rating IS NULL OR outcome_rating IN ('positive', 'neutral', 'negative')",
+            name="ck_outcome_rating_values"
+        ),
+        CheckConstraint(
+            "followup_days IS NULL OR (followup_days >= 7 AND followup_days <= 365)",
+            name="ck_followup_days_range"
+        ),
+    )
+    implemented_at = Column(DateTime, nullable=True)
+
     company = relationship("Company", back_populates="company_decisions")
-    
+
     def to_dict(self):
         return {
             "id": str(self.id),
@@ -43,7 +62,14 @@ class CompanyDecision(Base):
             "sources": self.sources_json or [],
             "created_from_message_id": str(self.created_from_message_id) if self.created_from_message_id else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "metrics_snapshot_at_decision": self.metrics_snapshot_at_decision,
+            "metrics_snapshot_at_followup": self.metrics_snapshot_at_followup,
+            "outcome_recorded_at": self.outcome_recorded_at.isoformat() if self.outcome_recorded_at else None,
+            "outcome_delta_json": self.outcome_delta_json,
+            "outcome_rating": self.outcome_rating,
+            "followup_days": self.followup_days or 60,
+            "implemented_at": self.implemented_at.isoformat() if self.implemented_at else None,
         }
 
 

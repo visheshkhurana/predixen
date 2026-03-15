@@ -84,6 +84,7 @@ class DecisionPatternEngine:
         """
         Collect anonymized decision outcomes from all companies.
         Returns list of {profile, decision_type, outcome, metrics_delta}.
+        Uses real outcome_rating data when available, falls back to status-based inference.
         """
         try:
             from server.models.company import Company
@@ -99,6 +100,8 @@ class DecisionPatternEngine:
 
             outcomes = []
             company_cache = {}
+
+            now = datetime.now(timezone.utc)
 
             for decision in decisions:
                 cid = decision.company_id
@@ -125,27 +128,40 @@ class DecisionPatternEngine:
 
                 confidence = getattr(decision, "confidence", "medium") or "medium"
 
-                decision_type = "general"
-                title_lower = (decision.title or "").lower()
-                if any(kw in title_lower for kw in ["hire", "team", "headcount"]):
-                    decision_type = "hiring"
-                elif any(kw in title_lower for kw in ["price", "pricing"]):
-                    decision_type = "pricing"
-                elif any(kw in title_lower for kw in ["cut", "reduce", "cost"]):
-                    decision_type = "cost_reduction"
-                elif any(kw in title_lower for kw in ["raise", "fundrais"]):
-                    decision_type = "fundraising"
-                elif any(kw in title_lower for kw in ["growth", "market", "expand"]):
-                    decision_type = "growth"
+                decision_type = self._classify_decision_type(decision.title)
 
-                outcome_positive = confidence in ("high", "medium") and decision.status in ("accepted", "implemented")
+                has_real_outcome = (
+                    getattr(decision, "outcome_rating", None) is not None
+                    and getattr(decision, "outcome_recorded_at", None) is not None
+                )
+
+                if has_real_outcome:
+                    outcome_positive = decision.outcome_rating == "positive"
+                    outcome_neutral = decision.outcome_rating == "neutral"
+                else:
+                    outcome_positive = confidence in ("high", "medium") and decision.status in ("accepted", "implemented")
+                    outcome_neutral = False
+
+                recency_weight = 1.0
+                if decision.updated_at:
+                    days_ago = (now - decision.updated_at.replace(tzinfo=timezone.utc)).days if decision.updated_at.tzinfo is None else (now - decision.updated_at).days
+                    if days_ago < 30:
+                        recency_weight = 1.5
+                    elif days_ago < 90:
+                        recency_weight = 1.2
+                    elif days_ago > 365:
+                        recency_weight = 0.7
 
                 outcomes.append({
                     "profile": profile,
                     "decision_type": decision_type,
                     "impact_level": confidence,
                     "outcome_positive": outcome_positive,
+                    "outcome_neutral": outcome_neutral,
                     "outcome_text_length": len(decision.title or ""),
+                    "has_real_outcome": has_real_outcome,
+                    "outcome_rating": getattr(decision, "outcome_rating", None),
+                    "recency_weight": recency_weight,
                 })
 
             return outcomes
@@ -153,6 +169,23 @@ class DecisionPatternEngine:
         except Exception as e:
             logger.error(f"Failed to collect decision outcomes: {e}")
             return []
+
+    @staticmethod
+    def _classify_decision_type(title: Optional[str]) -> str:
+        if not title:
+            return "general"
+        title_lower = title.lower()
+        if any(kw in title_lower for kw in ["hire", "team", "headcount"]):
+            return "hiring"
+        elif any(kw in title_lower for kw in ["price", "pricing"]):
+            return "pricing"
+        elif any(kw in title_lower for kw in ["cut", "reduce", "cost"]):
+            return "cost_reduction"
+        elif any(kw in title_lower for kw in ["raise", "fundrais"]):
+            return "fundraising"
+        elif any(kw in title_lower for kw in ["growth", "market", "expand"]):
+            return "growth"
+        return "general"
 
     def find_patterns(
         self,
@@ -176,25 +209,39 @@ class DecisionPatternEngine:
         if len(similar_outcomes) < 3:
             return self._get_default_patterns(company_profile)
 
-        type_stats = defaultdict(lambda: {"total": 0, "positive": 0, "high_impact": 0})
+        type_stats = defaultdict(lambda: {
+            "total": 0, "weighted_total": 0.0, "positive": 0, "weighted_positive": 0.0,
+            "neutral": 0, "weighted_neutral": 0.0,
+            "high_impact": 0, "real_outcome_count": 0,
+        })
         for outcome in similar_outcomes:
             dt = outcome["decision_type"]
+            w = outcome.get("recency_weight", 1.0)
             type_stats[dt]["total"] += 1
+            type_stats[dt]["weighted_total"] += w
             if outcome.get("outcome_positive"):
                 type_stats[dt]["positive"] += 1
+                type_stats[dt]["weighted_positive"] += w
+            elif outcome.get("outcome_neutral"):
+                type_stats[dt]["neutral"] += 1
+                type_stats[dt]["weighted_neutral"] += w
             if outcome.get("impact_level") == "high":
                 type_stats[dt]["high_impact"] += 1
+            if outcome.get("has_real_outcome"):
+                type_stats[dt]["real_outcome_count"] += 1
 
         patterns = []
         for dtype, stats in type_stats.items():
             if stats["total"] < 2:
                 continue
-            success_rate = stats["positive"] / stats["total"] if stats["total"] > 0 else 0
+            decisive_weight = stats["weighted_total"] - stats["weighted_neutral"]
+            success_rate = stats["weighted_positive"] / decisive_weight if decisive_weight > 0 else 0
             patterns.append({
                 "decision_type": dtype,
                 "sample_size": stats["total"],
                 "success_rate": round(success_rate * 100, 1),
                 "high_impact_count": stats["high_impact"],
+                "real_outcome_count": stats["real_outcome_count"],
                 "recommendation": self._pattern_recommendation(dtype, success_rate, company_profile),
             })
 

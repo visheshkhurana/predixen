@@ -58,6 +58,13 @@ class CreateDecisionRequest(BaseModel):
     tags: List[str] = []
     confidence: str = "medium"
     sources: List[str] = []
+    followup_days: Optional[int] = None
+
+    @validator("followup_days", pre=True, always=False)
+    def validate_followup_days(cls, v):
+        if v is not None and (v < 7 or v > 365):
+            raise ValueError("followup_days must be between 7 and 365")
+        return v
 
 
 class UpdateDecisionRequest(BaseModel):
@@ -69,6 +76,13 @@ class UpdateDecisionRequest(BaseModel):
     owner: Optional[str] = None
     tags: Optional[List[str]] = None
     confidence: Optional[str] = None
+    followup_days: Optional[int] = None
+
+    @validator("followup_days", pre=True, always=False)
+    def validate_followup_days(cls, v):
+        if v is not None and (v < 7 or v > 365):
+            raise ValueError("followup_days must be between 7 and 365")
+        return v
 
 @router.post("/simulation/{run_id}/decisions/generate", response_model=Dict[str, Any])
 def generate_decisions(
@@ -983,8 +997,21 @@ def create_company_decision(
         confidence=request.confidence,
         sources_json=request.sources
     )
+    if request.followup_days is not None:
+        decision.followup_days = request.followup_days
     
     db.add(decision)
+    db.flush()
+
+    if request.status == "implemented":
+        try:
+            from server.services.outcome_tracker import snapshot_metrics_at_decision
+            snapshot_metrics_at_decision(db, company_id, decision.id)
+        except Exception as e:
+            logger.error(f"Failed to snapshot metrics at decision creation: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to capture metrics snapshot for outcome tracking")
+
     db.commit()
     db.refresh(decision)
     
@@ -1022,6 +1049,7 @@ def update_company_decision(
         decision.options_json = [o.model_dump() for o in request.options]
     if request.recommendation is not None:
         decision.recommendation_json = request.recommendation.model_dump()
+    old_status = decision.status
     if request.status is not None:
         decision.status = request.status
     if request.owner is not None:
@@ -1030,9 +1058,20 @@ def update_company_decision(
         decision.tags = request.tags
     if request.confidence is not None:
         decision.confidence = request.confidence
+    if request.followup_days is not None:
+        decision.followup_days = request.followup_days
     
     decision.updated_at = datetime.utcnow()
     
+    if request.status == "implemented" and old_status != "implemented":
+        try:
+            from server.services.outcome_tracker import snapshot_metrics_at_decision
+            snapshot_metrics_at_decision(db, company_id, decision.id)
+        except Exception as e:
+            logger.error(f"Failed to snapshot metrics at decision implementation: {e}")
+            db.rollback()
+            raise HTTPException(status_code=500, detail="Failed to capture metrics snapshot for outcome tracking")
+
     db.commit()
     db.refresh(decision)
     
@@ -1372,4 +1411,50 @@ def get_decision_patterns(
         "company_profile": profile,
         "patterns": patterns,
         "recommendations": recommendations,
+    }
+
+
+@router.get("/companies/{company_id}/decisions/{decision_id}/outcome")
+def get_decision_outcome(
+    company_id: int,
+    decision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = get_user_company(db, company_id, current_user)
+
+    try:
+        decision_uuid = uuid_lib.UUID(decision_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid decision ID format")
+
+    decision = db.query(CompanyDecision).filter(
+        CompanyDecision.id == decision_uuid,
+        CompanyDecision.company_id == company_id,
+    ).first()
+
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    followup_days = decision.followup_days or 60
+    days_elapsed = None
+    days_remaining = None
+    if decision.implemented_at:
+        elapsed = (datetime.utcnow() - decision.implemented_at).days
+        days_elapsed = elapsed
+        if not decision.outcome_recorded_at:
+            days_remaining = max(0, followup_days - elapsed)
+
+    return {
+        "decision_id": str(decision.id),
+        "status": decision.status,
+        "implemented_at": decision.implemented_at.isoformat() if decision.implemented_at else None,
+        "followup_days": followup_days,
+        "days_elapsed": days_elapsed,
+        "days_remaining": days_remaining,
+        "metrics_at_decision": decision.metrics_snapshot_at_decision,
+        "metrics_at_followup": decision.metrics_snapshot_at_followup,
+        "outcome_delta": decision.outcome_delta_json,
+        "outcome_rating": decision.outcome_rating,
+        "outcome_recorded_at": decision.outcome_recorded_at.isoformat() if decision.outcome_recorded_at else None,
     }

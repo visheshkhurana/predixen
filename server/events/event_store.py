@@ -18,6 +18,7 @@ EVENT_TYPES = [
     "scenario_created",
     "simulation_completed",
     "decision_created",
+    "decision_outcome_recorded",
     "connector_synced",
     "copilot_request",
     "ai_recommendation_generated",

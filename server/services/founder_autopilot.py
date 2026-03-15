@@ -284,6 +284,15 @@ def run_autopilot(company_id: int) -> dict:
 
     briefing = generate_briefing(company_id)
 
+    try:
+        from server.services.outcome_tracker import check_pending_followups
+        followup_ids = check_pending_followups(company_id)
+        if followup_ids:
+            briefing["followup_outcomes_recorded"] = followup_ids
+            logger.info(f"Recorded {len(followup_ids)} decision followup outcomes for company {company_id}")
+    except Exception as e:
+        logger.error(f"Failed to check decision followups for company {company_id}: {e}")
+
     emit_event(
         company_id=company_id,
         user_id=None,

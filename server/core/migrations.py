@@ -1021,6 +1021,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_graph_adjacency_tables(engine)
     ensure_autopilot_tables(engine)
     ensure_survival_simulations_table(engine)
+    ensure_decision_outcome_columns(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1530,6 +1531,51 @@ def ensure_autopilot_tables(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Autopilot tables migration complete")
+
+
+def ensure_decision_outcome_columns(engine: Engine) -> None:
+    """Add outcome tracking columns to company_decisions table."""
+    outcome_columns = [
+        ('metrics_snapshot_at_decision', 'JSONB'),
+        ('metrics_snapshot_at_followup', 'JSONB'),
+        ('outcome_recorded_at', 'TIMESTAMP'),
+        ('outcome_delta_json', 'JSONB'),
+        ('outcome_rating', 'VARCHAR(20)'),
+        ('followup_days', 'INTEGER DEFAULT 60'),
+        ('implemented_at', 'TIMESTAMP'),
+    ]
+    with engine.connect() as conn:
+        for col_name, col_type in outcome_columns:
+            try:
+                conn.execute(text(
+                    f'ALTER TABLE company_decisions ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
+                ))
+            except Exception as e:
+                logger.debug(f"Column {col_name} may already exist or error: {e}")
+        try:
+            conn.execute(text("""
+                DO $$ BEGIN
+                    ALTER TABLE company_decisions
+                        ADD CONSTRAINT ck_outcome_rating_values
+                        CHECK (outcome_rating IS NULL OR outcome_rating IN ('positive', 'neutral', 'negative'));
+                EXCEPTION WHEN duplicate_object THEN NULL;
+                END $$;
+            """))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("""
+                DO $$ BEGIN
+                    ALTER TABLE company_decisions
+                        ADD CONSTRAINT ck_followup_days_range
+                        CHECK (followup_days IS NULL OR (followup_days >= 7 AND followup_days <= 365));
+                EXCEPTION WHEN duplicate_object THEN NULL;
+                END $$;
+            """))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Decision outcome columns migration complete")
 
 
 def ensure_survival_simulations_table(engine: Engine) -> None:
