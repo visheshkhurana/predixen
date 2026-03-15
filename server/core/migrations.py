@@ -1024,6 +1024,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_decision_outcome_columns(engine)
     ensure_company_data_sharing_column(engine)
     ensure_cross_company_patterns_table(engine)
+    ensure_simulation_accuracy_tables(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1641,3 +1642,62 @@ def ensure_cross_company_patterns_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Cross-company patterns table migration complete")
+
+
+def ensure_simulation_accuracy_tables(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_accuracy (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                simulation_run_id INTEGER,
+                scenario_id INTEGER,
+                prediction_month INTEGER NOT NULL,
+                predicted_revenue FLOAT,
+                actual_revenue FLOAT,
+                predicted_burn FLOAT,
+                actual_burn FLOAT,
+                predicted_cash FLOAT,
+                actual_cash FLOAT,
+                predicted_churn FLOAT,
+                actual_churn FLOAT,
+                variance_pct_json JSONB,
+                accuracy_score FLOAT,
+                computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS calibration_biases (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                metric VARCHAR(50) NOT NULL,
+                bias_pct FLOAT NOT NULL DEFAULT 0.0,
+                sample_count INTEGER DEFAULT 0,
+                confidence VARCHAR(20) DEFAULT 'low',
+                is_active INTEGER DEFAULT 1,
+                applied_at TIMESTAMP WITH TIME ZONE,
+                computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_company ON simulation_accuracy(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_run ON simulation_accuracy(simulation_run_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_computed ON simulation_accuracy(computed_at)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_company ON calibration_biases(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_active ON calibration_biases(company_id, is_active)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("""
+                ALTER TABLE simulation_accuracy
+                ALTER COLUMN variance_pct_json TYPE JSONB USING variance_pct_json::jsonb
+            """))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS predicted_churn FLOAT"))
+            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS actual_churn FLOAT"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Simulation accuracy and calibration biases tables migration complete")

@@ -96,6 +96,74 @@ def auto_calibrate_from_truth_scan(
     }
 
 
+@router.get("/companies/{company_id}/simulation/accuracy", response_model=Dict[str, Any])
+def get_simulation_accuracy(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = get_user_company(db, company_id, current_user)
+    from server.services.simulation_accuracy import get_accuracy_history, get_accuracy_summary
+    
+    summary = get_accuracy_summary(company_id)
+    history = get_accuracy_history(company_id)
+    
+    return {
+        "summary": summary,
+        "history": history,
+    }
+
+
+@router.post("/companies/{company_id}/simulation/accuracy/compute", response_model=Dict[str, Any])
+def compute_simulation_accuracy(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = get_user_company(db, company_id, current_user)
+    from server.services.simulation_accuracy import compute_accuracy
+    
+    result = compute_accuracy(company_id)
+    return result
+
+
+@router.post("/companies/{company_id}/simulation/calibrate", response_model=Dict[str, Any])
+def trigger_calibration(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = get_user_company(db, company_id, current_user)
+    from server.services.calibration_bias import suggest_calibration_adjustments, apply_calibration
+    
+    suggestion = suggest_calibration_adjustments(company_id)
+    
+    if suggestion["status"] == "suggested" and suggestion["adjustments"]:
+        result = apply_calibration(company_id, suggestion["adjustments"])
+        return {
+            "calibration": result,
+            "analysis": suggestion["analysis"],
+        }
+    
+    return {
+        "calibration": {"status": "no_adjustments", "applied": 0},
+        "analysis": suggestion.get("analysis", {}),
+    }
+
+
+@router.get("/companies/{company_id}/simulation/biases", response_model=Dict[str, Any])
+def get_active_calibration_biases(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    company = get_user_company(db, company_id, current_user)
+    from server.services.calibration_bias import get_active_biases
+    
+    biases = get_active_biases(company_id)
+    return {"biases": biases, "company_id": company_id}
+
+
 @router.get("/industries/benchmarks", response_model=Dict[str, Any])
 def get_industry_benchmarks(
     industry: str = "saas",

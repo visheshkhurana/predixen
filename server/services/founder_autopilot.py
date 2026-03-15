@@ -301,4 +301,31 @@ def run_autopilot(company_id: int) -> dict:
         payload={"risk_count": briefing["risk_count"], "critical": briefing["critical_count"]},
     )
 
+    try:
+        from server.services.simulation_accuracy import compute_accuracy
+        should_compute = True
+        try:
+            with SessionLocal() as check_db:
+                last_run = check_db.execute(
+                    text("""
+                        SELECT computed_at FROM simulation_accuracy
+                        WHERE company_id = :cid
+                        ORDER BY computed_at DESC LIMIT 1
+                    """),
+                    {"cid": company_id},
+                ).fetchone()
+                if last_run and last_run[0]:
+                    days_since = (datetime.now(timezone.utc) - last_run[0].replace(tzinfo=timezone.utc)).days
+                    should_compute = days_since >= 28
+        except Exception:
+            pass
+        if should_compute:
+            accuracy_result = compute_accuracy(company_id)
+            briefing["accuracy_computation"] = accuracy_result
+            logger.info(f"Accuracy computation for company {company_id}: {accuracy_result.get('status')}")
+        else:
+            logger.info(f"Skipping accuracy computation for company {company_id}: computed within last 28 days")
+    except Exception as e:
+        logger.error(f"Accuracy computation failed for company {company_id}: {e}")
+
     return briefing

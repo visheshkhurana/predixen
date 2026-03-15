@@ -105,15 +105,58 @@ def calculate_decay_factor(
 
 class EnhancedSimulationEngine:
     
-    def __init__(self, inputs: EnrichedSimulationInputs, seed: Optional[int] = None):
+    def __init__(self, inputs: EnrichedSimulationInputs, seed: Optional[int] = None, company_id: Optional[int] = None):
         self.inputs = inputs
         self.seed = seed
+        self.company_id = company_id
         self.rng = np.random.default_rng(seed)
         self.regimes = DEFAULT_REGIMES
         self.driver_names = ["growth_rate", "churn_rate", "gross_margin", "cac", "dso", "conversion_rate"]
         self.correlation_matrix = self._build_correlation_matrix()
         self.cholesky_L = self._compute_cholesky()
+        self.calibration_biases = self._load_calibration_biases()
+        self._calibration_applied = False
         
+    def _load_calibration_biases(self) -> Dict[str, float]:
+        if not self.company_id:
+            return {}
+        try:
+            from server.services.calibration_bias import get_active_biases
+            biases = get_active_biases(self.company_id)
+            bias_map = {}
+            metric_to_driver = {
+                "revenue": "growth_rate",
+                "burn": "burn_reduction_pct",
+                "cash": "cash_balance",
+                "churn": "churn_rate",
+            }
+            for metric, data in biases.items():
+                driver = metric_to_driver.get(metric)
+                if driver and data.get("bias_pct"):
+                    bias_map[metric] = data["bias_pct"]
+            return bias_map
+        except Exception:
+            return {}
+
+    def _apply_calibration_biases(self) -> None:
+        if not self.calibration_biases or self._calibration_applied:
+            return
+        self._calibration_applied = True
+        from copy import deepcopy
+        self.inputs = deepcopy(self.inputs)
+        if "revenue" in self.calibration_biases:
+            correction = self.calibration_biases["revenue"]
+            self.inputs.baseline_growth_rate *= (1 + correction / 100)
+        if "burn" in self.calibration_biases:
+            correction = self.calibration_biases["burn"]
+            if correction < 0:
+                self.inputs.burn_reduction_pct += min(abs(correction) * 0.5, 20)
+            elif correction > 0:
+                self.inputs.burn_reduction_pct = max(0, self.inputs.burn_reduction_pct - min(abs(correction) * 0.5, 20))
+        if "churn" in self.calibration_biases:
+            correction = self.calibration_biases["churn"]
+            self.inputs.churn_rate *= (1 + correction / 100)
+
     def _build_correlation_matrix(self) -> np.ndarray:
         n = len(self.driver_names)
         matrix = np.zeros((n, n))
@@ -385,6 +428,7 @@ class EnhancedSimulationEngine:
         self, 
         scenario: Optional[ScenarioDefinition] = None
     ) -> EnrichedSimulationResult:
+        self._apply_calibration_biases()
         n = self.inputs.n_simulations
         horizon = self.inputs.horizon_months
         
@@ -445,6 +489,7 @@ class EnhancedSimulationEngine:
         revenue_matrix = np.zeros((n, horizon))
         burn_matrix = np.zeros((n, horizon))
         arr_matrix = np.zeros((n, horizon))
+        churn_matrix = np.zeros((n, horizon))
         
         for sim_idx, states in enumerate(all_states):
             for m, state in enumerate(states):
@@ -452,6 +497,7 @@ class EnhancedSimulationEngine:
                 revenue_matrix[sim_idx, m] = state.revenue
                 burn_matrix[sim_idx, m] = state.burn_rate
                 arr_matrix[sim_idx, m] = state.arr
+                churn_matrix[sim_idx, m] = state.churn_amount
         
         bands = {
             "cash": {
@@ -473,6 +519,11 @@ class EnhancedSimulationEngine:
                 "p10": np.percentile(arr_matrix, 10, axis=0).tolist(),
                 "p50": np.percentile(arr_matrix, 50, axis=0).tolist(),
                 "p90": np.percentile(arr_matrix, 90, axis=0).tolist()
+            },
+            "churn": {
+                "p10": np.percentile(churn_matrix, 10, axis=0).tolist(),
+                "p50": np.percentile(churn_matrix, 50, axis=0).tolist(),
+                "p90": np.percentile(churn_matrix, 90, axis=0).tolist()
             }
         }
         

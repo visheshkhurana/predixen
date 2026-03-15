@@ -1216,7 +1216,7 @@ def simulate_enhanced(
         horizon_months=request.horizon_months
     )
     
-    engine = EnhancedSimulationEngine(inputs, seed=request.seed)
+    engine = EnhancedSimulationEngine(inputs, seed=request.seed, company_id=company_id)
     result = engine.run_monte_carlo()
     
     return {
@@ -1309,7 +1309,7 @@ def simulate_scenarios_enhanced(
     all_results = []
     
     for scenario_input in scenarios_to_run:
-        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed)
+        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed, company_id=company_id)
         
         scenario_def = ScenarioDefinition(
             name=scenario_input.name,
@@ -1365,7 +1365,7 @@ def simulate_scenarios_enhanced(
     sensitivity_report = None
     if request.include_sensitivity and all_results:
         baseline_result = all_results[0]
-        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed)
+        engine = EnhancedSimulationEngine(base_inputs, seed=request.seed, company_id=company_id)
         wmbt_report = engine.compute_sensitivity(baseline_result)
         sensitivity_report = {
             "target_runway_months": wmbt_report.target_runway_months,
@@ -1433,7 +1433,7 @@ def run_sensitivity_analysis(
         horizon_months=24
     )
     
-    engine = EnhancedSimulationEngine(inputs)
+    engine = EnhancedSimulationEngine(inputs, company_id=company_id)
     baseline_result = engine.run_monte_carlo()
     
     wmbt_report = engine.compute_sensitivity(
