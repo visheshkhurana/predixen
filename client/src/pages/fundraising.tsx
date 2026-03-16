@@ -149,7 +149,7 @@ const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
 
 const INVESTOR_DB: InvestorDBEntry[] = investorDatabaseRaw as InvestorDBEntry[];
 
-const INVESTOR_REGIONS = ['All Regions', 'USA', 'India', 'Korea', 'Japan', 'Multi-Regional'] as const;
+const INVESTOR_REGIONS = ['All Regions', 'USA', 'India', 'Korea', 'Japan', 'Global'] as const;
 const INVESTOR_TYPES = [
   { value: 'all', label: 'All' },
   { value: 'VC', label: 'VC' },
