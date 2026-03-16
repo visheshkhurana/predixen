@@ -18,7 +18,8 @@ import { CrossPageIntelligence } from '@/components/CrossPageIntelligence';
 import { apiRequest } from '@/lib/queryClient';
 import { 
   Plus, DollarSign, Users, TrendingUp, PieChart, 
-  Calculator, Play, FileText, Building2, Percent, Target
+  Calculator, Play, FileText, Building2, Percent, Target, Mail,
+  Clock, BarChart3, CheckCircle2, AlertCircle, Pause, Send
 } from 'lucide-react';
 import { EmptyStateCard } from '@/components/ui/empty-state';
 import { trackEvent } from '@/lib/posthog';
@@ -235,6 +236,10 @@ export default function FundraisingPage() {
             <Target className="h-4 w-4 mr-2" />
             Readiness
           </TabsTrigger>
+          <TabsTrigger value="outreach" data-testid="tab-outreach">
+            <Mail className="h-4 w-4 mr-2" />
+            Outreach
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="cap-table" className="space-y-4">
@@ -416,6 +421,112 @@ export default function FundraisingPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="outreach" className="space-y-4" data-testid="tab-content-outreach">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Outreach Sequences</h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card data-testid="card-sequence-post-meeting">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Post-Meeting Follow-up</CardTitle>
+                  <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" data-testid="badge-status-active-1">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Active
+                  </Badge>
+                </div>
+                <CardDescription>Automated follow-up sequence after investor meetings to maintain engagement and share materials.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>3 steps: 1hr thank you → 3 days data room → 1 week check-in</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Send className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium" data-testid="text-sent-1">28 sent</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-emerald-600" data-testid="text-reply-rate-1">71% reply rate</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-sequence-newsletter">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Investor Update Newsletter</CardTitle>
+                  <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid="badge-status-paused">
+                    <Pause className="h-3 w-3 mr-1" />
+                    Paused
+                  </Badge>
+                </div>
+                <CardDescription>Monthly newsletter that auto-pulls KPIs from your dashboard and sends updates to committed investors.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>Monthly cadence</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <Send className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium" data-testid="text-editions-sent">6 editions sent</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-sequence-due-diligence">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Due Diligence Automation</CardTitle>
+                  <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" data-testid="badge-status-active-2">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Active
+                  </Badge>
+                </div>
+                <CardDescription>Streamlines the due diligence process with automated data room access, checklists, and document reminders.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>4 steps: auto data room → checklist → document reminders → completion notification</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-sequence-reengagement">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Re-engagement Campaign</CardTitle>
+                  <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" data-testid="badge-status-inactive">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Inactive
+                  </Badge>
+                </div>
+                <CardDescription>Re-engage investors who previously passed with traction updates and milestone announcements.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" />
+                    <span>2 steps: traction update → milestone announcement</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="simulate" className="space-y-4">
