@@ -593,17 +593,21 @@ def compute_quality_of_growth(metrics: Dict, confidence: int) -> int:
     return max(0, min(100, score))
 
 def get_benchmarks(db: Session, industry: str, stage: str) -> List[Benchmark]:
+    from server.core.taxonomy import normalize_industry, normalize_stage
+    norm_ind = normalize_industry(industry)
+    norm_stg = normalize_stage(stage)
+
     benchmarks = db.query(Benchmark).filter(
-        Benchmark.industry == industry,
-        Benchmark.stage == stage
+        Benchmark.industry == norm_ind,
+        Benchmark.stage == norm_stg
     ).all()
-    
+
     if not benchmarks:
         benchmarks = db.query(Benchmark).filter(
-            Benchmark.industry == "general_saas",
-            Benchmark.stage == "unknown_stage"
+            Benchmark.industry == "saas",
+            Benchmark.stage == "seed"
         ).all()
-    
+
     return benchmarks
 
 def compare_to_benchmarks(metrics: Dict, benchmarks: List[Benchmark]) -> List[Dict[str, Any]]:

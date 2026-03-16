@@ -199,27 +199,83 @@ class MarketAgent(BaseAgent):
             "growth_rate": {"median": 30, "top_quartile": 50},
             "churn_rate": {"median": 5, "top_quartile": 2},
             "ltv_cac_ratio": {"median": 3, "top_quartile": 5},
-            "cac_payback_months": {"median": 15, "top_quartile": 9}
+            "cac_payback_months": {"median": 15, "top_quartile": 9},
+            "net_revenue_retention": {"median": 105, "top_quartile": 125},
+            "burn_multiple": {"median": 2.0, "top_quartile": 1.0},
+            "rule_of_40": {"median": 20, "top_quartile": 40},
         },
         "fintech": {
             "gross_margin": {"median": 65, "top_quartile": 78},
             "growth_rate": {"median": 40, "top_quartile": 70},
-            "ndr": {"median": 110, "top_quartile": 130}
+            "net_revenue_retention": {"median": 110, "top_quartile": 130},
+            "ltv_cac_ratio": {"median": 4, "top_quartile": 6},
+            "cac_payback_months": {"median": 14, "top_quartile": 8},
+            "burn_multiple": {"median": 2.5, "top_quartile": 1.5},
+            "churn_rate": {"median": 3, "top_quartile": 1.5},
         },
         "marketplace": {
             "take_rate": {"median": 15, "top_quartile": 25},
             "gross_margin": {"median": 50, "top_quartile": 65},
-            "growth_rate": {"median": 25, "top_quartile": 45}
+            "growth_rate": {"median": 25, "top_quartile": 45},
+            "ltv_cac_ratio": {"median": 2.5, "top_quartile": 4.0},
+            "churn_rate": {"median": 6, "top_quartile": 3},
+            "burn_multiple": {"median": 3.5, "top_quartile": 2.0},
+        },
+        "d2c": {
+            "gross_margin": {"median": 55, "top_quartile": 68},
+            "growth_rate": {"median": 15, "top_quartile": 30},
+            "cac": {"median": 45, "top_quartile": 15},
+            "repeat_purchase_rate": {"median": 25, "top_quartile": 45},
+            "ltv_cac_ratio": {"median": 2.2, "top_quartile": 3.5},
+            "burn_multiple": {"median": 4.0, "top_quartile": 2.5},
+        },
+        "healthtech": {
+            "gross_margin": {"median": 68, "top_quartile": 80},
+            "growth_rate": {"median": 10, "top_quartile": 18},
+            "churn_rate": {"median": 3, "top_quartile": 1.5},
+            "ltv_cac_ratio": {"median": 3.5, "top_quartile": 6.0},
+            "cac_payback_months": {"median": 15, "top_quartile": 8},
+            "net_revenue_retention": {"median": 108, "top_quartile": 122},
+            "burn_multiple": {"median": 3.5, "top_quartile": 2.0},
+        },
+        "consumer_sub": {
+            "gross_margin": {"median": 72, "top_quartile": 85},
+            "growth_rate": {"median": 18, "top_quartile": 35},
+            "churn_rate": {"median": 7, "top_quartile": 4},
+            "ltv_cac_ratio": {"median": 2.2, "top_quartile": 3.5},
+            "cac_payback_months": {"median": 5, "top_quartile": 2},
+            "trial_to_paid": {"median": 12, "top_quartile": 25},
+            "burn_multiple": {"median": 4.5, "top_quartile": 2.5},
+        },
+        "hardware": {
+            "gross_margin": {"median": 40, "top_quartile": 55},
+            "growth_rate": {"median": 8, "top_quartile": 15},
+            "cac": {"median": 300, "top_quartile": 100},
+            "ltv_cac_ratio": {"median": 2.0, "top_quartile": 3.5},
+            "burn_multiple": {"median": 5.0, "top_quartile": 3.0},
+            "repeat_purchase_rate": {"median": 15, "top_quartile": 30},
+        },
+        "services": {
+            "gross_margin": {"median": 50, "top_quartile": 65},
+            "growth_rate": {"median": 8, "top_quartile": 15},
+            "churn_rate": {"median": 4, "top_quartile": 2},
+            "ltv_cac_ratio": {"median": 3.5, "top_quartile": 6.0},
+            "cac_payback_months": {"median": 5, "top_quartile": 2},
+            "burn_multiple": {"median": 2.0, "top_quartile": 1.0},
+            "utilization_rate": {"median": 70, "top_quartile": 85},
         },
         "ecommerce": {
             "gross_margin": {"median": 35, "top_quartile": 50},
             "cac": {"median": 50, "top_quartile": 25},
-            "repeat_purchase_rate": {"median": 20, "top_quartile": 40}
+            "repeat_purchase_rate": {"median": 20, "top_quartile": 40},
+            "ltv_cac_ratio": {"median": 2.0, "top_quartile": 3.5},
+            "burn_multiple": {"median": 4.0, "top_quartile": 2.5},
         },
         "agtech": {
             "gross_margin": {"median": 45, "top_quartile": 60},
-            "growth_rate": {"median": 35, "top_quartile": 55}
-        }
+            "growth_rate": {"median": 35, "top_quartile": 55},
+            "burn_multiple": {"median": 4.0, "top_quartile": 2.5},
+        },
     }
     
     def __init__(self, llm_router=None):
@@ -313,11 +369,14 @@ class MarketAgent(BaseAgent):
         query_lower = query.lower()
         
         category_keywords = {
-            "saas": ["saas", "software", "subscription", "platform", "cloud"],
-            "fintech": ["fintech", "finance", "payment", "banking", "lending", "insurance"],
-            "marketplace": ["marketplace", "platform", "two-sided", "network"],
-            "ecommerce": ["ecommerce", "e-commerce", "retail", "shop", "store"],
-            "agtech": ["agtech", "agriculture", "farming", "agri", "food"]
+            "saas": ["saas", "software", "subscription", "platform", "cloud", "general_saas"],
+            "fintech": ["fintech", "finance", "payment", "banking", "lending", "insurance", "real_estate", "proptech"],
+            "marketplace": ["marketplace", "two-sided", "network", "ecommerce", "e-commerce", "retail", "shop", "store"],
+            "d2c": ["d2c", "direct", "consumer", "cpg", "food", "beverage", "brand"],
+            "healthtech": ["healthtech", "health", "healthcare", "biotech", "medical", "pharma", "wellness"],
+            "consumer_sub": ["consumer_sub", "media", "entertainment", "streaming", "content", "gaming"],
+            "hardware": ["hardware", "deeptech", "climate", "cleantech", "manufacturing", "iot", "device", "agritech", "agtech", "agriculture"],
+            "services": ["services", "consulting", "agency", "logistics", "supply_chain", "staffing", "professional"],
         }
         
         for category, keywords in category_keywords.items():

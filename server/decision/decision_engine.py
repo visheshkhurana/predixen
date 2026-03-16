@@ -264,9 +264,14 @@ def _get_cross_company_success_rates(truth_metrics: Dict) -> Dict[str, Any]:
             patterns = get_relevant_patterns(db, industry=industry, stage=stage)
 
             result = {}
+            seen_priority = {}
             for p in patterns:
-                if p.get("pattern_type") == "decision_outcome" and p.get("sample_size", 0) >= 2:
+                ptype = p.get("pattern_type")
+                if ptype in ("decision_outcome", "research") and p.get("sample_size", 0) >= 2:
                     dtype = p.get("decision_type", "")
+                    if dtype in seen_priority and seen_priority[dtype] == "decision_outcome" and ptype == "research":
+                        continue
+                    seen_priority[dtype] = ptype
                     bucket_mapping = {
                         "cost_reduction": "efficiency",
                         "hiring": "growth",

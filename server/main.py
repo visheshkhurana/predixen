@@ -221,6 +221,9 @@ async def _run_deferred_startup():
                 from server.seed.seed_benchmarks import seed_benchmarks
                 seed_benchmarks(db)
                 logger.info("Benchmark data seeded")
+                from server.seed.seed_research_patterns import seed_research_patterns
+                seed_research_patterns(db)
+                logger.info("Research patterns seeded")
             else:
                 logger.info("Skipping benchmark seeding (SEED_BENCHMARKS=false)")
 

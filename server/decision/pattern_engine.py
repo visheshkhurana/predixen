@@ -388,11 +388,18 @@ class DecisionPatternEngine:
             patterns = get_relevant_patterns(self.db, industry=industry, stage=stage)
             result = {}
             for p in patterns:
-                if p.get("pattern_type") == "decision_outcome" and p.get("sample_size", 0) >= 2:
-                    result[p["decision_type"]] = {
+                ptype = p.get("pattern_type")
+                if ptype in ("decision_outcome", "research") and p.get("sample_size", 0) >= 2:
+                    dt = p["decision_type"]
+                    if dt in result and result[dt].get("_ptype") == "decision_outcome" and ptype == "research":
+                        continue
+                    result[dt] = {
                         "success_rate": p["success_rate"],
                         "sample_size": p["sample_size"],
+                        "_ptype": ptype,
                     }
+            for v in result.values():
+                v.pop("_ptype", None)
             return result
         except Exception:
             return {}

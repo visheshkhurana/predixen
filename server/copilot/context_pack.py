@@ -205,8 +205,17 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
         if not patterns:
             return None
 
-        decision_patterns = [p for p in patterns if p.get("pattern_type") == "decision_outcome"]
+        all_decision = [p for p in patterns if p.get("pattern_type") in ("decision_outcome", "research")]
         benchmark_patterns = [p for p in patterns if p.get("pattern_type") == "benchmark"]
+
+        seen_dtypes: dict = {}
+        for p in all_decision:
+            dt = p.get("decision_type", "general")
+            ptype = p.get("pattern_type")
+            if dt in seen_dtypes and seen_dtypes[dt]["pattern_type"] == "decision_outcome" and ptype == "research":
+                continue
+            seen_dtypes[dt] = p
+        decision_patterns = list(seen_dtypes.values())
 
         insights = []
         for p in decision_patterns[:5]:
@@ -214,11 +223,13 @@ def build_platform_intelligence(company_id: int, db: Session) -> Optional[Dict[s
             rate = p.get("success_rate", 0)
             sample = p.get("sample_size", 0)
             companies = p.get("contributing_companies", 0)
+            ptype = p.get("pattern_type", "")
             if sample >= 2:
+                source_label = f"{sample} decisions across {companies} companies" if ptype == "decision_outcome" else f"{sample} research studies"
                 insights.append({
                     "type": "decision_pattern",
                     "decision_type": dtype,
-                    "insight": f"{rate:.0f}% of similar companies ({sample} decisions across {companies} companies) saw positive outcomes from {dtype.replace('_', ' ')} decisions.",
+                    "insight": f"{rate:.0f}% of similar companies ({source_label}) saw positive outcomes from {dtype.replace('_', ' ')} decisions.",
                     "success_rate": rate,
                     "sample_size": sample,
                 })

@@ -153,6 +153,9 @@ def get_relevant_patterns(
     stage: str,
 ) -> List[Dict[str, Any]]:
     try:
+        from server.core.taxonomy import normalize_industry, normalize_stage
+        norm_ind = normalize_industry(industry)
+        norm_stg = normalize_stage(stage)
         result = db.execute(
             text("""
                 SELECT pattern_type, industry, stage, decision_type,
@@ -164,7 +167,7 @@ def get_relevant_patterns(
                 ORDER BY sample_size DESC
                 LIMIT 20
             """),
-            {"industry": industry.lower(), "stage": stage.lower()},
+            {"industry": norm_ind, "stage": norm_stg},
         )
         rows = result.fetchall()
         return [

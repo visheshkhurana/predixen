@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,13 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brain, TrendingUp, Users, Database, ThumbsUp, BarChart3, Sparkles } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brain, TrendingUp, Users, Database, ThumbsUp, BarChart3, Sparkles, Upload, Download, FileJson } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SystemToolsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("events");
+  const [importJson, setImportJson] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ["/api/system/events"],
@@ -50,6 +53,10 @@ export default function SystemToolsPage() {
     queryKey: ["/api/ai/feedback/stats"],
   });
 
+  const { data: researchStats, isLoading: researchStatsLoading } = useQuery({
+    queryKey: ["/api/system/research-data-stats"],
+  });
+
   const runAggregation = useMutation({
     mutationFn: async () => {
       return apiRequest("POST", "/api/system/platform-intelligence/aggregate");
@@ -84,6 +91,118 @@ export default function SystemToolsPage() {
     },
   });
 
+  const importResearchData = useMutation({
+    mutationFn: async (jsonData: string) => {
+      const parsed = JSON.parse(jsonData);
+      const { _instructions, ...cleanData } = parsed;
+      return apiRequest("POST", "/api/system/import-research-data", cleanData);
+    },
+    onSuccess: async (res: any) => {
+      const data = typeof res.json === 'function' ? await res.json() : res;
+      queryClient.invalidateQueries({ queryKey: ["/api/system/research-data-stats"] });
+      toast({
+        title: "Import successful",
+        description: `Benchmarks: ${data.benchmarks?.inserted ?? 0} inserted, ${data.benchmarks?.updated ?? 0} updated. Patterns: ${data.patterns?.inserted ?? 0} inserted, ${data.patterns?.updated ?? 0} updated.`,
+      });
+      setImportJson("");
+    },
+    onError: (err: any) => {
+      toast({ title: "Import failed", description: err.message || "Invalid JSON format", variant: "destructive" });
+    },
+  });
+
+  const importCsvData = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/system/import-research-data-csv", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "CSV import failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system/research-data-stats"] });
+      const skipped = data.skipped_rows ? ` (${data.skipped_rows} rows skipped)` : "";
+      toast({
+        title: "CSV import successful",
+        description: `Benchmarks: ${data.benchmarks?.inserted ?? 0} inserted, ${data.benchmarks?.updated ?? 0} updated. Patterns: ${data.patterns?.inserted ?? 0} inserted, ${data.patterns?.updated ?? 0} updated.${skipped}`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "CSV import failed", description: err.message || "Invalid CSV format", variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === "csv") {
+      importCsvData.mutate(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setImportJson(text);
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const downloadTemplate = () => {
+    const template = {
+      benchmarks: [
+        {
+          industry: "saas",
+          stage: "seed",
+          metric_name: "revenue_growth_mom",
+          p25: 5.0,
+          p50: 10.0,
+          p75: 20.0,
+          direction: "higher_is_better",
+          source: "KeyBanc 2024 SaaS Survey",
+        },
+      ],
+      decision_patterns: [
+        {
+          industry: "saas",
+          stage: "seed",
+          decision_type: "pricing",
+          success_rate: 72.0,
+          sample_size: 150,
+          median_impact: 12.5,
+          p25_impact: 5.0,
+          p75_impact: 22.0,
+          source: "OpenView 2024 Product Benchmarks",
+          notes: "10-20% price increases saw <5% logo churn",
+        },
+      ],
+      _instructions: {
+        industries: ["saas", "fintech", "marketplace", "d2c", "healthtech", "consumer_sub", "hardware", "services"],
+        stages: ["pre_seed", "seed", "series_a", "series_b_plus"],
+        benchmark_metrics: ["revenue_growth_mom", "gross_margin", "burn_multiple", "runway_months", "net_revenue_retention", "logo_retention_12m", "ltv_cac_ratio", "concentration_top5", "cac_payback_months", "rule_of_40"],
+        decision_types: ["hiring", "pricing", "cost_reduction", "fundraising", "growth", "product", "retention"],
+        directions: ["higher_is_better", "lower_is_better"],
+        notes: "Both arrays are optional. Existing data with matching industry+stage+metric/decision_type will be updated; new combinations will be inserted.",
+      },
+    };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "research_data_template.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6" data-testid="system-tools-page">
       <div>
@@ -92,7 +211,7 @@ export default function SystemToolsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6" data-testid="system-tools-tabs">
+        <TabsList className="grid w-full grid-cols-7" data-testid="system-tools-tabs">
           <TabsTrigger value="events" data-testid="tab-events">
             <Activity className="w-4 h-4 mr-2" /> Events
           </TabsTrigger>
@@ -110,6 +229,9 @@ export default function SystemToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="learning" data-testid="tab-learning">
             <Sparkles className="w-4 h-4 mr-2" /> AI Learning
+          </TabsTrigger>
+          <TabsTrigger value="research" data-testid="tab-research">
+            <Database className="w-4 h-4 mr-2" /> Research Data
           </TabsTrigger>
         </TabsList>
 
@@ -684,6 +806,157 @@ export default function SystemToolsPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="research" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Research Data Management</h3>
+              <p className="text-sm text-muted-foreground">Import and manage industry benchmarks and decision pattern data</p>
+            </div>
+            <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
+              <Download className="w-4 h-4 mr-2" /> Download Template
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <BarChart3 className="w-4 h-4" /> Benchmarks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-benchmarks">
+                  {researchStats?.total_benchmarks ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">total benchmark rows</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Brain className="w-4 h-4" /> Patterns
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-total-patterns">
+                  {researchStats?.total_patterns ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">research decision patterns</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Database className="w-4 h-4" /> Industries
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-benchmark-industries">
+                  {researchStats?.benchmarks_by_industry ? Object.keys(researchStats.benchmarks_by_industry).length : 0}
+                </div>
+                <p className="text-xs text-muted-foreground">industries covered</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4" /> Decision Types
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-pattern-types">
+                  {researchStats?.patterns_by_type ? Object.keys(researchStats.patterns_by_type).length : 0}
+                </div>
+                <p className="text-xs text-muted-foreground">decision types tracked</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {researchStats?.benchmarks_by_industry && Object.keys(researchStats.benchmarks_by_industry).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Benchmarks by Industry</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(researchStats.benchmarks_by_industry).map(([industry, count]: [string, any]) => (
+                    <Badge key={industry} variant="outline" data-testid={`badge-benchmark-${industry}`}>
+                      {industry}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {researchStats?.patterns_by_type && Object.keys(researchStats.patterns_by_type).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Patterns by Decision Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(researchStats.patterns_by_type).map(([type, count]: [string, any]) => (
+                    <Badge key={type} variant="outline" data-testid={`badge-pattern-${type}`}>
+                      {type}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Upload className="w-4 h-4" /> Import Research Data
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".json,.csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  data-testid="input-file-upload"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importCsvData.isPending}
+                  data-testid="button-upload-file"
+                >
+                  <FileJson className="w-4 h-4 mr-2" /> {importCsvData.isPending ? "Importing CSV..." : "Upload .json or .csv file"}
+                </Button>
+              </div>
+
+              <Textarea
+                placeholder='Paste JSON data here (see template for format)...'
+                value={importJson}
+                onChange={(e) => setImportJson(e.target.value)}
+                className="font-mono text-sm min-h-[200px]"
+                data-testid="textarea-import-json"
+              />
+
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Accepts JSON or CSV files with benchmarks and decision patterns. Existing entries with matching keys will be updated.
+                </p>
+                <Button
+                  onClick={() => importResearchData.mutate(importJson)}
+                  disabled={!importJson.trim() || importResearchData.isPending}
+                  data-testid="button-import-data"
+                >
+                  <Upload className={`w-4 h-4 mr-2 ${importResearchData.isPending ? "animate-spin" : ""}`} />
+                  {importResearchData.isPending ? "Importing..." : "Import Data"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

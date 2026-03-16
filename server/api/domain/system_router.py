@@ -3,9 +3,11 @@ Domain Router: /system
 Aggregates system-level endpoints — events, flags, autopilot, admin tools.
 All endpoints require platform admin authentication.
 """
-from fastapi import APIRouter, Depends, Query
-from typing import Optional
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
+from pydantic import BaseModel, Field
+from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from server.core.db import get_db
 from server.api.admin import require_platform_admin
 
@@ -129,6 +131,299 @@ def trigger_aggregation(
     return {
         "patterns": patterns_result,
         "benchmarks": benchmarks_result,
+    }
+
+
+class BenchmarkImport(BaseModel):
+    industry: str
+    stage: str
+    metric_name: str
+    p25: float
+    p50: float
+    p75: float
+    direction: str = "higher_is_better"
+    source: Optional[str] = None
+
+class PatternImport(BaseModel):
+    industry: str
+    stage: str
+    decision_type: str
+    success_rate: float
+    sample_size: int = 0
+    median_impact: float = 0
+    p25_impact: float = 0
+    p75_impact: float = 0
+    source: Optional[str] = None
+    notes: Optional[str] = None
+
+class ResearchDataImport(BaseModel):
+    benchmarks: List[BenchmarkImport] = Field(default_factory=list)
+    decision_patterns: List[PatternImport] = Field(default_factory=list)
+
+
+@router.post("/import-research-data-csv")
+def import_research_data_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user=Depends(require_platform_admin),
+):
+    import csv
+    import io
+    import json
+    from datetime import datetime
+    from server.models.benchmark import Benchmark
+
+    MAX_CSV_SIZE = 10 * 1024 * 1024
+    raw = file.file.read(MAX_CSV_SIZE + 1)
+    if len(raw) > MAX_CSV_SIZE:
+        raise HTTPException(status_code=413, detail="CSV file exceeds 10 MB limit")
+    content = raw.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(content))
+    rows = list(reader)
+
+    if not rows:
+        return {"benchmarks": {"inserted": 0, "updated": 0}, "patterns": {"inserted": 0, "updated": 0}, "skipped_rows": 0}
+
+    first_keys = {k.strip().lower() for k in rows[0].keys()}
+    is_benchmark = "metric_name" in first_keys and "p25" in first_keys
+    is_pattern = "decision_type" in first_keys and "success_rate" in first_keys
+
+    if not is_benchmark and not is_pattern:
+        raise HTTPException(
+            status_code=400,
+            detail="Unrecognized CSV schema. Benchmark CSVs require columns: industry, stage, metric_name, p25, p50, p75. Pattern CSVs require: industry, stage, decision_type, success_rate, sample_size.",
+        )
+
+    inserted_benchmarks = 0
+    updated_benchmarks = 0
+    inserted_patterns = 0
+    updated_patterns = 0
+    skipped_rows = 0
+
+    if is_benchmark:
+        for row in rows:
+            industry = row.get("industry", "").strip().lower()
+            stage = row.get("stage", "").strip().lower()
+            metric_name = row.get("metric_name", "").strip().lower()
+            if not all([industry, stage, metric_name]):
+                skipped_rows += 1
+                continue
+            try:
+                p25 = float(row.get("p25", 0))
+                p50 = float(row.get("p50", 0))
+                p75 = float(row.get("p75", 0))
+            except (ValueError, TypeError):
+                skipped_rows += 1
+                continue
+            direction = row.get("direction", "higher_is_better").strip()
+
+            existing = db.query(Benchmark).filter_by(
+                industry=industry, stage=stage, metric_name=metric_name
+            ).first()
+            if existing:
+                existing.p25 = p25
+                existing.p50 = p50
+                existing.p75 = p75
+                existing.direction = direction
+                existing.updated_at = datetime.utcnow()
+                updated_benchmarks += 1
+            else:
+                db.add(Benchmark(
+                    industry=industry, stage=stage, metric_name=metric_name,
+                    p25=p25, p50=p50, p75=p75, direction=direction,
+                ))
+                inserted_benchmarks += 1
+
+    elif is_pattern:
+        for row in rows:
+            industry = row.get("industry", "").strip().lower()
+            stage = row.get("stage", "").strip().lower()
+            decision_type = row.get("decision_type", "").strip().lower()
+            if not all([industry, stage, decision_type]):
+                skipped_rows += 1
+                continue
+            try:
+                success_rate = float(row.get("success_rate", 0))
+                sample_size = int(float(row.get("sample_size", 0)))
+                median_impact = float(row.get("median_impact", 0))
+                p25_impact = float(row.get("p25_impact", 0))
+                p75_impact = float(row.get("p75_impact", 0))
+            except (ValueError, TypeError):
+                skipped_rows += 1
+                continue
+            metadata = json.dumps({
+                "source": row.get("source", ""),
+                "notes": row.get("notes", ""),
+            })
+
+            existing_row = db.execute(
+                text("""
+                    SELECT id FROM cross_company_patterns
+                    WHERE pattern_type='research' AND industry=:industry AND stage=:stage AND decision_type=:dt
+                """),
+                {"industry": industry, "stage": stage, "dt": decision_type},
+            ).fetchone()
+            if existing_row:
+                db.execute(
+                    text("""
+                        UPDATE cross_company_patterns
+                        SET success_rate=:sr, sample_size=:ss, median_impact=:mi,
+                            p25_impact=:p25, p75_impact=:p75, metadata_json=:mj,
+                            computed_at=:now
+                        WHERE id=:id
+                    """),
+                    {
+                        "sr": success_rate, "ss": sample_size, "mi": median_impact,
+                        "p25": p25_impact, "p75": p75_impact, "mj": metadata,
+                        "now": datetime.utcnow(), "id": existing_row[0],
+                    },
+                )
+                updated_patterns += 1
+            else:
+                db.execute(
+                    text("""
+                        INSERT INTO cross_company_patterns
+                            (pattern_type, industry, stage, decision_type, sample_size,
+                             success_rate, median_impact, p25_impact, p75_impact,
+                             metadata_json, contributing_companies, computed_at)
+                        VALUES
+                            ('research', :industry, :stage, :dt, :ss,
+                             :sr, :mi, :p25, :p75, :mj, 0, :now)
+                    """),
+                    {
+                        "industry": industry, "stage": stage, "dt": decision_type,
+                        "ss": sample_size, "sr": success_rate, "mi": median_impact,
+                        "p25": p25_impact, "p75": p75_impact,
+                        "mj": metadata, "now": datetime.utcnow(),
+                    },
+                )
+                inserted_patterns += 1
+
+    db.commit()
+
+    return {
+        "benchmarks": {"inserted": inserted_benchmarks, "updated": updated_benchmarks},
+        "patterns": {"inserted": inserted_patterns, "updated": updated_patterns},
+        "skipped_rows": skipped_rows,
+    }
+
+
+@router.post("/import-research-data")
+def import_research_data(
+    payload: ResearchDataImport,
+    db: Session = Depends(get_db),
+    user=Depends(require_platform_admin),
+):
+    import json
+    from datetime import datetime
+    from server.models.benchmark import Benchmark
+
+    inserted_benchmarks = 0
+    updated_benchmarks = 0
+    for b in payload.benchmarks:
+        ind = b.industry.strip().lower()
+        stg = b.stage.strip().lower()
+        mn = b.metric_name.strip().lower()
+        existing = db.query(Benchmark).filter_by(
+            industry=ind, stage=stg, metric_name=mn
+        ).first()
+        if existing:
+            existing.p25 = b.p25
+            existing.p50 = b.p50
+            existing.p75 = b.p75
+            existing.direction = b.direction
+            existing.updated_at = datetime.utcnow()
+            updated_benchmarks += 1
+        else:
+            db.add(Benchmark(
+                industry=ind, stage=stg, metric_name=mn,
+                p25=b.p25, p50=b.p50, p75=b.p75, direction=b.direction,
+            ))
+            inserted_benchmarks += 1
+
+    inserted_patterns = 0
+    updated_patterns = 0
+    for p in payload.decision_patterns:
+        ind = p.industry.strip().lower()
+        stg = p.stage.strip().lower()
+        dt = p.decision_type.strip().lower()
+        metadata = json.dumps({"source": p.source or "", "notes": p.notes or ""})
+        row = db.execute(
+            text("""
+                SELECT id FROM cross_company_patterns
+                WHERE pattern_type='research' AND industry=:industry AND stage=:stage AND decision_type=:dt
+            """),
+            {"industry": ind, "stage": stg, "dt": dt},
+        ).fetchone()
+        if row:
+            db.execute(
+                text("""
+                    UPDATE cross_company_patterns
+                    SET success_rate=:sr, sample_size=:ss, median_impact=:mi,
+                        p25_impact=:p25, p75_impact=:p75, metadata_json=:mj,
+                        computed_at=:now
+                    WHERE id=:id
+                """),
+                {
+                    "sr": p.success_rate, "ss": p.sample_size, "mi": p.median_impact,
+                    "p25": p.p25_impact, "p75": p.p75_impact, "mj": metadata,
+                    "now": datetime.utcnow(), "id": row[0],
+                },
+            )
+            updated_patterns += 1
+        else:
+            db.execute(
+                text("""
+                    INSERT INTO cross_company_patterns
+                        (pattern_type, industry, stage, decision_type, sample_size,
+                         success_rate, median_impact, p25_impact, p75_impact,
+                         metadata_json, contributing_companies, computed_at)
+                    VALUES
+                        ('research', :industry, :stage, :dt, :ss,
+                         :sr, :mi, :p25, :p75, :mj, 0, :now)
+                """),
+                {
+                    "industry": ind, "stage": stg, "dt": dt,
+                    "ss": p.sample_size, "sr": p.success_rate, "mi": p.median_impact,
+                    "p25": p.p25_impact, "p75": p.p75_impact,
+                    "mj": metadata, "now": datetime.utcnow(),
+                },
+            )
+            inserted_patterns += 1
+
+    db.commit()
+
+    return {
+        "benchmarks": {"inserted": inserted_benchmarks, "updated": updated_benchmarks},
+        "patterns": {"inserted": inserted_patterns, "updated": updated_patterns},
+    }
+
+
+@router.get("/research-data-stats")
+def get_research_data_stats(
+    db: Session = Depends(get_db),
+    user=Depends(require_platform_admin),
+):
+    benchmarks_by_industry = {}
+    rows = db.execute(text("SELECT industry, COUNT(*) FROM benchmarks GROUP BY industry ORDER BY industry")).fetchall()
+    for r in rows:
+        benchmarks_by_industry[r[0]] = r[1]
+
+    patterns_by_type = {}
+    rows = db.execute(text(
+        "SELECT decision_type, COUNT(*) FROM cross_company_patterns WHERE pattern_type='research' GROUP BY decision_type ORDER BY decision_type"
+    )).fetchall()
+    for r in rows:
+        patterns_by_type[r[0]] = r[1]
+
+    total_benchmarks = db.execute(text("SELECT COUNT(*) FROM benchmarks")).scalar() or 0
+    total_patterns = db.execute(text("SELECT COUNT(*) FROM cross_company_patterns WHERE pattern_type='research'")).scalar() or 0
+
+    return {
+        "total_benchmarks": total_benchmarks,
+        "benchmarks_by_industry": benchmarks_by_industry,
+        "total_patterns": total_patterns,
+        "patterns_by_type": patterns_by_type,
     }
 
 

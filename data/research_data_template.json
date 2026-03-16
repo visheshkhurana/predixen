@@ -1,0 +1,58 @@
+{
+  "benchmarks": [
+    {
+      "industry": "saas",
+      "stage": "seed",
+      "metric_name": "revenue_growth_mom",
+      "p25": 5.0,
+      "p50": 10.0,
+      "p75": 20.0,
+      "direction": "higher_is_better",
+      "source": "KeyBanc 2024 SaaS Survey"
+    },
+    {
+      "industry": "fintech",
+      "stage": "series_a",
+      "metric_name": "gross_margin",
+      "p25": 50.0,
+      "p50": 65.0,
+      "p75": 78.0,
+      "direction": "higher_is_better",
+      "source": "Bessemer Cloud Index 2024"
+    }
+  ],
+  "decision_patterns": [
+    {
+      "industry": "saas",
+      "stage": "seed",
+      "decision_type": "pricing",
+      "success_rate": 72.0,
+      "sample_size": 150,
+      "median_impact": 12.5,
+      "p25_impact": 5.0,
+      "p75_impact": 22.0,
+      "source": "OpenView 2024 Product Benchmarks",
+      "notes": "10-20% price increases saw <5% logo churn"
+    },
+    {
+      "industry": "marketplace",
+      "stage": "series_a",
+      "decision_type": "growth",
+      "success_rate": 60.0,
+      "sample_size": 160,
+      "median_impact": 15.0,
+      "p25_impact": 5.0,
+      "p75_impact": 28.0,
+      "source": "Startup Genome Report 2024",
+      "notes": "Category expansion after density threshold in core vertical"
+    }
+  ],
+  "_instructions": {
+    "industries": ["saas", "fintech", "marketplace", "d2c", "healthtech", "consumer_sub", "hardware", "services"],
+    "stages": ["pre_seed", "seed", "series_a", "series_b_plus"],
+    "benchmark_metrics": ["revenue_growth_mom", "gross_margin", "burn_multiple", "runway_months", "net_revenue_retention", "logo_retention_12m", "ltv_cac_ratio", "concentration_top5", "cac_payback_months", "rule_of_40"],
+    "decision_types": ["hiring", "pricing", "cost_reduction", "fundraising", "growth", "product", "retention"],
+    "directions": ["higher_is_better", "lower_is_better"],
+    "notes": "Both arrays are optional. Existing data with matching industry+stage+metric/decision_type will be updated; new combinations will be inserted. The _instructions field is ignored during import."
+  }
+}
