@@ -573,6 +573,13 @@ async def copilot_quick_chat(
         if web_research_text:
             system_prompt += f"\n\n--- REAL-TIME WEB RESEARCH ---\n{web_research_text}\n--- END RESEARCH ---\n\nIMPORTANT: When using web research data, clearly distinguish between the company's own data and external benchmarks/market data."
 
+        learning_ctx = context.get("learning_context")
+        if learning_ctx:
+            from server.services.learning_context import format_learning_context_for_prompt
+            learning_text = format_learning_context_for_prompt(learning_ctx)
+            if learning_text:
+                system_prompt += f"\n\n--- PLATFORM LEARNING CONTEXT ---\n{learning_text}\n--- END LEARNING CONTEXT ---"
+
         platform_intel = context.get("platform_intelligence")
         if platform_intel and platform_intel.get("insights"):
             intel_lines = [f"\n--- PLATFORM INTELLIGENCE (Aggregated Cross-Company Data) ---"]

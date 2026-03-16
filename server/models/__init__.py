@@ -70,6 +70,7 @@ from server.models.shared_scenario import SharedScenario
 from server.models.metric_snapshot import MetricSnapshot
 from server.models.workspace import NotificationPreference
 from server.models.twin_event import TwinEvent
+from server.models.copilot_feedback import CopilotFeedback
 
 __all__ = [
     "User",
@@ -154,4 +155,5 @@ __all__ = [
     "MetricSnapshot",
     "NotificationPreference",
     "TwinEvent",
+    "CopilotFeedback",
 ]

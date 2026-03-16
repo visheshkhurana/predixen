@@ -1,14 +1,32 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ThumbsUp, ThumbsDown, Check, Send, X } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Send, X, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { apiRequest } from '@/lib/queryClient';
 
 interface FeedbackButtonProps {
   onFeedback?: (feedback: 'positive' | 'negative', comment?: string) => void;
   testId?: string;
+  companyId?: number;
+  conversationId?: string;
+  messageIndex?: number;
+  messageId?: string;
+  responseType?: string;
+  tags?: string[];
+  showEffectivenessHint?: boolean;
 }
 
-export function FeedbackButton({ onFeedback, testId }: FeedbackButtonProps) {
+export function FeedbackButton({ 
+  onFeedback, 
+  testId, 
+  companyId, 
+  conversationId, 
+  messageIndex,
+  messageId,
+  responseType,
+  tags,
+  showEffectivenessHint 
+}: FeedbackButtonProps) {
   const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showCommentInput, setShowCommentInput] = useState(false);
@@ -21,10 +39,28 @@ export function FeedbackButton({ onFeedback, testId }: FeedbackButtonProps) {
     }
   }, [showCommentInput]);
 
+  const submitToApi = async (rating: 'helpful' | 'not_helpful', feedbackText?: string) => {
+    if (!companyId) return;
+    try {
+      await apiRequest('POST', '/api/ai/feedback', {
+        company_id: companyId,
+        conversation_id: conversationId,
+        message_index: messageIndex,
+        message_id: messageId,
+        rating,
+        feedback_text: feedbackText,
+        response_type: responseType,
+        tags: tags || [],
+      });
+    } catch {
+    }
+  };
+
   const handlePositive = () => {
     setFeedback('positive');
     setIsSubmitted(true);
     onFeedback?.('positive');
+    submitToApi('helpful');
     setTimeout(() => setIsSubmitted(false), 2000);
   };
 
@@ -42,7 +78,9 @@ export function FeedbackButton({ onFeedback, testId }: FeedbackButtonProps) {
   const submitNegativeFeedback = () => {
     setIsSubmitted(true);
     setShowCommentInput(false);
-    onFeedback?.('negative', comment.trim() || undefined);
+    const feedbackText = comment.trim() || undefined;
+    onFeedback?.('negative', feedbackText);
+    submitToApi('not_helpful', feedbackText);
     setComment('');
     setTimeout(() => setIsSubmitted(false), 2000);
   };
@@ -120,6 +158,12 @@ export function FeedbackButton({ onFeedback, testId }: FeedbackButtonProps) {
       >
         <ThumbsDown className="h-4 w-4" />
       </Button>
+      {showEffectivenessHint && (
+        <span className="text-[10px] text-emerald-500/80 flex items-center gap-1 ml-1" data-testid={`${testId}-effectiveness-hint`}>
+          <Sparkles className="h-3 w-3" />
+          Worked well for similar companies
+        </span>
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brain, TrendingUp, Users, Database } from "lucide-react";
+import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brain, TrendingUp, Users, Database, ThumbsUp, BarChart3, Sparkles } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -44,6 +44,10 @@ export default function SystemToolsPage() {
 
   const { data: platformIntelData, isLoading: platformIntelLoading } = useQuery({
     queryKey: ["/api/system/platform-intelligence"],
+  });
+
+  const { data: feedbackStats, isLoading: feedbackStatsLoading } = useQuery({
+    queryKey: ["/api/ai/feedback/stats"],
   });
 
   const runAggregation = useMutation({
@@ -88,7 +92,7 @@ export default function SystemToolsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5" data-testid="system-tools-tabs">
+        <TabsList className="grid w-full grid-cols-6" data-testid="system-tools-tabs">
           <TabsTrigger value="events" data-testid="tab-events">
             <Activity className="w-4 h-4 mr-2" /> Events
           </TabsTrigger>
@@ -103,6 +107,9 @@ export default function SystemToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="intelligence" data-testid="tab-intelligence">
             <Brain className="w-4 h-4 mr-2" /> Intelligence
+          </TabsTrigger>
+          <TabsTrigger value="learning" data-testid="tab-learning">
+            <Sparkles className="w-4 h-4 mr-2" /> AI Learning
           </TabsTrigger>
         </TabsList>
 
@@ -513,6 +520,170 @@ export default function SystemToolsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="learning" className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">AI Learning Metrics</h3>
+            <p className="text-sm text-muted-foreground">Response quality trends, recommendation effectiveness, and feedback volume</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <ThumbsUp className="w-4 h-4" /> Feedback Volume
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-feedback-volume">
+                  {feedbackStats?.patterns?.total_feedback ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">total ratings received</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4" /> Positive Rate
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-positive-rate">
+                  {feedbackStats?.patterns?.overall_quality_score ?? 0}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {feedbackStats?.patterns?.total_helpful ?? 0} helpful of {feedbackStats?.patterns?.total_feedback ?? 0}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <BarChart3 className="w-4 h-4" /> Categories Tracked
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-categories-tracked">
+                  {feedbackStats?.quality_scores ? Object.keys(feedbackStats.quality_scores).length : 0}
+                </div>
+                <p className="text-xs text-muted-foreground">advice categories scored</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1">
+                  <Sparkles className="w-4 h-4" /> Outcome Correlations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-outcome-correlations">
+                  {feedbackStats?.outcome_correlations?.length ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground">advice-outcome links</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {feedbackStats?.patterns?.by_response_type && Object.keys(feedbackStats.patterns.by_response_type).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Effectiveness by Response Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(feedbackStats.patterns.by_response_type).map(([type, data]: [string, any]) => (
+                    <div key={type} className="flex items-center justify-between p-3 rounded-lg border border-border" data-testid={`row-response-type-${type}`}>
+                      <div>
+                        <div className="font-medium text-sm">{type.replace(/_/g, ' ')}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {data.total} ratings · {data.helpful} helpful · {data.not_helpful} not helpful
+                        </div>
+                      </div>
+                      <Badge 
+                        variant={data.quality_score >= 70 ? "default" : data.quality_score >= 40 ? "secondary" : "destructive"}
+                        data-testid={`badge-quality-${type}`}
+                      >
+                        {data.quality_score}% quality
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {feedbackStats?.outcome_correlations && feedbackStats.outcome_correlations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Advice-Outcome Correlations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {feedbackStats.outcome_correlations.map((corr: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-border" data-testid={`row-correlation-${idx}`}>
+                      <div>
+                        <div className="font-medium text-sm">{corr.advice_category?.replace(/_/g, ' ')}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {corr.total_decisions} decisions tracked · {corr.positive_rate}% positive · {corr.negative_rate}% negative
+                        </div>
+                      </div>
+                      <Badge 
+                        variant={corr.effectiveness_score >= 50 ? "default" : "secondary"}
+                        data-testid={`badge-effectiveness-${idx}`}
+                      >
+                        {corr.effectiveness_score} effectiveness
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {feedbackStats?.daily_trend && feedbackStats.daily_trend.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Daily Feedback Trend (Last 30 Days)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-48">
+                  <div className="space-y-1">
+                    {feedbackStats.daily_trend.map((day: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-sm py-1 border-b border-border/30" data-testid={`row-daily-trend-${idx}`}>
+                        <span className="text-muted-foreground">{day.date}</span>
+                        <div className="flex items-center gap-3">
+                          <span>{day.total} ratings</span>
+                          <Badge variant="outline" className="text-xs">
+                            {day.total > 0 ? Math.round((day.helpful / day.total) * 100) : 0}% positive
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+
+          {feedbackStatsLoading && (
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50 animate-pulse" />
+                <p>Loading AI learning metrics...</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!feedbackStatsLoading && (!feedbackStats?.patterns?.total_feedback) && (
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No feedback data collected yet.</p>
+                <p className="text-sm mt-2">AI learning metrics will appear here once users start rating Copilot responses.</p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

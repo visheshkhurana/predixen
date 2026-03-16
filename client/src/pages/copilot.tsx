@@ -2094,7 +2094,12 @@ Type **help** for a full list of what I can do.`,
 
                   {message.role === 'assistant' && i > 0 && (
                     <div className="mt-3 pt-2 border-t border-border/50">
-                      <FeedbackButton testId={`feedback-${i}`} />
+                      <FeedbackButton 
+                        testId={`feedback-${i}`}
+                        companyId={currentCompany?.id}
+                        conversationId={activeConversation?.id}
+                        messageIndex={i}
+                      />
                     </div>
                   )}
                 </div>

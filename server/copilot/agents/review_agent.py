@@ -82,7 +82,15 @@ class ReviewAgent(BaseAgent):
             "hallucination_flags": [],
             "confidence_adjustment": None,
             "overall_status": "PASS",
+            "learning_caveats": [],
         }
+
+        learning_caveats = self._check_recommendation_quality(context)
+        if learning_caveats:
+            review["learning_caveats"] = learning_caveats
+            review["warnings"].extend([
+                {"type": "learning_caveat", "detail": c} for c in learning_caveats
+            ])
 
         for response in agent_responses:
             agent_name = response.agent_type.value
@@ -293,6 +301,27 @@ class ReviewAgent(BaseAgent):
                 })
 
         return errors
+
+    def _check_recommendation_quality(self, context: Dict[str, Any]) -> List[str]:
+        caveats = []
+        learning = context.get("learning_context")
+        if not learning:
+            return caveats
+
+        low_quality = learning.get("low_quality_categories", [])
+        for lq in low_quality:
+            cat = lq.get("category", "")
+            score = lq.get("score", 0)
+            caveats.append(
+                f"Historical data shows '{cat}' advice has had below-average effectiveness "
+                f"(quality score: {score:.0f}%). Consider alternative approaches or add caveats."
+            )
+
+        pitfalls = learning.get("common_pitfalls", [])
+        for p in pitfalls:
+            caveats.append(p.get("warning", ""))
+
+        return caveats
 
     async def _llm_deep_review(
         self,

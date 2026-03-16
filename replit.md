@@ -38,6 +38,7 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
     -   **Intelligence Graph v2**: Enhanced graph for related metrics and strategy patterns.
     -   **Founder Autopilot**: Daily automated risk detection and briefing generation, triggers monthly simulation accuracy computation.
     -   **Simulation Accuracy Tracker**: Compares past Monte Carlo predictions against actuals, computes accuracy scores, and provides an auto-calibration system.
+    -   **AI Learning Loop**: Closed-loop feedback system for Copilot. Users rate responses (helpful/not helpful), feedback stored in `copilot_feedback` table, aggregated by `feedback_analyzer.py`, and injected into Copilot prompt via `learning_context.py`. Admin UI in 6th "AI Learning" tab of System Tools.
     -   **Cross-Company Learning & Platform Intelligence**: Privacy-first benchmarking with anonymized data, enriching Intelligence Graph, Decision Engine, and Copilot context.
     -   **Startup Survival Simulator**: Free, public tool calculating survival probability using the Monte Carlo engine, with AI recommendations and shareable results.
 

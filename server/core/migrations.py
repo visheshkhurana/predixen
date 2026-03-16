@@ -1025,6 +1025,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_company_data_sharing_column(engine)
     ensure_cross_company_patterns_table(engine)
     ensure_simulation_accuracy_tables(engine)
+    ensure_copilot_feedback_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1701,3 +1702,34 @@ def ensure_simulation_accuracy_tables(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Simulation accuracy and calibration biases tables migration complete")
+
+
+def ensure_copilot_feedback_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS copilot_feedback (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                conversation_id VARCHAR(100),
+                message_index INTEGER,
+                rating VARCHAR(20) NOT NULL,
+                feedback_text TEXT,
+                context_snapshot_json JSONB,
+                response_type VARCHAR(50),
+                tags JSONB DEFAULT '[]'::jsonb,
+                message_id VARCHAR(100),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_company ON copilot_feedback(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_user ON copilot_feedback(user_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_rating ON copilot_feedback(rating)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_response_type ON copilot_feedback(response_type)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_message_id ON copilot_feedback(message_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cf_created ON copilot_feedback(created_at)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Copilot feedback table migration complete")

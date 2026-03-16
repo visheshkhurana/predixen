@@ -177,6 +177,14 @@ def build_context_pack(company: Company, db: Session) -> Dict[str, Any]:
         })
 
     context["platform_intelligence"] = build_platform_intelligence(company.id, db)
+
+    try:
+        from server.services.learning_context import build_learning_context
+        context["learning_context"] = build_learning_context(company.id, db)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"Learning context build failed: {e}")
+        context["learning_context"] = None
     
     return context
 

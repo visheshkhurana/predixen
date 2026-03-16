@@ -173,6 +173,32 @@ When the context pack includes a "Platform Intelligence" section:
 """
 
 
+LEARNING_CONTEXT_RULES = """
+## PLATFORM LEARNING CONTEXT USAGE
+
+When the context pack includes a "Platform Learning Context" section:
+
+1. **USE LEARNING DATA TO IMPROVE ADVICE**: If certain recommendation categories
+   have high quality scores, lean into those approaches with more confidence.
+   If categories have low quality scores, add caveats or suggest alternatives.
+
+2. **CITE LEARNING DATA**: When referencing platform learning insights, mention
+   the evidence: "Based on platform experience, cost-cutting recommendations
+   have been most effective when runway < 9 months."
+
+3. **ACKNOWLEDGE PITFALLS**: If the learning context flags common pitfalls,
+   proactively address them: "Note: historically, this type of advice has had
+   mixed results — here's how to maximize your chances of success..."
+
+4. **EFFECTIVENESS INDICATORS**: When a recommendation type has high historical
+   effectiveness, you may add: "This advice has worked well for similar companies."
+   When it has low effectiveness, add appropriate caveats.
+
+5. **DO NOT OVER-RELY**: Learning context is supplementary. Always ground
+   primary analysis in the company's own data and simulation results.
+"""
+
+
 def get_grounding_prompt_addition() -> str:
     """Get the full grounding rules to append to agent system prompts."""
-    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}\n\n{RESPONSE_MODE_RULES}\n\n{CAUSAL_EXPLANATION_RULES}\n\n{PLATFORM_INTELLIGENCE_RULES}"
+    return f"{STRICT_GROUNDING_RULES}\n\n{CANONICAL_DATA_RULES}\n\n{RESPONSE_MODE_RULES}\n\n{CAUSAL_EXPLANATION_RULES}\n\n{PLATFORM_INTELLIGENCE_RULES}\n\n{LEARNING_CONTEXT_RULES}"
