@@ -30,6 +30,7 @@ import { trackEvent } from '@/lib/posthog';
 import { ReadinessScore } from '@/components/fundraising/ReadinessScore';
 import { RecommendationsList } from '@/components/fundraising/RecommendationsList';
 import { RaiseWindow } from '@/components/fundraising/RaiseWindow';
+import investorDatabaseRaw from '@/data/investor-database.json';
 
 interface CapTable {
   id: string;
@@ -68,17 +69,23 @@ interface PipelineInvestor {
 }
 
 interface InvestorDBEntry {
-  id: string;
-  firm: string;
-  fundSize: string;
-  stageFocus: string[];
-  checkSizeRange: string;
-  hq: string;
+  id: number;
+  name: string;
+  type: string;
+  originalType: string;
+  address: string;
+  phone: string;
+  email: string;
+  website: string;
+  dealSize: string;
+  notableInvestments: string;
+  stages: string[];
+  countries: string;
+  yearFounded: number | null;
+  aum: string;
+  region: string;
   fitScore: number;
-  fitExplanation: string;
-  keyPartner: string;
-  category: 'vc' | 'angels' | 'cvc' | 'accelerator';
-  initial: string;
+  initials: string;
   color: string;
 }
 
@@ -140,29 +147,20 @@ const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
   ],
 };
 
-const INVESTOR_DB: InvestorDBEntry[] = [
-  { id: 'inv1', firm: 'Elevation Capital', fundSize: '$670M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$5-15M', hq: 'Bangalore', fitScore: 92, fitExplanation: 'Strong SaaS portfolio, active in your vertical, partner has domain expertise', keyPartner: 'Ravi Adusumalli', category: 'vc', initial: 'E', color: 'bg-violet-600' },
-  { id: 'inv2', firm: 'Blume Ventures', fundSize: '$250M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$1-5M', hq: 'Mumbai', fitScore: 88, fitExplanation: 'Early-stage focus, operator-friendly, strong network in India ecosystem', keyPartner: 'Karthik Reddy', category: 'vc', initial: 'B', color: 'bg-blue-600' },
-  { id: 'inv3', firm: 'Peak XV', fundSize: '$2.85B', stageFocus: ['Series A', 'Series B', 'Series C'], checkSizeRange: '$10-25M', hq: 'Bangalore', fitScore: 85, fitExplanation: 'Largest India fund, strong brand signal, deep operational support', keyPartner: 'Shailendra Singh', category: 'vc', initial: 'P', color: 'bg-rose-600' },
-  { id: 'inv4', firm: 'Accel India', fundSize: '$650M', stageFocus: ['Seed', 'Series A', 'Series B'], checkSizeRange: '$5-20M', hq: 'Bangalore', fitScore: 87, fitExplanation: 'Top-tier brand, strong SaaS track record, global network', keyPartner: 'Prashanth Prakash', category: 'vc', initial: 'A', color: 'bg-indigo-600' },
-  { id: 'inv5', firm: 'Matrix Partners', fundSize: '$500M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$3-10M', hq: 'Bangalore', fitScore: 83, fitExplanation: 'Strong fintech/SaaS portfolio, hands-on board participation', keyPartner: 'Tarun Davda', category: 'vc', initial: 'M', color: 'bg-teal-600' },
-  { id: 'inv6', firm: 'Lightspeed India', fundSize: '$500M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$5-15M', hq: 'Bangalore', fitScore: 79, fitExplanation: 'Strong global network, cross-border expansion support', keyPartner: 'Dev Khare', category: 'vc', initial: 'L', color: 'bg-amber-600' },
-  { id: 'inv7', firm: 'Nexus VP', fundSize: '$700M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$3-12M', hq: 'Mumbai', fitScore: 81, fitExplanation: 'Deep enterprise/SaaS expertise, strong LP network', keyPartner: 'Pratik Poddar', category: 'vc', initial: 'N', color: 'bg-cyan-600' },
-  { id: 'inv8', firm: 'Kalaari Capital', fundSize: '$350M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$2-8M', hq: 'Bangalore', fitScore: 76, fitExplanation: 'Strong early-stage brand, consumer and B2B portfolio', keyPartner: 'Vani Kola', category: 'vc', initial: 'K', color: 'bg-emerald-600' },
-  { id: 'inv9', firm: 'Chiratae Ventures', fundSize: '$400M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$3-10M', hq: 'Bangalore', fitScore: 74, fitExplanation: 'Long India track record, strong governance focus', keyPartner: 'Sudhir Sethi', category: 'vc', initial: 'C', color: 'bg-orange-600' },
-  { id: 'inv10', firm: '3one4 Capital', fundSize: '$200M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$2-8M', hq: 'Bangalore', fitScore: 82, fitExplanation: 'Founder-focused, strong tech/SaaS portfolio, thesis-driven', keyPartner: 'Siddarth Pai', category: 'vc', initial: '3', color: 'bg-purple-600' },
-  { id: 'inv11', firm: 'Stellaris VP', fundSize: '$300M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$2-8M', hq: 'Bangalore', fitScore: 86, fitExplanation: 'Ex-Helion partners, strong enterprise SaaS focus, hands-on', keyPartner: 'Alok Goyal', category: 'vc', initial: 'S', color: 'bg-sky-600' },
-  { id: 'inv12', firm: 'Together Fund', fundSize: '$150M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$500K-3M', hq: 'Bangalore', fitScore: 80, fitExplanation: 'Operator-angel hybrid, fast decisions, founder community', keyPartner: 'Manav Garg', category: 'angels', initial: 'T', color: 'bg-lime-600' },
-  { id: 'inv13', firm: 'India Quotient', fundSize: '$100M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$200K-1.5M', hq: 'Bangalore', fitScore: 71, fitExplanation: 'India-first thesis, consumer and SMB focus', keyPartner: 'Anand Lunia', category: 'angels', initial: 'I', color: 'bg-pink-600' },
-  { id: 'inv14', firm: 'Venture Highway', fundSize: '$120M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$500K-2M', hq: 'New Delhi', fitScore: 77, fitExplanation: 'WhatsApp alumni founders, strong global connections', keyPartner: 'Neeraj Arora', category: 'angels', initial: 'V', color: 'bg-fuchsia-600' },
-  { id: 'inv15', firm: 'Titan Capital', fundSize: '$80M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$100K-500K', hq: 'New Delhi', fitScore: 73, fitExplanation: 'Flipkart founder fund, strong brand, helpful intros', keyPartner: 'Sachin Bansal', category: 'angels', initial: 'T', color: 'bg-red-600' },
-  { id: 'inv16', firm: 'Better Capital', fundSize: '$60M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$100K-500K', hq: 'Bangalore', fitScore: 69, fitExplanation: 'Solo GP, fast decisions, strong community', keyPartner: 'Vaibhav Domkundwar', category: 'angels', initial: 'B', color: 'bg-yellow-600' },
-  { id: 'inv17', firm: '100X.VC', fundSize: '$50M', stageFocus: ['Pre-Seed'], checkSizeRange: '$50K-250K', hq: 'Mumbai', fitScore: 65, fitExplanation: 'iSAFE standardized, high volume, quick process', keyPartner: 'Sanjay Mehta', category: 'accelerator', initial: '1', color: 'bg-stone-600' },
-  { id: 'inv18', firm: 'Surge (Peak XV)', fundSize: '$400M', stageFocus: ['Seed'], checkSizeRange: '$1-2M', hq: 'Bangalore', fitScore: 84, fitExplanation: 'Cohort program, strong ops support, Peak XV follow-on path', keyPartner: 'Rajan Anandan', category: 'accelerator', initial: 'S', color: 'bg-rose-500' },
-  { id: 'inv19', firm: 'Initialized Capital', fundSize: '$700M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$500K-2M', hq: 'San Francisco', fitScore: 62, fitExplanation: 'YC-connected, global reach but limited India presence', keyPartner: 'Garry Tan', category: 'vc', initial: 'I', color: 'bg-neutral-600' },
-  { id: 'inv20', firm: 'Salesforce Ventures', fundSize: '$3B+', stageFocus: ['Series A', 'Series B', 'Series C'], checkSizeRange: '$5-20M', hq: 'San Francisco', fitScore: 70, fitExplanation: 'Strategic CRM/enterprise synergy, co-sell opportunities', keyPartner: 'Alex Kayyal', category: 'cvc', initial: 'S', color: 'bg-blue-500' },
-  { id: 'inv21', firm: 'GV', fundSize: '$4B+', stageFocus: ['Seed', 'Series A', 'Series B'], checkSizeRange: '$1-5M', hq: 'Mountain View', fitScore: 68, fitExplanation: 'Google ecosystem access, engineering support, data advantage', keyPartner: 'M.G. Siegler', category: 'cvc', initial: 'G', color: 'bg-green-600' },
-];
+const INVESTOR_DB: InvestorDBEntry[] = investorDatabaseRaw as InvestorDBEntry[];
+
+const INVESTOR_REGIONS = ['All Regions', 'USA', 'India', 'Korea', 'Japan', 'Multi-Regional'] as const;
+const INVESTOR_TYPES = [
+  { value: 'all', label: 'All' },
+  { value: 'VC', label: 'VC' },
+  { value: 'PE', label: 'PE' },
+  { value: 'CVC', label: 'CVC' },
+  { value: 'Family Office', label: 'Family Office' },
+  { value: 'Angels', label: 'Angels' },
+  { value: 'Accelerator', label: 'Accelerators' },
+] as const;
+const INVESTOR_STAGES = ['All Stages', 'Pre-Seed', 'Seed', 'Series A', 'Series B', 'Series C', 'Growth', 'Late Stage'] as const;
+const INVESTORS_PER_PAGE = 30;
 
 function getFitScoreColor(score: number): string {
   if (score >= 80) return 'text-emerald-500';
@@ -508,30 +506,51 @@ function AddInvestorDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
 function InvestorDatabaseTab() {
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [regionFilter, setRegionFilter] = useState<string>('All Regions');
+  const [stageFilter, setStageFilter] = useState<string>('All Stages');
+  const [page, setPage] = useState(1);
   const { toast } = useToast();
 
   const filtered = INVESTOR_DB.filter(inv => {
-    const matchesSearch = !search || inv.firm.toLowerCase().includes(search.toLowerCase()) ||
-      inv.keyPartner.toLowerCase().includes(search.toLowerCase()) ||
-      inv.hq.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || inv.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const q = search.toLowerCase();
+    const matchesSearch = !search ||
+      inv.name.toLowerCase().includes(q) ||
+      inv.originalType.toLowerCase().includes(q) ||
+      inv.countries.toLowerCase().includes(q) ||
+      inv.notableInvestments.toLowerCase().includes(q) ||
+      inv.region.toLowerCase().includes(q);
+    const matchesType = typeFilter === 'all' || inv.type === typeFilter;
+    const matchesRegion = regionFilter === 'All Regions' || inv.region === regionFilter;
+    const matchesStage = stageFilter === 'All Stages' ||
+      inv.stages.some(s => s.toLowerCase().includes(stageFilter.toLowerCase()));
+    return matchesSearch && matchesType && matchesRegion && matchesStage;
   });
+
+  const paginated = filtered.slice(0, page * INVESTORS_PER_PAGE);
+  const hasMore = paginated.length < filtered.length;
+
+  const resetFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setRegionFilter('All Regions');
+    setStageFilter('All Stages');
+    setPage(1);
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Investor Database</h2>
-          <Badge variant="outline">{filtered.length} investors</Badge>
+          <Badge variant="outline" data-testid="text-investor-count">{filtered.length} investors</Badge>
         </div>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search firms, partners, locations..."
+            placeholder="Search firms, portfolios, regions..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="pl-9"
             data-testid="input-search-investors"
           />
@@ -539,18 +558,12 @@ function InvestorDatabaseTab() {
       </div>
 
       <div className="flex gap-2 flex-wrap" data-testid="investor-category-filters">
-        {[
-          { value: 'all', label: 'All' },
-          { value: 'vc', label: 'VC' },
-          { value: 'angels', label: 'Angels' },
-          { value: 'cvc', label: 'CVC' },
-          { value: 'accelerator', label: 'Accelerators' },
-        ].map(cat => (
+        {INVESTOR_TYPES.map(cat => (
           <Button
             key={cat.value}
-            variant={categoryFilter === cat.value ? 'default' : 'outline'}
+            variant={typeFilter === cat.value ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setCategoryFilter(cat.value)}
+            onClick={() => { setTypeFilter(cat.value); setPage(1); }}
             data-testid={`filter-category-${cat.value}`}
           >
             {cat.label}
@@ -558,31 +571,53 @@ function InvestorDatabaseTab() {
         ))}
       </div>
 
+      <div className="flex gap-2 flex-wrap items-center">
+        <Select value={regionFilter} onValueChange={(v) => { setRegionFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="filter-region">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {INVESTOR_REGIONS.map(r => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={stageFilter} onValueChange={(v) => { setStageFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="filter-stage">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {INVESTOR_STAGES.map(s => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(typeFilter !== 'all' || regionFilter !== 'All Regions' || stageFilter !== 'All Stages' || search) && (
+          <Button variant="ghost" size="sm" onClick={resetFilters} className="text-xs h-8" data-testid="button-clear-filters">
+            Clear filters
+          </Button>
+        )}
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map(inv => (
+        {paginated.map(inv => (
           <Card key={inv.id} className="hover:border-primary/30 transition-colors" data-testid={`investor-card-${inv.id}`}>
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
                 <div className={`h-10 w-10 rounded-lg ${inv.color} flex items-center justify-center shrink-0`}>
-                  <span className="text-white font-bold text-sm">{inv.initial}</span>
+                  <span className="text-white font-bold text-sm">{inv.initials}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm truncate" data-testid={`text-investor-firm-${inv.id}`}>{inv.firm}</h3>
-                  <p className="text-xs text-muted-foreground">{inv.keyPartner}</p>
+                  <h3 className="font-semibold text-sm truncate" data-testid={`text-investor-firm-${inv.id}`}>{inv.name}</h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{inv.type}</Badge>
+                    <span className="text-[10px] text-muted-foreground">{inv.region}</span>
+                  </div>
                 </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="text-right shrink-0 cursor-help" data-testid={`fit-score-${inv.id}`}>
-                        <span className={`text-lg font-bold ${getFitScoreColor(inv.fitScore)}`}>{inv.fitScore}</span>
-                        <p className="text-[10px] text-muted-foreground">Fit Score</p>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="left" className="max-w-[200px]">
-                      <p className="text-xs">{inv.fitExplanation}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <div className="text-right shrink-0" data-testid={`fit-score-${inv.id}`}>
+                  <span className={`text-lg font-bold ${getFitScoreColor(inv.fitScore)}`}>{inv.fitScore}</span>
+                  <p className="text-[10px] text-muted-foreground">Fit Score</p>
+                </div>
               </div>
 
               <div className="mt-3">
@@ -592,35 +627,63 @@ function InvestorDatabaseTab() {
               </div>
 
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-xs">
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <DollarSign className="h-3 w-3" />
-                  <span>{inv.fundSize}</span>
-                </div>
+                {inv.aum && (
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <DollarSign className="h-3 w-3" />
+                    <span className="truncate">AUM {inv.aum}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <MapPin className="h-3 w-3" />
-                  <span>{inv.hq}</span>
+                  <span className="truncate">{inv.countries || inv.region}</span>
                 </div>
-                <div className="col-span-2 flex items-center gap-1 text-muted-foreground">
-                  <Target className="h-3 w-3" />
-                  <span>{inv.checkSizeRange}</span>
-                </div>
+                {inv.dealSize && (
+                  <div className="col-span-2 flex items-center gap-1 text-muted-foreground">
+                    <Target className="h-3 w-3" />
+                    <span className="truncate">{inv.dealSize}</span>
+                  </div>
+                )}
               </div>
 
-              <div className="flex flex-wrap gap-1 mt-2">
-                {inv.stageFocus.map(stage => (
-                  <Badge key={stage} variant="outline" className="text-[10px] px-1.5 py-0">{stage}</Badge>
-                ))}
-              </div>
+              {inv.stages.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {inv.stages.slice(0, 4).map(stage => (
+                    <Badge key={stage} variant="outline" className="text-[10px] px-1.5 py-0">{stage}</Badge>
+                  ))}
+                  {inv.stages.length > 4 && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">+{inv.stages.length - 4}</Badge>
+                  )}
+                </div>
+              )}
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full mt-3"
-                onClick={() => toast({ title: 'Added to Pipeline', description: `${inv.firm} added to Researching stage` })}
-                data-testid={`button-add-to-pipeline-${inv.id}`}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add to Pipeline
-              </Button>
+              {inv.notableInvestments && (
+                <p className="text-[10px] text-muted-foreground mt-2 line-clamp-1" title={inv.notableInvestments}>
+                  Portfolio: {inv.notableInvestments}
+                </p>
+              )}
+
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => toast({ title: 'Added to Pipeline', description: `${inv.name} added to Researching stage` })}
+                  data-testid={`button-add-to-pipeline-${inv.id}`}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Add to Pipeline
+                </Button>
+                {inv.website && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="px-2"
+                    onClick={() => window.open(inv.website, '_blank')}
+                    data-testid={`button-website-${inv.id}`}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -628,9 +691,28 @@ function InvestorDatabaseTab() {
           <div className="col-span-full text-center py-12 text-muted-foreground">
             <Database className="h-10 w-10 mx-auto mb-3 opacity-50" />
             <p className="text-sm">No investors match your filters</p>
+            <Button variant="link" size="sm" onClick={resetFilters} className="mt-2" data-testid="button-reset-filters">Reset all filters</Button>
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            onClick={() => setPage(p => p + 1)}
+            data-testid="button-load-more-investors"
+          >
+            Show More ({filtered.length - paginated.length} remaining)
+          </Button>
+        </div>
+      )}
+
+      {!hasMore && filtered.length > INVESTORS_PER_PAGE && (
+        <p className="text-center text-xs text-muted-foreground pt-2">
+          Showing all {filtered.length} investors
+        </p>
+      )}
     </div>
   );
 }
