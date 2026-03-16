@@ -21,7 +21,7 @@ import {
   Plus, DollarSign, TrendingUp, PieChart,
   Calculator, Play, Building2, Target, Mail,
   Clock, BarChart3, CheckCircle2, AlertCircle, Pause, Send,
-  Kanban, Database, Zap, Search, MapPin, Star,
+  Kanban, Database, Search, MapPin, Star,
   GripVertical, LayoutGrid, List,
   Calendar, ChevronRight
 } from 'lucide-react';
@@ -113,11 +113,11 @@ const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
   ],
   'Reached Out': [
     { id: '4', firm: 'Blume Ventures', partner: 'Karthik Reddy', checkSize: '$1-5M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Seed-A' },
-    { id: '5', firm: 'Peak XV Partners', partner: 'Shailendra Singh', checkSize: '$10-25M', lastActivity: '3 days ago', sentiment: 'yellow', warmIntro: true, stage: 'Series A-C' },
+    { id: '5', firm: 'Peak XV', partner: 'Shailendra Singh', checkSize: '$10-25M', lastActivity: '3 days ago', sentiment: 'yellow', warmIntro: true, stage: 'Series A-C' },
   ],
   'Intro Meeting': [
     { id: '6', firm: 'Accel India', partner: 'Prashanth Prakash', checkSize: '$5-20M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Series A-B' },
-    { id: '7', firm: 'Matrix Partners', partner: 'Tarun Davda', checkSize: '$3-10M', lastActivity: '2 days ago', sentiment: 'green', warmIntro: false, stage: 'Series A' },
+    { id: '7', firm: 'Matrix Partners India', partner: 'Tarun Davda', checkSize: '$3-10M', lastActivity: '2 days ago', sentiment: 'green', warmIntro: false, stage: 'Series A' },
   ],
   'Partner Meeting': [
     { id: '8', firm: 'Stellaris VP', partner: 'Alok Goyal', checkSize: '$2-8M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Series A' },
@@ -125,7 +125,7 @@ const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
   ],
   'Due Diligence': [
     { id: '10', firm: '3one4 Capital', partner: 'Siddarth Pai', checkSize: '$2-8M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Seed-A' },
-    { id: '11', firm: 'Nexus VP', partner: 'Pratik Poddar', checkSize: '$3-12M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Series A' },
+    { id: '11', firm: 'Nexus Venture Partners', partner: 'Pratik Poddar', checkSize: '$3-12M', lastActivity: '1 day ago', sentiment: 'green', warmIntro: true, stage: 'Series A' },
   ],
   'Term Sheet': [
     { id: '12', firm: 'Lightspeed India', partner: 'Dev Khare', checkSize: '$5-15M', lastActivity: 'Today', sentiment: 'green', warmIntro: true, stage: 'Series A-B' },
@@ -143,11 +143,11 @@ const DEMO_PIPELINE: Record<string, PipelineInvestor[]> = {
 const INVESTOR_DB: InvestorDBEntry[] = [
   { id: 'inv1', firm: 'Elevation Capital', fundSize: '$670M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$5-15M', hq: 'Bangalore', fitScore: 92, fitExplanation: 'Strong SaaS portfolio, active in your vertical, partner has domain expertise', keyPartner: 'Ravi Adusumalli', category: 'vc', initial: 'E', color: 'bg-violet-600' },
   { id: 'inv2', firm: 'Blume Ventures', fundSize: '$250M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$1-5M', hq: 'Mumbai', fitScore: 88, fitExplanation: 'Early-stage focus, operator-friendly, strong network in India ecosystem', keyPartner: 'Karthik Reddy', category: 'vc', initial: 'B', color: 'bg-blue-600' },
-  { id: 'inv3', firm: 'Peak XV Partners', fundSize: '$2.85B', stageFocus: ['Series A', 'Series B', 'Series C'], checkSizeRange: '$10-25M', hq: 'Bangalore', fitScore: 85, fitExplanation: 'Largest India fund, strong brand signal, deep operational support', keyPartner: 'Shailendra Singh', category: 'vc', initial: 'P', color: 'bg-rose-600' },
+  { id: 'inv3', firm: 'Peak XV', fundSize: '$2.85B', stageFocus: ['Series A', 'Series B', 'Series C'], checkSizeRange: '$10-25M', hq: 'Bangalore', fitScore: 85, fitExplanation: 'Largest India fund, strong brand signal, deep operational support', keyPartner: 'Shailendra Singh', category: 'vc', initial: 'P', color: 'bg-rose-600' },
   { id: 'inv4', firm: 'Accel India', fundSize: '$650M', stageFocus: ['Seed', 'Series A', 'Series B'], checkSizeRange: '$5-20M', hq: 'Bangalore', fitScore: 87, fitExplanation: 'Top-tier brand, strong SaaS track record, global network', keyPartner: 'Prashanth Prakash', category: 'vc', initial: 'A', color: 'bg-indigo-600' },
-  { id: 'inv5', firm: 'Matrix Partners India', fundSize: '$500M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$3-10M', hq: 'Bangalore', fitScore: 83, fitExplanation: 'Strong fintech/SaaS portfolio, hands-on board participation', keyPartner: 'Tarun Davda', category: 'vc', initial: 'M', color: 'bg-teal-600' },
+  { id: 'inv5', firm: 'Matrix Partners', fundSize: '$500M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$3-10M', hq: 'Bangalore', fitScore: 83, fitExplanation: 'Strong fintech/SaaS portfolio, hands-on board participation', keyPartner: 'Tarun Davda', category: 'vc', initial: 'M', color: 'bg-teal-600' },
   { id: 'inv6', firm: 'Lightspeed India', fundSize: '$500M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$5-15M', hq: 'Bangalore', fitScore: 79, fitExplanation: 'Strong global network, cross-border expansion support', keyPartner: 'Dev Khare', category: 'vc', initial: 'L', color: 'bg-amber-600' },
-  { id: 'inv7', firm: 'Nexus Venture Partners', fundSize: '$700M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$3-12M', hq: 'Mumbai', fitScore: 81, fitExplanation: 'Deep enterprise/SaaS expertise, strong LP network', keyPartner: 'Pratik Poddar', category: 'vc', initial: 'N', color: 'bg-cyan-600' },
+  { id: 'inv7', firm: 'Nexus VP', fundSize: '$700M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$3-12M', hq: 'Mumbai', fitScore: 81, fitExplanation: 'Deep enterprise/SaaS expertise, strong LP network', keyPartner: 'Pratik Poddar', category: 'vc', initial: 'N', color: 'bg-cyan-600' },
   { id: 'inv8', firm: 'Kalaari Capital', fundSize: '$350M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$2-8M', hq: 'Bangalore', fitScore: 76, fitExplanation: 'Strong early-stage brand, consumer and B2B portfolio', keyPartner: 'Vani Kola', category: 'vc', initial: 'K', color: 'bg-emerald-600' },
   { id: 'inv9', firm: 'Chiratae Ventures', fundSize: '$400M', stageFocus: ['Series A', 'Series B'], checkSizeRange: '$3-10M', hq: 'Bangalore', fitScore: 74, fitExplanation: 'Long India track record, strong governance focus', keyPartner: 'Sudhir Sethi', category: 'vc', initial: 'C', color: 'bg-orange-600' },
   { id: 'inv10', firm: '3one4 Capital', fundSize: '$200M', stageFocus: ['Seed', 'Series A'], checkSizeRange: '$2-8M', hq: 'Bangalore', fitScore: 82, fitExplanation: 'Founder-focused, strong tech/SaaS portfolio, thesis-driven', keyPartner: 'Siddarth Pai', category: 'vc', initial: '3', color: 'bg-purple-600' },
@@ -161,7 +161,7 @@ const INVESTOR_DB: InvestorDBEntry[] = [
   { id: 'inv18', firm: 'Surge (Peak XV)', fundSize: '$400M', stageFocus: ['Seed'], checkSizeRange: '$1-2M', hq: 'Bangalore', fitScore: 84, fitExplanation: 'Cohort program, strong ops support, Peak XV follow-on path', keyPartner: 'Rajan Anandan', category: 'accelerator', initial: 'S', color: 'bg-rose-500' },
   { id: 'inv19', firm: 'Initialized Capital', fundSize: '$700M', stageFocus: ['Pre-Seed', 'Seed'], checkSizeRange: '$500K-2M', hq: 'San Francisco', fitScore: 62, fitExplanation: 'YC-connected, global reach but limited India presence', keyPartner: 'Garry Tan', category: 'vc', initial: 'I', color: 'bg-neutral-600' },
   { id: 'inv20', firm: 'Salesforce Ventures', fundSize: '$3B+', stageFocus: ['Series A', 'Series B', 'Series C'], checkSizeRange: '$5-20M', hq: 'San Francisco', fitScore: 70, fitExplanation: 'Strategic CRM/enterprise synergy, co-sell opportunities', keyPartner: 'Alex Kayyal', category: 'cvc', initial: 'S', color: 'bg-blue-500' },
-  { id: 'inv21', firm: 'GV (Google Ventures)', fundSize: '$4B+', stageFocus: ['Seed', 'Series A', 'Series B'], checkSizeRange: '$1-5M', hq: 'Mountain View', fitScore: 68, fitExplanation: 'Google ecosystem access, engineering support, data advantage', keyPartner: 'M.G. Siegler', category: 'cvc', initial: 'G', color: 'bg-green-600' },
+  { id: 'inv21', firm: 'GV', fundSize: '$4B+', stageFocus: ['Seed', 'Series A', 'Series B'], checkSizeRange: '$1-5M', hq: 'Mountain View', fitScore: 68, fitExplanation: 'Google ecosystem access, engineering support, data advantage', keyPartner: 'M.G. Siegler', category: 'cvc', initial: 'G', color: 'bg-green-600' },
 ];
 
 function getFitScoreColor(score: number): string {
@@ -265,10 +265,16 @@ function DashboardBanner() {
   );
 }
 
-function PipelineCard({ investor }: { investor: PipelineInvestor }) {
+function PipelineCard({ investor, onDragStart }: { investor: PipelineInvestor; onDragStart: (investorId: string) => void }) {
   return (
     <Card
       className="mb-2 cursor-grab active:cursor-grabbing hover:border-primary/40 transition-colors"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', investor.id);
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart(investor.id);
+      }}
       data-testid={`pipeline-card-${investor.id}`}
     >
       <CardContent className="p-3">
@@ -299,11 +305,56 @@ function PipelineCard({ investor }: { investor: PipelineInvestor }) {
 }
 
 function PipelineTab() {
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [pipelineData] = useState(DEMO_PIPELINE);
+  const [pipelineData, setPipelineData] = useState(DEMO_PIPELINE);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+
+  const handleDrop = (targetColumn: string) => {
+    if (!draggingId) return;
+    const sourceColumn = Object.keys(pipelineData).find(col =>
+      pipelineData[col].some(inv => inv.id === draggingId)
+    );
+    if (!sourceColumn || sourceColumn === targetColumn) {
+      setDraggingId(null);
+      setDragOverColumn(null);
+      return;
+    }
+    const investor = pipelineData[sourceColumn].find(inv => inv.id === draggingId);
+    if (!investor) return;
+    setPipelineData(prev => ({
+      ...prev,
+      [sourceColumn]: prev[sourceColumn].filter(inv => inv.id !== draggingId),
+      [targetColumn]: [...prev[targetColumn], investor],
+    }));
+    toast({ title: 'Investor Moved', description: `${investor.firm} moved to ${targetColumn}` });
+    setDraggingId(null);
+    setDragOverColumn(null);
+  };
 
   const totalInvestors = Object.values(pipelineData).reduce((sum, col) => sum + col.length, 0);
+
+  const headerBar = (isBoardActive: boolean) => (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-semibold">Pipeline</h2>
+        <Badge variant="outline">{totalInvestors} investors</Badge>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant={isBoardActive ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('board')} data-testid="button-board-view">
+          <LayoutGrid className="h-4 w-4 mr-1" /> Board
+        </Button>
+        <Button variant={!isBoardActive ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')} data-testid="button-table-view">
+          <List className="h-4 w-4 mr-1" /> Table
+        </Button>
+        <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="button-add-investor-pipeline">
+          <Plus className="h-4 w-4 mr-1" /> Add Investor
+        </Button>
+      </div>
+    </div>
+  );
 
   if (viewMode === 'table') {
     const allInvestors = Object.entries(pipelineData).flatMap(([stage, investors]) =>
@@ -311,23 +362,7 @@ function PipelineTab() {
     );
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">Pipeline</h2>
-            <Badge variant="outline">{totalInvestors} investors</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setViewMode('board')} data-testid="button-board-view">
-              <LayoutGrid className="h-4 w-4 mr-1" /> Board
-            </Button>
-            <Button variant="default" size="sm" data-testid="button-table-view">
-              <List className="h-4 w-4 mr-1" /> Table
-            </Button>
-            <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="button-add-investor-pipeline">
-              <Plus className="h-4 w-4 mr-1" /> Add Investor
-            </Button>
-          </div>
-        </div>
+        {headerBar(false)}
         <Card>
           <div className="mobile-table-scroll">
             <Table>
@@ -365,30 +400,26 @@ function PipelineTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Pipeline</h2>
-          <Badge variant="outline">{totalInvestors} investors</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="default" size="sm" data-testid="button-board-view">
-            <LayoutGrid className="h-4 w-4 mr-1" /> Board
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setViewMode('table')} data-testid="button-table-view">
-            <List className="h-4 w-4 mr-1" /> Table
-          </Button>
-          <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="button-add-investor-pipeline">
-            <Plus className="h-4 w-4 mr-1" /> Add Investor
-          </Button>
-        </div>
-      </div>
+      {headerBar(true)}
 
       <div className="overflow-x-auto pb-4 -mx-4 px-4" data-testid="pipeline-kanban">
         <div className="flex gap-3" style={{ minWidth: `${PIPELINE_COLUMNS.length * 240}px` }}>
           {PIPELINE_COLUMNS.map(column => (
             <div
               key={column}
-              className={`flex-1 min-w-[220px] max-w-[280px] rounded-lg bg-muted/30 border border-border/50 border-t-2 ${COLUMN_COLORS[column]} p-3`}
+              className={`flex-1 min-w-[220px] max-w-[280px] rounded-lg border border-border/50 border-t-2 ${COLUMN_COLORS[column]} p-3 transition-colors ${
+                dragOverColumn === column ? 'bg-primary/10 border-primary/40' : 'bg-muted/30'
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDragOverColumn(column);
+              }}
+              onDragLeave={() => setDragOverColumn(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleDrop(column);
+              }}
               data-testid={`pipeline-column-${column.toLowerCase().replace(/\s/g, '-')}`}
             >
               <div className="flex items-center justify-between mb-3">
@@ -399,7 +430,7 @@ function PipelineTab() {
               </div>
               <div className="space-y-0 min-h-[120px]">
                 {(pipelineData[column] || []).map(investor => (
-                  <PipelineCard key={investor.id} investor={investor} />
+                  <PipelineCard key={investor.id} investor={investor} onDragStart={setDraggingId} />
                 ))}
                 {(!pipelineData[column] || pipelineData[column].length === 0) && (
                   <div className="flex items-center justify-center h-[100px] border border-dashed border-border/50 rounded-lg">
@@ -510,8 +541,8 @@ function InvestorDatabaseTab() {
       <div className="flex gap-2 flex-wrap" data-testid="investor-category-filters">
         {[
           { value: 'all', label: 'All' },
-          { value: 'vc', label: 'Venture Capital' },
-          { value: 'angels', label: 'Angels & Micro-VC' },
+          { value: 'vc', label: 'VC' },
+          { value: 'angels', label: 'Angels' },
           { value: 'cvc', label: 'CVC' },
           { value: 'accelerator', label: 'Accelerators' },
         ].map(cat => (
@@ -969,9 +1000,6 @@ export default function FundraisingPage() {
           <TabsTrigger value="investor-db" data-testid="tab-investor-db">
             <Database className="h-4 w-4 mr-2" />Investor Database
           </TabsTrigger>
-          <TabsTrigger value="automations" data-testid="tab-automations">
-            <Zap className="h-4 w-4 mr-2" />Automations
-          </TabsTrigger>
           <TabsTrigger value="outreach" data-testid="tab-outreach">
             <Mail className="h-4 w-4 mr-2" />Outreach
           </TabsTrigger>
@@ -994,12 +1022,9 @@ export default function FundraisingPage() {
           <InvestorDatabaseTab />
         </TabsContent>
 
-        <TabsContent value="automations" className="space-y-4" data-testid="tab-content-automations">
-          <AutomationsTab />
-        </TabsContent>
-
         <TabsContent value="outreach" className="space-y-4">
           <OutreachTab />
+          <AutomationsTab />
         </TabsContent>
 
         <TabsContent value="cap-table" className="space-y-4">
