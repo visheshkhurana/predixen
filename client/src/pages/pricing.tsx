@@ -88,7 +88,7 @@ export default function PricingPage() {
         {
           "@type": "Offer",
           name: "Growth",
-          price: "149",
+          price: "129",
           priceCurrency: "USD",
           billingIncrement: "month",
           description: "Advanced features for scaling companies.",
