@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { injectSEO } from "./seo-prerender";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
@@ -9,6 +10,8 @@ export function serveStatic(app: Express) {
       `Could not find the build directory: ${distPath}, make sure to build the client first`,
     );
   }
+
+  const indexHtml = fs.readFileSync(path.resolve(distPath, "index.html"), "utf-8");
 
   app.use("/assets", express.static(path.join(distPath, "assets"), {
     maxAge: "1y",
@@ -31,6 +34,9 @@ export function serveStatic(app: Express) {
       return;
     }
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.setHeader("Content-Type", "text/html");
+
+    const enrichedHtml = injectSEO(indexHtml, url.split("?")[0].split("#")[0]);
+    res.send(enrichedHtml);
   });
 }

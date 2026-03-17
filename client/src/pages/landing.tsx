@@ -3,6 +3,7 @@ import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   Plane,
   Sparkles,
@@ -19,7 +20,11 @@ import {
   Shield,
   Zap,
   CheckCircle2,
+  Check,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
+import { useState } from "react";
 
 const integrations = ["Stripe", "QuickBooks", "Gusto", "Mercury", "Brex", "Plaid", "Xero", "Shopify"];
 
@@ -92,6 +97,76 @@ const differentiators = [
   },
 ];
 
+const landingFaqs = [
+  {
+    q: "What is FounderConsole?",
+    a: "FounderConsole is an AI-powered financial intelligence platform for startups. It connects your financial data, builds a digital twin of your company, runs Monte Carlo simulations, and provides AI-powered strategic recommendations — replacing spreadsheets with simulations.",
+  },
+  {
+    q: "Is FounderConsole free?",
+    a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 37 data connectors, and board deck generation. No credit card is required.",
+  },
+  {
+    q: "How does FounderConsole help with fundraising?",
+    a: "FounderConsole includes a Fundraising OS with cap table management, dilution modeling, investor CRM, SAFE conversion modeling, and exit waterfall analysis. The AI copilot generates investor-ready reports, one-pagers, and board decks automatically.",
+  },
+  {
+    q: "What data sources can I connect?",
+    a: "FounderConsole supports 37 data connectors including Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify, Salesforce, and more. You can also upload CSV files or enter data manually.",
+  },
+  {
+    q: "What is a Monte Carlo simulation?",
+    a: "Monte Carlo simulation runs your financial model thousands of times with slightly different inputs each time, producing a probability distribution instead of a single forecast. You see P10 (pessimistic), P50 (median), and P90 (optimistic) outcomes for your runway and other metrics.",
+  },
+  {
+    q: "How is this different from a spreadsheet?",
+    a: "Spreadsheets give you one forecast based on one set of assumptions. FounderConsole runs thousands of scenarios, accounts for uncertainty, connects to live data sources, and uses AI to generate insights. It is the difference between a paper map and GPS navigation.",
+  },
+  {
+    q: "What is a startup digital twin?",
+    a: "A digital twin is a continuously updated virtual representation of your company. FounderConsole ingests data from your accounting, payment, banking, and payroll systems to create a live financial model that reflects your current reality — no manual updates needed.",
+  },
+  {
+    q: "How long does setup take?",
+    a: "Most founders are up and running in under five minutes. Connect your primary data source (Stripe, QuickBooks, or CSV), and FounderConsole automatically builds your digital twin and generates your first simulation.",
+  },
+];
+
+const pricingTiers = [
+  {
+    name: "Free Beta",
+    price: "$0",
+    period: "",
+    description: "All features unlocked during beta",
+    features: [
+      "Monte Carlo simulations",
+      "AI Copilot (all LLMs)",
+      "37 data connectors",
+      "Cap table & fundraising",
+      "Board deck generator",
+      "Digital twin",
+      "Team collaboration",
+    ],
+    highlighted: true,
+  },
+  {
+    name: "Pro",
+    price: "$49",
+    period: "/month",
+    description: "For scaling startups",
+    features: [
+      "Everything in Free",
+      "Unlimited simulations",
+      "Priority AI processing",
+      "Custom connectors",
+      "Advanced analytics",
+      "Dedicated support",
+      "API access",
+    ],
+    highlighted: false,
+  },
+];
+
 const stats = [
   { value: "2.4M+", label: "Scenarios Simulated" },
   { value: "37+", label: "Data Connectors" },
@@ -111,6 +186,116 @@ const testimonials = [
     role: "Founder, DataSync Labs",
   },
 ];
+
+function PricingPreview() {
+  return (
+    <section className="border-t bg-card/30">
+      <div className="mx-auto max-w-6xl px-4 py-20 md:py-24">
+        <div className="text-center mb-14">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-pricing-heading">
+            Simple, transparent pricing
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+            Start free. Upgrade when you need more power.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 max-w-3xl mx-auto">
+          {pricingTiers.map((tier) => (
+            <Card
+              key={tier.name}
+              className={tier.highlighted ? "border-primary/40 shadow-lg shadow-primary/5" : ""}
+              data-testid={`card-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              <CardHeader>
+                {tier.highlighted && (
+                  <Badge className="w-fit mb-2" data-testid="badge-popular">Most Popular</Badge>
+                )}
+                <CardTitle className="text-xl">{tier.name}</CardTitle>
+                <div className="flex items-baseline gap-1 mt-2">
+                  <span className="text-4xl font-bold text-foreground">{tier.price}</span>
+                  <span className="text-muted-foreground">{tier.period}</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">{tier.description}</p>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2.5">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button
+                  asChild
+                  className="w-full"
+                  variant={tier.highlighted ? "default" : "outline"}
+                  data-testid={`button-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <Link href="/auth">
+                    {tier.highlighted ? "Start Free" : "Get Started"}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          <Link href="/pricing" className="text-primary hover:underline">View full pricing details</Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  return (
+    <section className="border-t">
+      <div className="mx-auto max-w-3xl px-4 py-20 md:py-24">
+        <div className="text-center mb-14">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-faq-heading">
+            Frequently asked questions
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+            Everything you need to know about FounderConsole.
+          </p>
+        </div>
+        <div className="space-y-3">
+          {landingFaqs.map((faq, i) => (
+            <div
+              key={i}
+              className="rounded-xl border bg-card/50 overflow-hidden"
+              data-testid={`faq-item-${i}`}
+            >
+              <button
+                className="flex w-full items-center justify-between p-5 text-left"
+                onClick={() => setOpenIndex(openIndex === i ? null : i)}
+                data-testid={`button-faq-${i}`}
+              >
+                <span className="font-medium text-foreground text-sm">{faq.q}</span>
+                {openIndex === i ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                )}
+              </button>
+              {openIndex === i && (
+                <div className="px-5 pb-5 text-sm text-muted-foreground leading-relaxed">
+                  {faq.a}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function LandingPage() {
   useSEO({
@@ -148,6 +333,15 @@ export default function LandingPage() {
         },
         featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
         screenshot: "https://founderconsole.ai/og-image.png",
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: landingFaqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.q,
+          acceptedAnswer: { "@type": "Answer", text: faq.a },
+        })),
       },
     ],
   });
@@ -362,6 +556,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <PricingPreview />
+      <FAQSection />
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-20 md:py-24 text-center">
