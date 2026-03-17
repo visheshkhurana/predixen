@@ -237,26 +237,18 @@ function PublicOrAuthHome() {
   const user = useFounderStore((s) => s.user);
   const currentCompany = useFounderStore((s) => s.currentCompany);
 
-  if (!user) {
-    return (
-      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
-        <LandingPage />
-      </Suspense>
-    );
+  if (user && currentCompany) {
+    return <Redirect to="/overview" />;
   }
 
-  if (!currentCompany) {
+  if (user && !currentCompany) {
     return <Redirect to="/onboarding" />;
   }
 
   return (
-    <ErrorBoundary
-      fallback={(error, reset) => (
-        <PageErrorFallback error={error} reset={reset} pageName="Dashboard" />
-      )}
-    >
-      <OverviewPage />
-    </ErrorBoundary>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+      <LandingPage />
+    </Suspense>
   );
 }
 
@@ -678,16 +670,19 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     "--sidebar-width-icon": "3rem",
   };
   
-  // Check if we're on a standalone page (owner console, auth, onboarding, admin)
+  const marketingPaths = [
+    '/', '/features', '/pricing', '/about', '/blog', '/faq',
+    '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
+    '/survival-simulator', '/privacy', '/terms',
+    '/reset-password', '/verify-email', '/auth/callback',
+    '/login', '/signup', '/register', '/join',
+  ];
   const isStandalonePage = typeof window !== 'undefined' && 
-    (window.location.pathname === '/owner-console' || 
-     window.location.pathname === '/auth' ||
-     window.location.pathname === '/pricing' ||
-     window.location.pathname === '/demo' ||
-     window.location.pathname === '/onboarding' ||
+    (marketingPaths.includes(window.location.pathname) ||
+     window.location.pathname.startsWith('/blog/') ||
+     window.location.pathname.startsWith('/tools/') ||
      window.location.pathname.startsWith('/admin') ||
      window.location.pathname.startsWith('/scenarios/shared/') ||
-     window.location.pathname === '/survival-simulator' ||
      window.location.pathname.startsWith('/survival/'));
   
   if (!user || isStandalonePage) {

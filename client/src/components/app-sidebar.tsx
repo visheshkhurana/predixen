@@ -418,7 +418,7 @@ export function AppSidebar() {
                   isActive={location === "/" || location === "/overview"}
                   data-testid="nav-dashboard"
                 >
-                  <Link href="/">
+                  <Link href="/overview">
                     <LayoutDashboard className="h-4 w-4" />
                     <span>Dashboard</span>
                   </Link>
