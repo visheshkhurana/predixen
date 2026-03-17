@@ -17,6 +17,7 @@ export default function DemoPage() {
   useSEO({
     title: "Demo | FounderConsole",
     description: "Watch the FounderConsole demo: connect data, forecast, simulate confidence intervals, decide.",
+    path: "/demo",
   });
 
   return (

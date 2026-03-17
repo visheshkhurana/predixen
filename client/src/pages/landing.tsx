@@ -114,9 +114,23 @@ const testimonials = [
 
 export default function LandingPage() {
   useSEO({
-    title: "FounderConsole — The Flight Simulator for Founders",
+    title: "FounderConsole — AI Decision Simulator for Founders",
     description:
       "Connect your company data, simulate the future, and get AI-powered decisions. Replace spreadsheets with simulations.",
+    path: "/",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "FounderConsole",
+      url: "https://founderconsole.ai",
+      logo: "https://founderconsole.ai/og-image.png",
+      description: "AI-powered financial intelligence platform for startups. Investor-grade diligence, probabilistic simulation, and ranked decision recommendations.",
+      sameAs: [
+        "https://twitter.com/founderconsole",
+        "https://linkedin.com/company/founderconsole",
+        "https://github.com/founderconsole",
+      ],
+    },
   });
 
   return (

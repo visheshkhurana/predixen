@@ -99,6 +99,7 @@ export default function MarketingFeaturesPage() {
     title: "Features | FounderConsole",
     description:
       "Simulation engine, AI copilot, Truth Scan, Fundraising OS, 37 data connectors, and decision engine — built for startup founders.",
+    path: "/features",
   });
 
   return (

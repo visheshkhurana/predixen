@@ -62,6 +62,39 @@ export default function PricingPage() {
   useSEO({
     title: "Pricing | FounderConsole",
     description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta. No credit card required.",
+    path: "/pricing",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "FounderConsole",
+      applicationCategory: "FinanceApplication",
+      operatingSystem: "Web",
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Free Beta",
+          price: "0",
+          priceCurrency: "USD",
+          description: "All features free during public beta. No credit card required.",
+        },
+        {
+          "@type": "Offer",
+          name: "Startup",
+          price: "49",
+          priceCurrency: "USD",
+          billingIncrement: "month",
+          description: "Full platform access for growing startups.",
+        },
+        {
+          "@type": "Offer",
+          name: "Growth",
+          price: "149",
+          priceCurrency: "USD",
+          billingIncrement: "month",
+          description: "Advanced features for scaling companies.",
+        },
+      ],
+    },
   });
 
   return (

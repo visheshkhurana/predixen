@@ -38,6 +38,15 @@ export default function AboutPage() {
   useSEO({
     title: "About | FounderConsole",
     description: "Why FounderConsole exists: founders need explainable financial clarity under uncertainty.",
+    path: "/about",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "FounderConsole",
+      url: "https://founderconsole.ai",
+      logo: "https://founderconsole.ai/og-image.png",
+      description: "AI-powered financial intelligence platform for startups built by founders who lived the uncertainty.",
+    },
   });
 
   return (

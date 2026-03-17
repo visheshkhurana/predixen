@@ -150,6 +150,14 @@ function BlogList() {
     title: "Blog | FounderConsole",
     description:
       "Insights for startup founders: runway planning, Monte Carlo simulations, cap table management, fundraising timing, unit economics, and data-driven decision making.",
+    path: "/blog",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: "FounderConsole Blog",
+      url: "https://founderconsole.ai/blog",
+      description: "Insights for startup founders on runway planning, Monte Carlo simulations, cap table management, and data-driven decision making.",
+    },
   });
 
   return (
@@ -216,12 +224,37 @@ function BlogList() {
   );
 }
 
+function dateToISO(dateStr: string): string {
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+}
+
 function BlogPost({ slug }: { slug: string }) {
   const post = posts.find((p) => p.slug === slug);
+  const isoDate = post ? dateToISO(post.date) : "";
 
   useSEO({
     title: post ? `${post.title} | FounderConsole Blog` : "Blog | FounderConsole",
     description: post?.excerpt || "",
+    path: `/blog/${slug}`,
+    ogType: post ? "article" : "website",
+    articleMeta: post ? { publishedTime: isoDate, author: post.author } : undefined,
+    jsonLd: post
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          headline: post.title,
+          description: post.excerpt,
+          datePublished: isoDate,
+          author: { "@type": "Person", name: post.author },
+          publisher: {
+            "@type": "Organization",
+            name: "FounderConsole",
+            logo: { "@type": "ImageObject", url: "https://founderconsole.ai/og-image.png" },
+          },
+          mainEntityOfPage: `https://founderconsole.ai/blog/${slug}`,
+        }
+      : undefined,
   });
 
   if (!post) {

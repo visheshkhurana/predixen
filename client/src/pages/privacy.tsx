@@ -1,6 +1,7 @@
 import { Shield, Mail, Database, Eye, Cookie, Clock, Users, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
+import { useSEO } from '@/lib/seo';
 
 function Section({ icon: Icon, title, children, testId }: {
   icon: any; title: string; children: React.ReactNode; testId: string;
@@ -21,6 +22,13 @@ function Section({ icon: Icon, title, children, testId }: {
 }
 
 export default function PrivacyPolicyPage() {
+  useSEO({
+    title: "Privacy Policy | FounderConsole",
+    description: "How FounderConsole collects, uses, stores, and protects your information. Read-only integrations, encrypted data, no resale.",
+    path: "/privacy",
+    robots: "noindex, follow",
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16 space-y-6">

@@ -98,6 +98,7 @@ export default function FAQPage() {
   useSEO({
     title: "FAQ | FounderConsole",
     description: "FounderConsole FAQ: product, data, pricing, accuracy, and explainability.",
+    path: "/faq",
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "FAQPage",

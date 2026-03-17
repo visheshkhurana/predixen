@@ -25,6 +25,14 @@ export default function ContactPage() {
   useSEO({
     title: "Contact | FounderConsole",
     description: "Get in touch with the FounderConsole team. We respond within 24 hours.",
+    path: "/contact",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "ContactPage",
+      name: "Contact FounderConsole",
+      url: "https://founderconsole.ai/contact",
+      description: "Get in touch with the FounderConsole team. We respond within 24 hours.",
+    },
   });
 
   const { toast } = useToast();

@@ -365,7 +365,7 @@ export function AppSidebar() {
             className="h-9 w-9 rounded-md"
           />
           <div>
-            <h1 className="font-semibold text-sm">FounderConsole</h1>
+            <span className="font-semibold text-sm">FounderConsole</span>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>
           </div>
         </div>
