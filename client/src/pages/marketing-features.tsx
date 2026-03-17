@@ -17,6 +17,7 @@ const features = [
   {
     icon: BarChart3,
     title: "Simulation Engine",
+    screenshot: "/images/features/simulation-engine.png",
     headline: "Probability replaces guesswork.",
     description:
       "Run thousands of Monte Carlo simulations to understand the full range of outcomes for your startup. See P10/P50/P90 confidence bands so risk becomes measurable, not hypothetical.",
@@ -30,6 +31,7 @@ const features = [
   {
     icon: Sparkles,
     title: "AI Copilot",
+    screenshot: "/images/features/ai-copilot.png",
     headline: "Defend every decision with data.",
     description:
       "A multi-LLM copilot that routes queries across GPT-4, Claude, and Gemini to deliver the best answer. Perplexity-powered web research adds real-time market benchmarks and competitor context.",
@@ -43,6 +45,7 @@ const features = [
   {
     icon: ShieldCheck,
     title: "Truth Scan",
+    screenshot: "/images/features/truth-scan.png",
     headline: "Trust your numbers before sharing them.",
     description:
       "Multi-stage data validation catches errors, inconsistencies, and anomalies before they reach your board deck. Z-score anomaly detection flags outliers automatically so nothing slips through.",
@@ -56,6 +59,7 @@ const features = [
   {
     icon: DollarSign,
     title: "Fundraising OS",
+    screenshot: "/images/features/fundraising-os.png",
     headline: "From cap table to term sheet, covered.",
     description:
       "Manage your cap table, model SAFE and convertible note conversions, and understand dilution impact before you sign. Generate investor-ready materials and track your fundraising pipeline in one place.",
@@ -69,6 +73,7 @@ const features = [
   {
     icon: Plug,
     title: "Data Connectors",
+    screenshot: "/images/features/data-connectors.png",
     headline: "Connect everything. Auto-sync.",
     description:
       "37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.",
@@ -82,6 +87,7 @@ const features = [
   {
     icon: Brain,
     title: "Decision Engine",
+    screenshot: "/images/features/decision-engine.png",
     headline: "Strategic clarity, not just charts.",
     description:
       "Transform simulation results into narrative strategic briefings that boards and investors understand. Ranked recommendations with confidence scores explain why one path beats another.",
@@ -141,9 +147,13 @@ export default function MarketingFeaturesPage() {
                   </ul>
                 </div>
                 <div className="flex-1">
-                  <div className="rounded-xl border bg-card/50 p-8 flex items-center justify-center min-h-[180px]">
-                    <f.icon className="h-16 w-16 text-primary/20" />
-                  </div>
+                  <img
+                    src={f.screenshot}
+                    alt={`${f.title} — ${f.headline}`}
+                    className="rounded-xl border shadow-lg w-full object-cover"
+                    loading="lazy"
+                    data-testid={`img-feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
+                  />
                 </div>
               </div>
             ))}
