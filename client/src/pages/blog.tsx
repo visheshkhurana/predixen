@@ -234,7 +234,7 @@ function BlogPost({ slug }: { slug: string }) {
   const isoDate = post ? dateToISO(post.date) : "";
 
   useSEO({
-    title: post ? `${post.title} | FounderConsole Blog` : "Blog | FounderConsole",
+    title: post ? `${post.title} | FounderConsole` : "Blog | FounderConsole",
     description: post?.excerpt || "",
     path: `/blog/${slug}`,
     ogType: post ? "article" : "website",
@@ -252,6 +252,7 @@ function BlogPost({ slug }: { slug: string }) {
             name: "FounderConsole",
             logo: { "@type": "ImageObject", url: "https://founderconsole.ai/og-image.png" },
           },
+          image: "https://founderconsole.ai/og-image.png",
           mainEntityOfPage: `https://founderconsole.ai/blog/${slug}`,
         }
       : undefined,
