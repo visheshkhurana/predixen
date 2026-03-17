@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useSEO } from "@/lib/seo";
 import { useFounderStore } from "@/store/founderStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -516,6 +517,12 @@ function AlertSettingsSection({ companyId }: { companyId: number }) {
 }
 
 export default function AlertsPage() {
+  useSEO({
+    title: "Smart Alerts — Real-time Startup Metrics Monitoring | FounderConsole",
+    description: "Track anomalies, threshold breaches, and financial health drivers in real time. Z-score detection and severity-based filtering catch issues before they escalate.",
+    path: "/alerts",
+    robots: "noindex, nofollow",
+  });
   const { currentCompany } = useFounderStore();
   const companyId = currentCompany?.id;
   const { toast } = useToast();

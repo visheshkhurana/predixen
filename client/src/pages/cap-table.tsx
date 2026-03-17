@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSEO } from "@/lib/seo";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -228,6 +229,12 @@ function ScenarioTypeBadge({ type }: { type: string }) {
 type OwnershipView = 'fully_diluted' | 'by_class' | 'as_converted' | 'as_exercised';
 
 export default function CapTablePage() {
+  useSEO({
+    title: "Cap Table Management — Equity Tracking for Startups | FounderConsole",
+    description: "Manage your cap table with real-time ownership visualization. Model SAFE and convertible note conversions, track dilution, and generate investor-ready reports.",
+    path: "/cap-table",
+    robots: "noindex, nofollow",
+  });
   const { currentCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();

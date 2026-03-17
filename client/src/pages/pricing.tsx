@@ -67,7 +67,7 @@ export default function PricingPage() {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       name: "FounderConsole",
-      applicationCategory: "FinanceApplication",
+      applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       offers: [
         {

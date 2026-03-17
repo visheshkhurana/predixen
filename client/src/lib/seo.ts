@@ -9,7 +9,7 @@ type SEOProps = {
   path?: string;
   ogType?: string;
   robots?: string;
-  jsonLd?: object;
+  jsonLd?: object | object[];
   articleMeta?: {
     publishedTime?: string;
     author?: string;
@@ -54,6 +54,7 @@ export function useSEO({ title, description, path, ogType, robots, jsonLd, artic
     setOrCreateMeta("property", "og:url", fullUrl);
 
     setOrCreateMeta("property", "og:type", ogType || "website");
+    setOrCreateMeta("property", "og:site_name", "FounderConsole");
 
     setOrCreateMeta("name", "robots", robots || "index, follow");
 
@@ -66,17 +67,18 @@ export function useSEO({ title, description, path, ogType, robots, jsonLd, artic
       setOrCreateMeta("property", "article:author", articleMeta.author);
     }
 
-    let ldTag = document.querySelector("#seo-jsonld") as HTMLScriptElement | null;
+    const existingLd = document.querySelectorAll("script.seo-jsonld");
+    existingLd.forEach((el) => el.remove());
+
     if (jsonLd) {
-      if (!ldTag) {
-        ldTag = document.createElement("script");
-        ldTag.id = "seo-jsonld";
+      const ldArray = Array.isArray(jsonLd) ? jsonLd : [jsonLd];
+      ldArray.forEach((ld, i) => {
+        const ldTag = document.createElement("script");
+        ldTag.className = "seo-jsonld";
         ldTag.type = "application/ld+json";
+        ldTag.text = JSON.stringify(ld);
         document.head.appendChild(ldTag);
-      }
-      ldTag.text = JSON.stringify(jsonLd);
-    } else if (ldTag) {
-      document.head.removeChild(ldTag);
+      });
     }
 
     return () => {
@@ -84,6 +86,7 @@ export function useSEO({ title, description, path, ogType, robots, jsonLd, artic
       if (articleTime) articleTime.remove();
       const articleAuthor = document.querySelector('meta[property="article:author"]');
       if (articleAuthor) articleAuthor.remove();
+      document.querySelectorAll("script.seo-jsonld").forEach((el) => el.remove());
     };
   }, [title, description, path, ogType, robots, jsonLd, articleMeta]);
 }

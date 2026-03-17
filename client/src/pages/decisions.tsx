@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSEO } from "@/lib/seo";
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -211,6 +212,12 @@ function LikelihoodBadge({ likelihood }: { likelihood: string }) {
 }
 
 export default function DecisionsPage() {
+  useSEO({
+    title: "Decision Intelligence — Data-Driven Startup Decisions | FounderConsole",
+    description: "AI-generated strategic briefings with GO, CONDITIONAL, and NO-GO verdicts. Transform simulation results into actionable recommendations with confidence scores.",
+    path: "/decisions",
+    robots: "noindex, nofollow",
+  });
   const { currentCompany, setCurrentStep } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();

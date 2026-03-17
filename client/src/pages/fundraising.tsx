@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSEO } from "@/lib/seo";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -915,6 +916,12 @@ function OutreachTab() {
 }
 
 export default function FundraisingPage() {
+  useSEO({
+    title: "Fundraising Intelligence — Startup Fundraising Tools | FounderConsole",
+    description: "Pipeline CRM, investor database, outreach tracking, and fundraising readiness scoring. Manage your entire fundraising process from first contact to close.",
+    path: "/fundraising",
+    robots: "noindex, nofollow",
+  });
   const { currentCompany: selectedCompany } = useFounderStore();
   const { toast } = useToast();
   const queryClient = useQueryClient();

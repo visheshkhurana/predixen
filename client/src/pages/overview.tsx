@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useLocation, Link } from 'wouter';
+import { useSEO } from "@/lib/seo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -493,6 +494,12 @@ const KpiStatusIcon = ({ status }: { status: 'green' | 'yellow' | 'red' }) => {
 };
 
 export default function OverviewPage() {
+  useSEO({
+    title: "Dashboard — Financial Intelligence Overview | FounderConsole",
+    description: "Real-time financial dashboard with verified metrics, goal tracking, and AI-powered insights. Monitor MRR, runway, burn rate, and growth metrics in one place.",
+    path: "/overview",
+    robots: "noindex, nofollow",
+  });
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { currentCompany, setTruthScan, setCurrentStep, financialBaseline } = useFounderStore();

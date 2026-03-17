@@ -9,19 +9,34 @@ const faqSections = [
     title: "Getting Started",
     items: [
       {
-        question: "What problem does FounderConsole solve?",
+        question: "What is FounderConsole?",
         answer:
-          "FounderConsole helps founders make explainable financial decisions under uncertainty using real-time forecasting and Monte Carlo confidence intervals. Instead of relying on a single spreadsheet forecast, you see the range of possible outcomes and the probability of hitting key targets.",
+          "FounderConsole is an AI-powered financial intelligence platform built specifically for startup founders. It replaces spreadsheet-based forecasting with Monte Carlo simulations, giving you probability-based outcomes (P10/P50/P90) instead of a single-point guess. It includes an AI copilot, fundraising CRM, cap table management, 37 data connectors, and strategic briefings — everything a founder needs to make data-driven decisions.",
+      },
+      {
+        question: "How does FounderConsole help founders?",
+        answer:
+          "FounderConsole helps founders by transforming financial uncertainty into measurable probability. Instead of relying on gut feelings, you get Monte Carlo simulations that show the range of possible outcomes, an AI copilot that answers financial questions using your real data, automated data validation (Truth Scan) that catches errors before they reach your board, and strategic briefings that explain your risks and opportunities in plain English. It reduces the time spent on financial analysis from days to minutes.",
+      },
+      {
+        question: "What metrics does FounderConsole track?",
+        answer:
+          "FounderConsole tracks over 24 financial health metrics including MRR, ARR, runway, burn rate, CAC, LTV, LTV:CAC ratio, churn rate, gross margin, NRR, ARPU, active customers, and headcount. It automatically derives metrics from connected data sources, validates them with cross-reference checks, and flags anomalies using Z-score detection. Each metric includes a confidence score showing how reliable the data is.",
+      },
+      {
+        question: "Is FounderConsole free?",
+        answer:
+          "Yes — FounderConsole is completely free during the public beta. All features are unlocked with no credit card required. After the beta, pricing will include a free tier for basic forecasting, a Startup tier ($49/month) for unlimited simulations, and a Growth tier ($129/month) for teams. Beta users will receive preferred rates.",
+      },
+      {
+        question: "What is a startup digital twin?",
+        answer:
+          "A startup digital twin is a continuously-updated virtual representation of your company inside FounderConsole. It integrates your real financial data, simulation results, strategic decisions, and alerts into a single live model with health scoring and risk indicators. Think of it as a real-time mirror of your company's financial state that lets you test scenarios and see impacts before making actual decisions. The twin tracks metrics like cash balance, burn rate, revenue, and runway, and alerts you when key indicators change.",
       },
       {
         question: "How do I get started?",
         answer:
           "Sign up for free (no credit card required), connect one or more data sources like QuickBooks, Stripe, or Mercury, and you'll have a baseline forecast with confidence intervals within 5 minutes.",
-      },
-      {
-        question: "What do I get in the first 5 minutes?",
-        answer:
-          "A baseline forecast from your connected sources, one scenario simulation with confidence bands (P10/P50/P90), an AI narrative explaining your key risk drivers, and an investor-ready summary draft.",
       },
       {
         question: "Is there a demo I can try?",

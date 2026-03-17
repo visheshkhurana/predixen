@@ -18,7 +18,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell
 } from "recharts";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 
 const STORAGE_KEY = "fc_survival_sim_count";

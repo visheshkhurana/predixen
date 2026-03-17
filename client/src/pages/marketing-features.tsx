@@ -102,10 +102,22 @@ const features = [
 
 export default function MarketingFeaturesPage() {
   useSEO({
-    title: "Features | FounderConsole",
+    title: "Features — Simulation, AI Copilot, Fundraising CRM & More | FounderConsole",
     description:
-      "Simulation engine, AI copilot, Truth Scan, Fundraising OS, 37 data connectors, and decision engine — built for startup founders.",
+      "Monte Carlo simulation engine, multi-LLM AI copilot, Truth Scan data validation, Fundraising OS with CRM, 37 data connectors, and AI strategic briefings — built for startup founders.",
     path: "/features",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      name: "FounderConsole Features",
+      description: "Complete feature overview of FounderConsole: Monte Carlo simulations, AI copilot, data validation, fundraising tools, and 37 data connectors.",
+      url: "https://founderconsole.ai/features",
+      isPartOf: {
+        "@type": "WebSite",
+        name: "FounderConsole",
+        url: "https://founderconsole.ai",
+      },
+    },
   });
 
   return (

@@ -116,21 +116,40 @@ export default function LandingPage() {
   useSEO({
     title: "FounderConsole — AI Decision Simulator for Founders",
     description:
-      "Connect your company data, simulate the future, and get AI-powered decisions. Replace spreadsheets with simulations.",
+      "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors — replace spreadsheets with simulations.",
     path: "/",
-    jsonLd: {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: "FounderConsole",
-      url: "https://founderconsole.ai",
-      logo: "https://founderconsole.ai/og-image.png",
-      description: "AI-powered financial intelligence platform for startups. Investor-grade diligence, probabilistic simulation, and ranked decision recommendations.",
-      sameAs: [
-        "https://twitter.com/founderconsole",
-        "https://linkedin.com/company/founderconsole",
-        "https://github.com/founderconsole",
-      ],
-    },
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "FounderConsole",
+        url: "https://founderconsole.ai",
+        logo: "https://founderconsole.ai/og-image.png",
+        description: "AI-powered financial intelligence platform for startups. Investor-grade diligence, probabilistic simulation, and ranked decision recommendations.",
+        sameAs: [
+          "https://twitter.com/founderconsole",
+          "https://linkedin.com/company/founderconsole",
+          "https://github.com/founderconsole",
+        ],
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: "FounderConsole",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: "https://founderconsole.ai",
+        description: "AI-powered financial intelligence platform for startups with Monte Carlo simulations, fundraising CRM, and 37 data connectors.",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          description: "Free during public beta — all features unlocked, no credit card required",
+        },
+        featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
+        screenshot: "https://founderconsole.ai/og-image.png",
+      },
+    ],
   });
 
   return (

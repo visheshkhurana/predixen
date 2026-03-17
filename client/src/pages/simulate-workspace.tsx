@@ -1,4 +1,5 @@
 import { useState, useCallback, lazy, Suspense } from 'react';
+import { useSEO } from "@/lib/seo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -591,6 +592,12 @@ function HistoryWorkspace() {
 }
 
 export default function SimulateWorkspace() {
+  useSEO({
+    title: "Scenario Simulator — What-If Analysis for Startups | FounderConsole",
+    description: "Run Monte Carlo simulations to model hiring, pricing, and fundraising scenarios. See P10/P50/P90 confidence bands and compare outcomes side by side.",
+    path: "/simulate",
+    robots: "noindex, nofollow",
+  });
   const [activeTab, setActiveTab] = useState('scenarios');
   const currentCompany = useFounderStore((s) => s.currentCompany);
   const { data: scenarios } = useScenarios(currentCompany?.id || null);
