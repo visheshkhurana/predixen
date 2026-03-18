@@ -2,13 +2,17 @@
 Email service using Resend for transactional emails.
 Handles invite emails, welcome emails, and other platform notifications.
 Uses Replit Connectors API to fetch Resend credentials.
+Also includes Slack webhook notifications for signup events.
 """
 import os
 import resend
 import asyncio
 import httpx
+import logging
 from typing import Optional, Tuple
 from datetime import datetime
+
+_slack_logger = logging.getLogger("slack_notifications")
 
 
 # Cache for credentials (short-lived, refreshed each request cycle)
@@ -376,3 +380,57 @@ async def send_platform_update_email(
     subject = "FounderConsole - New Features & Updates"
     
     return await send_email(to_email, subject, html_content)
+
+
+async def send_slack_signup_notification(
+    email: str,
+    name: Optional[str] = None,
+    signup_method: str = "Email",
+    user_id: Optional[int] = None,
+):
+    webhook_url = os.getenv("SLACK_SIGNUP_WEBHOOK_URL")
+    if not webhook_url:
+        _slack_logger.debug("SLACK_SIGNUP_WEBHOOK_URL not set, skipping notification")
+        return
+
+    timestamp = datetime.utcnow().strftime("%B %d, %Y at %H:%M UTC")
+    display_name = name or "Not provided"
+    profile_link = f"https://founderconsole.ai/admin/users/{user_id}" if user_id else "N/A"
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "\U0001f389 New Signup on FounderConsole!", "emoji": True},
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Email:*\n{email}"},
+                {"type": "mrkdwn", "text": f"*Name:*\n{display_name}"},
+                {"type": "mrkdwn", "text": f"*Method:*\n{signup_method}"},
+                {"type": "mrkdwn", "text": f"*Time:*\n{timestamp}"},
+            ],
+        },
+    ]
+
+    if user_id:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Profile:* <{profile_link}|View in Admin Panel>"},
+        })
+
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "Sent from FounderConsole Signup Tracker"}],
+    })
+
+    payload = {"blocks": blocks, "text": f"New signup: {email} via {signup_method}"}
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(webhook_url, json=payload)
+            resp.raise_for_status()
+        _slack_logger.info(f"Slack signup notification sent for {email}")
+    except Exception as exc:
+        _slack_logger.warning(f"Failed to send Slack signup notification: {exc}")

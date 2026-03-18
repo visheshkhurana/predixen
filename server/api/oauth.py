@@ -72,6 +72,20 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    try:
+        from server.email.service import send_slack_signup_notification
+        import asyncio
+        loop = asyncio.get_event_loop()
+        loop.create_task(send_slack_signup_notification(
+            email=user.email,
+            name=display_name,
+            signup_method="Google OAuth",
+            user_id=user.id,
+        ))
+    except Exception as e:
+        logger.warning(f"Slack signup notification failed: {e}")
+
     return user
 
 

@@ -55,3 +55,4 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Twilio**: SMS/phone notifications.
 -   **Google OAuth**: Social login functionality.
 -   **PostHog**: Analytics for page views, user identification, custom events.
+-   **Slack Webhooks**: Signup notifications via `SLACK_SIGNUP_WEBHOOK_URL` env var (async, non-blocking).

@@ -194,6 +194,17 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
     
     access_token = _issue_tokens(response, db, user.id)
     
+    try:
+        from server.email.service import send_slack_signup_notification
+        asyncio.create_task(send_slack_signup_notification(
+            email=user.email,
+            name=sanitized_name,
+            signup_method="Email",
+            user_id=user.id,
+        ))
+    except Exception as e:
+        auth_logger.warning(f"Slack signup notification failed: {e}")
+    
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)
     
