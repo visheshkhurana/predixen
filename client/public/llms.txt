@@ -1,0 +1,60 @@
+# FounderConsole — AI Decision Simulator for Founders
+
+> FounderConsole is an AI-powered financial intelligence platform for startups.
+> It replaces spreadsheets with Monte Carlo simulations, giving founders
+> investor-grade diligence, probabilistic forecasting, and ranked decision
+> recommendations.
+
+## Core Features
+
+- **Monte Carlo Simulation Engine**: 24-month probabilistic projections with
+  P10/P50/P90 confidence bands, scenario versioning, sensitivity analysis, and
+  custom event modeling.
+- **AI Copilot (Fund Flow Copilot)**: Multi-agent system with router/orchestrator
+  architecture, company knowledge base, and structured recommendations powered
+  by multiple LLMs (OpenAI, Anthropic, Gemini, Perplexity, Grok).
+- **Fundraising OS**: Cap table management, dilution calculator, fundraising round
+  tracking, Investor Room, equity management, and exit waterfall analysis.
+- **Digital Twin**: Continuously updated virtual representation of the company
+  integrating financial state, simulations, decisions, and alerts with health
+  scoring and risk indicators.
+- **37 Data Connectors**: QuickBooks, Stripe, Gusto, Xero, Salesforce, HubSpot,
+  Mercury, Brex, Ramp, Shopify, and more for automatic data sync.
+- **Truth Scan**: Multi-stage data validation ensuring financial data integrity.
+- **Hiring Planner**: Plan hires by role/department/location with salary modeling
+  and runway impact analysis.
+- **Forecasting & Alerts**: Holt-Winters, linear regression, Z-score anomaly
+  detection, threshold monitoring, and automated severity-based alerts.
+- **Board Deck Export**: AI-powered generation of board presentations as PDF.
+- **Fundraising Readiness Score**: Weighted scoring with radar chart visualization,
+  recommendations, and AI-generated investment one-pager.
+
+## Free Tools
+
+- **Startup Runway Calculator** (/tools/runway-calculator): Interactive calculator
+  for estimating startup runway based on cash, revenue, expenses, and growth rate.
+- **Startup Survival Simulator** (/survival-simulator): Free public tool
+  calculating survival probability using Monte Carlo engine with AI
+  recommendations and shareable results.
+
+## Blog Topics
+
+The FounderConsole blog (/blog) covers:
+- Startup financial management and runway optimization
+- Monte Carlo simulation for startup forecasting
+- Cap table management and equity dilution
+- AI in financial planning and decision-making
+- Fundraising preparation and investor relations
+- Burn rate optimization and unit economics
+- SaaS metrics, churn analysis, and growth strategies
+- Board communication and financial reporting
+
+## Company
+
+- Website: https://founderconsole.ai
+- Blog: https://founderconsole.ai/blog
+- Pricing: Free during public beta; Pro plan at $49/month
+- Contact: https://founderconsole.ai/contact
+- Twitter: https://twitter.com/founderconsole
+- LinkedIn: https://linkedin.com/company/founderconsole
+- GitHub: https://github.com/founderconsole

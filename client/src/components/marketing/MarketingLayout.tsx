@@ -17,6 +17,7 @@ const navLinks = [
   { label: "About", href: "/about" },
   { label: "Blog", href: "/blog" },
   { label: "FAQ", href: "/faq" },
+  { label: "Survival Simulator", href: "/survival-simulator" },
 ];
 
 const footerProduct = [
@@ -24,6 +25,8 @@ const footerProduct = [
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
   { label: "Demo", href: "/demo" },
+  { label: "Runway Calculator", href: "/tools/runway-calculator" },
+  { label: "Survival Simulator", href: "/survival-simulator" },
 ];
 
 const footerCompany = [

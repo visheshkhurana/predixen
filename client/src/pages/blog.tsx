@@ -103,7 +103,7 @@ function BlogPost({ slug }: { slug: string }) {
     jsonLd: post
       ? {
           "@context": "https://schema.org",
-          "@type": "Article",
+          "@type": "BlogPosting",
           headline: post.title,
           description: post.excerpt,
           datePublished: isoDate,
