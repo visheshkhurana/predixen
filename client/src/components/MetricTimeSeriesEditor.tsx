@@ -60,7 +60,8 @@ export function MetricTimeSeriesEditor() {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch metrics');
-      return res.json();
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!companyId,
   });

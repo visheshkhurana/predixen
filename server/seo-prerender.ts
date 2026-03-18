@@ -1,4 +1,4 @@
-import { blogPosts } from "./seo-data";
+import { blogPosts, blogPostContent } from "./seo-data";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -10,6 +10,7 @@ interface PageMeta {
   ogType?: string;
   robots?: string;
   jsonLd?: object[];
+  bodyContent?: string;
 }
 
 const landingFaqs = [
@@ -23,12 +24,76 @@ const landingFaqs = [
   { q: "How long does setup take?", a: "Most founders are up and running in under five minutes. Connect your primary data source and FounderConsole automatically builds your digital twin." },
 ];
 
+function buildLandingBodyContent(): string {
+  const faqHtml = landingFaqs.map((f) =>
+    `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`
+  ).join("");
+
+  return `<article>
+<h1>FounderConsole — The Flight Simulator for Founders</h1>
+<p>FounderConsole is the AI-powered decision simulator for startup founders. Connect your company data, simulate the future, and get AI-powered decisions. Run your startup like a simulation.</p>
+<h2>How it works</h2>
+<ol>
+<li><strong>Connect your data</strong> — Link Stripe, QuickBooks, or upload a CSV. Your financial data flows in automatically.</li>
+<li><strong>Your company becomes a Digital Twin</strong> — We build a live model of your startup, validated, structured, and ready for simulation.</li>
+<li><strong>Run simulations</strong> — Test hiring plans, pricing changes, fundraising timing, and growth strategies before committing.</li>
+<li><strong>AI recommends decisions</strong> — Get ranked recommendations backed by data, with narratives you can defend to your board.</li>
+</ol>
+<h2>Core capabilities</h2>
+<ul>
+<li><strong>Digital Twin</strong> — Your company modeled in real time. Every financial metric, team member, and data source unified into a living digital representation.</li>
+<li><strong>Monte Carlo Simulator</strong> — Test decisions before making them. Run thousands of scenarios to see P10/P50/P90 outcomes.</li>
+<li><strong>AI Founder Copilot</strong> — Ask strategic questions in plain English. Get recommendations from parallel AI agents specialized in finance, strategy, and market analysis.</li>
+<li><strong>Decision Engine</strong> — Track every decision with full context. Learn from outcomes, compare scenarios, and build institutional memory.</li>
+</ul>
+<h2>Frequently Asked Questions</h2>
+${faqHtml}
+</article>`;
+}
+
+function buildBlogListBodyContent(): string {
+  const postsHtml = blogPosts.map((p) =>
+    `<article><h2><a href="/blog/${escapeHtml(p.slug)}">${escapeHtml(p.title)}</a></h2><p>${escapeHtml(p.excerpt)}</p><span>${escapeHtml(p.date)} — ${escapeHtml(p.author)}</span></article>`
+  ).join("");
+  return `<section><h1>Insights for Founders</h1><p>Practical decision science for founders. Runway, fundraising, hiring, and strategy — through the lens of probability.</p>${postsHtml}</section>`;
+}
+
+function buildBlogPostBodyContent(slug: string): string | null {
+  const post = blogPosts.find((p) => p.slug === slug);
+  const content = blogPostContent[slug];
+  if (!post) return null;
+  const paragraphs = content || [];
+  const bodyParagraphs = paragraphs.map((p: string) => {
+    if (p.startsWith("## ")) return `<h2>${escapeHtml(p.replace("## ", ""))}</h2>`;
+    return `<p>${escapeHtml(p)}</p>`;
+  }).join("");
+  return `<article><h1>${escapeHtml(post.title)}</h1><p><em>By ${escapeHtml(post.author)} — ${escapeHtml(post.date)}</em></p>${bodyParagraphs}</article>`;
+}
+
+function buildRunwayCalculatorBodyContent(): string {
+  return `<article>
+<h1>Startup Runway Calculator</h1>
+<p>Enter your financials to instantly see how many months of runway you have, when you'll run out of cash, and how growth affects your timeline.</p>
+<h2>How to Calculate Startup Runway: The Complete Guide</h2>
+<p>Startup runway is the number of months your company can continue operating before it runs out of cash, assuming no additional funding. It is one of the most important metrics for any early-stage founder because it determines how much time you have to achieve product-market fit, hit growth milestones, or close your next fundraising round.</p>
+<p>The basic runway formula is simple: divide your current cash balance by your monthly net burn rate. Net burn is the difference between your monthly expenses and your monthly revenue. If you have $500,000 in the bank and you burn $40,000 per month net, your runway is 12.5 months.</p>
+<h3>Why Simple Runway Calculations Are Dangerous</h3>
+<p>The problem with the simple formula is that it assumes a constant burn rate. In reality, expenses increase as you hire, revenue fluctuates month-to-month, and unexpected costs arise. A single-point runway estimate gives you false confidence.</p>
+<h3>Factors That Affect Your Runway</h3>
+<p>Revenue growth rate is the single biggest lever. Customer churn works in the opposite direction. Hiring pace is usually the largest controllable expense. Payment terms and accounts receivable also matter.</p>
+<h3>When to Start Fundraising Based on Runway</h3>
+<p>Most venture capital firms recommend starting your fundraise when you have 9 to 12 months of runway remaining. This gives you enough time to run a proper process without the desperation that comes from having only 3 months of cash left.</p>
+<p>FounderConsole connects to your actual financial data sources and runs Monte Carlo simulations to show you probabilistic runway projections with P10/P50/P90 confidence bands.</p>
+</article>`;
+}
+
 function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
       description: "FounderConsole is the AI-powered decision simulator for startup founders. Monte Carlo simulations, AI copilot, fundraising CRM, and 37 data connectors — replace spreadsheets with simulations.",
       canonical: SITE_URL + "/",
+      bodyContent: buildLandingBodyContent(),
       jsonLd: [
         {
           "@context": "https://schema.org",
@@ -115,6 +180,7 @@ function getPageMeta(path: string): PageMeta | null {
       title: "Blog — Startup Finance, Runway Planning & AI Strategy | FounderConsole",
       description: "Insights for startup founders: runway planning, Monte Carlo simulations, SaaS benchmarks, cap table management, and AI-powered financial tools.",
       canonical: SITE_URL + "/blog",
+      bodyContent: buildBlogListBodyContent(),
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "CollectionPage",
@@ -129,6 +195,7 @@ function getPageMeta(path: string): PageMeta | null {
       title: "Free Startup Runway Calculator | FounderConsole",
       description: "Calculate your startup runway in seconds. Enter cash on hand, monthly revenue, expenses, and growth rate to see how many months until you need to raise.",
       canonical: SITE_URL + "/tools/runway-calculator",
+      bodyContent: buildRunwayCalculatorBodyContent(),
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "WebApplication",
@@ -149,6 +216,22 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
+  if (path === "/privacy") {
+    return {
+      title: "Privacy Policy | FounderConsole",
+      description: "FounderConsole privacy policy. How we handle your data.",
+      canonical: SITE_URL + "/privacy",
+    };
+  }
+
+  if (path === "/terms") {
+    return {
+      title: "Terms of Service | FounderConsole",
+      description: "FounderConsole terms of service.",
+      canonical: SITE_URL + "/terms",
+    };
+  }
+
   const blogMatch = path.match(/^\/blog\/(.+)$/);
   if (blogMatch) {
     const slug = blogMatch[1];
@@ -160,6 +243,7 @@ function getPageMeta(path: string): PageMeta | null {
         description: post.excerpt,
         canonical: `${SITE_URL}/blog/${slug}`,
         ogType: "article",
+        bodyContent: buildBlogPostBodyContent(slug) || undefined,
         jsonLd: [{
           "@context": "https://schema.org",
           "@type": "Article",
@@ -238,10 +322,24 @@ export function injectSEO(html: string, path: string): string {
     `<meta name="twitter:description" content="${safeDesc}" />`
   );
 
-  result = result.replace(
-    /<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/,
-    (meta.jsonLd || []).map((ld) => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join("\n    ")
-  );
+  if (meta.jsonLd && meta.jsonLd.length > 0) {
+    const newLdScripts = meta.jsonLd.map((ld) => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join("\n    ");
+    let replaced = false;
+    result = result.replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, (match) => {
+      if (!replaced) {
+        replaced = true;
+        return newLdScripts;
+      }
+      return "";
+    });
+  }
+
+  if (meta.bodyContent) {
+    result = result.replace(
+      '<div id="root"></div>',
+      `<div id="root"></div><div id="ssr-content" style="position:absolute;left:-9999px;top:-9999px;overflow:hidden;width:1px;height:1px">${meta.bodyContent}</div>`
+    );
+  }
 
   return result;
 }
