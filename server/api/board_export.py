@@ -164,17 +164,20 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
         "monthly_revenue": extract_metric_value(metrics.get("monthly_revenue"), 0),
         "mrr": extract_metric_value(metrics.get("mrr"), 0),
         "arr": extract_metric_value(metrics.get("arr"), 0),
-        "burn_rate": extract_metric_value(metrics.get("monthly_burn"), 0),
+        "burn_rate": extract_metric_value(metrics.get("net_burn"), 0),
         "cash_balance": extract_metric_value(metrics.get("cash_balance"), 0),
-        "runway_months": extract_metric_value(metrics.get("runway_months"), 0),
+        "runway_months": extract_metric_value(metrics.get("runway_p50"), 0),
         "gross_margin": extract_metric_value(metrics.get("gross_margin"), 0),
         "revenue_growth": extract_metric_value(metrics.get("revenue_growth_mom"), 0),
-        "customers": extract_metric_value(metrics.get("customers"), 0),
+        "customers": extract_metric_value(metrics.get("customers"), extract_metric_value(metrics.get("customer_count"), 0)),
         "churn_rate": extract_metric_value(metrics.get("churn_rate"), 0),
         "cac": extract_metric_value(metrics.get("cac"), 0),
         "ltv": extract_metric_value(metrics.get("ltv"), 0),
         "ltv_cac_ratio": extract_metric_value(metrics.get("ltv_cac_ratio"), 0),
-        "ndr": extract_metric_value(metrics.get("ndr"), 0),
+        "ndr": extract_metric_value(metrics.get("net_revenue_retention"), 0),
+        "headcount": extract_metric_value(metrics.get("headcount"), 0),
+        "is_profitable": bool(extract_metric_value(metrics.get("is_profitable"), False)),
+        "runway_sustainable": bool(extract_metric_value(metrics.get("runway_sustainable"), False)),
     }
 
     return {
@@ -201,17 +204,23 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
     metrics = data["metrics"]
     section_title = section["title"]
 
+    runway_val = metrics.get('runway_months', 0)
+    runway_display = "Sustainable (profitable)" if metrics.get('runway_sustainable') else f"{runway_val:.1f} months"
+
     metrics_summary = (
         f"Company: {company_name}\n"
         f"MRR: ${metrics.get('mrr', 0):,.0f}, ARR: ${metrics.get('arr', 0):,.0f}\n"
         f"Monthly Revenue: ${metrics.get('monthly_revenue', 0):,.0f}\n"
-        f"Burn Rate: ${metrics.get('burn_rate', 0):,.0f}/mo\n"
+        f"Net Burn: ${metrics.get('burn_rate', 0):,.0f}/mo\n"
         f"Cash Balance: ${metrics.get('cash_balance', 0):,.0f}\n"
-        f"Runway: {metrics.get('runway_months', 0):.1f} months\n"
+        f"Runway: {runway_display}\n"
+        f"Profitable: {'Yes' if metrics.get('is_profitable') else 'No'}\n"
         f"Gross Margin: {metrics.get('gross_margin', 0):.1f}%\n"
         f"Revenue Growth MoM: {metrics.get('revenue_growth', 0):.1f}%\n"
+        f"Headcount: {int(metrics.get('headcount', 0))}\n"
         f"Churn Rate: {metrics.get('churn_rate', 0):.1f}%\n"
         f"LTV/CAC: {metrics.get('ltv_cac_ratio', 0):.1f}x\n"
+        f"NDR: {metrics.get('ndr', 0):.0f}%\n"
         f"Data Confidence: {data.get('confidence', 50)}%\n"
     )
 
@@ -225,10 +234,34 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
     for d in data.get("decisions", [])[:3]:
         decisions_text += f"- [{d.get('status', 'proposed')}] {d.get('title', 'Untitled')}\n"
 
+    template_guidance = {
+        "monthly-update": (
+            "This is a MONTHLY BOARD UPDATE for existing board members and investors. "
+            "Focus on month-over-month changes, operational progress, and what happened since last update. "
+            "Tone: transparent, metric-driven, concise. Highlight wins and flag concerns early. "
+            "Board members want to see trends, not just snapshots."
+        ),
+        "fundraising-prep": (
+            "This is an INVESTOR-FACING FUNDRAISING DECK for prospective investors. "
+            "Focus on traction, market opportunity, unit economics strength, and growth trajectory. "
+            "Tone: compelling, confident, forward-looking. Emphasize why this is a great investment. "
+            "Investors want to see momentum, defensibility, and efficient capital deployment."
+        ),
+        "scenario-analysis": (
+            "This is a SCENARIO ANALYSIS DECK for strategic planning discussions. "
+            "Focus on comparing different paths forward, risk-reward tradeoffs, and sensitivity to assumptions. "
+            "Tone: analytical, balanced, thorough. Present multiple options with clear trade-offs. "
+            "Stakeholders want to understand downside risks and upside potential of each path."
+        ),
+    }
+
+    template_context = template_guidance.get(template_id, "Write a professional board deck narrative.")
+
     prompt = (
         f"You are a CFO assistant creating a board deck section.\n"
         f"Template: {template_id}\n"
         f"Section: {section_title}\n\n"
+        f"TEMPLATE CONTEXT: {template_context}\n\n"
         f"Financial Data:\n{metrics_summary}\n"
     )
 
@@ -241,7 +274,8 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         f"\nWrite a concise, professional narrative for the '{section_title}' section "
         f"of a {template_id.replace('-', ' ')} board deck. "
         f"Use specific numbers from the data. Keep it to 2-3 paragraphs. "
-        f"Be direct and actionable. Do not use markdown headers."
+        f"Be direct and actionable. Do not use markdown headers. "
+        f"Tailor the tone and emphasis to match the template context above."
     )
 
     return prompt

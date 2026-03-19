@@ -56,3 +56,9 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Google OAuth**: Social login functionality.
 -   **PostHog**: Analytics for page views, user identification, custom events.
 -   **Slack Webhooks**: Signup notifications via `SLACK_SIGNUP_WEBHOOK_URL` env var (async, non-blocking).
+
+## Important Data Flow Notes
+-   **Single Source of Truth**: Truth Scan (`TruthScan.outputs_json.metrics`) is the canonical source for all financial metrics. All features (Board Deck, Copilot, Health Check, Decisions) read from it.
+-   **Metric Key Mapping**: Truth Scan stores `net_burn` (not `monthly_burn`), `runway_p50` (not `runway_months`), `headcount`, `is_profitable`, `runway_sustainable`.
+-   **API Pagination**: `/api/metrics` returns `{items: [...], total, page, page_size}` — frontend queries must handle this paginated format.
+-   **Simulation Engine**: Both `simulation_engine.py` and `enhanced_monte_carlo.py` expect `baseline_growth_rate` and `gross_margin` as raw percentages (e.g., 5 for 5%, 70 for 70%). They divide by 100 internally. Never pre-divide.

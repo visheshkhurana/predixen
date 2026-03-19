@@ -176,10 +176,11 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                     prev = cash_paths[sim, m_idx - 1] if m_idx > 0 else inputs.cash_balance
                     last_cashflows.append(cash_paths[sim, m_idx] - prev)
                 avg_net = np.mean(last_cashflows) if last_cashflows else 0
-                if avg_net > 0:
-                    months_of_buffer = ending_cash / max(float(avg_net), 1.0)
-                    noise = rng.normal(1.0, 0.25)
-                    runway_months[sim] = horizon + min(months_of_buffer * max(noise, 0.3), max_cap - horizon)
+                if avg_net > 0 and ending_cash > 0:
+                    runway_months[sim] = max_cap
+                elif avg_net > 0:
+                    noise = rng.normal(1.0, 0.15)
+                    runway_months[sim] = min(horizon + abs(avg_net) * max(noise, 0.5) * 12, max_cap)
                 else:
                     runway_months[sim] = horizon + rng.uniform(6, 24)
     

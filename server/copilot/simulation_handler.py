@@ -89,38 +89,29 @@ class SimulationHandler:
         metrics = truth_scan.outputs_json.get("metrics", {})
         params = parsed.parameters
         
-        baseline_revenue = metrics.get("monthly_revenue", 50000)
-        if isinstance(baseline_revenue, dict):
-            baseline_revenue = baseline_revenue.get("value", 50000)
-        
-        baseline_growth = metrics.get("revenue_growth_mom", 5)
-        if isinstance(baseline_growth, dict):
-            baseline_growth = baseline_growth.get("value", 5)
-        
-        burn_rate = metrics.get("burn_rate", 60000)
-        if isinstance(burn_rate, dict):
-            burn_rate = burn_rate.get("value", 60000)
-        
-        cash_balance = metrics.get("cash_balance", 500000)
-        if isinstance(cash_balance, dict):
-            cash_balance = cash_balance.get("value", 500000)
-        
-        gross_margin = metrics.get("gross_margin", 70)
-        if isinstance(gross_margin, dict):
-            gross_margin = gross_margin.get("value", 70)
-        
-        churn_rate = metrics.get("churn_rate", 5)
-        if isinstance(churn_rate, dict):
-            churn_rate = churn_rate.get("value", 5)
-        
-        opex = burn_rate * 0.3
-        payroll = burn_rate * 0.5
-        other_costs = burn_rate * 0.2
-        
+        def _extract(val, default):
+            if isinstance(val, dict):
+                return val.get("value", default)
+            return val if val is not None else default
+
+        baseline_revenue = _extract(metrics.get("monthly_revenue"), 50000)
+        baseline_growth = _extract(metrics.get("revenue_growth_mom"), 5)
+        cash_balance = _extract(metrics.get("cash_balance"), 500000)
+        gross_margin = _extract(metrics.get("gross_margin"), 70)
+        churn_rate = _extract(metrics.get("churn_rate"), 5)
+
+        opex = _extract(metrics.get("opex"), 0)
+        payroll = _extract(metrics.get("payroll"), 0)
+        other_costs = _extract(metrics.get("other_costs"), 0)
+
+        if opex == 0 and payroll == 0 and other_costs == 0:
+            net_burn = _extract(metrics.get("net_burn"), 60000)
+            if net_burn > 0:
+                opex = net_burn * 0.3
+                payroll = net_burn * 0.5
+                other_costs = net_burn * 0.2
+
         burn_reduction_pct = params.burn_reduction_pct or 0
-        if burn_reduction_pct:
-            opex = opex * (1 - burn_reduction_pct / 100)
-            other_costs = other_costs * (1 - burn_reduction_pct / 100)
         
         growth_uplift_pct = params.revenue_growth_pct or 0
         pricing_change_pct = params.price_change_pct or 0
@@ -130,8 +121,8 @@ class SimulationHandler:
         
         inputs = EnhancedSimulationInputs(
             baseline_revenue=baseline_revenue,
-            baseline_growth_rate=baseline_growth / 100,
-            gross_margin=gross_margin / 100,
+            baseline_growth_rate=baseline_growth,
+            gross_margin=gross_margin,
             opex=opex,
             payroll=payroll,
             other_costs=other_costs,
@@ -206,8 +197,10 @@ class SimulationHandler:
             'survival_rate': survival * 100 if survival <= 1 else survival,
             'final_cash': final_cash,
         }
+        total_costs = opex + payroll + other_costs
+        net_burn = total_costs - baseline_revenue
         current_financials = {
-            'burn_multiple': burn_rate / max(baseline_revenue, 1) if baseline_revenue else 3.0,
+            'burn_multiple': net_burn / max(baseline_revenue, 1) if baseline_revenue else 3.0,
             'gross_margin': gross_margin / 100,
             'churn_rate': churn_rate / 100,
             'growth_rate': baseline_growth / 100,

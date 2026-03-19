@@ -573,8 +573,8 @@ def generate_strategic_diagnosis(
         ltv_cac = extract_metric_value(metrics.get("ltv_cac_ratio"), 0)
         gross_margin_val = extract_metric_value(metrics.get("gross_margin"), 0)
         arr = revenue * 12 * scale_mult
-        headcount = 0
-        if latest_record:
+        headcount = extract_metric_value(metrics.get("headcount"), 0)
+        if not headcount and latest_record:
             headcount = getattr(latest_record, 'headcount', 0) or 0
 
         churn_display = churn_rate * 100 if 0 < churn_rate <= 1 else churn_rate

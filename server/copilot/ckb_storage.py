@@ -168,10 +168,14 @@ class CKBStorage:
                 },
                 "cashflow": {
                     "burn_rate": metrics.get("net_burn"),
-                    "runway_months": metrics.get("runway_months")
+                    "runway_months": metrics.get("runway_p50")
                 },
                 "balance_sheet": {
                     "cash_balance": metrics.get("cash_balance")
+                },
+                "team": {
+                    "headcount": metrics.get("headcount"),
+                    "revenue_per_employee": metrics.get("revenue_per_employee"),
                 },
                 "truth_scan_id": truth_scan.id,
                 "computed_at": truth_scan.created_at.isoformat()

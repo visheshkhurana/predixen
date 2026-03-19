@@ -1859,7 +1859,13 @@ Type **help** for a full list of what I can do.`,
     <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
       {/* Conversation History Sidebar */}
       {showConversationSidebar && (
-        <div className="hidden md:flex w-64 border-r border-border/50 flex-col bg-muted/30">
+        <>
+        <div 
+          className="fixed inset-0 bg-black/30 z-30 md:hidden" 
+          onClick={() => setShowConversationSidebar(false)}
+          data-testid="sidebar-backdrop"
+        />
+        <div className="fixed md:relative inset-y-0 left-0 z-40 md:z-auto w-64 border-r border-border/50 flex flex-col bg-background md:bg-muted/30 shadow-lg md:shadow-none mt-16 md:mt-0">
           <div className="p-3 border-b border-border/50 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Conversations</span>
             <Button 
@@ -1912,6 +1918,7 @@ Type **help** for a full list of what I can do.`,
             </div>
           </ScrollArea>
         </div>
+        </>
       )}
       
       {/* Main Chat Container - Centered */}

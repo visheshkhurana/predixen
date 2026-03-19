@@ -161,37 +161,63 @@ class RouterAgent(BaseAgent):
     def __init__(self, llm_router=None):
         super().__init__(AgentType.ROUTER, llm_router)
     
+    EXPLANATION_KEYWORDS = [
+        "what is", "what's", "explain", "tell me about", "how does",
+        "what does", "define", "meaning of", "overview", "summary",
+        "show me", "what are my", "current", "status", "report",
+        "how am i doing", "how are we doing", "where do we stand",
+    ]
+
     def determine_routing(self, query: str, has_document: bool = False) -> RoutingDecision:
         """Determine which agents to call based on the query."""
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
         
         decision = RoutingDecision()
         reasons = []
+
+        is_question = query_lower.startswith(("what", "how", "why", "where", "when", "who", "which", "can", "could", "do", "does", "is", "are", "will", "would", "should"))
+        is_explanation_request = any(kw in query_lower for kw in self.EXPLANATION_KEYWORDS)
+        is_action_request = any(kw in query_lower for kw in self.DECISION_KEYWORDS)
         
-        if any(kw in query_lower for kw in self.DECISION_KEYWORDS):
+        has_financial_keywords = has_document or any(kw in query_lower for kw in self.CFO_KEYWORDS)
+        has_market_keywords = any(kw in query_lower for kw in self.MARKET_KEYWORDS)
+        has_strategy_keywords = any(kw in query_lower for kw in self.STRATEGY_KEYWORDS)
+        has_ops_keywords = any(kw in query_lower for kw in self.OPERATIONS_KEYWORDS)
+
+        if is_explanation_request and has_financial_keywords and not is_action_request:
+            decision.call_cfo = True
+            reasons.append("Financial explanation/status request")
+        elif is_action_request:
             decision.call_decision_advisor = True
             reasons.append("Decision-first analysis with simulations")
-        
-        if has_document or any(kw in query_lower for kw in self.CFO_KEYWORDS):
-            decision.call_cfo = True
-            reasons.append("Financial analysis needed")
-        
-        if any(kw in query_lower for kw in self.MARKET_KEYWORDS):
-            decision.call_market = True
-            reasons.append("Market research needed")
-        
-        if any(kw in query_lower for kw in self.STRATEGY_KEYWORDS):
-            decision.call_strategy = True
-            reasons.append("Strategy advice needed")
-        
-        if any(kw in query_lower for kw in self.OPERATIONS_KEYWORDS):
-            decision.call_operations = True
-            reasons.append("Operational execution planning needed")
+            if has_market_keywords:
+                decision.call_market = True
+                reasons.append("Market context for decision")
+        else:
+            if has_financial_keywords:
+                decision.call_cfo = True
+                reasons.append("Financial analysis needed")
+            
+            if has_market_keywords:
+                decision.call_market = True
+                reasons.append("Market research needed")
+            
+            if has_strategy_keywords:
+                decision.call_strategy = True
+                reasons.append("Strategy advice needed")
+            
+            if has_ops_keywords:
+                decision.call_operations = True
+                reasons.append("Operational execution planning needed")
         
         if not any([decision.call_cfo, decision.call_market, decision.call_strategy, decision.call_decision_advisor, decision.call_operations]):
-            decision.call_cfo = True
-            decision.call_strategy = True
-            reasons.append("General advisory - using CFO + Strategy")
+            if is_question and not is_action_request:
+                decision.call_cfo = True
+                reasons.append("General question - routing to CFO for data-grounded response")
+            else:
+                decision.call_cfo = True
+                decision.call_strategy = True
+                reasons.append("General advisory - using CFO + Strategy")
         
         decision.reasoning = "; ".join(reasons)
         return decision
