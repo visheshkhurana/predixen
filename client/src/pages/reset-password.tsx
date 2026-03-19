@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, Loader2, Sparkles, CheckCircle } from 'lucide-react';
+import { Lock, Loader2, CheckCircle } from 'lucide-react';
+import fcLogo from "@assets/image_1773944058788.png";
 
 export default function ResetPasswordPage() {
   const [, setLocation] = useLocation();
@@ -86,8 +87,8 @@ export default function ResetPasswordPage() {
           ) : (
             <form onSubmit={handleReset} className="space-y-4">
               <div className="text-center space-y-2">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto mb-4">
-                  <Sparkles className="h-5 w-5 text-white" />
+                <div className="flex justify-center mb-4">
+                  <img src={fcLogo} alt="FounderConsole" className="h-10 w-auto" />
                 </div>
                 <h2 className="text-xl font-semibold">Set New Password</h2>
                 <p className="text-sm text-muted-foreground">Choose a strong password for your account.</p>

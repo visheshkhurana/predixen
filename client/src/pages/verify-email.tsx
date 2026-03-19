@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
+import fcLogo from "@assets/image_1773944058788.png";
 
 export default function VerifyEmailPage() {
   const [, setLocation] = useLocation();
@@ -45,8 +46,8 @@ export default function VerifyEmailPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardContent className="p-6 text-center space-y-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mx-auto mb-2">
-            <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex justify-center mb-2">
+            <img src={fcLogo} alt="FounderConsole" className="h-10 w-auto" />
           </div>
 
           {status === 'loading' && (

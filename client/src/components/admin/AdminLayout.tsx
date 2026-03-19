@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
-import founderconsoleLogo from "@assets/generated_images/predixen_fintech_logo_icon.png";
+import founderconsoleLogo from "@assets/image_1773944058788.png";
 
 interface NavItem {
   title: string;
