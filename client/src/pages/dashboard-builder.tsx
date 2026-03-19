@@ -369,11 +369,13 @@ export default function DashboardBuilderPage() {
     widgets: Array.isArray(rawDashboard.widgets) ? rawDashboard.widgets : [],
   } : rawDashboard;
 
-  const { data: rawMetrics = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[]>({
+  const { data: rawMetricsData = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[] | any>({
     queryKey: [`/api/metrics?company_id=${currentCompany?.id}`],
     enabled: !!currentCompany,
   });
-  const metrics = Array.isArray(rawMetrics) ? rawMetrics : [];
+  const metrics: MetricDefinition[] = Array.isArray(rawMetricsData) ? rawMetricsData 
+    : (rawMetricsData && Array.isArray(rawMetricsData.items)) ? rawMetricsData.items 
+    : [];
 
   const initRef = useRef(false);
   useEffect(() => {
