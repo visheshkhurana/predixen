@@ -54,25 +54,48 @@ def get_rotating_from_email(index: int, sender_name: str = "FounderConsole Updat
 
 UPDATES_LATEST = [
     {
-        "title": "Smarter AI Copilot Responses",
-        "description": "The AI Copilot now understands conversational context. It remembers your last 10 messages, gives intelligent replies to greetings and follow-ups, and renders responses with proper formatting including bold text, bullet points, and tables."
+        "title": "Investor Data Room",
+        "description": "A brand new Data Room tab in the Investor Room lets you upload and organize documents by category — Finance, Legal, Product & Tech, GTM, HR, and more. Keep your due diligence materials organized and ready for investors at all times."
     },
     {
-        "title": "Instant Metric Lookups",
-        "description": "Use /fetch-metric followed by a metric name (mrr, runway, burn, cac, ltv, etc.) to instantly pull your latest data. The copilot now filters to exactly the metric you ask for."
+        "title": "Board Deck HTML Export",
+        "description": "Export your AI-generated Board Decks as HTML files, in addition to PDF. Import the HTML directly into Google Slides or PowerPoint for easy editing and customization before your next board meeting."
     },
     {
-        "title": "Inline Scenario Simulations",
-        "description": "Suggestion buttons like 'Run burn cut scenario' now run directly in your chat conversation instead of navigating you away. Get simulation insights without leaving the copilot."
+        "title": "AI-Estimated Value Badges",
+        "description": "Metrics estimated by AI are now clearly flagged with an 'Estimated' badge throughout the platform — in Truth Scan results, the Overview dashboard, and Board Decks. You always know which numbers come from your actual data and which were AI-inferred."
     },
     {
-        "title": "Better Error Handling",
-        "description": "When something goes wrong, the copilot now shows a clear, friendly error message right in the chat instead of failing silently. No more wondering if your question was received."
+        "title": "Cap Table Duplicate Prevention",
+        "description": "The Cap Table now automatically detects and prevents duplicate stakeholder entries. If you try to add a stakeholder that already exists (by name or email), you'll get a clear warning instead of creating duplicates."
     },
     {
-        "title": "Feedback with Comments",
-        "description": "The thumbs down button now lets you tell us what went wrong. An optional text field appears so you can share specific feedback to help us improve."
-    }
+        "title": "Cap Table Guided Onboarding",
+        "description": "New to cap tables? A step-by-step guided walkthrough now appears when you first visit the Cap Table, explaining how to add founders, investors, and option pools. Makes equity management approachable even if you've never managed a cap table before."
+    },
+    {
+        "title": "Use of Funds Pre-Population",
+        "description": "The Fundraising Prep section now pre-populates your Use of Funds breakdown using your actual financial data — headcount costs, R&D spend, sales & marketing, and more. No more starting from a blank slate."
+    },
+    {
+        "title": "Smarter AI Copilot",
+        "description": "The Copilot no longer floods you with repetitive data gap warnings. It now consolidates missing data into a single, concise summary and focuses on giving you actionable insights with the data you have."
+    },
+    {
+        "title": "Headcount Bug Fix",
+        "description": "Fixed an issue where headcount entered in Simple Mode wasn't properly flowing through to simulations, board decks, and other features. Your team size now accurately reflects everywhere across the platform.",
+        "type": "fix"
+    },
+    {
+        "title": "Improved Metric Propagation",
+        "description": "ARR, Gross Margin, and Churn Rate now reliably propagate from data input through Truth Scan to Board Decks, Simulations, and the Copilot. What you enter is what you see — everywhere.",
+        "type": "fix"
+    },
+    {
+        "title": "Investor Room Stability",
+        "description": "Fixed crashes that could occur when opening certain Investor Room tabs before generating materials. The Investor Room is now stable and accessible at all times, even before you've run your first analysis.",
+        "type": "fix"
+    },
 ]
 
 
@@ -119,7 +142,7 @@ async def send_update_to_specified_users(
     fail_count = 0
     failed_emails = []
     
-    subject = "FounderConsole - AI Copilot Upgrades & New Features"
+    subject = "FounderConsole — 10 New Features & Fixes Just Shipped"
     db = SessionLocal()
     
     try:

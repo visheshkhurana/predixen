@@ -800,16 +800,25 @@ def render_platform_update_template(
     for update in updates:
         title = update.get("title", "")
         description = update.get("description", "")
+        item_type = update.get("type", "feature")
+        if item_type == "fix":
+            icon_bg = COLORS['success']
+            icon_char = "&#128295;"
+            badge = f'<span style="display:inline-block;padding:1px 6px;background-color:#dcfce7;color:#166534;font-size:10px;font-weight:600;border-radius:4px;margin-left:8px;vertical-align:middle;text-transform:uppercase;">Bug Fix</span>'
+        else:
+            icon_bg = COLORS['primary']
+            icon_char = "&#10024;"
+            badge = f'<span style="display:inline-block;padding:1px 6px;background-color:#e0f2fe;color:#0369a1;font-size:10px;font-weight:600;border-radius:4px;margin-left:8px;vertical-align:middle;text-transform:uppercase;">New</span>'
         update_items_html += f"""
         <tr>
             <td style="padding: 16px 0; border-bottom: 1px solid {COLORS['gray_100']};">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td style="width: 24px; vertical-align: top; padding-right: 12px;">
-                            <div style="width: 24px; height: 24px; background-color: {COLORS['primary']}; border-radius: 50%; text-align: center; line-height: 24px; color: {COLORS['white']}; font-size: 14px; font-weight: 600;">&#10003;</div>
+                        <td style="width: 28px; vertical-align: top; padding-right: 12px;">
+                            <div style="width: 28px; height: 28px; background-color: {icon_bg}; border-radius: 50%; text-align: center; line-height: 28px; color: {COLORS['white']}; font-size: 14px;">{icon_char}</div>
                         </td>
                         <td style="vertical-align: top;">
-                            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">{title}</p>
+                            <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: {COLORS['navy']}; font-family: {FONT_STACK};">{title}{badge}</p>
                             <p style="margin: 0; font-size: 14px; color: {COLORS['gray_600']}; font-family: {FONT_STACK}; line-height: 1.5;">{description}</p>
                         </td>
                     </tr>
@@ -822,9 +831,9 @@ def render_platform_update_template(
     {get_header_html("Platform Updates")}
     <tr>
         <td class="body-content" style="padding: 40px;">
-            <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: {COLORS['navy']}; font-family: {FONT_STACK};">New Features & Updates</h1>
+            <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 700; color: {COLORS['navy']}; font-family: {FONT_STACK};">New Features & Bug Fixes</h1>
             <p style="margin: 0 0 24px 0; font-size: 16px; color: {COLORS['gray_600']}; line-height: 1.6; font-family: {FONT_STACK};">
-                We've been busy improving FounderConsole! Here's what's new in the last 24 hours:
+                We've been busy improving FounderConsole. Here's everything that just shipped:
             </p>
             
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
