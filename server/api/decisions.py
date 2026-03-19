@@ -152,6 +152,25 @@ def generate_decisions(
     db.commit()
     db.refresh(decision)
     
+    try:
+        from server.email.activity_triggers import trigger_decision_report_email
+        top_recs = []
+        if isinstance(recommendations, list):
+            for r in recommendations[:5]:
+                top_recs.append({
+                    "title": r.get("title", r.get("action", "Recommendation")),
+                    "composite_score": r.get("composite_score", r.get("score", 0)),
+                    "impact_summary": r.get("impact_summary", r.get("description", "")),
+                })
+        trigger_decision_report_email(
+            user_email=current_user.email,
+            company_name=company.name,
+            recommendations_count=len(recommendations) if isinstance(recommendations, list) else 0,
+            top_recommendations=top_recs,
+        )
+    except Exception as e:
+        logger.warning(f"Decision report email trigger failed: {e}")
+    
     return {
         "id": decision.id,
         "simulation_run_id": run_id,

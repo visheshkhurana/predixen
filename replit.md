@@ -39,6 +39,7 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
     -   **Founder Autopilot**: Daily automated risk detection and briefing generation, triggers monthly simulation accuracy computation.
     -   **Simulation Accuracy Tracker**: Compares past Monte Carlo predictions against actuals, computes accuracy scores, and provides an auto-calibration system.
     -   **AI Learning Loop**: Closed-loop feedback system for Copilot. Users rate responses (helpful/not helpful), feedback stored in `copilot_feedback` table, aggregated by `feedback_analyzer.py`, and injected into Copilot prompt via `learning_context.py`. Admin UI in 6th "AI Learning" tab of System Tools.
+    -   **Activity Email Triggers**: Automatic email reports sent when simulations complete (P10/P50/P90 runway results), documents are generated (board decks, investor memos, KPI reports), and decision recommendations are created (ranked action list with scores). Implemented via `server/email/activity_triggers.py` with background async sending.
     -   **Cross-Company Learning & Platform Intelligence**: Privacy-first benchmarking with anonymized data, enriching Intelligence Graph, Decision Engine, and Copilot context.
     -   **Startup Survival Simulator**: Free, public tool calculating survival probability using the Monte Carlo engine, with AI recommendations and shareable results.
 

@@ -1219,6 +1219,20 @@ def simulate_enhanced(
     engine = EnhancedSimulationEngine(inputs, seed=request.seed, company_id=company_id)
     result = engine.run_monte_carlo()
     
+    try:
+        from server.email.activity_triggers import trigger_simulation_report_email
+        trigger_simulation_report_email(
+            user_email=current_user.email,
+            company_name=company.name,
+            scenario_name=result.scenario_name or "Baseline",
+            runway=result.runway,
+            survival=result.survival,
+            n_simulations=result.n_simulations,
+            horizon_months=result.horizon_months,
+        )
+    except Exception as e:
+        logger.warning(f"Simulation report email trigger failed: {e}")
+    
     return {
         "scenario_key": result.scenario_key,
         "scenario_name": result.scenario_name,
@@ -1375,6 +1389,23 @@ def simulate_scenarios_enhanced(
             "key_drivers": [asdict(d) for d in wmbt_report.key_drivers],
             "recommendations": wmbt_report.recommendations
         }
+    
+    try:
+        from server.email.activity_triggers import trigger_simulation_report_email
+        best = all_results[0] if all_results else None
+        if best:
+            trigger_simulation_report_email(
+                user_email=current_user.email,
+                company_name=company.name,
+                scenario_name=best.scenario_name or "Multi-Scenario Analysis",
+                runway=best.runway,
+                survival=best.survival,
+                n_simulations=request.n_sims,
+                horizon_months=request.horizon_months,
+                comparison=comparison,
+            )
+    except Exception as e:
+        logger.warning(f"Multi-scenario simulation report email trigger failed: {e}")
     
     return {
         "scenarios": scenarios_output,

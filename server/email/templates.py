@@ -725,6 +725,230 @@ def render_copilot_pitch_template(
 
 
 # ---------------------------------------------------------------------------
+# Activity Report Templates (Simulation, Document, Decision)
+# ---------------------------------------------------------------------------
+
+def render_simulation_report_template(
+    company_name: str,
+    scenario_name: str,
+    runway: dict,
+    survival: dict,
+    n_simulations: int = 500,
+    horizon_months: int = 24,
+    comparison: list = None,
+) -> str:
+    p10 = runway.get("p10", "—")
+    p50 = runway.get("p50", "—")
+    p90 = runway.get("p90", "—")
+
+    surv_12 = survival.get("12m", survival.get("12", "—"))
+    surv_18 = survival.get("18m", survival.get("18", "—"))
+    surv_24 = survival.get("24m", survival.get("24", "—"))
+
+    def fmt_pct(v):
+        if isinstance(v, (int, float)):
+            return f"{v:.0f}%" if v > 1 else f"{v*100:.0f}%"
+        return str(v)
+
+    def fmt_mo(v):
+        if isinstance(v, (int, float)):
+            return f"{v:.0f}"
+        return str(v)
+
+    p50_status = "good" if isinstance(p50, (int, float)) and p50 >= 18 else "bad" if isinstance(p50, (int, float)) and p50 < 12 else "neutral"
+
+    comparison_html = ""
+    if comparison and len(comparison) > 1:
+        rows = ""
+        for c in comparison[:5]:
+            score = c.get("composite_score", 0)
+            score_display = f"{score:.0f}" if isinstance(score, (int, float)) else str(score)
+            rows += f"""
+            <tr>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {COLORS['border_light']}; font-size: 14px; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text dark-border">{c.get('name', '—')}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {COLORS['border_light']}; font-size: 14px; color: {COLORS['text']}; text-align: center; font-family: {FONT_STACK};" class="dark-text dark-border">{fmt_mo(c.get('runway_p50', '—'))} mo</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {COLORS['border_light']}; font-size: 14px; color: {COLORS['text']}; text-align: center; font-family: {FONT_STACK};" class="dark-text dark-border">{fmt_pct(c.get('survival_18m', '—'))}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {COLORS['border_light']}; font-size: 14px; color: {COLORS['primary']}; text-align: center; font-weight: 600; font-family: {FONT_STACK};">{score_display}</td>
+            </tr>"""
+
+        comparison_html = f"""
+            {get_divider()}
+            <h3 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text">Scenario Comparison</h3>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid {COLORS['border']}; border-radius: 8px; overflow: hidden;" class="dark-border">
+                <tr style="background-color: {COLORS['bg_subtle']};" class="dark-subtle-bg">
+                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {COLORS['muted']}; text-transform: uppercase; letter-spacing: 0.5px;" class="dark-muted">Scenario</td>
+                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {COLORS['muted']}; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;" class="dark-muted">Runway P50</td>
+                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {COLORS['muted']}; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;" class="dark-muted">Surv. 18m</td>
+                    <td style="padding: 8px 12px; font-size: 11px; font-weight: 600; color: {COLORS['muted']}; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;" class="dark-muted">Score</td>
+                </tr>
+                {rows}
+            </table>"""
+
+    sim_url = f"{APP_URL}/simulation"
+
+    content = f"""
+    {get_header_html("SIMULATION REPORT")}
+    <tr>
+        <td class="body-content" style="padding: 32px 40px 40px 40px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 600; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text">Simulation Complete</h2>
+            <p style="margin: 0 0 24px 0; font-size: 15px; color: {COLORS['muted']}; line-height: 1.6; font-family: {FONT_STACK};" class="dark-muted">
+                <strong style="color: {COLORS['text']};" class="dark-text">{scenario_name}</strong> for {company_name} &mdash; {n_simulations:,} Monte Carlo iterations over {horizon_months} months.
+            </p>
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 24px 0;">
+                <tr>
+                    {get_kpi_card("P10 Runway", f"{fmt_mo(p10)} mo", status="bad")}
+                    <td width="8"></td>
+                    {get_kpi_card("P50 Runway", f"{fmt_mo(p50)} mo", status=p50_status)}
+                    <td width="8"></td>
+                    {get_kpi_card("P90 Runway", f"{fmt_mo(p90)} mo", status="good")}
+                </tr>
+            </table>
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 0 0 24px 0;">
+                <tr>
+                    {get_kpi_card("Surv. 12m", fmt_pct(surv_12))}
+                    <td width="8"></td>
+                    {get_kpi_card("Surv. 18m", fmt_pct(surv_18))}
+                    <td width="8"></td>
+                    {get_kpi_card("Surv. 24m", fmt_pct(surv_24))}
+                </tr>
+            </table>
+
+            {get_callout_box(f"<strong>Tip:</strong> Adjust the burn rate slider by &minus;10% in the What-If Explorer and see how your P50 shifts. Most founders find 2&ndash;3 key levers that change everything.")}
+
+            {comparison_html}
+
+            {get_cta_row(sim_url, "View Full Results", f"{APP_URL}/decisions", "Get Recommendations")}
+        </td>
+    </tr>
+    {get_footer_html()}"""
+    return get_email_wrapper(content, preheader=f"P10/P50/P90 results are in for {company_name}. See your runway outlook.")
+
+
+def render_document_generated_template(
+    company_name: str,
+    doc_type: str,
+    doc_name: str,
+    sections_count: int = 0,
+    sections: list = None,
+) -> str:
+    doc_type_icons = {
+        "board-deck": "&#128203;",
+        "monthly-update": "&#128203;",
+        "fundraising-prep": "&#128188;",
+        "scenario-analysis": "&#128200;",
+        "financial-model": "&#128200;",
+        "investor-memo": "&#128188;",
+        "board-memo": "&#128196;",
+        "kpi-report": "&#128202;",
+        "pitch-deck-outline": "&#127916;",
+        "scenario-brief": "&#128209;",
+    }
+    icon = doc_type_icons.get(doc_type, "&#128196;")
+
+    sections_html = ""
+    if sections:
+        items = ""
+        for s in sections[:8]:
+            title = s.get("title", "") if isinstance(s, dict) else str(s)
+            items += get_check_item(title)
+        sections_html = get_info_card("Sections Included", items)
+
+    view_url = f"{APP_URL}/board-export" if "board" in doc_type or doc_type in ["monthly-update", "fundraising-prep", "scenario-analysis"] else f"{APP_URL}/doc-generator"
+
+    content = f"""
+    {get_header_html("DOCUMENT READY")}
+    <tr>
+        <td class="body-content" style="padding: 32px 40px 40px 40px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+                <tr>
+                    <td width="48" valign="top" style="padding-right: 14px;">
+                        <div style="width: 44px; height: 44px; background-color: {COLORS['primary_light']}; border-radius: 10px; text-align: center; line-height: 44px; font-size: 22px;">{icon}</div>
+                    </td>
+                    <td valign="middle">
+                        <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 600; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text">Your {doc_name} is Ready</h2>
+                        <p style="margin: 0; font-size: 14px; color: {COLORS['muted']}; font-family: {FONT_STACK};" class="dark-muted">Generated for {company_name}</p>
+                    </td>
+                </tr>
+            </table>
+
+            <p style="font-size: 15px; color: {COLORS['muted']}; margin: 0 0 20px 0; line-height: 1.6; font-family: {FONT_STACK};" class="dark-muted">
+                Your document has been generated with {sections_count} AI-powered sections using your latest financial data.
+            </p>
+
+            {sections_html}
+
+            {get_cta_row(view_url, "View Document", f"{APP_URL}/overview", "Go to Dashboard")}
+
+            {get_callout_box(f"<strong>Next step:</strong> Review and customize the AI-generated narratives, then export as PDF or share directly with your board or investors.")}
+        </td>
+    </tr>
+    {get_footer_html()}"""
+    return get_email_wrapper(content, preheader=f"Your {doc_name} for {company_name} is ready to review")
+
+
+def render_decision_report_template(
+    company_name: str,
+    recommendations_count: int = 0,
+    top_recommendations: list = None,
+) -> str:
+    recs_html = ""
+    if top_recommendations:
+        for i, rec in enumerate(top_recommendations[:5], 1):
+            title = rec.get("title", rec.get("action", "Recommendation"))
+            score = rec.get("composite_score", rec.get("score", 0))
+            impact = rec.get("impact_summary", rec.get("description", ""))
+
+            score_display = f"{score:.0f}" if isinstance(score, (int, float)) else str(score)
+
+            badge_color = COLORS['success'] if isinstance(score, (int, float)) and score >= 70 else COLORS['warning'] if isinstance(score, (int, float)) and score >= 40 else COLORS['danger']
+
+            recs_html += f"""
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border: 1px solid {COLORS['border']}; border-radius: 8px; margin-bottom: 10px;" class="dark-border">
+                <tr>
+                    <td style="padding: 16px;" class="mobile-pad">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                                <td valign="top" style="padding-right: 12px;">
+                                    <div style="width: 24px; height: 24px; background-color: {COLORS['primary']}; border-radius: 50%; text-align: center; line-height: 24px; color: {COLORS['white']}; font-size: 12px; font-weight: 600; font-family: {FONT_STACK};">{i}</div>
+                                </td>
+                                <td valign="top" style="width: 100%;">
+                                    <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text">{title}</p>
+                                    <p style="margin: 0; font-size: 13px; color: {COLORS['muted']}; line-height: 1.5; font-family: {FONT_STACK};" class="dark-muted">{impact[:120]}{"..." if len(impact) > 120 else ""}</p>
+                                </td>
+                                <td valign="top" style="padding-left: 12px; white-space: nowrap;">
+                                    <span style="display: inline-block; padding: 4px 10px; background-color: {badge_color}; color: {COLORS['white']}; border-radius: 4px; font-size: 12px; font-weight: 600; font-family: {FONT_STACK};">{score_display}</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>"""
+
+    decisions_url = f"{APP_URL}/decisions"
+
+    content = f"""
+    {get_header_html("DECISION REPORT")}
+    <tr>
+        <td class="body-content" style="padding: 32px 40px 40px 40px;">
+            <h2 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 600; color: {COLORS['text']}; font-family: {FONT_STACK};" class="dark-text">Decision Recommendations Ready</h2>
+            <p style="margin: 0 0 24px 0; font-size: 15px; color: {COLORS['muted']}; line-height: 1.6; font-family: {FONT_STACK};" class="dark-muted">
+                {recommendations_count} AI-ranked recommendation{"s" if recommendations_count != 1 else ""} generated for <strong style="color: {COLORS['text']};" class="dark-text">{company_name}</strong>, scored by survival probability, growth impact, and risk.
+            </p>
+
+            {recs_html}
+
+            {get_cta_row(decisions_url, "View All Recommendations", f"{APP_URL}/simulation", "Run New Simulation")}
+
+            {get_callout_box("<strong>How scoring works:</strong> Each recommendation is evaluated across survival rate improvement (45%), runway extension (20%), efficiency gains (15%), and growth impact (20%), with risk penalties applied.")}
+        </td>
+    </tr>
+    {get_footer_html()}"""
+    return get_email_wrapper(content, preheader=f"{recommendations_count} decision recommendations ready for {company_name}")
+
+
+# ---------------------------------------------------------------------------
 # Template Config Registry
 # ---------------------------------------------------------------------------
 
@@ -777,7 +1001,28 @@ TEMPLATE_CONFIGS = {
         "variables": ["updates", "app_url"],
         "subject": "FounderConsole — New Features & Fixes Just Shipped",
         "render_fn": "render_platform_update_template"
-    }
+    },
+    "simulation_report": {
+        "name": "Simulation Report",
+        "description": "Sent after a Monte Carlo simulation completes",
+        "variables": ["company_name", "scenario_name", "runway", "survival", "n_simulations", "horizon_months"],
+        "subject": "Simulation Complete — {scenario_name} Results Ready",
+        "render_fn": "render_simulation_report_template"
+    },
+    "document_generated": {
+        "name": "Document Generated",
+        "description": "Sent after a board deck or document is generated",
+        "variables": ["company_name", "doc_type", "doc_name", "sections_count"],
+        "subject": "Your {doc_name} is Ready",
+        "render_fn": "render_document_generated_template"
+    },
+    "decision_report": {
+        "name": "Decision Report",
+        "description": "Sent after AI decision recommendations are generated",
+        "variables": ["company_name", "recommendations_count", "top_recommendations"],
+        "subject": "Decision Recommendations Ready for {company_name}",
+        "render_fn": "render_decision_report_template"
+    },
 }
 
 
@@ -815,7 +1060,35 @@ def get_template_preview(template_type: str) -> Optional[str]:
                 {"title": "Headcount Bug Fix", "description": "Fixed headcount not propagating from Simple Mode.", "type": "fix"},
             ],
             "app_url": "https://founderconsole.ai"
-        }
+        },
+        "simulation_report": {
+            "company_name": "Acme Corp",
+            "scenario_name": "Baseline",
+            "runway": {"p10": 8, "p50": 14, "p90": 22},
+            "survival": {"12m": 72, "18m": 55, "24m": 38},
+            "n_simulations": 500,
+            "horizon_months": 24,
+        },
+        "document_generated": {
+            "company_name": "Acme Corp",
+            "doc_type": "monthly-update",
+            "doc_name": "Monthly Board Update",
+            "sections_count": 6,
+            "sections": [
+                {"title": "Key Metrics Overview"},
+                {"title": "Revenue & Burn Trend"},
+                {"title": "Executive Summary"},
+            ],
+        },
+        "decision_report": {
+            "company_name": "Acme Corp",
+            "recommendations_count": 3,
+            "top_recommendations": [
+                {"title": "Reduce SaaS Tool Spend", "composite_score": 82, "impact_summary": "Cut $12K/mo in redundant tools. Extends runway by 2 months."},
+                {"title": "Accelerate Enterprise Sales", "composite_score": 71, "impact_summary": "Focus on 3 high-value deals in pipeline to increase MRR by 15%."},
+                {"title": "Defer Hiring Plan by 60 Days", "composite_score": 65, "impact_summary": "Postpone 2 engineering hires. Saves $30K/mo with minimal velocity impact."},
+            ],
+        },
     }
 
     renderers = {
@@ -826,6 +1099,9 @@ def get_template_preview(template_type: str) -> Optional[str]:
         "app_overview": render_app_overview_template,
         "copilot_pitch": render_copilot_pitch_template,
         "platform_update": render_platform_update_template,
+        "simulation_report": render_simulation_report_template,
+        "document_generated": render_document_generated_template,
+        "decision_report": render_decision_report_template,
     }
 
     if template_type in renderers and template_type in sample_data:

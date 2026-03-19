@@ -335,6 +335,19 @@ def generate_document(
                 "has_web_research": False,
             })
 
+    try:
+        from server.email.activity_triggers import trigger_document_generated_email
+        trigger_document_generated_email(
+            user_email=current_user.email,
+            company_name=company.name,
+            doc_type=request.doc_type,
+            doc_name=doc_config["name"],
+            sections_count=len(sections_result),
+            sections=[{"title": s["title"]} for s in sections_result],
+        )
+    except Exception as e:
+        logger.warning(f"Doc generator email trigger failed: {e}")
+
     return {
         "doc_type": doc_config,
         "sections": sections_result,

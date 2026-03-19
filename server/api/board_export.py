@@ -405,6 +405,19 @@ def generate_board_export(
 
         sections_result.append(section_out)
 
+    try:
+        from server.email.activity_triggers import trigger_document_generated_email
+        trigger_document_generated_email(
+            user_email=current_user.email,
+            company_name=company.name,
+            doc_type=request.templateId,
+            doc_name=template["name"],
+            sections_count=len(sections_result),
+            sections=[{"title": s["title"]} for s in sections_result],
+        )
+    except Exception as e:
+        logger.warning(f"Board export email trigger failed: {e}")
+
     return {
         "template": template,
         "sections": sections_result,
