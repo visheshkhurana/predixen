@@ -3,14 +3,32 @@ Email service using Resend for transactional emails.
 Handles invite emails, welcome emails, and other platform notifications.
 Uses Replit Connectors API to fetch Resend credentials.
 Also includes Slack webhook notifications for signup events.
+
+Platform/transactional emails use only founderconsole.* domains.
+Outreach/update emails rotate across all verified domains (see send_update_emails.py).
 """
 import os
 import resend
 import asyncio
 import httpx
 import logging
+import random
 from typing import Optional, Tuple
 from datetime import datetime
+
+
+PLATFORM_DOMAINS = [
+    "founderconsole.ai",
+    "founderconsole.co",
+    "founderconsole.com",
+    "founderconsole.in",
+    "founderconsole.info",
+    "founderconsole.net",
+    "founderconsole.shop",
+    "updates.founderconsole.ai",
+]
+
+_platform_domain_counter = 0
 
 _slack_logger = logging.getLogger("slack_notifications")
 
@@ -103,21 +121,27 @@ def get_resend_api_key() -> Optional[str]:
     return creds.get("api_key") if creds else None
 
 
+def _get_next_platform_domain() -> str:
+    """Get the next founderconsole domain in rotation for platform emails."""
+    global _platform_domain_counter
+    domain = PLATFORM_DOMAINS[_platform_domain_counter % len(PLATFORM_DOMAINS)]
+    _platform_domain_counter += 1
+    return domain
+
+
 def get_from_email() -> str:
-    """Get the default from email address for updates and notifications."""
-    creds = get_resend_credentials()
-    verified_email = creds.get("from_email", "noreply@founderconsole.ai") if creds else "noreply@founderconsole.ai"
-    return f"FounderConsole <{verified_email}>"
+    """Get a from email address for platform notifications, rotating across founderconsole.* domains."""
+    domain = _get_next_platform_domain()
+    return f"FounderConsole <noreply@{domain}>"
 
 
 def get_transactional_from_email() -> str:
-    """Get the transactional from email address for user-triggered emails (invites, shares, resets)."""
+    """Get a from email address for transactional emails (invites, resets, etc.), rotating across founderconsole.* domains."""
     env_override = os.getenv("RESEND_TRANSACTIONAL_FROM")
     if env_override:
         return env_override
-    creds = get_resend_credentials()
-    verified_email = creds.get("from_email", "noreply@founderconsole.ai") if creds else "noreply@founderconsole.ai"
-    return f"FounderConsole <{verified_email}>"
+    domain = _get_next_platform_domain()
+    return f"FounderConsole <noreply@{domain}>"
 
 
 def is_email_configured() -> bool:

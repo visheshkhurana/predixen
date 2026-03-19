@@ -17,7 +17,7 @@ from sqlalchemy import text
 from datetime import datetime
 
 
-VERIFIED_DOMAINS = [
+ALL_VERIFIED_DOMAINS = [
     "founderconsole.ai",
     "founderconsole.co",
     "founderconsole.com",
@@ -42,12 +42,12 @@ VERIFIED_DOMAINS = [
 
 
 def get_rotating_from_email(index: int, sender_name: str = "FounderConsole Updates") -> str:
-    """Get a from email address that rotates across all verified domains.
+    """Get a from email address that rotates across ALL verified domains.
     
-    Each call with a different index returns a different domain,
-    cycling through all verified domains to distribute sending load.
+    Used for outreach/update/pitch emails — distributes sending load
+    across all 20 domains (founderconsole, predixen, kpibeacon, runora).
     """
-    domain = VERIFIED_DOMAINS[index % len(VERIFIED_DOMAINS)]
+    domain = ALL_VERIFIED_DOMAINS[index % len(ALL_VERIFIED_DOMAINS)]
     local_part = f"updates{index + 1}"
     return f"{sender_name} <{local_part}@{domain}>"
 
@@ -110,7 +110,7 @@ async def send_update_to_specified_users(
     
     template_type = "text-only with tracking pixel" if use_text_only else "HTML"
     if rotate_domains:
-        print(f"Sending {template_type} updates to {len(emails)} addresses with domain rotation across {len(VERIFIED_DOMAINS)} domains")
+        print(f"Sending {template_type} updates to {len(emails)} addresses with domain rotation across {len(ALL_VERIFIED_DOMAINS)} domains")
     else:
         effective_from = from_email or get_rotating_from_email(0, sender_name)
         print(f"Sending {template_type} updates to {len(emails)} addresses using sender: {effective_from}")
@@ -180,7 +180,7 @@ async def send_update_to_specified_users(
             await asyncio.sleep(2)
             
             for email, tracking_id, orig_idx in failed_emails:
-                retry_from = get_rotating_from_email(orig_idx + len(VERIFIED_DOMAINS), sender_name)
+                retry_from = get_rotating_from_email(orig_idx + len(ALL_VERIFIED_DOMAINS), sender_name)
                 print(f"Retry: {email} via {retry_from.split('<')[1].rstrip('>')}...")
                 
                 if use_text_only:
@@ -467,7 +467,7 @@ async def send_pitch_emails(
     random.shuffle(emails)
     
     if rotate_domains:
-        print(f"Sending pitch emails to {len(emails)} addresses with domain rotation across {len(VERIFIED_DOMAINS)} domains")
+        print(f"Sending pitch emails to {len(emails)} addresses with domain rotation across {len(ALL_VERIFIED_DOMAINS)} domains")
     else:
         effective_from = from_email or get_rotating_from_email(0, sender_name)
         print(f"Sending pitch emails to {len(emails)} addresses using sender: {effective_from}")
