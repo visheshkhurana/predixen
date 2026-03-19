@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import uuid
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -14,6 +15,41 @@ from server.email.templates import render_platform_update_template, render_text_
 from server.core.db import SessionLocal
 from sqlalchemy import text
 from datetime import datetime
+
+
+VERIFIED_DOMAINS = [
+    "founderconsole.ai",
+    "founderconsole.co",
+    "founderconsole.com",
+    "founderconsole.in",
+    "founderconsole.info",
+    "founderconsole.net",
+    "founderconsole.shop",
+    "updates.founderconsole.ai",
+    "predixen.app",
+    "predixen.in",
+    "predixen.me",
+    "predixen.email",
+    "updates.predixen.me",
+    "kpibeacon.ai",
+    "kpibeacon.com",
+    "runora.xyz",
+    "runora.in",
+    "runora.me",
+    "runoraai.co",
+    "runoraai.com",
+]
+
+
+def get_rotating_from_email(index: int, sender_name: str = "FounderConsole Updates") -> str:
+    """Get a from email address that rotates across all verified domains.
+    
+    Each call with a different index returns a different domain,
+    cycling through all verified domains to distribute sending load.
+    """
+    domain = VERIFIED_DOMAINS[index % len(VERIFIED_DOMAINS)]
+    local_part = f"updates{index + 1}"
+    return f"{sender_name} <{local_part}@{domain}>"
 
 
 UPDATES_LATEST = [
@@ -54,18 +90,30 @@ def get_all_user_emails():
 async def send_update_to_specified_users(
     emails: list,
     updates: list,
-    from_email: str = "FounderConsole Updates <newchanges5@founderconsole.ai>",
-    use_text_only: bool = False
+    from_email: str = None,
+    use_text_only: bool = False,
+    rotate_domains: bool = True,
+    sender_name: str = "FounderConsole Updates"
 ):
-    """Send platform update email to specified users."""
+    """Send platform update email to specified users with domain rotation.
+    
+    When rotate_domains=True (default), each email is sent from a different
+    verified domain to distribute sending load across all 20 domains.
+    """
     if not is_email_configured():
         print("Email service not configured. Please set up Resend integration.")
         return {"success": 0, "failed": len(emails)}
     
     app_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     
+    random.shuffle(emails)
+    
     template_type = "text-only with tracking pixel" if use_text_only else "HTML"
-    print(f"Sending {template_type} updates to {len(emails)} addresses using sender: {from_email}")
+    if rotate_domains:
+        print(f"Sending {template_type} updates to {len(emails)} addresses with domain rotation across {len(VERIFIED_DOMAINS)} domains")
+    else:
+        effective_from = from_email or get_rotating_from_email(0, sender_name)
+        print(f"Sending {template_type} updates to {len(emails)} addresses using sender: {effective_from}")
     
     success_count = 0
     fail_count = 0
@@ -75,8 +123,13 @@ async def send_update_to_specified_users(
     db = SessionLocal()
     
     try:
-        for email in emails:
+        for i, email in enumerate(emails):
             tracking_id = str(uuid.uuid4())
+            
+            if rotate_domains:
+                current_from = get_rotating_from_email(i, sender_name)
+            else:
+                current_from = from_email or get_rotating_from_email(0, sender_name)
             
             if use_text_only:
                 html_content = render_text_only_update_template(
@@ -102,23 +155,23 @@ async def send_update_to_specified_users(
             })
             db.commit()
             
-            print(f"Sending to {email} (tracking: {tracking_id[:8]}...)...")
+            print(f"[{i+1}/{len(emails)}] Sending to {email} via {current_from.split('<')[1].rstrip('>')} ...")
             try:
                 result = await send_email(
                     to=email,
                     subject=subject,
                     html_content=html_content,
-                    from_email=from_email
+                    from_email=current_from
                 )
                 if result.get("success"):
-                    print(f"  Sent successfully to {email}")
+                    print(f"  Sent successfully")
                     success_count += 1
                 else:
                     print(f"  Failed: {result.get('error', 'Unknown error')}")
-                    failed_emails.append((email, tracking_id))
+                    failed_emails.append((email, tracking_id, i))
             except Exception as e:
                 print(f"  Error: {str(e)}")
-                failed_emails.append((email, tracking_id))
+                failed_emails.append((email, tracking_id, i))
             
             await asyncio.sleep(0.6)
         
@@ -126,8 +179,9 @@ async def send_update_to_specified_users(
             print(f"\nRetrying {len(failed_emails)} failed emails after delay...")
             await asyncio.sleep(2)
             
-            for email, tracking_id in failed_emails:
-                print(f"Retry: {email}...")
+            for email, tracking_id, orig_idx in failed_emails:
+                retry_from = get_rotating_from_email(orig_idx + len(VERIFIED_DOMAINS), sender_name)
+                print(f"Retry: {email} via {retry_from.split('<')[1].rstrip('>')}...")
                 
                 if use_text_only:
                     html_content = render_text_only_update_template(
@@ -146,10 +200,10 @@ async def send_update_to_specified_users(
                         to=email,
                         subject=subject,
                         html_content=html_content,
-                        from_email=from_email
+                        from_email=retry_from
                     )
                     if result.get("success"):
-                        print(f"  Sent successfully to {email}")
+                        print(f"  Sent successfully")
                         success_count += 1
                     else:
                         print(f"  Failed: {result.get('error', 'Unknown error')}")
@@ -162,7 +216,7 @@ async def send_update_to_specified_users(
     finally:
         db.close()
     
-    print(f"\nComplete: {success_count} sent, {fail_count} failed")
+    print(f"\nComplete: {success_count} sent, {fail_count} failed out of {len(emails)} total")
     return {"success": success_count, "failed": fail_count}
 
 
@@ -399,16 +453,24 @@ def render_pitch_email_template(app_url: str, tracking_id: str) -> str:
 
 async def send_pitch_emails(
     emails: list,
-    from_email: str = "FounderConsole <new@founderconsole.ai>"
+    from_email: str = None,
+    rotate_domains: bool = True,
+    sender_name: str = "FounderConsole"
 ):
-    """Send pitch emails to specified users."""
+    """Send pitch emails to specified users with domain rotation."""
     if not is_email_configured():
         print("Email service not configured. Please set up Resend integration.")
         return {"success": 0, "failed": len(emails)}
     
     app_url = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
     
-    print(f"Sending pitch emails to {len(emails)} addresses using sender: {from_email}")
+    random.shuffle(emails)
+    
+    if rotate_domains:
+        print(f"Sending pitch emails to {len(emails)} addresses with domain rotation across {len(VERIFIED_DOMAINS)} domains")
+    else:
+        effective_from = from_email or get_rotating_from_email(0, sender_name)
+        print(f"Sending pitch emails to {len(emails)} addresses using sender: {effective_from}")
     
     success_count = 0
     fail_count = 0
@@ -417,8 +479,13 @@ async def send_pitch_emails(
     db = SessionLocal()
     
     try:
-        for email in emails:
+        for i, email in enumerate(emails):
             tracking_id = str(uuid.uuid4())
+            
+            if rotate_domains:
+                current_from = get_rotating_from_email(i, sender_name)
+            else:
+                current_from = from_email or get_rotating_from_email(0, sender_name)
             
             html_content = render_pitch_email_template(
                 app_url=app_url,
@@ -437,16 +504,16 @@ async def send_pitch_emails(
             })
             db.commit()
             
-            print(f"Sending pitch to {email}...")
+            print(f"[{i+1}/{len(emails)}] Sending pitch to {email} via {current_from.split('<')[1].rstrip('>')}...")
             try:
                 result = await send_email(
                     to=email,
                     subject=subject,
                     html_content=html_content,
-                    from_email=from_email
+                    from_email=current_from
                 )
                 if result.get("success"):
-                    print(f"  Sent successfully to {email}")
+                    print(f"  Sent successfully")
                     success_count += 1
                 else:
                     print(f"  Failed: {result.get('error', 'Unknown error')}")
@@ -459,12 +526,12 @@ async def send_pitch_emails(
     finally:
         db.close()
     
-    print(f"\nComplete: {success_count} sent, {fail_count} failed")
+    print(f"\nComplete: {success_count} sent, {fail_count} failed out of {len(emails)} total")
     return {"success": success_count, "failed": fail_count}
 
 
 async def main():
-    """Main entry point for sending update emails."""
+    """Main entry point for sending update emails with domain rotation."""
     emails = get_all_user_emails()
     if not emails:
         emails = [
@@ -474,12 +541,10 @@ async def main():
             "vysheshk@gmail.com"
         ]
     
-    from_email = "FounderConsole Updates <newchanges23@founderconsole.ai>"
-    
     return await send_update_to_specified_users(
         emails=emails,
         updates=UPDATES_LATEST,
-        from_email=from_email,
+        rotate_domains=True,
         use_text_only=False
     )
 
