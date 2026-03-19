@@ -35,6 +35,28 @@ export function calculateRunway(state: FinancialState): number {
   return Math.min(runway, RUNWAY_SUSTAINABLE);
 }
 
+export function calculateStressedRunway(
+  state: FinancialState,
+  durationMonths: number = 24
+): number {
+  let cash = state.cashBalance;
+  let revenue = state.monthlyRevenue;
+  const growthRate = (state.growthRate || 0) / 100;
+  const churnRate = (state.churnRate || 0) / 100;
+  const grossMargin = state.grossMargin / 100;
+  const totalExpenses = state.opex + state.payroll + state.otherCosts;
+
+  for (let m = 0; m < durationMonths; m++) {
+    const grossProfit = revenue * grossMargin;
+    const netBurn = totalExpenses - grossProfit;
+    cash -= netBurn;
+    if (cash <= 0) return m;
+    revenue *= (1 + growthRate - churnRate);
+    if (revenue < 0) revenue = 0;
+  }
+  return cash > 0 ? RUNWAY_SUSTAINABLE : durationMonths;
+}
+
 export function formatRunwayDisplay(months: number): string {
   if (months >= RUNWAY_SUSTAINABLE) return 'Sustainable';
   if (months >= RUNWAY_DISPLAY_CAP) return '120+ mo';

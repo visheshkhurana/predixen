@@ -1156,7 +1156,7 @@ export default function ScenariosPage() {
           <p className="text-muted-foreground mt-1">
             {founderMode
               ? 'Focused view showing only what matters most'
-              : 'Ask a question about your startup\'s future and see what happens'}
+              : 'Describe a scenario and we\'ll simulate 1,000 outcomes to show your probability distribution'}
           </p>
         </div>
 
@@ -1493,7 +1493,7 @@ export default function ScenariosPage() {
         {(isCreating || isRunning) && (
           <div className="text-center py-12">
             <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground font-medium">Running 1,000 Monte Carlo simulations...</p>
+            <p className="text-muted-foreground font-medium">Simulating 1,000 scenarios... Analyzing probability distributions across revenue, burn, and runway.</p>
             <p className="text-sm text-muted-foreground mt-1">This usually takes a few seconds</p>
           </div>
         )}

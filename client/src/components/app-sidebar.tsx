@@ -128,22 +128,26 @@ function HealthScoreCard() {
       className="mx-3 rounded-md p-3 border border-primary/20"
       style={{ background: "linear-gradient(135deg, hsl(217 91% 60% / 0.08), hsl(271 81% 56% / 0.08))" }}
     >
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-xs font-medium text-muted-foreground">Business Health</span>
-        <span className={cn("text-sm font-bold font-mono", healthScore !== null ? getHealthColor(healthScore) : "text-muted-foreground")} data-testid="text-health-score">
-          {healthScore !== null ? `${healthScore}/100` : "N/A"}
-        </span>
-      </div>
-      <Progress
-        value={healthScore ?? 0}
-        className={cn("h-1.5 bg-muted/40", healthScore !== null ? getProgressColor(healthScore) : "")}
-      />
-      <div className="flex items-center justify-between gap-2 mt-2">
-        <span className="text-[11px] text-muted-foreground">Data Confidence</span>
-        <span className="text-[11px] font-medium text-muted-foreground font-mono" data-testid="text-data-confidence">
-          {hasData ? `${confidence}%` : "N/A"}
-        </span>
-      </div>
+      <Link href="/truth">
+        <div className="flex items-center justify-between gap-2 mb-1.5 cursor-pointer hover:opacity-80 transition-opacity">
+          <span className="text-xs font-medium text-muted-foreground">Business Health</span>
+          <span className={cn("text-sm font-bold font-mono", healthScore !== null ? getHealthColor(healthScore) : "text-muted-foreground")} data-testid="text-health-score">
+            {healthScore !== null ? `${healthScore}/100` : "N/A"}
+          </span>
+        </div>
+        <Progress
+          value={healthScore ?? 0}
+          className={cn("h-1.5 bg-muted/40", healthScore !== null ? getProgressColor(healthScore) : "")}
+        />
+      </Link>
+      <Link href="/data">
+        <div className="flex items-center justify-between gap-2 mt-2 cursor-pointer hover:opacity-80 transition-opacity">
+          <span className="text-[11px] text-muted-foreground">Data Confidence</span>
+          <span className="text-[11px] font-medium text-muted-foreground font-mono" data-testid="text-data-confidence">
+            {hasData ? `${confidence}%` : "N/A"}
+          </span>
+        </div>
+      </Link>
     </div>
   );
 }

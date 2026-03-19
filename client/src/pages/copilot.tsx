@@ -1130,7 +1130,7 @@ export default function CopilotPage() {
   
   const createDefaultMessage = (): Message => ({
     role: 'assistant',
-    content: "I'm your AI financial advisor powered by a multi-agent system. I can analyze your financials (CFO Agent), research your market (Market Agent), and develop strategy (Strategy Agent). What would you like to explore?",
+    content: "I'm your AI co-pilot for financial decisions. Ask me about your runway, fundraising timing, hiring plans, or any 'what if' scenario — I'll pull from your real data to give you actionable answers.",
     timestamp: new Date(),
   });
   
@@ -1958,7 +1958,7 @@ Type **help** for a full list of what I can do.`,
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2" data-testid="banner-ai-disclaimer">
           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            AI insights are informational only. Verify with financial advisors before making decisions.
+            AI-powered analysis based on your data. Always validate critical decisions with your advisors.
           </p>
         </div>
 

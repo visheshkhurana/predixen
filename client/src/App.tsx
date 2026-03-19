@@ -20,7 +20,7 @@ import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
-import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical } from "lucide-react";
+import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,6 +106,7 @@ import DocGeneratorPage from "@/pages/doc-generator";
 import DigitalTwinPage from "@/pages/digital-twin";
 import IntelligenceGraphPage from "@/pages/intelligence-graph";
 import SurvivalSimulatorPage from "@/pages/survival-simulator";
+import SettingsPage from "@/pages/settings";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -403,6 +404,12 @@ function Router() {
       </Route>
       <Route path="/intelligence">
         {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
+      </Route>
+      <Route path="/settings">
+        {() => <AuthenticatedRoute component={SettingsPage} allowWithoutCompany />}
+      </Route>
+      <Route path="/profile">
+        {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/billing">
         {() => <Redirect to="/admin/billing" />}
@@ -777,6 +784,39 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="hidden sm:inline">Briefing</span>
               </Button>
               {getConfidenceBadge()}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="shrink-0 rounded-full" data-testid="button-user-avatar">
+                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                      {user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <p className="text-sm font-medium truncate">{user?.email || 'Account'}</p>
+                    <p className="text-xs text-muted-foreground">{user?.role || 'Member'}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/settings')} data-testid="menu-item-settings">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                    onClick={async () => {
+                      try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+                      useFounderStore.getState().logout();
+                      window.location.href = '/auth';
+                    }}
+                    data-testid="menu-item-logout"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
           <Dialog open={briefingOpen} onOpenChange={setBriefingOpen}>

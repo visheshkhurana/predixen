@@ -127,7 +127,7 @@ const METRIC_DISPLAY_NAMES: Record<string, string> = {
 const DEFAULT_ALERT_RULES: AlertRule[] = [
   { id: "burn-spike", type: "burn_spike", enabled: true, threshold: 15, label: "Burn Spike", description: "Alert when monthly burn increases by more than threshold %" },
   { id: "mrr-drop", type: "mrr_drop", enabled: true, threshold: 5, label: "MRR Drop", description: "Alert when MRR drops by more than threshold %" },
-  { id: "churn-spike", type: "churn_spike", enabled: true, threshold: 50, label: "Churn Spike", description: "Alert when churn increases by more than threshold %" },
+  { id: "churn-spike", type: "churn_spike", enabled: true, threshold: 10, label: "Churn Spike", description: "Alert when churn increases by more than threshold %" },
   { id: "runway-warning", type: "runway_warning", enabled: true, threshold: 12, label: "Runway Warning", description: "Alert when runway drops below threshold months" },
   { id: "runway-caution", type: "runway_caution", enabled: true, threshold: 18, label: "Runway Caution", description: "Alert when runway drops below threshold months" },
   { id: "growth-slowdown", type: "growth_slowdown", enabled: true, threshold: 30, label: "Growth Slowdown", description: "Alert when growth rate drops by more than threshold %" },

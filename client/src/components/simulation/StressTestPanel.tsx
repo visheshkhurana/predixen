@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FlaskConical, TrendingDown, AlertCircle, Snowflake, Users, Swords, Pause, ArrowRight } from 'lucide-react';
 import { stressTestTemplates, StressTestTemplate, applyStressTest } from '@/lib/simulation/stressTestTemplates';
-import { calculateRunway, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
+import { calculateRunway, calculateStressedRunway, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
 import { cn } from '@/lib/utils';
 
 interface StressTestPanelProps {
@@ -50,7 +50,12 @@ export function StressTestPanel({
     const results: Record<string, number> = {};
     stressTestTemplates.forEach(template => {
       const stressedState = applyStressTest(currentState, template);
-      results[template.id] = calculateRunway(stressedState);
+      const simpleRunway = calculateRunway(stressedState);
+      if (simpleRunway >= 900) {
+        results[template.id] = calculateStressedRunway(stressedState, template.duration || 24);
+      } else {
+        results[template.id] = simpleRunway;
+      }
     });
     return results;
   }, [currentState]);

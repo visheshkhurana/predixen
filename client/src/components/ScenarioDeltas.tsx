@@ -974,7 +974,7 @@ function CounterMoveCard({
                 className="text-xs font-medium text-primary hover:underline py-1"
                 data-testid={`button-apply-counter-move-${move.id}`}
               >
-                Apply this counter-move
+                Run this scenario
               </button>
             )}
             {onShare && (

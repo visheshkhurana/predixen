@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
+import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -414,32 +415,40 @@ export default function CapTablePage() {
 
   const pieData = useMemo(() => {
     if (ownershipView === 'by_class' && viewData?.classes) {
-      return viewData.classes.map((c: any) => ({
-        name: c.share_class + (c.series ? ` (${c.series})` : ''),
-        value: c.percent,
-        shares: c.total_shares,
-      }));
+      return viewData.classes
+        .filter((c: any) => c.percent > 0)
+        .map((c: any) => ({
+          name: c.share_class + (c.series ? ` (${c.series})` : ''),
+          value: c.percent,
+          shares: c.total_shares,
+        }));
     }
     if (ownershipView === 'as_converted' && viewData?.as_converted) {
-      return viewData.as_converted.map((v: any) => ({
-        name: v.name,
-        value: v.percent,
-        shares: v.converted_shares,
-      }));
+      return viewData.as_converted
+        .filter((v: any) => v.percent > 0)
+        .map((v: any) => ({
+          name: v.name,
+          value: v.percent,
+          shares: v.converted_shares,
+        }));
     }
     if (ownershipView === 'as_exercised' && viewData?.as_exercised) {
-      return viewData.as_exercised.map((v: any) => ({
-        name: v.name,
-        value: v.percent,
-        shares: v.total_shares,
-      }));
+      return viewData.as_exercised
+        .filter((v: any) => v.percent > 0)
+        .map((v: any) => ({
+          name: v.name,
+          value: v.percent,
+          shares: v.total_shares,
+        }));
     }
     if (!summary?.ownership?.length) return [];
-    return summary.ownership.map((o: OwnershipEntry) => ({
-      name: o.name,
-      value: o.ownership_percent,
-      shares: o.total_fully_diluted,
-    }));
+    return summary.ownership
+      .filter((o: OwnershipEntry) => o.ownership_percent > 0)
+      .map((o: OwnershipEntry) => ({
+        name: o.name,
+        value: o.ownership_percent,
+        shares: o.total_fully_diluted,
+      }));
   }, [summary, ownershipView, viewData]);
 
   const handleSort = (col: string) => {
@@ -1051,12 +1060,12 @@ export default function CapTablePage() {
                       {shareholders.map((sh: ShareholderData) => {
                         const ownershipEntry = summary?.ownership?.find((o: OwnershipEntry) => o.shareholder_id === sh.id);
                         const isExpanded = expandedShareholder === sh.id;
+                        const hasZeroOwnership = !ownershipEntry || ownershipEntry.ownership_percent === 0;
                         return (
-                          <>
+                          <Fragment key={sh.id}>
                             <TableRow
-                              key={sh.id}
                               data-testid={`row-stakeholder-${sh.id}`}
-                              className="cursor-pointer"
+                              className={cn("cursor-pointer", hasZeroOwnership && "opacity-50")}
                               onClick={() => setExpandedShareholder(isExpanded ? null : sh.id)}
                             >
                               <TableCell className="font-medium">{sh.name}</TableCell>
@@ -1114,7 +1123,7 @@ export default function CapTablePage() {
                                 </TableCell>
                               </TableRow>
                             )}
-                          </>
+                          </Fragment>
                         );
                       })}
                     </TableBody>

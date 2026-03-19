@@ -10,9 +10,12 @@ import { getErrorMessage } from '@/lib/errors';
 import { Calendar, FileText, Loader2, CheckCircle } from 'lucide-react';
 
 interface RaiseWindowData {
-  optimal_start_month: number;
-  optimal_end_month: number;
-  estimated_duration_months: number;
+  optimal_start_month?: number;
+  optimal_end_month?: number;
+  estimated_duration_months?: number;
+  optimalStartMonth?: number;
+  optimalEndMonth?: number;
+  estimatedDurationMonths?: number;
 }
 
 const timelineSteps = [
@@ -24,12 +27,20 @@ const timelineSteps = [
 ];
 
 function getMonthName(monthOffset: number): string {
+  if (monthOffset == null || isNaN(monthOffset)) return 'TBD';
   const now = new Date();
   now.setMonth(now.getMonth() + monthOffset);
-  return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const result = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  if (result === 'Invalid Date') return 'TBD';
+  return result;
 }
 
-export function RaiseWindow({ raiseWindow, companyId }: { raiseWindow: RaiseWindowData; companyId: number }) {
+export function RaiseWindow({ raiseWindow: raw, companyId }: { raiseWindow: RaiseWindowData; companyId: number }) {
+  const raiseWindow = {
+    optimal_start_month: raw.optimal_start_month ?? raw.optimalStartMonth ?? 0,
+    optimal_end_month: raw.optimal_end_month ?? raw.optimalEndMonth ?? 3,
+    estimated_duration_months: raw.estimated_duration_months ?? raw.estimatedDurationMonths ?? 4,
+  };
   const { toast } = useToast();
   const [onePagerContent, setOnePagerContent] = useState<string | null>(null);
 
@@ -67,7 +78,9 @@ export function RaiseWindow({ raiseWindow, companyId }: { raiseWindow: RaiseWind
               {getMonthName(raiseWindow.optimal_end_month)}
             </Badge>
             <span className="text-sm text-muted-foreground">
-              (~{raiseWindow.estimated_duration_months} months)
+              {raiseWindow.estimated_duration_months != null && !isNaN(raiseWindow.estimated_duration_months) 
+                ? `(~${raiseWindow.estimated_duration_months} months)` 
+                : ''}
             </span>
           </div>
 

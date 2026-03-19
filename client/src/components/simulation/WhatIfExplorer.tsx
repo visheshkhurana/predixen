@@ -100,7 +100,7 @@ export function WhatIfExplorer({
           What-If Explorer
         </CardTitle>
         <CardDescription>
-          Drag sliders to see instant impact on your metrics
+          Adjust any variable below — results update in real time across runway, survival, and cash
         </CardDescription>
       </CardHeader>
       <CardContent>

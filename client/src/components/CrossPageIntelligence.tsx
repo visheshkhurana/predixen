@@ -108,7 +108,7 @@ function generateAlerts(simulation: any, scenario: any, baseline: any): Intellig
       type: 'opportunity',
       title: 'Strong position for growth investment',
       description: `${survival18m.toFixed(0)}% survival with ${runwayP50 >= 900 ? 'sustainable' : runwayP50.toFixed(0) + '+ month'} runway. You have room to invest in growth.`,
-      action: { label: 'Explore Growth', href: '/scenarios' },
+      action: { label: 'Model Growth Scenarios', href: '/scenarios' },
     });
   }
 

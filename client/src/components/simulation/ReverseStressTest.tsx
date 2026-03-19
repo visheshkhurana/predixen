@@ -113,7 +113,7 @@ export function ReverseStressTest({ currentState, testId = 'reverse-stress-test'
               Breaking Point Analysis
             </CardTitle>
             <CardDescription className="mt-1">
-              What would have to go wrong to run out of cash?
+              How far does each metric need to fall before your runway drops to 12 months?
             </CardDescription>
           </div>
           <Select value={targetMonths} onValueChange={setTargetMonths}>

@@ -59,10 +59,18 @@ def _compute_readiness(
     truth_scan: Optional[TruthScan],
 ) -> Dict[str, Any]:
     ts_runway = extract_metric_value(metrics.get("runway_months"), 0)
+    if ts_runway <= 0:
+        ts_runway = extract_metric_value(metrics.get("runway_p50"), 0)
+    if ts_runway <= 0:
+        ts_runway = extract_metric_value(metrics.get("runway"), 0)
     fr_runway = float(latest_record.runway_months) if latest_record and latest_record.runway_months else 0
     runway_months = ts_runway if ts_runway > 0 else fr_runway
 
     ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    if ts_growth == 0:
+        ts_growth = extract_metric_value(metrics.get("growth_rate"), 0)
+    if ts_growth == 0:
+        ts_growth = extract_metric_value(metrics.get("monthly_growth_rate"), 0)
     fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
     growth_pct = ts_growth if ts_growth != 0 else fr_growth
     if abs(growth_pct) < 1:
@@ -251,10 +259,18 @@ def generate_one_pager(
         revenue = float(latest_record.revenue)
 
     growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    if not growth:
+        growth = extract_metric_value(metrics.get("growth_rate"), 0)
+    if not growth:
+        growth = extract_metric_value(metrics.get("monthly_growth_rate"), 0)
     if not growth and latest_record and latest_record.mom_growth:
         growth = float(latest_record.mom_growth)
 
     runway = extract_metric_value(metrics.get("runway_months"), 0)
+    if not runway:
+        runway = extract_metric_value(metrics.get("runway_p50"), 0)
+    if not runway:
+        runway = extract_metric_value(metrics.get("runway"), 0)
     if not runway and latest_record and latest_record.runway_months:
         runway = float(latest_record.runway_months)
 

@@ -1215,7 +1215,7 @@ export default function OverviewPage() {
   const briefingMrrGrowth = baseData.mrr > 0 ? ((baseData.mrr - (baseData.mrr / (1 + assumptions.growthRate / 100))) / (baseData.mrr / (1 + assumptions.growthRate / 100)) * 100) : 0;
   const briefingBurnStatus = baseData.burnRate > 0
     ? (baseData.burnRate < baseData.mrr ? 'below revenue — you are burning efficiently' : 'above revenue — monitor spending closely')
-    : 'not tracked yet';
+    : 'AI-estimated';
   const briefingRunwayShift = baseData.runway >= 18 ? 'comfortably above 18 months' : baseData.runway >= 12 ? 'in the safe zone at 12+ months' : baseData.runway >= 6 ? 'getting tight — consider extending' : 'critically low — immediate action needed';
   const briefingCriticalCount = riskAlerts.filter(a => a.type === 'critical').length;
   const briefingWarningCount = riskAlerts.filter(a => a.type === 'warning').length;
@@ -1226,7 +1226,7 @@ export default function OverviewPage() {
     ? `Burn multiple is high at ${(baseData.burnRate / Math.max(baseData.mrr, 1)).toFixed(1)}x. Simulate "What if we cut hiring by 30%?" to see the impact.`
     : baseData.ltvCacRatio > 0 && baseData.ltvCacRatio < 3
     ? `LTV:CAC is ${safeToFixed(baseData.ltvCacRatio, 1)}x. Simulate "What if we improve CAC by 25%?" to boost unit economics.`
-    : `Your metrics look healthy. Try simulating "What if we raise prices by 15%?" to explore upside scenarios.`;
+    : `Your metrics look healthy. Try: "What if we cut burn 20% and grow revenue 15%?" to model your path to profitability.`;
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
@@ -1262,7 +1262,7 @@ export default function OverviewPage() {
                 <span className="text-amber-500 font-medium"> {briefingWarningCount} warning{briefingWarningCount > 1 ? 's' : ''} to review.</span>
               )}
               {briefingCriticalCount === 0 && briefingWarningCount === 0 && (
-                <span className="text-emerald-500 font-medium"> No critical alerts — looking good.</span>
+                <span className="text-emerald-500 font-medium"> All systems green. No alerts triggered this week.</span>
               )}
             </p>
             <p className="text-sm text-primary font-medium" data-testid="text-briefing-ai-suggestion">
@@ -2323,7 +2323,7 @@ export default function OverviewPage() {
         ) : (
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground">No recommendations yet. Run a simulation to generate decisions.</p>
+              <p className="text-muted-foreground">Run your first simulation to unlock AI-powered recommendations tailored to your data.</p>
               <Button className="mt-4" onClick={() => { setCurrentStep('simulation'); setLocation('/scenarios'); }} data-testid="button-run-simulation">
                 Run Simulation
               </Button>
