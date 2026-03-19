@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Lock, Loader2, CheckCircle } from 'lucide-react';
-import fcLogo from "@assets/image_1773944058788.png";
+import fcLogo from "@assets/image_1773962192360.png";
 
 export default function ResetPasswordPage() {
   const [, setLocation] = useLocation();

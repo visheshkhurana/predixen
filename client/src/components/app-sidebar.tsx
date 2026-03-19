@@ -57,7 +57,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useFounderStore } from "@/store/founderStore";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
-import founderconsoleLogo from "@assets/image_1773944058788.png";
+import founderconsoleLogo from "@assets/image_1773962192360.png";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 

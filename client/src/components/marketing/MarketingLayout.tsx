@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import logo from "@assets/image_1773944058788.png";
+import logo from "@assets/image_1773962192360.png";
 
 const navLinks = [
   { label: "Features", href: "/features" },

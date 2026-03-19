@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
-import fcLogo from "@assets/image_1773944058788.png";
+import fcLogo from "@assets/image_1773962192360.png";
 
 export default function VerifyEmailPage() {
   const [, setLocation] = useLocation();

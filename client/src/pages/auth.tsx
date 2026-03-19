@@ -10,7 +10,7 @@ import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight, Sparkles } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
-import fcLogo from "@assets/image_1773944058788.png";
+import fcLogo from "@assets/image_1773962192360.png";
 
 
 const identifyUser = (userId: number, email: string) => {

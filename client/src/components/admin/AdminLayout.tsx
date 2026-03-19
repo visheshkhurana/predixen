@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
-import founderconsoleLogo from "@assets/image_1773944058788.png";
+import founderconsoleLogo from "@assets/image_1773962192360.png";
 
 interface NavItem {
   title: string;
