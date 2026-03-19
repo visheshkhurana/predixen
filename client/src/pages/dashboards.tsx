@@ -55,10 +55,11 @@ export default function DashboardsPage() {
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
 
-  const { data: dashboards = [], isLoading } = useQuery<Dashboard[]>({
+  const { data: rawDashboards = [], isLoading } = useQuery<Dashboard[]>({
     queryKey: [`/api/dashboards?company_id=${currentCompany?.id}`],
     enabled: !!currentCompany,
   });
+  const dashboards = Array.isArray(rawDashboards) ? rawDashboards : [];
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; description: string }) => {

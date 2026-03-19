@@ -197,7 +197,15 @@ def create_shareholder(
         Shareholder.name == data.name
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Shareholder with this name already exists")
+        for field in ["email", "type", "relationship_type", "tax_id", "address", "notes"]:
+            val = getattr(data, field, None)
+            if val is not None and val != "":
+                setattr(existing, field, val)
+        if not existing.is_active:
+            existing.is_active = True
+        db.commit()
+        db.refresh(existing)
+        return existing.to_dict()
 
     sh = Shareholder(
         company_id=company_id,

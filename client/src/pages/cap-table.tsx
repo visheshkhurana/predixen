@@ -384,14 +384,14 @@ export default function CapTablePage() {
     enabled: !!companyId && ownershipView !== 'fully_diluted',
   });
 
-  const shareholders: ShareholderData[] = shareholdersData?.shareholders || [];
-  const grants: GrantData[] = grantsData?.grants || [];
-  const transactions: TransactionData[] = transactionsData?.transactions || [];
-  const holdings = holdingsData?.holdings || [];
-  const valuations = valuationsData?.valuations || [];
-  const convertibles: ConvertibleData[] = convertiblesData?.convertibles || [];
-  const scenarios: ScenarioData[] = scenariosData?.scenarios || [];
-  const auditLog: AuditLogData[] = auditLogData?.entries || auditLogData?.audit_log || [];
+  const shareholders: ShareholderData[] = Array.isArray(shareholdersData?.shareholders) ? shareholdersData.shareholders : [];
+  const grants: GrantData[] = Array.isArray(grantsData?.grants) ? grantsData.grants : [];
+  const transactions: TransactionData[] = Array.isArray(transactionsData?.transactions) ? transactionsData.transactions : [];
+  const holdings = Array.isArray(holdingsData?.holdings) ? holdingsData.holdings : [];
+  const valuations = Array.isArray(valuationsData?.valuations) ? valuationsData.valuations : [];
+  const convertibles: ConvertibleData[] = Array.isArray(convertiblesData?.convertibles) ? convertiblesData.convertibles : [];
+  const scenarios: ScenarioData[] = Array.isArray(scenariosData?.scenarios) ? scenariosData.scenarios : [];
+  const auditLog: AuditLogData[] = Array.isArray(auditLogData?.entries) ? auditLogData.entries : Array.isArray(auditLogData?.audit_log) ? auditLogData.audit_log : [];
   const summary = summaryData;
 
   const filteredTransactions = useMemo(() => {

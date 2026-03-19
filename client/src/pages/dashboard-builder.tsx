@@ -360,15 +360,20 @@ export default function DashboardBuilderPage() {
   const [selectedMetric, setSelectedMetric] = useState<string>('');
   const [widgetTitle, setWidgetTitle] = useState<string>('');
 
-  const { data: dashboard, isLoading: dashboardLoading } = useQuery<Dashboard>({
+  const { data: rawDashboard, isLoading: dashboardLoading } = useQuery<Dashboard>({
     queryKey: [`/api/dashboards/${dashboardId}`],
     enabled: !!dashboardId,
   });
+  const dashboard = rawDashboard && !('detail' in (rawDashboard as any)) ? {
+    ...rawDashboard,
+    widgets: Array.isArray(rawDashboard.widgets) ? rawDashboard.widgets : [],
+  } : rawDashboard;
 
-  const { data: metrics = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[]>({
+  const { data: rawMetrics = [], isSuccess: metricsLoaded } = useQuery<MetricDefinition[]>({
     queryKey: [`/api/metrics?company_id=${currentCompany?.id}`],
     enabled: !!currentCompany,
   });
+  const metrics = Array.isArray(rawMetrics) ? rawMetrics : [];
 
   const initRef = useRef(false);
   useEffect(() => {

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   ArrowUp, ArrowDown, Minus, AlertTriangle,
   TrendingUp, TrendingDown, Timer, ArrowRight,
-  DollarSign, PieChart, Fuel, Shield, Target, Mail
+  DollarSign, PieChart, Fuel, Shield, Target, Mail, X
 } from 'lucide-react';
 import { formatCurrencyAbbrev, isRunwaySustainable } from '@/lib/utils';
 
