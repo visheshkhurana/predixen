@@ -1181,6 +1181,10 @@ async def _copilot_chat_inner(
         "web_research_used": web_research_used,
         "web_research_type": web_research_type,
     })
+    
+    all_gaps = business_ctx.get("data_gaps", [])
+    new_gaps = [g for g in all_gaps if g not in conv_state.shown_data_gaps]
+    conv_state.shown_data_gaps = list(set(conv_state.shown_data_gaps + all_gaps))
     conversation_store.save(conv_state)
     
     return CopilotChatResponse(
@@ -1218,7 +1222,7 @@ async def _copilot_chat_inner(
         web_research_used=web_research_used,
         web_research_citations=web_research_citations,
         web_research_type=web_research_type,
-        data_gaps=business_ctx.get("data_gaps", []),
+        data_gaps=new_gaps,
     )
 
 

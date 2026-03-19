@@ -86,6 +86,20 @@ export function generatePDF(slides: SlideData[], companyName: string) {
   }, 600);
 }
 
+export function downloadAsHTML(slides: SlideData[], companyName: string) {
+  const html = buildPrintableHTML(slides, companyName);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeName = companyName.replace(/[^a-zA-Z0-9]/g, '_');
+  a.download = `${safeName}_Board_Deck.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function fmtCurrency(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;

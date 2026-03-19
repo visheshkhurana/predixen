@@ -192,20 +192,37 @@ def create_shareholder(
 ):
     get_user_company(db, company_id, current_user)
 
+    from sqlalchemy import or_, and_
+    conditions = [Shareholder.name == data.name]
+    if data.email and data.email.strip():
+        conditions.append(
+            and_(
+                Shareholder.email == data.email,
+                Shareholder.email != None,
+                Shareholder.email != ""
+            )
+        )
     existing = db.query(Shareholder).filter(
         Shareholder.company_id == company_id,
-        Shareholder.name == data.name
+        or_(*conditions)
     ).first()
     if existing:
-        for field in ["email", "type", "relationship_type", "tax_id", "address", "notes"]:
-            val = getattr(data, field, None)
-            if val is not None and val != "":
-                setattr(existing, field, val)
-        if not existing.is_active:
-            existing.is_active = True
-        db.commit()
-        db.refresh(existing)
-        return existing.to_dict()
+        if existing.name == data.name:
+            for field_name in ["email", "type", "relationship_type", "tax_id", "address", "notes"]:
+                val = getattr(data, field_name, None)
+                if val is not None and val != "":
+                    setattr(existing, field_name, val)
+            if not existing.is_active:
+                existing.is_active = True
+            db.commit()
+            db.refresh(existing)
+            return existing.to_dict()
+        else:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=409,
+                detail=f"A stakeholder with email '{data.email}' already exists: {existing.name}"
+            )
 
     sh = Shareholder(
         company_id=company_id,

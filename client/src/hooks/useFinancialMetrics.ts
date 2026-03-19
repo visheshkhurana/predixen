@@ -250,6 +250,9 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     const sources: Record<string, MetricSource> = {};
     const hasTruthScan = !!(tsMetrics && Object.keys(tsMetrics).length > 0);
     const hasManualEntry = !!(fb?.monthlyRevenue || fb?.cashOnHand || bb?.monthlyRevenue);
+    const estimatedMetrics: string[] = tsMetrics?._estimated_metrics || [];
+    const tsEstimatedMap: Record<string, boolean> = {};
+    for (const m of estimatedMetrics) { tsEstimatedMap[m] = true; }
     const mark = (key: string, directValue: any, computedValue: number, isUserProvided?: boolean) => {
       if (isUserProvided && directValue && Number(directValue) > 0) {
         sources[key] = 'reported';
@@ -272,7 +275,14 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     mark('grossMargin', c.grossMarginPct || ext?.grossMargin, grossMarginPct, !!tsVal('gross_margin'));
     mark('churnRate', c.churnRatePct, churnRatePct, !!tsVal('churn_rate'));
     mark('totalCustomers', c.totalCustomers || ext?.customers, totalCustomers, !!tsVal('total_customers'));
-    mark('headcount', c.headcount || ext?.headcount, headcount, !!(bb?.headcount || tsVal('headcount')));
+    if (tsEstimatedMap['headcount']) {
+      sources['headcount'] = 'estimated';
+    } else {
+      mark('headcount', c.headcount || ext?.headcount, headcount, !!(bb?.headcount || tsVal('headcount')));
+    }
+    if (tsEstimatedMap['gross_margin']) {
+      sources['grossMargin'] = 'estimated';
+    }
     sources['arpu'] = tsVal('arpu') ? 'reported' : (totalCustomers > 0 && mrr > 0 ? 'computed' : 'estimated');
     sources['paybackPeriod'] = tsVal('payback_period') ? 'reported' : (cac > 0 && arpu > 0 ? 'computed' : 'estimated');
     sources['burnMultiple'] = tsVal('burn_multiple') ? 'reported' : 'computed';

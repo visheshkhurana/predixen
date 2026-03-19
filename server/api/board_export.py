@@ -127,6 +127,28 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
 
     decision_data = [d.to_dict() for d in decisions]
 
+    fundraising_rounds = []
+    try:
+        from server.models.fundraising import FundraisingRound
+        rounds = (
+            db.query(FundraisingRound)
+            .filter(FundraisingRound.company_id == company.id)
+            .order_by(FundraisingRound.created_at.desc())
+            .limit(5)
+            .all()
+        )
+        for r in rounds:
+            round_dict = {
+                "name": r.name,
+                "target_raise": float(r.target_raise) if r.target_raise else None,
+                "status": r.status,
+                "pre_money_valuation": float(r.pre_money_valuation) if getattr(r, 'pre_money_valuation', None) else None,
+                "use_of_funds": getattr(r, 'use_of_funds', None) or getattr(r, 'notes', None),
+            }
+            fundraising_rounds.append(round_dict)
+    except Exception:
+        pass
+
     latest_sim_run = (
         db.query(SimulationRun)
         .join(Scenario, SimulationRun.scenario_id == Scenario.id)
@@ -195,6 +217,7 @@ def _gather_company_data(db: Session, company: Company) -> Dict[str, Any]:
         "decisions": decision_data,
         "simulation": sim_outputs,
         "truth_scan_raw": metrics,
+        "fundraising_rounds": fundraising_rounds,
         "generated_at": datetime.utcnow().isoformat(),
     }
 
@@ -211,7 +234,7 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         f"Company: {company_name}\n"
         f"MRR: ${metrics.get('mrr', 0):,.0f}, ARR: ${metrics.get('arr', 0):,.0f}\n"
         f"Monthly Revenue: ${metrics.get('monthly_revenue', 0):,.0f}\n"
-        f"Net Burn: ${metrics.get('burn_rate', 0):,.0f}/mo\n"
+        f"Net Burn: ${metrics.get('net_burn', 0):,.0f}/mo\n"
         f"Cash Balance: ${metrics.get('cash_balance', 0):,.0f}\n"
         f"Runway: {runway_display}\n"
         f"Profitable: {'Yes' if metrics.get('is_profitable') else 'No'}\n"
@@ -265,10 +288,28 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         f"Financial Data:\n{metrics_summary}\n"
     )
 
+    fundraising_text = ""
+    for fr in data.get("fundraising_rounds", [])[:3]:
+        name = fr.get("name", "Round")
+        target = fr.get("target_raise")
+        status = fr.get("status", "")
+        use_of_funds = fr.get("use_of_funds", "")
+        pre_money = fr.get("pre_money_valuation")
+        line = f"- {name}: Target ${target:,.0f}" if target else f"- {name}"
+        if pre_money:
+            line += f" at ${pre_money:,.0f} pre-money"
+        if status:
+            line += f" ({status})"
+        fundraising_text += line + "\n"
+        if use_of_funds:
+            fundraising_text += f"  Use of funds: {use_of_funds}\n"
+
     if scenarios_text:
         prompt += f"Scenarios:\n{scenarios_text}\n"
     if decisions_text:
         prompt += f"Recent Decisions:\n{decisions_text}\n"
+    if fundraising_text:
+        prompt += f"Fundraising Rounds:\n{fundraising_text}\n"
 
     prompt += (
         f"\nWrite a concise, professional narrative for the '{section_title}' section "
@@ -277,6 +318,12 @@ def _build_narrative_prompt(template_id: str, section: Dict, data: Dict) -> str:
         f"Be direct and actionable. Do not use markdown headers. "
         f"Tailor the tone and emphasis to match the template context above."
     )
+
+    if section_title == "Use of Funds & Milestones" and fundraising_text:
+        prompt += (
+            " Include specific use of funds allocation from fundraising data. "
+            "Break down how capital will be deployed across hiring, product, marketing, and operations."
+        )
 
     return prompt
 

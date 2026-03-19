@@ -407,19 +407,20 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     else:
         metrics["expense_breakdown"] = None
     
-    # Headcount data - use actual stored value if available
+    estimated_metrics = []
+    
     if financials:
         latest = financials[0]
-        # Use actual headcount from FinancialRecord if saved, otherwise estimate from payroll
         stored_headcount = getattr(latest, 'headcount', None)
         if stored_headcount and stored_headcount > 0:
             metrics["headcount"] = stored_headcount
         else:
-            # Fallback: estimate from payroll (assume avg salary)
-            avg_salary = 8000  # Monthly
+            avg_salary = 8000
             metrics["headcount"] = max(1, int(metrics.get("payroll", 0) / avg_salary))
+            if metrics.get("payroll", 0) > 0:
+                estimated_metrics.append("headcount")
         
-        metrics["planned_hires"] = 0  # Don't assume planned hires - user should enter this
+        metrics["planned_hires"] = 0
         if metrics["headcount"] > 0 and mrr:
             metrics["revenue_per_employee"] = mrr / metrics["headcount"]
         else:
@@ -428,6 +429,13 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["headcount"] = None
         metrics["planned_hires"] = 0
         metrics["revenue_per_employee"] = None
+    
+    if not metrics.get("gross_margin") and metrics.get("monthly_revenue", 0) > 0:
+        if metrics.get("cogs") is not None:
+            metrics["gross_margin"] = ((metrics["monthly_revenue"] - metrics["cogs"]) / metrics["monthly_revenue"]) * 100
+            estimated_metrics.append("gross_margin")
+    
+    metrics["_estimated_metrics"] = estimated_metrics
     
     # Cash flow forecast (12 month projection)
     if financials and len(financials) > 0:

@@ -23,7 +23,15 @@ import {
   Activity,
   Zap,
   Shield,
+  FileDown,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   LineChart,
   Line,
@@ -44,7 +52,7 @@ import {
 } from 'recharts';
 import { apiRequest } from '@/lib/queryClient';
 import { getTemplateById } from './templates';
-import { generatePDF, type SlideData, type ChartPoint, type ScenarioItem } from './pdfGenerator';
+import { generatePDF, downloadAsHTML, type SlideData, type ChartPoint, type ScenarioItem } from './pdfGenerator';
 
 function sanitizeText(text: string): string {
   return text.replace(/[<>&"']/g, (c) => {
@@ -326,6 +334,11 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
     }
   };
 
+  const handleDownloadHtml = () => {
+    const slides = buildSlides();
+    downloadAsHTML(slides, companyName);
+  };
+
   const rechartsData = useMemo(() => {
     return financialRecords.map(fr => ({
       month: formatShortDate(fr.period_start),
@@ -391,20 +404,40 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
                 >
                   Close
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleDownloadPdf}
-                  disabled={isGeneratingPdf}
-                  className="bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-600/90 text-white shadow-md"
-                  data-testid="button-download-pdf"
-                >
-                  {isGeneratingPdf ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
-                  Download PDF
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      disabled={isGeneratingPdf}
+                      className="bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-600/90 text-white shadow-md"
+                      data-testid="button-download-pdf"
+                    >
+                      {isGeneratingPdf ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
+                      )}
+                      Export
+                      <ChevronDown className="h-3 w-3 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" data-testid="menu-export-options">
+                    <DropdownMenuItem onClick={handleDownloadPdf} data-testid="menu-item-export-pdf">
+                      <Download className="h-4 w-4 mr-2" />
+                      <div>
+                        <div className="font-medium">Download as PDF</div>
+                        <div className="text-xs text-muted-foreground">Print-optimized format</div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadHtml} data-testid="menu-item-export-html">
+                      <FileDown className="h-4 w-4 mr-2" />
+                      <div>
+                        <div className="font-medium">Download as HTML</div>
+                        <div className="text-xs text-muted-foreground">Import into Google Slides or PowerPoint</div>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -667,19 +700,39 @@ export function PreviewModal({ open, onOpenChange, companyId, templateId }: Prev
               >
                 Close
               </Button>
-              <Button
-                onClick={handleDownloadPdf}
-                disabled={isGeneratingPdf}
-                className="bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-600/90 text-white shadow-md"
-                data-testid="button-download-pdf-bottom"
-              >
-                {isGeneratingPdf ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 mr-2" />
-                )}
-                Download PDF
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    disabled={isGeneratingPdf}
+                    className="bg-gradient-to-r from-primary to-cyan-600 hover:from-primary/90 hover:to-cyan-600/90 text-white shadow-md"
+                    data-testid="button-download-pdf-bottom"
+                  >
+                    {isGeneratingPdf ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    Export
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleDownloadPdf} data-testid="menu-item-export-pdf-bottom">
+                    <Download className="h-4 w-4 mr-2" />
+                    <div>
+                      <div className="font-medium">Download as PDF</div>
+                      <div className="text-xs text-muted-foreground">Print-optimized format</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadHtml} data-testid="menu-item-export-html-bottom">
+                    <FileDown className="h-4 w-4 mr-2" />
+                    <div>
+                      <div className="font-medium">Download as HTML</div>
+                      <div className="text-xs text-muted-foreground">Import into Google Slides or PowerPoint</div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         )}

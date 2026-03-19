@@ -32,6 +32,7 @@ class ConversationState:
     last_run_id: Optional[int] = None
     baseline_run_id: Optional[int] = None
     response_mode: str = "explain"
+    shown_data_gaps: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for storage."""
@@ -47,7 +48,9 @@ class ConversationState:
             data['created_at'] = datetime.fromisoformat(data['created_at'])
         if isinstance(data.get('updated_at'), str):
             data['updated_at'] = datetime.fromisoformat(data['updated_at'])
-        return cls(**data)
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**filtered)
     
     def add_message(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
         """Add a message to history."""

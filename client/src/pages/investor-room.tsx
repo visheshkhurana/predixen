@@ -15,8 +15,10 @@ import { apiRequest } from '@/lib/queryClient';
 import { getErrorMessage } from '@/lib/errors';
 import { 
   FileText, CheckSquare, HelpCircle, BarChart3, 
-  Play, Building2, RefreshCw, Copy, Download
+  Play, Building2, RefreshCw, Copy, Download,
+  Upload, FolderOpen, File, Trash2
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface FundraisingRound {
   id: string;
@@ -60,6 +62,8 @@ export default function InvestorRoomPage() {
   const [selectedMode, setSelectedMode] = useState<string>('vc');
   const [investorRoomData, setInvestorRoomData] = useState<InvestorRoomData | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, Record<string, boolean>>>({});
+  const [uploadedDocs, setUploadedDocs] = useState<Array<{name: string, category: string, size: number, uploadedAt: string}>>([]);
+  const [uploadCategory, setUploadCategory] = useState('finance');
 
   const { data: roundsData, isLoading: roundsLoading, error: roundsError } = useQuery<FundraisingRoundsResponse>({
     queryKey: ['/api/companies', selectedCompany?.id, 'fundraising/rounds'],
@@ -160,6 +164,31 @@ export default function InvestorRoomPage() {
     }
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+    const newDocs = Array.from(files).map(file => ({
+      name: file.name,
+      category: uploadCategory,
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+    }));
+    setUploadedDocs(prev => [...prev, ...newDocs]);
+    toast({ title: 'Documents Added', description: `${files.length} document(s) added to data room.` });
+    event.target.value = '';
+  };
+
+  const removeDocument = (index: number) => {
+    setUploadedDocs(prev => prev.filter((_, i) => i !== index));
+    toast({ title: 'Document Removed' });
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+    if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+    return `${bytes} B`;
+  };
+
   const getCategoryCompletionPercent = (category: string): number => {
     const items = investorRoomData?.data_room_checklist?.[category] || [];
     if (items.length === 0) return 0;
@@ -240,28 +269,37 @@ export default function InvestorRoomPage() {
         </CardContent>
       </Card>
 
-      {investorRoomData && (
+      {(investorRoomData || activeTab === 'dataroom') && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="memo" data-testid="tab-memo">
-              <FileText className="h-4 w-4 mr-2" />
-              Investor Memo
-            </TabsTrigger>
-            <TabsTrigger value="checklist" data-testid="tab-checklist">
-              <CheckSquare className="h-4 w-4 mr-2" />
-              Data Room Checklist
-            </TabsTrigger>
-            <TabsTrigger value="kpi" data-testid="tab-kpi">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              KPI Snapshot
-            </TabsTrigger>
-            <TabsTrigger value="faq" data-testid="tab-faq">
-              <HelpCircle className="h-4 w-4 mr-2" />
-              Investor FAQ
+            {investorRoomData && (
+              <>
+                <TabsTrigger value="memo" data-testid="tab-memo">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Investor Memo
+                </TabsTrigger>
+                <TabsTrigger value="checklist" data-testid="tab-checklist">
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  Data Room Checklist
+                </TabsTrigger>
+                <TabsTrigger value="kpi" data-testid="tab-kpi">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  KPI Snapshot
+                </TabsTrigger>
+                <TabsTrigger value="faq" data-testid="tab-faq">
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  Investor FAQ
+                </TabsTrigger>
+              </>
+            )}
+            <TabsTrigger value="dataroom" data-testid="tab-dataroom">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Data Room
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="memo">
+            {investorRoomData && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -281,9 +319,11 @@ export default function InvestorRoomPage() {
                 </ScrollArea>
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="checklist">
+            {investorRoomData && (
             <Card>
               <CardHeader>
                 <CardTitle>Data Room Checklist</CardTitle>
@@ -328,9 +368,11 @@ export default function InvestorRoomPage() {
                 </Accordion>
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="kpi">
+            {investorRoomData && (
             <Card>
               <CardHeader>
                 <CardTitle>KPI Snapshot</CardTitle>
@@ -400,9 +442,11 @@ export default function InvestorRoomPage() {
                 )}
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="faq">
+            {investorRoomData && (
             <Card>
               <CardHeader>
                 <CardTitle>Investor FAQ</CardTitle>
@@ -428,18 +472,108 @@ export default function InvestorRoomPage() {
                 </ScrollArea>
               </CardContent>
             </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="dataroom">
+            <Card>
+              <CardHeader>
+                <CardTitle>Data Room</CardTitle>
+                <CardDescription>Upload and organize due diligence documents for investors</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="space-y-2 min-w-[180px]">
+                    <label className="text-sm font-medium">Category</label>
+                    <Select value={uploadCategory} onValueChange={setUploadCategory}>
+                      <SelectTrigger data-testid="select-upload-category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="finance">Finance</SelectItem>
+                        <SelectItem value="legal">Legal</SelectItem>
+                        <SelectItem value="product_tech">Product & Tech</SelectItem>
+                        <SelectItem value="gtm">Go-to-Market</SelectItem>
+                        <SelectItem value="hr">HR & Team</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="doc-upload">
+                      <Button asChild variant="outline" data-testid="button-upload-doc">
+                        <span>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Documents
+                        </span>
+                      </Button>
+                    </label>
+                    <Input
+                      id="doc-upload"
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      data-testid="input-file-upload"
+                    />
+                  </div>
+                </div>
+
+                {uploadedDocs.length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-muted-foreground/20 rounded-lg" data-testid="empty-data-room">
+                    <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">No documents uploaded yet</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Upload financial statements, legal documents, pitch decks, and other due diligence materials.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {['finance', 'legal', 'product_tech', 'gtm', 'hr', 'other'].map(cat => {
+                      const catDocs = uploadedDocs.filter(d => d.category === cat);
+                      if (catDocs.length === 0) return null;
+                      return (
+                        <div key={cat} className="space-y-1">
+                          <h4 className="text-sm font-medium capitalize text-muted-foreground">{cat.replace('_', ' & ')}</h4>
+                          {catDocs.map((doc, i) => {
+                            const globalIdx = uploadedDocs.indexOf(doc);
+                            return (
+                              <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50" data-testid={`doc-item-${globalIdx}`}>
+                                <div className="flex items-center gap-2">
+                                  <File className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">{doc.name}</span>
+                                  <span className="text-xs text-muted-foreground">{formatFileSize(doc.size)}</span>
+                                </div>
+                                <Button variant="ghost" size="sm" onClick={() => removeDocument(globalIdx)} data-testid={`button-remove-doc-${globalIdx}`}>
+                                  <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       )}
 
-      {!investorRoomData && !generateMutation.isPending && (
+      {!investorRoomData && !generateMutation.isPending && activeTab !== 'dataroom' && (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Materials Generated</h3>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-4">
               Select a fundraising round and click "Generate Materials" to create your investor room.
             </p>
+            <Button variant="outline" size="sm" onClick={() => setActiveTab('dataroom')} data-testid="button-go-to-dataroom">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Go to Data Room
+            </Button>
           </CardContent>
         </Card>
       )}

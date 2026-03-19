@@ -279,6 +279,8 @@ export default function CapTablePage() {
   const [waterfallExitValue, setWaterfallExitValue] = useState('');
   const [waterfallResult, setWaterfallResult] = useState<any>(null);
   const [lastScenarioResult, setLastScenarioResult] = useState<any>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
 
   const { data: summaryData, isLoading: summaryLoading } = useQuery<CapTableSummary>({
     queryKey: ['/api/companies', companyId, 'cap-table', 'summary'],
@@ -928,12 +930,106 @@ export default function CapTablePage() {
           {shareholdersLoading ? (
             <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
           ) : shareholders.length === 0 ? (
+            showOnboarding ? (
+              <Card data-testid="card-cap-table-onboarding">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-emerald-500" />
+                    Cap Table Setup Guide
+                  </CardTitle>
+                  <CardDescription>
+                    Step {onboardingStep + 1} of 3 — Let&apos;s set up your equity structure
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {onboardingStep === 0 && (
+                    <div className="space-y-3" data-testid="onboarding-step-founders">
+                      <h3 className="font-semibold text-lg">Step 1: Add Founders</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Start by adding each co-founder. You&apos;ll specify their name, email, and role.
+                        After adding founders, you can issue shares to them.
+                      </p>
+                      <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                        <p className="text-sm font-medium">Quick tips:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
+                          <li>Add all co-founders before issuing shares</li>
+                          <li>Typical early-stage: 10M authorized shares at $0.0001/share</li>
+                          <li>Founder equity is usually Common stock</li>
+                        </ul>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => { setShowShareholderDialog(true); setNewShareholder(prev => ({ ...prev, type: 'founder' })); }} data-testid="button-add-founder">
+                          <Plus className="h-4 w-4 mr-2" /> Add Founder
+                        </Button>
+                        <Button variant="outline" onClick={() => setOnboardingStep(1)} data-testid="button-skip-step-1">
+                          Skip to Investors
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {onboardingStep === 1 && (
+                    <div className="space-y-3" data-testid="onboarding-step-investors">
+                      <h3 className="font-semibold text-lg">Step 2: Add Investors</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Add investors from any funding rounds. Include angels, VCs, and institutional investors.
+                      </p>
+                      <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                        <p className="text-sm font-medium">Quick tips:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
+                          <li>Investor equity is usually Preferred stock</li>
+                          <li>Include SAFEs and convertible notes separately</li>
+                          <li>You can add equity issuance details after</li>
+                        </ul>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => { setShowShareholderDialog(true); setNewShareholder(prev => ({ ...prev, type: 'investor' })); }} data-testid="button-add-investor">
+                          <Plus className="h-4 w-4 mr-2" /> Add Investor
+                        </Button>
+                        <Button variant="outline" onClick={() => setOnboardingStep(2)} data-testid="button-skip-step-2">
+                          Next: Issue Equity
+                        </Button>
+                        <Button variant="ghost" onClick={() => setOnboardingStep(0)} data-testid="button-back-step-1">
+                          Back
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {onboardingStep === 2 && (
+                    <div className="space-y-3" data-testid="onboarding-step-equity">
+                      <h3 className="font-semibold text-lg">Step 3: Issue Equity</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Once you&apos;ve added stakeholders, go to the Securities tab to issue shares,
+                        create option grants, and record convertible instruments.
+                      </p>
+                      <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                        <p className="text-sm font-medium">Available actions:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
+                          <li><strong>Issue Shares</strong> — Grant common or preferred stock</li>
+                          <li><strong>Option Grants</strong> — ISO/NSO/RSA/RSU with vesting schedules</li>
+                          <li><strong>Convertibles</strong> — SAFEs and convertible notes</li>
+                          <li><strong>Scenarios</strong> — Model future rounds and exits</li>
+                        </ul>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={() => { setShowOnboarding(false); setActiveTab('stakeholders'); }} data-testid="button-finish-onboarding">
+                          Get Started
+                        </Button>
+                        <Button variant="ghost" onClick={() => setOnboardingStep(1)} data-testid="button-back-step-2">
+                          Back
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
             <EmptyStateCard
               icon={Users}
               title="No Stakeholders"
               description="Add founders, employees, investors, and advisors to build your cap table."
-              action={{ label: "Add Stakeholder", onClick: () => setShowShareholderDialog(true), icon: Plus }}
+              action={{ label: "Guided Setup", onClick: () => { setShowOnboarding(true); setOnboardingStep(0); }, icon: Plus }}
             />
+            )
           ) : (
             <Card>
               <CardContent className="pt-4">

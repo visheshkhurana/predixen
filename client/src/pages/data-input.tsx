@@ -633,6 +633,7 @@ export default function DataInput() {
         monthlyRevenue: Number(values.monthlyRevenue) || 0,
         totalMonthlyExpenses: Number(totalExpenses),
         monthlyGrowthRate: Number(values.growthRate) || 0,
+        numberOfEmployees: values.employees ? Number(values.employees) : null,
         expenseBreakdown: {
           payroll: values.payrollExpenses ? Number(values.payrollExpenses) : null,
           marketing: values.marketingExpenses ? Number(values.marketingExpenses) : null,
