@@ -1422,7 +1422,7 @@ function AgentSimulationConsole() {
           monthly_burn: baseMetrics?.burnRate ?? 80000,
           cash_balance: baseMetrics?.cashOnHand ?? 500000,
           customers: 50,
-          team_size: baseMetrics?.headcount ?? 10,
+          team_size: baseMetrics?.headcount || 10,
           growth_rate: baseMetrics?.monthlyGrowthRate ?? 0.05,
           churn_rate: 0.03,
           funding_climate: fundingClimate,
