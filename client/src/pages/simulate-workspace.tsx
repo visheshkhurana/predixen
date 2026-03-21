@@ -17,6 +17,14 @@ import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useCounter } from '@/hooks/useCounter';
 import '@/styles/simulation-animations.css';
 import type { LucideIcon } from 'lucide-react';
+import { SimGlassCard } from '@/components/ui/sim-glass-card';
+import { SimStatusBadge } from '@/components/ui/sim-status-badge';
+import { SimAnimatedCounter } from '@/components/ui/sim-animated-counter';
+import { SimStepProgress } from '@/components/ui/sim-step-progress';
+import { SimTerminalDrawer } from '@/components/ui/sim-terminal-drawer';
+import { SimSkeleton } from '@/components/ui/sim-skeleton';
+import { SimBackgroundOrbs } from '@/components/ui/sim-background-orbs';
+import { SimEventCard } from '@/components/ui/sim-event-card';
 
 interface AccuracyRecord {
   id: number;
@@ -1274,6 +1282,27 @@ function AgentSimulationConsole() {
   const [currentTimelineMonth, setCurrentTimelineMonth] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [previousFundingProb, setPreviousFundingProb] = useState<number | null>(null);
+  const [terminalLogs, setTerminalLogs] = useState<Array<{ time: string; msg: string; type?: "info" | "success" | "error" | "warn" }>>([]);
+  const logTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    return () => {
+      logTimersRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
+  const simSteps = [
+    { id: 'init', label: 'Initialize Agents', status: (isSimulating || simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
+    { id: 'knowledge', label: 'Build Knowledge Graph', status: (isSimulating || simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
+    { id: 'simulate', label: 'Run Simulation', status: (isSimulating ? 'active' : simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
+    { id: 'analyze', label: 'Analyze Outcomes', status: (simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
+    { id: 'report', label: 'Compile Report', status: (simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
+  ];
+
+  const addLog = useCallback((msg: string, type: "info" | "success" | "error" | "warn" = "info") => {
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+    setTerminalLogs(prev => [...prev.slice(-30), { time, msg, type }]);
+  }, []);
 
   const runMutation = useMutation({
     mutationFn: async () => {
@@ -1300,6 +1329,13 @@ function AgentSimulationConsole() {
       setIsSimulating(true);
       setSimResult(null);
       setCurrentTimelineMonth(0);
+      setTerminalLogs([]);
+      addLog('Initializing 5 agents (Founder, Investor, Customer, Team, Market)...');
+      const t1 = setTimeout(() => addLog('Building company knowledge graph...'), 800);
+      const t2 = setTimeout(() => addLog('Loading financial metrics and historical data...'), 1600);
+      const t3 = setTimeout(() => addLog('Simulating market conditions...', 'info'), 2500);
+      const t4 = setTimeout(() => addLog('Agents evaluating scenarios...', 'info'), 3500);
+      logTimersRef.current = [t1, t2, t3, t4];
     },
     onSuccess: (data: BackendSimulationResponse) => {
       const mappedEvents = chainEvents((data.events || []).map(mapBackendEvent));
@@ -1328,10 +1364,12 @@ function AgentSimulationConsole() {
       setSimResult(result);
       setIsSimulating(false);
       setLastUpdated(Date.now());
+      addLog(`Simulation complete — Survival: ${data.summary.survivalProbability.toFixed(0)}%, ${mappedEvents.length} events generated`, 'success');
       toast({ title: 'Simulation Complete', description: `Survival probability: ${data.summary.survivalProbability.toFixed(0)}%` });
     },
     onError: (err: Error) => {
       setIsSimulating(false);
+      addLog(`Simulation failed: ${err.message}`, 'error');
       toast({ title: 'Simulation Failed', description: err.message || 'An error occurred', variant: 'destructive' });
     },
   });
@@ -1364,148 +1402,200 @@ function AgentSimulationConsole() {
   }, [simResult, toast]);
 
   const riskHigh = currentRunway > 0 && currentRunway < 10;
+  const simStatus = isSimulating ? 'running' : simResult ? 'complete' : 'ready';
 
   return (
-    <div className="simulation-root relative">
-      <div className="bg-orb bg-orb--blue top-10 left-10" />
-      <div className="bg-orb bg-orb--emerald bottom-10 right-10" />
-      <div className="bg-orb bg-orb--purple top-1/2 left-1/3" />
+    <div className="relative min-h-[600px]">
+      <SimBackgroundOrbs color="blue" />
 
       <div className="relative z-10">
-        <div className="flex items-center justify-between mb-3">
+        <SimStepProgress steps={simSteps} />
+
+        <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              {isSimulating && <div className="status-dot" />}
-              <h2 className="text-lg font-bold" data-testid="text-sim-title">Agent Simulation Console</h2>
-            </div>
-            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/30 text-emerald-500">
-              {isSimulating ? 'THINKING' : simResult ? 'COMPLETE' : 'READY'}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold flex items-center gap-2" data-testid="text-sim-title">
+              <Zap className="h-5 w-5 text-primary" />
+              Flight Simulator
+            </h2>
+            <SimStatusBadge status={simStatus} />
             <DataFreshness lastUpdated={lastUpdated} />
-            <div className="flex items-center gap-2">
-              {simResult?.shareToken && (
-                <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
-                  Share
-                </Button>
-              )}
-              <Button
-                size="sm"
-                onClick={() => runMutation.mutate()}
-                disabled={isSimulating || !currentCompany}
-                className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                data-testid="button-run-simulation"
-              >
-                {isSimulating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                {isSimulating ? 'Thinking...' : 'Run Simulation'}
+          </div>
+          <div className="flex items-center gap-2">
+            {simResult?.shareToken && (
+              <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
+                Share
               </Button>
-            </div>
+            )}
+            <Button
+              size="sm"
+              onClick={() => runMutation.mutate()}
+              disabled={isSimulating || !currentCompany}
+              className="h-8 text-sm gap-2 shadow-[0_0_20px_rgba(79,125,249,0.2)] hover:shadow-[0_0_30px_rgba(79,125,249,0.4)] transition-all duration-300"
+              data-testid="button-run-simulation"
+            >
+              {isSimulating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {isSimulating ? 'Simulating...' : 'Run Simulation'}
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-3 space-y-3">
-            <div className={`glass-panel p-4 rounded-lg animate-item ${isSimulating ? 'glass-panel--active' : ''}`}>
-              <h3 className="text-sm mb-3 font-medium">Live Metrics</h3>
-              <div className="space-y-2">
-                <LiveMetricCard
-                  label="Cash" value={currentCash} prefix="$" icon={DollarSign}
-                  color="text-emerald-500" trend={summary ? (summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'up' : 'down') : undefined}
-                  testId="metric-cash"
-                />
-                <LiveMetricCard
-                  label="Monthly Burn" value={currentBurn} prefix="$" icon={TrendingDown}
-                  color="text-red-400" trend={summary ? 'flat' : undefined}
-                  testId="metric-burn"
-                />
-                <LiveMetricCard
-                  label="Runway" value={currentRunway} suffix=" mo" icon={Clock}
-                  color={currentRunway < 6 ? 'text-red-400' : currentRunway < 12 ? 'text-amber-400' : 'text-emerald-500'}
-                  trend={summary ? (summary.finalRunway > 12 ? 'up' : 'down') : undefined}
-                  testId="metric-runway"
-                />
-                {summary && (
-                  <LiveMetricCard
-                    label="Survival" value={survivalPct} suffix="%" icon={ShieldCheck}
-                    color={survivalPct >= 70 ? 'text-emerald-500' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}
-                    testId="metric-survival"
+        <div className="grid grid-cols-12 gap-4 px-4 pb-16">
+          <div className="col-span-12 lg:col-span-3 space-y-3 fc-stagger">
+            <SimGlassCard variant={isSimulating ? 'processing' : 'elevated'} className="p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Live Metrics</h3>
+              <div className="space-y-3 fc-stagger">
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-cash">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Cash</span>
+                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+                  </div>
+                  <SimAnimatedCounter value={currentCash} prefix="$" className="text-lg font-bold font-mono text-emerald-400" />
+                  {summary && (
+                    <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'Improving' : 'Declining'}
+                    </div>
+                  )}
+                </div>
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-burn">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Monthly Burn</span>
+                    <TrendingDown className="h-3.5 w-3.5 text-red-400" />
+                  </div>
+                  <SimAnimatedCounter value={currentBurn} prefix="$" className="text-lg font-bold font-mono text-red-400" />
+                </div>
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-runway">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Runway</span>
+                    <Clock className="h-3.5 w-3.5" />
+                  </div>
+                  <SimAnimatedCounter
+                    value={currentRunway}
+                    suffix=" mo"
+                    className={`text-lg font-bold font-mono ${currentRunway < 6 ? 'text-red-400' : currentRunway < 12 ? 'text-amber-400' : 'text-emerald-400'}`}
+                    decimals={1}
                   />
+                </div>
+                {summary && (
+                  <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-survival">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Survival</span>
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    </div>
+                    <SimAnimatedCounter
+                      value={survivalPct}
+                      suffix="%"
+                      className={`text-lg font-bold font-mono ${survivalPct >= 70 ? 'text-emerald-400' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}`}
+                    />
+                  </div>
                 )}
-                <div className={`mt-2 px-2 py-1 text-xs rounded ${riskHigh ? 'risk-alert bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`} data-testid="risk-badge">
+                <div className={`mt-1 px-2 py-1 text-xs rounded-md font-mono ${riskHigh ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`} data-testid="risk-badge">
                   Risk: {riskHigh ? 'High' : 'Moderate'}
                 </div>
               </div>
-            </div>
+            </SimGlassCard>
 
-            <div className="glass-panel p-4 rounded-lg animate-item">
-              <h3 className="text-sm mb-3 font-medium">Scenario Controls</h3>
+            <SimGlassCard variant="elevated" className="p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">Scenario Controls</h3>
               <div className="space-y-3">
                 <ConsoleScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
                 <ConsoleScenarioSlider label="Funding Climate" value={fundingClimate} onChange={setFundingClimate} min={0} max={1} step={0.1} testId="slider-funding" />
                 <ConsoleScenarioSlider label="Market Growth" value={marketGrowth} onChange={setMarketGrowth} min={0} max={1} step={0.1} testId="slider-market" />
                 <ConsoleScenarioSlider label="Hiring Rate" value={hiringRate} onChange={setHiringRate} min={0} max={10} step={1} unit="/mo" testId="slider-hiring" />
               </div>
-            </div>
+            </SimGlassCard>
           </div>
 
           <div className="col-span-12 lg:col-span-6 space-y-3">
-            <div className="flex gap-3">
-              <div className="shrink-0 pt-1">
-                <SimulationStageTracker isActive={isSimulating} isComplete={!!simResult} />
-              </div>
-              <div className="flex-1 min-w-0 space-y-3">
-                <ConsoleThinkingState isActive={isSimulating} />
-                {timeline.length > 0 && (
-                  <div className="animate-item">
-                    <ConsoleTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="glass-panel p-4 rounded-lg animate-item">
-              <ConsoleEventFeed events={events} isLive={isSimulating} />
-            </div>
-
-            {!simResult && !isSimulating && (
-              <div className="text-center py-10 rounded-lg border border-dashed border-border/50 glass-panel">
-                <Activity className="h-8 w-8 mx-auto text-muted-foreground/30 mb-3" />
-                <h3 className="text-sm font-medium text-muted-foreground mb-1">Ready to Simulate</h3>
-                <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
-                  Adjust scenario parameters and click Run Simulation to watch the system think.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="col-span-12 lg:col-span-3 space-y-3">
-            <div className="result-card glass-panel p-4 rounded-lg animate-item">
-              <ConsoleInvestorPanel probability={fundingPct} risks={risks} previousProb={previousFundingProb} />
-            </div>
+            {isSimulating && <ConsoleThinkingState isActive={isSimulating} />}
 
             {timeline.length > 0 && (
-              <div className="result-card glass-panel p-4 rounded-lg animate-item">
+              <SimGlassCard variant="elevated" className="p-4 fc-animate-fade-up">
+                <ConsoleTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
+              </SimGlassCard>
+            )}
+
+            <SimGlassCard variant="default" className="p-4 min-h-[300px]">
+              {events.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Agent Events</h3>
+                    <span className="text-[10px] font-mono text-zinc-500">{events.length} events</span>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto -mx-4">
+                    {events.map((event, i) => (
+                      <SimEventCard
+                        key={i}
+                        agentName={`${event.type.charAt(0).toUpperCase()}${event.type.slice(1)} Agent`}
+                        agentType={event.type}
+                        action={event.reason || 'event'}
+                        description={event.message}
+                        timestamp={event.time}
+                        sentiment={event.severity === 'high' || event.severity === 'danger' ? 'negative' : 'neutral'}
+                        index={i}
+                        impact={event.impact}
+                        chainedFrom={event.chainedFrom}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : isSimulating ? (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-4">Agent Events</h3>
+                  <SimSkeleton lines={5} />
+                  <p className="text-xs text-zinc-500 text-center mt-4">Waiting for agent events...</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 fc-animate-fade-up">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 fc-animate-glow">
+                    <Zap className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-sm font-medium text-zinc-300 mb-2">Ready to Simulate</h3>
+                  <p className="text-xs text-zinc-500 max-w-sm text-center mb-4">
+                    Five AI agents — Founder, Investor, Customer, Team, and Market — will interact to model realistic outcomes based on your data.
+                  </p>
+                  <Button
+                    onClick={() => runMutation.mutate()}
+                    disabled={!currentCompany}
+                    className="shadow-[0_0_20px_rgba(79,125,249,0.2)] hover:shadow-[0_0_30px_rgba(79,125,249,0.4)] transition-all duration-300"
+                    data-testid="button-run-empty"
+                  >
+                    <Play className="h-4 w-4 mr-2" /> Launch Simulation
+                  </Button>
+                </div>
+              )}
+            </SimGlassCard>
+          </div>
+
+          <div className="col-span-12 lg:col-span-3 space-y-3 fc-stagger">
+            <SimGlassCard variant="elevated" className="p-4">
+              <ConsoleInvestorPanel probability={fundingPct} risks={risks} previousProb={previousFundingProb} />
+            </SimGlassCard>
+
+            {timeline.length > 0 && (
+              <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
                 <ConsoleCohortPanel timeline={timeline} />
-              </div>
+              </SimGlassCard>
             )}
 
             {recommendations.length > 0 && (
-              <div className="result-card glass-panel p-4 rounded-lg animate-item">
+              <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
                 <ConsoleDecisionReplay recommendations={recommendations} />
-              </div>
+              </SimGlassCard>
+            )}
+
+            {!simResult && !isSimulating && (
+              <SimGlassCard variant="default" className="p-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">AI Insights</h3>
+                <SimSkeleton lines={4} />
+                <p className="text-xs text-zinc-500 text-center mt-3">Run a simulation to see insights</p>
+              </SimGlassCard>
             )}
           </div>
         </div>
-
-        {isSimulating && (
-          <div className="mt-4">
-            <div className="shimmer h-10 rounded-lg flex items-center justify-center text-xs text-muted-foreground">
-              Re-running simulation...
-            </div>
-          </div>
-        )}
       </div>
+
+      <SimTerminalDrawer logs={terminalLogs} label="Simulation Log" />
     </div>
   );
 }
@@ -1549,8 +1639,8 @@ export default function SimulateWorkspace() {
               )}
             </TabsTrigger>
             <TabsTrigger value="console" className="gap-2" data-testid="workspace-tab-console">
-              <Play className="h-4 w-4" />
-              Console
+              <Zap className="h-4 w-4" />
+              Flight Simulator
             </TabsTrigger>
           </TabsList>
         </div>

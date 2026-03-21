@@ -449,19 +449,6 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={location === "/simulate-v2"}
-                  data-testid="nav-flight-simulator"
-                >
-                  <Link href="/simulate-v2">
-                    <Zap className="h-4 w-4" />
-                    <span className="flex-1">Flight Simulator</span>
-                    <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-emerald-500/15 text-emerald-500 border-0">NEW</Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
                   isActive={location === "/decisions"}
                   data-testid="nav-decisions"
                 >

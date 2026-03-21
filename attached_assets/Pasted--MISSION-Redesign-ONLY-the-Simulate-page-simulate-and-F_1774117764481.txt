@@ -1,0 +1,504 @@
+## MISSION
+
+Redesign ONLY the Simulate page (`/simulate`) and Flight Simulator page (`/simulate-v2`) to a world-class, investor-demo-ready standard inspired by mirofish-demo.pages.dev/console — but going beyond it with better hierarchy, emotional pacing, micro-interactions, and polish.
+
+This is a React 18 + TypeScript + Tailwind CSS app. Do NOT touch any other pages (dashboard, decisions, alerts, cap table, fundraising, etc.). Do NOT change the sidebar, routing, or global layout. All changes are scoped to the simulate pages and any new shared UI components they need.
+
+REFERENCE: Visit https://mirofish-demo.pages.dev/console and click "Experience it now" to see the full flow. Key patterns to adopt:
+- Glassmorphism cards with subtle borders and backdrop-blur
+- A horizontal step progress tracker showing simulation stages
+- Animated counters that roll up when values change
+- Staggered card entrance animations (each card fades in 60ms after the previous)
+- A collapsible terminal log drawer instead of inline logs
+- Pulsing border animation on the currently-active process step
+- Skeleton shimmer loading states instead of blank empty states
+- Subtle floating background orbs for depth
+- Social-media-style event feed for agent actions during simulation
+
+---
+
+## STEP 1: Create shared animation CSS
+
+Create `client/src/styles/simulate-animations.css` and import it in `client/src/index.css`:
+```css
+/* === Simulate Page Animations === */
+
+@keyframes fc-fadeUpIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fc-scaleFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fc-pulseBorder {
+  0% { box-shadow: 0 0 0 0 rgba(79, 125, 249, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(79, 125, 249, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 125, 249, 0); }
+}
+
+@keyframes fc-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fc-drift1 {
+  0%, 100% { transform: translate(0, 0) rotate(-12deg); }
+  50% { transform: translate(30px, -20px) rotate(-12deg); }
+}
+
+@keyframes fc-drift2 {
+  0%, 100% { transform: translate(0, 0) rotate(18deg); }
+  50% { transform: translate(-25px, 18px) rotate(18deg); }
+}
+
+@keyframes fc-statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes fc-rollUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fc-pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(79, 125, 249, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(79, 125, 249, 0.4); }
+}
+
+@keyframes fc-buttonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Utility classes — only used on simulate pages */
+.fc-animate-fade-up {
+  animation: fc-fadeUpIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fc-animate-scale-in {
+  animation: fc-scaleFadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.fc-animate-pulse-border {
+  animation: fc-pulseBorder 2s infinite;
+}
+.fc-animate-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: fc-shimmer 1.5s infinite;
+}
+.fc-animate-status-pulse {
+  animation: fc-statusPulse 2s ease-in-out infinite;
+}
+.fc-animate-glow {
+  animation: fc-pulseGlow 3s ease-in-out infinite;
+}
+
+/* Stagger children — apply to parent container */
+.fc-stagger > * { animation: fc-fadeUpIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.fc-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.fc-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.fc-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.fc-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.fc-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.fc-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.fc-stagger > *:nth-child(7) { animation-delay: 360ms; }
+.fc-stagger > *:nth-child(8) { animation-delay: 420ms; }
+.fc-stagger > *:nth-child(9) { animation-delay: 480ms; }
+.fc-stagger > *:nth-child(10) { animation-delay: 540ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-animate-fade-up,
+  .fc-animate-scale-in,
+  .fc-animate-pulse-border,
+  .fc-animate-shimmer,
+  .fc-animate-status-pulse,
+  .fc-animate-glow,
+  .fc-stagger > * {
+    animation: none !important;
+  }
+}
+```
+
+---
+
+## STEP 2: Create new UI components (all in `client/src/components/ui/`)
+
+### `sim-glass-card.tsx`
+Glassmorphism card used only on simulate pages:
+```tsx
+import { cn } from "@/lib/utils";
+import { ReactNode } from "react";
+
+interface SimGlassCardProps {
+  children: ReactNode;
+  className?: string;
+  variant?: "default" | "elevated" | "active" | "processing";
+  hover?: boolean;
+}
+
+export function SimGlassCard({ children, className, variant = "default", hover = true }: SimGlassCardProps) {
+  return (
+    <div className={cn(
+      "relative rounded-xl border backdrop-blur-md transition-all duration-300",
+      variant === "default" && "bg-white/[0.03] border-white/[0.06]",
+      variant === "elevated" && "bg-[#1e1e2a] border-white/10 shadow-lg shadow-black/20",
+      variant === "active" && "bg-white/[0.03] border-blue-500/30 shadow-[0_0_20px_rgba(79,125,249,0.15)]",
+      variant === "processing" && "bg-white/[0.03] border-amber-500/30 fc-animate-pulse-border",
+      hover && "hover:border-white/20 hover:bg-white/[0.06]",
+      className
+    )}>
+      {children}
+    </div>
+  );
+}
+```
+
+### `sim-status-badge.tsx`
+```tsx
+import { cn } from "@/lib/utils";
+
+interface SimStatusBadgeProps {
+  status: "ready" | "running" | "complete" | "error" | "pending";
+  label?: string;
+}
+
+const CONFIG = {
+  ready: { color: "#34d399", defaultLabel: "Ready" },
+  running: { color: "#f59e0b", defaultLabel: "Running" },
+  complete: { color: "#4f7df9", defaultLabel: "Complete" },
+  error: { color: "#ef4444", defaultLabel: "Error" },
+  pending: { color: "#55556a", defaultLabel: "Pending" },
+};
+
+export function SimStatusBadge({ status, label }: SimStatusBadgeProps) {
+  const c = CONFIG[status];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border"
+      style={{
+        color: c.color,
+        borderColor: `${c.color}33`,
+        backgroundColor: `${c.color}14`,
+      }}
+    >
+      <span
+        className={cn("w-1.5 h-1.5 rounded-full", status === "running" && "fc-animate-status-pulse")}
+        style={{ backgroundColor: c.color }}
+      />
+      {label || c.defaultLabel}
+    </span>
+  );
+}
+```
+
+### `sim-animated-counter.tsx`
+
+Odometer-style animated number:
+```tsx
+import { useEffect, useRef, useState } from "react";
+
+interface SimAnimatedCounterProps {
+  value: number;
+  duration?: number;
+  prefix?: string;
+  suffix?: string;
+  className?: string;
+  decimals?: number;
+}
+
+export function SimAnimatedCounter({ value, duration = 1200, prefix = "", suffix = "", className, decimals = 0 }: SimAnimatedCounterProps) {
+  const [display, setDisplay] = useState(0);
+  const prev = useRef(0);
+  const start = useRef<number | null>(null);
+
+  useEffect(() => {
+    prev.current = display;
+    start.current = null;
+
+    const tick = (ts: number) => {
+      if (!start.current) start.current = ts;
+      const p = Math.min((ts - start.current) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 4);
+      setDisplay(prev.current + (value - prev.current) * eased);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [value, duration]);
+
+  const formatted = decimals > 0 ? display.toFixed(decimals) : Math.round(display).toLocaleString();
+
+  return <span className={className}>{prefix}{formatted}{suffix}</span>;
+}
+```
+
+### `sim-step-progress.tsx`
+
+Horizontal step tracker for the simulation flow:
+```tsx
+import { cn } from "@/lib/utils";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
+
+interface SimStep {
+  id: string;
+  label: string;
+  summary?: string;
+  status: "complete" | "active" | "pending";
+}
+
+export function SimStepProgress({ steps }: { steps: SimStep[] }) {
+  return (
+    <div className="flex items-center gap-0.5 px-4 py-2.5 border-b border-white/[0.06] bg-[#111118]/60 backdrop-blur-sm overflow-x-auto">
+      {steps.map((step, i) => (
+        <div key={step.id} className="flex items-center gap-0.5 shrink-0">
+          <div className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300",
+            step.status === "complete" && "text-emerald-400",
+            step.status === "active" && "text-blue-400 bg-blue-500/10 border border-blue-500/20",
+            step.status === "pending" && "text-zinc-500",
+          )}>
+            {step.status === "complete" && <CheckCircle2 className="w-3.5 h-3.5" />}
+            {step.status === "active" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {step.status === "pending" && <Circle className="w-3.5 h-3.5 opacity-40" />}
+            <span>{step.label}</span>
+            {step.summary && step.status === "complete" && (
+              <span className="text-[10px] text-zinc-500 font-mono ml-1">{step.summary}</span>
+            )}
+          </div>
+          {i < steps.length - 1 && (
+            <div className={cn(
+              "w-6 h-px mx-0.5 transition-colors duration-500",
+              step.status === "complete" ? "bg-emerald-400/50" : "bg-white/[0.06]"
+            )} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### `sim-terminal-drawer.tsx`
+
+Collapsible log panel pinned to the bottom:
+```tsx
+import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { ChevronUp, ChevronDown, Terminal } from "lucide-react";
+
+interface LogEntry {
+  time: string;
+  msg: string;
+  type?: "info" | "success" | "error" | "warn";
+}
+
+export function SimTerminalDrawer({ logs, label, id }: { logs: LogEntry[]; label?: string; id?: string }) {
+  const [open, setOpen] = useState(false);
+  const last = logs[logs.length - 1];
+
+  return (
+    <div className={cn(
+      "fixed bottom-0 left-[var(--sidebar-width,240px)] right-0 z-40 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+      open ? "h-56" : "h-9"
+    )}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 h-9 bg-[#0d0d12] border-t border-white/[0.06] text-[11px] font-mono cursor-pointer hover:bg-[#151520] transition-colors"
+      >
+        <div className="flex items-center gap-2 text-zinc-500 min-w-0">
+          <Terminal className="w-3 h-3 shrink-0" />
+          <span className="uppercase tracking-widest text-zinc-600 shrink-0">{label || "System Log"}</span>
+          {last && !open && (
+            <span className={cn(
+              "truncate",
+              last.type === "success" ? "text-emerald-400" : last.type === "error" ? "text-red-400" : "text-zinc-500"
+            )}>
+              {last.type === "success" && "✓ "}{last.msg}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {id && <span className="text-zinc-600">{id}</span>}
+          {open ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="h-[calc(100%-2.25rem)] overflow-y-auto bg-[#08080c] px-4 py-2 font-mono text-[11px] space-y-px scroll-smooth">
+          {logs.map((l, i) => (
+            <div key={i} className="flex gap-3 leading-relaxed">
+              <span className="text-zinc-600 shrink-0 select-none">{l.time}</span>
+              <span className={cn(
+                l.type === "success" ? "text-emerald-400" :
+                l.type === "error" ? "text-red-400" :
+                l.type === "warn" ? "text-amber-400" :
+                "text-zinc-400"
+              )}>{l.msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### `sim-skeleton.tsx`
+
+Shimmer skeleton blocks for loading states:
+```tsx
+import { cn } from "@/lib/utils";
+
+export function SimSkeleton({ className, lines = 3 }: { className?: string; lines?: number }) {
+  return (
+    <div className={cn("space-y-2.5", className)}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <div
+          key={i}
+          className={cn("h-3 rounded fc-animate-shimmer", i === lines - 1 ? "w-2/3" : "w-full")}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+### `sim-background-orbs.tsx`
+
+Floating ambient orbs:
+```tsx
+export function SimBackgroundOrbs({ color = "blue" }: { color?: "blue" | "amber" | "green" }) {
+  const palette: Record<string, [string, string]> = {
+    blue: ["rgba(79,125,249,0.05)", "rgba(167,139,250,0.03)"],
+    amber: ["rgba(245,158,11,0.05)", "rgba(234,88,12,0.03)"],
+    green: ["rgba(52,211,153,0.05)", "rgba(16,185,129,0.03)"],
+  };
+  const [c1, c2] = palette[color];
+
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden z-0">
+      <div className="absolute w-[500px] h-[350px] rounded-full blur-[100px] top-[10%] right-[5%]"
+        style={{ background: c1, animation: "fc-drift1 25s ease-in-out infinite" }} />
+      <div className="absolute w-[400px] h-[300px] rounded-full blur-[80px] bottom-[15%] left-[3%]"
+        style={{ background: c2, animation: "fc-drift2 30s ease-in-out infinite" }} />
+    </div>
+  );
+}
+```
+
+### `sim-event-card.tsx`
+
+Social-media-style card for agent events in the simulation feed:
+```tsx
+import { cn } from "@/lib/utils";
+
+interface SimEventCardProps {
+  agentName: string;
+  agentType: string;
+  action: string;
+  description: string;
+  timestamp: string;
+  sentiment?: "positive" | "neutral" | "negative";
+  index?: number;
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  Founder: "#f59e0b",
+  Investor: "#4f7df9",
+  Customer: "#34d399",
+  Team: "#a78bfa",
+  Market: "#f97316",
+};
+
+export function SimEventCard({ agentName, agentType, action, description, timestamp, sentiment, index = 0 }: SimEventCardProps) {
+  const dotColor = TYPE_COLORS[agentType] || "#6b7280";
+
+  return (
+    <div
+      className="fc-animate-fade-up px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors"
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white/80 shrink-0"
+          style={{ backgroundColor: `${dotColor}22`, border: `1px solid ${dotColor}44` }}>
+          {agentName.charAt(0)}
+        </div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-medium text-zinc-200 truncate">{agentName}</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-zinc-500 shrink-0">{agentType}</span>
+          <span className="text-[10px] text-zinc-600 shrink-0">· {action}</span>
+        </div>
+        <span className="text-[10px] text-zinc-600 ml-auto shrink-0 font-mono">{timestamp}</span>
+      </div>
+      <p className={cn(
+        "text-sm leading-relaxed pl-9",
+        sentiment === "positive" ? "text-zinc-300" :
+        sentiment === "negative" ? "text-zinc-400" :
+        "text-zinc-400"
+      )}>
+        {description}
+      </p>
+    </div>
+  );
+}
+```
+
+---
+
+## STEP 3: Apply to the Simulate page (`/simulate`)
+
+In the existing Simulation Console page at `client/src/pages/simulate-workspace.tsx` (or wherever `/simulate` is rendered), make these changes:
+
+1. **Add `SimStepProgress` at the top of the page content** (below breadcrumbs, above "Simulation Console" title) with 5 steps: Initialize Agents → Build Knowledge Graph → Run Simulation → Analyze Outcomes → Compile Report. Set the step statuses based on the current simulation state.
+
+2. **Wrap the Live Metrics cards** (CASH, MONTHLY BURN, RUNWAY) with `SimGlassCard variant="elevated"`. Replace the plain number values with `SimAnimatedCounter`. Add the `fc-stagger` class to the parent grid so cards cascade in.
+
+3. **Wrap the Scenario Controls section** with `SimGlassCard variant="elevated"`.
+
+4. **Replace the empty "Run a simulation to see agent events" state** with `SimSkeleton lines={5}` wrapped in a `SimGlassCard`, with a centered message below. When events DO come in, render them using `SimEventCard` components inside a scrollable container.
+
+5. **Replace the empty "Ready to Simulate" right panel** with a `SimGlassCard` containing the `SimSkeleton` and message, then populate with investor outlook data using `SimAnimatedCounter` for the term sheet probability.
+
+6. **Upgrade the "Run Simulation" button**: Add these classes: `shadow-[0_0_20px_rgba(79,125,249,0.2)] hover:shadow-[0_0_30px_rgba(79,125,249,0.4)] transition-all duration-300`. When simulation is running, replace button text with a `Loader2` spinner + "Simulating...".
+
+7. **Add `SimBackgroundOrbs color="blue"`** as the first child of the page wrapper (position relative, z-0).
+
+8. **Add `SimTerminalDrawer`** at the bottom. Feed it the simulation log entries (initializing agents, building knowledge graph, etc.) as they happen. Remove any existing inline log display.
+
+---
+
+## STEP 4: Apply to the Flight Simulator page (`/simulate-v2`)
+
+In the Flight Simulator page at `client/src/pages/simulate-v2` (or wherever `/simulate-v2` is rendered):
+
+1. **Add `SimStepProgress`** at the top with steps: Configure → Launch → Simulate Agents → Generate Insights → Complete.
+
+2. **Wrap the left Scenario Controls panel** with `SimGlassCard variant="elevated"` and add a `p-5` padding. Add thin `border-b border-white/[0.04] pb-4 mb-4` dividers between the SCENARIO CONTROLS, ENVIRONMENT, and FOUNDER DNA sections.
+
+3. **Upgrade the center "Flight Simulator" empty state**: Add `SimBackgroundOrbs color="blue"` behind it. The lightning bolt icon should get a `fc-animate-glow` class for a pulsing glow ring. The description text and "Launch Simulation" button should have `fc-animate-fade-up` with staggered delays (description at 0ms, button at 200ms).
+
+4. **Upgrade the "Launch Simulation" / "Run Simulation" button**: Make it larger (`px-8 py-3.5 text-base`). Add a shimmer gradient on hover: `bg-gradient-to-r from-blue-600 via-blue-500 to-blue-600 bg-[length:200%_100%] hover:animate-[fc-buttonShimmer_2s_linear_infinite]`. Add the glow shadow: `shadow-[0_0_25px_rgba(79,125,249,0.3)] hover:shadow-[0_0_40px_rgba(79,125,249,0.5)]`.
+
+5. **When simulation runs — Agent Events feed**: Replace any list/text display of agent events with `SimEventCard` components inside a `SimGlassCard`. The card should have a header: "Agent Events" with a live count badge showing total events. Each agent event card cascades in with staggered animation.
+
+6. **Right panel AI Insights**: Wrap with `SimGlassCard variant="elevated"`. When insights load, each insight should be its own `SimGlassCard variant="default"` that fades in with `fc-animate-fade-up` staggered.
+
+7. **Add `SimTerminalDrawer`** at the bottom with simulation log entries. Feed it timestamped entries like: "Initializing 5 agents...", "Founder agent analyzing metrics...", "Investor agent evaluating term sheet...", "Round 3/24 complete", etc.
+
+8. **Add `SimStatusBadge`** next to the page title "Flight Simulator" showing the current state (Ready / Running / Complete).
+
+---
+
+## CRITICAL RULES
+
+1. ONLY modify files related to the simulate pages and the new UI components listed above.
+2. Do NOT touch: sidebar, dashboard, decisions, alerts, cap table, fundraising, onboarding, or any other page.
+3. All new components go in `client/src/components/ui/` with the `sim-` prefix.
+4. The new CSS file goes in `client/src/styles/simulate-animations.css`.
+5. All animation class names are prefixed with `fc-` to avoid conflicts with existing styles.
+6. Do NOT remove any existing functionality on the simulate pages — only enhance visually.
+7. Test that the app builds and both simulate pages render correctly after each step.
+8. Respect `prefers-reduced-motion` (already handled in the CSS above).
