@@ -71,6 +71,14 @@ from server.models.metric_snapshot import MetricSnapshot
 from server.models.workspace import NotificationPreference
 from server.models.twin_event import TwinEvent
 from server.models.copilot_feedback import CopilotFeedback
+from server.models.conversation import Conversation
+from server.models.analytics_event import AnalyticsEvent
+from server.models.cap_table import Shareholder, EquityHolding, OptionGrant, EquityTransaction
+from server.models.company_source import CompanySource
+from server.models.exchange_rate import ExchangeRate
+from server.models.lead import Lead
+from server.models.scenario_template import ScenarioTemplate
+from server.models.simulation_accuracy import SimulationAccuracy, CalibrationBias
 from server.models.agent_simulation import AgentSimulationRun
 
 __all__ = [
@@ -157,5 +165,6 @@ __all__ = [
     "NotificationPreference",
     "TwinEvent",
     "CopilotFeedback",
+    "Conversation",
     "AgentSimulationRun",
 ]

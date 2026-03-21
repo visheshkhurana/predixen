@@ -136,7 +136,6 @@ def _record_to_dict(r) -> Dict[str, Any]:
     return {
         "period": r.period_start.isoformat() if r.period_start else None,
         "revenue": r.revenue,
-        "expenses": r.total_expenses,
         "net_burn": r.net_burn,
         "runway": r.runway_months,
         "growth": r.mom_growth,
