@@ -1,0 +1,237 @@
+// ==========================================
+// FOUNDERCONSOLE SIMULATE (FINAL VERSION)
+// WITH AGENT-STYLE FEED + ANIMATIONS
+// ==========================================
+
+import React, { useState, useEffect } from "react";
+import "@/styles/simulation-animations.css";
+import { useCounter } from "@/hooks/useCounter";
+
+// ==========================================
+// STATUS BAR
+// ==========================================
+function StatusBar() {
+  return (
+    <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
+      <div className="status-dot"></div>
+      <span>Running simulation...</span>
+    </div>
+  );
+}
+
+// ==========================================
+// AGENT EVENT COMPONENT
+// ==========================================
+function AgentEvent({ event }: any) {
+  const colorMap: any = {
+    investor: "bg-purple-500/10 border-purple-500/30",
+    customer: "bg-blue-500/10 border-blue-500/30",
+    team: "bg-green-500/10 border-green-500/30",
+    market: "bg-orange-500/10 border-orange-500/30",
+  };
+
+  return (
+    <div
+      className={`event-item flex items-start gap-3 p-3 rounded-lg border ${colorMap[event.type]}`}
+    >
+      <div className="text-xs uppercase tracking-wide text-gray-400 w-16">
+        {event.type}
+      </div>
+
+      <div className="flex-1 text-sm">
+        <div className="text-gray-200">{event.message}</div>
+
+        <div className="text-xs text-gray-500 mt-1">
+          {event.time}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// EVENT FEED (AGENT BASED)
+// ==========================================
+function EventFeed({ events }: any) {
+  return (
+    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-2">
+      {events.map((e: any, i: number) => (
+        <AgentEvent key={i} event={e} />
+      ))}
+    </div>
+  );
+}
+
+// ==========================================
+// TIMELINE
+// ==========================================
+function Timeline({ current }: { current: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      {[...Array(12)].map((_, i) => (
+        <div
+          key={i}
+          className={`h-2 flex-1 rounded transition-all duration-300 ${
+            i <= current ? "bg-blue-500" : "bg-gray-700"
+          }`}
+        ></div>
+      ))}
+    </div>
+  );
+}
+
+// ==========================================
+// MAIN SIMULATION PAGE
+// ==========================================
+export default function SimulateEnhanced() {
+  const [events, setEvents] = useState([
+    {
+      type: "team",
+      message: "Hiring 3 engineers increased burn rate",
+      time: "Month 2",
+    },
+    {
+      type: "customer",
+      message: "Churn increased to 3.5%",
+      time: "Month 3",
+    },
+    {
+      type: "investor",
+      message: "Investor confidence dropped due to burn",
+      time: "Month 5",
+    },
+    {
+      type: "market",
+      message: "Market slowdown impacting growth",
+      time: "Month 6",
+    },
+  ]);
+
+  // ==========================================
+  // LIVE METRICS
+  // ==========================================
+  const runway = useCounter(14);
+  const burn = useCounter(55000);
+  const cash = useCounter(780000);
+
+  const riskHigh = runway < 10;
+
+  // ==========================================
+  // SIMULATE LIVE EVENT STREAM
+  // ==========================================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newEvent = {
+        type: ["investor", "customer", "team"][Math.floor(Math.random() * 3)],
+        message: "System update event triggered",
+        time: `Month ${Math.floor(Math.random() * 12)}`,
+      };
+
+      setEvents((prev) => [newEvent, ...prev.slice(0, 8)]);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="simulation-root relative min-h-screen bg-[#0a0a0a] text-white p-6">
+
+      {/* BACKGROUND ORBS */}
+      <div className="bg-orb top-10 left-10"></div>
+      <div className="bg-orb bottom-10 right-10"></div>
+
+      <StatusBar />
+
+      <div className="grid grid-cols-12 gap-6">
+
+        {/* ==========================================
+            LEFT PANEL
+        ========================================== */}
+        <div className="col-span-3 space-y-4">
+
+          <div className="bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-3">Live Metrics</h3>
+
+            <div className="space-y-2 text-sm">
+              <div>Cash: ${cash.toLocaleString()}</div>
+              <div>Burn: ${burn.toLocaleString()}</div>
+              <div>Runway: {runway} months</div>
+
+              <div
+                className={`mt-2 px-2 py-1 text-xs rounded ${
+                  riskHigh
+                    ? "risk-alert bg-red-500/20"
+                    : "bg-green-500/20"
+                }`}
+              >
+                Risk: {riskHigh ? "High" : "Moderate"}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-2">Scenario Controls</h3>
+            <div className="text-xs text-gray-400">
+              (Use existing sliders here)
+            </div>
+          </div>
+
+        </div>
+
+        {/* ==========================================
+            CENTER PANEL (SIMULATION CORE)
+        ========================================== */}
+        <div className="col-span-6">
+
+          <Timeline current={6} />
+
+          <div className="bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-3">Simulation Events</h3>
+
+            <EventFeed events={events} />
+          </div>
+
+        </div>
+
+        {/* ==========================================
+            RIGHT PANEL (INSIGHTS)
+        ========================================== */}
+        <div className="col-span-3 space-y-4">
+
+          <div className="result-card bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-2">Recommendation</h3>
+            <p className="text-sm">
+              Delay hiring to extend runway
+            </p>
+          </div>
+
+          <div className="result-card bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-2">Key Risk</h3>
+            <p className="text-sm">
+              Runway may drop below 9 months
+            </p>
+          </div>
+
+          <div className="result-card bg-white/5 border border-white/10 p-4 rounded-lg">
+            <h3 className="text-sm mb-2">Suggested Action</h3>
+            <p className="text-sm">
+              Raise capital within 90 days
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* ==========================================
+          SIMULATION LOADING FEEDBACK
+      ========================================== */}
+      <div className="mt-6">
+        <div className="shimmer h-10 rounded-lg flex items-center justify-center text-xs">
+          Re-running simulation...
+        </div>
+      </div>
+
+    </div>
+  );
+}
