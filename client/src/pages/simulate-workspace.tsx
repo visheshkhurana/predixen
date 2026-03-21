@@ -233,13 +233,76 @@ function chainEvents(events: SimEvent[]): SimEvent[] {
   return chained;
 }
 
-function ThinkingState({ isActive }: { isActive: boolean }) {
-  const [msgIndex, setMsgIndex] = useState(0);
+const SIMULATION_STAGES = [
+  { id: 'init', label: 'Initializing agents' },
+  { id: 'knowledge', label: 'Building knowledge graph' },
+  { id: 'simulate', label: 'Running simulation rounds' },
+  { id: 'analyze', label: 'Analyzing outcomes' },
+  { id: 'report', label: 'Compiling report' },
+];
+
+function SimulationStageTracker({ isActive, isComplete }: { isActive: boolean; isComplete: boolean }) {
+  const [activeStage, setActiveStage] = useState(0);
 
   useEffect(() => {
-    if (!isActive) return;
+    if (!isActive) {
+      if (isComplete) setActiveStage(SIMULATION_STAGES.length);
+      return;
+    }
+    setActiveStage(0);
     const interval = setInterval(() => {
-      setMsgIndex(prev => (prev + 1) % THINKING_MESSAGES.length);
+      setActiveStage(prev => {
+        if (prev >= SIMULATION_STAGES.length - 1) return prev;
+        return prev + 1;
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isActive, isComplete]);
+
+  return (
+    <div className="stage-tracker flex flex-col gap-0" data-testid="stage-tracker">
+      {SIMULATION_STAGES.map((stage, i) => {
+        const isDone = isComplete || i < activeStage;
+        const isCurrent = isActive && i === activeStage;
+        return (
+          <div key={stage.id} className="flex items-start gap-2">
+            <div className="flex flex-col items-center">
+              <div className={`stage-dot ${isDone ? 'stage-dot--complete' : ''} ${isCurrent ? 'stage-dot--active' : ''}`} data-testid={`stage-${stage.id}`} />
+              {i < SIMULATION_STAGES.length - 1 && (
+                <div className={`stage-line h-4 ${isDone ? 'stage-line--complete' : ''}`} />
+              )}
+            </div>
+            <span className={`text-[10px] -mt-0.5 ${isDone ? 'text-emerald-500' : isCurrent ? 'text-blue-400' : 'text-muted-foreground/50'}`}>
+              {isDone ? '✓ ' : ''}{stage.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+function ThinkingState({ isActive }: { isActive: boolean }) {
+  const [msgIndex, setMsgIndex] = useState(0);
+  const [logEntries, setLogEntries] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!isActive) {
+      setLogEntries([]);
+      return;
+    }
+    const interval = setInterval(() => {
+      setMsgIndex(prev => {
+        const next = (prev + 1) % THINKING_MESSAGES.length;
+        const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+        const prefix = next < 3 ? '<span class="log-info">INFO</span>' : next < 7 ? '<span class="log-success">✓</span>' : '<span class="log-warn">PROC</span>';
+        setLogEntries(prev => {
+          const newEntries = [...prev, `<span class="log-time">${ts}</span> ${prefix} ${THINKING_MESSAGES[next]}`];
+          return newEntries.slice(-8);
+        });
+        return next;
+      });
     }, 2500);
     return () => clearInterval(interval);
   }, [isActive]);
@@ -247,14 +310,23 @@ function ThinkingState({ isActive }: { isActive: boolean }) {
   if (!isActive) return null;
 
   return (
-    <div className="thinking-text flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/30 mb-2" data-testid="thinking-state" key={msgIndex}>
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400 shrink-0" />
-      <span className="text-xs text-cyan-400/90">{THINKING_MESSAGES[msgIndex]}</span>
-      <span className="text-xs">
-        <span className="dot-1">.</span>
-        <span className="dot-2">.</span>
-        <span className="dot-3">.</span>
-      </span>
+    <div className="space-y-2 mb-2" data-testid="thinking-state">
+      <div className="thinking-text flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/30" key={msgIndex}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400 shrink-0" />
+        <span className="text-xs text-cyan-400/90">{THINKING_MESSAGES[msgIndex]}</span>
+        <span className="text-xs">
+          <span className="dot-1">.</span>
+          <span className="dot-2">.</span>
+          <span className="dot-3">.</span>
+        </span>
+      </div>
+      {logEntries.length > 0 && (
+        <div className="system-log" data-testid="system-log">
+          {logEntries.map((entry, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: entry }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -742,8 +814,9 @@ export default function SimulateWorkspace() {
 
   return (
     <div className="simulation-root relative min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
-      <div className="bg-orb top-10 left-10" />
-      <div className="bg-orb bottom-10 right-10" />
+      <div className="bg-orb bg-orb--blue top-10 left-10" />
+      <div className="bg-orb bg-orb--emerald bottom-10 right-10" />
+      <div className="bg-orb bg-orb--purple top-1/2 left-1/3" />
 
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-3">
@@ -781,7 +854,7 @@ export default function SimulateWorkspace() {
         <div className="grid grid-cols-12 gap-4">
           {/* LEFT — Live Metrics + Controls */}
           <div className="col-span-12 lg:col-span-3 space-y-3">
-            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+            <div className={`glass-panel p-4 rounded-lg animate-item ${isSimulating ? 'glass-panel--active' : ''}`}>
               <h3 className="text-sm mb-3 font-medium">Live Metrics</h3>
               <div className="space-y-2">
                 <LiveMetricCard
@@ -813,7 +886,7 @@ export default function SimulateWorkspace() {
               </div>
             </div>
 
-            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+            <div className="glass-panel p-4 rounded-lg animate-item">
               <h3 className="text-sm mb-3 font-medium">Scenario Controls</h3>
               <div className="space-y-3">
                 <ScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
@@ -826,18 +899,27 @@ export default function SimulateWorkspace() {
 
           {/* CENTER — Thinking + Timeline + Events */}
           <div className="col-span-12 lg:col-span-6 space-y-3">
-            <ThinkingState isActive={isSimulating} />
+            <div className="flex gap-3">
+              <div className="shrink-0 pt-1">
+                <SimulationStageTracker isActive={isSimulating} isComplete={!!simResult} />
+              </div>
+              <div className="flex-1 min-w-0 space-y-3">
+                <ThinkingState isActive={isSimulating} />
 
-            {timeline.length > 0 && (
-              <SimTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
-            )}
+                {timeline.length > 0 && (
+                  <div className="animate-item">
+                    <SimTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
+                  </div>
+                )}
+              </div>
+            </div>
 
-            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+            <div className="glass-panel p-4 rounded-lg animate-item">
               <EventFeed events={events} isLive={isSimulating} />
             </div>
 
             {!simResult && !isSimulating && (
-              <div className="text-center py-10 rounded-lg border border-dashed border-border/50">
+              <div className="text-center py-10 rounded-lg border border-dashed border-border/50 glass-panel">
                 <Activity className="h-8 w-8 mx-auto text-muted-foreground/30 mb-3" />
                 <h3 className="text-sm font-medium text-muted-foreground mb-1">Ready to Simulate</h3>
                 <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
@@ -849,18 +931,18 @@ export default function SimulateWorkspace() {
 
           {/* RIGHT — Investor + Cohort + Decisions */}
           <div className="col-span-12 lg:col-span-3 space-y-3">
-            <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+            <div className="result-card glass-panel p-4 rounded-lg animate-item">
               <InvestorPanel probability={fundingPct} risks={risks} previousProb={previousFundingProb} />
             </div>
 
             {timeline.length > 0 && (
-              <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+              <div className="result-card glass-panel p-4 rounded-lg animate-item">
                 <CohortPanel timeline={timeline} />
               </div>
             )}
 
             {recommendations.length > 0 && (
-              <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+              <div className="result-card glass-panel p-4 rounded-lg animate-item">
                 <DecisionReplay recommendations={recommendations} />
               </div>
             )}
