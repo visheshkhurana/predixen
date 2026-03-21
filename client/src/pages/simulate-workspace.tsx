@@ -3,18 +3,80 @@ import { useSEO } from "@/lib/seo";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import {
-  Play, Users, TrendingUp, TrendingDown, DollarSign,
-  Activity, Target, Clock, Zap,
+  Play, TrendingUp, TrendingDown, DollarSign,
+  Activity, Clock,
   AlertTriangle, ShieldCheck, Loader2
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useCounter } from '@/hooks/useCounter';
-import { useCurrency } from '@/hooks/useCurrency';
 import '@/styles/simulation-animations.css';
+import type { LucideIcon } from 'lucide-react';
+
+interface BackendEvent {
+  agentType?: string;
+  type?: string;
+  eventType?: string;
+  description?: string;
+  message?: string;
+  impact?: Record<string, number>;
+  severity?: string;
+  month?: number;
+  time?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface BackendRecommendation {
+  priority?: string;
+  title?: string;
+  action?: string;
+  description?: string;
+  impact?: string;
+  category?: string;
+}
+
+interface BackendRisk {
+  type?: string;
+  description?: string;
+  risk?: string;
+  severity?: string;
+  probability?: number;
+  occurrences?: number;
+}
+
+interface BackendTimelineEntry {
+  month: number;
+  cash_balance?: number;
+  cash?: number;
+  monthly_revenue?: number;
+  revenue?: number;
+  monthly_burn?: number;
+  burn?: number;
+  runway_months?: number;
+  runway?: number;
+  headcount?: number;
+}
+
+interface BackendSimulationResponse {
+  summary: {
+    survivalProbability: number;
+    fundingProbability: number;
+    finalCash: number;
+    finalRunway: number;
+    peakBurn: number;
+    revenueGrowth: number;
+  };
+  timeline: BackendTimelineEntry[];
+  events: BackendEvent[];
+  keyRisks: BackendRisk[];
+  recommendations: BackendRecommendation[];
+  trajectories: Record<string, number[]>;
+  shareToken?: string;
+  simulationId?: number;
+}
 
 interface SimEvent {
   type: 'investor' | 'customer' | 'team' | 'market' | 'founder';
@@ -77,7 +139,7 @@ const THINKING_MESSAGES = [
 
 const AGENT_CHAIN_ORDER = ['team', 'customer', 'market', 'investor', 'founder'];
 
-function mapBackendEvent(e: any): SimEvent {
+function mapBackendEvent(e: BackendEvent): SimEvent {
   const agentType = e.agentType || e.type || 'market';
   const impactObj = e.impact || {};
   const impactParts: string[] = [];
@@ -117,7 +179,7 @@ function mapBackendEvent(e: any): SimEvent {
   };
 }
 
-function mapBackendRecommendation(r: any): SimRecommendation {
+function mapBackendRecommendation(r: BackendRecommendation): SimRecommendation {
   const categoryWhyMap: Record<string, string> = {
     survival: 'Critical runway risk detected by simulation',
     efficiency: 'Burn efficiency below optimal threshold',
@@ -230,7 +292,7 @@ function LiveMetricCard({
   label, value, prefix, suffix, trend, icon: Icon, color = 'text-foreground', testId
 }: {
   label: string; value: number; prefix?: string; suffix?: string;
-  trend?: 'up' | 'down' | 'flat'; icon: any; color?: string; testId: string;
+  trend?: 'up' | 'down' | 'flat'; icon: LucideIcon; color?: string; testId: string;
 }) {
   const animatedValue = useCounter(value);
   const isNegativeTrend = trend === 'down';
@@ -355,7 +417,7 @@ function SimTimeline({ timeline, currentMonth }: { timeline: TimelineMonth[]; cu
             <div key={i} className={`sim-timeline-bar ${isActive ? 'ring-1 ring-emerald-500/50' : ''}`} data-testid={`timeline-month-${i}`}>
               <div
                 className={`sim-timeline-bar__fill ${barColor}`}
-                style={{ width: `${pct}%`, '--bar-width': `${pct}%` } as any}
+                style={{ width: `${pct}%`, '--bar-width': `${pct}%` } as React.CSSProperties}
               />
               <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px]">
                 <span className="font-medium">M{m.month}</span>
@@ -570,8 +632,7 @@ export default function SimulateWorkspace() {
   });
 
   const currentCompany = useFounderStore((s) => s.currentCompany);
-  const { metrics: baseMetrics, isLoading: metricsLoading } = useFinancialMetrics();
-  const { format: formatCurrency } = useCurrency();
+  const { metrics: baseMetrics } = useFinancialMetrics();
   const { toast } = useToast();
 
   const [numRounds, setNumRounds] = useState(12);
@@ -612,16 +673,16 @@ export default function SimulateWorkspace() {
       setSimResult(null);
       setCurrentTimelineMonth(0);
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: BackendSimulationResponse) => {
       const mappedEvents = chainEvents((data.events || []).map(mapBackendEvent));
       const mappedRecs = (data.recommendations || []).map(mapBackendRecommendation);
-      const mappedRisks = (data.keyRisks || []).map((r: any) => ({
+      const mappedRisks = (data.keyRisks || []).map((r: BackendRisk) => ({
         risk: r.description || r.risk || r.type || '',
         severity: r.severity || 'medium',
         probability: r.probability || r.occurrences || 0,
         driver: r.type ? r.type.replace(/_/g, ' ') : undefined,
       }));
-      const mappedTimeline = (data.timeline || []).map((t: any) => ({
+      const mappedTimeline = (data.timeline || []).map((t: BackendTimelineEntry) => ({
         month: t.month,
         cash: t.cash_balance ?? t.cash ?? 0,
         revenue: t.monthly_revenue ?? t.revenue ?? 0,
@@ -641,7 +702,7 @@ export default function SimulateWorkspace() {
       setLastUpdated(Date.now());
       toast({ title: 'Simulation Complete', description: `Survival probability: ${data.summary.survivalProbability.toFixed(0)}%` });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       setIsSimulating(false);
       toast({ title: 'Simulation Failed', description: err.message || 'An error occurred', variant: 'destructive' });
     },
