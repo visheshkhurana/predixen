@@ -1,0 +1,155 @@
+You are a senior full-stack engineer working inside FounderConsole.
+
+You are upgrading the existing `/simulate` page.
+
+DO NOT:
+- create new pages
+- change routing
+- change architecture
+
+ONLY enhance UX, feedback, and intelligence layer.
+
+--------------------------------------------------
+
+OBJECTIVE
+
+Transform simulate page from:
+
+"event display"
+
+to:
+
+"thinking system"
+
+--------------------------------------------------
+
+STEP 1 — ADD CAUSAL EVENTS
+
+Update event system to include:
+
+{
+  type: "investor" | "customer" | "team" | "market" | "founder",
+  message: string,
+  reason: string,
+  impact: string,
+  time: string
+}
+
+Render:
+
+EVENT
+→ reason
+→ impact
+
+--------------------------------------------------
+
+STEP 2 — CHAIN EVENTS
+
+Link events:
+
+Team → Investor → Founder
+
+Render visually:
+
+[TEAM] Hiring increased burn
+→ [INVESTOR] Confidence dropped
+→ [FOUNDER] Recommendation generated
+
+--------------------------------------------------
+
+STEP 3 — ADD SYSTEM THINKING STATE
+
+Add system messages:
+
+"Analyzing investor sentiment..."
+"Evaluating survival probability..."
+"Recalculating runway..."
+
+Show above event feed.
+
+--------------------------------------------------
+
+STEP 4 — ADD DATA FRESHNESS INDICATOR
+
+Top-right:
+
+● Live (updated Xs ago)
+
+Update every 2–3 seconds.
+
+--------------------------------------------------
+
+STEP 5 — ADD DECISION EXPLANATION
+
+Each recommendation must include:
+
+- why it was generated
+- what it affects
+- confidence score
+
+--------------------------------------------------
+
+STEP 6 — IMPROVE INVESTOR PANEL
+
+Add:
+
+- probability change (+ / - delta)
+- key driver (burn / growth / runway)
+
+--------------------------------------------------
+
+STEP 7 — IMPROVE COHORT PANEL
+
+Add:
+
+- trend indicator (↑ ↓)
+- churn reason (if available)
+
+--------------------------------------------------
+
+STEP 8 — ADD MICRO-ANIMATIONS
+
+- fade-in new events
+- count-up metrics
+- pulse risk badge
+- shimmer loading bar
+
+Use existing CSS only.
+
+--------------------------------------------------
+
+STEP 9 — REMOVE NOISE
+
+Reduce:
+
+- unnecessary charts
+- redundant metrics
+
+Focus on:
+
+events + decisions
+
+--------------------------------------------------
+
+STEP 10 — FINAL BEHAVIOR
+
+System must feel like:
+
+- thinking
+- reacting
+- evolving
+
+NOT static dashboard.
+
+--------------------------------------------------
+
+EXECUTION RULE
+
+Do NOT rewrite logic.
+
+ONLY:
+- extend UI
+- reuse components
+- wire existing data
+
+--------------------------------------------------

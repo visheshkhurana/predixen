@@ -1,0 +1,130 @@
+# MiroFish Demo — Complete UI/UX Flow & Animation Breakdown
+
+I've thoroughly navigated every screen and inspected the source code. Here's a comprehensive breakdown you can use to recreate this in your **FounderConsole** application.
+
+---
+
+## Tech Stack
+
+The app is built with **Vue 3** (with scoped CSS using `data-v-*` attributes), **Vue Router** for page transitions, and uses pure **CSS animations/transitions** (no Framer Motion, GSAP, or React Spring). It's deployed on Cloudflare Pages.
+
+---
+
+## Complete Route Flow (5 Stages)
+
+### Stage 1: `/console` — Console Home (System Status)
+**Layout:** Two-column — left sidebar with workflow steps, right panel with input configuration.
+
+**Key UI elements:**
+- **System status indicator** — A small colored dot (green/orange) with "System status" label and a heading that types out "The system is ready." with a bold, large font.
+- **Workflow Steps sidebar (01–05)** — Numbered steps with title + description. Each step uses a monospaced step number and a regular body description.
+- **Right panel cards:** "Reality Seed" section with PDF file upload card (bordered, with download icon), a divider labeled "Input parameters," and a "Simulated Requirements" section styled as a dark code-like block with monospace font.
+- **CTA Button:** "Experience it now →" — large, full-width, monospaced font, with hover transition (0.3s ease).
+- **Warning banner:** Yellow-tinted background with a ⚠ icon and disclaimer text.
+
+### Stage 2: `/console/process/:projectId` — Map Construction
+**Layout:** Two-column — left: live interactive graph visualization; right: step-by-step process cards.
+
+**Key UI elements:**
+- **Top navigation tabs:** Atlas | Double column | workbench | (current stage) — pill-shaped toggle buttons with active state highlighting.
+- **Status indicator in navbar:** Colored dot (orange = in progress, green = complete) with label like "Ontology generation in progress."
+- **Graph Visualization (left):** Force-directed graph with colored nodes by entity type (University=orange, Entity=blue, Alumni=green, etc.), edge labels with relationship names, a legend at the bottom, "Show Edge Labels" toggle, Refresh and Fullscreen buttons.
+- **"Updating in real time..." toast:** Dark semi-transparent pill at bottom-center with a spinning/pulsing icon.
+- **Process steps (right):** Cards with red/orange left border (pulsing border animation), numbered 01–03 with status badges ("COMPLETED" in red/coral, "15%" / "70%" / "90%" progress badges, "PROCESSING" label).
+- **Animated counters:** Entity nodes, relationship edges, and schema type counts that increment in real-time as the graph builds.
+
+**Animations:**
+- `pulse-border` — `box-shadow` animation pulsing out from 0px to 6px then fading
+- Live counter animation with numbers smoothly incrementing
+- Graph nodes appearing with a bounceIn effect
+- Progress percentage badges updating with color transitions
+
+### Stage 3: `/console/simulation/:simulationId` — Environment Setup
+**Layout:** Same two-column with graph left, configuration panels right.
+
+**Key UI elements:**
+- **Simulation Instance card** with Project ID, Graph ID, Simulation ID, Task ID displayed in a monospace key-value grid.
+- **Agent Persona generation cards:** Beautiful cards showing each agent with avatar initial, @handle, role, bio text, and topic tags (pill-shaped). Cards are horizontally scrollable.
+- **Simulation Configuration panel:** Duration (72 hours), Round duration (60 min), hourly active range (10–27), peak hours with multiplier badges (×1.5, ×0.7, ×0.4, ×0.05).
+- **Agent Configuration grid:** 55 agent cards in a 2-column grid, each showing: agent name, type badge (Person/Student/University), stance badge (SUPPORTIVE=green, NEUTRAL=gray, OPPOSING=red), "Active Period" bar chart (24-hour heatmap), posting/comment frequency, response delay, Activity progress bar (purple), Emotional Tendency (colored +/- value), Influence score.
+- **Recommendation Algorithm configuration:** Two platform configs with weight sliders for timeliness, popularity, relevance, virus threshold, echo chamber intensity.
+- **LLM Configuration Inference:** Explanatory text block with event rationale.
+- **Initial Activation Sequence (4 posts):** Cards showing initial social media posts from different agents, with agent type label, agent handle, and post content.
+- **Start Simulation section:** Toggle for "Custom" mode, wheel/round selector, estimated time notice, and two buttons: "← Return to graph construction" (outline) and "Start dual-platform simulation" (solid dark).
+- **System Dashboard:** Dark terminal-style log at the bottom of the page with monospace font, timestamp entries, ✓ success markers, └─ tree-style indentation.
+
+### Stage 4: `/console/simulation/:simId/start` — Simulation Running
+**Layout:** Two-column — left: graph (now with many more nodes and real-time updates); right: dual-platform simulation feed.
+
+**Key UI elements:**
+- **Platform tabs:** "INFO PLAZA" and "TOPIC COMMUNITY" with globe/chat icons, showing Round X/40, Elapsed Time, Acts count, and ✓ completion checkmarks.
+- **Event counter:** "Total Events: 732" with agent count icon.
+- **Available Actions floating tooltip:** Dark card showing action types as pill badges (POST, COMMENT, LIKE, DISLIKE, SEARCH, TREND, FOLLOW, MUTE, REFRESH, IDLE).
+- **Social media feed:** Scrolling feed of simulated posts with timestamps (R1 · 06:58:03 format).
+- **GraphRAG Long Short-Term Memory toast:** Dark toast at bottom "GraphRAG Long Short-Term Memory is being updated in real time."
+- **"START GENERATING RESULTS REPORT →" button:** Prominent CTA at top-right, with arrow icon.
+- **Simulation Monitor:** Terminal-style dark log showing real-time simulation events.
+
+### Stage 5a: `/console/report/:reportId` — Report Generation
+**Layout:** Two-column — left: rendered report content; right: generation progress tracker.
+
+**Key UI elements:**
+- **Progress tracker (right):** Shows "SECTIONS 3/3 ELAPSED 6m 54s TOOLS 10" with "COMPLETED" badge. Vertical timeline with PL (Planning), 01, 02, 03, OK stages, each with green dot indicators and descriptive titles. Active step highlighted with a blue/dark background pill.
+- **Report content (left):** Long-form text with bold headings, block quotes in italic with left border, numbered sections.
+- **"Entering Deep Interaction →" button:** Full-width dark button.
+- **Console Output:** Terminal-style log showing GraphRAG queries in real-time with INFO tags.
+
+### Stage 5b: `/console/interaction/:reportId` — Deep Interaction
+**Layout:** Two-column — left: full rendered prediction report; right: interactive chat interface.
+
+**Key UI elements:**
+- **"PREDICTION REPORT" badge:** Small label in top-left with report ID.
+- **Report content:** Large serif-like title, italicized executive summary, numbered sections with expand/collapse (chevron icons).
+- **Interactive Tools panel (right):** Three tab buttons: "Talking to the Report Agent" (active, with chat icon), "Engage with any individual" (with people icon), "Send questionnaire" (with checkmark icon).
+- **Report Agent Chat:** Description card explaining the agent's capabilities, four tool cards in a 2×2 grid (InsightForge Deep Attribution, PanoramaSearch Panoramic Tracking, QuickSearch, InterviewSubAgent Virtual Interview), each with an icon and description.
+- **Agent dialogue dropdown:** "Select Dialogue Partner" showing list of 55 agents with avatar circles (colored by initials), name, and role description.
+- **Chat input:** Text field with "Enter your question..." placeholder and send button (paper plane icon).
+
+---
+
+## Key Animations to Recreate
+
+**1. Fade-in on Mount** — `waitlistFadeIn`: `opacity: 0 → 1`, `scale(0.95) → scale(1)`, 0.4s ease-out
+
+**2. SVG Underline Draw** — `draw-underline`: Uses `stroke-dasharray/stroke-dashoffset` technique, 0.6s ease-out with 0.5s delay
+
+**3. Floating Orbs (Background)** — `drift-hero`: Large blurred circles (600×400px, `blur(80px)`) that slowly translate back and forth, 30s infinite ease-in-out
+
+**4. Metal/Shimmer Text** — `metal-shift` + `metal-shimmer`: Background-position animation on gradient text, creating a reflective metallic sweep
+
+**5. Pulse-down Scroll Indicator** — `pulse-sink`: translateY bouncing 0→5px with opacity 0.6→1, 2.4s infinite with cubic-bezier easing
+
+**6. Card Hover Glow** — Feature cards use `--spot-x`/`--spot-y` CSS custom properties (mouse tracking via JS) for a radial gradient spotlight effect on hover, with border-color and box-shadow transitions at 0.35s cubic-bezier(0.4, 0, 0.2, 1)
+
+**7. Pulse Border (Active Step)** — `pulse-border`: box-shadow expanding from 0 to 6px and fading out, applied to currently-active process cards
+
+**8. Scroll-triggered Fade-up** — `.animate-item`: `opacity: 0.6s ease-out, transform: 0.6s ease-out` — elements start invisible and translated down, then animate into view
+
+**9. Progress Bar Counters** — Smooth number counting animation as GraphRAG nodes/edges increment
+
+**10. Backdrop Blur Cards** — `backdrop-filter: blur(16px) saturate(1.2)` with semi-transparent backgrounds
+
+---
+
+## View Modes (Top Navigation)
+
+- **Atlas** — Full-screen knowledge graph visualization
+- **Double Column** — Graph on left, report/content on right (50/50 split)
+- **Workbench** — Content on left, interactive tools on right
+
+---
+
+## Design System Notes
+
+- **Font:** Monospace for technical labels (IDs, timestamps, API endpoints, status text); clean sans-serif for body; large serif-italic for report headings
+- **Color palette:** White background for console pages, dark (#0a0a0a) for marketing/home; coral/red for status badges; green for completed; purple for activity bars; orange/yellow for accents and warnings
+- **Border radius:** Rounded corners throughout (8–16px for cards, full-round for badges/pills)
+- **Dark terminal:** The System Dashboard/Console Output uses a dark background (#1a1a1a), monospace font, with colored timestamps and ✓/└─ tree formatting
+- **Entity color coding:** Orange=University, Blue=Entity, Green=Alumni, Green-dark=Organization, Red=Student, Pink=Professor, Light blue=Person, Purple=MediaOutlet, Green-bright=Legal Authority, Yellow=OpinionLeader, Orange-red=Government Agency
+
+This is everything you need to recreate the MiroFish demo's UI/UX flow and animations in your FounderConsole application. Want me to help you start building any specific section or component?
