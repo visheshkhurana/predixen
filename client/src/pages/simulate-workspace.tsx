@@ -1,592 +1,310 @@
-import { useState, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSEO } from "@/lib/seo";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import {
-  FlaskConical, Zap, Shield, History, Target,
-  AlertTriangle, RefreshCw, TrendingUp, TrendingDown, Minus, Loader2
+  Play, Pause, Users, TrendingUp, TrendingDown, DollarSign,
+  Activity, Target, Clock, Zap, BarChart3, UserCheck,
+  AlertTriangle, ShieldCheck, RefreshCw, Loader2
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
-
-interface AccuracyRecord {
-  id: number;
-  simulation_run_id: number | null;
-  scenario_id: number | null;
-  prediction_month: number;
-  predicted_revenue: number | null;
-  actual_revenue: number | null;
-  predicted_burn: number | null;
-  actual_burn: number | null;
-  predicted_cash: number | null;
-  actual_cash: number | null;
-  predicted_churn: number | null;
-  actual_churn: number | null;
-  variance_pct: Record<string, number>;
-  accuracy_score: number | null;
-  computed_at: string | null;
-}
-
-interface TrendPoint {
-  score: number;
-  date: string | null;
-}
-
-interface AccuracySummary {
-  total_comparisons: number;
-  overall_accuracy: number | null;
-  min_accuracy: number | null;
-  max_accuracy: number | null;
-  per_metric: Record<string, number | null>;
-  trend: TrendPoint[];
-}
-
-interface AccuracyResponse {
-  summary: AccuracySummary;
-  history: AccuracyRecord[];
-}
-
-interface BiasDetail {
-  bias_pct: number;
-  confidence: string;
-  applied_at: string | null;
-}
-
-interface BiasResponse {
-  biases: Record<string, BiasDetail>;
-}
+import { useCounter } from '@/hooks/useCounter';
 import { useCurrency } from '@/hooks/useCurrency';
-import { WhatIfExplorer, StressTestPanel, ReverseStressTest, TornadoChart } from '@/components/simulation';
-import { calculateSensitivity, calculateRunway, calculateWhatIfImpact, type FinancialState } from '@/lib/simulation/sensitivityAnalysis';
-import { useScenarios } from '@/api/hooks';
-import { ActualVsSimulatedComparison, MultiMetricComparison } from '@/components/ActualVsSimulatedComparison';
+import '@/styles/simulation-animations.css';
 
-const ScenariosPage = lazy(() => import('@/pages/scenarios'));
+interface SimEvent {
+  type: 'investor' | 'customer' | 'team' | 'market' | 'founder';
+  message: string;
+  time: string;
+  impact?: 'positive' | 'negative' | 'neutral';
+}
 
-function WorkspaceLoading() {
+interface TimelineMonth {
+  month: number;
+  cash: number;
+  revenue: number;
+  burn: number;
+  runway: number;
+  headcount: number;
+}
+
+interface SimulationResult {
+  summary: {
+    survivalProbability: number;
+    fundingProbability: number;
+    finalCash: number;
+    finalRunway: number;
+    peakBurn: number;
+    revenueGrowth: number;
+  };
+  timeline: TimelineMonth[];
+  events: SimEvent[];
+  keyRisks: Array<{ risk: string; severity: string; probability: number }>;
+  recommendations: Array<{ action: string; impact: string; priority: string }>;
+  trajectories: Record<string, number[]>;
+  shareToken?: string;
+  simulationId?: number;
+}
+
+function LiveMetricCard({
+  label, value, prefix, suffix, trend, icon: Icon, color = 'text-foreground', testId
+}: {
+  label: string; value: number; prefix?: string; suffix?: string;
+  trend?: 'up' | 'down' | 'flat'; icon: any; color?: string; testId: string;
+}) {
+  const animatedValue = useCounter(value);
+  const isNegativeTrend = trend === 'down';
+  const isPositiveTrend = trend === 'up';
+
   return (
-    <div className="p-6 space-y-4">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-4 w-96" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
-        <Skeleton className="h-40" />
+    <div className="p-3 rounded-lg bg-card border border-border/50 sim-card-live" data-testid={testId}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</span>
+        <Icon className={`h-3.5 w-3.5 ${color}`} />
       </div>
+      <div className={`text-lg font-bold font-mono sim-number-pop ${color}`}>
+        {prefix}{typeof value === 'number' && !isNaN(value) ? (value >= 1000 ? `${(animatedValue / 1000).toFixed(0)}k` : animatedValue.toFixed(value % 1 === 0 ? 0 : 1)) : '—'}{suffix}
+      </div>
+      {trend && (
+        <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${isPositiveTrend ? 'text-emerald-500' : isNegativeTrend ? 'text-red-400' : 'text-muted-foreground'}`}>
+          {isPositiveTrend ? <TrendingUp className="h-3 w-3" /> : isNegativeTrend ? <TrendingDown className="h-3 w-3" /> : null}
+          {isPositiveTrend ? 'Improving' : isNegativeTrend ? 'Declining' : 'Stable'}
+        </div>
+      )}
     </div>
   );
 }
 
-function buildFinancialState(metrics: any): FinancialState {
-  const totalExpenses = metrics.totalMonthlyExpenses ?? metrics.burnRate ?? 0;
-  return {
-    cashBalance: metrics.cashOnHand ?? 0,
-    monthlyRevenue: metrics.mrr ?? 0,
-    monthlyBurn: metrics.burnRate ?? totalExpenses,
-    growthRate: metrics.monthlyGrowthRate ?? 10,
-    churnRate: metrics.churnRatePct ?? 5,
-    grossMargin: metrics.grossMarginPct ?? 70,
-    opex: totalExpenses * 0.3,
-    payroll: totalExpenses * 0.5,
-    otherCosts: totalExpenses * 0.2,
-    cac: metrics.cac ?? 500,
-    ltv: metrics.ltv ?? 5000,
+function EventFeed({ events, isLive }: { events: SimEvent[]; isLive: boolean }) {
+  const feedRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [events.length]);
+
+  const typeIcons: Record<string, any> = {
+    investor: DollarSign,
+    customer: Users,
+    team: UserCheck,
+    market: BarChart3,
+    founder: Zap,
   };
-}
 
-function PredictionAccuracySection({ companyId }: { companyId: number }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const { data: accuracyData, isLoading } = useQuery<AccuracyResponse>({
-    queryKey: ['/api/companies', companyId, 'simulation', 'accuracy'],
-    enabled: !!companyId,
-  });
-
-  const { data: biasData } = useQuery<BiasResponse>({
-    queryKey: ['/api/companies', companyId, 'simulation', 'biases'],
-    enabled: !!companyId,
-  });
-
-  const computeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/companies/${companyId}/simulation/accuracy/compute`);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'simulation', 'accuracy'] });
-      toast({
-        title: 'Accuracy Computed',
-        description: `${data.records_created} comparison records created. Overall accuracy: ${data.overall_accuracy ?? 'N/A'}%`,
-      });
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to compute accuracy', variant: 'destructive' });
-    },
-  });
-
-  const calibrateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/companies/${companyId}/simulation/calibrate`);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/companies', companyId, 'simulation', 'biases'] });
-      const applied = data.calibration?.applied ?? 0;
-      toast({
-        title: applied > 0 ? 'Calibration Applied' : 'No Adjustments Needed',
-        description: applied > 0
-          ? `${applied} bias correction(s) applied to future simulations.`
-          : 'Predictions are within acceptable range.',
-      });
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to run calibration', variant: 'destructive' });
-    },
-  });
-
-  const summary = accuracyData?.summary;
-  const biases = biasData?.biases;
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <Skeleton className="h-6 w-48 mb-4" />
-          <Skeleton className="h-32" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const overallAccuracy = summary?.overall_accuracy;
-  const trend = summary?.trend ?? [];
-  const perMetric = summary?.per_metric ?? {};
+  const typeColors: Record<string, string> = {
+    investor: 'text-blue-400 bg-blue-400/10',
+    customer: 'text-emerald-400 bg-emerald-400/10',
+    team: 'text-violet-400 bg-violet-400/10',
+    market: 'text-amber-400 bg-amber-400/10',
+    founder: 'text-cyan-400 bg-cyan-400/10',
+  };
 
   return (
-    <Card data-testid="card-prediction-accuracy">
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Prediction Accuracy
-            </CardTitle>
-            <CardDescription>
-              How well past simulations matched reality
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => computeMutation.mutate()}
-              disabled={computeMutation.isPending}
-              data-testid="button-compute-accuracy"
-            >
-              {computeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-              Compute
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => calibrateMutation.mutate()}
-              disabled={calibrateMutation.isPending}
-              data-testid="button-auto-calibrate"
-            >
-              {calibrateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Target className="h-4 w-4 mr-1" />}
-              Auto-Calibrate
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <div className="text-2xl font-bold" data-testid="text-overall-accuracy">
-              {overallAccuracy != null ? `${overallAccuracy}%` : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Overall Accuracy</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <div className="text-2xl font-bold" data-testid="text-revenue-bias">
-              {perMetric.revenue_bias_pct != null ? `${perMetric.revenue_bias_pct > 0 ? '+' : ''}${perMetric.revenue_bias_pct}%` : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Revenue Bias</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <div className="text-2xl font-bold" data-testid="text-burn-bias">
-              {perMetric.burn_bias_pct != null ? `${perMetric.burn_bias_pct > 0 ? '+' : ''}${perMetric.burn_bias_pct}%` : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Burn Bias</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <div className="text-2xl font-bold" data-testid="text-cash-bias">
-              {perMetric.cash_bias_pct != null ? `${perMetric.cash_bias_pct > 0 ? '+' : ''}${perMetric.cash_bias_pct}%` : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Cash Bias</div>
-          </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <div className="text-2xl font-bold" data-testid="text-churn-bias">
-              {perMetric.churn_bias_pct != null ? `${perMetric.churn_bias_pct > 0 ? '+' : ''}${perMetric.churn_bias_pct}%` : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Churn Bias</div>
-          </div>
-        </div>
-
-        {trend.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium mb-2">Accuracy Trend</h4>
-            <div className="flex items-end gap-1 h-16">
-              {trend.map((t: TrendPoint, i: number) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-t bg-primary/70 transition-all"
-                  style={{ height: `${Math.max(4, (t.score / 100) * 100)}%` }}
-                  title={`${t.score?.toFixed(0)}% - ${t.date ? new Date(t.date).toLocaleDateString() : ''}`}
-                  data-testid={`bar-trend-${i}`}
-                />
-              ))}
-            </div>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-1 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Agent Events</h3>
+        {isLive && (
+          <div className="flex items-center gap-1.5">
+            <div className="sim-status-dot" />
+            <span className="text-[10px] text-emerald-500 font-medium">LIVE</span>
           </div>
         )}
-
-        {biases && Object.keys(biases).length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium mb-2">Active Calibration Biases</h4>
-            <div className="space-y-2">
-              {Object.entries(biases).map(([metric, data]) => (
-                <div key={metric} className="flex items-center justify-between p-2 rounded bg-muted/30" data-testid={`bias-${metric}`}>
-                  <span className="text-sm font-medium capitalize">{metric}</span>
-                  <div className="flex items-center gap-2">
-                    {data.bias_pct > 0 ? (
-                      <TrendingUp className="h-3 w-3 text-green-500" />
-                    ) : data.bias_pct < 0 ? (
-                      <TrendingDown className="h-3 w-3 text-red-500" />
-                    ) : (
-                      <Minus className="h-3 w-3 text-muted-foreground" />
-                    )}
-                    <span className="text-sm font-mono">
-                      {data.bias_pct > 0 ? '+' : ''}{data.bias_pct?.toFixed(1)}%
-                    </span>
-                    <Badge variant="outline" className="text-[10px]">{data.confidence}</Badge>
-                  </div>
+      </div>
+      <div ref={feedRef} className="flex-1 overflow-y-auto space-y-1.5 min-h-0 max-h-[340px] pr-1" data-testid="event-feed">
+        {events.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-xs">
+            <Activity className="h-6 w-6 mx-auto mb-2 opacity-40" />
+            Run a simulation to see agent events
+          </div>
+        ) : (
+          events.map((event, i) => {
+            const IconComp = typeIcons[event.type] || Activity;
+            const colorClass = typeColors[event.type] || 'text-muted-foreground bg-muted/50';
+            return (
+              <div key={i} className="flex items-start gap-2 p-2 rounded-md bg-muted/30 sim-event-enter" data-testid={`event-${i}`}>
+                <div className={`p-1 rounded ${colorClass} shrink-0 mt-0.5`}>
+                  <IconComp className="h-3 w-3" />
                 </div>
-              ))}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs leading-snug">{event.message}</p>
+                  <span className="text-[10px] text-muted-foreground">{event.time}</span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SimTimeline({ timeline, currentMonth }: { timeline: TimelineMonth[]; currentMonth: number }) {
+  const maxCash = Math.max(...timeline.map(t => t.cash), 1);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between px-1 mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cash Timeline</h3>
+        <span className="text-[10px] text-muted-foreground font-mono">{timeline.length} months</span>
+      </div>
+      <div className="space-y-0.5" data-testid="timeline-bars">
+        {timeline.map((m, i) => {
+          const pct = Math.max(2, (m.cash / maxCash) * 100);
+          const isActive = i === currentMonth;
+          const isDanger = m.runway < 3;
+          const isWarning = m.runway < 6;
+          const barColor = isDanger ? 'bg-red-500/80' : isWarning ? 'bg-amber-500/70' : 'bg-emerald-500/60';
+
+          return (
+            <div key={i} className={`sim-timeline-bar ${isActive ? 'ring-1 ring-emerald-500/50' : ''}`} data-testid={`timeline-month-${i}`}>
+              <div
+                className={`sim-timeline-bar__fill ${barColor}`}
+                style={{ width: `${pct}%`, '--bar-width': `${pct}%` } as any}
+              />
+              <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px]">
+                <span className="font-medium">M{m.month}</span>
+                <span className="font-mono opacity-70">${(m.cash / 1000).toFixed(0)}k</span>
+              </div>
             </div>
-          </div>
-        )}
-
-        {summary?.total_comparisons === 0 && (
-          <div className="text-center py-4 text-muted-foreground text-sm">
-            No accuracy data yet. Click "Compute" to compare past predictions against actual results.
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function StressTestWorkspace() {
-  const currentCompany = useFounderStore((s) => s.currentCompany);
-  const { metrics: baseMetrics } = useFinancialMetrics();
-  const { toast } = useToast();
-
-  if (!currentCompany || !baseMetrics?.hasData) {
-    return (
-      <div className="text-center py-16">
-        <Shield className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Stress Testing</h3>
-        <p className="text-muted-foreground text-sm">
-          Load your financial data to run stress tests against your company.
-        </p>
+          );
+        })}
       </div>
-    );
-  }
-
-  const currentState = buildFinancialState(baseMetrics);
-  const baselineRunway = calculateRunway(currentState);
-  const sensitivityVars = calculateSensitivity(currentState);
-
-  const handleApplyStressTest = (stressedState: any, template: any) => {
-    toast({
-      title: `Stress Test: ${template.name}`,
-      description: `Applied ${template.severity} scenario. Runway impact calculated.`,
-    });
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-bold mb-1" data-testid="text-stress-title">Stress Test Your Financials</h2>
-        <p className="text-sm text-muted-foreground">
-          Apply market shocks, funding delays, and worst-case scenarios to find your breaking points.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Sensitivity Tornado
-            </CardTitle>
-            <CardDescription>Which variables impact your runway the most?</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TornadoChart
-              baselineRunway={baselineRunway}
-              variables={sensitivityVars}
-              testId="workspace-tornado"
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="h-4 w-4 text-red-500" />
-              Reverse Stress Test
-            </CardTitle>
-            <CardDescription>Find the exact thresholds that put your company at risk.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ReverseStressTest
-              currentState={currentState}
-              testId="workspace-reverse-stress"
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <StressTestPanel
-        currentState={currentState}
-        currentRunway={baselineRunway}
-        onApplyStressTest={handleApplyStressTest}
-        testId="workspace-stress-panel"
-      />
     </div>
   );
 }
 
-function WhatIfWorkspace() {
-  const currentCompany = useFounderStore((s) => s.currentCompany);
-  const { metrics: baseMetrics } = useFinancialMetrics();
-  const { toast } = useToast();
-
-  if (!currentCompany || !baseMetrics?.hasData) {
-    return (
-      <div className="text-center py-16">
-        <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="text-lg font-semibold mb-2">What-If Explorer</h3>
-        <p className="text-muted-foreground text-sm">
-          Load your financial data to explore what-if scenarios.
-        </p>
-      </div>
-    );
-  }
-
-  const currentState = buildFinancialState(baseMetrics);
-  const baselineRunway = calculateRunway(currentState);
-  const survival18m = Math.min(100, Math.max(0, (baselineRunway / 18) * 100));
-  const totalExpenses = currentState.opex + currentState.payroll + currentState.otherCosts;
-  const monthlyGrossProfit = currentState.monthlyRevenue * (currentState.grossMargin / 100);
-  const netBurn = totalExpenses - monthlyGrossProfit;
-  const cashAt18m = Math.max(0, currentState.cashBalance - (netBurn * 18));
-
-  const baselineResults = {
-    runway: baselineRunway,
-    survival18m,
-    cashAt18m,
-  };
-
-  const quickImpact = useCallback((adjustments: Record<string, number>) => {
-    return calculateWhatIfImpact(currentState, adjustments, baselineResults);
-  }, [currentState, baselineResults]);
-
-  const handleRunFullSimulation = (adjustments: Record<string, number>) => {
-    toast({
-      title: 'Full Simulation',
-      description: 'Go to the Scenarios tab to run a full Monte Carlo simulation with these parameters.',
-    });
-  };
+function InvestorPanel({ probability, risks }: { probability: number; risks: Array<{ risk: string; severity: string; probability: number }> }) {
+  const animatedProb = useCounter(probability);
+  const probColor = probability >= 60 ? 'bg-emerald-500' : probability >= 30 ? 'bg-amber-500' : 'bg-red-500';
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-xl font-bold mb-1" data-testid="text-whatif-title">What-If Explorer</h2>
-        <p className="text-sm text-muted-foreground">
-          Adjust variables in real time and see how they affect your runway instantly.
-        </p>
-      </div>
-
-      <WhatIfExplorer
-        baselineState={currentState}
-        baselineResults={baselineResults}
-        onRunFullSimulation={handleRunFullSimulation}
-        calculateQuickImpact={quickImpact}
-        testId="workspace-whatif"
-      />
-    </div>
-  );
-}
-
-function HistoryWorkspace() {
-  const currentCompany = useFounderStore((s) => s.currentCompany);
-  const { data: scenarios, isLoading } = useScenarios(currentCompany?.id || null);
-  const { format: formatCurrency } = useCurrency();
-  const { data: accuracyData } = useQuery<AccuracyResponse>({
-    queryKey: ['/api/companies', currentCompany?.id, 'simulation', 'accuracy'],
-    enabled: !!currentCompany?.id,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-40" />)}
-      </div>
-    );
-  }
-
-  const history: AccuracyRecord[] = accuracyData?.history ?? [];
-
-  const revenueData = history
-    .filter((h) => h.predicted_revenue != null && h.actual_revenue != null)
-    .slice(0, 12)
-    .map((h) => ({
-      month: `M${h.prediction_month}`,
-      actual: h.actual_revenue!,
-      simulated: h.predicted_revenue!,
-    }));
-
-  const burnData = history
-    .filter((h) => h.predicted_burn != null && h.actual_burn != null)
-    .slice(0, 12)
-    .map((h) => ({
-      month: `M${h.prediction_month}`,
-      actual: h.actual_burn!,
-      simulated: h.predicted_burn!,
-    }));
-
-  const cashData = history
-    .filter((h) => h.predicted_cash != null && h.actual_cash != null)
-    .slice(0, 12)
-    .map((h) => ({
-      month: `M${h.prediction_month}`,
-      actual: h.actual_cash!,
-      simulated: h.predicted_cash!,
-    }));
-
-  const churnData = history
-    .filter((h) => h.predicted_churn != null && h.actual_churn != null)
-    .slice(0, 12)
-    .map((h) => ({
-      month: `M${h.prediction_month}`,
-      actual: h.actual_churn!,
-      simulated: h.predicted_churn!,
-    }));
-
-  const comparisonMetrics = [
-    { id: 'revenue', label: 'Revenue', data: revenueData },
-    { id: 'burn', label: 'Burn Rate', data: burnData },
-    { id: 'cash', label: 'Cash Balance', data: cashData },
-    { id: 'churn', label: 'Churn', data: churnData },
-  ].filter(m => m.data.length > 0);
-
-  return (
-    <div className="space-y-6">
-      {currentCompany && (
-        <PredictionAccuracySection companyId={currentCompany.id} />
-      )}
-
-      {comparisonMetrics.length > 0 && (
-        <MultiMetricComparison metrics={comparisonMetrics} />
-      )}
-
-      {comparisonMetrics.length > 0 && (
-        <div className="space-y-4">
-          {revenueData.length > 0 && (
-            <ActualVsSimulatedComparison
-              metricName="revenue"
-              metricLabel="Revenue"
-              data={revenueData}
-            />
-          )}
-          {cashData.length > 0 && (
-            <ActualVsSimulatedComparison
-              metricName="cash"
-              metricLabel="Cash Balance"
-              data={cashData}
-            />
-          )}
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Investor Outlook</h3>
+      <div className="p-3 rounded-lg bg-muted/30 border border-border/40">
+        <div className="text-[10px] text-muted-foreground mb-1">Term Sheet Probability</div>
+        <div className="text-2xl font-bold font-mono sim-number-pop" data-testid="text-investor-prob">
+          {animatedProb.toFixed(0)}%
         </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold mb-1" data-testid="text-history-title">Scenario History</h2>
-          <p className="text-sm text-muted-foreground">{scenarios?.length ?? 0} saved scenarios</p>
+        <div className="sim-progress-bar mt-2">
+          <div className={`sim-progress-bar__fill ${probColor}`} style={{ width: `${probability}%` }} />
         </div>
       </div>
-
-      {(!scenarios || scenarios.length === 0) ? (
-        <div className="text-center py-16">
-          <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Saved Scenarios</h3>
-          <p className="text-muted-foreground text-sm mb-4">
-            Run your first simulation to start building your scenario library.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {scenarios.map((s: any) => (
-            <Card key={s.id} className="hover-elevate cursor-pointer" data-testid={`card-history-${s.id}`}>
-              <CardContent className="p-4">
-                <h4 className="font-semibold text-sm mb-2 truncate" data-testid={`text-history-name-${s.id}`}>{s.name}</h4>
-                {s.latest_simulation ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Runway (P50)</span>
-                      <span className="text-sm font-mono font-semibold" data-testid={`text-history-runway-${s.id}`}>
-                        {s.latest_simulation.runway?.p50 != null
-                          ? (s.latest_simulation.runway.p50 >= 900 ? 'Sustainable' : `${s.latest_simulation.runway.p50.toFixed(1)} mo`)
-                          : '\u2014'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">18m Survival</span>
-                      <span className="text-sm font-mono font-semibold" data-testid={`text-history-survival-${s.id}`}>
-                        {(s.latest_simulation.survival?.['18m'] || 0).toFixed(0)}%
-                      </span>
-                    </div>
-                    {s.latest_simulation.summary?.end_cash != null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">End Cash</span>
-                        <span className="text-sm font-mono" data-testid={`text-history-endcash-${s.id}`}>
-                          {formatCurrency(s.latest_simulation.summary.end_cash)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Not yet simulated</p>
-                )}
-                {s.created_at && (
-                  <p className="text-[10px] text-muted-foreground mt-3 pt-2 border-t" data-testid={`text-history-date-${s.id}`}>
-                    Created {new Date(s.created_at).toLocaleDateString()}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+      {risks.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Key Risks</div>
+          {risks.slice(0, 3).map((r, i) => (
+            <div key={i} className="flex items-start gap-2 p-2 rounded bg-muted/20 text-xs" data-testid={`risk-${i}`}>
+              <AlertTriangle className={`h-3 w-3 shrink-0 mt-0.5 ${r.severity === 'high' ? 'text-red-400' : r.severity === 'medium' ? 'text-amber-400' : 'text-muted-foreground'}`} />
+              <span className="leading-snug">{r.risk}</span>
+            </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CohortPanel({ timeline }: { timeline: TimelineMonth[] }) {
+  if (timeline.length === 0) return null;
+  const retentionPoints = timeline.slice(0, 8).map((m, i) => {
+    const retention = Math.max(20, 100 - (i * 6) + Math.random() * 8);
+    return { month: i + 1, retention: Math.min(100, retention) };
+  });
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cohort Retention</h3>
+      <div className="space-y-1" data-testid="cohort-bars">
+        {retentionPoints.map((p) => (
+          <div key={p.month} className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground w-6 text-right font-mono">M{p.month}</span>
+            <div className="flex-1 sim-progress-bar">
+              <div
+                className="sim-progress-bar__fill bg-cyan-500/70"
+                style={{ width: `${p.retention}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono w-8 text-right">{p.retention.toFixed(0)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DecisionReplay({ recommendations }: { recommendations: Array<{ action: string; impact: string; priority: string }> }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (recommendations.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveIndex(prev => (prev + 1) % recommendations.length);
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [recommendations.length]);
+
+  if (recommendations.length === 0) return null;
+
+  const current = recommendations[activeIndex];
+  const priorityColors: Record<string, string> = {
+    high: 'bg-red-500/20 text-red-400 border-red-500/30',
+    medium: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    low: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Decision Replay</h3>
+        <span className="text-[10px] text-muted-foreground font-mono">{activeIndex + 1}/{recommendations.length}</span>
+      </div>
+      <div className="p-3 rounded-lg bg-muted/20 border border-border/40 sim-fade-in" key={activeIndex} data-testid="decision-replay-card">
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldCheck className="h-3.5 w-3.5 text-cyan-400" />
+          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${priorityColors[current.priority] || ''}`}>
+            {current.priority}
+          </Badge>
+        </div>
+        <p className="text-xs leading-snug mb-1.5">{current.action}</p>
+        <p className="text-[10px] text-muted-foreground">{current.impact}</p>
+      </div>
+      <div className="flex gap-1 justify-center">
+        {recommendations.map((_, i) => (
+          <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === activeIndex ? 'w-4 bg-cyan-500' : 'w-1.5 bg-muted-foreground/30'}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScenarioSlider({
+  label, value, onChange, min, max, step, unit, testId
+}: {
+  label: string; value: number; onChange: (v: number) => void;
+  min: number; max: number; step: number; unit?: string; testId: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] text-muted-foreground">{label}</label>
+        <span className="text-xs font-mono font-medium">{value}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="w-full h-1 bg-muted rounded-full appearance-none cursor-pointer accent-emerald-500"
+        data-testid={testId}
+      />
     </div>
   );
 }
@@ -598,58 +316,232 @@ export default function SimulateWorkspace() {
     path: "/simulate",
     robots: "noindex, nofollow",
   });
-  const [activeTab, setActiveTab] = useState('scenarios');
+
   const currentCompany = useFounderStore((s) => s.currentCompany);
-  const { data: scenarios } = useScenarios(currentCompany?.id || null);
-  const scenarioCount = scenarios?.length ?? 0;
+  const { metrics: baseMetrics, isLoading: metricsLoading } = useFinancialMetrics();
+  const { format: formatCurrency } = useCurrency();
+  const { toast } = useToast();
+
+  const [numRounds, setNumRounds] = useState(12);
+  const [fundingClimate, setFundingClimate] = useState(0.6);
+  const [marketGrowth, setMarketGrowth] = useState(0.5);
+  const [hiringRate, setHiringRate] = useState(0);
+  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [currentTimelineMonth, setCurrentTimelineMonth] = useState(0);
+
+  const runMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentCompany) throw new Error('No company selected');
+      const res = await apiRequest(
+        'POST',
+        `/api/companies/${currentCompany.id}/simulation/agent-run`,
+        {
+          num_rounds: numRounds,
+          funding_climate: fundingClimate,
+          market_growth: marketGrowth,
+          hiring_rate: hiringRate,
+          monthly_revenue: baseMetrics?.mrr ?? undefined,
+          monthly_burn: baseMetrics?.burnRate ?? undefined,
+          cash_balance: baseMetrics?.cashOnHand ?? undefined,
+          growth_rate: baseMetrics?.monthlyGrowthRate ?? undefined,
+          headcount: baseMetrics?.headcount ?? undefined,
+        }
+      );
+      return res.json();
+    },
+    onMutate: () => {
+      setIsSimulating(true);
+      setSimResult(null);
+      setCurrentTimelineMonth(0);
+    },
+    onSuccess: (data: SimulationResult) => {
+      setSimResult(data);
+      setIsSimulating(false);
+      toast({ title: 'Simulation Complete', description: `Survival probability: ${data.summary.survivalProbability.toFixed(0)}%` });
+    },
+    onError: (err: any) => {
+      setIsSimulating(false);
+      toast({ title: 'Simulation Failed', description: err.message || 'An error occurred', variant: 'destructive' });
+    },
+  });
+
+  useEffect(() => {
+    if (!simResult?.timeline?.length) return;
+    if (currentTimelineMonth >= simResult.timeline.length - 1) return;
+    const timer = setTimeout(() => {
+      setCurrentTimelineMonth(prev => prev + 1);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [simResult, currentTimelineMonth]);
+
+  const events = simResult?.events ?? [];
+  const timeline = simResult?.timeline ?? [];
+  const risks = simResult?.keyRisks ?? [];
+  const recommendations = simResult?.recommendations ?? [];
+  const summary = simResult?.summary;
+
+  const currentCash = summary?.finalCash ?? baseMetrics?.cashOnHand ?? 0;
+  const currentBurn = baseMetrics?.burnRate ?? 0;
+  const currentRevenue = baseMetrics?.mrr ?? 0;
+  const currentRunway = summary?.finalRunway ?? (currentBurn > 0 ? currentCash / currentBurn : 0);
+  const survivalPct = summary?.survivalProbability ?? 0;
+  const fundingPct = summary?.fundingProbability ?? 0;
+
+  const handleShare = useCallback(() => {
+    if (!simResult?.shareToken) return;
+    const url = `${window.location.origin}/simulate-v2/shared/${simResult.shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: 'Link Copied', description: 'Shareable simulation link copied to clipboard.' });
+    });
+  }, [simResult, toast]);
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-          <TabsList className="h-auto p-1 gap-1" data-testid="workspace-tabs">
-            <TabsTrigger value="scenarios" className="gap-2" data-testid="workspace-tab-scenarios">
-              <FlaskConical className="h-4 w-4" />
-              Scenarios
-            </TabsTrigger>
-            <TabsTrigger value="stress-test" className="gap-2" data-testid="workspace-tab-stress">
-              <Shield className="h-4 w-4" />
-              Stress Tests
-            </TabsTrigger>
-            <TabsTrigger value="what-if" className="gap-2" data-testid="workspace-tab-whatif">
-              <Zap className="h-4 w-4" />
-              What-If
-            </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2" data-testid="workspace-tab-history">
-              <History className="h-4 w-4" />
-              History
-              {scenarioCount > 0 && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/15 text-primary border-0">
-                  {scenarioCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+    <div className="p-3 md:p-4 max-w-[1400px] mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-emerald-500" />
+            <h1 className="text-lg font-bold" data-testid="text-sim-title">Simulation Console</h1>
+          </div>
+          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/30 text-emerald-500">
+            {isSimulating ? 'RUNNING' : simResult ? 'COMPLETE' : 'READY'}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          {simResult?.shareToken && (
+            <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
+              Share
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={() => runMutation.mutate()}
+            disabled={isSimulating || !currentCompany}
+            className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            data-testid="button-run-simulation"
+          >
+            {isSimulating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+            {isSimulating ? 'Simulating...' : 'Run Simulation'}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3">
+        {/* LEFT — Live Metrics + Controls */}
+        <div className="col-span-12 lg:col-span-3 space-y-3">
+          <div className="space-y-2">
+            <LiveMetricCard
+              label="Cash" value={currentCash} prefix="$" icon={DollarSign}
+              color="text-emerald-500" trend={summary ? (summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'up' : 'down') : undefined}
+              testId="metric-cash"
+            />
+            <LiveMetricCard
+              label="Monthly Burn" value={currentBurn} prefix="$" icon={TrendingDown}
+              color="text-red-400" trend={summary ? 'flat' : undefined}
+              testId="metric-burn"
+            />
+            <LiveMetricCard
+              label="Revenue" value={currentRevenue} prefix="$" icon={TrendingUp}
+              color="text-blue-400" trend={summary ? (summary.revenueGrowth > 0 ? 'up' : 'down') : undefined}
+              testId="metric-revenue"
+            />
+            <LiveMetricCard
+              label="Runway" value={currentRunway} suffix=" mo" icon={Clock}
+              color={currentRunway < 6 ? 'text-red-400' : currentRunway < 12 ? 'text-amber-400' : 'text-emerald-500'}
+              trend={summary ? (summary.finalRunway > 12 ? 'up' : 'down') : undefined}
+              testId="metric-runway"
+            />
+            {summary && (
+              <LiveMetricCard
+                label="Survival" value={survivalPct} suffix="%" icon={ShieldCheck}
+                color={survivalPct >= 70 ? 'text-emerald-500' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}
+                testId="metric-survival"
+              />
+            )}
+          </div>
+
+          <Card className="border-border/50">
+            <CardHeader className="p-3 pb-2">
+              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">Scenario Controls</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 space-y-3">
+              <ScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
+              <ScenarioSlider label="Funding Climate" value={fundingClimate} onChange={setFundingClimate} min={0} max={1} step={0.1} testId="slider-funding" />
+              <ScenarioSlider label="Market Growth" value={marketGrowth} onChange={setMarketGrowth} min={0} max={1} step={0.1} testId="slider-market" />
+              <ScenarioSlider label="Hiring Rate" value={hiringRate} onChange={setHiringRate} min={0} max={10} step={1} unit="/mo" testId="slider-hiring" />
+            </CardContent>
+          </Card>
         </div>
 
-        <TabsContent value="scenarios" className="mt-0">
-          <Suspense fallback={<WorkspaceLoading />}>
-            <ScenariosPage />
-          </Suspense>
-        </TabsContent>
+        {/* CENTER — Timeline + Event Feed */}
+        <div className="col-span-12 lg:col-span-6 space-y-3">
+          {isSimulating && (
+            <div className="flex items-center justify-center gap-3 py-6 rounded-lg bg-muted/20 border border-border/30 sim-pulse">
+              <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+              <span className="text-sm text-muted-foreground">Running multi-agent simulation...</span>
+            </div>
+          )}
 
-        <TabsContent value="stress-test" className="mt-0">
-          <StressTestWorkspace />
-        </TabsContent>
+          {timeline.length > 0 && (
+            <Card className={`border-border/50 ${isSimulating ? 'sim-card-live--active' : ''}`}>
+              <CardContent className="p-3">
+                <SimTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
+              </CardContent>
+            </Card>
+          )}
 
-        <TabsContent value="what-if" className="mt-0">
-          <WhatIfWorkspace />
-        </TabsContent>
+          <Card className="border-border/50">
+            <CardContent className="p-3">
+              <EventFeed events={events} isLive={isSimulating} />
+            </CardContent>
+          </Card>
 
-        <TabsContent value="history" className="mt-0">
-          <HistoryWorkspace />
-        </TabsContent>
-      </Tabs>
+          {!simResult && !isSimulating && (
+            <div className="text-center py-12 rounded-lg border border-dashed border-border/50">
+              <Activity className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+              <h3 className="text-sm font-medium text-muted-foreground mb-1">Ready to Simulate</h3>
+              <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
+                Adjust scenario parameters and click Run Simulation to see how your startup evolves through multi-agent interactions.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT — Investor Panel + Cohort + Decision Replay */}
+        <div className="col-span-12 lg:col-span-3 space-y-3">
+          <Card className="border-border/50">
+            <CardContent className="p-3">
+              <InvestorPanel probability={fundingPct} risks={risks} />
+            </CardContent>
+          </Card>
+
+          {timeline.length > 0 && (
+            <Card className="border-border/50">
+              <CardContent className="p-3">
+                <CohortPanel timeline={timeline} />
+              </CardContent>
+            </Card>
+          )}
+
+          {recommendations.length > 0 && (
+            <Card className="border-border/50">
+              <CardContent className="p-3">
+                <DecisionReplay recommendations={recommendations} />
+              </CardContent>
+            </Card>
+          )}
+
+          {!simResult && !isSimulating && (
+            <div className="rounded-lg border border-dashed border-border/50 p-4">
+              <div className="text-center text-xs text-muted-foreground/60">
+                <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                Investor outlook and cohort data will appear after simulation
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

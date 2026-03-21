@@ -1,0 +1,120 @@
+@keyframes sim-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes sim-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes sim-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sim-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(16, 185, 129, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+}
+
+@keyframes sim-bar-fill {
+  from { width: 0%; }
+  to { width: var(--bar-width, 0%); }
+}
+
+@keyframes sim-number-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.sim-pulse {
+  animation: sim-pulse 2s ease-in-out infinite;
+}
+
+.sim-slide-in {
+  animation: sim-slide-in 300ms ease-out forwards;
+}
+
+.sim-fade-in {
+  animation: sim-fade-in 300ms ease-out forwards;
+}
+
+.sim-glow {
+  animation: sim-glow 2s ease-in-out infinite;
+}
+
+.sim-bar-fill {
+  animation: sim-bar-fill 400ms ease-out forwards;
+}
+
+.sim-number-pop {
+  animation: sim-number-pop 300ms ease-out;
+}
+
+.sim-event-enter {
+  animation: sim-slide-in 300ms ease-out forwards;
+}
+
+.sim-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: sim-pulse 2s ease-in-out infinite;
+}
+
+.sim-status-dot--warning {
+  background: #f59e0b;
+}
+
+.sim-status-dot--danger {
+  background: #ef4444;
+}
+
+.sim-progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+
+.sim-progress-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 400ms ease-out;
+}
+
+.sim-timeline-bar {
+  height: 32px;
+  border-radius: 4px;
+  background: hsl(var(--muted) / 0.5);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 200ms;
+}
+
+.sim-timeline-bar:hover {
+  background: hsl(var(--muted) / 0.8);
+}
+
+.sim-timeline-bar__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 400ms ease-out;
+}
+
+.sim-card-live {
+  border: 1px solid hsl(var(--border));
+  transition: border-color 300ms, box-shadow 300ms;
+}
+
+.sim-card-live--active {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.1);
+}

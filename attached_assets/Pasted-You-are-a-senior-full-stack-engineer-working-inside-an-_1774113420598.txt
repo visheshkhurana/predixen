@@ -1,0 +1,263 @@
+You are a senior full-stack engineer working inside an existing production SaaS app: FounderConsole.
+
+Your job is to UPGRADE the existing `/simulate` page ONLY.
+
+--------------------------------------------------
+
+🚨 HARD CONSTRAINTS (DO NOT BREAK)
+
+- DO NOT create new routes
+- DO NOT create new pages
+- DO NOT create "flight simulator"
+- DO NOT modify navigation
+- DO NOT refactor architecture
+
+ONLY enhance the existing simulate page UI and interaction layer.
+
+--------------------------------------------------
+
+⚡ PERFORMANCE DIRECTIVE (VERY IMPORTANT)
+
+You MUST:
+
+- reuse provided code EXACTLY
+- NOT rewrite animations
+- NOT generate alternative versions
+- NOT expand code unnecessarily
+- NOT create new abstractions unless required
+
+Goal:
+→ Minimize token usage  
+→ Maximize reuse  
+→ Plug-and-play implementation  
+
+--------------------------------------------------
+
+🎯 OBJECTIVE
+
+Transform `/simulate` into a:
+
+"Live Startup Simulation Console"
+
+That feels:
+
+- alive
+- real-time
+- decision-driven
+- system-based (not dashboard)
+
+--------------------------------------------------
+
+🧱 FINAL LAYOUT (STRICT)
+
+Use this EXACT layout:
+
+LEFT (col-span-3):
+- Live metrics
+- Existing inputs (sliders)
+
+CENTER (col-span-6):
+- Timeline
+- Agent event feed
+
+RIGHT (col-span-3):
+- Investor panel
+- Cohort panel
+- Decision replay
+
+--------------------------------------------------
+
+🧠 UX RULES
+
+- Always show system state (no blank screens)
+- Always show feedback ("Running simulation...")
+- Show events instead of charts
+- Animate transitions (fast, smooth)
+
+--------------------------------------------------
+
+📦 STEP 1 — USE PREDEFINED ANIMATION FILE
+
+DO NOT rewrite animations.
+
+Use this file:
+
+client/src/styles/simulation-animations.css
+
+If missing → CREATE and paste EXACTLY:
+
+[INSERT FULL CSS BLOCK HERE]
+
+--------------------------------------------------
+
+📦 STEP 2 — USE EXISTING COUNTER HOOK
+
+Use this file:
+
+client/src/hooks/useCounter.ts
+
+If missing → CREATE and paste EXACTLY:
+
+[INSERT useCounter CODE HERE]
+
+DO NOT modify.
+
+--------------------------------------------------
+
+📦 STEP 3 — REPLACE UI ONLY (IMPORTANT)
+
+Locate existing `/simulate` page component.
+
+REPLACE ONLY the JSX/TSX UI.
+
+DO NOT change:
+- API calls
+- state management
+- business logic
+
+--------------------------------------------------
+
+📦 STEP 4 — USE THIS EXACT COMPONENT STRUCTURE
+
+Paste EXACTLY this component and reuse:
+
+[INSERT FINAL REACT COMPONENT BLOCK HERE]
+
+DO NOT rewrite.
+
+--------------------------------------------------
+
+📦 STEP 5 — CONNECT REAL DATA (NO NEW LOGIC)
+
+Replace mock values ONLY:
+
+events → simulation output  
+runway → real KPI  
+burn → real KPI  
+cash → real KPI  
+investor probability → simulation result  
+cohort → retention data  
+
+DO NOT create new APIs.
+
+--------------------------------------------------
+
+📦 STEP 6 — AGENT EVENT SYSTEM
+
+Events MUST follow this structure:
+
+{
+  type: "investor" | "customer" | "team" | "market",
+  message: string,
+  time: string
+}
+
+Examples:
+
+Investor:
+- "Term sheet probability dropped"
+- "Investor confidence declining"
+
+Customer:
+- "Churn increased to 4%"
+- "Retention declining"
+
+Team:
+- "Hiring increased burn"
+- "Team productivity improved"
+
+Market:
+- "Market slowdown detected"
+
+--------------------------------------------------
+
+📦 STEP 7 — INVESTOR PANEL
+
+Use existing simulation outputs to calculate:
+
+Term sheet probability %
+
+Render as progress bar.
+
+DO NOT add new logic.
+
+--------------------------------------------------
+
+📦 STEP 8 — COHORT PANEL
+
+Render retention visually:
+
+Month 1 → Month N
+
+Use simple % bars.
+
+DO NOT over-engineer.
+
+--------------------------------------------------
+
+📦 STEP 9 — DECISION REPLAY (IMPORTANT)
+
+Replay past simulation events:
+
+- auto cycle every 1.5 seconds
+- show key outcomes
+
+DO NOT create backend changes.
+
+--------------------------------------------------
+
+📦 STEP 10 — ANIMATION RULES
+
+- Use CSS only (NO GSAP, NO Framer Motion)
+- Max duration: 300–400ms
+- No blocking renders
+- Use existing animation classes
+
+--------------------------------------------------
+
+📦 STEP 11 — CLEANUP
+
+REMOVE / DE-EMPHASIZE:
+
+- heavy charts
+- redundant graphs
+- unused tabs
+- clutter
+
+--------------------------------------------------
+
+🎯 FINAL OUTPUT EXPECTATION
+
+The simulate page should:
+
+- feel like a real system running
+- show business evolution over time
+- provide clear decisions
+- feel fast and responsive
+
+--------------------------------------------------
+
+🧠 PRODUCT DEFINITION
+
+This is NOT:
+
+- analytics dashboard
+- reporting tool
+
+This IS:
+
+"Startup Flight Simulator"
+
+--------------------------------------------------
+
+⚡ FINAL EXECUTION RULE
+
+DO NOT THINK FROM SCRATCH.
+
+ONLY:
+
+- plug code
+- wire data
+- apply classes
+
+--------------------------------------------------
