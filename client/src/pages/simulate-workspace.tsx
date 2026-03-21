@@ -7,9 +7,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import {
-  Play, Pause, Users, TrendingUp, TrendingDown, DollarSign,
-  Activity, Target, Clock, Zap, BarChart3, UserCheck,
-  AlertTriangle, ShieldCheck, RefreshCw, Loader2
+  Play, Users, TrendingUp, TrendingDown, DollarSign,
+  Activity, Target, Clock, Zap,
+  AlertTriangle, ShieldCheck, Loader2
 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
 import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
@@ -89,20 +89,12 @@ function EventFeed({ events, isLive }: { events: SimEvent[]; isLive: boolean }) 
     }
   }, [events.length]);
 
-  const typeIcons: Record<string, any> = {
-    investor: DollarSign,
-    customer: Users,
-    team: UserCheck,
-    market: BarChart3,
-    founder: Zap,
-  };
-
   const typeColors: Record<string, string> = {
-    investor: 'text-blue-400 bg-blue-400/10',
-    customer: 'text-emerald-400 bg-emerald-400/10',
-    team: 'text-violet-400 bg-violet-400/10',
-    market: 'text-amber-400 bg-amber-400/10',
-    founder: 'text-cyan-400 bg-cyan-400/10',
+    investor: 'text-purple-400 bg-purple-500/10 border border-purple-500/30',
+    customer: 'text-blue-400 bg-blue-500/10 border border-blue-500/30',
+    team: 'text-green-400 bg-green-500/10 border border-green-500/30',
+    market: 'text-orange-400 bg-orange-500/10 border border-orange-500/30',
+    founder: 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/30',
   };
 
   return (
@@ -124,16 +116,15 @@ function EventFeed({ events, isLive }: { events: SimEvent[]; isLive: boolean }) 
           </div>
         ) : (
           events.map((event, i) => {
-            const IconComp = typeIcons[event.type] || Activity;
-            const colorClass = typeColors[event.type] || 'text-muted-foreground bg-muted/50';
+            const colorClass = typeColors[event.type] || 'bg-muted/50 border border-border/40';
             return (
-              <div key={i} className="flex items-start gap-2 p-2 rounded-md bg-muted/30 sim-event-enter" data-testid={`event-${i}`}>
-                <div className={`p-1 rounded ${colorClass} shrink-0 mt-0.5`}>
-                  <IconComp className="h-3 w-3" />
+              <div key={i} className={`event-item flex items-start gap-3 p-3 rounded-lg ${colorClass}`} data-testid={`event-${i}`}>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground w-14 shrink-0 pt-0.5">
+                  {event.type}
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-xs leading-snug">{event.message}</p>
-                  <span className="text-[10px] text-muted-foreground">{event.time}</span>
+                  <span className="text-[10px] text-muted-foreground mt-1 block">{event.time}</span>
                 </div>
               </div>
             );
@@ -396,151 +387,180 @@ export default function SimulateWorkspace() {
     });
   }, [simResult, toast]);
 
-  return (
-    <div className="p-3 md:p-4 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-emerald-500" />
-            <h1 className="text-lg font-bold" data-testid="text-sim-title">Simulation Console</h1>
-          </div>
-          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/30 text-emerald-500">
-            {isSimulating ? 'RUNNING' : simResult ? 'COMPLETE' : 'READY'}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          {simResult?.shareToken && (
-            <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
-              Share
-            </Button>
-          )}
-          <Button
-            size="sm"
-            onClick={() => runMutation.mutate()}
-            disabled={isSimulating || !currentCompany}
-            className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-            data-testid="button-run-simulation"
-          >
-            {isSimulating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            {isSimulating ? 'Simulating...' : 'Run Simulation'}
-          </Button>
-        </div>
-      </div>
+  const riskHigh = currentRunway > 0 && currentRunway < 10;
 
-      <div className="grid grid-cols-12 gap-3">
-        {/* LEFT — Live Metrics + Controls */}
-        <div className="col-span-12 lg:col-span-3 space-y-3">
-          <div className="space-y-2">
-            <LiveMetricCard
-              label="Cash" value={currentCash} prefix="$" icon={DollarSign}
-              color="text-emerald-500" trend={summary ? (summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'up' : 'down') : undefined}
-              testId="metric-cash"
-            />
-            <LiveMetricCard
-              label="Monthly Burn" value={currentBurn} prefix="$" icon={TrendingDown}
-              color="text-red-400" trend={summary ? 'flat' : undefined}
-              testId="metric-burn"
-            />
-            <LiveMetricCard
-              label="Revenue" value={currentRevenue} prefix="$" icon={TrendingUp}
-              color="text-blue-400" trend={summary ? (summary.revenueGrowth > 0 ? 'up' : 'down') : undefined}
-              testId="metric-revenue"
-            />
-            <LiveMetricCard
-              label="Runway" value={currentRunway} suffix=" mo" icon={Clock}
-              color={currentRunway < 6 ? 'text-red-400' : currentRunway < 12 ? 'text-amber-400' : 'text-emerald-500'}
-              trend={summary ? (summary.finalRunway > 12 ? 'up' : 'down') : undefined}
-              testId="metric-runway"
-            />
-            {summary && (
-              <LiveMetricCard
-                label="Survival" value={survivalPct} suffix="%" icon={ShieldCheck}
-                color={survivalPct >= 70 ? 'text-emerald-500' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}
-                testId="metric-survival"
-              />
+  return (
+    <div className="simulation-root relative min-h-screen p-4 md:p-6 max-w-[1400px] mx-auto">
+      <div className="bg-orb top-10 left-10" />
+      <div className="bg-orb bottom-10 right-10" />
+
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {isSimulating && <div className="status-dot" />}
+              <h1 className="text-lg font-bold" data-testid="text-sim-title">Simulation Console</h1>
+            </div>
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-emerald-500/30 text-emerald-500">
+              {isSimulating ? 'RUNNING' : simResult ? 'COMPLETE' : 'READY'}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            {simResult?.shareToken && (
+              <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
+                Share
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => runMutation.mutate()}
+              disabled={isSimulating || !currentCompany}
+              className="h-7 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              data-testid="button-run-simulation"
+            >
+              {isSimulating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+              {isSimulating ? 'Simulating...' : 'Run Simulation'}
+            </Button>
+          </div>
+        </div>
+
+        {isSimulating && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+            <div className="status-dot" />
+            <span>Running simulation...</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-12 gap-4">
+          {/* LEFT — Live Metrics + Controls */}
+          <div className="col-span-12 lg:col-span-3 space-y-3">
+            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+              <h3 className="text-sm mb-3 font-medium">Live Metrics</h3>
+              <div className="space-y-2">
+                <LiveMetricCard
+                  label="Cash" value={currentCash} prefix="$" icon={DollarSign}
+                  color="text-emerald-500" trend={summary ? (summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'up' : 'down') : undefined}
+                  testId="metric-cash"
+                />
+                <LiveMetricCard
+                  label="Monthly Burn" value={currentBurn} prefix="$" icon={TrendingDown}
+                  color="text-red-400" trend={summary ? 'flat' : undefined}
+                  testId="metric-burn"
+                />
+                <LiveMetricCard
+                  label="Revenue" value={currentRevenue} prefix="$" icon={TrendingUp}
+                  color="text-blue-400" trend={summary ? (summary.revenueGrowth > 0 ? 'up' : 'down') : undefined}
+                  testId="metric-revenue"
+                />
+                <LiveMetricCard
+                  label="Runway" value={currentRunway} suffix=" mo" icon={Clock}
+                  color={currentRunway < 6 ? 'text-red-400' : currentRunway < 12 ? 'text-amber-400' : 'text-emerald-500'}
+                  trend={summary ? (summary.finalRunway > 12 ? 'up' : 'down') : undefined}
+                  testId="metric-runway"
+                />
+                {summary && (
+                  <LiveMetricCard
+                    label="Survival" value={survivalPct} suffix="%" icon={ShieldCheck}
+                    color={survivalPct >= 70 ? 'text-emerald-500' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}
+                    testId="metric-survival"
+                  />
+                )}
+                <div className={`mt-2 px-2 py-1 text-xs rounded ${riskHigh ? 'risk-alert bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`} data-testid="risk-badge">
+                  Risk: {riskHigh ? 'High' : 'Moderate'}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+              <h3 className="text-sm mb-3 font-medium">Scenario Controls</h3>
+              <div className="space-y-3">
+                <ScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
+                <ScenarioSlider label="Funding Climate" value={fundingClimate} onChange={setFundingClimate} min={0} max={1} step={0.1} testId="slider-funding" />
+                <ScenarioSlider label="Market Growth" value={marketGrowth} onChange={setMarketGrowth} min={0} max={1} step={0.1} testId="slider-market" />
+                <ScenarioSlider label="Hiring Rate" value={hiringRate} onChange={setHiringRate} min={0} max={10} step={1} unit="/mo" testId="slider-hiring" />
+              </div>
+            </div>
+          </div>
+
+          {/* CENTER — Timeline + Event Feed */}
+          <div className="col-span-12 lg:col-span-6 space-y-3">
+            {timeline.length > 0 ? (
+              <SimTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
+            ) : (
+              <div className="flex items-center gap-2 mb-2">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="h-2 flex-1 rounded transition-all duration-300 bg-muted/40" />
+                ))}
+              </div>
+            )}
+
+            {isSimulating && (
+              <div className="flex items-center justify-center gap-3 py-6 rounded-lg bg-muted/20 border border-border/30 sim-pulse">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+                <span className="text-sm text-muted-foreground">Running multi-agent simulation...</span>
+              </div>
+            )}
+
+            <div className="bg-card/50 border border-border/50 p-4 rounded-lg">
+              <h3 className="text-sm mb-3 font-medium">Simulation Events</h3>
+              <EventFeed events={events} isLive={isSimulating} />
+            </div>
+
+            {!simResult && !isSimulating && (
+              <div className="text-center py-10 rounded-lg border border-dashed border-border/50">
+                <Activity className="h-8 w-8 mx-auto text-muted-foreground/30 mb-3" />
+                <h3 className="text-sm font-medium text-muted-foreground mb-1">Ready to Simulate</h3>
+                <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
+                  Adjust scenario parameters and click Run Simulation to see how your startup evolves.
+                </p>
+              </div>
             )}
           </div>
 
-          <Card className="border-border/50">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground">Scenario Controls</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0 space-y-3">
-              <ScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
-              <ScenarioSlider label="Funding Climate" value={fundingClimate} onChange={setFundingClimate} min={0} max={1} step={0.1} testId="slider-funding" />
-              <ScenarioSlider label="Market Growth" value={marketGrowth} onChange={setMarketGrowth} min={0} max={1} step={0.1} testId="slider-market" />
-              <ScenarioSlider label="Hiring Rate" value={hiringRate} onChange={setHiringRate} min={0} max={10} step={1} unit="/mo" testId="slider-hiring" />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* CENTER — Timeline + Event Feed */}
-        <div className="col-span-12 lg:col-span-6 space-y-3">
-          {isSimulating && (
-            <div className="flex items-center justify-center gap-3 py-6 rounded-lg bg-muted/20 border border-border/30 sim-pulse">
-              <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
-              <span className="text-sm text-muted-foreground">Running multi-agent simulation...</span>
-            </div>
-          )}
-
-          {timeline.length > 0 && (
-            <Card className={`border-border/50 ${isSimulating ? 'sim-card-live--active' : ''}`}>
-              <CardContent className="p-3">
-                <SimTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="border-border/50">
-            <CardContent className="p-3">
-              <EventFeed events={events} isLive={isSimulating} />
-            </CardContent>
-          </Card>
-
-          {!simResult && !isSimulating && (
-            <div className="text-center py-12 rounded-lg border border-dashed border-border/50">
-              <Activity className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
-              <h3 className="text-sm font-medium text-muted-foreground mb-1">Ready to Simulate</h3>
-              <p className="text-xs text-muted-foreground/70 max-w-sm mx-auto">
-                Adjust scenario parameters and click Run Simulation to see how your startup evolves through multi-agent interactions.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT — Investor Panel + Cohort + Decision Replay */}
-        <div className="col-span-12 lg:col-span-3 space-y-3">
-          <Card className="border-border/50">
-            <CardContent className="p-3">
+          {/* RIGHT — Investor + Cohort + Decisions */}
+          <div className="col-span-12 lg:col-span-3 space-y-3">
+            <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
               <InvestorPanel probability={fundingPct} risks={risks} />
-            </CardContent>
-          </Card>
-
-          {timeline.length > 0 && (
-            <Card className="border-border/50">
-              <CardContent className="p-3">
-                <CohortPanel timeline={timeline} />
-              </CardContent>
-            </Card>
-          )}
-
-          {recommendations.length > 0 && (
-            <Card className="border-border/50">
-              <CardContent className="p-3">
-                <DecisionReplay recommendations={recommendations} />
-              </CardContent>
-            </Card>
-          )}
-
-          {!simResult && !isSimulating && (
-            <div className="rounded-lg border border-dashed border-border/50 p-4">
-              <div className="text-center text-xs text-muted-foreground/60">
-                <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                Investor outlook and cohort data will appear after simulation
-              </div>
             </div>
-          )}
+
+            {timeline.length > 0 && (
+              <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+                <CohortPanel timeline={timeline} />
+              </div>
+            )}
+
+            {recommendations.length > 0 && (
+              <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+                <DecisionReplay recommendations={recommendations} />
+              </div>
+            )}
+
+            {!simResult && !isSimulating && (
+              <div className="space-y-3">
+                <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+                  <h3 className="text-sm mb-2 font-medium">Recommendation</h3>
+                  <p className="text-xs text-muted-foreground">Run simulation for insights</p>
+                </div>
+                <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+                  <h3 className="text-sm mb-2 font-medium">Key Risk</h3>
+                  <p className="text-xs text-muted-foreground">Awaiting simulation data</p>
+                </div>
+                <div className="result-card bg-card/50 border border-border/50 p-4 rounded-lg">
+                  <h3 className="text-sm mb-2 font-medium">Suggested Action</h3>
+                  <p className="text-xs text-muted-foreground">Start a simulation to see actions</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
+        {isSimulating && (
+          <div className="mt-4">
+            <div className="shimmer h-10 rounded-lg flex items-center justify-center text-xs text-muted-foreground">
+              Re-running simulation...
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

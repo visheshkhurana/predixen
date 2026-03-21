@@ -118,3 +118,64 @@
   border-color: rgba(16, 185, 129, 0.4);
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.1);
 }
+
+.simulation-root {
+  overflow: hidden;
+}
+
+.bg-orb {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: sim-pulse 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.04) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer-sweep 2s ease-in-out infinite;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.risk-alert {
+  animation: sim-pulse 1.5s ease-in-out infinite;
+}
+
+.result-card {
+  transition: border-color 300ms, transform 200ms;
+}
+
+.result-card:hover {
+  border-color: rgba(255,255,255,0.2);
+  transform: translateY(-1px);
+}
+
+.event-item {
+  transition: opacity 300ms, transform 300ms;
+  animation: sim-slide-in 300ms ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 400ms ease-out forwards;
+}
