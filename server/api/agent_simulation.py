@@ -13,20 +13,14 @@ from sqlalchemy.orm import Session
 
 from server.core.db import get_db
 from server.core.security import get_current_user
-from server.models import User, Company
+from server.core.company_access import get_user_company
+from server.models import User
 from server.models.agent_simulation import AgentSimulationRun
 from server.simulation_agents.simulation_orchestrator import run_agent_simulation
 from server.simulation_agents.simulation_report import generate_report
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["agent-simulation"])
-
-
-def _verify_company_access(company_id: int, user: User, db: Session):
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return company
 
 
 class AgentSimulationRequest(BaseModel):
@@ -56,7 +50,7 @@ async def run_simulation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_company_access(company_id, current_user, db)
+    get_user_company(db, company_id, current_user)
     scenario_inputs = request.model_dump(exclude_none=True)
 
     try:
@@ -109,7 +103,7 @@ async def list_simulations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_company_access(company_id, current_user, db)
+    get_user_company(db, company_id, current_user)
     runs = (
         db.query(AgentSimulationRun)
         .filter(AgentSimulationRun.company_id == company_id)
@@ -127,7 +121,7 @@ async def get_simulation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _verify_company_access(company_id, current_user, db)
+    get_user_company(db, company_id, current_user)
     run = (
         db.query(AgentSimulationRun)
         .filter(AgentSimulationRun.id == run_id, AgentSimulationRun.company_id == company_id)
