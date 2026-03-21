@@ -43,7 +43,7 @@ def _sse_event(event_type: str, data: dict) -> str:
     return f"data: {payload}\n\n"
 
 
-@router.post("/api/simulation/v2/run")
+@router.post("/simulation/v2/run")
 async def run_simulation_v2_sse(
     request: SimulationV2Request,
     current_user: User = Depends(get_current_user),
@@ -153,7 +153,7 @@ async def run_simulation_v2_sse(
     )
 
 
-@router.get("/api/simulation/v2/{simulation_id}")
+@router.get("/simulation/v2/{simulation_id}")
 async def get_simulation_v2_result(
     simulation_id: str,
     current_user: User = Depends(get_current_user),
