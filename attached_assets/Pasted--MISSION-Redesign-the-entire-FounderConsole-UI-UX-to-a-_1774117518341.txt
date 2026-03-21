@@ -1,0 +1,572 @@
+## MISSION
+
+Redesign the entire FounderConsole UI/UX to a world-class, investor-demo-ready standard. The inspiration is mirofish-demo.pages.dev/console — a 5-stage simulation console — but we are going BEYOND it. We are not copying it. We are taking the best patterns and elevating them with better hierarchy, emotional pacing, micro-interactions, and polish.
+
+This is a React 18 + TypeScript + Tailwind CSS app. The existing sidebar, routing, and data layer stay intact. We are upgrading the VISUAL LAYER and INTERACTION DESIGN only. Do NOT break existing functionality. All changes are additive or CSS/component-level refactors.
+
+---
+
+## DESIGN SYSTEM FOUNDATION (Do this first)
+
+### 1. Create `client/src/styles/design-tokens.css`
+
+Define CSS custom properties for the entire system:
+```css
+:root {
+  /* Surfaces */
+  --surface-primary: #0a0a0f;
+  --surface-secondary: #111118;
+  --surface-tertiary: #1a1a24;
+  --surface-elevated: #1e1e2a;
+  --surface-glass: rgba(255, 255, 255, 0.03);
+  --surface-glass-hover: rgba(255, 255, 255, 0.06);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-active: rgba(255, 255, 255, 0.2);
+
+  /* Text */
+  --text-primary: #f0f0f5;
+  --text-secondary: #8888a0;
+  --text-tertiary: #55556a;
+  --text-accent: #6c8cff;
+
+  /* Accents */
+  --accent-blue: #4f7df9;
+  --accent-green: #34d399;
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-purple: #a78bfa;
+
+  /* Status */
+  --status-ready: #34d399;
+  --status-running: #f59e0b;
+  --status-complete: #4f7df9;
+  --status-error: #ef4444;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-glow-blue: 0 0 20px rgba(79,125,249,0.15);
+  --shadow-glow-green: 0 0 20px rgba(52,211,153,0.15);
+
+  /* Animation */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --duration-dramatic: 800ms;
+}
+```
+
+Import this in `client/src/index.css` before Tailwind directives.
+
+### 2. Create `client/src/styles/animations.css`
+```css
+/* Staggered fade-up entrance */
+@keyframes fadeUpIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scale fade in */
+@keyframes scaleFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Pulse border for active/processing items */
+@keyframes pulseBorder {
+  0% { box-shadow: 0 0 0 0 rgba(79, 125, 249, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(79, 125, 249, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(79, 125, 249, 0); }
+}
+
+/* Shimmer for skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Slow drift for background orbs */
+@keyframes drift1 {
+  0%, 100% { transform: translate(0, 0) rotate(-12deg); }
+  50% { transform: translate(30px, -20px) rotate(-12deg); }
+}
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) rotate(18deg); }
+  50% { transform: translate(-25px, 18px) rotate(18deg); }
+}
+
+/* Odometer number roll */
+@keyframes rollUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Status dot pulse */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Typing cursor blink */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Utility classes */
+.animate-fade-up { animation: fadeUpIn var(--duration-slow) var(--ease-out-expo) both; }
+.animate-scale-in { animation: scaleFadeIn var(--duration-normal) var(--ease-out-expo) both; }
+.animate-pulse-border { animation: pulseBorder 2s infinite; }
+.animate-shimmer { 
+  background: linear-gradient(90deg, var(--surface-tertiary) 25%, var(--surface-elevated) 50%, var(--surface-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.animate-status-pulse { animation: statusPulse 2s ease-in-out infinite; }
+
+/* Stagger children */
+.stagger-children > * { animation: fadeUpIn var(--duration-slow) var(--ease-out-expo) both; }
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 480ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 540ms; }
+```
+
+Import this in `client/src/index.css` as well.
+
+---
+
+## COMPONENT UPGRADES
+
+### 3. Create `client/src/components/ui/glass-card.tsx`
+
+A glassmorphism card component used everywhere:
+```tsx
+import { cn } from "@/lib/utils";
+import { ReactNode } from "react";
+
+interface GlassCardProps {
+  children: ReactNode;
+  className?: string;
+  variant?: "default" | "elevated" | "active" | "processing";
+  hover?: boolean;
+}
+
+export function GlassCard({ children, className, variant = "default", hover = true }: GlassCardProps) {
+  return (
+    <div className={cn(
+      "relative rounded-xl border backdrop-blur-md transition-all",
+      variant === "default" && "bg-[var(--surface-glass)] border-[var(--border-subtle)]",
+      variant === "elevated" && "bg-[var(--surface-elevated)] border-[var(--border-default)] shadow-[var(--shadow-md)]",
+      variant === "active" && "bg-[var(--surface-glass)] border-[var(--accent-blue)]/30 shadow-[var(--shadow-glow-blue)]",
+      variant === "processing" && "bg-[var(--surface-glass)] border-[var(--accent-amber)]/30 animate-pulse-border",
+      hover && "hover:border-[var(--border-active)] hover:bg-[var(--surface-glass-hover)]",
+      "duration-300",
+      className
+    )}>
+      {children}
+    </div>
+  );
+}
+```
+
+### 4. Create `client/src/components/ui/status-badge.tsx`
+```tsx
+import { cn } from "@/lib/utils";
+
+interface StatusBadgeProps {
+  status: "ready" | "running" | "complete" | "error" | "pending";
+  label?: string;
+  size?: "sm" | "md";
+}
+
+export function StatusBadge({ status, label, size = "sm" }: StatusBadgeProps) {
+  const statusConfig = {
+    ready: { color: "var(--status-ready)", text: label || "Ready", pulse: false },
+    running: { color: "var(--status-running)", text: label || "Running", pulse: true },
+    complete: { color: "var(--status-complete)", text: label || "Complete", pulse: false },
+    error: { color: "var(--status-error)", text: label || "Error", pulse: false },
+    pending: { color: "var(--text-tertiary)", text: label || "Pending", pulse: false },
+  };
+
+  const config = statusConfig[status];
+
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1.5 font-mono uppercase tracking-wider",
+      size === "sm" ? "text-[10px] px-2 py-0.5" : "text-xs px-2.5 py-1",
+      "rounded-full border",
+    )} style={{
+      color: config.color,
+      borderColor: `color-mix(in srgb, ${config.color} 30%, transparent)`,
+      backgroundColor: `color-mix(in srgb, ${config.color} 8%, transparent)`,
+    }}>
+      <span className={cn("w-1.5 h-1.5 rounded-full", config.pulse && "animate-status-pulse")} 
+            style={{ backgroundColor: config.color }} />
+      {config.text}
+    </span>
+  );
+}
+```
+
+### 5. Create `client/src/components/ui/animated-counter.tsx`
+
+An odometer-style animated number:
+```tsx
+import { useEffect, useRef, useState } from "react";
+
+interface AnimatedCounterProps {
+  value: number;
+  duration?: number;
+  prefix?: string;
+  suffix?: string;
+  className?: string;
+  formatFn?: (n: number) => string;
+}
+
+export function AnimatedCounter({ value, duration = 1200, prefix, suffix, className, formatFn }: AnimatedCounterProps) {
+  const [displayValue, setDisplayValue] = useState(0);
+  const startRef = useRef(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    startRef.current = displayValue;
+    startTimeRef.current = null;
+
+    const animate = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 4); // ease-out-quart
+      const current = Math.round(startRef.current + (value - startRef.current) * eased);
+      setDisplayValue(current);
+      if (progress < 1) requestAnimationFrame(animate);
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, duration]);
+
+  const formatted = formatFn ? formatFn(displayValue) : displayValue.toLocaleString();
+
+  return (
+    <span className={className}>
+      {prefix}{formatted}{suffix}
+    </span>
+  );
+}
+```
+
+### 6. Create `client/src/components/ui/skeleton-block.tsx`
+```tsx
+import { cn } from "@/lib/utils";
+
+interface SkeletonBlockProps {
+  className?: string;
+  lines?: number;
+}
+
+export function SkeletonBlock({ className, lines = 3 }: SkeletonBlockProps) {
+  return (
+    <div className={cn("space-y-2", className)}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className={cn(
+          "h-3 rounded animate-shimmer",
+          i === lines - 1 ? "w-2/3" : "w-full"
+        )} />
+      ))}
+    </div>
+  );
+}
+```
+
+### 7. Create `client/src/components/ui/step-progress-bar.tsx`
+
+A persistent horizontal step progress bar — this goes at the top of simulation-related pages:
+```tsx
+import { cn } from "@/lib/utils";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
+
+interface Step {
+  id: string;
+  label: string;
+  summary?: string; // e.g. "132 nodes" after completion
+  status: "complete" | "active" | "pending";
+}
+
+interface StepProgressBarProps {
+  steps: Step[];
+  className?: string;
+}
+
+export function StepProgressBar({ steps, className }: StepProgressBarProps) {
+  return (
+    <div className={cn("flex items-center gap-1 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface-secondary)]/50 backdrop-blur-sm", className)}>
+      {steps.map((step, i) => (
+        <div key={step.id} className="flex items-center gap-1">
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300",
+            step.status === "complete" && "text-[var(--accent-green)]",
+            step.status === "active" && "text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 border border-[var(--accent-blue)]/20",
+            step.status === "pending" && "text-[var(--text-tertiary)]",
+          )}>
+            {step.status === "complete" && <CheckCircle2 className="w-3.5 h-3.5" />}
+            {step.status === "active" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {step.status === "pending" && <Circle className="w-3.5 h-3.5" />}
+            <span>{step.label}</span>
+            {step.summary && step.status === "complete" && (
+              <span className="text-[10px] text-[var(--text-tertiary)] font-mono">{step.summary}</span>
+            )}
+          </div>
+          {i < steps.length - 1 && (
+            <div className={cn(
+              "w-8 h-px mx-1",
+              i < steps.findIndex(s => s.status === "active") ? "bg-[var(--accent-green)]" : "bg-[var(--border-subtle)]"
+            )} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### 8. Create `client/src/components/ui/terminal-drawer.tsx`
+
+A collapsible terminal log drawer that replaces full-screen terminals:
+```tsx
+import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { ChevronUp, ChevronDown, Terminal } from "lucide-react";
+
+interface LogEntry {
+  timestamp: string;
+  message: string;
+  type?: "info" | "success" | "error" | "warning";
+}
+
+interface TerminalDrawerProps {
+  logs: LogEntry[];
+  title?: string;
+  projectId?: string;
+  className?: string;
+}
+
+export function TerminalDrawer({ logs, title = "System Log", projectId, className }: TerminalDrawerProps) {
+  const [expanded, setExpanded] = useState(false);
+  const lastLog = logs[logs.length - 1];
+
+  return (
+    <div className={cn(
+      "fixed bottom-0 left-0 right-0 z-40 transition-all duration-500",
+      expanded ? "h-64" : "h-10",
+      className
+    )}>
+      {/* Collapsed bar */}
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 h-10 bg-[#0d0d12] border-t border-[var(--border-subtle)] text-xs font-mono cursor-pointer hover:bg-[var(--surface-tertiary)] transition-colors"
+      >
+        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+          <Terminal className="w-3.5 h-3.5" />
+          <span className="text-[var(--text-tertiary)] uppercase tracking-wider">{title}</span>
+          {lastLog && (
+            <span className={cn(
+              lastLog.type === "success" ? "text-[var(--accent-green)]" : 
+              lastLog.type === "error" ? "text-[var(--accent-red)]" : "text-[var(--text-secondary)]"
+            )}>
+              {lastLog.type === "success" && "✓ "}{lastLog.message}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {projectId && <span className="text-[var(--text-tertiary)]">{projectId}</span>}
+          {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+        </div>
+      </button>
+
+      {/* Expanded log */}
+      {expanded && (
+        <div className="h-[calc(100%-2.5rem)] overflow-y-auto bg-[#0a0a0e] px-4 py-2 font-mono text-xs space-y-0.5">
+          {logs.map((log, i) => (
+            <div key={i} className="flex gap-3">
+              <span className="text-[var(--text-tertiary)] shrink-0">{log.timestamp}</span>
+              <span className={cn(
+                log.type === "success" ? "text-[var(--accent-green)]" :
+                log.type === "error" ? "text-[var(--accent-red)]" :
+                log.type === "warning" ? "text-[var(--accent-amber)]" :
+                "text-[var(--text-secondary)]"
+              )}>{log.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 9. Create `client/src/components/ui/background-orbs.tsx`
+
+Subtle floating background orbs for visual richness:
+```tsx
+export function BackgroundOrbs({ variant = "blue" }: { variant?: "blue" | "amber" | "green" }) {
+  const colors = {
+    blue: { c1: "rgba(79,125,249,0.06)", c2: "rgba(167,139,250,0.04)" },
+    amber: { c1: "rgba(245,158,11,0.06)", c2: "rgba(234,88,12,0.04)" },
+    green: { c1: "rgba(52,211,153,0.06)", c2: "rgba(16,185,129,0.04)" },
+  };
+  const c = colors[variant];
+
+  return (
+    <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+      <div className="absolute w-[500px] h-[350px] rounded-full blur-[100px] top-[15%] right-[10%]"
+           style={{ background: c.c1, animation: "drift1 25s ease-in-out infinite" }} />
+      <div className="absolute w-[400px] h-[300px] rounded-full blur-[80px] bottom-[20%] left-[5%]"
+           style={{ background: c.c2, animation: "drift2 30s ease-in-out infinite" }} />
+    </div>
+  );
+}
+```
+
+---
+
+## PAGE-LEVEL UPGRADES
+
+### 10. Upgrade the Simulate page (`client/src/pages/simulate-workspace.tsx` or equivalent)
+
+Apply these changes to the existing simulation page:
+
+- Wrap the Simulation Console header area with a `StepProgressBar` showing 5 steps: Initialize → Configure → Simulate → Analyze → Report
+- Replace flat metric cards (CASH, MONTHLY BURN, RUNWAY) with `GlassCard` components. Add `AnimatedCounter` for the numerical values so they roll up on load and on data change.
+- Add `BackgroundOrbs variant="blue"` as a child of the page wrapper (behind content, z-0).
+- The "Run Simulation" button should have a subtle glow effect: `shadow-[0_0_20px_rgba(79,125,249,0.3)]` on hover, with `transition-all duration-300`.
+- Add `stagger-children` class to the parent container of metric cards so they cascade in on page load.
+- Add `SkeletonBlock` components that show while data is loading, replacing blank "Run a simulation to see" empty states.
+
+### 11. Upgrade the Flight Simulator page (`client/src/pages/simulate-v2` or equivalent)
+
+- Left panel (Scenario Controls): Wrap in a `GlassCard variant="elevated"`. Add section dividers between SCENARIO CONTROLS, ENVIRONMENT, and FOUNDER DNA using a thin `border-b border-[var(--border-subtle)]` with a small label.
+- Center area: Replace the static "Flight Simulator" empty state with a more dramatic illustration. Add a pulsing ring animation around the lightning bolt icon. The description text should fade in with `animate-fade-up`.
+- Right panel (AI Insights): Wrap in `GlassCard`. When insights load, each insight card should stagger in.
+- "Launch Simulation" button: Make it larger, more prominent. Add a shimmer effect on the button text using a CSS gradient animation (like the metal-shimmer from MiroFish). When clicked, it should animate into a progress state.
+- During simulation: Show a `StepProgressBar` at the top. The agent events should appear as social-media-style cards with avatar, agent name (with a colored dot for agent type), timestamp, and the event text. Each event card should `animate-fade-up` as it appears.
+
+### 12. Upgrade the Dashboard/Overview page
+
+- The daily briefing card at the top should use `GlassCard variant="elevated"` with a subtle left border accent in blue.
+- Goal Tracker cards: Add `AnimatedCounter` for the progress values. The progress bars should animate from 0 to their current value on mount (use CSS `transition: width 1s var(--ease-out-expo)`).
+- Financial metrics row (MRR, ARR, etc.): Each card should be a `GlassCard` with the "Verified" badge styled as a `StatusBadge status="complete"`. Numbers should use `AnimatedCounter`.
+- Add `stagger-children` to the metrics grid.
+
+### 13. Upgrade the Decisions page
+
+- The "Generating your strategic briefing" loading state needs a complete overhaul:
+  - Replace the generic spinner with a more sophisticated animation: a ring of dots that orbit around the icon, OR use the shimmer skeleton approach.
+  - The step indicators (Analyzing financial data, Evaluating growth trajectory, etc.) should use the same step pattern as `StepProgressBar` but vertical. Each step should have a status dot that transitions from gray → amber (pulsing) → green (complete) as the process advances.
+  - Add a subtle progress bar beneath the title that fills as steps complete.
+
+---
+
+## GLOBAL POLISH
+
+### 14. Sidebar Enhancement
+
+In the existing sidebar component:
+- The "AI Copilot" button should have a very subtle rainbow/gradient border that shifts slowly (use `background: linear-gradient(135deg, #4f7df9, #a78bfa, #4f7df9)` with `background-size: 200% 200%` and a slow `animation: metal-shift 8s ease-in-out infinite`).
+- Navigation items: on hover, add a subtle left border highlight that slides in (use `before:` pseudo-element with `transition: width 200ms`).
+- The "Business Health" card in the sidebar should pulse its border gently in green when score is above 70.
+
+### 15. Toast Notifications
+
+Create `client/src/components/ui/event-toast.tsx` — a small notification that slides in from the bottom-right corner for simulation events:
+```tsx
+import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+
+interface EventToastProps {
+  message: string;
+  type?: "info" | "success" | "warning";
+  duration?: number;
+  onDismiss: () => void;
+}
+
+export function EventToast({ message, type = "info", duration = 4000, onDismiss }: EventToastProps) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+    const timer = setTimeout(() => {
+      setVisible(false);
+      setTimeout(onDismiss, 300);
+    }, duration);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className={cn(
+      "fixed bottom-14 right-4 z-50 max-w-sm px-4 py-2.5 rounded-lg border font-mono text-xs transition-all duration-300",
+      "bg-[var(--surface-elevated)] border-[var(--border-default)] shadow-[var(--shadow-md)]",
+      visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
+      type === "success" && "border-[var(--accent-green)]/30",
+      type === "warning" && "border-[var(--accent-amber)]/30",
+    )}>
+      <span className={cn(
+        type === "success" ? "text-[var(--accent-green)]" :
+        type === "warning" ? "text-[var(--accent-amber)]" :
+        "text-[var(--text-secondary)]"
+      )}>{type === "success" && "✓ "}{message}</span>
+    </div>
+  );
+}
+```
+
+### 16. Typography Scale
+
+In `tailwind.config.ts`, extend the theme with these font size additions:
+```js
+fontSize: {
+  'display': ['2.5rem', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '700' }],
+  'headline': ['1.75rem', { lineHeight: '1.2', letterSpacing: '-0.01em', fontWeight: '600' }],
+  'title': ['1.25rem', { lineHeight: '1.3', fontWeight: '600' }],
+  'body': ['0.875rem', { lineHeight: '1.6' }],
+  'caption': ['0.75rem', { lineHeight: '1.5' }],
+  'mono-sm': ['0.6875rem', { lineHeight: '1.4', fontFamily: 'monospace' }],
+}
+```
+
+---
+
+## IMPLEMENTATION ORDER
+
+Do these in sequence, testing after each group:
+
+**Phase 1 — Foundation:** Steps 1-2 (design tokens + animations CSS). Then steps 3-8 (all new UI components). Just create the files, don't wire them in yet.
+
+**Phase 2 — Dashboard:** Step 12 (upgrade overview page using new components). Verify visually.
+
+**Phase 3 — Simulation pages:** Steps 10-11 (upgrade both simulate pages). This is the highest-impact change.
+
+**Phase 4 — Global polish:** Steps 13-16 (decisions page, sidebar, toasts, typography).
+
+---
+
+## CRITICAL RULES
+
+1. Do NOT remove or restructure any existing pages, routes, or data fetching logic.
+2. Do NOT change the sidebar navigation structure or routing.
+3. All new components go in `client/src/components/ui/`.
+4. All new CSS goes in `client/src/styles/` and is imported in `index.css`.
+5. Use Tailwind classes + CSS custom properties. Do NOT use inline styles except for dynamic values.
+6. Every animation must respect `prefers-reduced-motion: reduce` — wrap animations in `@media (prefers-reduced-motion: no-preference)`.
+7. Test that the app still builds and runs after each phase before moving to the next.
+8. Keep the dark theme as the primary. These design tokens are for dark mode only.
