@@ -1,0 +1,858 @@
+Here's the full Replit prompt — it covers the **simulation engine logic** (adapted from MiroFish's architecture for FounderConsole's startup/financial domain) AND the **UI/UX**. Copy-paste ready:
+
+---
+
+```
+## MISSION
+
+Rebuild the Simulate pages (`/simulate` and `/simulate-v2`) with a real multi-agent simulation engine inspired by MiroFish (github.com/666ghj/MiroFish). This covers BOTH backend logic AND frontend UI.
+
+MiroFish's architecture is:
+1. Upload seed document → LLM extracts ontology (entity types + relation types)
+2. Build a knowledge graph (GraphRAG) from the document using Zep
+3. Generate agent personas from graph entities via LLM
+4. LLM generates simulation config (time, platform behavior, agent parameters)
+5. Run multi-agent simulation — agents POST, COMMENT, LIKE, SEARCH, etc. on dual platforms (Twitter/Reddit style) round by round
+6. Each agent has: persona, emotional tendency, activity level, influence score, active hours
+7. Each round: select active agents based on time-of-day multipliers → each agent chooses an action via LLM → actions feed back into the system → graph memory updated
+8. After simulation: ReportAgent uses ReACT pattern + tool calls (graph search, panorama search, interview agents) to generate a structured report
+9. Deep interaction: chat with any agent or the ReportAgent post-simulation
+
+**We adapt this for FounderConsole's domain:** Instead of social media opinion simulation, we simulate a STARTUP ECOSYSTEM where agents (Founder, Investors, Customers, Team, Market) interact over months making decisions that affect financial outcomes.
+
+---
+
+## PART 1: BACKEND — Multi-Agent Simulation Engine
+
+### Architecture Overview
+
+Create these new server files. FounderConsole has a Python backend at `server/`. All new files go under `server/services/simulation/`:
+
+```
+server/services/simulation/
+├── __init__.py
+├── engine.py              # Core simulation loop
+├── agents.py              # Agent definitions and LLM decision-making
+├── agent_config.py        # Agent persona generation via LLM
+├── environment.py         # Market/environment state per round
+├── actions.py             # Action types and effects
+├── memory.py              # Agent memory (short-term + long-term)
+├── report_generator.py    # Post-simulation report via LLM
+└── types.py               # Shared data types
+```
+
+### 1. `types.py` — Core Data Structures
+
+```python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+
+class SimulationStatus(str, Enum):
+    CREATED = "created"
+    CONFIGURING = "configuring"
+    READY = "ready"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class AgentType(str, Enum):
+    FOUNDER = "founder"
+    INVESTOR = "investor"
+    CUSTOMER = "customer"
+    TEAM_MEMBER = "team"
+    MARKET = "market"
+    COMPETITOR = "competitor"
+    ADVISOR = "advisor"
+
+class ActionType(str, Enum):
+    # Founder actions
+    HIRE = "hire"
+    FIRE = "fire"
+    PIVOT_PRODUCT = "pivot_product"
+    RAISE_PRICES = "raise_prices"
+    CUT_PRICES = "cut_prices"
+    LAUNCH_FEATURE = "launch_feature"
+    CUT_BURN = "cut_burn"
+    INCREASE_MARKETING = "increase_marketing"
+    SEEK_FUNDING = "seek_funding"
+    
+    # Investor actions
+    OFFER_TERM_SHEET = "offer_term_sheet"
+    PASS_ON_DEAL = "pass_on_deal"
+    REQUEST_METRICS = "request_metrics"
+    FOLLOW_ON_INVEST = "follow_on_invest"
+    MARK_DOWN = "mark_down"
+    
+    # Customer actions
+    SIGN_CONTRACT = "sign_contract"
+    CHURN = "churn"
+    UPGRADE = "upgrade"
+    REFER_OTHERS = "refer_others"
+    COMPLAIN = "complain"
+    REQUEST_FEATURE = "request_feature"
+    
+    # Team actions
+    QUIT = "quit"
+    REQUEST_RAISE = "request_raise"
+    SHIP_FEATURE = "ship_feature"
+    MISS_DEADLINE = "miss_deadline"
+    PROPOSE_IDEA = "propose_idea"
+    
+    # Market actions
+    RECESSION = "recession"
+    BOOM = "boom"
+    NEW_REGULATION = "new_regulation"
+    COMPETITOR_LAUNCH = "competitor_launch"
+    VIRAL_MOMENT = "viral_moment"
+    MARKET_SHIFT = "market_shift"
+    
+    # Meta
+    OBSERVE = "observe"
+    IDLE = "idle"
+
+class Sentiment(str, Enum):
+    VERY_POSITIVE = "very_positive"
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+    VERY_NEGATIVE = "very_negative"
+
+@dataclass
+class AgentPersona:
+    id: str
+    name: str
+    agent_type: AgentType
+    bio: str
+    personality_traits: List[str]    # e.g. ["risk-averse", "data-driven", "impatient"]
+    goals: List[str]                 # e.g. ["10x return in 5 years"]
+    emotional_tendency: float        # -1.0 (bearish/pessimistic) to 1.0 (bullish/optimistic)
+    activity_level: float            # 0.0 to 1.0 — how often they take actions
+    influence: float                 # 0.0 to 3.0 — how much their actions impact metrics
+    risk_tolerance: float            # 0.0 to 1.0
+    available_actions: List[ActionType] = field(default_factory=list)
+
+@dataclass
+class AgentAction:
+    round_num: int
+    month_label: str                 # e.g. "Month 3"
+    agent_id: str
+    agent_name: str
+    agent_type: AgentType
+    action: ActionType
+    reasoning: str                   # LLM's chain-of-thought for why this action
+    description: str                 # Human-readable description of what happened
+    impact: Dict[str, float]         # e.g. {"mrr_delta": -2000, "churn_delta": 0.5}
+    sentiment: Sentiment
+    timestamp: datetime = field(default_factory=datetime.now)
+
+@dataclass 
+class CompanyState:
+    """Mutable state of the startup — updated each round"""
+    mrr: float = 0.0
+    arr: float = 0.0
+    burn_rate: float = 0.0
+    cash: float = 0.0
+    runway_months: float = 0.0
+    customers: int = 0
+    churn_rate: float = 0.0
+    team_size: int = 0
+    team_morale: float = 0.7        # 0-1
+    product_quality: float = 0.5    # 0-1
+    market_fit: float = 0.5         # 0-1
+    brand_reputation: float = 0.5   # 0-1
+    investor_confidence: float = 0.5 # 0-1
+    growth_rate: float = 0.0        # monthly MRR growth %
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return self.__dict__.copy()
+    
+    def apply_action_impact(self, impact: Dict[str, float]):
+        for key, delta in impact.items():
+            field_name = key.replace("_delta", "")
+            if hasattr(self, field_name):
+                current = getattr(self, field_name)
+                setattr(self, field_name, max(0, current + delta))
+        # Recalculate derived metrics
+        self.arr = self.mrr * 12
+        self.runway_months = self.cash / self.burn_rate if self.burn_rate > 0 else 999
+
+@dataclass
+class SimulationConfig:
+    simulation_id: str
+    total_rounds: int = 24           # months
+    agents: List[AgentPersona] = field(default_factory=list)
+    initial_state: CompanyState = field(default_factory=CompanyState)
+    scenario_params: Dict[str, Any] = field(default_factory=dict)
+    # Time-of-simulation activity multipliers (which agents are more active early vs late)
+    early_stage_multipliers: Dict[str, float] = field(default_factory=lambda: {
+        "founder": 1.5, "investor": 0.3, "customer": 0.5, "team": 1.0, "market": 0.8
+    })
+    late_stage_multipliers: Dict[str, float] = field(default_factory=lambda: {
+        "founder": 1.0, "investor": 1.5, "customer": 1.2, "team": 0.8, "market": 1.0
+    })
+
+@dataclass
+class SimulationResult:
+    simulation_id: str
+    config: SimulationConfig
+    rounds: List[Dict[str, Any]] = field(default_factory=list)  # state snapshot per round
+    all_actions: List[AgentAction] = field(default_factory=list)
+    final_state: CompanyState = field(default_factory=CompanyState)
+    status: SimulationStatus = SimulationStatus.CREATED
+```
+
+### 2. `agents.py` — Agent LLM Decision-Making (THIS IS THE CORE)
+
+This is the equivalent of MiroFish's OASIS agent system. Each agent uses LLM to decide what action to take based on the current company state, their persona, their memory, and what other agents did recently.
+
+```python
+"""
+Agent decision engine — each agent is an LLM-powered actor.
+
+Equivalent to MiroFish's dual-platform agent system, but adapted for 
+startup simulation. Instead of POST/COMMENT/LIKE on Twitter/Reddit, 
+agents HIRE/FIRE/INVEST/CHURN/SHIP etc. in a startup ecosystem.
+
+Key MiroFish patterns we adopt:
+- Each agent has a persona prompt that defines their personality and goals
+- Each round, active agents are selected based on activity multipliers
+- Each agent sees the current state + recent events + their memory
+- LLM decides the action + reasoning + impact estimate
+- Actions feed back into company state for the next round
+"""
+
+import json
+import random
+from typing import List, Dict, Any, Optional
+from openai import OpenAI
+from .types import *
+
+def build_agent_system_prompt(agent: AgentPersona, company_state: CompanyState) -> str:
+    """Build the system prompt for an agent's decision. Equivalent to MiroFish's persona injection."""
+    
+    return f"""You are {agent.name}, a {agent.agent_type.value} in a startup simulation.
+
+PERSONA:
+{agent.bio}
+
+PERSONALITY TRAITS: {', '.join(agent.personality_traits)}
+GOALS: {', '.join(agent.goals)}
+EMOTIONAL TENDENCY: {agent.emotional_tendency} (-1=very pessimistic, 1=very optimistic)
+RISK TOLERANCE: {agent.risk_tolerance} (0=risk-averse, 1=risk-seeking)
+
+You must decide your next action based on the current company state and recent events.
+You MUST respond with valid JSON only."""
+
+
+def build_agent_decision_prompt(
+    agent: AgentPersona, 
+    company_state: CompanyState, 
+    recent_actions: List[AgentAction],
+    round_num: int,
+    total_rounds: int,
+    memory: List[str]
+) -> str:
+    """Build the user prompt for an agent's decision each round."""
+    
+    recent_events = "\n".join([
+        f"- [Month {a.round_num}] {a.agent_name} ({a.agent_type.value}): {a.description}"
+        for a in recent_actions[-10:]  # last 10 events
+    ]) or "No recent events."
+    
+    memory_text = "\n".join([f"- {m}" for m in memory[-5:]]) or "No prior memories."
+    
+    available = [a.value for a in agent.available_actions]
+    
+    return f"""CURRENT MONTH: {round_num} of {total_rounds}
+
+COMPANY STATE:
+- MRR: ${company_state.mrr:,.0f} | ARR: ${company_state.arr:,.0f}
+- Burn Rate: ${company_state.burn_rate:,.0f}/mo | Cash: ${company_state.cash:,.0f}
+- Runway: {company_state.runway_months:.1f} months
+- Customers: {company_state.customers} | Churn: {company_state.churn_rate:.1%}
+- Team Size: {company_state.team_size} | Morale: {company_state.team_morale:.0%}
+- Product Quality: {company_state.product_quality:.0%}
+- Market Fit: {company_state.market_fit:.0%}
+- Growth Rate: {company_state.growth_rate:.1%}/mo
+- Investor Confidence: {company_state.investor_confidence:.0%}
+
+RECENT EVENTS:
+{recent_events}
+
+YOUR MEMORIES:
+{memory_text}
+
+AVAILABLE ACTIONS: {json.dumps(available)}
+
+Decide your ONE action this month. Respond with JSON:
+{{
+  "action": "<one of your available actions>",
+  "reasoning": "<2-3 sentence chain-of-thought explaining your decision>",
+  "description": "<1 sentence human-readable description of what you did>",
+  "sentiment": "<very_positive|positive|neutral|negative|very_negative>",
+  "impact": {{
+    "mrr_delta": <number>,
+    "burn_rate_delta": <number>,
+    "cash_delta": <number>,
+    "customers_delta": <number>,
+    "churn_rate_delta": <number>,
+    "team_size_delta": <number>,
+    "team_morale_delta": <number>,
+    "product_quality_delta": <number>,
+    "market_fit_delta": <number>,
+    "investor_confidence_delta": <number>,
+    "growth_rate_delta": <number>
+  }}
+}}
+
+Only include non-zero deltas. Be realistic — single actions cause small incremental changes, not dramatic swings. A single customer churning reduces customers by 1, not 50."""
+
+
+async def agent_decide(
+    agent: AgentPersona,
+    company_state: CompanyState,
+    recent_actions: List[AgentAction],
+    round_num: int,
+    total_rounds: int,
+    memory: List[str],
+    llm_client: OpenAI,
+    model: str = "gpt-4o-mini"
+) -> Optional[AgentAction]:
+    """
+    Have a single agent make a decision for this round.
+    
+    This is the equivalent of MiroFish's per-agent-per-round LLM call.
+    MiroFish calls LLM for each of 55 agents per round to decide POST/COMMENT/LIKE.
+    We call LLM for each of 5-8 agents per round to decide HIRE/INVEST/CHURN etc.
+    """
+    
+    system_prompt = build_agent_system_prompt(agent, company_state)
+    user_prompt = build_agent_decision_prompt(
+        agent, company_state, recent_actions, round_num, total_rounds, memory
+    )
+    
+    try:
+        response = llm_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7 + (agent.emotional_tendency * 0.2),  # More emotional agents = more random
+            max_tokens=500,
+            response_format={"type": "json_object"}
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        
+        return AgentAction(
+            round_num=round_num,
+            month_label=f"Month {round_num}",
+            agent_id=agent.id,
+            agent_name=agent.name,
+            agent_type=agent.agent_type,
+            action=ActionType(result["action"]),
+            reasoning=result.get("reasoning", ""),
+            description=result.get("description", ""),
+            impact=result.get("impact", {}),
+            sentiment=Sentiment(result.get("sentiment", "neutral"))
+        )
+    except Exception as e:
+        # Fallback: agent observes
+        return AgentAction(
+            round_num=round_num,
+            month_label=f"Month {round_num}",
+            agent_id=agent.id,
+            agent_name=agent.name,
+            agent_type=agent.agent_type,
+            action=ActionType.OBSERVE,
+            reasoning=f"Agent could not decide: {str(e)}",
+            description=f"{agent.name} observes the situation.",
+            impact={},
+            sentiment=Sentiment.NEUTRAL
+        )
+```
+
+### 3. `agent_config.py` — LLM-Generated Agent Personas
+
+Equivalent to MiroFish's `oasis_profile_generator.py` — uses LLM to generate rich personas based on the company data.
+
+```python
+"""
+Generate agent personas from company financial data using LLM.
+Equivalent to MiroFish's OasisProfileGenerator which reads graph entities 
+and generates personas. We read company metrics and generate startup-domain agents.
+"""
+
+import json
+from typing import List, Dict, Any
+from openai import OpenAI
+from .types import AgentPersona, AgentType, ActionType, CompanyState
+
+AGENT_TEMPLATES = {
+    AgentType.FOUNDER: {
+        "available_actions": [
+            ActionType.HIRE, ActionType.FIRE, ActionType.PIVOT_PRODUCT,
+            ActionType.RAISE_PRICES, ActionType.CUT_PRICES, ActionType.LAUNCH_FEATURE,
+            ActionType.CUT_BURN, ActionType.INCREASE_MARKETING, ActionType.SEEK_FUNDING
+        ]
+    },
+    AgentType.INVESTOR: {
+        "available_actions": [
+            ActionType.OFFER_TERM_SHEET, ActionType.PASS_ON_DEAL,
+            ActionType.REQUEST_METRICS, ActionType.FOLLOW_ON_INVEST, ActionType.MARK_DOWN
+        ]
+    },
+    AgentType.CUSTOMER: {
+        "available_actions": [
+            ActionType.SIGN_CONTRACT, ActionType.CHURN, ActionType.UPGRADE,
+            ActionType.REFER_OTHERS, ActionType.COMPLAIN, ActionType.REQUEST_FEATURE
+        ]
+    },
+    AgentType.TEAM_MEMBER: {
+        "available_actions": [
+            ActionType.QUIT, ActionType.REQUEST_RAISE, ActionType.SHIP_FEATURE,
+            ActionType.MISS_DEADLINE, ActionType.PROPOSE_IDEA
+        ]
+    },
+    AgentType.MARKET: {
+        "available_actions": [
+            ActionType.RECESSION, ActionType.BOOM, ActionType.NEW_REGULATION,
+            ActionType.COMPETITOR_LAUNCH, ActionType.VIRAL_MOMENT, ActionType.MARKET_SHIFT
+        ]
+    }
+}
+
+async def generate_agent_personas(
+    company_state: CompanyState,
+    scenario_params: Dict[str, Any],
+    llm_client: OpenAI,
+    model: str = "gpt-4o-mini"
+) -> List[AgentPersona]:
+    """
+    Use LLM to generate rich agent personas based on company context.
+    Like MiroFish generates 55 social media personas from graph entities,
+    we generate 5-8 startup ecosystem personas from financial data.
+    """
+    
+    prompt = f"""Generate realistic agent personas for a startup simulation.
+
+COMPANY CONTEXT:
+- MRR: ${company_state.mrr:,.0f}, Burn: ${company_state.burn_rate:,.0f}/mo
+- Cash: ${company_state.cash:,.0f}, Runway: {company_state.runway_months:.1f}mo
+- {company_state.customers} customers, {company_state.churn_rate:.1%} churn
+- Team of {company_state.team_size}, morale at {company_state.team_morale:.0%}
+
+SCENARIO: {json.dumps(scenario_params)}
+
+Generate exactly 7 agents as a JSON array. Each agent needs:
+- "name": A realistic name (e.g. "Sarah Chen, Series A VC" not just "Investor")
+- "agent_type": one of [founder, investor, customer, team, market, competitor, advisor]
+- "bio": 2-3 sentences describing their background, motivations, and how they relate to this company
+- "personality_traits": array of 3-4 traits like "data-driven", "impatient", "risk-averse", "growth-obsessed"
+- "goals": array of 2-3 specific goals
+- "emotional_tendency": float -1.0 to 1.0
+- "activity_level": float 0.0 to 1.0
+- "influence": float 0.5 to 3.0
+- "risk_tolerance": float 0.0 to 1.0
+
+REQUIRED MIX: 1 founder, 2 investors (1 bullish, 1 cautious), 1 key customer, 1 team lead, 1 market force, 1 competitor/advisor.
+
+Respond with a JSON array only."""
+
+    response = llm_client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+        max_tokens=3000,
+        response_format={"type": "json_object"}
+    )
+    
+    data = json.loads(response.choices[0].message.content)
+    agents_data = data if isinstance(data, list) else data.get("agents", [])
+    
+    personas = []
+    for i, a in enumerate(agents_data):
+        agent_type = AgentType(a["agent_type"])
+        template = AGENT_TEMPLATES.get(agent_type, AGENT_TEMPLATES[AgentType.MARKET])
+        
+        personas.append(AgentPersona(
+            id=f"agent_{i}",
+            name=a["name"],
+            agent_type=agent_type,
+            bio=a["bio"],
+            personality_traits=a.get("personality_traits", []),
+            goals=a.get("goals", []),
+            emotional_tendency=float(a.get("emotional_tendency", 0)),
+            activity_level=float(a.get("activity_level", 0.5)),
+            influence=float(a.get("influence", 1.0)),
+            risk_tolerance=float(a.get("risk_tolerance", 0.5)),
+            available_actions=template["available_actions"]
+        ))
+    
+    return personas
+```
+
+### 4. `engine.py` — Core Simulation Loop
+
+This is the equivalent of MiroFish's `simulation_runner.py` — the main loop that runs rounds, selects active agents, calls LLM for decisions, and updates state.
+
+```python
+"""
+Core simulation engine — runs the multi-agent simulation round by round.
+
+Equivalent to MiroFish's SimulationRunner which:
+1. Iterates through rounds (they do 72 rounds for 72 hours of social media)
+2. Each round: determine active agents based on time-of-day multipliers
+3. Each active agent calls LLM to decide action
+4. Actions are applied to the environment state
+5. Graph memory is updated with new events
+
+We adapt this: 
+- Each round = 1 month of startup life
+- 5-8 agents instead of 55 social media users
+- Actions affect financial metrics instead of post engagement
+"""
+
+import asyncio
+import json
+import random
+import uuid
+from typing import List, Dict, Any, Optional, Callable
+from datetime import datetime
+from openai import OpenAI
+
+from .types import *
+from .agents import agent_decide
+from .agent_config import generate_agent_personas
+from .memory import AgentMemoryManager
+from .report_generator import generate_simulation_report
+
+
+class SimulationEngine:
+    def __init__(self, llm_api_key: str, llm_base_url: str = None, llm_model: str = "gpt-4o-mini"):
+        self.llm_client = OpenAI(api_key=llm_api_key, base_url=llm_base_url)
+        self.model = llm_model
+        self.memory_manager = AgentMemoryManager()
+    
+    async def run_simulation(
+        self,
+        initial_state: CompanyState,
+        scenario_params: Dict[str, Any],
+        total_rounds: int = 24,
+        progress_callback: Optional[Callable] = None,
+        event_callback: Optional[Callable] = None
+    ) -> SimulationResult:
+        """
+        Run the full multi-agent simulation.
+        
+        progress_callback(step, progress_pct, message) — for UI progress updates
+        event_callback(action: AgentAction) — called each time an agent acts, for real-time UI feed
+        """
+        
+        simulation_id = f"sim_{uuid.uuid4().hex[:12]}"
+        
+        # === STEP 1: Generate Agent Personas (like MiroFish's OasisProfileGenerator) ===
+        if progress_callback:
+            progress_callback("generating_agents", 0, "Initializing agents...")
+        
+        agents = await generate_agent_personas(
+            initial_state, scenario_params, self.llm_client, self.model
+        )
+        
+        if progress_callback:
+            progress_callback("generating_agents", 100, f"Generated {len(agents)} agent personas")
+        
+        # === STEP 2: Build Simulation Config ===
+        config = SimulationConfig(
+            simulation_id=simulation_id,
+            total_rounds=total_rounds,
+            agents=agents,
+            initial_state=initial_state,
+            scenario_params=scenario_params
+        )
+        
+        result = SimulationResult(
+            simulation_id=simulation_id,
+            config=config,
+            status=SimulationStatus.RUNNING
+        )
+        
+        # === STEP 3: Run Simulation Rounds (like MiroFish's round-by-round OASIS loop) ===
+        current_state = CompanyState(**initial_state.to_dict())
+        all_actions: List[AgentAction] = []
+        
+        if progress_callback:
+            progress_callback("simulating", 0, "Starting simulation...")
+        
+        for round_num in range(1, total_rounds + 1):
+            # Determine which agents are active this round
+            # (Like MiroFish's time-of-day activity multipliers)
+            active_agents = self._select_active_agents(agents, round_num, total_rounds)
+            
+            round_actions = []
+            
+            for agent in active_agents:
+                # Get agent's memory
+                memory = self.memory_manager.get_memory(agent.id)
+                
+                # === THE KEY LLM CALL: Agent decides action ===
+                action = await agent_decide(
+                    agent=agent,
+                    company_state=current_state,
+                    recent_actions=all_actions[-15:],
+                    round_num=round_num,
+                    total_rounds=total_rounds,
+                    memory=memory,
+                    llm_client=self.llm_client,
+                    model=self.model
+                )
+                
+                if action:
+                    # Apply impact to company state
+                    current_state.apply_action_impact(action.impact)
+                    
+                    # Update agent memory
+                    self.memory_manager.add_memory(
+                        agent.id,
+                        f"Month {round_num}: I {action.description}. Result: {json.dumps(action.impact)}"
+                    )
+                    
+                    round_actions.append(action)
+                    all_actions.append(action)
+                    
+                    # Real-time event callback for UI feed
+                    if event_callback:
+                        event_callback(action)
+            
+            # Natural monthly changes (burn cash, organic growth/churn)
+            self._apply_monthly_dynamics(current_state)
+            
+            # Snapshot this round
+            result.rounds.append({
+                "round": round_num,
+                "month_label": f"Month {round_num}",
+                "state": current_state.to_dict(),
+                "actions": [self._action_to_dict(a) for a in round_actions],
+                "active_agent_count": len(active_agents)
+            })
+            
+            if progress_callback:
+                pct = int((round_num / total_rounds) * 100)
+                progress_callback("simulating", pct, f"Round {round_num}/{total_rounds} complete — {len(round_actions)} actions")
+        
+        result.all_actions = all_actions
+        result.final_state = current_state
+        result.status = SimulationStatus.COMPLETED
+        
+        # === STEP 4: Generate Report (like MiroFish's ReportAgent) ===
+        if progress_callback:
+            progress_callback("generating_report", 0, "Compiling analysis report...")
+        
+        report = await generate_simulation_report(
+            result, self.llm_client, self.model
+        )
+        
+        if progress_callback:
+            progress_callback("generating_report", 100, "Report complete")
+        
+        result.report = report
+        return result
+    
+    def _select_active_agents(self, agents: List[AgentPersona], round_num: int, total_rounds: int) -> List[AgentPersona]:
+        """
+        Select which agents act this round based on their activity level
+        and whether we're in early/mid/late stage of the simulation.
+        
+        Like MiroFish's time-of-day multipliers (peak hours = more agents active),
+        we use stage-of-company multipliers (early stage = founder more active, late stage = investors more active).
+        """
+        stage_progress = round_num / total_rounds  # 0.0 to 1.0
+        
+        active = []
+        for agent in agents:
+            # Base probability from agent's activity level
+            prob = agent.activity_level
+            
+            # Stage multiplier
+            if stage_progress < 0.33:
+                stage_mult = {"founder": 1.5, "investor": 0.3, "customer": 0.5, "team": 1.2, "market": 0.6, "competitor": 0.4, "advisor": 0.8}
+            elif stage_progress < 0.66:
+                stage_mult = {"founder": 1.0, "investor": 1.0, "customer": 1.0, "team": 1.0, "market": 1.0, "competitor": 1.0, "advisor": 1.0}
+            else:
+                stage_mult = {"founder": 0.8, "investor": 1.5, "customer": 1.3, "team": 0.7, "market": 1.2, "competitor": 1.3, "advisor": 0.5}
+            
+            mult = stage_mult.get(agent.agent_type.value, 1.0)
+            final_prob = min(prob * mult, 0.95)
+            
+            if random.random() < final_prob:
+                active.append(agent)
+        
+        # Founder always acts
+        founder_ids = [a.id for a in active if a.agent_type == AgentType.FOUNDER]
+        if not founder_ids:
+            founders = [a for a in agents if a.agent_type == AgentType.FOUNDER]
+            if founders:
+                active.append(founders[0])
+        
+        return active
+    
+    def _apply_monthly_dynamics(self, state: CompanyState):
+        """Natural monthly state changes — cash burn, organic growth."""
+        state.cash -= state.burn_rate
+        if state.growth_rate > 0:
+            new_customers = max(1, int(state.customers * state.growth_rate))
+            state.customers += new_customers
+            state.mrr += new_customers * (state.mrr / max(state.customers, 1))
+        churned = int(state.customers * state.churn_rate)
+        state.customers = max(0, state.customers - churned)
+        state.arr = state.mrr * 12
+        state.runway_months = state.cash / state.burn_rate if state.burn_rate > 0 else 999
+    
+    def _action_to_dict(self, action: AgentAction) -> Dict[str, Any]:
+        return {
+            "round": action.round_num,
+            "month": action.month_label,
+            "agent_id": action.agent_id,
+            "agent_name": action.agent_name,
+            "agent_type": action.agent_type.value,
+            "action": action.action.value,
+            "reasoning": action.reasoning,
+            "description": action.description,
+            "impact": action.impact,
+            "sentiment": action.sentiment.value
+        }
+```
+
+### 5. `memory.py` — Agent Memory (Short-term + Long-term)
+
+Like MiroFish's Zep-based GraphRAG memory that tracks what each agent has done and seen:
+
+```python
+"""
+Agent memory system. MiroFish uses Zep Cloud for GraphRAG-based long/short term memory.
+We use a simpler in-memory approach with a sliding window.
+"""
+from typing import List, Dict
+from collections import defaultdict
+
+class AgentMemoryManager:
+    def __init__(self, max_short_term: int = 10, max_long_term: int = 5):
+        self.short_term: Dict[str, List[str]] = defaultdict(list)
+        self.long_term: Dict[str, List[str]] = defaultdict(list)
+        self.max_short_term = max_short_term
+        self.max_long_term = max_long_term
+    
+    def add_memory(self, agent_id: str, memory: str):
+        self.short_term[agent_id].append(memory)
+        if len(self.short_term[agent_id]) > self.max_short_term:
+            oldest = self.short_term[agent_id].pop(0)
+            self.long_term[agent_id].append(oldest)
+            if len(self.long_term[agent_id]) > self.max_long_term:
+                self.long_term[agent_id].pop(0)
+    
+    def get_memory(self, agent_id: str) -> List[str]:
+        return self.long_term.get(agent_id, []) + self.short_term.get(agent_id, [])
+```
+
+### 6. `report_generator.py` — Post-Simulation Report via LLM
+
+Like MiroFish's ReportAgent that uses ReACT pattern:
+
+```python
+"""
+Generate a structured report after simulation completes.
+Equivalent to MiroFish's report_agent.py which uses ReACT + tool calls.
+"""
+import json
+from typing import Dict, Any
+from openai import OpenAI
+from .types import SimulationResult
+
+async def generate_simulation_report(
+    result: SimulationResult,
+    llm_client: OpenAI,
+    model: str
+) -> Dict[str, Any]:
+    
+    # Summarize key events
+    key_events = []
+    for action in result.all_actions:
+        if action.action.value not in ["observe", "idle"]:
+            key_events.append(f"Month {action.round_num}: {action.agent_name} — {action.description}")
+    
+    initial = result.config.initial_state
+    final = result.final_state
+    
+    prompt = f"""Analyze this startup simulation and produce a structured report.
+
+INITIAL STATE: MRR ${initial.mrr:,.0f}, Cash ${initial.cash:,.0f}, {initial.customers} customers, {initial.team_size} team
+FINAL STATE: MRR ${final.mrr:,.0f}, Cash ${final.cash:,.0f}, {final.customers} customers, {final.team_size} team
+SIMULATION LENGTH: {result.config.total_rounds} months
+TOTAL EVENTS: {len(result.all_actions)}
+
+KEY EVENTS:
+{chr(10).join(key_events[:40])}
+
+Generate a JSON report with:
+{{
+  "title": "Executive summary title",
+  "executive_summary": "2-3 paragraph executive summary",
+  "key_findings": ["finding 1", "finding 2", ...],
+  "risk_factors": ["risk 1", "risk 2", ...],
+  "opportunities": ["opp 1", "opp 2", ...],
+  "recommendation": "Final strategic recommendation paragraph",
+  "outcome_score": 0-100 (how well did the startup do?),
+  "term_sheet_probability": 0-100
+}}"""
+
+    response = llm_client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+        max_tokens=2000,
+        response_format={"type": "json_object"}
+    )
+    
+    return json.loads(response.choices[0].message.content)
+```
+
+### 7. API Route — Wire it into the existing server
+
+Add a new route file `server/routes/simulation_v2.py` (or add to existing simulation routes) that exposes:
+
+```
+POST /api/simulation/v2/run
+  Body: { scenario_params, total_rounds, initial_state (optional, defaults to company's current metrics) }
+  Returns: SSE stream of progress events + final SimulationResult
+
+GET /api/simulation/v2/:id
+  Returns: Full simulation result with all rounds and report
+```
+
+Use Server-Sent Events (SSE) so the frontend gets real-time updates as each agent acts. Each SSE event is one of:
+- `{"type": "progress", "step": "generating_agents", "pct": 50, "msg": "..."}`
+- `{"type": "agent_event", "data": {action object}}`
+- `{"type": "round_complete", "round": 5, "state": {company state}}`
+- `{"type": "complete", "result": {full result}}`
+
+---
+
+## PART 2: FRONTEND — Simulate Page UI
+
+Apply the MiroFish-inspired UI from the previous prompt (glassmorphism cards, step progress bar, animated counters, staggered animations, terminal drawer, event feed cards) to the simulate pages. REFERENCE THE PREVIOUS PROMPT I GAVE YOU for all the UI component code — `SimGlassCard`, `SimStepProgress`, `SimAnimatedCounter`, `SimStatusBadge`, `SimTerminalDrawer`, `SimEventCard`, `SimBackgroundOrbs`, `SimSkeleton`, and all the CSS animations in `simulate-animations.css`.
+
+**Key frontend changes for the new engine:**
+
+1. On `/simulate-v2` (Flight Simulator), when "Launch Simulation" is clicked:
+   - Connect to the SSE endpoint
+   - Show `SimStepProgress` updating through: Configure → Generate Agents → Simulate → Analyze → Report
+   - As `agent_event` SSE messages arrive, render them as `SimEventCard` components in real-time in the center panel
+   - As `round_complete` messages arrive, update the `SimAnimatedCounter` values for MRR, Cash, Runway, Customers
+   - Show the `SimTerminalDrawer` at the bottom with timestamped log entries
+   - When the report arrives, display it in the AI Insights panel on the right
+
+2. **Agent Persona Cards:** After the "Generate Agents" step completes, show a horizontal scrollable row of agent

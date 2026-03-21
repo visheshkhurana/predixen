@@ -1268,6 +1268,62 @@ function ConsoleScenarioSlider({
   );
 }
 
+interface V2AgentPersona {
+  id: string;
+  name: string;
+  agent_type: string;
+  bio: string;
+  personality_traits: string[];
+  goals: string[];
+  emotional_tendency: number;
+  activity_level: number;
+  influence: number;
+  risk_tolerance: number;
+}
+
+interface V2CompanyState {
+  mrr: number;
+  arr: number;
+  burn_rate: number;
+  cash: number;
+  runway_months: number;
+  customers: number;
+  churn_rate: number;
+  team_size: number;
+  team_morale: number;
+  product_quality: number;
+  market_fit: number;
+  brand_reputation: number;
+  investor_confidence: number;
+  growth_rate: number;
+}
+
+interface V2AgentEvent {
+  round: number;
+  month: string;
+  agent_id: string;
+  agent_name: string;
+  agent_type: string;
+  action: string;
+  reasoning: string;
+  description: string;
+  impact: Record<string, number>;
+  sentiment: string;
+}
+
+interface V2Report {
+  title: string;
+  executive_summary: string;
+  key_findings: string[];
+  risk_factors: string[];
+  opportunities: string[];
+  recommendation: string;
+  outcome_score: number;
+  term_sheet_probability: number;
+}
+
+type SimStep = 'idle' | 'generating_agents' | 'simulating' | 'generating_report' | 'complete';
+
 function AgentSimulationConsole() {
   const currentCompany = useFounderStore((s) => s.currentCompany);
   const { metrics: baseMetrics } = useFinancialMetrics();
@@ -1276,133 +1332,209 @@ function AgentSimulationConsole() {
   const [numRounds, setNumRounds] = useState(12);
   const [fundingClimate, setFundingClimate] = useState(0.6);
   const [marketGrowth, setMarketGrowth] = useState(0.5);
-  const [hiringRate, setHiringRate] = useState(0);
-  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [marketVolatility, setMarketVolatility] = useState(0.1);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [currentTimelineMonth, setCurrentTimelineMonth] = useState(0);
+  const [currentStep, setCurrentStep] = useState<SimStep>('idle');
+  const [progressPct, setProgressPct] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [previousFundingProb, setPreviousFundingProb] = useState<number | null>(null);
   const [terminalLogs, setTerminalLogs] = useState<Array<{ time: string; msg: string; type?: "info" | "success" | "error" | "warn" }>>([]);
-  const logTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [agents, setAgents] = useState<V2AgentPersona[]>([]);
+  const [liveState, setLiveState] = useState<V2CompanyState | null>(null);
+  const [streamEvents, setStreamEvents] = useState<V2AgentEvent[]>([]);
+  const [report, setReport] = useState<V2Report | null>(null);
+  const [completedRounds, setCompletedRounds] = useState(0);
+  const [simulationId, setSimulationId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const eventFeedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     return () => {
-      logTimersRef.current.forEach(clearTimeout);
+      abortRef.current?.abort();
     };
   }, []);
 
-  const simSteps = [
-    { id: 'init', label: 'Initialize Agents', status: (isSimulating || simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
-    { id: 'knowledge', label: 'Build Knowledge Graph', status: (isSimulating || simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
-    { id: 'simulate', label: 'Run Simulation', status: (isSimulating ? 'active' : simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
-    { id: 'analyze', label: 'Analyze Outcomes', status: (simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
-    { id: 'report', label: 'Compile Report', status: (simResult ? 'complete' : 'pending') as 'complete' | 'active' | 'pending' },
-  ];
-
   const addLog = useCallback((msg: string, type: "info" | "success" | "error" | "warn" = "info") => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-    setTerminalLogs(prev => [...prev.slice(-30), { time, msg, type }]);
+    setTerminalLogs(prev => [...prev.slice(-50), { time, msg, type }]);
   }, []);
 
-  const runMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentCompany) throw new Error('No company selected');
-      const res = await apiRequest(
-        'POST',
-        `/api/companies/${currentCompany.id}/simulation/agent-run`,
-        {
-          num_rounds: numRounds,
+  const stepMap: Record<SimStep, Array<{ id: string; label: string; status: 'complete' | 'active' | 'pending' }>> = {
+    idle: [
+      { id: 'agents', label: 'Generate Agents', status: 'pending' },
+      { id: 'simulate', label: 'Run Simulation', status: 'pending' },
+      { id: 'analyze', label: 'Analyze Outcomes', status: 'pending' },
+      { id: 'report', label: 'Compile Report', status: 'pending' },
+    ],
+    generating_agents: [
+      { id: 'agents', label: 'Generate Agents', status: 'active' },
+      { id: 'simulate', label: 'Run Simulation', status: 'pending' },
+      { id: 'analyze', label: 'Analyze Outcomes', status: 'pending' },
+      { id: 'report', label: 'Compile Report', status: 'pending' },
+    ],
+    simulating: [
+      { id: 'agents', label: 'Generate Agents', status: 'complete' },
+      { id: 'simulate', label: 'Run Simulation', status: 'active' },
+      { id: 'analyze', label: 'Analyze Outcomes', status: 'pending' },
+      { id: 'report', label: 'Compile Report', status: 'pending' },
+    ],
+    generating_report: [
+      { id: 'agents', label: 'Generate Agents', status: 'complete' },
+      { id: 'simulate', label: 'Run Simulation', status: 'complete' },
+      { id: 'analyze', label: 'Analyze Outcomes', status: 'complete' },
+      { id: 'report', label: 'Compile Report', status: 'active' },
+    ],
+    complete: [
+      { id: 'agents', label: 'Generate Agents', status: 'complete' },
+      { id: 'simulate', label: 'Run Simulation', status: 'complete' },
+      { id: 'analyze', label: 'Analyze Outcomes', status: 'complete' },
+      { id: 'report', label: 'Compile Report', status: 'complete' },
+    ],
+  };
+
+  const simSteps = stepMap[currentStep];
+
+  const runSimulation = useCallback(async () => {
+    setIsSimulating(true);
+    setCurrentStep('generating_agents');
+    setProgressPct(0);
+    setStreamEvents([]);
+    setAgents([]);
+    setReport(null);
+    setLiveState(null);
+    setCompletedRounds(0);
+    setSimulationId(null);
+    setTerminalLogs([]);
+    addLog('Starting MiroFish-style multi-agent simulation...');
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch('/api/simulation/v2/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        signal: controller.signal,
+        body: JSON.stringify({
+          total_rounds: numRounds,
+          monthly_revenue: baseMetrics?.mrr ?? 50000,
+          monthly_burn: baseMetrics?.burnRate ?? 80000,
+          cash_balance: baseMetrics?.cashOnHand ?? 500000,
+          customers: 50,
+          team_size: baseMetrics?.headcount ?? 10,
+          growth_rate: baseMetrics?.monthlyGrowthRate ?? 0.05,
+          churn_rate: 0.03,
           funding_climate: fundingClimate,
           market_growth: marketGrowth,
-          hiring_rate: hiringRate,
-          monthly_revenue: baseMetrics?.mrr ?? undefined,
-          monthly_burn: baseMetrics?.burnRate ?? undefined,
-          cash_balance: baseMetrics?.cashOnHand ?? undefined,
-          growth_rate: baseMetrics?.monthlyGrowthRate ?? undefined,
-          headcount: baseMetrics?.headcount ?? undefined,
+          market_volatility: marketVolatility,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+
+          try {
+            const msg = JSON.parse(raw);
+
+            switch (msg.type) {
+              case 'progress':
+                setCurrentStep(msg.step as SimStep);
+                setProgressPct(msg.pct ?? 0);
+                addLog(msg.msg || `${msg.step}: ${msg.pct}%`);
+                break;
+
+              case 'agent_event': {
+                const evt = msg.data as V2AgentEvent;
+                setStreamEvents(prev => [...prev, evt]);
+                addLog(`[Month ${evt.round}] ${evt.agent_name}: ${evt.description}`);
+                break;
+              }
+
+              case 'round_complete':
+                setLiveState(msg.state as V2CompanyState);
+                setCompletedRounds(msg.round);
+                break;
+
+              case 'agents_generated':
+                setAgents(msg.agents as V2AgentPersona[]);
+                addLog(`${(msg.agents as V2AgentPersona[]).length} agent personas generated`, 'success');
+                break;
+
+              case 'complete': {
+                const result = msg.result;
+                setSimulationId(result.simulation_id);
+                setReport(result.report as V2Report);
+                setLiveState(result.final_state as V2CompanyState);
+                if (result.agents) setAgents(result.agents);
+                setCurrentStep('complete');
+                setIsSimulating(false);
+                setLastUpdated(Date.now());
+                const score = result.report?.outcome_score ?? 0;
+                addLog(`Simulation complete — Outcome score: ${score}/100`, 'success');
+                toast({ title: 'Simulation Complete', description: `Outcome score: ${score}/100` });
+                break;
+              }
+
+              case 'error':
+                throw new Error(msg.message || 'Simulation failed');
+            }
+          } catch (parseErr) {
+            if ((parseErr as Error).message?.includes('Simulation failed') ||
+                (parseErr as Error).message?.includes('HTTP')) {
+              throw parseErr;
+            }
+          }
         }
-      );
-      return res.json();
-    },
-    onMutate: () => {
-      if (simResult) setPreviousFundingProb(simResult.summary.fundingProbability);
-      setIsSimulating(true);
-      setSimResult(null);
-      setCurrentTimelineMonth(0);
-      setTerminalLogs([]);
-      addLog('Initializing 5 agents (Founder, Investor, Customer, Team, Market)...');
-      const t1 = setTimeout(() => addLog('Building company knowledge graph...'), 800);
-      const t2 = setTimeout(() => addLog('Loading financial metrics and historical data...'), 1600);
-      const t3 = setTimeout(() => addLog('Simulating market conditions...', 'info'), 2500);
-      const t4 = setTimeout(() => addLog('Agents evaluating scenarios...', 'info'), 3500);
-      logTimersRef.current = [t1, t2, t3, t4];
-    },
-    onSuccess: (data: BackendSimulationResponse) => {
-      const mappedEvents = chainEvents((data.events || []).map(mapBackendEvent));
-      const mappedRecs = (data.recommendations || []).map(mapBackendRecommendation);
-      const mappedRisks = (data.keyRisks || []).map((r: BackendRisk) => ({
-        risk: r.description || r.risk || r.type || '',
-        severity: r.severity || 'medium',
-        probability: r.probability || r.occurrences || 0,
-        driver: r.type ? r.type.replace(/_/g, ' ') : undefined,
-      }));
-      const mappedTimeline = (data.timeline || []).map((t: BackendTimelineEntry) => ({
-        month: t.month,
-        cash: t.cash_balance ?? t.cash ?? 0,
-        revenue: t.monthly_revenue ?? t.revenue ?? 0,
-        burn: t.monthly_burn ?? t.burn ?? 0,
-        runway: t.runway_months ?? t.runway ?? 0,
-        headcount: t.headcount ?? 0,
-      }));
-      const result: SimulationResult = {
-        ...data,
-        timeline: mappedTimeline,
-        events: mappedEvents,
-        recommendations: mappedRecs,
-        keyRisks: mappedRisks,
-      };
-      setSimResult(result);
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
       setIsSimulating(false);
-      setLastUpdated(Date.now());
-      addLog(`Simulation complete — Survival: ${data.summary.survivalProbability.toFixed(0)}%, ${mappedEvents.length} events generated`, 'success');
-      toast({ title: 'Simulation Complete', description: `Survival probability: ${data.summary.survivalProbability.toFixed(0)}%` });
-    },
-    onError: (err: Error) => {
-      setIsSimulating(false);
+      setCurrentStep('idle');
       addLog(`Simulation failed: ${err.message}`, 'error');
       toast({ title: 'Simulation Failed', description: err.message || 'An error occurred', variant: 'destructive' });
-    },
-  });
+    }
+  }, [numRounds, fundingClimate, marketGrowth, marketVolatility, baseMetrics, addLog, toast]);
 
   useEffect(() => {
-    if (!simResult?.timeline?.length) return;
-    if (currentTimelineMonth >= simResult.timeline.length - 1) return;
-    const timer = setTimeout(() => setCurrentTimelineMonth(prev => prev + 1), 200);
-    return () => clearTimeout(timer);
-  }, [simResult, currentTimelineMonth]);
+    if (eventFeedRef.current) {
+      eventFeedRef.current.scrollTop = eventFeedRef.current.scrollHeight;
+    }
+  }, [streamEvents.length]);
 
-  const events = simResult?.events ?? [];
-  const timeline = simResult?.timeline ?? [];
-  const risks = simResult?.keyRisks ?? [];
-  const recommendations = simResult?.recommendations ?? [];
-  const summary = simResult?.summary;
-
-  const currentCash = summary?.finalCash ?? baseMetrics?.cashOnHand ?? 0;
-  const currentBurn = baseMetrics?.burnRate ?? 0;
-  const currentRunway = summary?.finalRunway ?? (currentBurn > 0 ? currentCash / currentBurn : 0);
-  const survivalPct = summary?.survivalProbability ?? 0;
-  const fundingPct = summary?.fundingProbability ?? 0;
-
-  const handleShare = useCallback(() => {
-    if (!simResult?.shareToken) return;
-    const url = `${window.location.origin}/simulate-v2/shared/${simResult.shareToken}`;
-    navigator.clipboard.writeText(url).then(() => {
-      toast({ title: 'Link Copied', description: 'Shareable simulation link copied to clipboard.' });
-    });
-  }, [simResult, toast]);
-
+  const initCash = baseMetrics?.cashOnHand ?? 500000;
+  const initBurn = baseMetrics?.burnRate ?? 80000;
+  const currentCash = liveState?.cash ?? initCash;
+  const currentBurn = liveState?.burn_rate ?? initBurn;
+  const currentRunway = liveState?.runway_months ?? (initBurn > 0 ? initCash / initBurn : 0);
+  const currentMrr = liveState?.mrr ?? baseMetrics?.mrr ?? 50000;
+  const currentCustomers = liveState?.customers ?? 50;
+  const outcomeScore = report?.outcome_score ?? 0;
+  const termSheetProb = report?.term_sheet_probability ?? 0;
+  const isComplete = currentStep === 'complete';
   const riskHigh = currentRunway > 0 && currentRunway < 10;
-  const simStatus = isSimulating ? 'running' : simResult ? 'complete' : 'ready';
+  const simStatus = isSimulating ? 'running' : isComplete ? 'complete' : 'ready';
 
   return (
     <div className="relative min-h-[600px]">
@@ -1419,17 +1551,17 @@ function AgentSimulationConsole() {
             </h2>
             <SimStatusBadge status={simStatus} />
             <DataFreshness lastUpdated={lastUpdated} />
+            {isSimulating && completedRounds > 0 && (
+              <span className="text-[10px] font-mono text-zinc-500">
+                Month {completedRounds}/{numRounds}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            {simResult?.shareToken && (
-              <Button variant="ghost" size="sm" onClick={handleShare} className="text-xs h-7" data-testid="button-share-results">
-                Share
-              </Button>
-            )}
             <Button
               size="sm"
-              onClick={() => runMutation.mutate()}
-              disabled={isSimulating || !currentCompany}
+              onClick={runSimulation}
+              disabled={isSimulating}
               className="h-8 text-sm gap-2 shadow-[0_0_20px_rgba(79,125,249,0.2)] hover:shadow-[0_0_30px_rgba(79,125,249,0.4)] transition-all duration-300"
               data-testid="button-run-simulation"
             >
@@ -1438,6 +1570,37 @@ function AgentSimulationConsole() {
             </Button>
           </div>
         </div>
+
+        {agents.length > 0 && (
+          <div className="px-4 pb-3 overflow-x-auto">
+            <div className="flex gap-2 min-w-max">
+              {agents.map((agent, i) => (
+                <div
+                  key={agent.id}
+                  className="flex-shrink-0 w-48 p-3 rounded-lg border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm fc-animate-fade-up"
+                  style={{ animationDelay: `${i * 80}ms` }}
+                  data-testid={`agent-card-${agent.id}`}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                      {agent.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-zinc-200 truncate">{agent.name}</div>
+                      <div className="text-[10px] text-zinc-500">{agent.agent_type}</div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 line-clamp-2 leading-relaxed">{agent.bio}</p>
+                  <div className="flex gap-1 mt-1.5 flex-wrap">
+                    {agent.personality_traits.slice(0, 2).map(t => (
+                      <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.05] text-zinc-500">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-12 gap-4 px-4 pb-16">
           <div className="col-span-12 lg:col-span-3 space-y-3 fc-stagger">
@@ -1450,12 +1613,19 @@ function AgentSimulationConsole() {
                     <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
                   </div>
                   <SimAnimatedCounter value={currentCash} prefix="$" className="text-lg font-bold font-mono text-emerald-400" />
-                  {summary && (
-                    <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      {summary.finalCash > (baseMetrics?.cashOnHand ?? 0) ? 'Improving' : 'Declining'}
+                  {liveState && (
+                    <div className={`flex items-center gap-1 mt-0.5 text-[10px] ${liveState.cash > initCash ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {liveState.cash > initCash ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {liveState.cash > initCash ? 'Improving' : 'Declining'}
                     </div>
                   )}
+                </div>
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-mrr">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">MRR</span>
+                    <TrendingUp className="h-3.5 w-3.5 text-blue-400" />
+                  </div>
+                  <SimAnimatedCounter value={currentMrr} prefix="$" className="text-lg font-bold font-mono text-blue-400" />
                 </div>
                 <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-burn">
                   <div className="flex items-center justify-between mb-1">
@@ -1476,19 +1646,13 @@ function AgentSimulationConsole() {
                     decimals={1}
                   />
                 </div>
-                {summary && (
-                  <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-survival">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Survival</span>
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                    </div>
-                    <SimAnimatedCounter
-                      value={survivalPct}
-                      suffix="%"
-                      className={`text-lg font-bold font-mono ${survivalPct >= 70 ? 'text-emerald-400' : survivalPct >= 40 ? 'text-amber-400' : 'text-red-400'}`}
-                    />
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid="metric-customers">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Customers</span>
+                    <Activity className="h-3.5 w-3.5 text-violet-400" />
                   </div>
-                )}
+                  <SimAnimatedCounter value={currentCustomers} className="text-lg font-bold font-mono text-violet-400" />
+                </div>
                 <div className={`mt-1 px-2 py-1 text-xs rounded-md font-mono ${riskHigh ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`} data-testid="risk-badge">
                   Risk: {riskHigh ? 'High' : 'Moderate'}
                 </div>
@@ -1501,40 +1665,47 @@ function AgentSimulationConsole() {
                 <ConsoleScenarioSlider label="Simulation Months" value={numRounds} onChange={setNumRounds} min={6} max={36} step={1} testId="slider-rounds" />
                 <ConsoleScenarioSlider label="Funding Climate" value={fundingClimate} onChange={setFundingClimate} min={0} max={1} step={0.1} testId="slider-funding" />
                 <ConsoleScenarioSlider label="Market Growth" value={marketGrowth} onChange={setMarketGrowth} min={0} max={1} step={0.1} testId="slider-market" />
-                <ConsoleScenarioSlider label="Hiring Rate" value={hiringRate} onChange={setHiringRate} min={0} max={10} step={1} unit="/mo" testId="slider-hiring" />
+                <ConsoleScenarioSlider label="Market Volatility" value={marketVolatility} onChange={setMarketVolatility} min={0} max={0.5} step={0.05} testId="slider-volatility" />
               </div>
             </SimGlassCard>
           </div>
 
           <div className="col-span-12 lg:col-span-6 space-y-3">
-            {isSimulating && <ConsoleThinkingState isActive={isSimulating} />}
-
-            {timeline.length > 0 && (
-              <SimGlassCard variant="elevated" className="p-4 fc-animate-fade-up">
-                <ConsoleTimeline timeline={timeline} currentMonth={currentTimelineMonth} />
+            {isSimulating && currentStep === 'generating_agents' && (
+              <SimGlassCard variant="processing" className="p-4 fc-animate-fade-up">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <div>
+                    <h3 className="text-sm font-medium text-zinc-200">Generating Agent Personas</h3>
+                    <p className="text-xs text-zinc-500">LLM is creating 7 unique personas based on your company data...</p>
+                  </div>
+                </div>
               </SimGlassCard>
             )}
 
             <SimGlassCard variant="default" className="p-4 min-h-[300px]">
-              {events.length > 0 ? (
+              {streamEvents.length > 0 ? (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Agent Events</h3>
-                    <span className="text-[10px] font-mono text-zinc-500">{events.length} events</span>
+                    <span className="text-[10px] font-mono text-zinc-500">{streamEvents.length} events</span>
                   </div>
-                  <div className="max-h-[420px] overflow-y-auto -mx-4">
-                    {events.map((event, i) => (
+                  <div ref={eventFeedRef} className="max-h-[420px] overflow-y-auto -mx-4">
+                    {streamEvents.map((evt, i) => (
                       <SimEventCard
-                        key={i}
-                        agentName={`${event.type.charAt(0).toUpperCase()}${event.type.slice(1)} Agent`}
-                        agentType={event.type}
-                        action={event.reason || 'event'}
-                        description={event.message}
-                        timestamp={event.time}
-                        sentiment={event.severity === 'high' || event.severity === 'danger' ? 'negative' : 'neutral'}
+                        key={`${evt.round}-${evt.agent_id}-${i}`}
+                        agentName={evt.agent_name}
+                        agentType={evt.agent_type}
+                        action={evt.action}
+                        description={evt.description}
+                        timestamp={evt.month}
+                        sentiment={
+                          evt.sentiment === 'very_negative' || evt.sentiment === 'negative' ? 'negative' :
+                          evt.sentiment === 'very_positive' || evt.sentiment === 'positive' ? 'positive' : 'neutral'
+                        }
                         index={i}
-                        impact={event.impact}
-                        chainedFrom={event.chainedFrom}
+                        impact={evt.reasoning}
+                        chainedFrom={undefined}
                       />
                     ))}
                   </div>
@@ -1552,11 +1723,10 @@ function AgentSimulationConsole() {
                   </div>
                   <h3 className="text-sm font-medium text-zinc-300 mb-2">Ready to Simulate</h3>
                   <p className="text-xs text-zinc-500 max-w-sm text-center mb-4">
-                    Five AI agents — Founder, Investor, Customer, Team, and Market — will interact to model realistic outcomes based on your data.
+                    Seven LLM-powered agents — Founder, Investors, Customer, Team, Market, and Competitor — will make decisions month-by-month to model realistic outcomes.
                   </p>
                   <Button
-                    onClick={() => runMutation.mutate()}
-                    disabled={!currentCompany}
+                    onClick={runSimulation}
                     className="shadow-[0_0_20px_rgba(79,125,249,0.2)] hover:shadow-[0_0_30px_rgba(79,125,249,0.4)] transition-all duration-300"
                     data-testid="button-run-empty"
                   >
@@ -1568,27 +1738,79 @@ function AgentSimulationConsole() {
           </div>
 
           <div className="col-span-12 lg:col-span-3 space-y-3 fc-stagger">
-            <SimGlassCard variant="elevated" className="p-4">
-              <ConsoleInvestorPanel probability={fundingPct} risks={risks} previousProb={previousFundingProb} />
-            </SimGlassCard>
+            {report ? (
+              <>
+                <SimGlassCard variant="elevated" className="p-4 fc-animate-fade-up">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Outcome Score</h3>
+                  <div className="flex items-center gap-3 mb-3">
+                    <SimAnimatedCounter
+                      value={outcomeScore}
+                      suffix="/100"
+                      className={`text-2xl font-bold font-mono ${outcomeScore >= 70 ? 'text-emerald-400' : outcomeScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}
+                    />
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mb-2">Term Sheet Probability</div>
+                  <SimAnimatedCounter
+                    value={termSheetProb}
+                    suffix="%"
+                    className={`text-lg font-bold font-mono ${termSheetProb >= 60 ? 'text-emerald-400' : termSheetProb >= 30 ? 'text-amber-400' : 'text-red-400'}`}
+                  />
+                </SimGlassCard>
 
-            {timeline.length > 0 && (
-              <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
-                <ConsoleCohortPanel timeline={timeline} />
-              </SimGlassCard>
-            )}
+                <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">{report.title}</h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed mb-3">{report.executive_summary}</p>
+                </SimGlassCard>
 
-            {recommendations.length > 0 && (
-              <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
-                <ConsoleDecisionReplay recommendations={recommendations} />
-              </SimGlassCard>
-            )}
+                {report.key_findings.length > 0 && (
+                  <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Key Findings</h3>
+                    <ul className="space-y-1.5">
+                      {report.key_findings.map((f, i) => (
+                        <li key={i} className="text-xs text-zinc-400 flex items-start gap-1.5">
+                          <span className="text-emerald-400 mt-0.5">&#x2022;</span>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                  </SimGlassCard>
+                )}
 
-            {!simResult && !isSimulating && (
+                {report.risk_factors.length > 0 && (
+                  <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Risk Factors</h3>
+                    <ul className="space-y-1.5">
+                      {report.risk_factors.map((r, i) => (
+                        <li key={i} className="text-xs text-zinc-400 flex items-start gap-1.5">
+                          <AlertTriangle className="h-3 w-3 text-amber-400 mt-0.5 shrink-0" />
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </SimGlassCard>
+                )}
+
+                {report.recommendation && (
+                  <SimGlassCard variant="default" className="p-4 fc-animate-fade-up">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Recommendation</h3>
+                    <p className="text-xs text-zinc-400 leading-relaxed">{report.recommendation}</p>
+                  </SimGlassCard>
+                )}
+              </>
+            ) : isComplete ? null : (
               <SimGlassCard variant="default" className="p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">AI Insights</h3>
-                <SimSkeleton lines={4} />
-                <p className="text-xs text-zinc-500 text-center mt-3">Run a simulation to see insights</p>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">AI Report</h3>
+                {isSimulating ? (
+                  <>
+                    <SimSkeleton lines={4} />
+                    <p className="text-xs text-zinc-500 text-center mt-3">Report generates after simulation</p>
+                  </>
+                ) : (
+                  <>
+                    <SimSkeleton lines={4} />
+                    <p className="text-xs text-zinc-500 text-center mt-3">Run a simulation to see the report</p>
+                  </>
+                )}
               </SimGlassCard>
             )}
           </div>
