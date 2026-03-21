@@ -71,6 +71,7 @@ from server.models.metric_snapshot import MetricSnapshot
 from server.models.workspace import NotificationPreference
 from server.models.twin_event import TwinEvent
 from server.models.copilot_feedback import CopilotFeedback
+from server.models.agent_simulation import AgentSimulationRun
 
 __all__ = [
     "User",
@@ -156,4 +157,5 @@ __all__ = [
     "NotificationPreference",
     "TwinEvent",
     "CopilotFeedback",
+    "AgentSimulationRun",
 ]

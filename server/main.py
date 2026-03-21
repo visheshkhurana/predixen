@@ -104,6 +104,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import slack_bot as slack_bot_api
     from server.api import digital_twin as digital_twin_api
     from server.api import intelligence_graph as intelligence_graph_api
+    from server.api import agent_simulation as agent_simulation_api
     from server.realtime import routes as realtime_ws
     from server.api.domain import company_router, finance_router, simulation_router, decision_router, connector_router, ai_router, system_router
 
@@ -168,6 +169,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(slack_bot_api.router)
     app.include_router(digital_twin_api.router)
     app.include_router(intelligence_graph_api.router)
+    app.include_router(agent_simulation_api.router)
     app.include_router(realtime_ws.router)
 
     app.include_router(company_router.router)

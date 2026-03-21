@@ -1026,6 +1026,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_cross_company_patterns_table(engine)
     ensure_simulation_accuracy_tables(engine)
     ensure_copilot_feedback_table(engine)
+    ensure_agent_simulation_runs_table(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1733,3 +1734,36 @@ def ensure_copilot_feedback_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Copilot feedback table migration complete")
+
+
+def ensure_agent_simulation_runs_table(engine: Engine) -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_simulation_runs (
+                id SERIAL PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                scenario_json TEXT,
+                num_rounds INTEGER DEFAULT 24,
+                seed INTEGER,
+                survival_probability FLOAT,
+                funding_probability FLOAT,
+                final_cash FLOAT,
+                final_runway FLOAT,
+                results_json TEXT NOT NULL,
+                events_json TEXT,
+                memory_json TEXT,
+                status VARCHAR(20) DEFAULT 'completed',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                completed_at TIMESTAMP,
+                share_token VARCHAR(64) UNIQUE
+            )
+        """))
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_asr_company ON agent_simulation_runs(company_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_asr_share ON agent_simulation_runs(share_token)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_asr_created ON agent_simulation_runs(created_at)"))
+        except Exception:
+            pass
+        conn.commit()
+    logger.info("Agent simulation runs table migration complete")

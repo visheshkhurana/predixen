@@ -56,6 +56,7 @@ import OverviewPage from "@/pages/overview";
 import TruthScanPage from "@/pages/truth-scan";
 import ScenariosPage from "@/pages/scenarios";
 import SimulateWorkspace from "@/pages/simulate-workspace";
+import SimulateV2Page, { SharedSimulationPage } from "@/pages/simulate-v2";
 import DecisionsPage from "@/pages/decisions";
 import CopilotPage from "@/pages/copilot";
 import DataInputPage from "@/pages/data-input";
@@ -323,6 +324,12 @@ function Router() {
       </Route>
       <Route path="/simulate">
         {() => <AuthenticatedRoute component={SimulateWorkspace} />}
+      </Route>
+      <Route path="/simulate-v2">
+        {() => <AuthenticatedRoute component={SimulateV2Page} />}
+      </Route>
+      <Route path="/simulate-v2/shared/:token">
+        {() => <SharedSimulationPage />}
       </Route>
       <Route path="/help">
         {() => <Redirect to="/docs" />}

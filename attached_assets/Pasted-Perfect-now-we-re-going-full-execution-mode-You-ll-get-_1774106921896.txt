@@ -1,0 +1,482 @@
+Perfect — now we’re going full execution mode.
+
+You’ll get:
+	1.	Exact Replit implementation prompt (production-grade)
+	2.	UI/UX wireframe system (how it should look + behave like a $100M product)
+
+This is essentially your FounderConsole v2 blueprint.
+
+⸻
+
+🚀 PART 1 — REPLIT IMPLEMENTATION PROMPT
+
+(Copy-paste this into Replit / Claude / Cursor)
+
+⸻
+
+
+You are a senior systems architect and full-stack engineer.
+
+You are upgrading FounderConsole into a next-generation simulation platform.
+
+The goal is to implement a "Founder Digital Twin + Agent-Based Simulation Engine".
+
+This must integrate into the existing architecture:
+
+Frontend:
+React + TypeScript + Zustand + TanStack Query
+
+Backend:
+FastAPI + Python + PostgreSQL + Redis + Workers
+
+Existing systems:
+- Monte Carlo simulation engine
+- Digital Twin
+- Decision engine
+- AI Copilot
+
+--------------------------------------------------
+
+PHASE 1 — NEW ARCHITECTURE LAYER
+
+Create a new layer:
+
+server/simulation_agents/
+
+Modules:
+
+1. agent_factory.py
+2. agent_models.py
+3. agent_memory.py
+4. simulation_orchestrator.py
+5. environment_engine.py
+6. knowledge_graph.py
+7. simulation_report.py
+
+--------------------------------------------------
+
+PHASE 2 — KNOWLEDGE GRAPH
+
+Create a graph representation of the company.
+
+Entities:
+
+Company
+Metrics
+Team
+Investors
+Customers
+Market
+Competitors
+
+Relationships:
+
+Company → Metrics
+Company → Team
+Company → Investors
+Company → Market
+Company → Customers
+
+Store graph in Postgres (adjacency table).
+
+File:
+server/services/knowledge_graph.py
+
+Functions:
+
+build_company_graph(company_id)
+get_related_entities(entity_id)
+update_graph()
+
+--------------------------------------------------
+
+PHASE 3 — AGENT SYSTEM
+
+Create agents:
+
+FounderAgent
+InvestorAgent
+CustomerAgent
+TeamAgent
+MarketAgent
+
+Each agent must have:
+
+state
+memory
+goals
+decision_rules
+
+Example:
+
+InvestorAgent:
+- reacts to growth, burn, runway
+- decides to invest or pass
+
+CustomerAgent:
+- reacts to product changes
+- churn probability
+
+File:
+server/simulation_agents/agent_models.py
+
+--------------------------------------------------
+
+PHASE 4 — AGENT MEMORY
+
+Each agent stores:
+
+past_decisions
+context
+environment
+
+Use Redis for short-term memory
+Use Postgres for long-term logs
+
+File:
+server/simulation_agents/agent_memory.py
+
+--------------------------------------------------
+
+PHASE 5 — SIMULATION ORCHESTRATOR
+
+Create orchestrator:
+
+run_simulation(company_id, scenario)
+
+Steps:
+
+1. Load Digital Twin
+2. Build knowledge graph
+3. Initialize agents
+4. Run N rounds (default 50)
+
+Each round:
+
+- agents act
+- environment updates
+- events generated
+
+Use asyncio for parallel execution
+
+File:
+server/simulation_agents/simulation_orchestrator.py
+
+--------------------------------------------------
+
+PHASE 6 — ENVIRONMENT ENGINE
+
+Simulate environment:
+
+market conditions
+funding climate
+growth pressure
+competition
+
+File:
+server/simulation_agents/environment_engine.py
+
+--------------------------------------------------
+
+PHASE 7 — OUTPUT SYSTEM
+
+Return:
+
+survival_probability
+funding_probability
+growth_projection
+risk_events
+decision_recommendations
+
+File:
+server/simulation_agents/simulation_report.py
+
+--------------------------------------------------
+
+PHASE 8 — API ENDPOINT
+
+Create:
+
+POST /api/simulation/agent-run
+
+Input:
+
+company_id
+scenario_inputs
+
+Output:
+
+simulation_summary
+agent_events
+timeline
+recommendations
+
+--------------------------------------------------
+
+PHASE 9 — FRONTEND (CRITICAL)
+
+Create new page:
+
+/simulate-v2
+
+Components:
+
+SimulationCanvas.tsx
+AgentTimeline.tsx
+DecisionPanel.tsx
+ScenarioControls.tsx
+LiveEventFeed.tsx
+
+--------------------------------------------------
+
+PHASE 10 — SIMULATION CANVAS UI
+
+Layout:
+
+LEFT PANEL:
+Inputs + sliders
+
+CENTER:
+Simulation visualization
+
+RIGHT PANEL:
+AI insights
+
+--------------------------------------------------
+
+PHASE 11 — LIVE EVENT FEED
+
+Show:
+
+InvestorAgent: "Growth slowing — not investing"
+CustomerAgent: "Churn increasing"
+TeamAgent: "Hiring stress detected"
+
+--------------------------------------------------
+
+PHASE 12 — SCENARIO CONTROLS
+
+Sliders:
+
+hiring
+pricing
+marketing
+fundraising
+
+Re-run simulation instantly
+
+--------------------------------------------------
+
+PHASE 13 — SHAREABLE OUTPUT
+
+Create:
+
+/simulation/:id
+
+Display:
+
+results
+timeline
+insights
+
+Add share buttons
+
+--------------------------------------------------
+
+FINAL OUTPUT
+
+Deliver:
+
+- full backend implementation
+- frontend simulation UI
+- database schema
+- working API
+- simulation output
+
+
+⸻
+
+🎨 PART 2 — UI/UX WIREFRAME SYSTEM
+
+(This is where you actually win)
+
+⸻
+
+🧠 Core UX Principle
+
+You are NOT building dashboards.
+
+You are building:
+
+A simulation experience
+
+
+⸻
+
+🖥️ Screen 1 — Main Simulation Canvas
+
+Layout
+
+┌──────────────┬──────────────────────────┬──────────────┐
+│ Inputs       │  Simulation World        │ AI Insights  │
+│              │                          │              │
+│ Cash         │  [Agents interacting]    │ Recommendation│
+│ Burn         │  [Timeline evolving]     │ Risk alerts  │
+│ Hiring       │                          │ Actions      │
+└──────────────┴──────────────────────────┴──────────────┘
+
+
+⸻
+
+🔥 CENTER = MAGIC
+
+Instead of charts:
+
+You show:
+
+Live simulation events
+
+Example:
+
+Month 2:
+Customer churn increased
+
+Month 4:
+Investor interest dropped
+
+Month 6:
+Runway risk triggered
+
+
+⸻
+
+📊 Screen 2 — Timeline View
+
+Month 1 → stable
+Month 3 → burn spike
+Month 6 → funding risk
+Month 9 → survival drop
+
+Clickable timeline.
+
+⸻
+
+⚡ Screen 3 — Decision Impact
+
+Decision: Hire 5 engineers
+
+Impact:
+Burn ↑
+Growth ↑
+Runway ↓
+Survival ↓
+
+
+⸻
+
+🎛️ Screen 4 — Scenario Switcher
+
+Scenario A
+Scenario B
+Scenario C
+
+Side-by-side comparison.
+
+⸻
+
+🎮 Screen 5 — What-If Sliders
+
+Hiring ↑ ↓
+Pricing ↑ ↓
+Marketing ↑ ↓
+Fundraising timing
+
+Each change = re-simulation.
+
+⸻
+
+🔥 Screen 6 — Share Page
+
+Your startup survival probability: 68%
+
+Key risk:
+Burn exceeds growth
+
+Recommendation:
+Delay hiring 2 months
+
+Buttons:
+
+Share
+Export PDF
+Send to investor
+
+
+⸻
+
+💎 UI DETAILS THAT MATTER
+
+Colors
+
+Green → safe
+Yellow → risk
+Red → danger
+
+
+⸻
+
+Animations
+	•	timeline transitions
+	•	agent activity pulses
+	•	chart morphing
+
+⸻
+
+Micro UX
+
+When user changes slider:
+
+"Re-running simulation..."
+
+Feels alive.
+
+⸻
+
+🧠 FINAL POSITIONING
+
+After this:
+
+FounderConsole becomes:
+
+Flight Simulator for Founders
+
+
+⸻
+
+⚡ REAL TALK
+
+If you build this properly:
+
+You are NOT competing with:
+	•	Carta
+	•	Pulley
+	•	Visible
+
+You are creating:
+
+A new category
+
+
+⸻
+
+🚀 If you want next step
+
+I can give you:
+
+👉 Exact 7-day execution roadmap to ship this fast
+
+OR
+
+👉 The 3 features that would make this go viral instantly
+
+Those are what will turn this into a $100M product direction.
