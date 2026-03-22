@@ -17,6 +17,7 @@ RECIPIENTS = [
     {"email": "nikita.luther@gmail.com", "id": "nikita_luther", "name": "Nikita"},
     {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
+    {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
 ]
 
 
@@ -242,7 +243,7 @@ Arjun<br>FounderConsole
 
 
 def send_all():
-    sender = "Arjun from FounderConsole <arjun@founderconsole.ai>"
+    sender = "Arjun from FounderConsole <arjun@runoraai.com>"
 
     print(f"Sending update v30 to {len(RECIPIENTS)} recipients...")
     print(f"Sender: {sender}")
