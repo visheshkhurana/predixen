@@ -736,25 +736,33 @@ def compute_decision_scores(
 ) -> List[DecisionScore]:
     if weights is None:
         weights = {
-            "survival": 0.30,
-            "growth": 0.25,
-            "downside_risk": 0.20,
-            "dilution": 0.15,
+            "survival": 0.35,
+            "growth": 0.20,
+            "downside_risk": 0.25,
+            "dilution": 0.10,
             "complexity": 0.10
         }
     
     scores = []
     
     for result in results:
-        survival_score = result.survival.get("18m", 0) / 100
+        survival_18m = result.survival.get("18m", 0)
+        survival_score = survival_18m / 100
         
         arr_18m = result.bands["arr"]["p50"][17] if len(result.bands["arr"]["p50"]) > 17 else result.bands["arr"]["p50"][-1]
         arr_start = result.bands["arr"]["p50"][0]
-        growth_score = min(1.0, (arr_18m / max(1, arr_start) - 1) / 3)
+        arr_ratio = arr_18m / max(1, arr_start)
+        if arr_ratio < 1:
+            growth_score = max(0, arr_ratio - 0.5) * 2
+        else:
+            growth_score = min(1.0, (arr_ratio - 1) / 3)
         
         cash_p10_end = result.bands["cash"]["p10"][-1]
+        cash_p50_end = result.bands["cash"]["p50"][-1] if "p50" in result.bands["cash"] else cash_p10_end
         downside_risk = max(0, -cash_p10_end) / 1000000
         downside_score = max(0, 1 - downside_risk)
+        if cash_p50_end < 0:
+            downside_score *= 0.3
         
         dilution_pct = 0
         dilution_score = 1.0 - (dilution_pct / 50)
@@ -776,11 +784,19 @@ def compute_decision_scores(
             complexity_weighted
         )
         
+        if survival_18m < 50:
+            composite = min(composite, 0.45)
+        elif survival_18m < 70:
+            composite = min(composite, 0.65)
+        
+        if arr_ratio < 0.7:
+            composite *= 0.85
+        
         scores.append(DecisionScore(
             scenario_key=result.scenario_key,
             scenario_name=result.scenario_name,
             survival_12m_prob=result.survival.get("12m", 0),
-            survival_18m_prob=result.survival.get("18m", 0),
+            survival_18m_prob=survival_18m,
             expected_arr_18m=arr_18m,
             downside_risk_cvar=cash_p10_end,
             dilution_pct=dilution_pct,

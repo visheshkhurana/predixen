@@ -26,13 +26,17 @@ const timelineSteps = [
   { label: 'Close', description: 'Legal & wire' },
 ];
 
-function getMonthName(monthOffset: number): string {
-  if (monthOffset == null || isNaN(monthOffset)) return 'TBD';
-  const now = new Date();
-  now.setMonth(now.getMonth() + monthOffset);
-  const result = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  if (result === 'Invalid Date') return 'TBD';
-  return result;
+function getMonthName(monthOffset: number | null | undefined): string {
+  if (monthOffset == null || isNaN(monthOffset) || !isFinite(monthOffset)) return 'TBD';
+  const safeOffset = Math.max(0, Math.min(Math.round(monthOffset), 36));
+  try {
+    const now = new Date();
+    now.setMonth(now.getMonth() + safeOffset);
+    if (isNaN(now.getTime())) return 'TBD';
+    return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  } catch {
+    return 'TBD';
+  }
 }
 
 export function RaiseWindow({ raiseWindow: raw, companyId }: { raiseWindow: RaiseWindowData; companyId: number }) {

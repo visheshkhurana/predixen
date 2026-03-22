@@ -63,7 +63,17 @@ def _compute_readiness(
         ts_runway = extract_metric_value(metrics.get("runway_p50"), 0)
     if ts_runway <= 0:
         ts_runway = extract_metric_value(metrics.get("runway"), 0)
+    if ts_runway <= 0:
+        ts_cash = extract_metric_value(metrics.get("cash_balance"), 0) or extract_metric_value(metrics.get("cash_on_hand"), 0)
+        ts_burn = extract_metric_value(metrics.get("net_burn"), 0) or extract_metric_value(metrics.get("monthly_burn"), 0)
+        if ts_cash > 0 and ts_burn > 0:
+            ts_runway = round(ts_cash / ts_burn, 1)
     fr_runway = float(latest_record.runway_months) if latest_record and latest_record.runway_months else 0
+    if fr_runway <= 0 and latest_record:
+        fr_cash = float(latest_record.cash_balance) if hasattr(latest_record, 'cash_balance') and latest_record.cash_balance else 0
+        fr_burn = float(latest_record.net_burn) if hasattr(latest_record, 'net_burn') and latest_record.net_burn else 0
+        if fr_cash > 0 and fr_burn > 0:
+            fr_runway = round(fr_cash / fr_burn, 1)
     runway_months = ts_runway if ts_runway > 0 else fr_runway
 
     ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)

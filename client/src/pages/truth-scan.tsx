@@ -798,9 +798,10 @@ export default function TruthScanPage() {
         m.revenue_growth_mom = Number(financialBaseline.monthlyGrowthRate);
       }
     }
-      // P0 FIX #5: Normalize gross_margin from backend (decimal -> percentage)
       if (m.gross_margin != null && typeof m.gross_margin === "number" && m.gross_margin > 0 && m.gross_margin < 1) {
-        m.gross_margin = m.gross_margin * 100;
+        m.gross_margin = Math.round(m.gross_margin * 10000) / 100;
+      } else if (m.gross_margin != null && typeof m.gross_margin === "number") {
+        m.gross_margin = Math.round(m.gross_margin * 100) / 100;
       }
     return m;
   }, [rawMetrics, financialBaseline]);

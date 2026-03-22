@@ -251,18 +251,24 @@ def run_enhanced_monte_carlo(
                 runway_months[sim] = month + 1
         
         if runway_months[sim] == 0:
-            max_cap = 120
+            max_cap = 240
             final_cash = cash_paths[sim, horizon - 1]
             final_revenue = revenue_paths[sim, horizon - 1]
             
             net_cf = final_revenue * (adjusted_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
-            if net_cf >= 0 and final_cash > 0:
-                runway_months[sim] = max_cap
+            if net_cf > 0 and final_cash > 0:
+                extra_months = final_cash / max(net_cf, 1) if net_cf < final_cash * 0.1 else max_cap
+                noise = rng.normal(1.0, 0.1)
+                runway_months[sim] = min(horizon + extra_months * max(noise, 0.7), max_cap)
+            elif net_cf >= 0 and final_cash > 0:
+                noise = rng.normal(1.0, 0.15)
+                extra = final_cash / max(inputs.opex * burn_reduction_mult + payroll, 1) * max(noise, 0.5)
+                runway_months[sim] = min(horizon + extra, max_cap)
             elif net_cf >= 0:
                 noise = rng.normal(1.0, 0.15)
-                runway_months[sim] = min(horizon + abs(net_cf) * max(noise, 0.5) * 12, max_cap)
+                runway_months[sim] = min(horizon + abs(net_cf) * max(noise, 0.5) * 6, max_cap)
             else:
-                extra = final_cash / abs(net_cf) if abs(net_cf) > 0 else max_cap
+                extra = final_cash / abs(net_cf) if abs(net_cf) > 0 else 0
                 noise = rng.normal(1.0, 0.15)
                 runway_months[sim] = min(horizon + extra * max(noise, 0.5), max_cap)
         

@@ -227,25 +227,25 @@ function PredictionAccuracySection({ companyId }: { companyId: number }) {
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="text-2xl font-bold" data-testid="text-revenue-bias">
-              {perMetric.revenue_bias_pct != null ? `${perMetric.revenue_bias_pct > 0 ? '+' : ''}${perMetric.revenue_bias_pct}%` : '—'}
+              {perMetric.revenue_bias_pct != null ? `${perMetric.revenue_bias_pct > 0 ? '+' : ''}${Number(perMetric.revenue_bias_pct).toFixed(1)}%` : '—'}
             </div>
             <div className="text-xs text-muted-foreground">Revenue Bias</div>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="text-2xl font-bold" data-testid="text-burn-bias">
-              {perMetric.burn_bias_pct != null ? `${perMetric.burn_bias_pct > 0 ? '+' : ''}${perMetric.burn_bias_pct}%` : '—'}
+              {perMetric.burn_bias_pct != null ? `${perMetric.burn_bias_pct > 0 ? '+' : ''}${Number(perMetric.burn_bias_pct).toFixed(1)}%` : '—'}
             </div>
             <div className="text-xs text-muted-foreground">Burn Bias</div>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="text-2xl font-bold" data-testid="text-cash-bias">
-              {perMetric.cash_bias_pct != null ? `${perMetric.cash_bias_pct > 0 ? '+' : ''}${perMetric.cash_bias_pct}%` : '—'}
+              {perMetric.cash_bias_pct != null ? `${perMetric.cash_bias_pct > 0 ? '+' : ''}${Number(perMetric.cash_bias_pct).toFixed(1)}%` : '—'}
             </div>
             <div className="text-xs text-muted-foreground">Cash Bias</div>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
             <div className="text-2xl font-bold" data-testid="text-churn-bias">
-              {perMetric.churn_bias_pct != null ? `${perMetric.churn_bias_pct > 0 ? '+' : ''}${perMetric.churn_bias_pct}%` : '—'}
+              {perMetric.churn_bias_pct != null ? `${perMetric.churn_bias_pct > 0 ? '+' : ''}${Number(perMetric.churn_bias_pct).toFixed(1)}%` : '—'}
             </div>
             <div className="text-xs text-muted-foreground">Churn Bias</div>
           </div>

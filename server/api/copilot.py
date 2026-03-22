@@ -649,21 +649,56 @@ def _generate_followups(message: str, context: Dict[str, Any]) -> List[str]:
     msg_lower = message.lower()
     followups = []
 
+    metrics = context.get("metrics", {})
+    runway = metrics.get("runway_months") or metrics.get("runway_p50")
+    mrr = metrics.get("monthly_revenue") or metrics.get("mrr")
+    burn = metrics.get("net_burn") or metrics.get("monthly_burn")
+
     if any(w in msg_lower for w in ["revenue", "mrr", "arr", "sales"]):
-        followups.extend(["How has my revenue trended over the last 6 months?", "What's driving my revenue growth?"])
+        followups.append("How has my revenue trended over the last 6 months?")
+        if mrr and burn:
+            followups.append(f"My MRR is ${mrr:,.0f} and burn is ${burn:,.0f} — when do I break even?" if isinstance(mrr, (int, float)) else "When will I break even?")
+        followups.append("What if I raise prices by 15%?")
     elif any(w in msg_lower for w in ["payroll", "salary", "team", "headcount", "hiring"]):
-        followups.extend(["What percentage of my burn is payroll?", "How has headcount changed over time?"])
+        followups.append("What percentage of my burn is payroll?")
+        followups.append("What if I freeze hiring for 6 months?")
+        followups.append("What's the runway impact of hiring 3 more engineers?")
     elif any(w in msg_lower for w in ["burn", "expenses", "costs", "spending"]):
-        followups.extend(["Where can I cut costs?", "What's my biggest expense category?"])
+        followups.append("What's my biggest expense category?")
+        followups.append("What if I cut burn by 25%?")
+        followups.append("How does my burn compare to similar-stage startups?")
     elif any(w in msg_lower for w in ["runway", "cash", "survive"]):
-        followups.extend(["How can I extend my runway?", "What if I cut burn by 20%?"])
+        if runway and isinstance(runway, (int, float)):
+            followups.append(f"My runway is {runway:.0f} months — what's the biggest risk to it?")
+        else:
+            followups.append("What's the biggest risk to my runway?")
+        followups.append("What if I cut costs by 20% — how much runway do I gain?")
+        followups.append("Should I fundraise now or extend my runway first?")
+    elif any(w in msg_lower for w in ["fundrais", "raise", "investor", "valuation"]):
+        followups.append("What's my fundraising readiness score?")
+        followups.append("How much dilution should I expect in a seed round?")
+        followups.append("What metrics do investors care about most at my stage?")
+    elif any(w in msg_lower for w in ["churn", "retention", "customer"]):
+        followups.append("What's my churn rate trend over the last 6 months?")
+        followups.append("What if churn increases by 50% — what happens to my runway?")
+        followups.append("What's my customer lifetime value?")
     elif any(w in msg_lower for w in ["growth", "trend", "compare"]):
-        followups.extend(["What's my month-over-month growth?", "How do I compare to benchmarks?"])
+        followups.append("What's my month-over-month growth rate?")
+        followups.append("How do I compare to benchmarks for my stage?")
+        followups.append("What's the growth rate I need to hit to raise a Series A?")
+    elif any(w in msg_lower for w in ["simulate", "scenario", "what if", "projection"]):
+        followups.append("What if we lose our biggest customer?")
+        followups.append("What if revenue drops 30% for 3 months?")
+        followups.append("Run a stress test on my current plan")
     else:
-        followups.extend(["What's my current runway?", "Show me my burn breakdown"])
+        followups.append("What's my current financial health summary?")
+        followups.append("What are the top 3 risks to my business right now?")
+        followups.append("What should I focus on this month?")
 
     if context.get("latest_simulation"):
-        followups.append("What did my latest simulation project?")
+        sim = context["latest_simulation"]
+        sim_name = sim.get("scenario_name") or sim.get("name") or "latest simulation"
+        followups.append(f"What were the key takeaways from my {sim_name}?")
 
     return followups[:3]
 

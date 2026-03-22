@@ -52,6 +52,17 @@ def get_twin_state(db: Session, company_id: int) -> dict:
 
     cs = db.query(CompanyState).filter(CompanyState.company_id == company_id).first()
 
+    from server.models import TruthScan
+    latest_ts = (
+        db.query(TruthScan)
+        .filter(TruthScan.company_id == company_id, TruthScan.status == "completed")
+        .order_by(desc(TruthScan.created_at))
+        .first()
+    )
+    ts_metrics = {}
+    if latest_ts and latest_ts.outputs_json:
+        ts_metrics = latest_ts.outputs_json.get("metrics", {}) if isinstance(latest_ts.outputs_json, dict) else {}
+
     financials = {}
     state_json = {}
     snapshot_id = None
@@ -68,6 +79,29 @@ def get_twin_state(db: Session, company_id: int) -> dict:
             state_json = json.loads(cs.state_json) if cs.state_json else {}
         except (json.JSONDecodeError, TypeError):
             state_json = {}
+
+    if ts_metrics:
+        def _ts_val(key, *alt_keys):
+            v = ts_metrics.get(key)
+            if v is None:
+                for k in alt_keys:
+                    v = ts_metrics.get(k)
+                    if v is not None:
+                        break
+            if isinstance(v, dict):
+                return v.get("value")
+            return v
+
+        ts_cash = _ts_val("cash_balance", "cash_on_hand", "cash")
+        ts_burn = _ts_val("monthly_burn", "net_burn", "burn_rate")
+        ts_revenue = _ts_val("monthly_revenue", "mrr", "revenue")
+
+        if ts_cash is not None and (not financials.get("cash_balance") or financials["cash_balance"] == 0):
+            financials["cash_balance"] = float(ts_cash)
+        if ts_burn is not None and (not financials.get("monthly_burn") or financials["monthly_burn"] == 0):
+            financials["monthly_burn"] = float(ts_burn)
+        if ts_revenue is not None and (not financials.get("revenue_monthly") or financials["revenue_monthly"] == 0):
+            financials["revenue_monthly"] = float(ts_revenue)
 
     latest_records = (
         db.query(FinancialRecord)
