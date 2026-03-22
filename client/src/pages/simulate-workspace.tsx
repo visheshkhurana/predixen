@@ -1423,7 +1423,7 @@ function AgentSimulationConsole() {
           cash_balance: baseMetrics?.cashOnHand ?? 500000,
           customers: 50,
           team_size: baseMetrics?.headcount || 10,
-          growth_rate: baseMetrics?.monthlyGrowthRate ?? 0.05,
+          growth_rate: Math.min(1.0, Math.max(-0.5, (baseMetrics?.monthlyGrowthRate ?? 5) > 1 ? (baseMetrics?.monthlyGrowthRate ?? 5) / 100 : (baseMetrics?.monthlyGrowthRate ?? 0.05))),
           churn_rate: 0.03,
           funding_climate: fundingClimate,
           market_growth: marketGrowth,
