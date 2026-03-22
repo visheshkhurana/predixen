@@ -22,15 +22,30 @@ async def generate_simulation_report(
     initial = result.config.initial_state
     final = result.final_state
 
+    plausibility_warnings = []
+    if final.mrr > 100_000_000:
+        plausibility_warnings.append(f"WARNING: Final MRR (${final.mrr:,.0f}) exceeds $100M — likely unrealistic for a startup simulation.")
+    if final.customers > 1_000_000:
+        plausibility_warnings.append(f"WARNING: Final customer count ({final.customers:,}) exceeds 1M — likely unrealistic for a {result.config.total_rounds}-month simulation.")
+    if initial.mrr > 0 and final.mrr / initial.mrr > 100:
+        plausibility_warnings.append(f"WARNING: MRR grew {final.mrr / initial.mrr:.0f}x in {result.config.total_rounds} months — extreme growth detected.")
+    if initial.customers > 0 and final.customers / max(initial.customers, 1) > 100:
+        plausibility_warnings.append(f"WARNING: Customers grew {final.customers / max(initial.customers, 1):.0f}x — extreme growth detected.")
+
+    warnings_text = "\n".join(plausibility_warnings) if plausibility_warnings else ""
+
     prompt = f"""Analyze this startup simulation and produce a structured report.
 
 INITIAL STATE: MRR ${initial.mrr:,.0f}, Cash ${initial.cash:,.0f}, {initial.customers} customers, {initial.team_size} team
 FINAL STATE: MRR ${final.mrr:,.0f}, Cash ${final.cash:,.0f}, {final.customers} customers, {final.team_size} team
 SIMULATION LENGTH: {result.config.total_rounds} months
 TOTAL EVENTS: {len(result.all_actions)}
+{f"PLAUSIBILITY WARNINGS:{chr(10)}{warnings_text}" if warnings_text else ""}
 
 KEY EVENTS:
 {chr(10).join(key_events[:40])}
+
+If any plausibility warnings are present, factor them into your analysis and note unrealistic results in the executive summary.
 
 Generate a JSON report with:
 {{

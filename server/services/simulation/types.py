@@ -168,14 +168,40 @@ class CompanyState:
         }
 
     def apply_action_impact(self, impact: Dict[str, float]):
+        CLAMP_RULES = {
+            "growth_rate": (-0.1, 0.5),
+            "churn_rate": (0.0, 0.2),
+            "team_morale": (0.0, 1.0),
+            "product_quality": (0.0, 1.0),
+            "market_fit": (0.0, 1.0),
+            "brand_reputation": (0.0, 1.0),
+            "investor_confidence": (0.0, 1.0),
+        }
+        MAX_DELTA = {
+            "customers_delta": lambda s: max(20, int(s.customers * 0.15)),
+            "mrr_delta": lambda s: max(5000, s.mrr * 0.15),
+            "burn_rate_delta": lambda s: max(5000, s.burn_rate * 0.2),
+            "cash_delta": lambda s: max(50000, s.cash * 0.2) if s.cash > 0 else 500000,
+            "team_size_delta": lambda _: 5,
+            "growth_rate_delta": lambda _: 0.05,
+            "churn_rate_delta": lambda _: 0.03,
+        }
         for key, delta in impact.items():
+            if not isinstance(delta, (int, float)):
+                continue
+            cap_fn = MAX_DELTA.get(key)
+            if cap_fn:
+                cap = cap_fn(self)
+                delta = max(-cap, min(cap, delta))
             field_name = key.replace("_delta", "")
             if hasattr(self, field_name):
                 current = getattr(self, field_name)
                 if isinstance(current, int):
                     setattr(self, field_name, max(0, current + int(delta)))
                 else:
-                    setattr(self, field_name, max(0.0, current + delta))
+                    new_val = current + delta
+                    lo, hi = CLAMP_RULES.get(field_name, (0.0, float("inf")))
+                    setattr(self, field_name, max(lo, min(hi, new_val)))
         self.arr = self.mrr * 12
         self.runway_months = self.cash / self.burn_rate if self.burn_rate > 0 else 999
 

@@ -41,6 +41,14 @@ def build_agent_decision_prompt(
     memory_text = "\n".join([f"- {m}" for m in memory[-5:]]) or "No prior memories."
     available = [a.value for a in agent.available_actions]
 
+    own_recent = [
+        a for a in recent_actions if a.agent_type == agent.agent_type
+    ][-3:]
+    own_actions_text = "\n".join([
+        f"- Month {a.round_num}: {a.action.value} — {a.description}"
+        for a in own_recent
+    ]) or "None yet."
+
     return f"""CURRENT MONTH: {round_num} of {total_rounds}
 
 COMPANY STATE:
@@ -54,13 +62,21 @@ COMPANY STATE:
 - Growth Rate: {company_state.growth_rate:.1%}/mo
 - Investor Confidence: {company_state.investor_confidence:.0%}
 
-RECENT EVENTS:
+RECENT EVENTS (all agents):
 {recent_events}
+
+YOUR LAST 3 ACTIONS:
+{own_actions_text}
 
 YOUR MEMORIES:
 {memory_text}
 
 AVAILABLE ACTIONS: {json.dumps(available)}
+
+IMPORTANT RULES:
+- Do NOT repeat the same action you took last round. Vary your decisions across rounds.
+- Consider the outcomes of your previous actions before deciding.
+- If your last action had little impact, try a different approach.
 
 Decide your ONE action this month. Respond with JSON:
 {{
@@ -69,21 +85,21 @@ Decide your ONE action this month. Respond with JSON:
   "description": "<1 sentence human-readable description of what you did>",
   "sentiment": "<very_positive|positive|neutral|negative|very_negative>",
   "impact": {{
-    "mrr_delta": <number>,
-    "burn_rate_delta": <number>,
-    "cash_delta": <number>,
-    "customers_delta": <number>,
-    "churn_rate_delta": <number>,
-    "team_size_delta": <number>,
-    "team_morale_delta": <number>,
-    "product_quality_delta": <number>,
-    "market_fit_delta": <number>,
-    "investor_confidence_delta": <number>,
-    "growth_rate_delta": <number>
+    "mrr_delta": <number, max ±5000>,
+    "burn_rate_delta": <number, max ±5000>,
+    "cash_delta": <number, max ±50000>,
+    "customers_delta": <number, max ±20>,
+    "churn_rate_delta": <number, max ±0.02>,
+    "team_size_delta": <number, max ±3>,
+    "team_morale_delta": <number, max ±0.1>,
+    "product_quality_delta": <number, max ±0.1>,
+    "market_fit_delta": <number, max ±0.1>,
+    "investor_confidence_delta": <number, max ±0.1>,
+    "growth_rate_delta": <number, max ±0.03>
   }}
 }}
 
-Only include non-zero deltas. Be realistic — single actions cause small incremental changes, not dramatic swings. A single customer churning reduces customers by 1, not 50."""
+Only include non-zero deltas. Be realistic — this is a SINGLE MONTH of a startup. Single actions cause small incremental changes, not dramatic swings. A typical monthly MRR change is $500-$5000, not $50,000. Customer changes are 1-20 per month, not hundreds."""
 
 
 async def agent_decide(

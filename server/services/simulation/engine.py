@@ -166,17 +166,29 @@ class SimulationEngine:
         return active
 
     def _apply_monthly_dynamics(self, state: CompanyState):
-        state.cash -= state.burn_rate
+        if state.growth_rate > 1:
+            state.growth_rate = state.growth_rate / 100.0
+        state.growth_rate = max(-0.1, min(0.5, state.growth_rate))
+        state.churn_rate = max(0.0, min(0.2, state.churn_rate))
+
+        state.cash += state.mrr - state.burn_rate
+
         if state.growth_rate > 0 and state.customers > 0:
             new_customers = max(1, int(state.customers * state.growth_rate))
+            new_customers = min(new_customers, max(50, int(state.customers * 0.5)))
             avg_revenue = state.mrr / max(state.customers, 1)
             state.customers += new_customers
             state.mrr += new_customers * avg_revenue
+
         churned = int(state.customers * state.churn_rate)
         state.customers = max(0, state.customers - churned)
         if churned > 0 and state.customers > 0:
             avg_revenue = state.mrr / max(state.customers + churned, 1)
             state.mrr = max(0, state.mrr - churned * avg_revenue)
+
+        state.mrr = min(state.mrr, 100_000_000)
+        state.customers = min(state.customers, 1_000_000)
+
         state.arr = state.mrr * 12
         state.runway_months = state.cash / state.burn_rate if state.burn_rate > 0 else 999
 
