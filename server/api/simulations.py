@@ -843,6 +843,14 @@ def simulate_counter_moves(
     sim_config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
     si = scenario.inputs_json or {}
 
+    baseline_enhanced = _build_enhanced_inputs(scenario, metrics, latest_record, overrides={
+        "pricing_change_pct": 0, "growth_uplift_pct": 0, "burn_reduction_pct": 0,
+        "gross_margin_delta_pct": 0, "churn_change_pct": 0, "cac_change_pct": 0,
+        "fundraise_amount": 0, "fundraise_month": None,
+    })
+    baseline_outputs = run_enhanced_monte_carlo(baseline_enhanced, sim_config)
+    baseline_runway_p50 = baseline_outputs.get("runway", {}).get("p50", 0)
+
     results = []
     for move in COUNTER_MOVES:
         merged = {}
@@ -868,7 +876,11 @@ def simulate_counter_moves(
             "summary": outputs.get("summary"),
         })
 
-    return {"scenario_id": scenario_id, "counter_moves": results}
+    return {
+        "scenario_id": scenario_id,
+        "counter_moves": results,
+        "baseline_runway_p50": baseline_runway_p50,
+    }
 
 
 @router.get("/scenarios/{scenario_id}/simulation/latest", response_model=Dict[str, Any])

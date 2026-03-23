@@ -43,9 +43,9 @@ export function WhatIfExplorer({
   testId = 'what-if-explorer'
 }: WhatIfExplorerProps) {
   const sliderConfigs: SliderConfig[] = useMemo(() => [
-    { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: baselineState?.monthlyGrowthRate || baselineState?.growthRate || 0, unit: '%' },
-    { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: baselineState?.churnRate ? (baselineState.churnRate > 1 ? baselineState.churnRate : baselineState.churnRate * 100) : 5, unit: '%' },
-    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: baselineState?.grossMargin ? Math.round(baselineState.grossMargin > 1 ? baselineState.grossMargin : baselineState.grossMargin * 100) : 70, unit: '%' },
+    { key: 'revenueGrowth', label: 'Revenue Growth Rate', icon: TrendingUp, min: -30, max: 60, step: 1, defaultValue: Math.round(baselineState?.monthlyGrowthRate || baselineState?.growthRate || 0), unit: '%' },
+    { key: 'churnRate', label: 'Monthly Churn Rate', icon: TrendingDown, min: 0, max: 20, step: 0.5, defaultValue: Math.round((baselineState?.churnRate ? (baselineState.churnRate > 1 ? baselineState.churnRate : baselineState.churnRate * 100) : 5) * 2) / 2, unit: '%' },
+    { key: 'grossMargin', label: 'Gross Margin', icon: Percent, min: 30, max: 95, step: 1, defaultValue: Math.round(baselineState?.grossMargin ? (baselineState.grossMargin > 1 ? baselineState.grossMargin : baselineState.grossMargin * 100) : 70), unit: '%' },
     { key: 'burnChange', label: 'Burn Rate Change', icon: Flame, min: -50, max: 100, step: 5, defaultValue: 0, unit: '%' },
     { key: 'fundraising', label: 'Fundraising Amount', icon: DollarSign, min: 0, max: 5000000, step: 100000, defaultValue: 0, unit: '$', format: (v) => formatCurrencyAbbrev(v) },
   ], [baselineState]);
@@ -73,7 +73,10 @@ export function WhatIfExplorer({
   }, [values, debouncedCalculate]);
 
   const handleSliderChange = (key: string, value: number[]) => {
-    setValues(prev => ({ ...prev, [key]: value[0] }));
+    const config = sliderConfigs.find(s => s.key === key);
+    const precision = config && config.step < 1 ? 1 : 0;
+    const rounded = Number(value[0].toFixed(precision));
+    setValues(prev => ({ ...prev, [key]: rounded }));
   };
 
   const handleReset = () => {

@@ -80,6 +80,23 @@ def get_twin_state(db: Session, company_id: int) -> dict:
         except (json.JSONDecodeError, TypeError):
             state_json = {}
 
+    fr_cash = None
+    fr_burn = None
+    fr_revenue = None
+    latest_fr = (
+        db.query(FinancialRecord)
+        .filter(FinancialRecord.company_id == company_id)
+        .order_by(desc(FinancialRecord.period_start))
+        .first()
+    )
+    if latest_fr:
+        fr_cash = float(latest_fr.cash_balance) if latest_fr.cash_balance else None
+        fr_burn = float(latest_fr.net_burn) if latest_fr.net_burn else None
+        if fr_burn is None and latest_fr.opex:
+            rev = float(latest_fr.revenue) if latest_fr.revenue else 0
+            fr_burn = float(latest_fr.opex) + (float(latest_fr.payroll) if latest_fr.payroll else 0) - rev
+        fr_revenue = float(latest_fr.revenue) if latest_fr.revenue else None
+
     if ts_metrics:
         def _ts_val(key, *alt_keys):
             v = ts_metrics.get(key)
@@ -96,12 +113,27 @@ def get_twin_state(db: Session, company_id: int) -> dict:
         ts_burn = _ts_val("monthly_burn", "net_burn", "burn_rate")
         ts_revenue = _ts_val("monthly_revenue", "mrr", "revenue")
 
-        if ts_cash is not None and (not financials.get("cash_balance") or financials["cash_balance"] == 0):
-            financials["cash_balance"] = float(ts_cash)
-        if ts_burn is not None and (not financials.get("monthly_burn") or financials["monthly_burn"] == 0):
-            financials["monthly_burn"] = float(ts_burn)
-        if ts_revenue is not None and (not financials.get("revenue_monthly") or financials["revenue_monthly"] == 0):
-            financials["revenue_monthly"] = float(ts_revenue)
+        cs_cash = financials.get("cash_balance") or 0
+        best_cash = max(float(ts_cash) if ts_cash else 0, float(fr_cash) if fr_cash else 0)
+        if best_cash > 0 and (cs_cash == 0 or (best_cash > cs_cash * 5 and best_cash > 100000)):
+            financials["cash_balance"] = best_cash
+
+        cs_burn = financials.get("monthly_burn") or 0
+        best_burn = float(ts_burn) if ts_burn else (float(fr_burn) if fr_burn else 0)
+        if best_burn > 0 and (cs_burn == 0 or (best_burn > cs_burn * 5 and best_burn > 10000)):
+            financials["monthly_burn"] = best_burn
+
+        cs_rev = financials.get("revenue_monthly") or 0
+        best_rev = max(float(ts_revenue) if ts_revenue else 0, float(fr_revenue) if fr_revenue else 0)
+        if best_rev > 0 and (cs_rev == 0 or (best_rev > cs_rev * 5 and best_rev > 10000)):
+            financials["revenue_monthly"] = best_rev
+    elif latest_fr:
+        if not financials.get("cash_balance") and fr_cash:
+            financials["cash_balance"] = fr_cash
+        if not financials.get("monthly_burn") and fr_burn:
+            financials["monthly_burn"] = fr_burn
+        if not financials.get("revenue_monthly") and fr_revenue:
+            financials["revenue_monthly"] = fr_revenue
 
     latest_records = (
         db.query(FinancialRecord)

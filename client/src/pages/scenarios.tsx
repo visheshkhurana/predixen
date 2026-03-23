@@ -257,8 +257,8 @@ export default function ScenariosPage() {
     if (!currentCompany || !simulation) return;
     const cmRunway = move.runway?.p50 ?? 0;
     const cmSurvival = move.survivalProbability?.['18m'] ?? move.survival?.['18m'] ?? 0;
-    const baseRunway = simulation.runway?.p50 ?? 0;
-    const baseSurvival = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
+    const baseRunway = baselineComparison.simulation?.runway?.p50 ?? simulation.runway?.p50 ?? 0;
+    const baseSurvival = baselineComparison.simulation?.survivalProbability?.['18m'] ?? baselineComparison.simulation?.survival?.['18m'] ?? simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
     openEmailShare({
       contentType: 'counter_move',
       subject: `Counter-Move: ${move.name} - ${currentCompany.name}`,
@@ -740,7 +740,78 @@ export default function ScenariosPage() {
       matched = true;
     }
 
-    if (q.includes('market') || q.includes('expan')) {
+    const shippingCostMatch = q.match(/(?:shipping|logistics|carrier|freight|fulfillment|fuel|delivery)\s+(?:cost|rate|price|fee|expense)s?\s+(?:increase|rise|hike|spike|go(?:es)?\s+up|jump)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    const shippingCostMatch2 = q.match(/(?:increase|rise|hike|spike)\s+(?:in\s+)?(?:\w+\s+)?(?:shipping|logistics|carrier|freight|fulfillment|fuel|delivery)\s+(?:cost|rate|price|fee|expense)s?\s*(?:by\s+)?(\d+)\s*%/i);
+    const shippingGenericMatch = q.match(/(?:shipping|logistics|fulfillment|freight|delivery)\s+(?:cost|rate|price|fee|expense)s?\s+(?:increase|rise|hike|spike|go\s+up)/i);
+    if (!matched && (shippingCostMatch || shippingCostMatch2)) {
+      const pct = parseInt((shippingCostMatch || shippingCostMatch2)![1]);
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -pct);
+      params.gross_margin_delta_pct -= Math.round(pct * 0.4);
+      tags.push('pessimistic');
+      matched = true;
+    } else if (!matched && shippingGenericMatch) {
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -20);
+      params.gross_margin_delta_pct -= 8;
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const codReturnMatch = q.match(/(?:cod|cash.on.delivery)\s+(?:return|rto)s?\s+(?:rate|ratio)?\s*(?:spike|increase|rise|go\s+up|jump)s?\s+(?:from\s+\d+%?\s+)?(?:to\s+)?(\d+)\s*%/i);
+    const returnRateMatch = q.match(/(?:return|rto)s?\s+(?:rate|ratio)s?\s+(?:spike|increase|rise|go\s+up|jump)s?\s+(?:from\s+\d+%?\s+)?(?:to\s+)?(\d+)\s*%/i);
+    const returnFromToMatch = q.match(/(?:return|rto|cod\s+return)s?\s+(?:rate|ratio)?s?\s*(?:spike|increase|go|jump)s?\s+from\s+(\d+)%?\s+to\s+(\d+)\s*%/i);
+    const returnGenericMatch = q.match(/(?:return|rto)\s+(?:rate|ratio)s?\s+(?:spike|increase|rise|go\s+up|jump)/i);
+    if (!matched && returnFromToMatch) {
+      const fromPct = parseInt(returnFromToMatch[1]);
+      const toPct = parseInt(returnFromToMatch[2]);
+      const delta = toPct - fromPct;
+      params.gross_margin_delta_pct -= Math.round(delta * 0.75);
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -Math.round(delta * 0.5));
+      tags.push('pessimistic');
+      matched = true;
+    } else if (!matched && (codReturnMatch || returnRateMatch)) {
+      const targetPct = parseInt((codReturnMatch || returnRateMatch)![1]);
+      params.gross_margin_delta_pct -= Math.round(targetPct * 0.5);
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -Math.round(targetPct * 0.3));
+      tags.push('pessimistic');
+      matched = true;
+    } else if (!matched && returnGenericMatch) {
+      params.gross_margin_delta_pct -= 10;
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -10);
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const loseCustomersMatch = q.match(/lose\s+(\d+)\s*%\s*(?:of\s+)?(?:customer|user|client|subscriber)s?/i);
+    const customerLossMatch = q.match(/(?:customer|user|client|subscriber)s?\s+(?:loss|churn|leave|defect|drop)s?\s+(?:by\s+|of\s+)?(\d+)\s*%/i);
+    if (!matched && (loseCustomersMatch || customerLossMatch)) {
+      const pct = parseInt((loseCustomersMatch || customerLossMatch)![1]);
+      params.growth_uplift_pct -= pct;
+      params.churn_change_pct += Math.round(pct * 0.3);
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const opexIncreaseMatch = q.match(/(?:operating|opex|overhead)\s+(?:cost|expense)s?\s+(?:increase|rise|go\s+up|jump|spike)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    const opexIncreaseMatch2 = q.match(/(?:increase|rise)\s+(?:in\s+)?(?:operating|opex|overhead)\s+(?:cost|expense)s?\s+(?:by\s+)?(\d+)\s*%/i);
+    if (!matched && (opexIncreaseMatch || opexIncreaseMatch2)) {
+      const pct = parseInt((opexIncreaseMatch || opexIncreaseMatch2)![1]);
+      params.burn_reduction_pct = Math.min(params.burn_reduction_pct, -pct);
+      tags.push('pessimistic');
+      matched = true;
+    }
+
+    const competitorMatch = q.match(/competitor/i);
+    if (competitorMatch && !matched) {
+      params.churn_change_pct += 3;
+      params.growth_uplift_pct -= 10;
+      tags.push('pessimistic');
+      matched = true;
+    } else if (competitorMatch) {
+      params.churn_change_pct += 2;
+      params.growth_uplift_pct -= 5;
+    }
+
+    if ((q.includes('market') || q.includes('expan')) && !competitorMatch) {
       if (!matched || !tags.includes('growth')) {
         params.growth_uplift_pct += 25;
         params.burn_reduction_pct = params.burn_reduction_pct || -15;
@@ -1038,15 +1109,35 @@ export default function ScenariosPage() {
     const runwayP90Val = simulation.runway?.p90 ?? 0;
     const spread = runwayP90Val - runwayP10Val;
 
-    let riskScore = 5;
-    if (survival18m >= 90 && runwayP50Val >= 18) riskScore = 9;
-    else if (survival18m >= 80 && runwayP50Val >= 14) riskScore = 8;
-    else if (survival18m >= 70 && runwayP50Val >= 12) riskScore = 7;
-    else if (survival18m >= 60 && runwayP50Val >= 10) riskScore = 6;
-    else if (survival18m >= 50 && runwayP50Val >= 8) riskScore = 5;
-    else if (survival18m >= 40) riskScore = 4;
-    else if (survival18m >= 30) riskScore = 3;
-    else riskScore = 2;
+    const baseRunwayForScore = baselineComparison.simulation?.runway?.p50 ?? runwayP50Val;
+    const baseSurvForScore = baselineComparison.simulation?.survivalProbability?.['18m'] ?? baselineComparison.simulation?.survival?.['18m'] ?? survival18m;
+    const runwayDeltaPct = baseRunwayForScore > 0 ? ((runwayP50Val - baseRunwayForScore) / baseRunwayForScore) * 100 : 0;
+    const survivalDeltaPp = survival18m - baseSurvForScore;
+
+    let survivalComponent = 9;
+    if (survival18m >= 99) survivalComponent = 9;
+    else if (survival18m >= 95) survivalComponent = 7;
+    else if (survival18m >= 85) survivalComponent = 5;
+    else if (survival18m >= 70) survivalComponent = 3;
+    else if (survival18m >= 50) survivalComponent = 2;
+    else survivalComponent = 1;
+
+    let runwayChangeComponent = 5;
+    if (runwayDeltaPct > 30) runwayChangeComponent = 10;
+    else if (runwayDeltaPct > 10) runwayChangeComponent = 8;
+    else if (runwayDeltaPct > 0) runwayChangeComponent = 6;
+    else if (runwayDeltaPct > -10) runwayChangeComponent = 4;
+    else if (runwayDeltaPct > -25) runwayChangeComponent = 2;
+    else if (runwayDeltaPct > -50) runwayChangeComponent = 1;
+    else runwayChangeComponent = 0;
+
+    let p10Penalty = 0;
+    if (runwayP10Val < 6) p10Penalty = -3;
+    else if (runwayP10Val < 12) p10Penalty = -2;
+    else if (runwayP10Val < 18) p10Penalty = -1;
+
+    let riskScore = Math.round(survivalComponent * 0.4 + runwayChangeComponent * 0.4 + Math.max(0, 5 + p10Penalty) * 0.2);
+    riskScore = Math.max(1, Math.min(10, riskScore));
     if (spread > 15) riskScore = Math.max(1, riskScore - 1);
 
     let rewardScore = 5;
@@ -1054,8 +1145,7 @@ export default function ScenariosPage() {
       const bRev = baselineComparison.simulation.metrics?.revenue?.[23]?.p50 ?? 0;
       const sRev = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
       const revGrowthPct = bRev > 0 ? ((sRev - bRev) / bRev) * 100 : 0;
-      const bRunway = baselineComparison.simulation.runway?.p50 ?? 0;
-      const runwayGain = runwayP50Val - bRunway;
+      const runwayGain = runwayP50Val - baseRunwayForScore;
       if (revGrowthPct > 30 && runwayGain > 3) rewardScore = 10;
       else if (revGrowthPct > 20 || runwayGain > 5) rewardScore = 9;
       else if (revGrowthPct > 10 || runwayGain > 3) rewardScore = 8;
@@ -1671,11 +1761,21 @@ export default function ScenariosPage() {
                   onClick={() => {
                     const s18 = simulation.survivalProbability?.['18m'] ?? simulation.survival?.['18m'] ?? 0;
                     const rp50 = simulation.runway?.p50 ?? 0;
+                    const bRunway = baselineComparison.simulation?.runway?.p50 ?? rp50;
+                    const bSurv = baselineComparison.simulation?.survivalProbability?.['18m'] ?? baselineComparison.simulation?.survival?.['18m'] ?? s18;
+                    const runwayChangePct = bRunway > 0 ? ((rp50 - bRunway) / bRunway) * 100 : 0;
                     let vLabel = 'CONDITIONAL GO';
-                    if (s18 >= 75 && rp50 >= 14) vLabel = 'GO';
-                    else if (s18 < 40 || rp50 < 8) vLabel = 'NO-GO';
+                    if (runwayChangePct >= -5 && s18 >= 75 && rp50 >= 14) vLabel = 'GO';
+                    else if (s18 < 40 || rp50 < 8 || runwayChangePct < -40) vLabel = 'NO-GO';
                     let score = 5;
-                    if (s18 >= 90) score = 9; else if (s18 >= 75) score = 8; else if (s18 >= 60) score = 7; else if (s18 >= 50) score = 6; else if (s18 >= 40) score = 5; else if (s18 >= 30) score = 4; else score = 3;
+                    if (runwayChangePct > 20 && s18 >= 90) score = 9;
+                    else if (runwayChangePct > 10 && s18 >= 80) score = 8;
+                    else if (runwayChangePct > 0 && s18 >= 70) score = 7;
+                    else if (runwayChangePct > -10 && s18 >= 60) score = 6;
+                    else if (runwayChangePct > -20 && s18 >= 50) score = 5;
+                    else if (runwayChangePct > -30) score = 4;
+                    else if (runwayChangePct > -50) score = 3;
+                    else score = 2;
                     handleShareAIDecision({
                       recommendation: `${currentScenarioName}: ${rp50 >= 900 ? 'Sustainable' : `${rp50.toFixed(1)} months`} runway, ${s18.toFixed(0)}% survival at 18 months`,
                       verdictLabel: vLabel,
@@ -1701,15 +1801,35 @@ export default function ScenariosPage() {
               const rev24m = simulation.metrics?.revenue?.[23]?.p50 ?? simulation.month_data?.[23]?.revenue_p50 ?? 0;
               const cash18m = simulation.metrics?.cash?.[17]?.p50 ?? simulation.month_data?.[17]?.cash_p50 ?? 0;
               const spread = (simulation.runway?.p90 ?? 0) - (simulation.runway?.p10 ?? 0);
-              let riskScore = 5;
-              if (survival18m >= 90 && runwayP50 >= 18) riskScore = 9;
-              else if (survival18m >= 80 && runwayP50 >= 14) riskScore = 8;
-              else if (survival18m >= 70 && runwayP50 >= 12) riskScore = 7;
-              else if (survival18m >= 60 && runwayP50 >= 10) riskScore = 6;
-              else if (survival18m >= 50 && runwayP50 >= 8) riskScore = 5;
-              else if (survival18m >= 40) riskScore = 4;
-              else if (survival18m >= 30) riskScore = 3;
-              else riskScore = 2;
+              const fmBaseRunway = baselineComparison.simulation?.runway?.p50 ?? runwayP50;
+              const fmBaseSurv = baselineComparison.simulation?.survivalProbability?.['18m'] ?? baselineComparison.simulation?.survival?.['18m'] ?? survival18m;
+              const fmRunwayDeltaPct = fmBaseRunway > 0 ? ((runwayP50 - fmBaseRunway) / fmBaseRunway) * 100 : 0;
+              const fmP10 = simulation.runway?.p10 ?? 0;
+
+              let fmSurvComp = 9;
+              if (survival18m >= 99) fmSurvComp = 9;
+              else if (survival18m >= 95) fmSurvComp = 7;
+              else if (survival18m >= 85) fmSurvComp = 5;
+              else if (survival18m >= 70) fmSurvComp = 3;
+              else if (survival18m >= 50) fmSurvComp = 2;
+              else fmSurvComp = 1;
+
+              let fmRunwayComp = 5;
+              if (fmRunwayDeltaPct > 30) fmRunwayComp = 10;
+              else if (fmRunwayDeltaPct > 10) fmRunwayComp = 8;
+              else if (fmRunwayDeltaPct > 0) fmRunwayComp = 6;
+              else if (fmRunwayDeltaPct > -10) fmRunwayComp = 4;
+              else if (fmRunwayDeltaPct > -25) fmRunwayComp = 2;
+              else if (fmRunwayDeltaPct > -50) fmRunwayComp = 1;
+              else fmRunwayComp = 0;
+
+              let fmP10Penalty = 0;
+              if (fmP10 < 6) fmP10Penalty = -3;
+              else if (fmP10 < 12) fmP10Penalty = -2;
+              else if (fmP10 < 18) fmP10Penalty = -1;
+
+              let riskScore = Math.round(fmSurvComp * 0.4 + fmRunwayComp * 0.4 + Math.max(0, 5 + fmP10Penalty) * 0.2);
+              riskScore = Math.max(1, Math.min(10, riskScore));
               if (spread > 15) riskScore = Math.max(1, riskScore - 1);
 
               const survivalColor = survival18m >= 70 ? 'text-emerald-600 dark:text-emerald-400' : survival18m >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';

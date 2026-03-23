@@ -84,14 +84,23 @@ REQUIRED MIX: 1 founder, 2 investors (1 bullish, 1 cautious), 1 key customer, 1 
 
 Respond with a JSON object: {{"agents": [...]}}"""
 
-    try:
-        response = llm_client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=3000,
-            response_format={"type": "json_object"},
+    import asyncio
+
+    async def _call_llm():
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: llm_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.8,
+                max_tokens=3000,
+                response_format={"type": "json_object"},
+            )
         )
+
+    try:
+        response = await asyncio.wait_for(_call_llm(), timeout=45.0)
 
         data = json.loads(response.choices[0].message.content)
         agents_data = data if isinstance(data, list) else data.get("agents", [])
@@ -118,8 +127,15 @@ Respond with a JSON object: {{"agents": [...]}}"""
                 available_actions=template["available_actions"],
             ))
 
+        if len(personas) < 5:
+            logger.warning(f"LLM returned only {len(personas)} agents, using fallback")
+            return _fallback_personas()
+
         return personas
 
+    except asyncio.TimeoutError:
+        logger.warning("Agent persona generation timed out after 45s, using fallback")
+        return _fallback_personas()
     except Exception as e:
         logger.error(f"Failed to generate agent personas via LLM: {e}")
         return _fallback_personas()

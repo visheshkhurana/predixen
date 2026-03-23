@@ -87,12 +87,15 @@ async def run_simulation_v2_sse(
 
     async def run_engine():
         try:
-            result = await engine.run_simulation(
-                initial_state=initial_state,
-                scenario_params=scenario_params,
-                total_rounds=request.total_rounds,
-                progress_callback=progress_callback,
-                event_callback=event_callback,
+            result = await asyncio.wait_for(
+                engine.run_simulation(
+                    initial_state=initial_state,
+                    scenario_params=scenario_params,
+                    total_rounds=request.total_rounds,
+                    progress_callback=progress_callback,
+                    event_callback=event_callback,
+                ),
+                timeout=180.0,
             )
 
             for rnd in result.rounds:
@@ -121,6 +124,9 @@ async def run_simulation_v2_sse(
             _results_store[result.simulation_id] = complete_data
 
             await event_queue.put(_sse_event("complete", {"result": complete_data}))
+        except asyncio.TimeoutError:
+            logger.warning("Flight Simulator timed out after 180s")
+            await event_queue.put(_sse_event("error", {"message": "Simulation timed out after 3 minutes. Try reducing the number of rounds or try again."}))
         except Exception as e:
             logger.error(f"Simulation engine error: {e}\n{traceback.format_exc()}")
             await event_queue.put(_sse_event("error", {"message": str(e)}))

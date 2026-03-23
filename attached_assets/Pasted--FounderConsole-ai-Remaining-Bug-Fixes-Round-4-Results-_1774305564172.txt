@@ -1,0 +1,705 @@
+# FounderConsole.ai — Remaining Bug Fixes (Round 4 Results)
+## Paste into Replit Agent
+
+---
+
+You are fixing **FounderConsole.ai**, a Monte Carlo simulation platform for founders. These are the 6 remaining bugs that have persisted across 4 rounds of testing (22+ hours, 20+ test simulations). Fix ALL of them.
+
+The app stack: Next.js frontend, Python/FastAPI simulation backend, GPT-4o for AI features, likely PostgreSQL or Supabase for data.
+
+---
+
+## 🔴 BUG 1: NLP SCENARIO PARSING — BROKEN ACROSS ALL 4 ROUNDS
+
+### The problem
+When users type natural language scenarios in the /simulate page, the simulation engine does NOT extract or apply any variable changes. Every simulation shows **"No changes from baseline"** in the "Scenario Inputs vs Baseline" section. The Monte Carlo runs on unmodified baseline data regardless of what the user types.
+
+### Tested scenarios that all failed (20+ times across 4 rounds):
+- "What happens if our shipping costs increase 25% due to fuel price hikes?" → No changes
+- "What happens if COD return rates spike from 15% to 35%?" → No changes
+- "What happens if a competitor launches free shipping and we lose 20% of customers?" → No changes
+- "What happens if we cut our burn rate by 30%?" → No changes
+- All produce identical P50 runway (~51.1-51.9 months) confirming baseline-only execution
+
+### The only things that DO work:
+- Quick scenario pills ("Cut marketing 30%", "Raise prices 20%") — these bypass the NLP and directly set variables
+- The "Adjust Variables Manually" button — directly sets slider values
+
+### Root cause
+The function that converts user text → simulation variable changes is either:
+(a) Not being called at all
+(b) Failing silently and defaulting to baseline
+(c) Using a keyword matcher that's too narrow
+
+### WHERE TO LOOK IN YOUR CODE
+
+Search for where the simulation input text gets processed before the Monte Carlo engine runs. Look for:
+
+```bash
+# Find the scenario parsing logic
+grep -rn "parse_scenario\|extract_variables\|scenario_input\|user_query\|natural_language" --include="*.py" --include="*.ts" --include="*.tsx" .
+grep -rn "No changes from baseline\|no_changes\|baseline_only" --include="*.py" --include="*.ts" .
+grep -rn "scenario_params\|variable_changes\|modified_variables" --include="*.py" .
+```
+
+### THE FIX
+
+Replace whatever parsing exists with an LLM-based extraction. Add this BEFORE your Monte Carlo simulation runs:
+
+```python
+import json
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
+PARSE_PROMPT = """You are a financial scenario parser for a startup simulation engine.
+
+The user described a scenario. Extract the specific variable changes to apply to a Monte Carlo simulation.
+
+CURRENT COMPANY BASELINE:
+- Monthly Revenue (MRR): ${mrr}
+- Monthly Burn Rate: ${burn}
+- Cash Balance: ${cash}
+- Growth Rate: {growth}%
+- Churn Rate: {churn}%
+- Gross Margin: {margin}%
+- LTV:CAC Ratio: {ltv_cac}x
+- Customer Count: {customers}
+
+AVAILABLE VARIABLES YOU CAN MODIFY:
+1. revenue_growth_rate_change: percentage point change (e.g., +10 means growth goes from 0% to 10%)
+2. burn_rate_change_pct: percentage change to burn (e.g., -30 means 30% reduction, +25 means 25% increase)
+3. churn_rate_change: percentage point change (e.g., +2 means churn goes from 3.2% to 5.2%)
+4. gross_margin_change: percentage point change (e.g., -15 means margin drops from 82% to 67%)
+5. customer_count_change_pct: percentage change in customers (e.g., -20 means lose 20% of customers)
+6. fundraise_amount: dollar amount of new funding (e.g., 5000000 for $5M raise)
+7. opex_change_pct: percentage change in operating expenses (e.g., +25 means opex goes up 25%)
+8. headcount_change_pct: percentage change in team size (e.g., -10 means reduce headcount 10%)
+
+MAPPING RULES:
+- "shipping costs increase 25%" → opex_change_pct: +25
+- "lose 20% of customers" → customer_count_change_pct: -20 AND revenue_growth_rate_change: -20
+- "COD returns spike to 35%" → gross_margin_change: -15 (returns eat into margin) AND opex_change_pct: +10 (reverse logistics costs)
+- "competitor launches free shipping" → churn_rate_change: +3 AND revenue_growth_rate_change: -10
+- "cut burn by 30%" → burn_rate_change_pct: -30
+- "hire 5 engineers" → burn_rate_change_pct: +5 AND headcount_change_pct: +5
+- "raise prices 20%" → revenue_growth_rate_change: +15 AND churn_rate_change: +1
+- "raise $5M Series A" → fundraise_amount: 5000000
+- NEGATIVE scenarios MUST produce negative variable changes
+- POSITIVE scenarios MUST produce positive variable changes
+- You can modify MULTIPLE variables for one scenario
+
+Return ONLY valid JSON:
+{
+  "variables": {
+    "variable_name": numeric_value,
+    ...
+  },
+  "summary": "one-line description of what changes were applied",
+  "confidence": "high" | "medium" | "low"
+}
+
+If the scenario is unclear, still make your best guess — do NOT return empty variables."""
+
+async def parse_scenario_with_llm(user_text: str, company_data: dict) -> dict:
+    """Parse natural language scenario into simulation variable changes using GPT-4o."""
+
+    prompt = PARSE_PROMPT.format(
+        mrr=f"{company_data['mrr']:,.0f}",
+        burn=f"{abs(company_data['monthly_burn']):,.0f}",
+        cash=f"{company_data['cash_balance']:,.0f}",
+        growth=company_data.get('growth_rate', 0),
+        churn=company_data.get('churn_rate', 3.2),
+        margin=company_data.get('gross_margin', 82.4),
+        ltv_cac=company_data.get('ltv_cac_ratio', 10),
+        customers=company_data.get('customer_count', 150),
+    )
+
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_text}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=500,
+        )
+        result = json.loads(response.choices[0].message.content)
+
+        # Validate that at least one variable was extracted
+        if not result.get("variables") or len(result["variables"]) == 0:
+            # Fallback: try a more aggressive extraction
+            return await _fallback_parse(user_text, company_data)
+
+        return result
+
+    except Exception as e:
+        print(f"LLM parsing failed: {e}")
+        return {"variables": {}, "summary": "Could not parse scenario", "confidence": "low"}
+
+
+async def _fallback_parse(user_text: str, company_data: dict) -> dict:
+    """Fallback: simple keyword matching if LLM fails."""
+    text = user_text.lower()
+    variables = {}
+
+    # Cost increases
+    if any(w in text for w in ["shipping cost", "logistics cost", "carrier rate", "fuel price", "fulfillment cost"]):
+        # Extract percentage if present
+        import re
+        pct_match = re.search(r'(\d+)%', text)
+        pct = int(pct_match.group(1)) if pct_match else 20
+        if any(w in text for w in ["increase", "rise", "hike", "spike", "go up"]):
+            variables["opex_change_pct"] = pct
+        elif any(w in text for w in ["decrease", "reduce", "cut", "drop"]):
+            variables["opex_change_pct"] = -pct
+
+    # Customer loss / churn
+    if any(w in text for w in ["lose customer", "customer loss", "customers leave", "churn increase"]):
+        pct_match = re.search(r'(\d+)%', text)
+        pct = int(pct_match.group(1)) if pct_match else 15
+        variables["customer_count_change_pct"] = -pct
+        variables["revenue_growth_rate_change"] = -pct
+
+    # Competitor
+    if "competitor" in text:
+        variables["churn_rate_change"] = variables.get("churn_rate_change", 0) + 3
+        variables["revenue_growth_rate_change"] = variables.get("revenue_growth_rate_change", 0) - 10
+
+    # Returns / COD
+    if any(w in text for w in ["return rate", "cod return", "rto", "reverse logistics"]):
+        pct_match = re.search(r'(\d+)%', text)
+        if pct_match:
+            variables["gross_margin_change"] = -int(pct_match.group(1)) // 2
+        else:
+            variables["gross_margin_change"] = -10
+        variables["opex_change_pct"] = variables.get("opex_change_pct", 0) + 10
+
+    # Burn changes
+    if any(w in text for w in ["cut burn", "reduce burn", "lower burn"]):
+        pct_match = re.search(r'(\d+)%', text)
+        pct = int(pct_match.group(1)) if pct_match else 20
+        variables["burn_rate_change_pct"] = -pct
+
+    if any(w in text for w in ["increase burn", "more spending"]):
+        pct_match = re.search(r'(\d+)%', text)
+        pct = int(pct_match.group(1)) if pct_match else 20
+        variables["burn_rate_change_pct"] = pct
+
+    return {
+        "variables": variables,
+        "summary": f"Keyword extraction: {len(variables)} variables modified",
+        "confidence": "medium" if variables else "low"
+    }
+```
+
+### INTEGRATION POINT
+
+Find where simulation runs are initiated (the API endpoint that handles the "Simulate" button click) and add the parsing step:
+
+```python
+@router.post("/api/simulate")
+async def run_simulation(request: SimulationRequest):
+    company = await get_company_data(request.company_id)
+
+    # STEP 1: Parse the scenario text into variable changes (THIS IS THE MISSING STEP)
+    parsed = await parse_scenario_with_llm(request.scenario_text, company)
+
+    # STEP 2: Apply the parsed changes to the baseline
+    modified_params = apply_variable_changes(company, parsed["variables"])
+
+    # STEP 3: Run Monte Carlo with MODIFIED parameters (not baseline!)
+    results = run_monte_carlo(modified_params, iterations=request.iterations)
+
+    # STEP 4: Store the parsed variables for display in "Scenario Inputs vs Baseline"
+    results["scenario_inputs"] = parsed["variables"]
+    results["scenario_summary"] = parsed["summary"]
+    results["parse_confidence"] = parsed["confidence"]
+
+    return results
+
+
+def apply_variable_changes(baseline: dict, changes: dict) -> dict:
+    """Apply parsed variable changes to baseline company data."""
+    modified = baseline.copy()
+
+    if "burn_rate_change_pct" in changes:
+        modified["monthly_burn"] *= (1 + changes["burn_rate_change_pct"] / 100)
+
+    if "revenue_growth_rate_change" in changes:
+        modified["growth_rate"] += changes["revenue_growth_rate_change"]
+
+    if "churn_rate_change" in changes:
+        modified["churn_rate"] += changes["churn_rate_change"]
+
+    if "gross_margin_change" in changes:
+        modified["gross_margin"] += changes["gross_margin_change"]
+
+    if "customer_count_change_pct" in changes:
+        modified["customer_count"] *= (1 + changes["customer_count_change_pct"] / 100)
+
+    if "opex_change_pct" in changes:
+        modified["operating_expenses"] *= (1 + changes["opex_change_pct"] / 100)
+
+    if "fundraise_amount" in changes:
+        modified["cash_balance"] += changes["fundraise_amount"]
+
+    if "headcount_change_pct" in changes:
+        modified["headcount"] *= (1 + changes["headcount_change_pct"] / 100)
+
+    return modified
+```
+
+### ALSO FIX: The "Scenario Inputs vs Baseline" display
+
+On the frontend, the component that shows "No changes from baseline" needs to render the parsed variables:
+
+```tsx
+// Find this component — likely in SimulationResults.tsx or ScenarioComparison.tsx
+// BEFORE:
+{scenarioInputs.length === 0 && <p>No changes from baseline</p>}
+
+// AFTER:
+{Object.keys(scenarioInputs).length === 0 ? (
+  <p className="text-muted">No changes from baseline</p>
+) : (
+  <div className="space-y-2">
+    {Object.entries(scenarioInputs).map(([key, value]) => (
+      <div key={key} className="flex justify-between">
+        <span>{formatVariableName(key)}</span>
+        <span className={value > 0 ? 'text-green-600' : 'text-red-600'}>
+          {value > 0 ? '+' : ''}{value}
+          {key.includes('pct') || key.includes('rate') || key.includes('margin') ? '%' : ''}
+        </span>
+      </div>
+    ))}
+  </div>
+)}
+```
+
+### ALSO FIX: AI narrative must reference the scenario
+
+Pass the user's original query and parsed variables to the narrative generator:
+
+```python
+NARRATIVE_PROMPT = """Write a 2-3 sentence decision recommendation for a founder.
+
+THE FOUNDER ASKED: "{scenario_text}"
+
+CHANGES APPLIED TO SIMULATION:
+{parsed_changes}
+
+SIMULATION RESULTS:
+- P50 Runway: {p50_runway} months (was {baseline_runway} months)
+- 18-month Survival: {survival}%
+- Decision Score: {score}/10 ({verdict})
+
+RULES:
+1. FIRST SENTENCE: Directly address the specific scenario. Name the topic (shipping costs, competitor, COD returns, etc.)
+2. SECOND SENTENCE: State the recommendation with the key number that supports it.
+3. THIRD SENTENCE: One specific risk to watch or action to take.
+4. NEVER use generic phrases like "Move forward" or "The data says go" without connecting to the scenario.
+5. If the score is <=5, the tone must be cautionary. If >=8, confident.
+
+Examples:
+- "A 25% increase in shipping costs would compress your margins and add ~$2.8M/year to operating expenses. With runway dropping from 60 to 47 months, this is manageable but requires immediate carrier renegotiation. Watch: if fuel prices rise another 15%, rerun this simulation."
+- "Losing 20% of customers to a competitor offering free shipping would cut MRR by $3.7M/month. Your runway drops to 28 months and survival probability falls to 74%. Do NOT proceed without a retention strategy — consider matching with selective free shipping on high-AOV orders."
+"""
+```
+
+---
+
+## 🔴 BUG 2: SCORE CALIBRATION — 8/10 GO ON EVERYTHING
+
+### The problem
+Every simulation returns 8/10 GO regardless of whether the scenario is positive or negative. Across 20+ test runs and 4 rounds, the score has been 7/10 or 8/10 GO on every single simulation.
+
+### Root cause
+Since NLP isn't modifying variables (Bug 1), all simulations produce near-identical results (~51.3 months runway, 100% survival). The scoring function sees identical inputs and produces identical outputs.
+
+**Once Bug 1 is fixed**, the scores should naturally differentiate because negative scenarios will produce worse outcomes. But you also need to fix the scoring logic itself:
+
+### THE FIX
+
+Find your scoring function and replace it:
+
+```python
+def calculate_decision_score(
+    p50_runway_after: float,
+    p50_runway_before: float,
+    survival_18m: float,
+    p10_runway: float,
+    scenario_direction: str = "neutral"  # "positive", "negative", "neutral"
+) -> dict:
+    """
+    Calibrated 1-10 scoring with meaningful differentiation.
+
+    Key principle: The score MUST reflect the CHANGE from baseline, not just absolute values.
+    A company with 60mo runway getting a scenario that drops it to 40mo should score ~5,
+    not 8 just because 40mo is still "fine."
+    """
+
+    # Calculate the magnitude of change
+    runway_delta = p50_runway_after - p50_runway_before
+    runway_change_pct = (runway_delta / max(p50_runway_before, 1)) * 100
+
+    # Base score from survival probability
+    if survival_18m >= 0.99:
+        survival_score = 9
+    elif survival_18m >= 0.95:
+        survival_score = 7
+    elif survival_18m >= 0.85:
+        survival_score = 5
+    elif survival_18m >= 0.70:
+        survival_score = 3
+    elif survival_18m >= 0.50:
+        survival_score = 2
+    else:
+        survival_score = 1
+
+    # Runway change score (-5 to +5)
+    if runway_change_pct > 30:
+        runway_score = 5
+    elif runway_change_pct > 10:
+        runway_score = 3
+    elif runway_change_pct > 0:
+        runway_score = 1
+    elif runway_change_pct > -10:
+        runway_score = -1
+    elif runway_change_pct > -25:
+        runway_score = -3
+    elif runway_change_pct > -50:
+        runway_score = -4
+    else:
+        runway_score = -5
+
+    # P10 downside penalty
+    p10_penalty = 0
+    if p10_runway < 6:
+        p10_penalty = -3
+    elif p10_runway < 12:
+        p10_penalty = -2
+    elif p10_runway < 18:
+        p10_penalty = -1
+
+    # Composite score
+    raw_score = (survival_score * 0.4) + ((runway_score + 5) * 0.4) + ((5 + p10_penalty) * 0.2)
+    # Normalize to 1-10 scale
+    final_score = max(1, min(10, round(raw_score)))
+
+    # Verdict
+    if final_score <= 3:
+        verdict = "NO-GO"
+        headline = "Don't do this."
+    elif final_score <= 5:
+        verdict = "CAUTION"
+        headline = "Proceed with major modifications."
+    elif final_score <= 7:
+        verdict = "CONDITIONAL GO"
+        headline = "Viable if key assumptions hold."
+    else:
+        verdict = "GO"
+        headline = "The numbers support this move."
+
+    return {
+        "overall_score": final_score,
+        "verdict": verdict,
+        "headline": headline,
+        "risk_score": min(10, max(1, 10 - abs(p10_penalty) * 2)),
+        "reward_score": min(10, max(1, 5 + runway_score)),
+        "capital_efficiency_score": min(10, max(1, survival_score)),
+        "survival_impact_pct": round((survival_18m - 1.0) * 100, 1),
+    }
+```
+
+### CRITICAL: Make YOUR ANSWER and DECISION SCORE use the SAME function
+
+In Round 2 testing, the "YOUR ANSWER" card showed 6/10 while the "DECISION SCORE" section showed 8/10 on the SAME page. These must use the same scoring function. Search for duplicate scoring logic:
+
+```bash
+grep -rn "decision_score\|calculate_score\|your_answer.*score" --include="*.py" --include="*.ts" .
+```
+
+---
+
+## 🔴 BUG 3: FLIGHT SIMULATOR — INTERNAL SERVER ERROR
+
+### The problem
+The Flight Simulator starts, shows "Generating Agent Personas," then crashes after ~2 minutes with "Simulation failed: Internal Server Error." This was working in Round 3 (6 agents, 55 events, 85/100 score) but regressed in Round 4.
+
+### Root cause
+Likely a backend timeout, memory issue, or API rate limit on the LLM calls that generate 7 agent personas. Since it worked once (Round 3) and then failed (Round 4), it could be:
+- LLM API timeout (generating 7 personas = 7 sequential API calls)
+- Server memory pressure
+- Deployment regression (new code broke it)
+
+### THE FIX
+
+```python
+# 1. Add timeout and retry logic for agent generation
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+async def generate_single_agent(agent_type: str, company_data: dict) -> dict:
+    """Generate a single agent persona with retry logic."""
+    try:
+        response = await asyncio.wait_for(
+            llm_client.chat.completions.create(
+                model="gpt-4o-mini",  # Use mini for persona generation (faster, cheaper)
+                messages=[{
+                    "role": "system",
+                    "content": f"Generate a {agent_type} persona for a {company_data['industry']} startup..."
+                }],
+                temperature=0.8,
+                max_tokens=300,
+            ),
+            timeout=30.0  # 30 second timeout per agent
+        )
+        return json.loads(response.choices[0].message.content)
+    except asyncio.TimeoutError:
+        return get_default_persona(agent_type)  # Use a pre-built default if LLM times out
+
+# 2. Generate agents in PARALLEL, not sequentially
+async def generate_all_agents(company_data: dict) -> list:
+    agent_types = ["founder", "investor_bullish", "investor_cautious",
+                   "customer", "team_member", "market_analyst", "competitor"]
+
+    tasks = [generate_single_agent(t, company_data) for t in agent_types]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    agents = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            agents.append(get_default_persona(agent_types[i]))
+        else:
+            agents.append(result)
+
+    return agents
+
+# 3. Add overall timeout for the entire simulation
+@router.post("/api/flight-simulator/run")
+async def run_flight_simulator(request: FlightSimRequest):
+    try:
+        result = await asyncio.wait_for(
+            execute_flight_simulation(request),
+            timeout=180.0  # 3 minute overall timeout
+        )
+        return result
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=504,
+            content={"error": "Simulation timed out. Try reducing simulation months or try again."}
+        )
+
+# 4. ALSO: Accept negative burn values
+# The old crash was: "monthly_burn must be >= 0"
+# Find the Pydantic model or validation and fix it:
+
+class FlightSimRequest(BaseModel):
+    company_id: str
+    simulation_months: int = 12
+    monthly_burn: float  # REMOVE: Field(ge=0)  ← This was causing the original crash
+    # The burn CAN be negative (meaning the company is profitable / cash-flow positive)
+    funding_climate: float = 0.6
+    market_growth: float = 0.5
+    market_volatility: float = 0.1
+```
+
+---
+
+## 🟡 BUG 4: DIGITAL TWIN DATA INCONSISTENCY
+
+### The problem
+Digital Twin shows: Cash $500K, Burn $25K, Revenue $8K, Runway 20mo
+Dashboard shows: Cash $35M, Burn $11.4M, Revenue $18.5M, Runway 60mo
+
+### THE FIX
+
+The Digital Twin is reading from a separate data source. Make it read from the same source as the dashboard:
+
+```python
+@router.get("/api/digital-twin/{company_id}")
+async def get_digital_twin(company_id: str):
+    # WRONG: reading from digital_twin_snapshots table with stale data
+    # snapshot = await db.digital_twin_snapshots.find_one({"company_id": company_id})
+
+    # RIGHT: read from the SAME source as the main dashboard
+    company = await get_company_financials(company_id)  # Same function the dashboard uses
+
+    return {
+        "cash_balance": company["cash_balance"],
+        "monthly_burn": company["monthly_burn"],
+        "monthly_revenue": company["mrr"],
+        "runway_months": company["runway_months"],
+        "gross_margin": company.get("gross_margin"),
+        "churn_rate": company.get("churn_rate"),
+        "ltv": company.get("ltv"),
+        "cac": company.get("cac"),
+        "headcount": company.get("headcount"),
+        "twin_health": calculate_data_confidence(company),
+        "last_updated": company.get("updated_at", datetime.utcnow()),
+    }
+```
+
+Or if the Digital Twin intentionally uses snapshots, sync them on every data update:
+
+```python
+async def update_company_data(company_id: str, data: dict):
+    # Update main company record
+    await db.companies.update_one({"_id": company_id}, {"$set": data})
+
+    # ALSO sync digital twin snapshot
+    await db.digital_twin_snapshots.update_one(
+        {"company_id": company_id},
+        {"$set": {
+            "cash_balance": data.get("cash_balance"),
+            "monthly_burn": data.get("monthly_burn"),
+            "monthly_revenue": data.get("mrr"),
+            "runway_months": data.get("runway_months"),
+            "updated_at": datetime.utcnow(),
+        }},
+        upsert=True
+    )
+```
+
+---
+
+## 🟡 BUG 5: COPILOT FOLLOW-UP SUGGESTIONS ALWAYS IDENTICAL
+
+### The problem
+Every Copilot response suggests the same follow-up: "What are your customer acquisition costs and lifetime value?" regardless of the question asked.
+
+### THE FIX
+
+Find where follow-up suggestions are generated. It's likely hardcoded or a static list. Replace with:
+
+```python
+# Option A: Add to the Copilot system prompt
+COPILOT_SYSTEM_PROMPT = """...(your existing prompt)...
+
+IMPORTANT: At the end of your response, suggest ONE follow-up question.
+The follow-up MUST be directly related to the topic the user asked about.
+
+Rules for follow-ups:
+- If user asked about RISK → suggest simulating a specific risk scenario
+- If user asked about GROWTH/EXPANSION → suggest analyzing unit economics for the new segment
+- If user asked about FUNDRAISING → suggest timing analysis or valuation benchmarking
+- If user asked about COSTS → suggest identifying the top 3 cost reduction levers
+- If user asked about HIRING → suggest runway impact analysis for the proposed hires
+- NEVER default to "What are your CAC and LTV?" — be specific to the conversation
+
+Format: End your response with a JSON block:
+{"follow_up": "your contextual follow-up question here"}
+"""
+
+# Option B: Generate follow-up as a separate quick call
+async def generate_follow_up(user_question: str, ai_response: str) -> str:
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "user",
+            "content": f"""Based on this Q&A, suggest ONE follow-up question that deepens the analysis.
+
+Question: {user_question}
+Answer summary: {ai_response[:500]}
+
+The follow-up must be specific to the topic discussed. Do NOT suggest "What are your CAC and LTV?" — suggest something unique and actionable. Return only the question text."""
+        }],
+        temperature=0.7,
+        max_tokens=100,
+    )
+    return response.choices[0].message.content.strip()
+```
+
+---
+
+## 🟡 BUG 6: COUNTER-MOVE "CUT COSTS 20%" SHOWS NEGATIVE IMPACT
+
+### The problem
+The "Cut Costs 20%" counter-move shows a negative runway delta of -0.7 months. Cutting costs should EXTEND runway.
+
+### Root cause
+The delta is calculated as: `counter_move_runway - current_simulation_p50` instead of `counter_move_runway - baseline_runway`. Since the current simulation's P50 (51.3) is slightly higher than the counter-move result (51.0) due to randomness, the delta appears negative.
+
+### THE FIX
+
+```python
+def calculate_counter_move_delta(counter_move_runway: float, company_data: dict) -> float:
+    """Always compare counter-move against the COMPANY BASELINE dashboard runway, not the current sim."""
+    baseline_runway = company_data["dashboard_runway"]  # Use 60.0 months
+    return counter_move_runway - baseline_runway
+
+# NOT: counter_move_runway - current_simulation_p50  (this is what's causing the bug)
+```
+
+Also: generate CONTEXTUAL counter-moves based on the scenario:
+
+```python
+async def generate_counter_moves(scenario_text: str, simulation_results: dict) -> list:
+    """Generate scenario-specific counter-moves instead of generic ones."""
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{
+            "role": "system",
+            "content": """Given a startup scenario and simulation results, suggest 3 counter-moves.
+Each counter-move should directly address the scenario's risk.
+
+For "shipping costs increase": suggest carrier negotiation, route optimization, surcharge pass-through
+For "competitor threat": suggest retention program, feature differentiation, selective price matching
+For "COD returns spike": suggest prepaid incentives, verification checks, return policy changes
+
+Return JSON array: [{"name": "...", "description": "...", "burn_change_pct": -X, "revenue_change_pct": +Y}, ...]"""
+        }, {
+            "role": "user",
+            "content": f"Scenario: {scenario_text}\nP50 Runway: {simulation_results['p50_runway']}mo"
+        }],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+    )
+    return json.loads(response.choices[0].message.content)
+```
+
+---
+
+## TESTING CHECKLIST
+
+After implementing all fixes, run these exact tests:
+
+```
+□ "What happens if shipping costs increase 25%?"
+  → Scenario Inputs should show: opex_change_pct: +25
+  → Score should be 5-7 (not 8)
+  → Narrative should mention "shipping costs" and "operating expenses"
+
+□ "What happens if COD return rates spike from 15% to 35%?"
+  → Scenario Inputs should show: gross_margin_change: -15, opex_change_pct: +10
+  → Score should be 4-6
+
+□ "What happens if a competitor launches free shipping and we lose 20% of customers?"
+  → Scenario Inputs should show: customer_count_change_pct: -20, churn_rate_change: +3
+  → Score should be 2-4 (this is a severe scenario)
+
+□ "What happens if we cut burn by 30%?"
+  → Scenario Inputs should show: burn_rate_change_pct: -30
+  → Score should be 8-9 (positive scenario)
+
+□ Flight Simulator → should complete without crashing
+
+□ Digital Twin → cash should show $35M (matching dashboard)
+
+□ Copilot Q1 follow-up ≠ Copilot Q2 follow-up
+
+□ Counter-move "Cut Costs 20%" → positive runway delta
+```
+
+---
+
+## PRIORITY ORDER
+1. **Bug 1 (NLP)** + **Bug 2 (Scores)** — fix together, they're interdependent
+2. **Bug 3 (Flight Simulator)** — regression, was working yesterday
+3. **Bug 5 (Copilot follow-ups)** — quick win
+4. **Bug 6 (Counter-moves)** — quick win
+5. **Bug 4 (Digital Twin)** — data sync
