@@ -544,6 +544,26 @@ export default function KPIBoardPage() {
         isRefreshing={isRefreshing}
       />
 
+      {!isLoading && metrics.mrr === 0 && metrics.arr === 0 && metrics.cash_balance === 0 && metrics.net_burn === 0 && (
+        <Card className="border-dashed border-amber-500/30 bg-amber-50/50 dark:bg-amber-900/10" data-testid="card-kpi-empty-state">
+          <CardContent className="flex items-center gap-4 py-4">
+            <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">No financial data yet</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">Upload your financials or connect an integration to populate these KPIs with real numbers.</p>
+            </div>
+            <Button asChild variant="outline" size="sm" data-testid="button-kpi-add-data">
+              <a href="/data-input">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add Data
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <EnhancedKPICard
           title="MRR"

@@ -58,16 +58,69 @@ class ParsedIntent:
     is_complete: bool = True
 
 
+FINANCIAL_TERM_ALIASES = {
+    'arr': 'annual_recurring_revenue',
+    'annual recurring revenue': 'annual_recurring_revenue',
+    'mrr': 'monthly_recurring_revenue',
+    'monthly recurring revenue': 'monthly_recurring_revenue',
+    'arpu': 'average_revenue_per_user',
+    'average revenue per user': 'average_revenue_per_user',
+    'ltv': 'lifetime_value',
+    'cltv': 'lifetime_value',
+    'customer lifetime value': 'lifetime_value',
+    'cac': 'customer_acquisition_cost',
+    'customer acquisition cost': 'customer_acquisition_cost',
+    'nrr': 'net_revenue_retention',
+    'net revenue retention': 'net_revenue_retention',
+    'ndr': 'net_dollar_retention',
+    'net dollar retention': 'net_dollar_retention',
+    'grr': 'gross_revenue_retention',
+    'gross revenue retention': 'gross_revenue_retention',
+    'gmv': 'gross_merchandise_volume',
+    'gross merchandise volume': 'gross_merchandise_volume',
+    'acv': 'annual_contract_value',
+    'annual contract value': 'annual_contract_value',
+    'tcv': 'total_contract_value',
+    'total contract value': 'total_contract_value',
+    'ebitda': 'ebitda',
+    'cogs': 'cost_of_goods_sold',
+    'cost of goods sold': 'cost_of_goods_sold',
+    'dau': 'daily_active_users',
+    'daily active users': 'daily_active_users',
+    'mau': 'monthly_active_users',
+    'monthly active users': 'monthly_active_users',
+    'burn multiple': 'burn_multiple',
+    'burn rate': 'burn_rate',
+    'monthly burn': 'burn_rate',
+    'net burn': 'net_burn',
+    'gross margin': 'gross_margin',
+    'operating margin': 'operating_margin',
+    'churn rate': 'churn_rate',
+    'monthly churn': 'churn_rate',
+    'revenue churn': 'revenue_churn',
+    'logo churn': 'logo_churn',
+    'customer churn': 'churn_rate',
+    'runway': 'runway_months',
+    'cash runway': 'runway_months',
+    'quick ratio': 'quick_ratio',
+    'saas quick ratio': 'quick_ratio',
+    'rule of 40': 'rule_of_40',
+    'magic number': 'magic_number',
+    'payback period': 'payback_period',
+    'cac payback': 'payback_period',
+}
+
 INTENT_PATTERNS = {
     CopilotIntent.RUN_SIMULATION: [
         r'\b(simulate|simulating|run\s+simulation|run\s+a?\s*sim|model|project|forecast)\b',
         r'\bwhat\s+(if|happens\s+if|would\s+happen)\b',
         r'\b(scenario|test|try)\b.*\b(with|where|assuming)\b',
         r'\b(raise|fundraise|raising)\s*\$?\d+',
-        r'\b(cut|cuts?|reduce|reduces?|reducing|lower|lowering|decrease|decreasing|slash|slashing)\s*(the\s+)?(burn|costs?|expenses?|spending|opex|overhead)\b',
-        r'\b(increase|increasing|raise|raising|bump|bumping|grow|growing)\s*(the\s+)?(price|prices|revenue|pricing|mrr)\b',
+        r'\b(cut|cuts?|reduce|reduces?|reducing|lower|lowering|decrease|decreasing|slash|slashing)\s*(the\s+)?(burn|costs?|expenses?|spending|opex|overhead|cogs|cac)\b',
+        r'\b(increase|increasing|raise|raising|bump|bumping|grow|growing)\s*(the\s+)?(price|prices|revenue|pricing|mrr|arr|arpu|nrr|ndr|grr)\b',
         r'\b(freeze|freezing|stop|stopping|pause|pausing|halt|halting)\s*(the\s+)?hir(ing|es?)\b',
         r'\b(hire|hiring|add|adding|lay\s*off|laying\s*off)\s*\d+\s*(people|employees?)\b',
+        r'\b(improve|boost|optimize|reduce)\s*(the\s+)?(ltv|cac|churn|retention|arpu|nrr|ndr|grr|burn\s*multiple|payback)\b',
     ],
     CopilotIntent.COMPARE_SCENARIOS: [
         r'\b(compare|versus|vs\.?|against)\b',
@@ -132,16 +185,17 @@ PARAMETER_PATTERNS = {
         (r'raise\s*(?:in|at)\s*(\d+)\s*(months?|mos?)', 1),
     ],
     'revenue_growth': [
-        (r'(increase|boost|grow)\s*revenue\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
-        (r'(\d+(?:\.\d+)?)\s*%\s*revenue\s*(growth|increase)', 1),
-        (r'revenue\s*(growth|increase)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
-        (r'(reduce|cut|lower|decrease|drop)\s*revenue\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
-        (r'revenue\s*(decline|decrease|drop|reduction)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'(increase|boost|grow)\s*(?:the\s+)?(?:revenue|mrr|arr)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(\d+(?:\.\d+)?)\s*%\s*(?:revenue|mrr|arr)\s*(growth|increase)', 1),
+        (r'(?:revenue|mrr|arr)\s*(growth|increase)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduce|cut|lower|decrease|drop)\s*(?:the\s+)?(?:revenue|mrr|arr)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'(?:revenue|mrr|arr)\s*(decline|decrease|drop|reduction)\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'(improve|boost|grow)\s*(?:the\s+)?(?:nrr|ndr|grr|arpu)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
     ],
     'churn_reduction': [
-        (r'(reduce|cut|lower|decrease)\s*churn\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
-        (r'(\d+(?:\.\d+)?)\s*%\s*churn\s*(reduction|decrease)', 1),
-        (r'(improv\w*|increas\w*|boost\w*)\s*(?:week[\s-]?\d+\s+)?retention\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(reduce|cut|lower|decrease)\s*(?:the\s+)?(?:churn|churn\s*rate|customer\s*churn|logo\s*churn|revenue\s*churn)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(\d+(?:\.\d+)?)\s*%\s*(?:churn|customer\s*churn)\s*(reduction|decrease)', 1),
+        (r'(improv\w*|increas\w*|boost\w*)\s*(?:week[\s-]?\d+\s+)?(?:retention|nrr|ndr|grr)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
         (r'convert\s*(\d+(?:\.\d+)?)\s*%\s*(?:monthly\s+)?(?:subscribers?|users?|customers?)\s*(?:to\s+)?annual', 1),
     ],
     'burn_reallocation': [
@@ -165,6 +219,21 @@ PARAMETER_PATTERNS = {
 }
 
 
+def resolve_financial_terms(message: str) -> Dict[str, str]:
+    """Resolve financial abbreviations and industry terms in a message.
+    
+    Returns a dict of {term_found: canonical_key} for all recognized financial terms.
+    """
+    message_lower = message.lower()
+    found = {}
+    sorted_aliases = sorted(FINANCIAL_TERM_ALIASES.keys(), key=len, reverse=True)
+    for alias in sorted_aliases:
+        pattern = r'\b' + re.escape(alias) + r'\b'
+        if re.search(pattern, message_lower):
+            found[alias] = FINANCIAL_TERM_ALIASES[alias]
+    return found
+
+
 def parse_intent(message: str) -> ParsedIntent:
     """
     Parse a natural language message to extract intent and parameters.
@@ -177,6 +246,8 @@ def parse_intent(message: str) -> ParsedIntent:
     """
     message_lower = message.lower().strip()
     
+    resolved_terms = resolve_financial_terms(message_lower)
+    
     detected_intent = CopilotIntent.GENERAL_QUERY
     max_confidence = 0.0
     
@@ -184,6 +255,8 @@ def parse_intent(message: str) -> ParsedIntent:
         for pattern in patterns:
             if re.search(pattern, message_lower, re.IGNORECASE):
                 confidence = 0.8
+                if resolved_terms:
+                    confidence = min(0.95, confidence + 0.1)
                 if detected_intent == CopilotIntent.GENERAL_QUERY or confidence > max_confidence:
                     detected_intent = intent
                     max_confidence = confidence

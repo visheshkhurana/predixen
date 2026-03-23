@@ -1139,7 +1139,17 @@ function ConsoleInvestorPanel({ probability, risks, previousProb }: {
 }
 
 function ConsoleCohortPanel({ timeline }: { timeline: TimelineMonth[] }) {
-  if (timeline.length === 0) return null;
+  if (timeline.length === 0) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cohort Retention</h3>
+        <div className="p-4 rounded-lg bg-muted/20 border border-border/30 text-center" data-testid="cohort-empty-state">
+          <Activity className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
+          <p className="text-xs text-muted-foreground">Run a simulation to see projected cohort retention curves based on your revenue and burn dynamics.</p>
+        </div>
+      </div>
+    );
+  }
 
   const firstRevenue = timeline[0]?.revenue || 1;
   const retentionPoints = timeline.slice(0, 8).map((m, i) => {
@@ -1148,6 +1158,17 @@ function ConsoleCohortPanel({ timeline }: { timeline: TimelineMonth[] }) {
     const retention = Math.max(10, revenueRetention - burnPressure);
     return { month: m.month, retention: Math.min(100, retention) };
   });
+
+  if (retentionPoints.length < 2) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cohort Retention</h3>
+        <div className="p-4 rounded-lg bg-muted/20 border border-border/30 text-center" data-testid="cohort-insufficient-data">
+          <p className="text-xs text-muted-foreground">Need at least 2 months of simulation data to display retention trends.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
