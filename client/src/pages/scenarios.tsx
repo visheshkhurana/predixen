@@ -2092,6 +2092,7 @@ export default function ScenariosPage() {
               <CounterMoveCards
                 counterMoves={simulation?.counter_moves || null}
                 currentSimulation={simulation}
+                baselineSimulation={baselineComparison.simulation}
                 isLoading={false}
                 hasFailed={false}
                 onRetry={() => {}}

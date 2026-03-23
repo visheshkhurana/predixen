@@ -633,12 +633,18 @@ def format_parameters_summary(params: SimulationParameters) -> str:
     parts = []
     
     if params.burn_reduction_pct:
-        parts.append(f"burn reduction of {abs(params.burn_reduction_pct):.0f}%")
+        if params.burn_reduction_pct > 0:
+            parts.append(f"cost reduction of {params.burn_reduction_pct:.0f}%")
+        else:
+            parts.append(f"cost increase of {abs(params.burn_reduction_pct):.0f}%")
     if params.price_change_pct:
         direction = "increase" if params.price_change_pct > 0 else "decrease"
         parts.append(f"price {direction} of {abs(params.price_change_pct):.0f}%")
     if params.revenue_growth_pct:
-        parts.append(f"revenue growth boost of {params.revenue_growth_pct:.0f}%")
+        if params.revenue_growth_pct > 0:
+            parts.append(f"revenue growth of {params.revenue_growth_pct:.0f}%")
+        else:
+            parts.append(f"revenue decline of {abs(params.revenue_growth_pct):.0f}%")
     if params.hiring_freeze_months:
         parts.append(f"hiring freeze for {params.hiring_freeze_months} months")
     if params.headcount_change:
@@ -653,9 +659,12 @@ def format_parameters_summary(params: SimulationParameters) -> str:
     if params.fundraise_month:
         parts.append(f"fundraise in month {params.fundraise_month}")
     if params.churn_reduction_pct:
-        parts.append(f"churn reduction of {params.churn_reduction_pct:.0f}%")
+        if params.churn_reduction_pct > 0:
+            parts.append(f"churn reduction of {params.churn_reduction_pct:.0f}%")
+        else:
+            parts.append(f"churn increase of {abs(params.churn_reduction_pct):.0f}%")
     
     if not parts:
-        return "No specific parameters detected"
+        return "baseline assumptions (no changes)"
     
     return ", ".join(parts)

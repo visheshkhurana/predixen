@@ -747,15 +747,32 @@ async def copilot_chat(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
+    import asyncio
     try:
-        return await _copilot_chat_inner(company_id, company, request, db, current_user)
+        return await asyncio.wait_for(
+            _copilot_chat_inner(company_id, company, request, db, current_user),
+            timeout=90.0
+        )
+    except asyncio.TimeoutError:
+        _logger.warning(f"Copilot chat timed out for company {company_id}")
+        from server.schemas.canonical import CopilotChatResponse
+        return CopilotChatResponse(
+            response="I'm taking longer than expected to analyze this. Please try asking again or simplify your question.",
+            follow_up_suggestions=["Can you rephrase that more specifically?"],
+            sources=[],
+            confidence=0.3,
+            response_metadata={}
+        )
     except HTTPException:
         raise
     except Exception as e:
         _logger.warning(f"Copilot chat first attempt failed for company {company_id}: {e}, retrying...")
         try:
-            return await _copilot_chat_inner(company_id, company, request, db, current_user)
-        except Exception as retry_err:
+            return await asyncio.wait_for(
+                _copilot_chat_inner(company_id, company, request, db, current_user),
+                timeout=60.0
+            )
+        except (asyncio.TimeoutError, Exception) as retry_err:
             _logger.error(f"Copilot chat retry also failed for company {company_id}: {retry_err}", exc_info=True)
 
         truth_scan_summary = []

@@ -895,21 +895,23 @@ const ICON_MAP: Record<string, typeof ArrowUp> = {
 function CounterMoveCard({
   move,
   currentSimulation,
+  baselineSimulation,
   onApply,
   onShare,
 }: {
   move: CounterMoveResult;
   currentSimulation: SimulationData;
+  baselineSimulation?: SimulationData | null;
   onApply?: (move: CounterMoveResult) => void;
   onShare?: (move: CounterMoveResult) => void;
 }) {
-  const currentRunway = currentSimulation.runway?.p50 ?? 0;
-  const currentSurvival = getSurvival(currentSimulation, '18m') ?? 0;
+  const referenceRunway = baselineSimulation?.runway?.p50 ?? currentSimulation.runway?.p50 ?? 0;
+  const referenceSurvival = baselineSimulation ? (getSurvival(baselineSimulation, '18m') ?? 0) : (getSurvival(currentSimulation, '18m') ?? 0);
   const moveRunway = move.runway?.p50 ?? 0;
   const moveSurvival = (move.survivalProbability?.['18m'] ?? move.survival?.['18m']) ?? 0;
 
-  const runwayDelta = moveRunway - currentRunway;
-  const survivalDelta = moveSurvival - currentSurvival;
+  const runwayDelta = moveRunway - referenceRunway;
+  const survivalDelta = moveSurvival - referenceSurvival;
 
   const isPositiveRunway = runwayDelta > 0.2;
   const isPositiveSurvival = survivalDelta > 1;
@@ -997,6 +999,7 @@ function CounterMoveCard({
 export function CounterMoveCards({
   counterMoves,
   currentSimulation,
+  baselineSimulation,
   isLoading,
   hasFailed,
   onRetry,
@@ -1006,6 +1009,7 @@ export function CounterMoveCards({
 }: {
   counterMoves: CounterMoveResult[] | null;
   currentSimulation: SimulationData;
+  baselineSimulation?: SimulationData | null;
   isLoading: boolean;
   hasFailed?: boolean;
   onRetry?: () => void;
@@ -1086,6 +1090,7 @@ export function CounterMoveCards({
               key={move.id}
               move={move}
               currentSimulation={currentSimulation}
+              baselineSimulation={baselineSimulation}
               onApply={onApply}
               onShare={onShare}
             />

@@ -271,16 +271,32 @@ class SimulationHandler:
         if growth_warning_text:
             growth_warning_text = "\n\n" + growth_warning_text
         
+        scenario_context = ""
+        if parsed.original_message and param_summary != "baseline assumptions (no changes)":
+            scenario_context = f'\n\n**Scenario**: "{parsed.original_message}"\n**Mapped to**: {param_summary}'
+        elif param_summary != "baseline assumptions (no changes)":
+            scenario_context = f"\n**Applied changes**: {param_summary}"
+        
+        survival_pct = survival * 100 if survival <= 1 else survival
+        if survival_pct >= 95:
+            outlook = "Strong position — this scenario maintains healthy survival odds."
+        elif survival_pct >= 80:
+            outlook = "Moderate risk — survival is reasonable but warrants monitoring."
+        elif survival_pct >= 60:
+            outlook = "Elevated risk — consider mitigation strategies to improve survival odds."
+        else:
+            outlook = "High risk — this scenario significantly threatens company survival. Immediate action recommended."
+        
         response_text = f"""**Simulation Results: {scenario_name}**
-
-I ran a {params.horizon_months}-month simulation with {param_summary}.
+{scenario_context}
+I ran a {params.horizon_months}-month Monte Carlo simulation ({config.iterations} iterations).
 
 **Key Outcomes:**
 - **Runway**: {runway:.1f} months (P50)
-- **Survival Rate**: {survival*100:.0f}%
+- **Survival Rate**: {survival_pct:.0f}%
 - **Final Cash**: ${final_cash/1000:.0f}K
 
-The simulation ran {config.iterations} Monte Carlo iterations to account for uncertainty.{growth_warning_text}
+**Assessment**: {outlook}{growth_warning_text}
 
 {rec_text}"""
         

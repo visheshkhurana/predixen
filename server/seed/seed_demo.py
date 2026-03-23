@@ -203,6 +203,7 @@ def seed_demo_data(db: Session):
                 _seed_dashboard_widgets(db, demo_company)
                 _seed_investors_pipeline(db, demo_company)
                 _seed_company_decisions(db, demo_company)
+                _seed_shareholders(db, demo_company)
                 _ensure_connector_metadata(db, demo_company)
                 _ensure_company_state(db, demo_company)
                 seed_team_members(db)
@@ -526,6 +527,48 @@ def seed_demo_data(db: Session):
     return demo_user
 
 
+def _seed_shareholders(db: Session, demo_company):
+    from server.models.cap_table import Shareholder, EquityHolding
+    existing = db.query(Shareholder).filter(Shareholder.company_id == demo_company.id).first()
+    if existing:
+        return
+
+    total_shares = 10_000_000
+    shareholders_data = [
+        {"name": "Arjun Mehta", "type": "founder", "email": "arjun@techflow.ai", "shares": 4_000_000, "class": "common", "price": 0.001},
+        {"name": "Priya Sharma", "type": "founder", "email": "priya@techflow.ai", "shares": 2_500_000, "class": "common", "price": 0.001},
+        {"name": "Vikram Patel", "type": "founder", "email": "vikram@techflow.ai", "shares": 1_500_000, "class": "common", "price": 0.001},
+        {"name": "Sequoia Capital India", "type": "investor", "shares": 800_000, "class": "preferred", "series": "Seed", "price": 0.50, "liq_pref": 1.0},
+        {"name": "Matrix Partners", "type": "investor", "shares": 500_000, "class": "preferred", "series": "Seed", "price": 0.50, "liq_pref": 1.0},
+        {"name": "ESOP Pool", "type": "esop_pool", "shares": 700_000, "class": "common", "price": 0.001},
+    ]
+
+    for s in shareholders_data:
+        sh = Shareholder(
+            company_id=demo_company.id,
+            name=s["name"],
+            email=s.get("email"),
+            type=s["type"],
+            is_active=True,
+        )
+        db.add(sh)
+        db.flush()
+
+        holding = EquityHolding(
+            company_id=demo_company.id,
+            shareholder_id=sh.id,
+            share_class=s["class"],
+            series=s.get("series"),
+            shares=s["shares"],
+            price_per_share=s["price"],
+            liquidation_preference_multiple=s.get("liq_pref"),
+        )
+        db.add(holding)
+
+    db.commit()
+    logger.info(f"Seeded {len(shareholders_data)} shareholders with equity holdings for demo company")
+
+
 def _seed_extended_demo_data(db: Session, demo_company, demo_user):
     _seed_additional_scenarios(db, demo_company)
     _seed_fundraising(db, demo_company)
@@ -536,6 +579,7 @@ def _seed_extended_demo_data(db: Session, demo_company, demo_user):
     _seed_dashboard_widgets(db, demo_company)
     _seed_investors_pipeline(db, demo_company)
     _seed_company_decisions(db, demo_company)
+    _seed_shareholders(db, demo_company)
     logger.info("Extended demo data seeded successfully")
 
 

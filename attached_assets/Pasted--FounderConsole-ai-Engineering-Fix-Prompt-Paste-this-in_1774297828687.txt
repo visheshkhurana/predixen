@@ -1,0 +1,557 @@
+# FounderConsole.ai — Engineering Fix Prompt
+## Paste this into Replit Agent / Cursor / Copilot
+
+---
+
+You are working on **FounderConsole.ai**, a Monte Carlo-powered financial simulation and decision-support platform for startup founders. The app uses Next.js (frontend), a Python/FastAPI backend for simulations, and LLM APIs (GPT-4o) for AI features.
+
+Below are **7 critical bugs** found across 5 rounds of production testing. Each bug includes: what's broken, exact reproduction steps, root cause analysis, and a specific fix with code-level guidance.
+
+Fix ALL of these in order of priority.
+
+---
+
+## BUG 1: NLP Scenario Parsing — CRITICAL (Core Product Broken)
+
+### What's broken
+When a user types a natural language simulation like "What happens if our shipping costs increase 25%?", the simulation engine runs but **does NOT modify any variables**. The "Scenario Inputs vs Baseline" section shows **"No changes from baseline"** for every simulation. The AI narrative is generic and never mentions the scenario topic.
+
+### Reproduction
+1. Go to `/simulate`
+2. Type: "What happens if our shipping costs increase 25% due to fuel price hikes?"
+3. Click Simulate
+4. Check "Scenario Inputs vs Baseline" → shows "No changes from baseline"
+5. Check AI narrative → generic text, no mention of shipping or fuel
+6. Repeat with "What happens if COD return rates spike from 15% to 35%?" → same result
+7. Repeat with "What happens if a competitor launches free shipping and we lose 20% of customers?" → same result
+
+### Evidence
+- 5 rounds of testing, 15+ simulations — NLP has NEVER successfully parsed an industry-specific scenario
+- Only generic financial terms work (e.g., "cut marketing 30%" → correctly reduces burn)
+- Quick scenario pills (pre-built buttons) work fine — the issue is in the NLP text → variable mapping
+
+### Root cause analysis
+The NLP parser likely uses a pattern-matching or keyword-extraction approach that only recognizes a limited set of financial terms: "marketing", "hiring", "prices", "burn", "churn", "fundraise". It does NOT recognize:
+- Industry terms: "shipping costs", "COD returns", "carrier rates", "fulfillment", "RTO", "return rate"
+- Competitive terms: "competitor", "customer loss", "market share"
+- Operational terms: "fuel price", "warehouse", "logistics"
+
+When the NLP fails to extract variables, the simulation runs on unmodified baseline data — producing identical results regardless of what the user typed.
+
+### Fix approach
+
+**Option A: Structured LLM extraction (recommended)**
+
+Replace the keyword-based parser with an LLM call that extracts structured variable changes from the user's text:
+
+```python
+# In your simulation preprocessing / scenario parser
+
+SYSTEM_PROMPT = """You are a financial scenario parser for a startup simulation engine.
+
+Given a user's natural language scenario description and their current financial baseline,
+extract the specific variable changes that should be applied to the Monte Carlo simulation.
+
+Available variables you can modify:
+- revenue_growth_rate (current: {current_growth}%) — change in percentage points
+- monthly_burn_change (current: ${current_burn}) — percentage change to burn rate
+- churn_rate (current: {current_churn}%) — new absolute churn rate
+- gross_margin (current: {current_margin}%) — new absolute gross margin
+- fundraise_amount — dollar amount of new funding
+- customer_count_change — percentage change in customer count
+- cac_change — percentage change in customer acquisition cost
+- opex_change — percentage change in operating expenses
+
+Rules:
+1. Map the user's scenario to ONE OR MORE variable changes
+2. "shipping costs increase 25%" → opex_change: +25 (shipping is an operating expense)
+3. "lose 20% of customers" → customer_count_change: -20, revenue_growth_rate: -20
+4. "COD returns spike to 35%" → gross_margin: reduce by ~15pp (returns eat margin), opex_change: +10 (reverse logistics cost)
+5. "competitor launches free shipping" → churn_rate: increase by 3-5pp, revenue_growth_rate: -10 to -15
+6. If the scenario is NEGATIVE, you MUST modify variables in a negative direction
+7. If you cannot map the scenario, return clarifying_question instead
+
+Return JSON:
+{
+  "parsed_variables": {
+    "variable_name": new_value_or_delta,
+    ...
+  },
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "brief explanation of mapping",
+  "clarifying_question": null | "question string if ambiguous"
+}
+"""
+
+async def parse_scenario(user_text: str, baseline: dict) -> dict:
+    prompt = SYSTEM_PROMPT.format(
+        current_growth=baseline["growth_rate"],
+        current_burn=baseline["monthly_burn"],
+        current_churn=baseline["churn_rate"],
+        current_margin=baseline["gross_margin"],
+    )
+
+    response = await openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_text}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1  # Low temp for consistent extraction
+    )
+
+    return json.loads(response.choices[0].message.content)
+```
+
+**Option B: Add a confirmation step (UX improvement)**
+
+After NLP extraction, show the user what variables will be changed BEFORE running the simulation:
+
+```
+User types: "What happens if shipping costs increase 25%?"
+
+System shows: "I understood: Operating Expenses +25%. Is this correct?"
+[Edit Variables] [Confirm & Simulate]
+```
+
+This builds trust AND fixes the NLP issue by letting users correct mistakes.
+
+**Option C: Expand keyword dictionary (minimal fix)**
+
+If you're using keyword matching, add these mappings:
+
+```python
+SCENARIO_KEYWORD_MAP = {
+    # Shipping / logistics
+    "shipping costs": {"variable": "opex_change", "direction": "same"},
+    "carrier rates": {"variable": "opex_change", "direction": "same"},
+    "fuel price": {"variable": "opex_change", "direction": "same"},
+    "logistics costs": {"variable": "opex_change", "direction": "same"},
+    "fulfillment costs": {"variable": "opex_change", "direction": "same"},
+    "warehouse costs": {"variable": "opex_change", "direction": "same"},
+
+    # Returns / COD
+    "return rate": {"variable": "gross_margin", "direction": "inverse"},
+    "COD returns": {"variable": "gross_margin", "direction": "inverse"},
+    "RTO": {"variable": "gross_margin", "direction": "inverse"},
+    "reverse logistics": {"variable": "opex_change", "direction": "same"},
+
+    # Competition
+    "competitor": {"variable": "churn_rate", "direction": "increase"},
+    "lose customers": {"variable": "customer_count_change", "direction": "decrease"},
+    "customer loss": {"variable": "customer_count_change", "direction": "decrease"},
+    "market share": {"variable": "revenue_growth_rate", "direction": "decrease"},
+    "free shipping": {"variable": "churn_rate", "direction": "increase"},
+
+    # Existing (should already work)
+    "marketing": {"variable": "monthly_burn_change", "direction": "same"},
+    "hiring": {"variable": "monthly_burn_change", "direction": "same"},
+    "prices": {"variable": "revenue_growth_rate", "direction": "same"},
+    "churn": {"variable": "churn_rate", "direction": "same"},
+    "raise": {"variable": "fundraise_amount", "direction": "same"},
+    "burn": {"variable": "monthly_burn_change", "direction": "same"},
+}
+```
+
+---
+
+## BUG 2: Score Calibration — All Scenarios Return 8/10 GO
+
+### What's broken
+Every simulation returns 8/10 GO regardless of scenario severity. A founder asking "What happens if a competitor takes 20% of our customers?" gets the same 8/10 GO as "What happens if we cut costs 30%?" This makes the decision engine useless — it always says GO.
+
+### Reproduction
+1. Run any 3 different simulations (positive, neutral, negative)
+2. All return 8/10 GO
+3. The "YOUR ANSWER" narrative always says "Move forward" or "Launch it"
+
+### Root cause
+The scoring function likely doesn't weight the DIRECTION of the scenario. Since NLP isn't modifying variables (Bug 1), all simulations run on baseline data and produce similar results → similar scores. But even when variables ARE modified (via quick pills), scores don't differentiate enough.
+
+### Fix approach
+
+Implement a scoring rubric that considers survival probability and runway change:
+
+```python
+def calculate_decision_score(simulation_result: dict, baseline: dict) -> dict:
+    """
+    Calculate a calibrated 1-10 decision score.
+
+    Scoring rubric:
+    - 1-3: NO-GO (survival drops below 70% OR runway drops >50%)
+    - 4-5: CAUTION (survival 70-85% OR runway drops 20-50%)
+    - 6-7: CONDITIONAL GO (survival 85-95% OR runway drops 5-20%)
+    - 8-9: GO (survival >95% AND runway drops <5%)
+    - 10: STRONG GO (survival >99% AND runway increases)
+    """
+
+    p50_runway_before = baseline["runway_months"]
+    p50_runway_after = simulation_result["p50_runway"]
+    survival_18m = simulation_result["survival_18m"]
+    p10_runway = simulation_result["p10_runway"]
+
+    runway_change_pct = (p50_runway_after - p50_runway_before) / max(p50_runway_before, 1) * 100
+
+    # Start with base score of 5
+    score = 5.0
+
+    # Survival probability impact (heaviest weight)
+    if survival_18m >= 0.99:
+        score += 2.0
+    elif survival_18m >= 0.95:
+        score += 1.5
+    elif survival_18m >= 0.85:
+        score += 0.5
+    elif survival_18m >= 0.70:
+        score -= 1.0
+    elif survival_18m >= 0.50:
+        score -= 2.5
+    else:
+        score -= 4.0  # <50% survival = very bad
+
+    # Runway change impact
+    if runway_change_pct > 20:
+        score += 2.0
+    elif runway_change_pct > 5:
+        score += 1.0
+    elif runway_change_pct > -5:
+        score += 0.0  # Neutral
+    elif runway_change_pct > -20:
+        score -= 1.0
+    elif runway_change_pct > -50:
+        score -= 2.0
+    else:
+        score -= 3.0  # Runway cut by 50%+ = terrible
+
+    # P10 downside risk adjustment
+    if p10_runway < 12:
+        score -= 1.0
+    elif p10_runway < 6:
+        score -= 2.0
+
+    # Clamp to 1-10
+    score = max(1, min(10, round(score)))
+
+    # Determine verdict
+    if score <= 3:
+        verdict = "NO-GO"
+    elif score <= 5:
+        verdict = "CAUTION"
+    elif score <= 7:
+        verdict = "CONDITIONAL GO"
+    else:
+        verdict = "GO"
+
+    return {
+        "score": score,
+        "verdict": verdict,
+        "risk_score": calculate_risk_subscore(simulation_result),
+        "reward_score": calculate_reward_subscore(simulation_result, baseline),
+        "capital_efficiency": calculate_capital_efficiency(simulation_result),
+        "survival_impact": survival_18m - baseline.get("survival_18m", 1.0),
+    }
+```
+
+**Key principle:** A simulation that reduces runway by >20% or drops survival below 85% should NEVER get an 8/10 GO. The scoring must be DIRECTIONAL.
+
+---
+
+## BUG 3: Floating Point Display — 82.43243243243244%
+
+### What's broken
+The What-If Explorer slider for Gross Margin shows `82.43243243243244%` — a raw JavaScript floating point number with 14 decimal places. Should show `82.4%`.
+
+### Reproduction
+1. Go to `/simulate` → What-If tab
+2. Look at the Gross Margin slider label
+
+### Fix
+
+Find the component that renders the Gross Margin value and apply rounding. This is likely in your What-If Explorer React component:
+
+```tsx
+// BEFORE (broken):
+<span>{grossMargin}%</span>
+
+// AFTER (fixed):
+<span>{Number(grossMargin).toFixed(1)}%</span>
+
+// Or more robust:
+const formatPercent = (value: number, decimals: number = 1): string => {
+  return `${Number(value).toFixed(decimals)}%`;
+};
+
+<span>{formatPercent(grossMargin)}</span>
+```
+
+**Apply this globally** — search your codebase for any place you display percentage values and ensure they're all formatted:
+
+```bash
+# Find all places percentages are displayed
+grep -rn "%" --include="*.tsx" --include="*.jsx" src/components/
+```
+
+---
+
+## BUG 4: Digital Twin Data Inconsistency ($500K vs $35M)
+
+### What's broken
+The Digital Twin (`/digital-twin`) shows:
+- Cash: $500K (dashboard shows $35M)
+- Monthly Burn: $25K (dashboard shows -$11.4M)
+- Monthly Revenue: $8K (dashboard shows $18.5M MRR)
+- Runway: 20 months (dashboard shows 60 months)
+
+The Digital Twin appears to run on completely separate/default data instead of the company's actual financial data.
+
+### Root cause
+The Digital Twin likely has its own data store (snapshot table) that was populated with demo/default values during initial setup and never synced with the main company financial data. The main dashboard reads from the primary `companies` or `financials` table, while the Digital Twin reads from a `digital_twin_snapshots` table.
+
+### Fix
+
+```python
+# Option A: Sync Digital Twin with main data source on each load
+@router.get("/api/digital-twin/{company_id}")
+async def get_digital_twin(company_id: str):
+    # Pull from the SAME data source as the main dashboard
+    company = await get_company_financials(company_id)
+
+    return {
+        "cash_balance": company.cash_balance,       # Should be $35M
+        "monthly_burn": company.monthly_burn,        # Should be -$11.4M
+        "monthly_revenue": company.mrr,              # Should be $18.5M
+        "runway_months": company.runway_months,      # Should be 60
+        "twin_health": calculate_twin_health(company),
+        "snapshot_id": generate_snapshot_id(),
+        "last_updated": datetime.utcnow(),
+    }
+
+# Option B: If snapshots are intentional, auto-sync on data changes
+async def on_financial_data_update(company_id: str, new_data: dict):
+    # Update main financials
+    await update_company_financials(company_id, new_data)
+    # ALSO update digital twin snapshot
+    await update_digital_twin_snapshot(company_id, new_data)
+```
+
+---
+
+## BUG 5: Copilot Follow-up Suggestions Always Identical
+
+### What's broken
+Every Copilot question gets the same follow-up suggestion: "What are your customer acquisition costs and lifetime value?" regardless of the question asked.
+
+Also new bug: the second question in a conversation hangs indefinitely (first question works, second never completes).
+
+### Reproduction
+1. Go to `/copilot`
+2. Ask: "What's our biggest financial risk right now?"
+3. See follow-up: "What are your customer acquisition costs and lifetime value?"
+4. Ask: "Should we expand to 3 new cities?"
+5. Either see same follow-up OR the question hangs forever
+
+### Fix for follow-up suggestions
+
+The follow-up is likely hardcoded or selected from a static list. Replace with context-aware generation:
+
+```python
+FOLLOW_UP_PROMPT = """Based on the user's question and your response, suggest ONE specific follow-up question that would deepen this analysis. The follow-up must be DIFFERENT from the original question and directly related to the topic discussed.
+
+User's question: {user_question}
+Your response summary: {response_summary}
+Company context: MRR ${mrr}, Burn ${burn}, Runway {runway}mo
+
+Rules:
+- If the question was about RISK → suggest a mitigation scenario simulation
+- If the question was about GROWTH → suggest a unit economics deep-dive
+- If the question was about FUNDRAISING → suggest a timing/valuation analysis
+- If the question was about COSTS → suggest an efficiency benchmark
+- NEVER suggest "What are your CAC and LTV?" as a default
+- The follow-up should feel like a smart advisor's next question
+
+Return only the follow-up question text, nothing else.
+"""
+```
+
+### Fix for second question hang
+
+This is likely a concurrency or context-length issue:
+
+```python
+# Check if the conversation context is growing too large
+async def handle_copilot_message(conversation_id: str, message: str):
+    conversation = await get_conversation(conversation_id)
+
+    # Truncate context to last N messages to prevent token overflow
+    recent_messages = conversation.messages[-10:]  # Keep last 10
+
+    # Add timeout to prevent indefinite hangs
+    try:
+        response = await asyncio.wait_for(
+            generate_copilot_response(recent_messages, message),
+            timeout=60.0  # 60 second timeout
+        )
+    except asyncio.TimeoutError:
+        return {
+            "response": "I'm taking longer than expected to analyze this. Please try asking again or rephrase your question.",
+            "error": "timeout"
+        }
+```
+
+---
+
+## BUG 6: Counter-Move "Cut Costs 20%" Shows Negative Runway Impact
+
+### What's broken
+The "Cut Costs 20%" counter-move shows a NEGATIVE runway delta of -0.3 months. Cutting costs should EXTEND runway, not reduce it.
+
+### Root cause
+The counter-move is likely being compared against the wrong baseline. If the comparison is `counter_move_runway - previous_simulation_p50` instead of `counter_move_runway - current_baseline_runway`, and the previous simulation had a higher P50 than the baseline, the delta appears negative.
+
+### Fix
+
+```python
+def calculate_counter_move_impact(counter_move_result: dict, baseline: dict) -> dict:
+    """
+    Always compare counter-move outcomes against the COMPANY BASELINE,
+    not against the current simulation's P50.
+    """
+    baseline_runway = baseline["dashboard_runway"]  # Use the 60.0 month dashboard value
+
+    return {
+        "runway": counter_move_result["p50_runway"],
+        "delta": counter_move_result["p50_runway"] - baseline_runway,  # Compare vs baseline!
+        "survival": counter_move_result["survival_18m"],
+    }
+
+# NOT this (broken):
+# "delta": counter_move_result["p50_runway"] - current_sim_p50  # Wrong comparison!
+```
+
+Also: counter-moves should be CONTEXTUAL to the simulation scenario:
+- If sim is about cost increases → counter-moves should include "negotiate supplier contracts", "switch carriers"
+- If sim is about customer loss → counter-moves should include "loyalty program", "retention campaign"
+- If sim is about growth → counter-moves should include "expand channels", "raise prices"
+
+---
+
+## BUG 7: Cap Table — Empty / Data Wiped
+
+### What's broken
+The Cap Table Stakeholders tab now shows "No Equity Issued Yet" with 0 stakeholders. Previously showed 14 stakeholders (13 at 0%, 1 at 100%).
+
+### Fix
+Check if the stakeholder data was accidentally deleted or if there's a data loading issue:
+
+```sql
+-- Check if stakeholder data still exists in the database
+SELECT * FROM cap_table_stakeholders WHERE company_id = 'shiprocket_company_id';
+
+-- If data exists but isn't loading, check the API query
+-- If data was deleted, restore from backup
+```
+
+If the 13 stakeholders at 0% was a data integrity issue (shares never allocated), the fix is:
+
+```python
+# When importing stakeholders from DRHP or cap table data,
+# ensure share counts are populated, not just names
+async def import_stakeholders(company_id: str, stakeholders: list):
+    for s in stakeholders:
+        await create_stakeholder(
+            company_id=company_id,
+            name=s["name"],
+            type=s["type"],  # "founder" or "investor"
+            common_shares=s.get("common_shares", 0),
+            preferred_shares=s.get("preferred_shares", 0),
+            options=s.get("options", 0),
+            # Don't just import names — import share data too!
+        )
+```
+
+---
+
+## ADDITIONAL QUICK FIXES
+
+### Simulation Engine Intermittent Availability
+The simulation engine sometimes returns "temporarily unavailable" errors. Add retry logic:
+
+```typescript
+// Frontend: retry simulation with exponential backoff
+async function runSimulation(query: string, retries = 3): Promise<SimResult> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const result = await fetch('/api/simulate', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+        signal: AbortSignal.timeout(120000), // 2 min timeout
+      });
+      if (result.ok) return result.json();
+      if (result.status === 503) {
+        await new Promise(r => setTimeout(r, 2000 * (i + 1))); // Backoff
+        continue;
+      }
+      throw new Error(`Simulation failed: ${result.status}`);
+    } catch (e) {
+      if (i === retries - 1) throw e;
+    }
+  }
+}
+```
+
+### AI Narrative Should Reference Scenario Topic
+After generating the Monte Carlo results, pass the original user query to the narrative generator:
+
+```python
+NARRATIVE_PROMPT = """Generate a decision recommendation for a startup founder.
+
+IMPORTANT: Your response MUST specifically reference the scenario the founder described:
+Scenario: "{user_scenario}"
+
+Simulation results:
+- P50 Runway: {p50_runway} months
+- 18-month Survival: {survival}%
+- Decision Score: {score}/10
+- Key variables changed: {variables_changed}
+
+Write 2-3 sentences that:
+1. Directly address the specific scenario (mention the topic: shipping costs, competitor, etc.)
+2. Give a clear recommendation (GO / NO-GO / CAUTION)
+3. Cite the specific numbers that support the recommendation
+4. Suggest one specific action to mitigate risk
+
+Do NOT use generic phrases like "Move forward" or "The data says go" without context.
+"""
+```
+
+---
+
+## TESTING CHECKLIST
+
+After implementing fixes, verify each by running these exact simulations:
+
+```
+□ "What happens if shipping costs increase 25%?" → Should show opex_change +25%, score < 8 if negative impact
+□ "What happens if COD return rates spike from 15% to 35%?" → Should show margin reduction, score reflects severity
+□ "What happens if a competitor launches free shipping and we lose 20% of customers?" → Should show churn increase + revenue drop, score 3-5 range (NO-GO or CAUTION)
+□ "What happens if we cut burn by 30%?" → Should show burn reduction, score 8-9 (GO)
+□ Check Gross Margin in What-If tab → Should show 82.4% (not 82.43243243243244%)
+□ Check Digital Twin → Cash should match dashboard ($35M)
+□ Ask Copilot two different questions → Follow-up suggestions should be different
+□ Check counter-moves → "Cut Costs 20%" should show POSITIVE runway delta
+□ Check Cap Table → Stakeholders should be visible with share data
+□ Run Flight Simulator → Should complete (already working as of Round 3)
+```
+
+---
+
+## PRIORITY ORDER
+
+1. **BUG 1: NLP Parsing** — This is the core product. Fix this first. Everything else is secondary.
+2. **BUG 2: Score Calibration** — Second most important. Without this, the decision engine has no value.
+3. **BUG 3: Floating Point** — 5-minute fix. Do it immediately.
+4. **BUG 5: Copilot** — Fix the hang first (timeout), then fix follow-ups.
+5. **BUG 6: Counter-moves** — Fix the comparison baseline.
+6. **BUG 4: Digital Twin** — Sync data sources.
+7. **BUG 7: Cap Table** — Check data integrity.
