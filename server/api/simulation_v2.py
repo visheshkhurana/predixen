@@ -27,7 +27,7 @@ _results_store: dict = {}
 class SimulationV2Request(BaseModel):
     total_rounds: int = Field(default=24, ge=6, le=60)
     monthly_revenue: float = Field(default=50000, ge=0)
-    monthly_burn: float = Field(default=80000, ge=0)
+    monthly_burn: float = Field(default=80000)
     cash_balance: float = Field(default=500000, ge=0)
     customers: int = Field(default=50, ge=0)
     team_size: int = Field(default=10, ge=1)

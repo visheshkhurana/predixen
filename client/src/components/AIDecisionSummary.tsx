@@ -94,7 +94,16 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
         })()
       : 0;
 
-    if (survival18m >= 75 && runwayP50 >= 14) {
+    const hasNegativeImpact = bRunwayDelta < -3 || bSurvDelta < -10;
+    const hasSevereNegativeImpact = bRunwayDelta < -8 || bSurvDelta < -20;
+
+    if (survival18m < 40 || runwayP50 < 8 || hasSevereNegativeImpact) {
+      verdict = 'no-go';
+      verdictLabel = 'NO-GO';
+      verdictColor = 'text-red-600 dark:text-red-400';
+      verdictBg = 'bg-red-50/80 dark:bg-red-950/30 border-red-200/50 dark:border-red-800/30';
+      verdictIcon = <Shield className="h-5 w-5 text-red-500" />;
+    } else if (survival18m >= 75 && runwayP50 >= 14 && !hasNegativeImpact) {
       if (burnIncreaseWarning >= 40) {
         verdict = 'conditional';
         verdictLabel = 'CONDITIONAL GO';
@@ -105,12 +114,6 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
         verdictBg = 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200/50 dark:border-emerald-800/30';
         verdictIcon = <CheckCircle className="h-5 w-5 text-emerald-500" />;
       }
-    } else if (survival18m < 40 || runwayP50 < 8) {
-      verdict = 'no-go';
-      verdictLabel = 'NO-GO';
-      verdictColor = 'text-red-600 dark:text-red-400';
-      verdictBg = 'bg-red-50/80 dark:bg-red-950/30 border-red-200/50 dark:border-red-800/30';
-      verdictIcon = <Shield className="h-5 w-5 text-red-500" />;
     }
 
     let headline = '';
@@ -209,10 +212,14 @@ export function AIDecisionSummary({ simulation, scenarioName, baselineSimulation
     if (burnCoverage !== null) score += Math.min(burnCoverage / 12, 1) * 1;
     else score += 0.5;
     if (bRunwayDelta > 0) score += Math.min(bRunwayDelta / 10, 1) * 0.5;
+    else if (bRunwayDelta < 0) score += Math.max(-2, bRunwayDelta / 5) * 1.0;
     if (bSurvDelta > 0) score += Math.min(bSurvDelta / 30, 1) * 0.5;
+    else if (bSurvDelta < 0) score += Math.max(-2, bSurvDelta / 15) * 1.0;
     if (burnIncreaseWarning >= 75) score -= 3.5;
     else if (burnIncreaseWarning >= 50) score -= 2.5;
     else if (burnIncreaseWarning > 0) score -= 1.0;
+    if (survival18m < 50) score = Math.min(score, 4.5);
+    else if (survival18m < 70) score = Math.min(score, 6.5);
     const decisionScore = Math.max(1, Math.min(10, Math.round(score)));
 
     let baselineDelta = '';

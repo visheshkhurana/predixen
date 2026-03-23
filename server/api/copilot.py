@@ -1006,7 +1006,11 @@ async def _copilot_chat_inner(
                     recommendations=None,
                     assumptions=[],
                     risks=[],
-                    next_questions=[],
+                    next_questions=sim_response.get('next_questions', [
+                        "What are my key financial metrics?",
+                        "Run a scenario cutting burn by 20%",
+                        "How much runway do I have?",
+                    ]),
                     confidence="High" if sim_response.get('success') else "Medium",
                     ckb_updated=False,
                     decision_created=None,

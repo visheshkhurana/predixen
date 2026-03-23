@@ -119,6 +119,8 @@ class SimulationHandler:
         fundraise_amount = params.fundraise_amount or 0
         fundraise_month = params.fundraise_month
         
+        churn_change_pct = params.churn_reduction_pct or 0
+
         inputs = EnhancedSimulationInputs(
             baseline_revenue=baseline_revenue,
             baseline_growth_rate=baseline_growth,
@@ -133,6 +135,7 @@ class SimulationHandler:
             burn_reduction_pct=burn_reduction_pct,
             fundraise_amount=fundraise_amount,
             fundraise_month=fundraise_month,
+            churn_change_pct=churn_change_pct,
         )
         
         config = SimulationConfig(
@@ -293,7 +296,10 @@ The simulation ran {config.iterations} Monte Carlo iterations to account for unc
                 {'label': 'Save as Plan', 'action': 'save_scenario'},
                 {'label': 'Compare Scenarios', 'action': 'compare_scenarios'},
                 {'label': 'Tweak Parameters', 'action': 'modify_previous'},
-            ]
+            ],
+            'next_questions': self._generate_context_follow_ups(
+                params, runway, survival, final_cash, baseline_revenue, net_burn, gross_margin
+            )
         }
     
     def modify_previous(self, parsed: ParsedIntent) -> Dict[str, Any]:
@@ -643,6 +649,52 @@ The simulation accounts for uncertainty through Monte Carlo modeling, running hu
             'pass_to_agents': True
         }
     
+    def _generate_context_follow_ups(
+        self, params, runway: float, survival: float, final_cash: float,
+        baseline_revenue: float, net_burn: float, gross_margin: float
+    ) -> List[str]:
+        questions = []
+
+        survival_pct = survival * 100 if survival <= 1 else survival
+
+        if survival_pct < 50:
+            questions.append(f"Survival is only {survival_pct:.0f}%. What if we cut burn by 25% to improve odds?")
+        elif survival_pct < 75:
+            questions.append(f"At {survival_pct:.0f}% survival, what combination of cuts gets us above 80%?")
+
+        if runway < 12:
+            questions.append(f"With {runway:.0f} months runway, should we raise a bridge round?")
+        elif runway < 18:
+            questions.append(f"At {runway:.0f} months, what happens if we freeze hiring for 6 months?")
+
+        if params.burn_reduction_pct and params.burn_reduction_pct > 0:
+            questions.append(f"What if we also increase prices by 10% alongside the {params.burn_reduction_pct:.0f}% cost cut?")
+        elif params.burn_reduction_pct and params.burn_reduction_pct < 0:
+            deeper = abs(params.burn_reduction_pct) + 10
+            questions.append(f"Cost increase of {abs(params.burn_reduction_pct):.0f}% hurts — can we offset with a {deeper:.0f}% revenue boost?")
+
+        if params.price_change_pct and not params.burn_reduction_pct:
+            questions.append("What if we pair the price change with a 15% burn reduction?")
+
+        if net_burn > 0 and baseline_revenue > 0:
+            burn_multiple = net_burn / baseline_revenue
+            if burn_multiple > 2:
+                questions.append(f"Burn multiple is {burn_multiple:.1f}x — what's the fastest path to get it below 1.5x?")
+
+        if gross_margin < 50:
+            questions.append(f"Gross margin is {gross_margin:.0f}% — what if we improve it by 10 points?")
+
+        if final_cash > 0 and final_cash < 200000:
+            questions.append(f"We'd end with only ${final_cash/1000:.0f}K — should we plan a fundraise at month 6?")
+
+        if not questions:
+            questions = [
+                "What if we extend this scenario by another 12 months?",
+                "How does this compare to a more aggressive growth plan?",
+            ]
+
+        return questions[:3]
+
     def _build_clarification_response(self, parsed: ParsedIntent) -> Dict[str, Any]:
         """Build a response requesting clarification."""
         clarifications = parsed.clarifications_needed

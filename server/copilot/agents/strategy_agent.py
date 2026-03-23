@@ -173,12 +173,37 @@ class StrategyAgent(BaseAgent):
         assumptions = self._identify_assumptions(output, context)
         
         next_questions = []
-        if not ckb.financials.get("runway_months"):
-            next_questions.append("What is your current runway?")
-        if not ckb.strategy.get("moat"):
-            next_questions.append("What is your key defensibility or moat?")
-        if not output.business_diagnosis.get("revenue_model"):
-            next_questions.append("How do you charge customers (subscription, usage, transaction)?")
+        runway = ckb.financials.get("runway_months")
+        burn = ckb.financials.get("net_burn") or ckb.financials.get("monthly_burn")
+        mrr = ckb.financials.get("mrr") or ckb.financials.get("monthly_revenue")
+        growth = ckb.financials.get("revenue_growth_rate") or ckb.financials.get("growth_rate")
+
+        if runway and runway < 12:
+            next_questions.append(f"Runway is {runway:.0f} months — what if we cut burn by 20% to extend it?")
+        elif runway and runway < 18:
+            next_questions.append(f"At {runway:.0f} months runway, when should we start fundraising?")
+
+        if burn and mrr and burn > 0:
+            bm = burn / max(mrr, 1)
+            if bm > 2:
+                next_questions.append(f"Burn multiple is {bm:.1f}x — simulate cutting costs to get below 1.5x")
+
+        if growth is not None and growth < 5:
+            next_questions.append(f"Growth is {growth:.1f}% MoM — what levers could accelerate it to 10%+?")
+        elif growth is not None and growth > 15:
+            next_questions.append(f"Growing at {growth:.1f}% MoM — simulate hiring 5 engineers to sustain this")
+
+        if not next_questions:
+            if not ckb.financials.get("runway_months"):
+                next_questions.append("What is your current runway?")
+            if not ckb.strategy.get("moat"):
+                next_questions.append("What is your key defensibility or moat?")
+            if not output.business_diagnosis.get("revenue_model"):
+                next_questions.append("How do you charge customers (subscription, usage, transaction)?")
+
+        if not next_questions:
+            next_questions.append("Simulate a 15% burn reduction to see its impact on runway")
+            next_questions.append("What are the top risks to monitor this quarter?")
         
         confidence = self._assess_confidence(ckb, context)
         

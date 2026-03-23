@@ -117,7 +117,7 @@ def run_enhanced_monte_carlo(
     clamped_burn_change = max(-100, min(100, inputs.burn_reduction_pct))
     burn_reduction_mult = 1 - (clamped_burn_change / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
-    adjusted_churn = inputs.churn_rate + inputs.churn_change_pct
+    adjusted_churn = inputs.churn_change_pct
     adjusted_cac = inputs.cac * (1 + inputs.cac_change_pct / 100) if inputs.cac > 0 else 0
     fundraise_amount = max(0, inputs.fundraise_amount)
     fundraise_month = inputs.fundraise_month
@@ -153,10 +153,8 @@ def run_enhanced_monte_carlo(
                 rng.normal(current_margin, inputs.margin_sigma),
                 10, 95
             ) / 100
-            churn = np.clip(
-                rng.normal(current_churn, inputs.churn_sigma),
-                0, 50
-            ) / 100
+            churn_raw = rng.normal(current_churn, inputs.churn_sigma)
+            churn = np.clip(churn_raw, -20, 50) / 100
             
             for event in inputs.events:
                 if month + 1 == event.month:

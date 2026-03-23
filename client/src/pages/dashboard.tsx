@@ -62,7 +62,9 @@ import type { SimulationResult, Scenario, DashboardKPIs } from "@shared/schema";
 import { formatCurrencyAbbrev, formatRunway } from "@/lib/utils";
 
 function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
+  const pct = Math.abs(value) > 0 && Math.abs(value) <= 1 ? value * 100 : value;
+  const fixed = pct.toFixed(1);
+  return `${fixed.replace(/\.0$/, '')}%`;
 }
 
 interface KPITileProps {

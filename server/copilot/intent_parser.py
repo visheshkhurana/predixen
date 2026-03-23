@@ -233,6 +233,17 @@ PARAMETER_PATTERNS = {
         (r'shift\s*\$?(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?\s*(?:\/\s*month\s*)?(?:from\s+)(?:paid\s+)?(?:ads?|advertising|acquisition|marketing)', 1, 2),
         (r'reallocat\w*\s*\$?(\d+(?:\.\d+)?)\s*(k|thousand|m|million)?\s*(?:from|to)', 1, 2),
     ],
+    'ecommerce_cost_change': [
+        (r'(increas\w*|rais\w*|bump\w*|grow\w*|rise\w*|go\w*\s+up)\s*(?:in\s+)?(?:the\s+)?(?:shipping\s*costs?|fulfillment\s*costs?|delivery\s*costs?|last\s*mile\s*costs?|packaging\s*costs?|warehouse\s*costs?|carrier\s*rates?|logistics\s*costs?|cod\s*(?:return|rto)\s*(?:rate|costs?)?)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2),
+        (r'(?:shipping\s*costs?|fulfillment\s*costs?|delivery\s*costs?|logistics\s*costs?|carrier\s*rates?)\s*(?:increas\w*|ris\w*|go\w*\s*up|jump\w*|spike\w*)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 1),
+        (r'(reduc\w*|cut\w*|lower\w*|decreas\w*)\s*(?:the\s+)?(?:shipping\s*costs?|fulfillment\s*costs?|delivery\s*costs?|logistics\s*costs?|carrier\s*rates?)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
+        (r'(\d+(?:\.\d+)?)\s*%\s*(?:increase|rise|jump|spike)\s*(?:in\s+)?(?:shipping|fulfillment|delivery|logistics|carrier)', 1),
+    ],
+    'competitor_impact': [
+        (r'(?:competitor|rival|new\s*entrant)\s*(?:takes?|steals?|captures?|wins?|grabs?)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)', 1),
+        (r'(?:lose|losing)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)\s*(?:to\s*)?(?:a\s*)?(?:competitor|rival)', 1),
+        (r'(\d+(?:\.\d+)?)\s*%\s*(?:customer|market|user)\s*(?:loss|churn|attrition)\s*(?:from|due\s*to|because\s*of)?\s*(?:competitor|competition|rival)', 1),
+    ],
     'horizon': [
         (r'(?:for|over|next)\s*(\d+)\s*(month|mo)', 1),
         (r'(\d+)[\s-]*(month|mo)\s*(simulation|forecast|projection|horizon)', 1),
@@ -479,6 +490,64 @@ def extract_parameters(message: str) -> SimulationParameters:
                 break
             except (ValueError, IndexError):
                 pass
+
+    if params.burn_reduction_pct is None:
+        for pattern_tuple in PARAMETER_PATTERNS.get('ecommerce_cost_change', []):
+            pattern = pattern_tuple[0]
+            group_idx = pattern_tuple[1]
+            multiplier = pattern_tuple[2] if len(pattern_tuple) > 2 else 1
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                try:
+                    pct = float(match.group(group_idx)) * multiplier
+                    params.burn_reduction_pct = -pct
+                    break
+                except (ValueError, IndexError):
+                    pass
+
+    for pattern_tuple in PARAMETER_PATTERNS.get('competitor_impact', []):
+        pattern = pattern_tuple[0]
+        group_idx = pattern_tuple[1]
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            try:
+                loss_pct = float(match.group(group_idx))
+                if params.revenue_growth_pct is None:
+                    params.revenue_growth_pct = -loss_pct
+                if params.churn_reduction_pct is None:
+                    params.churn_reduction_pct = -loss_pct
+                break
+            except (ValueError, IndexError):
+                pass
+
+    resolved_terms = resolve_financial_terms(message)
+    if resolved_terms and not has_any_simulation_params(params):
+        pct_match = re.search(r'(\d+(?:\.\d+)?)\s*%', message)
+        pct_val = float(pct_match.group(1)) if pct_match else 10.0
+
+        is_increase = bool(re.search(r'\b(increas\w*|rais\w*|rise\w*|grow\w*|up|higher|more|spike|jump|go\w*\s*up)\b', message, re.IGNORECASE))
+        is_decrease = bool(re.search(r'\b(decreas\w*|reduc\w*|cut\w*|lower\w*|drop\w*|less|down|fall|shrink)\b', message, re.IGNORECASE))
+
+        cost_terms = {'shipping_cost_per_order', 'fulfillment_cost', 'carrier_rate', 'delivery_cost',
+                      'last_mile_cost', 'packaging_cost', 'warehouse_cost', 'reverse_logistics_cost',
+                      'fuel_surcharge', 'cost_of_goods_sold', 'cash_on_delivery', 'return_to_origin'}
+        revenue_terms = {'average_order_value', 'repeat_purchase_rate', 'direct_to_consumer', 'order_volume'}
+        churn_terms = {'churn_rate', 'revenue_churn', 'logo_churn', 'return_rate'}
+
+        matched_categories = set(resolved_terms.values())
+        has_cost = bool(matched_categories & cost_terms)
+        has_revenue = bool(matched_categories & revenue_terms)
+        has_churn = bool(matched_categories & churn_terms)
+
+        if has_cost:
+            sign = 1 if is_increase else -1
+            params.burn_reduction_pct = -pct_val * sign
+        if has_revenue:
+            sign = 1 if is_increase else -1
+            params.revenue_growth_pct = pct_val * sign
+        if has_churn:
+            sign = -1 if is_increase else 1
+            params.churn_reduction_pct = pct_val * sign
 
     for pattern_tuple in PARAMETER_PATTERNS.get('horizon', []):
         pattern = pattern_tuple[0]

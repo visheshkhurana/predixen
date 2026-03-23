@@ -55,7 +55,7 @@ def get_twin_state(db: Session, company_id: int) -> dict:
     from server.models import TruthScan
     latest_ts = (
         db.query(TruthScan)
-        .filter(TruthScan.company_id == company_id, TruthScan.status == "completed")
+        .filter(TruthScan.company_id == company_id)
         .order_by(desc(TruthScan.created_at))
         .first()
     )
@@ -392,28 +392,40 @@ def run_twin_simulation(
         return {"error": "No company state available for simulation"}
 
     try:
-        from server.simulate.enhanced_monte_carlo import run_enhanced_monte_carlo
+        from server.simulate.enhanced_monte_carlo import (
+            run_enhanced_monte_carlo, EnhancedSimulationInputs, SimulationConfig
+        )
 
-        baseline = {
-            "baseline_revenue": cs.revenue_monthly or 0,
-            "baseline_growth_rate": float(cs.revenue_growth_rate or 0),
-            "gross_margin": 0.7,
-            "opex": cs.expenses_monthly or 0,
-            "payroll": 0,
-            "cash_balance": cs.cash_balance or 0,
-        }
+        revenue = cs.revenue_monthly or 0
+        growth_rate = float(cs.revenue_growth_rate or 0)
+        expenses = cs.expenses_monthly or 0
+        cash = cs.cash_balance or 0
 
-        levers = {
-            "pricing_change_pct": scenario_config.get("pricing_change_pct", 0),
-            "growth_uplift_pct": scenario_config.get("growth_uplift_pct", 0),
-            "burn_reduction_pct": scenario_config.get("burn_reduction_pct", 0),
-            "fundraise_month": scenario_config.get("fundraise_month"),
-            "fundraise_amount": scenario_config.get("fundraise_amount"),
-            "hiring_plan": scenario_config.get("hiring_plan", []),
-        }
+        burn = cs.monthly_burn or 0
+        if expenses == 0 and burn > 0:
+            expenses = burn
 
-        sim_inputs = {**baseline, **levers}
-        results = run_enhanced_monte_carlo(sim_inputs, num_simulations=1000)
+        opex = expenses * 0.3
+        payroll = expenses * 0.5
+        other_costs = expenses * 0.2
+
+        inputs = EnhancedSimulationInputs(
+            baseline_revenue=revenue,
+            baseline_growth_rate=growth_rate,
+            gross_margin=70,
+            opex=opex,
+            payroll=payroll,
+            other_costs=other_costs,
+            cash_balance=cash,
+            pricing_change_pct=scenario_config.get("pricing_change_pct", 0),
+            growth_uplift_pct=scenario_config.get("growth_uplift_pct", 0),
+            burn_reduction_pct=scenario_config.get("burn_reduction_pct", 0),
+            fundraise_month=scenario_config.get("fundraise_month"),
+            fundraise_amount=scenario_config.get("fundraise_amount", 0),
+        )
+
+        config = SimulationConfig(iterations=500, horizon_months=24, seed=42)
+        results = run_enhanced_monte_carlo(inputs, config)
 
         emit_twin_event(db, company_id, "simulation_run", "digital_twin", {
             "scenario": scenario_config,
