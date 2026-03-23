@@ -2,8 +2,8 @@ import { type User, type InsertUser, type Scenario, type InsertScenario, type Fi
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUser(id: number): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   getScenarios(): Promise<Scenario[]>;
@@ -20,7 +20,7 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private users: Map<number, User>;
   private scenarios: Map<string, Scenario>;
   private financialData: FinancialInput | undefined;
   private latestSimulation: SimulationResult | undefined;
@@ -32,19 +32,19 @@ export class MemStorage implements IStorage {
     this.latestSimulation = undefined;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
+  async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
+  async getUserByEmail(email: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+      (user) => user.email === email,
     );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const id = this.users.size + 1;
+    const user: User = { ...insertUser, id, created_at: new Date(), role: "user", is_active: true, updated_at: new Date(), oauth_provider: null, oauth_id: null, avatar_url: null, display_name: null, is_email_verified: false };
     this.users.set(id, user);
     return user;
   }

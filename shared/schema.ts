@@ -1,17 +1,26 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, real, jsonb, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, real, jsonb, serial, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull(),
+  password_hash: varchar("password_hash", { length: 255 }),
+  created_at: timestamp("created_at").defaultNow(),
+  role: varchar("role", { length: 50 }).default("user"),
+  is_active: boolean("is_active").default(true),
+  updated_at: timestamp("updated_at").defaultNow(),
+  oauth_provider: varchar("oauth_provider", { length: 50 }),
+  oauth_id: varchar("oauth_id", { length: 255 }),
+  avatar_url: varchar("avatar_url", { length: 500 }),
+  display_name: varchar("display_name", { length: 255 }),
+  is_email_verified: boolean("is_email_verified").default(false),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+  email: true,
+  password_hash: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
