@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useSEO } from "@/lib/seo";
 import { useFounderStore } from "@/store/founderStore";
+import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -516,6 +517,96 @@ function AlertSettingsSection({ companyId }: { companyId: number }) {
   );
 }
 
+function generateThresholdAlerts(metrics: ReturnType<typeof useFinancialMetrics>['metrics']): SmartAlert[] {
+  const thresholdAlerts: SmartAlert[] = [];
+  const now = new Date().toISOString();
+
+  if (metrics.hasData && metrics.runway < 6 && metrics.runway > 0) {
+    thresholdAlerts.push({
+      id: 'threshold-runway-critical',
+      type: 'runway_warning',
+      severity: 'critical',
+      title: 'Cash Runway Critical',
+      message: `Only ${metrics.runway.toFixed(1)} months of runway remaining. Immediate fundraising or burn reduction required.`,
+      metric: 'runway_months',
+      currentValue: metrics.runway,
+      previousValue: 0,
+      changePercent: 0,
+      timestamp: now,
+      acknowledged: false,
+      suggestedAction: 'Consider reducing burn rate or initiating fundraising conversations immediately.',
+    });
+  } else if (metrics.hasData && metrics.runway < 12 && metrics.runway > 0) {
+    thresholdAlerts.push({
+      id: 'threshold-runway-warning',
+      type: 'runway_warning',
+      severity: 'warning',
+      title: 'Low Runway Warning',
+      message: `${metrics.runway.toFixed(1)} months of runway remaining. Plan fundraising or reduce expenses.`,
+      metric: 'runway_months',
+      currentValue: metrics.runway,
+      previousValue: 0,
+      changePercent: 0,
+      timestamp: now,
+      acknowledged: false,
+      suggestedAction: 'Start fundraising preparations or identify areas to reduce burn.',
+    });
+  }
+
+  if (metrics.hasData && metrics.netBurn > 0 && metrics.mrr > 0 && metrics.netBurn > metrics.mrr * 3) {
+    thresholdAlerts.push({
+      id: 'threshold-burn-high',
+      type: 'burn_spike',
+      severity: 'warning',
+      title: 'High Burn Rate',
+      message: 'Monthly burn exceeds 3x MRR. Growth efficiency may be compromised.',
+      metric: 'burn_rate',
+      currentValue: metrics.netBurn,
+      previousValue: metrics.mrr,
+      changePercent: 0,
+      timestamp: now,
+      acknowledged: false,
+      suggestedAction: 'Review expenses and identify areas to reduce burn relative to revenue.',
+    });
+  }
+
+  if (metrics.hasData && metrics.cashOnHand > 0 && metrics.cashOnHand < 100000) {
+    thresholdAlerts.push({
+      id: 'threshold-cash-critical',
+      type: 'cash_critical',
+      severity: 'critical',
+      title: 'Cash Balance Critical',
+      message: `Cash reserves at $${(metrics.cashOnHand / 1000).toFixed(0)}K — dangerously low. Immediate fundraising required.`,
+      metric: 'cash_balance',
+      currentValue: metrics.cashOnHand,
+      previousValue: 0,
+      changePercent: 0,
+      timestamp: now,
+      acknowledged: false,
+      suggestedAction: 'Seek emergency funding or drastically cut expenses.',
+    });
+  }
+
+  if (metrics.hasData && metrics.churnRatePct > 10) {
+    thresholdAlerts.push({
+      id: 'threshold-churn-high',
+      type: 'churn_spike',
+      severity: 'warning',
+      title: 'High Customer Churn',
+      message: `Monthly churn rate at ${metrics.churnRatePct.toFixed(1)}%. This may threaten long-term growth.`,
+      metric: 'churn_rate',
+      currentValue: metrics.churnRatePct,
+      previousValue: 0,
+      changePercent: 0,
+      timestamp: now,
+      acknowledged: false,
+      suggestedAction: 'Investigate churn drivers and implement retention strategies.',
+    });
+  }
+
+  return thresholdAlerts;
+}
+
 export default function AlertsPage() {
   useSEO({
     title: "Smart Alerts — Real-time Startup Metrics Monitoring | FounderConsole",
@@ -526,6 +617,8 @@ export default function AlertsPage() {
   const { currentCompany } = useFounderStore();
   const companyId = currentCompany?.id;
   const { toast } = useToast();
+  const { metrics } = useFinancialMetrics();
+  const hasAutoEvaluated = useRef(false);
 
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -596,7 +689,19 @@ export default function AlertsPage() {
     },
   });
 
-  const alerts = smartAlertsData?.alerts ?? [];
+  const thresholdAlerts = generateThresholdAlerts(metrics);
+
+  useEffect(() => {
+    if (companyId && !hasAutoEvaluated.current && !smartAlertsLoading && metrics.hasData) {
+      hasAutoEvaluated.current = true;
+      evaluateMutation.mutate();
+    }
+  }, [companyId, smartAlertsLoading, metrics.hasData]);
+
+  const smartAlerts = smartAlertsData?.alerts ?? [];
+  const smartAlertIds = new Set(smartAlerts.map(a => a.type));
+  const uniqueThresholdAlerts = thresholdAlerts.filter(ta => !smartAlertIds.has(ta.type));
+  const alerts = [...smartAlerts, ...uniqueThresholdAlerts];
   const isLoading = smartAlertsLoading || oldAlertsLoading;
 
   const filteredAlerts = alerts.filter((alert) => {

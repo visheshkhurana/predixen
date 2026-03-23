@@ -94,11 +94,11 @@ class SimulationHandler:
                 return val.get("value", default)
             return val if val is not None else default
 
-        baseline_revenue = _extract(metrics.get("monthly_revenue"), 50000)
+        baseline_revenue = _extract(metrics.get("mrr"), 0) or _extract(metrics.get("monthly_revenue"), 0) or _extract(metrics.get("revenue"), 50000)
         baseline_growth = _extract(metrics.get("revenue_growth_mom"), 5)
         cash_balance = _extract(metrics.get("cash_balance"), 500000)
         gross_margin = _extract(metrics.get("gross_margin"), 70)
-        churn_rate = _extract(metrics.get("churn_rate"), 5)
+        churn_rate = _extract(metrics.get("churn_rate"), 0) or _extract(metrics.get("gross_churn_rate"), 5)
 
         opex = _extract(metrics.get("opex"), 0)
         payroll = _extract(metrics.get("payroll"), 0)
@@ -194,6 +194,24 @@ class SimulationHandler:
         
         param_summary = format_parameters_summary(params)
         
+        growth_warnings = []
+        effective_growth = baseline_growth + (params.revenue_growth_pct or 0)
+        if effective_growth > 0:
+            annual_equiv = ((1 + effective_growth / 100) ** 12 - 1) * 100
+            final_revenue_ratio = (1 + effective_growth / 100) ** params.horizon_months
+            if final_revenue_ratio > 50:
+                growth_warnings.append(
+                    f"⚠️ **Growth Sanity Check**: {effective_growth:.0f}% monthly compounding = "
+                    f"{annual_equiv:,.0f}% annual growth, implying {final_revenue_ratio:.0f}x revenue over "
+                    f"{params.horizon_months} months. Verify this is realistic for your market."
+                )
+            elif final_revenue_ratio > 10:
+                growth_warnings.append(
+                    f"📊 **Note**: {effective_growth:.0f}% monthly (compounding) = "
+                    f"{annual_equiv:,.0f}% annual growth ({final_revenue_ratio:.0f}x revenue in "
+                    f"{params.horizon_months} months)."
+                )
+        
         rec_engine = RecommendationEngine(industry="saas")
         sim_results_for_recs = {
             'runway_months': runway,
@@ -246,6 +264,10 @@ class SimulationHandler:
         
         chart_data = self._generate_chart_data(results, scenario_name)
         
+        growth_warning_text = "\n\n".join(growth_warnings)
+        if growth_warning_text:
+            growth_warning_text = "\n\n" + growth_warning_text
+        
         response_text = f"""**Simulation Results: {scenario_name}**
 
 I ran a {params.horizon_months}-month simulation with {param_summary}.
@@ -255,7 +277,7 @@ I ran a {params.horizon_months}-month simulation with {param_summary}.
 - **Survival Rate**: {survival*100:.0f}%
 - **Final Cash**: ${final_cash/1000:.0f}K
 
-The simulation ran {config.iterations} Monte Carlo iterations to account for uncertainty.
+The simulation ran {config.iterations} Monte Carlo iterations to account for uncertainty.{growth_warning_text}
 
 {rec_text}"""
         
@@ -272,6 +294,9 @@ The simulation ran {config.iterations} Monte Carlo iterations to account for unc
                 'survival_rate': survival,
                 'final_cash': final_cash,
                 'confidence_intervals': summary.get('percentiles', {}),
+                'growth_warnings': growth_warnings,
+                'effective_monthly_growth_pct': effective_growth,
+                'annual_growth_equivalent_pct': round(((1 + effective_growth / 100) ** 12 - 1) * 100, 1) if effective_growth > 0 else 0,
             },
             'parameters': {
                 'burn_reduction_pct': params.burn_reduction_pct,

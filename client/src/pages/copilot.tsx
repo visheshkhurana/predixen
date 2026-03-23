@@ -1615,8 +1615,10 @@ Type **help** for a full list of what I can do.`,
         if (response.pii_findings) {
           setLatestPiiFindings(response.pii_findings);
         }
+        setIsTyping(false);
       } catch (error: unknown) {
         console.error('Copilot API error:', error);
+        setIsTyping(false);
         let errorContent = '';
         let structuredFallback: CopilotApiResponse | undefined = undefined;
         const errMsg = error instanceof Error ? error.message : String(error ?? '');
@@ -1690,7 +1692,6 @@ Type **help** for a full list of what I can do.`,
       }, 1500);
     }
     trackEvent('copilot_message', { company_id: currentCompany?.id, source: 'copilot_page' });
-    setIsTyping(false);
   };
 
   const handleSend = () => {
