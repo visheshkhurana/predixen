@@ -14,7 +14,7 @@ class SimulationRun(Base):
     outputs_json = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    data_snapshot_id = Column(String(64), nullable=False, index=True)
+    data_snapshot_id = Column(String(64), nullable=True, index=True)
     inputs_json = Column(JSON, nullable=True)
     status = Column(String(20), default="completed")
     error_message = Column(Text, nullable=True)
