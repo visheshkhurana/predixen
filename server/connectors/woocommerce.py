@@ -1,17 +1,21 @@
 """
-Shopify E-commerce Connector - Online store and revenue data.
+WooCommerce E-commerce Connector - WordPress store and revenue data.
 
 Provides:
-- Order data (as invoices)
+- Order data (as invoices and ledger entries)
 - Product catalog
 - Customer records
 - Revenue and sales analytics
+- COD/Prepaid split tracking
+- Refund and return tracking
 
-API Documentation: https://shopify.dev/docs/api/admin-rest
+API Documentation: https://woocommerce.github.io/woocommerce-rest-api-docs/
 """
 
 import httpx
 import logging
+import base64
+from urllib.parse import urlparse
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
@@ -32,13 +36,13 @@ logger = logging.getLogger(__name__)
 
 
 @ConnectorRegistry.register
-class ShopifyConnector(BaseConnector):
-    PROVIDER_ID = "shopify"
-    PROVIDER_NAME = "Shopify"
-    PROVIDER_DESCRIPTION = "E-commerce platform. Import orders, products, and customers for revenue tracking and sales analytics."
+class WooCommerceConnector(BaseConnector):
+    PROVIDER_ID = "woocommerce"
+    PROVIDER_NAME = "WooCommerce"
+    PROVIDER_DESCRIPTION = "WordPress e-commerce platform. Import orders, products, and customers for revenue tracking, COD/prepaid split analysis, and sales analytics."
     PROVIDER_CATEGORY = ProviderCategory.ACCOUNTING
     AUTH_TYPE = AuthType.API_KEY
-    DOCS_URL = "https://shopify.dev/docs/api/admin-rest"
+    DOCS_URL = "https://woocommerce.github.io/woocommerce-rest-api-docs/"
 
     SUPPORTS_EMPLOYEES = False
     SUPPORTS_PAYROLL = False
@@ -47,50 +51,78 @@ class ShopifyConnector(BaseConnector):
 
     def __init__(self, config: ConnectorConfig):
         super().__init__(config)
-        self._shop_domain = config.credentials.get("shop_domain", "")
-        self._access_token = config.credentials.get("access_token", "")
+        self._store_url = config.credentials.get("store_url", "").rstrip("/")
+        self._consumer_key = config.credentials.get("consumer_key", "")
+        self._consumer_secret = config.credentials.get("consumer_secret", "")
         self._client: Optional[httpx.AsyncClient] = None
+        self._validate_store_url()
+
+    def _validate_store_url(self):
+        if not self._store_url:
+            return
+        parsed = urlparse(self._store_url)
+        if parsed.scheme not in ("https", "http"):
+            raise ValueError("WooCommerce store URL must use https:// or http://")
+        hostname = parsed.hostname or ""
+        blocked = ["localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254", "metadata.google.internal"]
+        if hostname in blocked or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+            raise ValueError("WooCommerce store URL must be a public domain")
 
     def _get_base_url(self) -> str:
-        domain = self._shop_domain.replace(".myshopify.com", "").strip()
-        return f"https://{domain}.myshopify.com/admin/api/2024-01"
+        return f"{self._store_url}/wp-json/wc/v3"
+
+    def _is_https(self) -> bool:
+        return self._store_url.startswith("https://")
 
     async def _get_client(self) -> httpx.AsyncClient:
         if not self._client:
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            params = {}
+
+            if self._is_https():
+                auth_string = base64.b64encode(
+                    f"{self._consumer_key}:{self._consumer_secret}".encode()
+                ).decode()
+                headers["Authorization"] = f"Basic {auth_string}"
+            else:
+                params["consumer_key"] = self._consumer_key
+                params["consumer_secret"] = self._consumer_secret
+
             self._client = httpx.AsyncClient(
                 base_url=self._get_base_url(),
                 timeout=30.0,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Shopify-Access-Token": self._access_token,
-                },
+                params=params,
+                headers=headers,
             )
         return self._client
 
     async def authenticate(self) -> bool:
-        if not self._shop_domain or not self._access_token:
-            logger.warning("Shopify shop_domain or access_token not provided")
+        if not self._store_url or not self._consumer_key or not self._consumer_secret:
+            logger.warning("WooCommerce store_url, consumer_key, or consumer_secret not provided")
             return False
 
         try:
             client = await self._get_client()
-            response = await client.get("/products.json", params={"limit": 1})
+            response = await client.get("/products", params={"per_page": 1})
 
             if response.status_code == 200:
                 self._authenticated = True
-                logger.info("Shopify authentication successful")
+                logger.info("WooCommerce authentication successful")
                 return True
             else:
-                logger.warning(f"Shopify auth failed: {response.status_code} - {response.text[:200]}")
+                logger.warning(f"WooCommerce auth failed: {response.status_code} - {response.text[:200]}")
                 return False
         except Exception as e:
-            logger.error(f"Shopify authentication error: {e}")
+            logger.error(f"WooCommerce authentication error: {e}")
             return False
 
     async def test_connection(self) -> bool:
         try:
             client = await self._get_client()
-            response = await client.get("/products.json", params={"limit": 1})
+            response = await client.get("/products", params={"per_page": 1})
             return response.status_code == 200
         except Exception:
             return False
@@ -98,7 +130,7 @@ class ShopifyConnector(BaseConnector):
     async def get_orders(
         self,
         start_date: Optional[datetime] = None,
-        limit: int = 250,
+        limit: int = 500,
         status: str = "any",
     ) -> List[Dict[str, Any]]:
         if not self._authenticated:
@@ -108,48 +140,43 @@ class ShopifyConnector(BaseConnector):
         try:
             client = await self._get_client()
             all_orders = []
-            page_info = None
+            page = 1
+            per_page = min(limit, 100)
 
             while True:
                 params: Dict[str, Any] = {
-                    "limit": min(limit, 250),
-                    "status": status,
+                    "per_page": per_page,
+                    "page": page,
+                    "orderby": "date",
+                    "order": "desc",
                 }
                 if start_date:
-                    params["created_at_min"] = start_date.strftime("%Y-%m-%dT00:00:00Z")
-                if page_info:
-                    params = {"limit": min(limit, 250), "page_info": page_info}
+                    params["after"] = start_date.strftime("%Y-%m-%dT00:00:00")
+                if status != "any":
+                    params["status"] = status
 
-                response = await client.get("/orders.json", params=params)
+                response = await client.get("/orders", params=params)
 
                 if response.status_code != 200:
-                    logger.error(f"Shopify orders error: {response.status_code}")
+                    logger.error(f"WooCommerce orders error: {response.status_code}")
                     break
 
-                data = response.json()
-                orders = data.get("orders", [])
+                orders = response.json()
+                if not orders:
+                    break
+
                 all_orders.extend(orders)
 
-                link_header = response.headers.get("link", "")
-                if 'rel="next"' in link_header:
-                    for part in link_header.split(","):
-                        if 'rel="next"' in part:
-                            url_part = part.split(";")[0].strip().strip("<>")
-                            if "page_info=" in url_part:
-                                page_info = url_part.split("page_info=")[-1]
-                                break
-                    else:
-                        break
-                else:
+                total_pages = int(response.headers.get("X-WP-TotalPages", 1))
+                if page >= total_pages or len(all_orders) >= limit:
                     break
 
-                if len(all_orders) >= limit:
-                    break
+                page += 1
 
-            return all_orders
+            return all_orders[:limit]
 
         except Exception as e:
-            logger.error(f"Shopify orders fetch error: {e}")
+            logger.error(f"WooCommerce orders fetch error: {e}")
             return []
 
     async def get_products(self, limit: int = 250) -> List[Dict[str, Any]]:
@@ -159,14 +186,32 @@ class ShopifyConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            params: Dict[str, Any] = {"limit": min(limit, 250)}
-            response = await client.get("/products.json", params=params)
+            all_products = []
+            page = 1
+            per_page = min(limit, 100)
 
-            if response.status_code == 200:
-                return response.json().get("products", [])
-            return []
+            while True:
+                params: Dict[str, Any] = {"per_page": per_page, "page": page}
+                response = await client.get("/products", params=params)
+
+                if response.status_code != 200:
+                    break
+
+                products = response.json()
+                if not products:
+                    break
+
+                all_products.extend(products)
+
+                total_pages = int(response.headers.get("X-WP-TotalPages", 1))
+                if page >= total_pages or len(all_products) >= limit:
+                    break
+
+                page += 1
+
+            return all_products[:limit]
         except Exception as e:
-            logger.error(f"Shopify products fetch error: {e}")
+            logger.error(f"WooCommerce products fetch error: {e}")
             return []
 
     async def get_customers(self, limit: int = 250) -> List[Dict[str, Any]]:
@@ -176,24 +221,65 @@ class ShopifyConnector(BaseConnector):
 
         try:
             client = await self._get_client()
-            params: Dict[str, Any] = {"limit": min(limit, 250)}
-            response = await client.get("/customers.json", params=params)
+            all_customers = []
+            page = 1
+            per_page = min(limit, 100)
+
+            while True:
+                params: Dict[str, Any] = {"per_page": per_page, "page": page}
+                response = await client.get("/customers", params=params)
+
+                if response.status_code != 200:
+                    break
+
+                customers = response.json()
+                if not customers:
+                    break
+
+                all_customers.extend(customers)
+
+                total_pages = int(response.headers.get("X-WP-TotalPages", 1))
+                if page >= total_pages or len(all_customers) >= limit:
+                    break
+
+                page += 1
+
+            return all_customers[:limit]
+        except Exception as e:
+            logger.error(f"WooCommerce customers fetch error: {e}")
+            return []
+
+    async def get_refunds(self, order_id: int) -> List[Dict[str, Any]]:
+        if not self._authenticated:
+            if not await self.authenticate():
+                return []
+
+        try:
+            client = await self._get_client()
+            response = await client.get(f"/orders/{order_id}/refunds")
 
             if response.status_code == 200:
-                return response.json().get("customers", [])
+                return response.json()
             return []
         except Exception as e:
-            logger.error(f"Shopify customers fetch error: {e}")
+            logger.error(f"WooCommerce refunds fetch error for order {order_id}: {e}")
             return []
 
+    def _parse_date(self, date_str: str) -> datetime:
+        if not date_str:
+            return datetime.now()
+        try:
+            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return datetime.now()
+
     def _detect_payment_type(self, order: Dict[str, Any]) -> str:
-        gateway = (order.get("gateway", "") or "").lower()
-        payment_details = order.get("payment_gateway_names", [])
-        payment_str = " ".join([gateway] + [str(p).lower() for p in payment_details])
+        method = order.get("payment_method", "").lower()
+        method_title = order.get("payment_method_title", "").lower()
 
         cod_keywords = ["cod", "cash on delivery", "cash_on_delivery", "pay on delivery"]
         for kw in cod_keywords:
-            if kw in payment_str:
+            if kw in method or kw in method_title:
                 return "cod"
         return "prepaid"
 
@@ -206,38 +292,33 @@ class ShopifyConnector(BaseConnector):
         entries = []
 
         for order in orders:
-            total_price = float(order.get("total_price", 0))
-            order_date_str = order.get("created_at", "")
-            try:
-                order_date = datetime.fromisoformat(order_date_str.replace("Z", "+00:00")) if order_date_str else datetime.now()
-            except (ValueError, TypeError):
-                order_date = datetime.now()
+            total_price = float(order.get("total", 0))
+            order_date = self._parse_date(order.get("date_created", ""))
 
             if end_date and order_date > end_date:
                 continue
 
             payment_type = self._detect_payment_type(order)
-            shipping_lines = order.get("shipping_lines", [])
-            shipping_total = sum(float(s.get("price", 0)) for s in shipping_lines)
+            shipping_total = float(order.get("shipping_total", 0))
 
             entries.append(
                 LedgerEntry(
                     external_id=str(order.get("id", "")),
                     date=order_date,
-                    account_code="shopify_revenue",
-                    account_name="Shopify Revenue",
+                    account_code="woocommerce_revenue",
+                    account_name="WooCommerce Revenue",
                     debit=0.0,
                     credit=total_price,
-                    description=f"Order #{order.get('order_number', '')} - {order.get('email', '')}",
+                    description=f"Order #{order.get('number', '')} - {order.get('billing', {}).get('email', '')}",
                     category="Sales Revenue",
                     metadata={
-                        "order_number": order.get("order_number"),
-                        "financial_status": order.get("financial_status"),
-                        "fulfillment_status": order.get("fulfillment_status"),
-                        "currency": order.get("currency", "USD"),
+                        "order_number": order.get("number"),
+                        "status": order.get("status"),
+                        "payment_method": order.get("payment_method"),
                         "payment_type": payment_type,
+                        "currency": order.get("currency", "USD"),
                         "shipping_total": shipping_total,
-                        "discount_codes": order.get("discount_codes", []),
+                        "discount_total": float(order.get("discount_total", 0)),
                     },
                 )
             )
@@ -253,36 +334,31 @@ class ShopifyConnector(BaseConnector):
         invoices = []
 
         for order in orders:
-            total_price = float(order.get("total_price", 0))
-            subtotal = float(order.get("subtotal_price", 0))
+            total_price = float(order.get("total", 0))
+            subtotal = sum(float(item.get("subtotal", 0)) for item in order.get("line_items", []))
             total_tax = float(order.get("total_tax", 0))
-            order_date_str = order.get("created_at", "")
-
-            try:
-                order_date = datetime.fromisoformat(order_date_str.replace("Z", "+00:00")) if order_date_str else datetime.now()
-            except (ValueError, TypeError):
-                order_date = datetime.now()
+            order_date = self._parse_date(order.get("date_created", ""))
 
             if end_date and order_date > end_date:
                 continue
 
-            customer = order.get("customer", {})
-            customer_name = ""
-            if customer:
-                customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+            billing = order.get("billing", {})
+            customer_name = f"{billing.get('first_name', '')} {billing.get('last_name', '')}".strip()
             if not customer_name:
-                customer_name = order.get("email", "Guest")
+                customer_name = billing.get("email", "Guest")
 
-            financial_status = order.get("financial_status", "pending")
+            wc_status = order.get("status", "pending")
             status_map = {
-                "paid": "paid",
-                "partially_paid": "partial",
-                "refunded": "refunded",
-                "partially_refunded": "partial_refund",
+                "completed": "paid",
+                "processing": "paid",
+                "on-hold": "pending",
                 "pending": "pending",
-                "authorized": "pending",
-                "voided": "cancelled",
+                "cancelled": "cancelled",
+                "refunded": "refunded",
+                "failed": "cancelled",
             }
+
+            payment_type = self._detect_payment_type(order)
 
             line_items = []
             for item in order.get("line_items", []):
@@ -291,11 +367,8 @@ class ShopifyConnector(BaseConnector):
                     "quantity": item.get("quantity", 0),
                     "price": float(item.get("price", 0)),
                     "sku": item.get("sku", ""),
+                    "product_id": item.get("product_id"),
                 })
-
-            payment_type = self._detect_payment_type(order)
-            shipping_lines = order.get("shipping_lines", [])
-            shipping_total = sum(float(s.get("price", 0)) for s in shipping_lines)
 
             invoices.append(
                 InvoiceRecord(
@@ -306,15 +379,18 @@ class ShopifyConnector(BaseConnector):
                     tax=total_tax,
                     total=total_price,
                     currency=order.get("currency", "USD"),
-                    status=status_map.get(financial_status, "pending"),
+                    status=status_map.get(wc_status, "pending"),
                     line_items=line_items,
                     metadata={
-                        "order_number": order.get("order_number"),
-                        "financial_status": financial_status,
-                        "fulfillment_status": order.get("fulfillment_status"),
+                        "order_number": order.get("number"),
+                        "wc_status": wc_status,
+                        "payment_method": order.get("payment_method"),
+                        "payment_method_title": order.get("payment_method_title"),
                         "payment_type": payment_type,
-                        "shipping_total": shipping_total,
-                        "source": "shopify_order",
+                        "shipping_total": float(order.get("shipping_total", 0)),
+                        "shipping_tax": float(order.get("shipping_tax", 0)),
+                        "discount_total": float(order.get("discount_total", 0)),
+                        "source": "woocommerce_order",
                     },
                 )
             )
@@ -329,8 +405,8 @@ class ShopifyConnector(BaseConnector):
         invoices=None,
     ) -> Dict[str, Any]:
         result = {
-            "source_type": "connector_shopify",
-            "extraction_summary": f"Synced from Shopify ({self._shop_domain})",
+            "source_type": "connector_woocommerce",
+            "extraction_summary": f"Synced from WooCommerce ({self._store_url})",
         }
 
         if invoices:
@@ -349,7 +425,9 @@ class ShopifyConnector(BaseConnector):
             result["cod_percentage"] = round(len(cod_orders) / len(invoices) * 100, 1) if invoices else 0
 
             shipping_total = sum(float(inv.metadata.get("shipping_total", 0)) for inv in invoices)
+            discount_total = sum(float(inv.metadata.get("discount_total", 0)) for inv in invoices)
             result["total_shipping"] = shipping_total
+            result["total_discounts"] = discount_total
 
             refunded = [inv for inv in invoices if inv.status == "refunded"]
             result["refunded_orders"] = len(refunded)
@@ -373,7 +451,7 @@ class ShopifyConnector(BaseConnector):
                     success=False,
                     provider_id=self.PROVIDER_ID,
                     sync_type="full",
-                    errors=["Authentication failed - check shop_domain and access_token"],
+                    errors=["Authentication failed - check store_url, consumer_key, and consumer_secret"],
                     sync_started=sync_started,
                 )
 
@@ -400,7 +478,7 @@ class ShopifyConnector(BaseConnector):
             )
 
         except Exception as e:
-            logger.error(f"Shopify sync failed: {e}")
+            logger.error(f"WooCommerce sync failed: {e}")
             return SyncResult(
                 success=False,
                 provider_id=self.PROVIDER_ID,

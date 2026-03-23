@@ -308,6 +308,20 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
       "View reports",
     ],
   },
+  woocommerce: {
+    dataImported: [
+      "Order history & revenue",
+      "Product catalog",
+      "Customer records",
+      "COD/Prepaid split analysis",
+      "Shipping & refund data",
+    ],
+    permissions: [
+      "Read orders & products",
+      "Access customer data",
+      "View sales analytics",
+    ],
+  },
 };
 
 const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15 min"; category: ConnectorCategory; isRecommended?: boolean }> = {
@@ -325,6 +339,7 @@ const connectorMetadata: Record<string, { setupTime: "~5 min" | "~10 min" | "~15
   chargebee: { setupTime: "~10 min", category: "revenue" },
   paddle: { setupTime: "~10 min", category: "revenue" },
   shopify: { setupTime: "~10 min", category: "revenue" },
+  woocommerce: { setupTime: "~10 min", category: "revenue" },
   brex: { setupTime: "~5 min", category: "revenue" },
   netsuite: { setupTime: "~15 min", category: "accounting" },
   wave: { setupTime: "~10 min", category: "accounting" },
@@ -482,6 +497,18 @@ const paymentsProviders: IntegrationProvider[] = [
     name: "Plaid",
     description: "Bank account connections for real-time balances and transactions",
     features: ["Bank Balances", "Transaction History", "Cash Flow Analysis", "Multi-Account Support"],
+  },
+  {
+    id: "shopify",
+    name: "Shopify",
+    description: "E-commerce platform for online stores and retail",
+    features: ["Order Revenue", "COD/Prepaid Split", "Product Catalog", "Shipping & Refund Tracking"],
+  },
+  {
+    id: "woocommerce",
+    name: "WooCommerce",
+    description: "WordPress e-commerce for D2C brands and online stores",
+    features: ["Order Revenue", "COD/Prepaid Split", "Customer Data", "Return Rate Analysis"],
   },
 ];
 
@@ -665,7 +692,7 @@ export default function IntegrationsPage() {
     queryKey: ["/api/connectors/companies", companyId, "status"],
   });
 
-  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  const connectorSyncIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const syncMutation = useMutation({
     mutationFn: async ({ type, provider }: { type: "accounting" | "crm" | "payments" | "payroll" | "erp"; provider: string }) => {
@@ -744,7 +771,7 @@ export default function IntegrationsPage() {
     return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
   };
   
-  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks"];
+  const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
   
   const renderProviderCard = (provider: IntegrationProvider, type: IntegrationType) => {
     const connectorInfo = getConnectorInfo(provider.id);
@@ -1409,6 +1436,11 @@ const providerCredentialFields: Record<string, { field: string; label: string; p
     { field: "shop_domain", label: "Shop Domain", placeholder: "yourstore (without .myshopify.com)" },
     { field: "access_token", label: "Admin API Token", placeholder: "shpat_..." },
   ],
+  woocommerce: [
+    { field: "store_url", label: "Store URL", placeholder: "https://yourstore.com" },
+    { field: "consumer_key", label: "Consumer Key", placeholder: "ck_..." },
+    { field: "consumer_secret", label: "Consumer Secret", placeholder: "cs_..." },
+  ],
   mysql: [
     { field: "host", label: "Host", placeholder: "localhost or IP address" },
     { field: "port", label: "Port", placeholder: "3306" },
@@ -1476,7 +1508,7 @@ function ConnectDialog({
     { field: "api_key", label: "API Key", placeholder: "Enter API Key" },
   ];
   
-  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
+  const connectorBackedProviders = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "shopify", "woocommerce", "mysql", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude", "google_sheets", "rest_api"];
   const isPayrollOrErp = type === "payroll" || type === "erp" || connectorBackedProviders.includes(provider.id);
 
   const benefits = integrationBenefits[provider.id] || {

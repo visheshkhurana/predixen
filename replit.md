@@ -23,7 +23,7 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
     -   **Optimization & Recommendations**: Constrained multi-objective optimization and automated recommendations engine.
     -   **Fundraising OS**: Cap table management, dilution calculations, fundraising round tracking, Investor Room, equity management, exit waterfall analysis.
     -   **Forecasting & Alerts**: Holt-Winters, linear regression, Z-score anomaly detection, threshold monitoring, automated metric monitoring with severity-based filtering.
-    -   **Data Connectors**: Framework for payroll & ERP, with 37 production connectors (e.g., QuickBooks Online, Stripe, Gusto).
+    -   **Data Connectors**: Framework for payroll & ERP, with 38 production connectors (e.g., QuickBooks Online, Stripe, Gusto, Shopify, WooCommerce). Ecommerce connectors include COD/prepaid split detection, shipping cost tracking, refund/return rate analysis, and AOV computation.
     -   **Board Deck Export**: AI-powered generation of board deck presentations (PDF).
     -   **Hiring Planner**: Planning hires by role/department/location with salary modeling and runway impact.
     -   **Fundraising Readiness Score**: Weighted scoring, radar chart, recommendations, AI-generated investment one-pager.
@@ -73,5 +73,5 @@ The platform utilizes a modern full-stack architecture with React/TypeScript for
 -   **Digital Twin Fallback**: `digital_twin.py` falls back to TruthScan metrics (cash_balance, net_burn, revenue) when CompanyState has zero/missing values.
 -   **Fundraising Readiness Runway**: `fundraising_readiness.py` computes runway from cash/burn when `runway_months` field is missing or zero, checking both TruthScan and FinancialRecord sources.
 -   **Copilot Follow-ups**: `copilot.py` generates context-aware follow-up suggestions using 10 topic categories with company-specific metric values, simulation context, and fundraising/churn scenario branches. No repeated generic suggestions.
--   **NLP Financial Term Recognition**: `intent_parser.py` includes `FINANCIAL_TERM_ALIASES` mapping 45+ industry abbreviations (ARR, MRR, ARPU, LTV, CAC, NRR, NDR, GRR, GMV, ACV, EBITDA, COGS, DAU/MAU, burn multiple, etc.) to canonical keys. `resolve_financial_terms()` detects terms in messages and boosts intent confidence.
--   **Ingest Field Mapping**: `ingest.py` `field_mapping` covers 30+ canonical fields with extensive synonym lists for document/CSV extraction (e.g., 'cash' → cashOnHand, 'fte' → headcount, 'subscriber_count' → customers).
+-   **NLP Financial Term Recognition**: `intent_parser.py` includes `FINANCIAL_TERM_ALIASES` mapping 65+ industry abbreviations (ARR, MRR, ARPU, LTV, CAC, NRR, NDR, GRR, GMV, ACV, EBITDA, COGS, DAU/MAU, burn multiple, AOV, COD, RTO, shipping cost, fulfillment cost, D2C, etc.) to canonical keys. `resolve_financial_terms()` detects terms in messages and boosts intent confidence.
+-   **Ingest Field Mapping**: `ingest.py` `field_mapping` covers 37+ canonical fields with extensive synonym lists for document/CSV extraction (e.g., 'cash' → cashOnHand, 'fte' → headcount, 'subscriber_count' → customers, 'aov' → averageOrderValue, 'rto_rate' → returnRate, 'cod_percentage' → codPercentage).

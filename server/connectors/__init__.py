@@ -17,7 +17,7 @@ _CONNECTOR_MODULES = [
     "pipedrive", "close_crm", "mixpanel", "mercury", "brex",
     "ramp", "shopify", "mysql_connector", "freshbooks", "wave",
     "bench", "chargebee", "recurly", "rippling", "deel",
-    "netsuite", "profitwell", "amplitude",
+    "netsuite", "profitwell", "amplitude", "woocommerce",
 ]
 
 _connectors_loaded = False
