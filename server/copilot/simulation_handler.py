@@ -10,7 +10,7 @@ import logging
 
 from server.copilot.intent_parser import (
     ParsedIntent, CopilotIntent, SimulationParameters,
-    format_parameters_summary
+    format_parameters_summary, has_any_simulation_params
 )
 from server.copilot.conversation_state import ConversationState, conversation_store
 from server.copilot.recommendation_engine import (
@@ -88,6 +88,9 @@ class SimulationHandler:
         
         metrics = truth_scan.outputs_json.get("metrics", {})
         params = parsed.parameters
+        
+        if not has_any_simulation_params(params) and parsed.original_message:
+            params = self._llm_extract_parameters(parsed.original_message, params)
         
         def _extract(val, default):
             if isinstance(val, dict):
@@ -758,6 +761,62 @@ The simulation accounts for uncertainty through Monte Carlo modeling, running hu
             'summary': summary,
             'clarifications': questions
         }
+    
+    def _llm_extract_parameters(self, message: str, params: SimulationParameters) -> SimulationParameters:
+        """Use LLM as fallback to extract simulation parameters from natural language."""
+        import json
+        import re as _re
+        try:
+            from server.lib.llm.llm_router import LLMRouter
+            
+            system_prompt = """You are a financial scenario parser. Extract variable changes from the user's scenario description.
+
+Available variables (return ONLY those that apply):
+- burn_reduction_pct: % change in burn/costs (positive=reduce costs, negative=increase costs)
+- revenue_growth_pct: % change in revenue (positive=growth, negative=decline)
+- price_change_pct: % change in pricing
+- churn_reduction_pct: % change in churn (positive=reduce churn, negative=increase churn)
+- headcount_change: number of hires (+) or layoffs (-)
+- fundraise_amount: dollar amount of funding
+
+Rules:
+- "shipping costs increase 25%" → burn_reduction_pct: -25
+- "lose 20% of customers" → revenue_growth_pct: -20, churn_reduction_pct: -20
+- "COD returns spike to 35%" → burn_reduction_pct: -15, churn_reduction_pct: -10
+- "competitor takes market share" → revenue_growth_pct: -15, churn_reduction_pct: -5
+- Negative scenarios MUST produce negative values for affected variables
+- Return ONLY a JSON object with the variables that change: {"variable": value, ...}"""
+
+            router = LLMRouter(db_session=self.db, company_id=self.company_id, user_id=self.user_id)
+            response = router.chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message}
+                ],
+                temperature=0.1,
+                max_tokens=200
+            )
+            
+            result_text = response.get("content", "") if isinstance(response, dict) else str(response)
+            json_match = _re.search(r'\{[^}]+\}', result_text)
+            if json_match:
+                extracted = json.loads(json_match.group())
+                if "burn_reduction_pct" in extracted and params.burn_reduction_pct is None:
+                    params.burn_reduction_pct = float(extracted["burn_reduction_pct"])
+                if "revenue_growth_pct" in extracted and params.revenue_growth_pct is None:
+                    params.revenue_growth_pct = float(extracted["revenue_growth_pct"])
+                if "price_change_pct" in extracted and params.price_change_pct is None:
+                    params.price_change_pct = float(extracted["price_change_pct"])
+                if "churn_reduction_pct" in extracted and params.churn_reduction_pct is None:
+                    params.churn_reduction_pct = float(extracted["churn_reduction_pct"])
+                if "headcount_change" in extracted and params.headcount_change is None:
+                    params.headcount_change = int(extracted["headcount_change"])
+                if "fundraise_amount" in extracted and params.fundraise_amount is None:
+                    params.fundraise_amount = float(extracted["fundraise_amount"])
+                logger.info(f"LLM extracted parameters: {extracted}")
+        except Exception as e:
+            logger.warning(f"LLM parameter extraction failed, using regex-only: {e}")
+        return params
     
     def _generate_chart_data(
         self, 

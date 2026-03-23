@@ -239,10 +239,17 @@ PARAMETER_PATTERNS = {
         (r'(reduc\w*|cut\w*|lower\w*|decreas\w*)\s*(?:the\s+)?(?:shipping\s*costs?|fulfillment\s*costs?|delivery\s*costs?|logistics\s*costs?|carrier\s*rates?)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 2, -1),
         (r'(\d+(?:\.\d+)?)\s*%\s*(?:increase|rise|jump|spike)\s*(?:in\s+)?(?:shipping|fulfillment|delivery|logistics|carrier)', 1),
     ],
+    'ecommerce_rate_change': [
+        (r'(?:cod|rto|return)\s*(?:return\s*)?(?:rate|percentage)s?\s*(?:spike|jump|increas\w*|ris\w*|go\w*\s*up)\s*(?:from\s*\d+(?:\.\d+)?\s*%?\s*)?(?:to\s*)?(\d+(?:\.\d+)?)\s*%', 1),
+        (r'(?:cod|rto|return)\s*(?:return\s*)?(?:rate|percentage)s?\s*(?:spike|jump|increas\w*|ris\w*|go\w*\s*up)\s*(?:by\s*)?(\d+(?:\.\d+)?)\s*%', 1),
+        (r'(?:return|refund|rto)\s*(?:rate|percentage)s?\s*(?:from\s*\d+(?:\.\d+)?\s*%?\s*)?to\s*(\d+(?:\.\d+)?)\s*%', 1),
+    ],
     'competitor_impact': [
         (r'(?:competitor|rival|new\s*entrant)\s*(?:takes?|steals?|captures?|wins?|grabs?)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)', 1),
         (r'(?:lose|losing)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)\s*(?:to\s*)?(?:a\s*)?(?:competitor|rival)', 1),
         (r'(\d+(?:\.\d+)?)\s*%\s*(?:customer|market|user)\s*(?:loss|churn|attrition)\s*(?:from|due\s*to|because\s*of)?\s*(?:competitor|competition|rival)', 1),
+        (r'(?:competitor|rival|competition)\s+.{0,80}(?:lose|losing|loss)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)', 1),
+        (r'(?:lose|losing)\s*(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(?:our\s*)?(?:customers?|market|users?|share)', 1),
     ],
     'horizon': [
         (r'(?:for|over|next)\s*(\d+)\s*(month|mo)', 1),
@@ -501,6 +508,20 @@ def extract_parameters(message: str) -> SimulationParameters:
                 try:
                     pct = float(match.group(group_idx)) * multiplier
                     params.burn_reduction_pct = -pct
+                    break
+                except (ValueError, IndexError):
+                    pass
+
+    if params.burn_reduction_pct is None and params.churn_reduction_pct is None:
+        for pattern_tuple in PARAMETER_PATTERNS.get('ecommerce_rate_change', []):
+            pattern = pattern_tuple[0]
+            group_idx = pattern_tuple[1]
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                try:
+                    target_rate = float(match.group(group_idx))
+                    params.burn_reduction_pct = -target_rate
+                    params.churn_reduction_pct = -(target_rate / 2)
                     break
                 except (ValueError, IndexError):
                     pass
