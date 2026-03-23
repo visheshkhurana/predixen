@@ -1,0 +1,116 @@
+import React, { useState } from 'react';
+
+const CopilotFixed = ({ companyId }) => {
+  const [query, setQuery] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    const userMessage = query;
+    setQuery('');
+    setMessages(prev => [...prev, { type: 'user', text: userMessage }]);
+    
+    try {
+      const response = await fetch('/api/copilot/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: userMessage, company_id: companyId })
+      });
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get response');
+      }
+      
+      setMessages(prev => [...prev, {
+        type: 'ai',
+        text: data.response,
+        model: data.model_used,
+        confidence: data.confidence,
+        isFallback: data.is_fallback
+      }]);
+      
+    } catch (err) {
+      setError(err.message);
+      setMessages(prev => [...prev, {
+        type: 'error',
+        text: 'Sorry, I encountered an error. Please try again.'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="copilot-container">
+      <h2>AI Copilot</h2>
+      
+      {error && (
+        <div className="error-banner" style={{background: '#fee', padding: '10px', borderRadius: '5px', marginBottom: '10px'}}>
+          <p>⚠️ {error}</p>
+          <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+      
+      <div className="messages" style={{maxHeight: '400px', overflowY: 'auto', marginBottom: '20px'}}>
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`message ${msg.type}`} style={{
+            padding: '10px',
+            margin: '5px 0',
+            borderRadius: '5px',
+            background: msg.type === 'user' ? '#e3f2fd' : msg.type === 'error' ? '#fee' : '#f5f5f5'
+          }}>
+            <p>{msg.text}</p>
+            {msg.model && (
+              <small style={{color: '#666'}}>
+                Model: {msg.model} {msg.isFallback && '(Fallback)'}
+              </small>
+            )}
+          </div>
+        ))}
+        {isLoading && <div className="loading">🤔 Thinking...</div>}
+      </div>
+      
+      <form onSubmit={sendMessage}>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ask about runway, churn, pricing..."
+          style={{width: '70%', padding: '10px', marginRight: '10px'}}
+          disabled={isLoading}
+        />
+        <button 
+          type="submit" 
+          disabled={isLoading}
+          style={{padding: '10px 20px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px'}}
+        >
+          {isLoading ? 'Sending...' : 'Ask'}
+        </button>
+      </form>
+      
+      <div className="suggestions" style={{marginTop: '20px'}}>
+        <p>Try asking:</p>
+        <button onClick={() => setQuery('How do I extend runway by 6 months?')} style={{margin: '5px'}}>
+          Extend runway
+        </button>
+        <button onClick={() => setQuery('What if churn increases to 5%?')} style={{margin: '5px'}}>
+          Churn impact
+        </button>
+        <button onClick={() => setQuery('Should I raise prices 20%?')} style={{margin: '5px'}}>
+          Pricing strategy
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default CopilotFixed;
