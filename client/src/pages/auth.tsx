@@ -10,7 +10,7 @@ import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight, Sparkles } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
-import fcLogo from "@assets/image_1773962192360.png";
+import { FCLogo } from "@/components/FCLogo";
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -259,7 +259,7 @@ export default function AuthPage() {
         <div className="relative z-10 flex flex-col justify-between w-full px-8 lg:px-12 xl:px-16 py-10 lg:py-12">
           <div>
             <div className="flex items-center gap-3 mb-16">
-              <img src={fcLogo} alt="FounderConsole" className="h-10 w-auto" />
+              <FCLogo size="lg" />
             </div>
 
             <div className="max-w-xl">
@@ -314,7 +314,7 @@ export default function AuthPage() {
       <div className="flex-1 flex items-center justify-center bg-background px-5 py-8 sm:p-8 md:p-12">
         <div className="w-full max-w-[420px]">
           <div className="md:hidden flex items-center justify-center gap-2.5 mb-8">
-            <img src={fcLogo} alt="FounderConsole" className="h-9 w-auto" />
+            <FCLogo size="md" />
           </div>
 
           <div className="text-center mb-8">

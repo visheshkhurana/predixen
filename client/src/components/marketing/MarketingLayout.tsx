@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import logo from "@assets/image_1773962192360.png";
+import { FCLogo } from "@/components/FCLogo";
 
 const navLinks = [
   { label: "Features", href: "/features" },
@@ -70,7 +70,7 @@ function Header() {
     <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" data-testid="link-logo" className="flex items-center gap-2">
-          <img src={logo} alt="FounderConsole" className="h-8 w-8 rounded-md" />
+          <FCLogo size="md" />
           <span className="text-lg font-semibold tracking-tight text-foreground">FounderConsole</span>
         </Link>
 
@@ -105,7 +105,7 @@ function Header() {
                     className="flex items-center gap-2"
                     data-testid="link-mobile-logo"
                   >
-                    <img src={logo} alt="FounderConsole" className="h-7 w-7 rounded-md" />
+                    <FCLogo size="sm" />
                     <span className="text-base font-semibold">FounderConsole</span>
                   </Link>
                 </SheetTitle>

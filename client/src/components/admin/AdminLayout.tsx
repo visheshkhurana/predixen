@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
-import founderconsoleLogo from "@assets/image_1773962192360.png";
+import { FCLogo } from "@/components/FCLogo";
 
 interface NavItem {
   title: string;
@@ -55,11 +55,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="h-16 flex items-center justify-between px-4 border-b border-border">
           {sidebarOpen && (
             <div className="flex items-center gap-2">
-              <img 
-                src={founderconsoleLogo} 
-                alt="FounderConsole" 
-                className="h-8 w-8 rounded-lg"
-              />
+              <FCLogo size="md" />
               <span className="font-semibold text-sm">Admin Console</span>
             </div>
           )}

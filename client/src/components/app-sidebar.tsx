@@ -58,8 +58,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useFounderStore } from "@/store/founderStore";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
-import founderconsoleLogo from "@assets/image_1773962192360.png";
 import { cn } from "@/lib/utils";
+import { FCLogo } from "@/components/FCLogo";
 import { useQuery } from "@tanstack/react-query";
 
 interface SettingsNavItem {
@@ -364,11 +364,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <img
-            src={founderconsoleLogo}
-            alt="FounderConsole"
-            className="h-9 w-9 rounded-md"
-          />
+          <FCLogo size="md" />
           <div>
             <span className="font-semibold text-sm">FounderConsole</span>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>
