@@ -18,6 +18,7 @@ RECIPIENTS = [
     {"email": "nikita@predixen.ai", "id": "nikita_predixen", "name": "Nikita"},
     {"email": "nikitafl2024@gmail.com", "id": "nikita_fl2024", "name": "Nikita"},
     {"email": "vysheshk@gmail.com", "id": "vyshesh_k", "name": "Vyshesh"},
+    {"email": "start@runora.ai", "id": "start_runora", "name": "Team"},
 ]
 
 
