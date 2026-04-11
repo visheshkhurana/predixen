@@ -90,6 +90,32 @@
 .fc-stagger > *:nth-child(9) { animation-delay: 480ms; }
 .fc-stagger > *:nth-child(10) { animation-delay: 540ms; }
 
+@keyframes fc-float1 {
+  0%, 100% { transform: translate(0, 0); opacity: 0.4; }
+  25% { transform: translate(15px, -30px); opacity: 0.7; }
+  50% { transform: translate(-10px, -60px); opacity: 0.3; }
+  75% { transform: translate(20px, -20px); opacity: 0.6; }
+}
+
+@keyframes fc-float2 {
+  0%, 100% { transform: translate(0, 0); opacity: 0.3; }
+  33% { transform: translate(-20px, -40px); opacity: 0.6; }
+  66% { transform: translate(10px, -15px); opacity: 0.2; }
+}
+
+@keyframes fc-float3 {
+  0%, 100% { transform: translate(0, 0); opacity: 0.5; }
+  20% { transform: translate(25px, -10px); opacity: 0.3; }
+  40% { transform: translate(-15px, -50px); opacity: 0.7; }
+  60% { transform: translate(5px, -30px); opacity: 0.4; }
+  80% { transform: translate(-20px, -5px); opacity: 0.6; }
+}
+
+@keyframes fc-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.5); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fc-animate-fade-up,
   .fc-animate-scale-in,

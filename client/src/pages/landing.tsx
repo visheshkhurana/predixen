@@ -348,12 +348,7 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-primary/3 blur-3xl" />
-          <div className="absolute top-1/3 right-1/4 w-72 h-72 rounded-full bg-violet-500/3 blur-3xl" />
-        </div>
+      <section className="relative">
         <div className="relative mx-auto max-w-6xl px-4 py-20 md:py-32 text-center">
           <Badge variant="secondary" className="mb-6 text-xs font-medium" data-testid="badge-hero-label">
             <Plane className="mr-1.5 h-3 w-3" />
@@ -466,7 +461,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="border-t bg-card/30">
+      <section className="border-t bg-card/20">
         <div className="mx-auto max-w-6xl px-4 py-20 md:py-24">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold tracking-tight text-foreground" data-testid="text-features-heading">
@@ -522,7 +517,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="border-t bg-card/30">
+      <section className="border-t bg-card/20">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             {stats.map((stat) => (

@@ -10,6 +10,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { FCLogo } from "@/components/FCLogo";
+import { MarketingBackground } from "@/components/marketing/MarketingBackground";
 
 const navLinks = [
   { label: "Features", href: "/features" },
@@ -246,8 +247,9 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <MarketingBackground />
       <Header />
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      <main className="relative z-[1] flex-1 pb-16 md:pb-0">{children}</main>
       <Footer />
       <MobileStickyCTA />
     </div>
