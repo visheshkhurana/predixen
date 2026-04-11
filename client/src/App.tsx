@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Stepper } from "@/components/Layout/Stepper";
+import { PageTransition } from "@/components/Layout/page-transition";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -176,10 +177,10 @@ function Router() {
         {() => <AuthenticatedRoute component={OnboardingPage} />}
       </Route>
       <Route path="/">
-        {() => <AuthenticatedRoute component={OverviewPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={OverviewPage} /></PageTransition>}
       </Route>
       <Route path="/overview">
-        {() => <AuthenticatedRoute component={OverviewPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={OverviewPage} /></PageTransition>}
       </Route>
       <Route path="/kpi-board">
         {() => <AuthenticatedRoute component={KPIBoardPage} />}
@@ -197,13 +198,13 @@ function Router() {
         {() => <AuthenticatedRoute component={DataVerificationPage} />}
       </Route>
       <Route path="/scenarios">
-        {() => <AuthenticatedRoute component={ScenariosPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={ScenariosPage} /></PageTransition>}
       </Route>
       <Route path="/scenarios/:id">
-        {() => <AuthenticatedRoute component={ScenariosPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={ScenariosPage} /></PageTransition>}
       </Route>
       <Route path="/decisions">
-        {() => <AuthenticatedRoute component={DecisionsPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={DecisionsPage} /></PageTransition>}
       </Route>
       <Route path="/copilot">
         {() => <AuthenticatedRoute component={CopilotPage} />}
@@ -218,7 +219,7 @@ function Router() {
         {() => <AuthenticatedRoute component={AddDataSourcePage} />}
       </Route>
       <Route path="/alerts">
-        {() => <AuthenticatedRoute component={AlertsPage} />}
+        {() => <PageTransition><AuthenticatedRoute component={AlertsPage} /></PageTransition>}
       </Route>
       <Route path="/templates">
         {() => <AuthenticatedRoute component={TemplatesPage} />}
@@ -523,7 +524,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <AppSidebar />
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background sticky top-0 z-50">
+          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/80 backdrop-blur-sm sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}

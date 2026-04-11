@@ -123,7 +123,7 @@ function HealthScoreCard() {
 
   return (
     <div
-      className="mx-3 rounded-md p-3 border border-primary/20"
+      className="mx-3 rounded-md p-3 border border-indigo-500/20"
       style={{ background: "linear-gradient(135deg, hsl(217 91% 60% / 0.08), hsl(271 81% 56% / 0.08))" }}
     >
       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -303,11 +303,13 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <img
-            src={founderconsoleLogo}
-            alt="FounderConsole"
-            className="h-9 w-9 rounded-md"
-          />
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0">
+            <img
+              src={founderconsoleLogo}
+              alt="FounderConsole"
+              className="h-6 w-6 rounded object-contain"
+            />
+          </div>
           <div>
             <h1 className="font-semibold text-sm">FounderConsole</h1>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>
@@ -328,12 +330,9 @@ export function AppSidebar() {
               variant="default"
               size="sm"
               className={cn(
-                "w-full justify-start gap-2.5 text-white border border-white/10",
-                location === "/copilot" && "ring-1 ring-white/30"
+                "w-full justify-start gap-2.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 border border-indigo-500/30 hover:border-indigo-500/50 text-foreground",
+                location === "/copilot" && "border-indigo-500/60 from-indigo-500/30 to-violet-500/30"
               )}
-              style={{
-                background: "linear-gradient(135deg, hsl(217 91% 55%), hsl(271 81% 50%))",
-              }}
               data-testid="nav-copilot"
             >
               <Sparkles className="h-4 w-4" />
@@ -354,7 +353,7 @@ export function AppSidebar() {
 
         {/* Core Section */}
         <SidebarGroup className="py-0">
-          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <SidebarGroupLabel className="px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
             Core
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -364,6 +363,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/" || location === "/overview"}
                   data-testid="nav-dashboard"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/">
                     <LayoutDashboard className="h-4 w-4" />
@@ -376,6 +376,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/scenarios" || location.startsWith("/scenarios/")}
                   data-testid="nav-simulate"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/scenarios">
                     <FlaskConical className="h-4 w-4" />
@@ -393,6 +394,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/decisions"}
                   data-testid="nav-decisions"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/decisions">
                     <Target className="h-4 w-4" />
@@ -411,7 +413,7 @@ export function AppSidebar() {
 
         {/* Finance Section */}
         <SidebarGroup className="py-0 mt-2">
-          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <SidebarGroupLabel className="px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
             Finance
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -421,6 +423,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/fundraising"}
                   data-testid="nav-fundraising"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/fundraising">
                     <DollarSign className="h-4 w-4" />
@@ -433,6 +436,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/truth" || location === "/truth-scan"}
                   data-testid="nav-health-check"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/truth">
                     <Search className="h-4 w-4" />
@@ -446,7 +450,7 @@ export function AppSidebar() {
 
         {/* Track Section */}
         <SidebarGroup className="py-0 mt-2">
-          <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <SidebarGroupLabel className="px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
             Track
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -456,6 +460,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/journal"}
                   data-testid="nav-journal"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/journal">
                     <BookOpen className="h-4 w-4" />
@@ -471,6 +476,7 @@ export function AppSidebar() {
                   asChild
                   isActive={location === "/goals"}
                   data-testid="nav-goals"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
                 >
                   <Link href="/goals">
                     <Flag className="h-4 w-4" />
