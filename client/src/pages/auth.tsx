@@ -10,6 +10,8 @@ import { api, ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Sparkles, TrendingUp, Shield, Zap } from 'lucide-react';
 import { SiGoogle, SiGithub } from 'react-icons/si';
+import { SceneCanvas } from '@/components/three/scene-canvas';
+import { AmbientParticles } from '@/components/three/ambient-floating-particles';
 
 
 // Analytics & Pixel user identification
@@ -177,7 +179,28 @@ export default function AuthPage() {
   
   return (
     <div className="min-h-screen flex bg-background">
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+      {/* 3D Background */}
+      <div className="fixed inset-0 z-0">
+        <SceneCanvas style={{ width: '100%', height: '100%' }}>
+          <AmbientParticles count={40} color="#6366f1" spread={8} />
+          <AmbientParticles count={20} color="#22d3ee" spread={10} />
+          {/* Floating geometric shapes */}
+          <mesh position={[-3, 2, -2]} rotation={[0.5, 0.3, 0]}>
+            <icosahedronGeometry args={[1, 0]} />
+            <meshBasicMaterial color="#6366f1" wireframe transparent opacity={0.08} />
+          </mesh>
+          <mesh position={[3, -1, -3]} rotation={[0.2, 0.6, 0]}>
+            <octahedronGeometry args={[0.8, 0]} />
+            <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.06} />
+          </mesh>
+          <mesh position={[0, -3, -4]} rotation={[0.1, 0.4, 0.2]}>
+            <octahedronGeometry args={[1.2, 0]} />
+            <meshBasicMaterial color="#6366f1" wireframe transparent opacity={0.05} />
+          </mesh>
+        </SceneCanvas>
+      </div>
+
+      <div className="hidden lg:flex lg:w-1/2 relative z-10 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-background" />
         <div 
           className="absolute inset-0 opacity-30"
@@ -228,7 +251,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 relative z-10">
         <Card className="w-full max-w-md shadow-xl border-border/50">
           <CardContent className="p-6 sm:p-8">
             <div className="text-center mb-6">
