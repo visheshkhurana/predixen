@@ -434,6 +434,19 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
+                  isActive={location === "/investor-room"}
+                  data-testid="nav-investor-room"
+                  className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"
+                >
+                  <Link href="/investor-room">
+                    <Briefcase className="h-4 w-4" />
+                    <span>Investor Room</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
                   isActive={location === "/truth" || location === "/truth-scan"}
                   data-testid="nav-health-check"
                   className="data-[active=true]:bg-indigo-500/15 data-[active=true]:text-white data-[active=true]:border-l-2 data-[active=true]:border-indigo-500"

@@ -527,7 +527,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/80 backdrop-blur-sm sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
-              {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
+              {currentCompany && <div className="hidden sm:block opacity-60"><Stepper currentStep={currentStep} /></div>}
             </div>
             <div className="flex items-center gap-1.5 min-w-0">
               <div className="hidden lg:block min-w-0 overflow-hidden shrink">
@@ -658,7 +658,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             </DialogContent>
           </Dialog>
           <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
-          <main className="flex-1 overflow-auto bg-background">
+          <main className="flex-1 overflow-auto scroll-smooth bg-background">
             {children}
           </main>
         </div>

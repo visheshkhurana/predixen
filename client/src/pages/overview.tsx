@@ -1046,7 +1046,7 @@ export default function OverviewPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {!briefingDismissed && (
-        <Card className="relative border-primary/20" data-testid="card-morning-briefing">
+        <Card className="relative bg-white/[0.03] border border-white/[0.06] backdrop-blur-sm rounded-[14px]" data-testid="card-morning-briefing">
           <Button
             variant="ghost"
             size="icon"
@@ -1114,13 +1114,13 @@ export default function OverviewPage() {
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
+          <Card className="hover-elevate cursor-pointer hover:border-white/[0.1] transition-all duration-200" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')} MRR</p>
                 <Badge variant={baseData.mrr >= 100000 ? "secondary" : baseData.mrr >= 50000 ? "secondary" : "destructive"} className={baseData.mrr >= 50000 ? "bg-emerald-500/10 text-emerald-500 shrink-0" : "shrink-0"} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</Badge>
               </div>
-              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
+              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className={`h-2 ${baseData.mrr >= 50000 ? '[&>div]:bg-indigo-500' : '[&>div]:bg-red-500'}`} data-testid="progress-goal-mrr" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
                 <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')}</span>
                 <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
@@ -1128,13 +1128,13 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
+          <Card className="hover-elevate cursor-pointer hover:border-white/[0.1] transition-all duration-200" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
                 <Badge variant={baseData.runway >= 36 ? "secondary" : baseData.runway >= 18 ? "secondary" : "destructive"} className={baseData.runway >= 18 ? "bg-primary/10 text-primary shrink-0" : "shrink-0"} data-testid="badge-goal-runway-status">{baseData.runway >= 36 ? 'Complete' : baseData.runway >= 18 ? 'In Progress' : 'Off Track'}</Badge>
               </div>
-              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
+              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className={`h-2 ${baseData.runway >= 36 ? '[&>div]:bg-indigo-500' : baseData.runway >= 18 ? '[&>div]:bg-amber-500' : '[&>div]:bg-red-500'}`} data-testid="progress-goal-runway" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
                 <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 months</span>
                 <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}% complete</span>
@@ -1142,13 +1142,13 @@ export default function OverviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
+          <Card className="hover-elevate cursor-pointer hover:border-white/[0.1] transition-all duration-200" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
             <CardContent className="pt-4 pb-4 space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
                 <Badge variant={sharedMetrics.sources['churnRate'] === 'estimated' ? "secondary" : (baseData.churnRate <= 2 ? "secondary" : "destructive")} className={sharedMetrics.sources['churnRate'] === 'estimated' ? "shrink-0" : (baseData.churnRate <= 2 ? "bg-emerald-500/20 text-emerald-400 shrink-0" : "shrink-0")} data-testid="badge-goal-churn-status">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'No Data' : (baseData.churnRate <= 2 ? 'On Track' : 'Off Track')}</Badge>
               </div>
-              <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
+              <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className={`h-2 ${sharedMetrics.sources['churnRate'] === 'estimated' ? '' : baseData.churnRate <= 2 ? '[&>div]:bg-indigo-500' : '[&>div]:bg-red-500'}`} data-testid="progress-goal-churn" />
               <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
                 <span data-testid="text-goal-churn-progress">Current: {sharedMetrics.sources['churnRate'] === 'estimated' ? 'N/A' : `${baseData.churnRate.toFixed(1)}%`}</span>
                 <span data-testid="text-goal-churn-target">Target: 2.0%</span>
