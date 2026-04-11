@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -16,6 +17,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { staggerContainer, fadeUpVariant } from '@/lib/animation-variants';
 import {
   Tooltip,
   TooltipContent,
@@ -394,15 +396,33 @@ export function DashboardKPICards({ simulation, metrics, previousMetrics, compan
       </div>
 
       {firstRow.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {firstRow}
-        </div>
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          {firstRow.map((card, i) => (
+            <motion.div key={i} variants={fadeUpVariant}>
+              {card}
+            </motion.div>
+          ))}
+        </motion.div>
       )}
-      
+
       {secondRow.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {secondRow}
-        </div>
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        >
+          {secondRow.map((card, i) => (
+            <motion.div key={i} variants={fadeUpVariant}>
+              {card}
+            </motion.div>
+          ))}
+        </motion.div>
       )}
     </div>
   );

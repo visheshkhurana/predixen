@@ -153,7 +153,11 @@ export function MetricCard({
       animate="visible"
     >
     <Card
-      className={cn('overflow-visible', onClick && 'cursor-pointer hover-elevate')}
+      className={cn(
+        'overflow-visible transition-all duration-200',
+        'hover:border-white/[0.1] hover:shadow-[0_0_20px_rgba(99,102,241,0.06)]',
+        onClick && 'cursor-pointer hover-elevate',
+      )}
       data-testid={testId}
       onClick={onClick}
     >

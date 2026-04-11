@@ -1161,7 +1161,7 @@ export default function OverviewPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-company-name">{currentCompany.name}</h1>
-          <p className="text-muted-foreground">Financial Intelligence Overview</p>
+          <p className="text-sm opacity-40">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
         <div className="flex items-center gap-2">
           {getConfidenceBadge()}
@@ -1494,7 +1494,14 @@ export default function OverviewPage() {
       </div>
 
       {/* Additional KPIs Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {metricsLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kpi-skeleton">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="animate-pulse bg-white/[0.03] rounded-[14px] h-28" />
+          ))}
+        </div>
+      ) : null}
+      <div className={metricsLoading ? 'hidden' : 'grid grid-cols-2 md:grid-cols-4 gap-4'}>
         <Card className="overflow-visible">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between mb-2">
