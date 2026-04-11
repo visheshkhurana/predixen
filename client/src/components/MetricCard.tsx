@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -5,6 +6,7 @@ import { TrendingUp, TrendingDown, Minus, Info, Database, Calculator, Clock, Git
 import { cn } from '@/lib/utils';
 import { Sparkline } from './Sparkline';
 import { formatDistanceToNow } from 'date-fns';
+import { fadeUpVariant } from '@/lib/animation-variants';
 
 export interface MetricProvenance {
   definition: string;
@@ -145,8 +147,13 @@ export function MetricCard({
   };
 
   return (
-    <Card 
-      className={cn('overflow-visible', onClick && 'cursor-pointer hover-elevate')} 
+    <motion.div
+      variants={fadeUpVariant}
+      initial="hidden"
+      animate="visible"
+    >
+    <Card
+      className={cn('overflow-visible', onClick && 'cursor-pointer hover-elevate')}
       data-testid={testId}
       onClick={onClick}
     >
@@ -267,5 +274,6 @@ export function MetricCard({
         )}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
