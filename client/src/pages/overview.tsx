@@ -75,6 +75,8 @@ import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { useIndustryTerms } from '@/hooks/useIndustryTerms';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
+import { SceneCanvas } from '@/components/three/scene-canvas';
+import { RunwayTerrain } from '@/components/three/runway-cash-projection-terrain-3d';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1639,6 +1641,19 @@ export default function OverviewPage() {
             </Badge>
           </CardContent>
         </Card>
+      </div>
+
+      {/* 3D Runway Terrain Visualization */}
+      <div className="rounded-[14px] bg-white/[0.03] border border-white/[0.06] p-4 h-[350px] relative" data-testid="card-runway-terrain-3d">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-semibold">Runway Projection</h3>
+          <span className="text-xs opacity-40">3D Terrain View</span>
+        </div>
+        <div className="absolute inset-0 top-10 rounded-b-[14px] overflow-hidden">
+          <SceneCanvas style={{ width: '100%', height: '100%' }}>
+            <RunwayTerrain />
+          </SceneCanvas>
+        </div>
       </div>
 
       {/* Segment Analysis Section */}
