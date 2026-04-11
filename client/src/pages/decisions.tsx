@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { ShareModal, type ShareModalData } from '@/components/ShareModal';
+import { SceneCanvas } from '@/components/three/scene-canvas';
+import { DecisionTree3D } from '@/components/three/decision-tree-explorable-3d';
 
 const LOADING_STEPS = [
   { label: 'Analyzing financial data', duration: 3000 },
@@ -806,6 +808,19 @@ export default function DecisionsPage() {
               })}
             </section>
           )}
+
+          {/* 3D Decision Tree */}
+          <div className="rounded-[14px] bg-white/[0.03] border border-white/[0.06] p-4 h-[400px] relative" data-testid="card-decision-tree-3d">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-semibold">Strategic Decision Tree</h3>
+              <span className="text-xs opacity-40">Explore paths in 3D</span>
+            </div>
+            <div className="absolute inset-0 top-10 rounded-b-[14px] overflow-hidden">
+              <SceneCanvas style={{ width: '100%', height: '100%' }}>
+                <DecisionTree3D />
+              </SceneCanvas>
+            </div>
+          </div>
 
           <footer className="pt-6 border-t border-border" data-testid="section-footer">
             <p className="text-xs text-muted-foreground">

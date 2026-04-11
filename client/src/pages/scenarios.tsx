@@ -16,6 +16,8 @@ import { SimulationLearnMoreModal } from '@/components/SimulationLearnMoreModal'
 import { ScenarioWizard } from '@/components/ScenarioWizard';
 import { StrategicScenarioBuilder } from '@/components/StrategicScenarioBuilder';
 import { type ScenarioEvent } from '@/components/CustomEventBuilder';
+import { SceneCanvas } from '@/components/three/scene-canvas';
+import { MonteCarloCloud } from '@/components/three/monte-carlo-simulation-particle-cloud';
 import { MonthlyResultsTable } from '@/components/MonthlyResultsTable';
 import { ScenarioComparisonChart } from '@/components/ScenarioComparisonChart';
 import { MultiScenarioSummary } from '@/components/MultiScenarioSummary';
@@ -1877,6 +1879,19 @@ export default function ScenariosPage() {
                 title="Cash Projection Bands"
                 description="10th, 50th, and 90th percentile outcomes"
               />
+
+              {/* 3D Monte Carlo Particle Cloud */}
+              <div className="rounded-[14px] bg-white/[0.03] border border-white/[0.06] p-4 h-[400px] relative" data-testid="card-monte-carlo-cloud">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-sm font-semibold">Simulation Cloud</h3>
+                  <span className="text-xs opacity-40">Each dot = one simulation run</span>
+                </div>
+                <div className="absolute inset-0 top-10 rounded-b-[14px] overflow-hidden">
+                  <SceneCanvas style={{ width: '100%', height: '100%' }}>
+                    <MonteCarloCloud />
+                  </SceneCanvas>
+                </div>
+              </div>
 
               {simulation?.fundraising_intelligence && (
                 <>

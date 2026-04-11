@@ -77,6 +77,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { useToast } from '@/hooks/use-toast';
 import { SceneCanvas } from '@/components/three/scene-canvas';
 import { RunwayTerrain } from '@/components/three/runway-cash-projection-terrain-3d';
+import { HealthScoreRing } from '@/components/three/health-score-animated-ring';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1652,6 +1653,19 @@ export default function OverviewPage() {
         <div className="absolute inset-0 top-10 rounded-b-[14px] overflow-hidden">
           <SceneCanvas style={{ width: '100%', height: '100%' }}>
             <RunwayTerrain />
+          </SceneCanvas>
+        </div>
+      </div>
+
+      {/* 3D Health Score Ring */}
+      <div className="rounded-[14px] bg-white/[0.03] border border-white/[0.06] p-4 h-[350px] relative" data-testid="card-health-score-ring-3d">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-semibold">Company Health Score</h3>
+          <span className="text-xs opacity-40">3D Ring View</span>
+        </div>
+        <div className="absolute inset-0 top-10 rounded-b-[14px] overflow-hidden">
+          <SceneCanvas style={{ width: '100%', height: '100%' }}>
+            <HealthScoreRing score={45} />
           </SceneCanvas>
         </div>
       </div>
