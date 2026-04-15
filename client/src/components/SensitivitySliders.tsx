@@ -1,5 +1,4 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -157,16 +156,14 @@ export function SensitivitySliders({
   if (!expanded) {
     return (
       <div className="max-w-3xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={() => setExpanded(true)}
-          className="w-full justify-center text-muted-foreground"
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
           data-testid={`${testId}-expand`}
         >
-          <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
-          Adjust Variables Manually
-        </Button>
+          <SlidersHorizontal className="h-3 w-3" />
+          Adjust variables manually
+        </button>
       </div>
     );
   }
@@ -178,30 +175,31 @@ export function SensitivitySliders({
   }
 
   return (
-    <Card className="max-w-3xl mx-auto" data-testid={testId}>
-      <CardContent className="pt-4 pb-4 px-4">
-        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+    <div className="max-w-3xl mx-auto border border-white/[0.06] rounded-xl bg-white/[0.02] backdrop-blur-sm p-4" data-testid={testId}>
+        <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-primary" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-[11px] font-medium text-muted-foreground/60">
               Sensitivity Sliders
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleReset}
               disabled={!impact.isChanged}
+              className="h-6 text-[10px] px-2"
               data-testid={`${testId}-reset`}
             >
-              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+              <RotateCcw className="h-3 w-3 mr-1" />
               Reset
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setExpanded(false)}
+              className="h-6 text-[10px] px-2"
               data-testid={`${testId}-collapse`}
             >
               Collapse
@@ -292,8 +290,7 @@ export function SensitivitySliders({
             Run Full Simulation
           </Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 

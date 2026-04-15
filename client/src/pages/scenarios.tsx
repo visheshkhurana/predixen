@@ -1230,199 +1230,195 @@ export default function ScenariosPage() {
     <div className="space-y-8">
       {/* STEP 1: "What's the question?" */}
       <section data-testid="section-question">
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">Simulate Any Scenario</h1>
-            <Button
-              variant={founderMode ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => { setFounderMode(!founderMode); setFounderDetailOpen(false); }}
-              className="shrink-0"
-              data-testid="button-founder-mode"
-            >
-              {founderMode ? <Eye className="h-3.5 w-3.5 mr-1.5" /> : <EyeOff className="h-3.5 w-3.5 mr-1.5" />}
-              Founder Mode
-            </Button>
-            {currentCompany && <BoardExportButton companyId={currentCompany.id} />}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-2xl font-semibold tracking-tight" data-testid="text-page-title">Simulate</h1>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={founderMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => { setFounderMode(!founderMode); setFounderDetailOpen(false); }}
+                className="h-7 text-xs shrink-0"
+                data-testid="button-founder-mode"
+              >
+                {founderMode ? <Eye className="h-3 w-3 mr-1" /> : <EyeOff className="h-3 w-3 mr-1" />}
+                Founder Mode
+              </Button>
+              {currentCompany && <BoardExportButton companyId={currentCompany.id} />}
+              {selectedScenarioId && (
+                <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" data-testid="button-reset-baseline">
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Reset to Baseline?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will clear your current scenario selections and simulation results. Your saved scenarios will not be affected.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => {
+                        setSelectedScenarioId(null);
+                        setMultiSimResults(null);
+                        setEnhancedResults(null);
+                        setSensitivityResults(null);
+                        setShowResetDialog(false);
+                      }}>
+                        Reset
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground/60">
             {founderMode
               ? 'Focused view showing only what matters most'
               : 'Describe a scenario and we\'ll simulate 1,000 outcomes to show your probability distribution'}
           </p>
         </div>
 
-        <div className="relative max-w-3xl mx-auto mb-5">
-          <div className="flex items-center gap-2 border rounded-md p-1.5 bg-card shadow-sm focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
-            <Search className="h-5 w-5 text-muted-foreground ml-2 shrink-0" />
+        <div className="relative max-w-3xl mx-auto mb-6">
+          <div className="flex items-center gap-2 border border-white/[0.08] rounded-xl p-1.5 bg-white/[0.02] backdrop-blur-sm focus-within:border-white/[0.15] transition-all">
+            <Search className="h-4 w-4 text-muted-foreground/50 ml-2.5 shrink-0" />
             <input
               type="text"
               value={questionInput}
               onChange={(e) => setQuestionInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleQuestionSubmit(); }}
               placeholder="What happens if we hire 3 engineers and raise prices 15%?"
-              className="flex-1 bg-transparent border-0 outline-none text-sm py-2 placeholder:text-muted-foreground/60"
+              className="flex-1 bg-transparent border-0 outline-none text-sm py-2 placeholder:text-muted-foreground/40"
               data-testid="input-simulation-question"
             />
-            <Button
-              onClick={handleQuestionSubmit}
-              disabled={isCreating || isRunning || !questionInput.trim()}
-              className="shrink-0"
-              style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.8))' }}
-              data-testid="button-simulate"
-            >
-              {(isCreating || isRunning) ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Zap className="h-4 w-4 mr-2" />
-              )}
-              Simulate
-            </Button>
+            <div className="flex items-center gap-1.5 mr-1">
+              <Select value={String(simIterations)} onValueChange={(v) => setSimIterations(Number(v))}>
+                <SelectTrigger className="h-7 w-[70px] text-[10px] border-white/[0.06] bg-white/[0.03] text-muted-foreground" data-testid="select-iterations">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">100 runs</SelectItem>
+                  <SelectItem value="250">250 runs</SelectItem>
+                  <SelectItem value="500">500 runs</SelectItem>
+                  <SelectItem value="1000">1K runs</SelectItem>
+                  <SelectItem value="2000">2K runs</SelectItem>
+                  <SelectItem value="5000">5K runs</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handleQuestionSubmit}
+                disabled={isCreating || isRunning || !questionInput.trim()}
+                className="shrink-0 h-8 px-4 rounded-lg"
+                style={{ background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.8))' }}
+                data-testid="button-simulate"
+              >
+                {(isCreating || isRunning) ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Zap className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
           </div>
           {(() => {
             const detected = questionInput.trim() ? detectDualPath(questionInput.trim()) : { isDual: false, pathA: '', pathB: '' };
             if (!detected.isDual) return null;
             return (
-              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-md bg-primary/5 border border-primary/20" data-testid="dual-path-preview">
-                <GitCompare className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-xs text-muted-foreground">Dual-path detected:</span>
+              <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-primary/5 border border-primary/20" data-testid="dual-path-preview">
+                <GitCompare className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-[10px] text-muted-foreground">Dual-path detected:</span>
                 <Badge variant="outline" className="text-[10px]">A: {detected.pathA}</Badge>
-                <span className="text-xs text-muted-foreground">vs</span>
+                <span className="text-[10px] text-muted-foreground">vs</span>
                 <Badge variant="outline" className="text-[10px]">B: {detected.pathB}</Badge>
               </div>
             );
           })()}
-          <div className="flex items-center gap-3 mt-2 flex-wrap" data-testid="simulation-settings">
-            <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground whitespace-nowrap">Iterations:</Label>
-              <Select value={String(simIterations)} onValueChange={(v) => setSimIterations(Number(v))}>
-                <SelectTrigger className="h-7 w-[90px] text-xs" data-testid="select-iterations">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="100">100</SelectItem>
-                  <SelectItem value="250">250</SelectItem>
-                  <SelectItem value="500">500</SelectItem>
-                  <SelectItem value="1000">1,000</SelectItem>
-                  <SelectItem value="2000">2,000</SelectItem>
-                  <SelectItem value="5000">5,000</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Label className="text-xs text-muted-foreground whitespace-nowrap">Seed:</Label>
+          <div className="flex items-center gap-2 mt-2 opacity-30 hover:opacity-100 focus-within:opacity-100 transition-opacity" data-testid="simulation-settings">
+            <div className="flex items-center gap-1">
+              <Label className="text-[10px] text-muted-foreground/50 whitespace-nowrap">Seed:</Label>
               <Input
                 type="number"
                 placeholder="Random"
                 value={simSeed ?? ''}
                 onChange={(e) => setSimSeed(e.target.value ? Number(e.target.value) : null)}
-                className="h-7 w-[90px] text-xs"
+                className="h-6 w-[80px] text-[10px] border-white/[0.06] bg-white/[0.02]"
                 data-testid="input-seed"
               />
             </div>
             {simSeed !== null && (
-              <Badge variant="outline" className="text-[10px]" data-testid="badge-reproducible">Reproducible</Badge>
-            )}
-            {selectedScenarioId && (
-              <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" data-testid="button-reset-baseline">
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    Reset
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Reset to Baseline?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will clear your current scenario selections and simulation results. Your saved scenarios will not be affected.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => {
-                      setSelectedScenarioId(null);
-                      setMultiSimResults(null);
-                      setEnhancedResults(null);
-                      setSensitivityResults(null);
-                      setShowResetDialog(false);
-                    }}>
-                      Reset
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Badge variant="outline" className="text-[9px] h-5 border-white/[0.08]" data-testid="badge-reproducible">Reproducible</Badge>
             )}
           </div>
         </div>
 
         {dualPathMode.active && (isCreating || isRunning) && (
           <div className="max-w-3xl mx-auto mb-4">
-            <Card className="border-primary/20">
-              <CardContent className="pt-4 pb-4 px-4">
+            <div className="border border-primary/20 rounded-xl bg-white/[0.02] backdrop-blur-sm p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <GitCompare className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold">Running Dual-Path Comparison</span>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-auto" />
+                  <GitCompare className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold">Running Dual-Path Comparison</span>
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-auto" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-2.5 rounded-md bg-muted/50 border">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Path A</p>
+                  <div className="p-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Path A</p>
                     <p className="text-xs font-medium">{dualPathMode.pathA?.name?.replace('Path A: ', '')}</p>
-                    {dualPathMode.pathA?.scenarioId && <Badge variant="outline" className="text-[10px] mt-1.5">Created</Badge>}
+                    {dualPathMode.pathA?.scenarioId && <Badge variant="outline" className="text-[9px] mt-1.5 border-white/[0.08]">Created</Badge>}
                   </div>
-                  <div className="p-2.5 rounded-md bg-muted/50 border">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Path B</p>
+                  <div className="p-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Path B</p>
                     <p className="text-xs font-medium">{dualPathMode.pathB?.name?.replace('Path B: ', '')}</p>
-                    {dualPathMode.pathB?.scenarioId && <Badge variant="outline" className="text-[10px] mt-1.5">Created</Badge>}
+                    {dualPathMode.pathB?.scenarioId && <Badge variant="outline" className="text-[9px] mt-1.5 border-white/[0.08]">Created</Badge>}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
 
         {dualPathMode.active && !isCreating && !isRunning && compareIds.length === 2 && (
           <div className="max-w-3xl mx-auto mb-4">
-            <Card className="border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/10">
-              <CardContent className="pt-4 pb-4 px-4">
+            <div className="border border-emerald-500/20 rounded-xl bg-emerald-500/[0.03] backdrop-blur-sm p-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <GitCompare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-sm font-semibold">Dual-Path Comparison Ready</span>
-                    <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-600 dark:text-emerald-400">2 paths simulated</Badge>
+                    <GitCompare className="h-3.5 w-3.5 text-emerald-400" />
+                    <span className="text-xs font-semibold">Dual-Path Comparison Ready</span>
+                    <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-500/[0.06] px-1.5 py-0.5 rounded">2 paths</span>
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
+                    className="h-6 text-[10px]"
                     onClick={() => {
                       setDualPathMode({ active: false });
                       setCompareIds([]);
                     }}
                     data-testid="button-clear-dual-path"
                   >
-                    Clear Comparison
+                    Clear
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Both scenarios are shown in your results below. Switch between Path A and Path B in the scenario list, or view the Compare tab for side-by-side analysis.</p>
-              </CardContent>
-            </Card>
+                <p className="text-[10px] text-muted-foreground/60 mt-2">Switch between paths in the scenario list, or use the Compare tab for side-by-side analysis.</p>
+            </div>
           </div>
         )}
 
-        <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-3xl mx-auto">
+        <div className="flex flex-wrap justify-center gap-1.5 mb-6 max-w-3xl mx-auto">
           {SUGGESTION_CHIPS.map((chip) => (
-            <Button
+            <button
               key={chip.label}
-              variant="outline"
-              size="sm"
               onClick={() => handleChipClick(chip.label)}
               disabled={isCreating || isRunning}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground/70 border border-white/[0.06] bg-white/[0.02] rounded-full hover:border-white/[0.12] hover:text-foreground transition-all disabled:opacity-40"
               data-testid={`chip-${chip.label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
             >
-              <chip.icon className="h-3.5 w-3.5 mr-1.5" />
+              <chip.icon className="h-3 w-3" />
               {chip.label}
-            </Button>
+            </button>
           ))}
         </div>
 
@@ -1452,52 +1448,50 @@ export default function ScenariosPage() {
         )}
 
         {baseMetrics && (
-          <Card className="max-w-4xl mx-auto" data-testid="card-context-bar">
-            <CardContent className="py-3 px-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 text-center">
+          <div className="max-w-3xl mx-auto border border-white/[0.06] rounded-xl bg-white/[0.02] backdrop-blur-sm px-4 py-3" data-testid="card-context-bar">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 text-center">
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Cash</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-cash">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Cash</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-cash">
                     {formatCurrency(baseMetrics.cashOnHand)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Monthly Burn</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-burn">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Burn</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-burn">
                     {formatCurrency(netBurn)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Runway</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-runway">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Runway</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-runway">
                     {formatRunway(Number(baseMetrics.currentRunway))}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">MRR</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-mrr">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">MRR</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-mrr">
                     {formatCurrency(baseMetrics.monthlyRevenue)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Growth Rate</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-growth">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">Growth</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-growth">
                     {Number(baseMetrics.growthRate).toFixed(1)}%
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider">LTV:CAC</p>
-                  <p className="text-sm font-semibold font-mono" data-testid="text-context-ltvcac">
+                  <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest mb-0.5">LTV:CAC</p>
+                  <p className="text-xs font-semibold font-mono" data-testid="text-context-ltvcac">
                     {Number(sharedMetrics.ltvCacRatio).toFixed(1)}x
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </div>
         )}
 
         {isUsingDemoData && (
-          <Card className="max-w-4xl mx-auto mt-4 border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20" data-testid="demo-data-warning">
+          <Card className="max-w-3xl mx-auto mt-4 border-amber-500/20 bg-amber-500/[0.03] backdrop-blur-sm" data-testid="demo-data-warning">
             <CardContent className="flex items-start gap-3 p-4">
               <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -1639,22 +1633,22 @@ export default function ScenariosPage() {
 
         {simulation && !isRunning && !isCreating && (
           <>
-            <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div>
-                <h2 className="text-xl font-bold" data-testid="text-results-title">Simulation Results</h2>
-                <p className="text-sm text-muted-foreground">{currentScenarioName} &mdash; 1,000 Monte Carlo runs</p>
+                <h2 className="text-base font-semibold tracking-tight" data-testid="text-results-title">Simulation Results</h2>
+                <p className="text-xs text-muted-foreground/60">{currentScenarioName} — 1,000 Monte Carlo runs</p>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm" onClick={handleShareScenario} data-testid="button-share-scenario">
-                  <Share2 className="h-4 w-4 mr-2" />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleShareScenario} data-testid="button-share-scenario">
+                  <Share2 className="h-3 w-3 mr-1.5" />
                   Share Link
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareSimulationResults} data-testid="button-email-results">
-                  <Mail className="h-4 w-4 mr-2" />
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleShareSimulationResults} data-testid="button-email-results">
+                  <Mail className="h-3 w-3 mr-1.5" />
                   Email Results
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => window.print()} data-testid="button-print-results">
-                  <Download className="h-4 w-4 mr-2" />
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => window.print()} data-testid="button-print-results">
+                  <Download className="h-3 w-3 mr-1.5" />
                   Print / PDF
                 </Button>
                 <ExportButton
