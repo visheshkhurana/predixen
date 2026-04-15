@@ -116,6 +116,28 @@
   50% { opacity: 0.8; transform: scale(1.5); }
 }
 
+.fc-glass-card {
+  background: hsl(var(--card) / 0.6);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border: 1px solid hsl(var(--border) / 0.5);
+  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fc-glass-card:hover {
+  box-shadow: 0 8px 30px hsl(var(--background) / 0.15), inset 0 1px 0 hsl(var(--foreground) / 0.04);
+  transform: translateY(-1px);
+}
+
+.dark .fc-glass-card {
+  background: hsl(var(--card) / 0.5);
+  border-color: hsl(var(--foreground) / 0.08);
+}
+
+.dark .fc-glass-card:hover {
+  box-shadow: 0 8px 30px hsl(0 0% 0% / 0.25), inset 0 1px 0 hsl(var(--foreground) / 0.06);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fc-animate-fade-up,
   .fc-animate-scale-in,
@@ -123,7 +145,14 @@
   .fc-animate-shimmer,
   .fc-animate-status-pulse,
   .fc-animate-glow,
-  .fc-stagger > * {
+  .fc-stagger > *,
+  [class*="fc-float"],
+  [class*="fc-drift"],
+  [class*="fc-twinkle"] {
     animation: none !important;
+  }
+
+  .fc-glass-card:hover {
+    transform: none;
   }
 }

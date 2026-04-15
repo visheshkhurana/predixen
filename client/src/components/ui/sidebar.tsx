@@ -209,20 +209,22 @@ function Sidebar({
   const isOffcanvas = collapsible === "offcanvas"
   const isIcon = collapsible === "icon"
 
+  const springEasing = "cubic-bezier(0.32, 0.72, 0, 1)"
+
   const gapStyle: React.CSSProperties = {
     width: isCollapsed && isOffcanvas
       ? "0px"
       : isCollapsed && isIcon
         ? "var(--sidebar-width-icon)"
         : "var(--sidebar-width)",
-    transition: "width 200ms linear",
+    transition: `width 300ms ${springEasing}`,
   }
 
   const containerStyle: React.CSSProperties = {
     width: isCollapsed && isIcon
       ? "var(--sidebar-width-icon)"
       : "var(--sidebar-width)",
-    transition: "left 200ms linear, right 200ms linear, width 200ms linear",
+    transition: `left 300ms ${springEasing}, right 300ms ${springEasing}, width 300ms ${springEasing}`,
     ...(side === "left"
       ? { left: isCollapsed && isOffcanvas ? "calc(var(--sidebar-width) * -1)" : "0" }
       : { right: isCollapsed && isOffcanvas ? "calc(var(--sidebar-width) * -1)" : "0" }),

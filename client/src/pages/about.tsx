@@ -1,8 +1,12 @@
+import { useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import { Eye, BarChart3, Rocket, Lock, ArrowRight } from "lucide-react";
+import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 const values = [
   {
@@ -34,7 +38,54 @@ const team = [
   { initials: "DM", name: "Dev Mehta", role: "Lead Engineer" },
 ];
 
+gsap.registerPlugin(ScrollTrigger);
+
 export default function AboutPage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (prefersReducedMotion || !containerRef.current) return;
+
+    const ctx = gsap.context(() => {
+      gsap.utils.toArray<HTMLElement>(".about-value-card").forEach((card, i) => {
+        gsap.fromTo(card,
+          { y: 20, opacity: 0.8 },
+          {
+            y: 0,
+            opacity: 1,
+            ease: "none",
+            scrollTrigger: {
+              trigger: card,
+              start: "top 90%",
+              end: "top 50%",
+              scrub: 0.6,
+            },
+          }
+        );
+      });
+
+      gsap.utils.toArray<HTMLElement>(".about-team-member").forEach((member) => {
+        gsap.fromTo(member,
+          { y: 15, scale: 0.97 },
+          {
+            y: 0,
+            scale: 1,
+            ease: "none",
+            scrollTrigger: {
+              trigger: member,
+              start: "top 90%",
+              end: "top 60%",
+              scrub: 0.5,
+            },
+          }
+        );
+      });
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, []);
+
   useSEO({
     title: "About | FounderConsole",
     description: "Why FounderConsole exists: founders need explainable financial clarity under uncertainty.",
@@ -51,6 +102,8 @@ export default function AboutPage() {
 
   return (
     <MarketingLayout>
+      <div ref={containerRef}>
+      <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-about-title">
@@ -61,7 +114,9 @@ export default function AboutPage() {
           </p>
         </div>
       </section>
+      </FadeIn>
 
+      <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <div className="max-w-3xl space-y-5 text-muted-foreground">
@@ -81,28 +136,33 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.1}>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-values-heading">
             Our values
           </h2>
-          <div className="mt-8 grid gap-6 sm:grid-cols-2">
+          <StaggerChildren className="mt-8 grid gap-6 sm:grid-cols-2" staggerDelay={0.08}>
             {values.map((v) => (
+              <StaggerItem key={v.title}>
               <div
-                key={v.title}
-                className="rounded-xl border bg-card/50 p-6"
+                className="about-value-card rounded-xl border bg-card/50 p-6"
                 data-testid={`card-value-${v.title.toLowerCase()}`}
               >
                 <v.icon className="h-5 w-5 text-primary" />
                 <h3 className="mt-3 text-base font-semibold text-foreground">{v.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{v.description}</p>
               </div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerChildren>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.1}>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-team-heading">
@@ -110,7 +170,7 @@ export default function AboutPage() {
           </h2>
           <div className="mt-8 grid grid-cols-2 gap-6 md:grid-cols-4">
             {team.map((member) => (
-              <div key={member.name} className="flex flex-col items-center text-center" data-testid={`card-team-${member.initials.toLowerCase()}`}>
+              <div key={member.name} className="about-team-member flex flex-col items-center text-center" data-testid={`card-team-${member.initials.toLowerCase()}`}>
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                   <span className="text-lg font-semibold text-muted-foreground">{member.initials}</span>
                 </div>
@@ -121,7 +181,9 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.1}>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
           <h2 className="text-2xl font-semibold text-foreground" data-testid="text-about-cta">
@@ -140,6 +202,8 @@ export default function AboutPage() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
+      </div>
     </MarketingLayout>
   );
 }

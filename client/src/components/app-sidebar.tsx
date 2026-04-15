@@ -361,12 +361,14 @@ export function AppSidebar() {
   const pendingDecisionCount = decisions?.filter((d: any) => d.status === "pending" || d.status === "open")?.length ?? 0;
 
   return (
-    <Sidebar>
+    <Sidebar className="glass-subtle">
       <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <FCLogo size="md" />
+        <div className="flex items-center gap-3 group">
+          <div className="transition-transform duration-300 ease-out group-hover:scale-110">
+            <FCLogo size="md" />
+          </div>
           <div>
-            <span className="font-semibold text-sm">FounderConsole</span>
+            <span className="font-semibold text-sm bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FounderConsole</span>
             <p className="text-xs text-muted-foreground">Intelligence OS</p>
           </div>
         </div>
@@ -384,18 +386,18 @@ export function AppSidebar() {
               variant="default"
               size="sm"
               className={cn(
-                "w-full justify-start gap-2.5 text-white border border-white/10",
-                location === "/copilot" && "ring-1 ring-white/30"
+                "w-full justify-start gap-2.5 text-white border border-white/10 transition-all duration-300 hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5",
+                location === "/copilot" && "ring-1 ring-white/30 shadow-lg shadow-primary/25"
               )}
               style={{
                 background: "linear-gradient(135deg, hsl(217 91% 55%), hsl(271 81% 50%))",
               }}
               data-testid="nav-copilot"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 animate-pulse" />
               <span className="flex-1 text-left">AI Copilot</span>
               <span
-                className="flex items-center gap-0.5 text-[10px] font-mono bg-white/15 px-1.5 py-0.5 rounded"
+                className="flex items-center gap-0.5 text-[10px] font-mono bg-white/15 px-1.5 py-0.5 rounded backdrop-blur-sm"
               >
                 <Command className="h-2.5 w-2.5" />K
               </span>
@@ -629,7 +631,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-2 pb-3 space-y-1">
+      <SidebarFooter className="px-2 pb-3 space-y-1 border-t border-border/30">
         <SettingsDrawer />
         <div className="flex items-center justify-between px-3 py-1">
           <ThemeToggle />

@@ -1,7 +1,11 @@
+import { useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
+import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   BarChart3,
   Sparkles,
@@ -100,7 +104,37 @@ const features = [
   },
 ];
 
+gsap.registerPlugin(ScrollTrigger);
+
 export default function MarketingFeaturesPage() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (prefersReducedMotion || !containerRef.current) return;
+
+    const ctx = gsap.context(() => {
+      gsap.utils.toArray<HTMLElement>(".feature-image").forEach((img) => {
+        gsap.fromTo(img, 
+          { y: 30, scale: 0.95 },
+          {
+            y: -20,
+            scale: 1,
+            ease: "none",
+            scrollTrigger: {
+              trigger: img,
+              start: "top 85%",
+              end: "bottom 15%",
+              scrub: 0.8,
+            },
+          }
+        );
+      });
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, []);
+
   useSEO({
     title: "Features — Simulation, AI Copilot, Fundraising CRM & More | FounderConsole",
     description:
@@ -122,6 +156,8 @@ export default function MarketingFeaturesPage() {
 
   return (
     <MarketingLayout>
+      <div ref={containerRef}>
+      <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-features-title">
@@ -132,13 +168,14 @@ export default function MarketingFeaturesPage() {
           </p>
         </div>
       </section>
+      </FadeIn>
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
           <div className="space-y-16">
             {features.map((f, i) => (
+              <ScrollReveal key={f.title} delay={0.05}>
               <div
-                key={f.title}
                 className={`flex flex-col gap-8 md:flex-row md:items-start ${i % 2 === 1 ? "md:flex-row-reverse" : ""}`}
                 data-testid={`section-feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
               >
@@ -162,17 +199,19 @@ export default function MarketingFeaturesPage() {
                   <img
                     src={f.screenshot}
                     alt={`${f.title} — ${f.headline}`}
-                    className="rounded-xl border shadow-lg w-full object-cover"
+                    className="feature-image rounded-xl border shadow-lg w-full object-cover"
                     loading="lazy"
                     data-testid={`img-feature-${f.title.toLowerCase().replace(/\s+/g, "-")}`}
                   />
                 </div>
               </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
+      <ScrollReveal delay={0.1}>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
           <h2 className="text-2xl font-semibold text-foreground" data-testid="text-features-cta">
@@ -191,6 +230,8 @@ export default function MarketingFeaturesPage() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
+      </div>
     </MarketingLayout>
   );
 }

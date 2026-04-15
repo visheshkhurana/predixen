@@ -15,6 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { FeedbackButton } from '@/components/FeedbackButton';
+import { FadeIn } from '@/components/ui/motion-primitives';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, ReferenceLine
@@ -1857,6 +1858,7 @@ Type **help** for a full list of what I can do.`,
   }
   
   return (
+    <FadeIn delay={0.05} duration={0.4} direction="none">
     <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
       {/* Conversation History Sidebar */}
       {showConversationSidebar && (
@@ -1866,7 +1868,7 @@ Type **help** for a full list of what I can do.`,
           onClick={() => setShowConversationSidebar(false)}
           data-testid="sidebar-backdrop"
         />
-        <div className="fixed md:relative inset-y-0 left-0 z-40 md:z-auto w-64 border-r border-border/50 flex flex-col bg-background md:bg-muted/30 shadow-lg md:shadow-none mt-16 md:mt-0">
+        <div className="fixed md:relative inset-y-0 left-0 z-40 md:z-auto w-64 border-r border-border/50 flex flex-col bg-background md:bg-muted/30 glass-subtle shadow-lg md:shadow-none mt-16 md:mt-0">
           <div className="p-3 border-b border-border/50 flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Conversations</span>
             <Button 
@@ -2569,5 +2571,6 @@ Type **help** for a full list of what I can do.`,
         </div>
       </div>
     </div>
+    </FadeIn>
   );
 }

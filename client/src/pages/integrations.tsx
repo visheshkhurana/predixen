@@ -4,6 +4,7 @@ import { trackEvent } from "@/lib/posthog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { FadeIn } from '@/components/ui/motion-primitives';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -948,6 +949,7 @@ export default function IntegrationsPage() {
   };
 
   return (
+    <FadeIn delay={0.05} duration={0.4}>
     <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold" data-testid="text-page-title">Integrations</h1>
@@ -1302,6 +1304,7 @@ export default function IntegrationsPage() {
         }}
       />
     </div>
+    </FadeIn>
   );
 }
 

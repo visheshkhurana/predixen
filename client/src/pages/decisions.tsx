@@ -3,6 +3,7 @@ import { useSEO } from "@/lib/seo";
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FadeIn, StaggerChildren, StaggerItem, ScrollReveal } from '@/components/ui/motion-primitives';
 
 import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
@@ -153,7 +154,7 @@ function StickyTOC({ activeSection, visibleSections }: { activeSection: string; 
 
   return (
     <nav className="hidden xl:block fixed right-8 top-32 w-52 z-50" data-testid="toc-sidebar">
-      <div className="rounded-md border border-border/50 bg-card/80 p-4" style={{ backdropFilter: 'blur(8px)' }}>
+      <div className="rounded-md glass-subtle p-4">
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-4 font-semibold">Contents</p>
         <div className="relative pl-[7px]">
           <div className="absolute left-[7px] top-0 bottom-0 w-px bg-border" />
@@ -300,10 +301,11 @@ export default function DecisionsPage() {
 
       setCurrentStep('decision');
       toast({ title: 'Briefing generated', description: 'Your strategic briefing is ready.' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (timedOut) return;
       const message = (err instanceof Error ? err.message : typeof err === 'string' ? err : '') || 'Something went wrong';
-      if (message.includes('authentication') || message.includes('credentials') || err.status === 401) {
+      const status = err && typeof err === 'object' && 'status' in err ? (err as { status: number }).status : undefined;
+      if (message.includes('authentication') || message.includes('credentials') || status === 401) {
         toast({
           title: 'Session Expired',
           description: 'Please sign in again to continue.',
@@ -555,6 +557,7 @@ export default function DecisionsPage() {
         companyName={currentCompany.name}
       />
 
+      <FadeIn delay={0.1}>
       <header className="mb-10">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -644,6 +647,7 @@ export default function DecisionsPage() {
           <div className="mt-6 border-b border-border" />
         )}
       </header>
+      </FadeIn>
 
       {generationError ? (
         <Card className="border-destructive/30" data-testid="section-generation-error">

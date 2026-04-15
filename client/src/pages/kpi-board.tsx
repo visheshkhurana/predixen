@@ -12,6 +12,7 @@ import { useFinancialMetrics } from '@/hooks/useFinancialMetrics';
 import { Sparkline } from '@/components/Sparkline';
 import { formatCurrencyAbbrev, cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
+import { FadeIn, StaggerChildren, StaggerItem, ScrollReveal } from '@/components/ui/motion-primitives';
 import {
   TrendingUp,
   TrendingDown,
@@ -523,6 +524,7 @@ export default function KPIBoardPage() {
   }
 
   return (
+    <FadeIn delay={0.05} duration={0.4}>
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -566,7 +568,8 @@ export default function KPIBoardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <StaggerChildren className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" staggerDelay={0.08}>
+        <StaggerItem>
         <EnhancedKPICard
           title="MRR"
           value={isLoading ? '—' : formatCurrency(metrics.mrr)}
@@ -581,6 +584,8 @@ export default function KPIBoardPage() {
           hoverDetail={`MRR is ${formatCurrency(metrics.mrr)}. ${mrrTrend.value ? `Changed ${mrrTrend.value} from prior period.` : ''} ARR equivalent: ${formatCurrency(metrics.arr)}.`}
           testId="kpi-card-mrr"
         />
+        </StaggerItem>
+        <StaggerItem>
         <EnhancedKPICard
           title="ARR"
           value={isLoading ? '—' : formatCurrency(metrics.arr)}
@@ -594,6 +599,8 @@ export default function KPIBoardPage() {
           hoverDetail={`Annualized recurring revenue: ${formatCurrency(metrics.arr)}.`}
           testId="kpi-card-arr"
         />
+        </StaggerItem>
+        <StaggerItem>
         <EnhancedKPICard
           title="Cash Balance"
           value={isLoading ? '—' : formatCurrency(metrics.cash_balance)}
@@ -606,6 +613,8 @@ export default function KPIBoardPage() {
           hoverDetail={`Current cash on hand: ${formatCurrency(metrics.cash_balance)}.`}
           testId="kpi-card-cash"
         />
+        </StaggerItem>
+        <StaggerItem>
         <EnhancedKPICard
           title="Runway"
           value={isLoading ? '—' : (metrics.runway_months >= 120) ? '\u221E' : `${metrics.runway_months.toFixed(1)} mo`}
@@ -617,7 +626,8 @@ export default function KPIBoardPage() {
           hoverDetail={metrics.runway_months >= 120 ? 'Company is profitable or cash-flow positive.' : `At current burn rate, cash lasts approximately ${metrics.runway_months.toFixed(1)} months.`}
           testId="kpi-card-runway"
         />
-      </div>
+        </StaggerItem>
+      </StaggerChildren>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <EnhancedKPICard
@@ -700,6 +710,7 @@ export default function KPIBoardPage() {
         />
       </div>
 
+      <ScrollReveal>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card data-testid="chart-mrr-trend">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -784,7 +795,9 @@ export default function KPIBoardPage() {
           </CardContent>
         </Card>
       </div>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.1}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card data-testid="chart-cash-flow">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -883,7 +896,9 @@ export default function KPIBoardPage() {
           </CardContent>
         </Card>
       </div>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.15}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card data-testid="chart-unit-economics">
           <CardHeader>
@@ -953,8 +968,10 @@ export default function KPIBoardPage() {
           </CardContent>
         </Card>
       </div>
+      </ScrollReveal>
 
       <DataSourcesPanel onAddIntegration={() => navigate('/integrations')} />
     </div>
+    </FadeIn>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, CheckCircle } from "lucide-react";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useSEO } from "@/lib/seo";
+import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 const tiers = [
   {
@@ -56,8 +60,37 @@ const tiers = [
   },
 ];
 
+gsap.registerPlugin(ScrollTrigger);
+
 export default function PricingPage() {
   const [, navigate] = useLocation();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (prefersReducedMotion || !containerRef.current) return;
+
+    const ctx = gsap.context(() => {
+      gsap.utils.toArray<HTMLElement>(".pricing-benefit-card").forEach((card) => {
+        gsap.fromTo(card,
+          { y: 20, opacity: 0.85 },
+          {
+            y: 0,
+            opacity: 1,
+            ease: "none",
+            scrollTrigger: {
+              trigger: card,
+              start: "top 90%",
+              end: "top 55%",
+              scrub: 0.6,
+            },
+          }
+        );
+      });
+    }, containerRef);
+
+    return () => ctx.revert();
+  }, []);
 
   useSEO({
     title: "Pricing | FounderConsole",
@@ -99,6 +132,8 @@ export default function PricingPage() {
 
   return (
     <MarketingLayout>
+      <div ref={containerRef}>
+      <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
           <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-beta">
@@ -112,14 +147,16 @@ export default function PricingPage() {
           </p>
         </div>
       </section>
+      </FadeIn>
 
+      <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="grid gap-6 md:grid-cols-3">
+          <StaggerChildren className="grid gap-6 md:grid-cols-3" staggerDelay={0.1}>
             {tiers.map((tier) => (
+              <StaggerItem key={tier.name}>
               <Card
-                key={tier.name}
-                className={`flex flex-col ${tier.highlighted ? "border-primary" : ""}`}
+                className={`flex flex-col h-full ${tier.highlighted ? "border-primary" : ""}`}
                 data-testid={`card-tier-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <CardHeader>
@@ -163,11 +200,14 @@ export default function PricingPage() {
                   </Button>
                 </CardFooter>
               </Card>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerChildren>
         </div>
       </section>
+      </ScrollReveal>
 
+      <ScrollReveal delay={0.1}>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-5min-heading">
@@ -175,7 +215,7 @@ export default function PricingPage() {
           </h2>
           <p className="mt-2 text-muted-foreground">Designed to reduce risk, not add complexity.</p>
           <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <div className="rounded-xl border bg-card/50 p-6">
+            <div className="pricing-benefit-card rounded-xl border bg-card/50 p-6">
               <h3 className="text-base font-semibold text-foreground">Immediate deliverables</h3>
               <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
                 {[
@@ -192,7 +232,7 @@ export default function PricingPage() {
               </ul>
             </div>
 
-            <div className="rounded-xl border bg-card/50 p-6">
+            <div className="pricing-benefit-card rounded-xl border bg-card/50 p-6">
               <h3 className="text-base font-semibold text-foreground">What this does for founders</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 Founders can't waste hours building spreadsheets and making decisions off a single outcome. The value is turning uncertainty into an explainable, defensible decision language that investors and boards respect.
@@ -206,6 +246,7 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+      </ScrollReveal>
 
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
@@ -214,6 +255,7 @@ export default function PricingPage() {
           </p>
         </div>
       </section>
+      </div>
     </MarketingLayout>
   );
 }

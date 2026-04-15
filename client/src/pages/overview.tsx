@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { FadeIn, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
 import {
   AlertTriangle,
   TrendingUp,
@@ -1231,7 +1232,8 @@ export default function OverviewPage() {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       {!briefingDismissed && (
-        <Card className="relative border-primary/20" data-testid="card-morning-briefing">
+        <FadeIn delay={0.1}>
+        <Card className="relative border-primary/20 glass-subtle" data-testid="card-morning-briefing">
           <Button
             variant="ghost"
             size="icon"
@@ -1285,6 +1287,7 @@ export default function OverviewPage() {
             </div>
           </CardContent>
         </Card>
+        </FadeIn>
       )}
 
       <div data-testid="section-goal-tracker">
@@ -1554,8 +1557,8 @@ export default function OverviewPage() {
               }}
             />
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <MetricCard
+            <StaggerChildren className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" staggerDelay={0.05}>
+              <StaggerItem><MetricCard
                 title="MRR"
                 value={formatCurrency(baseData.mrr)}
                 subtitle="Monthly Recurring Revenue"
@@ -1571,8 +1574,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-              <MetricCard
+              /></StaggerItem>
+              <StaggerItem><MetricCard
                 title="ARR"
                 value={formatCurrency(baseData.arr)}
                 subtitle="Annual Recurring Revenue"
@@ -1588,8 +1591,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-              <MetricCard
+              /></StaggerItem>
+              <StaggerItem><MetricCard
                 title="Cash on Hand"
                 value={formatCurrency(baseData.cash)}
                 subtitle={`Runway: ${formatRunway(baseData.runway)}`}
@@ -1604,8 +1607,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-              <MetricCard
+              /></StaggerItem>
+              <StaggerItem><MetricCard
                 title="Burn Rate"
                 value={formatCurrency(baseData.burnRate)}
                 subtitle="/month"
@@ -1620,8 +1623,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-              <MetricCard
+              /></StaggerItem>
+              <StaggerItem><MetricCard
                 title="CAC"
                 value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
                 subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
@@ -1636,8 +1639,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-              <MetricCard
+              /></StaggerItem>
+              <StaggerItem><MetricCard
                 title="LTV"
                 value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
                 subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
@@ -1653,8 +1656,8 @@ export default function OverviewPage() {
                   timestamp: truthScan?.computed_at,
                   confidence: truthScan?.data_confidence_score,
                 }}
-              />
-            </div>
+              /></StaggerItem>
+            </StaggerChildren>
           )}
         </>
       )}

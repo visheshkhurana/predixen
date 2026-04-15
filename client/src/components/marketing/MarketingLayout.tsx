@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
   { label: "Features", href: "/features" },
@@ -68,7 +69,7 @@ function Header() {
   }, [location]);
 
   return (
-    <header className="sticky top-0 z-[9999] border-b bg-background/80 backdrop-blur-md">
+    <header className="sticky top-0 z-[9999] border-b border-border/50 bg-background/60 backdrop-blur-2xl backdrop-saturate-150">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link href="/" data-testid="link-logo" className="flex items-center gap-2">
           <FCLogo size="md" />
@@ -244,12 +245,29 @@ function useMetaPixel() {
 
 export function MarketingLayout({ children }: { children: React.ReactNode }) {
   useMetaPixel();
+  const [location] = useLocation();
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <MarketingBackground />
       <Header />
-      <main className="relative z-[1] flex-1 pb-16 md:pb-0">{children}</main>
+      {prefersReducedMotion ? (
+        <main className="relative z-[1] flex-1 pb-16 md:pb-0">{children}</main>
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.main
+            key={location}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="relative z-[1] flex-1 pb-16 md:pb-0"
+          >
+            {children}
+          </motion.main>
+        </AnimatePresence>
+      )}
       <Footer />
       <MobileStickyCTA />
     </div>

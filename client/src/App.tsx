@@ -1,6 +1,7 @@
-import { useEffect, useState, useRef, useCallback, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
 import { Switch, Route, Redirect, useLocation, Link } from "wouter";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -729,7 +730,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <span>Demo Mode — You are viewing simulated sample data. <Link href="/auth" className="underline hover:text-amber-300">Sign up free</Link> to use your own.</span>
             </div>
           )}
-          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background sticky top-0 z-50">
+          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background/80 backdrop-blur-xl sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}
@@ -917,7 +918,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <CopilotDrawer open={copilotOpen} onOpenChange={setCopilotOpen} />
           <Breadcrumbs />
           <main className="flex-1 overflow-auto bg-background">
-            {children}
+            <AnimatedRouteWrapper>
+              {children}
+            </AnimatedRouteWrapper>
           </main>
 
           <AskAIButton />
@@ -925,6 +928,29 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </SidebarProvider>
+  );
+}
+
+function AnimatedRouteWrapper({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const prefersReducedMotion = useReducedMotion();
+
+  if (prefersReducedMotion) {
+    return <>{children}</>;
+  }
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

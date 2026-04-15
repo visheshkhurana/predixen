@@ -3,6 +3,7 @@ import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
+import { FadeIn, ScrollReveal } from '@/components/ui/motion-primitives';
 
 const faqSections = [
   {
@@ -130,6 +131,7 @@ export default function FAQPage() {
 
   return (
     <MarketingLayout>
+      <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-faq-title">
@@ -140,11 +142,13 @@ export default function FAQPage() {
           </p>
         </div>
       </section>
+      </FadeIn>
 
       <section className="border-t">
         <div className="mx-auto max-w-3xl px-4 py-10">
           {faqSections.map((section) => (
-            <div key={section.title} className="mb-10">
+            <ScrollReveal key={section.title}>
+            <div className="mb-10">
               <h2 className="mb-4 text-lg font-semibold text-foreground" data-testid={`text-faq-section-${section.title.toLowerCase().replace(/\s+/g, "-")}`}>
                 {section.title}
               </h2>
@@ -166,8 +170,10 @@ export default function FAQPage() {
                 ))}
               </Accordion>
             </div>
+            </ScrollReveal>
           ))}
 
+          <ScrollReveal delay={0.1}>
           <div className="rounded-xl border bg-card/50 p-6 text-center">
             <h3 className="text-base font-semibold text-foreground" data-testid="text-faq-still-questions">
               Still have questions?
@@ -181,6 +187,7 @@ export default function FAQPage() {
               </Button>
             </div>
           </div>
+          </ScrollReveal>
         </div>
       </section>
     </MarketingLayout>

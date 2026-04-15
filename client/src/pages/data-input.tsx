@@ -38,6 +38,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { FadeIn } from '@/components/ui/motion-primitives';
 import { useToast } from "@/hooks/use-toast";
 import { useFounderStore, FinancialBaseline, ExtractionResult } from "@/store/founderStore";
 import {
@@ -1123,6 +1124,7 @@ export default function DataInput() {
   };
 
   return (
+    <FadeIn delay={0.05} duration={0.4}>
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <CrossPageIntelligence context="data-input" className="mb-4" testId="data-input-intelligence" />
       <div className="mb-6 flex items-center justify-between">
@@ -2326,5 +2328,6 @@ export default function DataInput() {
         </DialogContent>
       </Dialog>
     </div>
+    </FadeIn>
   );
 }

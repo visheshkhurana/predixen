@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFounderStore } from '@/store/founderStore';
 import { apiRequest } from '@/lib/queryClient';
 import { Settings, Lock, Mail, Bell, LogOut, Loader2, User, Shield, Check } from 'lucide-react';
+import { FadeIn } from '@/components/ui/motion-primitives';
 
 export default function SettingsPage() {
   const { user, logout } = useFounderStore();
@@ -61,6 +62,7 @@ export default function SettingsPage() {
   };
 
   return (
+    <FadeIn delay={0.05} duration={0.4}>
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">Settings</h1>
@@ -222,5 +224,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
+    </FadeIn>
   );
 }

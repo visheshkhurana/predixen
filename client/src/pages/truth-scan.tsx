@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FadeIn } from '@/components/ui/motion-primitives';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { MetricCard } from '@/components/MetricCard';
@@ -875,6 +876,7 @@ export default function TruthScanPage() {
   };
   
   return (
+    <FadeIn delay={0.05} duration={0.4}>
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -1571,5 +1573,6 @@ export default function TruthScanPage() {
         benchmarkData={selectedMetric.benchmark}
       />
     </div>
+    </FadeIn>
   );
 }

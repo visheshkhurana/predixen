@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import { Clock, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
+import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
 import { blogPosts } from "@/data/blog-posts";
 
 function BlogList() {
@@ -23,6 +24,7 @@ function BlogList() {
 
   return (
     <MarketingLayout>
+      <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-blog-title">
@@ -33,13 +35,15 @@ function BlogList() {
           </p>
         </div>
       </section>
+      </FadeIn>
 
+      <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+          <StaggerChildren className="grid gap-6 grid-cols-1 md:grid-cols-2" staggerDelay={0.08}>
             {blogPosts.map((post, index) => (
+              <StaggerItem key={post.slug}>
               <Link
-                key={post.slug}
                 href={`/blog/${post.slug}`}
                 className="group"
                 data-testid={`card-blog-${index}`}
@@ -77,10 +81,12 @@ function BlogList() {
                   </div>
                 </article>
               </Link>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerChildren>
         </div>
       </section>
+      </ScrollReveal>
     </MarketingLayout>
   );
 }
@@ -138,6 +144,7 @@ function BlogPost({ slug }: { slug: string }) {
 
   return (
     <MarketingLayout>
+      <FadeIn delay={0.05} duration={0.5}>
       <article className="mx-auto max-w-3xl px-4 py-12 md:py-16" data-testid="blog-article">
         <Link href="/blog" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8" data-testid="link-back-to-blog">
           <ArrowLeft className="h-4 w-4" />
@@ -207,6 +214,7 @@ function BlogPost({ slug }: { slug: string }) {
           </div>
         </div>
       </article>
+      </FadeIn>
     </MarketingLayout>
   );
 }
