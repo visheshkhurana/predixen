@@ -83,6 +83,12 @@ const settingsGroups: { label: string; items: SettingsNavItem[] }[] = [
       { title: "Goals", url: "/goals", icon: Flag },
     ],
   },
+  {
+    label: "Account",
+    items: [
+      { title: "Plans & Billing", url: "/billing", icon: CreditCard },
+    ],
+  },
 ];
 
 const adminSettingsItems: SettingsNavItem[] = [

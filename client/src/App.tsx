@@ -20,6 +20,7 @@ import { ContextBar } from "@/components/ContextBar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageErrorFallback } from "@/components/PageErrorFallback";
 import { BackendStatusBanner } from "@/components/BackendStatusBanner";
+import { TrialBanner } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
 import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
@@ -110,6 +111,7 @@ import DigitalTwinPage from "@/pages/digital-twin";
 import IntelligenceGraphPage from "@/pages/intelligence-graph";
 import SurvivalSimulatorPage from "@/pages/survival-simulator";
 import SettingsPage from "@/pages/settings";
+import BillingPage from "@/pages/billing";
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -147,6 +149,28 @@ function AuthenticatedRoute({ component: Component, allowWithoutCompany = false 
       }}
     >
       <Component />
+    </ErrorBoundary>
+  );
+}
+
+function GatedRoute({ component: Component, feature }: { component: React.ComponentType; feature: string }) {
+  const user = useFounderStore((s) => s.user);
+  const currentCompany = useFounderStore((s) => s.currentCompany);
+
+  if (!user) return <Redirect to="/auth" />;
+  if (!currentCompany) return <Redirect to="/onboarding" />;
+
+  return (
+    <ErrorBoundary
+      fallback={(error, reset) => <PageErrorFallback error={error} reset={reset} pageName="Page" />}
+      onError={(error, info) => {
+        console.error('Gated Route Error:', error);
+        console.error('Component Stack:', info.componentStack);
+      }}
+    >
+      <PaywallGate feature={feature}>
+        <Component />
+      </PaywallGate>
     </ErrorBoundary>
   );
 }
@@ -373,13 +397,13 @@ function Router() {
         {() => <AdminRoute component={MessagingPage} />}
       </Route>
       <Route path="/cap-table">
-        {() => <AuthenticatedRoute component={CapTablePage} />}
+        {() => <GatedRoute component={CapTablePage} feature="cap_table" />}
       </Route>
       <Route path="/fundraising">
-        {() => <AuthenticatedRoute component={FundraisingPage} />}
+        {() => <GatedRoute component={FundraisingPage} feature="fundraising_os" />}
       </Route>
       <Route path="/investor-room">
-        {() => <AuthenticatedRoute component={InvestorRoomPage} />}
+        {() => <GatedRoute component={InvestorRoomPage} feature="investor_room" />}
       </Route>
       <Route path="/dashboards">
         {() => <AuthenticatedRoute component={DashboardsPage} />}
@@ -400,16 +424,16 @@ function Router() {
         {() => <AuthenticatedRoute component={GoalsPage} />}
       </Route>
       <Route path="/hiring-planner">
-        {() => <AuthenticatedRoute component={HiringPlannerPage} />}
+        {() => <GatedRoute component={HiringPlannerPage} feature="hiring_planner" />}
       </Route>
       <Route path="/doc-generator">
-        {() => <AuthenticatedRoute component={DocGeneratorPage} />}
+        {() => <GatedRoute component={DocGeneratorPage} feature="document_generator" />}
       </Route>
       <Route path="/ai-graphics">
-        {() => <AuthenticatedRoute component={AIGraphicsPage} />}
+        {() => <GatedRoute component={AIGraphicsPage} feature="ai_graphics" />}
       </Route>
       <Route path="/digital-twin">
-        {() => <AuthenticatedRoute component={DigitalTwinPage} />}
+        {() => <GatedRoute component={DigitalTwinPage} feature="digital_twin" />}
       </Route>
       <Route path="/intelligence">
         {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
@@ -421,7 +445,7 @@ function Router() {
         {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/billing">
-        {() => <Redirect to="/admin/billing" />}
+        {() => <AuthenticatedRoute component={BillingPage} allowWithoutCompany />}
       </Route>
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin">
@@ -726,6 +750,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-[1]">
           <BackendStatusBanner />
+          <TrialBanner />
           {user?.email === 'demo@founderconsole.ai' && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
               <FlaskConical className="h-3.5 w-3.5 shrink-0" />

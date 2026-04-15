@@ -1027,6 +1027,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_simulation_accuracy_tables(engine)
     ensure_copilot_feedback_table(engine)
     ensure_agent_simulation_runs_table(engine)
+    ensure_subscription_trial_columns(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1767,3 +1768,22 @@ def ensure_agent_simulation_runs_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Agent simulation runs table migration complete")
+
+
+def ensure_subscription_trial_columns(engine: Engine) -> None:
+    """Add trial_start and trial_end columns to subscriptions table."""
+    new_columns = [
+        ('trial_start', 'TIMESTAMP'),
+        ('trial_end', 'TIMESTAMP'),
+    ]
+    with engine.connect() as conn:
+        for col_name, col_type in new_columns:
+            try:
+                conn.execute(text(
+                    f"ALTER TABLE subscriptions ADD COLUMN {col_name} {col_type}"
+                ))
+                logger.info(f"Added column {col_name} to subscriptions")
+            except Exception:
+                pass
+        conn.commit()
+    logger.info("Subscription trial columns migration complete")

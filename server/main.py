@@ -333,6 +333,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
+from server.core.subscription import PaywallMiddleware
+app.add_middleware(PaywallMiddleware)
+
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
     "/auth/register",
