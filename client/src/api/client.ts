@@ -875,4 +875,80 @@ export const api = {
         method: 'DELETE',
       }),
   },
+
+  billing: {
+    getPlans: () =>
+      request<{ plans: Array<{
+        id: string;
+        name: string;
+        price_usd: number;
+        price_monthly_usd: number;
+        price_annual_usd: number;
+        price_monthly_inr: number;
+        price_annual_inr: number;
+        price_monthly_paise: number;
+        price_annual_paise: number;
+        features: string[];
+      }> }>('/billing/plans'),
+
+    createOrder: (planId: string, billingPeriod: string = 'monthly') =>
+      request<{
+        order_id: string;
+        amount: number;
+        currency: string;
+        key_id: string;
+        plan: { id: string; name: string };
+        description: string;
+      }>('/billing/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ plan_id: planId, billing_period: billingPeriod }),
+      }),
+
+    verifyPayment: (
+      razorpayOrderId: string,
+      razorpayPaymentId: string,
+      razorpaySignature: string,
+      planId: string,
+      billingPeriod: string = 'monthly',
+    ) =>
+      request<{
+        status: string;
+        subscription: {
+          id: number;
+          plan: string;
+          status: string;
+          monthly_price: number;
+          current_period_start: string | null;
+          current_period_end: string | null;
+          payment_gateway: string;
+        };
+      }>('/billing/verify-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          razorpay_order_id: razorpayOrderId,
+          razorpay_payment_id: razorpayPaymentId,
+          razorpay_signature: razorpaySignature,
+          plan_id: planId,
+          billing_period: billingPeriod,
+        }),
+      }),
+
+    getSubscription: () =>
+      request<{
+        id?: number;
+        plan_id: string;
+        plan_name: string;
+        status: string;
+        monthly_price?: number;
+        current_period_start: string | null;
+        current_period_end: string | null;
+        cancel_at_period_end: boolean;
+        payment_gateway: string | null;
+      }>('/billing/subscription'),
+
+    cancel: () =>
+      request<{ message: string; current_period_end: string | null }>('/billing/cancel', {
+        method: 'POST',
+      }),
+  },
 };

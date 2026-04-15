@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
     RATE_LIMIT_SIMULATION: int = int(os.getenv("RATE_LIMIT_SIMULATION", "10"))
 
+    # Razorpay payment gateway
+    RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")
+    RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+    RAZORPAY_WEBHOOK_SECRET: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    USD_TO_INR_RATE: float = float(os.getenv("USD_TO_INR_RATE", "83.0"))
+
     # Database connection pool settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))

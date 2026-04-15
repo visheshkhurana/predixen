@@ -1,17 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, ArrowRight, CheckCircle } from "lucide-react";
+import { Check, ArrowRight, CheckCircle, Loader2 } from "lucide-react";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useSEO } from "@/lib/seo";
 import { FadeIn, ScrollReveal, StaggerChildren, StaggerItem } from '@/components/ui/motion-primitives';
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/api/client";
+import { openRazorpayCheckout, type RazorpayResponse } from "@/lib/razorpay";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 const tiers = [
   {
+    id: "free",
     name: "Free Beta",
     price: "$0",
     period: "",
@@ -29,6 +33,7 @@ const tiers = [
     highlighted: true,
   },
   {
+    id: "startup",
     name: "Startup",
     price: "$49",
     period: "/month",
@@ -44,6 +49,7 @@ const tiers = [
     highlighted: false,
   },
   {
+    id: "growth",
     name: "Growth",
     price: "$129",
     period: "/month",
@@ -65,6 +71,8 @@ gsap.registerPlugin(ScrollTrigger);
 export default function PricingPage() {
   const [, navigate] = useLocation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -130,6 +138,81 @@ export default function PricingPage() {
     },
   });
 
+  async function handleSubscribe(tierId: string, tierName: string) {
+    if (tierId === "free") {
+      navigate("/auth");
+      return;
+    }
+
+    setLoadingTier(tierId);
+
+    try {
+      // Create a Razorpay order via backend
+      const orderData = await api.billing.createOrder(tierId, "monthly");
+
+      // Open Razorpay checkout
+      await openRazorpayCheckout({
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "FounderConsole",
+        description: orderData.description,
+        order_id: orderData.order_id,
+        handler: async (response: RazorpayResponse) => {
+          try {
+            // Verify payment on backend
+            await api.billing.verifyPayment(
+              response.razorpay_order_id,
+              response.razorpay_payment_id,
+              response.razorpay_signature,
+              tierId,
+              "monthly",
+            );
+
+            toast({
+              title: "Payment successful",
+              description: `You're now on the ${tierName} plan. Welcome aboard.`,
+            });
+
+            navigate("/dashboard");
+          } catch (err: any) {
+            toast({
+              title: "Payment verification failed",
+              description: err?.message || "Please contact support if you were charged.",
+              variant: "destructive",
+            });
+          } finally {
+            setLoadingTier(null);
+          }
+        },
+        prefill: {},
+        theme: { color: "#6366f1" },
+        modal: {
+          ondismiss: () => {
+            setLoadingTier(null);
+          },
+          confirm_close: true,
+        },
+      });
+    } catch (err: any) {
+      // If 401, user is not logged in — redirect to auth
+      if (err?.status === 401 || err?.message?.includes("authenticated")) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in or create an account first.",
+        });
+        navigate("/auth");
+      } else {
+        toast({
+          title: "Something went wrong",
+          description: err?.message || "Could not initiate payment. Please try again.",
+          variant: "destructive",
+        });
+      }
+      setLoadingTier(null);
+    }
+  }
+
   return (
     <MarketingLayout>
       <div ref={containerRef}>
@@ -192,11 +275,26 @@ export default function PricingPage() {
                   <Button
                     variant={tier.highlighted ? "default" : "outline"}
                     className="w-full gap-2"
-                    onClick={() => navigate("/auth")}
+                    disabled={loadingTier !== null}
+                    onClick={() => handleSubscribe(tier.id, tier.name)}
                     data-testid={`button-cta-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
-                    {tier.highlighted ? "Get Started Free" : "Coming Soon"}
-                    <ArrowRight className="h-4 w-4" />
+                    {loadingTier === tier.id ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : tier.highlighted ? (
+                      <>
+                        Get Started Free
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Subscribe
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </CardFooter>
               </Card>
@@ -251,7 +349,7 @@ export default function PricingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All features include SSL encryption, daily backups, and 99.9% uptime SLA. Free during beta — no credit card required.
+            All features include SSL encryption, daily backups, and 99.9% uptime SLA. Payments processed securely via Razorpay.
           </p>
         </div>
       </section>

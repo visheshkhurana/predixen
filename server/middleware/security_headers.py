@@ -15,11 +15,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     # Sentry replay, and common CDN assets, but blocks everything else.
     CSP_POLICY = "; ".join([
         "default-src 'self'",
-        "script-src 'self' https://*.sentry.io https://*.sentry-cdn.com",
+        "script-src 'self' https://*.sentry.io https://*.sentry-cdn.com https://checkout.razorpay.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: blob: https:",
-        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://*.replit.dev wss://*.replit.dev https://us.i.posthog.com https://us.posthog.com",
+        "connect-src 'self' https://*.sentry.io https://*.ingest.sentry.io https://api.openai.com https://*.replit.dev wss://*.replit.dev https://us.i.posthog.com https://us.posthog.com https://api.razorpay.com https://lumberjack.razorpay.com",
+        "frame-src https://api.razorpay.com https://checkout.razorpay.com",
         "frame-ancestors 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -51,7 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Restrict browser features
         response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=(), payment=()"
+            "camera=(), microphone=(), geolocation=(), payment=(self)"
         )
 
         # Prevent caching of sensitive API responses

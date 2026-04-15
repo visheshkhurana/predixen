@@ -38,12 +38,12 @@ app.use((_req, res, next) => {
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://checkout.razorpay.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com",
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
-    "frame-src https://accounts.google.com",
+    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com https://api.razorpay.com https://lumberjack.razorpay.com",
+    "frame-src https://accounts.google.com https://api.razorpay.com https://checkout.razorpay.com",
   ].join("; "));
   next();
 });
