@@ -1,10 +1,10 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TrendingUp, TrendingDown, Minus, Info, Database, Calculator, Clock, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sparkline } from './Sparkline';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, useReducedMotion } from 'framer-motion';
 
 export interface MetricProvenance {
   definition: string;
@@ -50,6 +50,20 @@ const metricSourceConfig = {
   reported: { label: 'Verified', className: 'bg-emerald-500/20 text-emerald-400' },
 };
 
+const variantAccent = {
+  default: 'from-white/[0.03] to-transparent',
+  warning: 'from-amber-500/[0.06] to-transparent',
+  danger: 'from-red-500/[0.06] to-transparent',
+  success: 'from-emerald-500/[0.06] to-transparent',
+};
+
+const variantBorder = {
+  default: 'border-white/[0.06]',
+  warning: 'border-amber-500/20',
+  danger: 'border-red-500/20',
+  success: 'border-emerald-500/20',
+};
+
 export function MetricCard({
   title,
   value,
@@ -66,6 +80,8 @@ export function MetricCard({
   provenance,
   onClick,
 }: MetricCardProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   const getTrendIcon = () => {
     if (!trend) return null;
     switch (trend) {
@@ -82,190 +98,148 @@ export function MetricCard({
     if (!trend) return '';
     switch (trend) {
       case 'up':
-        return 'text-emerald-500';
+        return 'text-emerald-400';
       case 'down':
-        return 'text-red-500';
+        return 'text-red-400';
       case 'stable':
         return 'text-muted-foreground';
     }
   };
 
-  const getBenchmarkBadge = () => {
-    if (!benchmark) return null;
-    
-    const isGood =
-      (benchmark.direction === 'higher_is_better' && benchmark.position.startsWith('above')) ||
-      (benchmark.direction === 'lower_is_better' && benchmark.position === 'below_p25');
-    
-    const labels: Record<string, string> = {
-      above_p75: 'Top Quartile',
-      above_p50: 'Above Median',
-      above_p25: 'Above P25',
-      below_p25: 'Below P25',
-    };
-    
-    return (
-      <Badge
-        variant="secondary"
-        className={cn(
-          'text-xs',
-          isGood
-            ? 'bg-emerald-500/20 text-emerald-400'
-            : 'bg-amber-500/20 text-amber-400'
-        )}
-      >
-        {labels[benchmark.position]}
-      </Badge>
-    );
-  };
-
-  const getVariantBadge = () => {
-    switch (variant) {
-      case 'warning':
-        return (
-          <Badge variant="secondary" className="bg-amber-500/20 text-amber-400 text-xs">
-            Caution
-          </Badge>
-        );
-      case 'danger':
-        return (
-          <Badge variant="destructive" className="text-xs">
-            Critical
-          </Badge>
-        );
-      case 'success':
-        return (
-          <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 text-xs">
-            Healthy
-          </Badge>
-        );
-      default:
-        return null;
-    }
+  const Wrapper = prefersReducedMotion ? 'div' : motion.div;
+  const wrapperProps = prefersReducedMotion ? {} : {
+    whileHover: { y: -2, transition: { type: 'spring', stiffness: 400, damping: 25 } },
+    whileTap: { scale: 0.98 },
   };
 
   return (
-    <Card 
-      className={cn('overflow-visible', onClick && 'cursor-pointer hover-elevate')} 
+    <Wrapper
+      {...wrapperProps}
+      className={cn(
+        'group relative rounded-xl border p-5 transition-all duration-300',
+        'bg-gradient-to-b backdrop-blur-xl',
+        variantAccent[variant],
+        variantBorder[variant],
+        'hover:border-white/[0.12] hover:shadow-lg hover:shadow-black/10',
+        onClick && 'cursor-pointer',
+      )}
       data-testid={testId}
       onClick={onClick}
     >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-muted-foreground">{title}</span>
-            {(tooltip || provenance) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-full p-0.5"
-                    onClick={(e) => e.stopPropagation()}
-                    data-testid={`${testId}-tooltip`}
-                  >
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs p-3" side="top">
-                  {provenance ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-sm">{title}</span>
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            "text-[10px] px-1.5 py-0",
-                            sourceConfig[provenance.source].bgColor,
-                            sourceConfig[provenance.source].color
-                          )}
-                        >
-                          {provenance.sourceLabel || sourceConfig[provenance.source].label}
-                        </Badge>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider truncate">{title}</span>
+          {(tooltip || provenance) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`${testId}-tooltip`}
+                >
+                  <Info className="h-3 w-3 text-muted-foreground/60" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs p-3" side="top">
+                {provenance ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-sm">{title}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] px-1.5 py-0",
+                          sourceConfig[provenance.source].bgColor,
+                          sourceConfig[provenance.source].color
+                        )}
+                      >
+                        {provenance.sourceLabel || sourceConfig[provenance.source].label}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{provenance.definition}</p>
+                    {provenance.formula && (
+                      <div className="flex items-start gap-1.5 text-xs">
+                        <Calculator className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+                        <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded break-all">
+                          {provenance.formula}
+                        </code>
                       </div>
-                      <p className="text-xs text-muted-foreground">{provenance.definition}</p>
-                      {provenance.formula && (
-                        <div className="flex items-start gap-1.5 text-xs">
-                          <Calculator className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
-                          <code className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded break-all">
-                            {provenance.formula}
-                          </code>
+                    )}
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                      <div className="flex items-center gap-1">
+                        <Database className={cn("h-3 w-3", sourceConfig[provenance.source].color)} />
+                        <span>{provenance.sourceLabel || sourceConfig[provenance.source].label}</span>
+                      </div>
+                      {provenance.timestamp && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatDistanceToNow(new Date(provenance.timestamp), { addSuffix: true })}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                      {provenance.runId && (
                         <div className="flex items-center gap-1">
-                          <Database className={cn("h-3 w-3", sourceConfig[provenance.source].color)} />
-                          <span>{provenance.sourceLabel || sourceConfig[provenance.source].label}</span>
-                        </div>
-                        {provenance.timestamp && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            <span>{formatDistanceToNow(new Date(provenance.timestamp), { addSuffix: true })}</span>
-                          </div>
-                        )}
-                        {provenance.runId && (
-                          <div className="flex items-center gap-1">
-                            <GitBranch className="h-3 w-3" />
-                            <span className="font-mono">{provenance.runId.slice(0, 8)}</span>
-                          </div>
-                        )}
-                      </div>
-                      {provenance.confidence !== undefined && (
-                        <div className="text-[10px] text-muted-foreground">
-                          Confidence: {provenance.confidence}%
+                          <GitBranch className="h-3 w-3" />
+                          <span className="font-mono">{provenance.runId.slice(0, 8)}</span>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-sm">{tooltip}</p>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {metricSource && (
-              <Badge
-                variant="secondary"
-                className={cn('text-xs', metricSourceConfig[metricSource].className)}
-                data-testid={`${testId}-source-badge`}
-              >
-                {metricSourceConfig[metricSource].label}
-              </Badge>
-            )}
-            {getVariantBadge()}
-            {getBenchmarkBadge()}
-          </div>
+                    {provenance.confidence !== undefined && (
+                      <div className="text-[10px] text-muted-foreground">
+                        Confidence: {provenance.confidence}%
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm">{tooltip}</p>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <div>
-            <span
-              className="text-2xl font-semibold font-mono tracking-tight"
-              data-testid={`${testId}-value`}
-            >
-              {value}
-            </span>
-            {subtitle && (
-              <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-            )}
-            {lastUpdated && (
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5" data-testid={`${testId}-last-updated`}>
-                Updated {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
-              </p>
-            )}
-          </div>
+        {metricSource && metricSource !== 'reported' && (
+          <Badge
+            variant="secondary"
+            className={cn('text-[10px] px-1.5 py-0 h-4 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity', metricSourceConfig[metricSource].className)}
+            data-testid={`${testId}-source-badge`}
+          >
+            {metricSourceConfig[metricSource].label}
+          </Badge>
+        )}
+      </div>
+
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <span
+            className="text-2xl font-semibold font-mono tracking-tight leading-none"
+            data-testid={`${testId}-value`}
+          >
+            {value}
+          </span>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground/70 mt-1.5 truncate">{subtitle}</p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
           {trendData && trendData.length > 1 && (
-            <div className="flex-shrink-0" data-testid={`${testId}-sparkline`}>
-              <Sparkline data={trendData} width={50} height={24} />
+            <div data-testid={`${testId}-sparkline`}>
+              <Sparkline data={trendData} width={48} height={20} />
+            </div>
+          )}
+          {trend && trendValue && (
+            <div className={cn('flex items-center gap-0.5 text-[11px] font-medium', getTrendColor())}>
+              {getTrendIcon()}
+              <span>{trendValue}</span>
             </div>
           )}
         </div>
-        {trend && trendValue && (
-          <div className={cn('flex items-center gap-1 mt-2 text-xs', getTrendColor())}>
-            {getTrendIcon()}
-            <span>{trendValue}</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {lastUpdated && (
+        <p className="text-[9px] text-muted-foreground/40 mt-2 font-mono" data-testid={`${testId}-last-updated`}>
+          {formatDistanceToNow(new Date(lastUpdated), { addSuffix: true })}
+        </p>
+      )}
+    </Wrapper>
   );
 }

@@ -342,7 +342,7 @@ export function DecisionCard({
       <CardContent className="space-y-5">
         <p className="text-sm text-muted-foreground leading-relaxed">{rationale}</p>
         
-        <div className="space-y-3 p-4 rounded-xl bg-secondary/50">
+        <div className="space-y-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           <div className="flex items-center gap-2 text-sm font-medium mb-3">
             <BarChart3 className="h-4 w-4 text-primary" />
             <span>Impact Analysis</span>

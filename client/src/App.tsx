@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { DashboardBackground } from "@/components/DashboardBackground";
 import { Stepper } from "@/components/Layout/Stepper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -718,11 +719,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full relative">
+        <DashboardBackground />
         <div className="no-print">
           <AppSidebar />
         </div>
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative z-[1]">
           <BackendStatusBanner />
           {user?.email === 'demo@founderconsole.ai' && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
@@ -730,7 +732,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               <span>Demo Mode — You are viewing simulated sample data. <Link href="/auth" className="underline hover:text-amber-300">Sign up free</Link> to use your own.</span>
             </div>
           )}
-          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b bg-background/80 backdrop-blur-xl sticky top-0 z-50">
+          <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" className="shrink-0" />
               {currentCompany && <div className="hidden sm:block"><Stepper currentStep={currentStep} /></div>}

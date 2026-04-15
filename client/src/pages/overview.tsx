@@ -1230,134 +1230,309 @@ export default function OverviewPage() {
     : `Your metrics look healthy. Try: "What if we cut burn 20% and grow revenue 15%?" to model your path to profitability.`;
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 md:p-10 lg:p-12 max-w-[1400px] mx-auto space-y-10">
+
+      <FadeIn delay={0}>
+        <div className="flex items-end justify-between gap-6 flex-wrap">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight" data-testid="text-company-name">{currentCompany.name}</h1>
+            <p className="text-sm text-muted-foreground/70">Financial Intelligence Overview</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {getConfidenceBadge()}
+            <BoardExportButton companyId={currentCompany.id} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]"
+              onClick={handleRefreshScan}
+              disabled={runTruthScanMutation.isPending}
+              data-testid="button-refresh-scan"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${runTruthScanMutation.isPending ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </FadeIn>
+
       {!briefingDismissed && (
-        <FadeIn delay={0.1}>
-        <Card className="relative border-primary/20 glass-subtle" data-testid="card-morning-briefing">
+        <FadeIn delay={0.05}>
+        <div className="relative rounded-xl border border-primary/10 bg-gradient-to-r from-primary/[0.04] via-transparent to-violet-500/[0.04] p-5 backdrop-blur-sm" data-testid="card-morning-briefing">
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-3 right-3"
+            className="absolute top-3 right-3 h-7 w-7 opacity-40 hover:opacity-100"
             onClick={() => setBriefingDismissed(true)}
             data-testid="button-dismiss-briefing"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </Button>
-          <CardContent className="pt-5 pb-5 pr-12 space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold" data-testid="text-briefing-title">
-                {briefingGreeting} — Here's your daily briefing
-              </h2>
-              <p className="text-xs text-muted-foreground" data-testid="text-briefing-date">{briefingDate}</p>
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-primary" />
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-summary">
-              MRR is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
-              <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
-              Burn is {briefingBurnStatus} at{' '}
-              <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
-              Runway is {briefingRunwayShift} at{' '}
-              <span className="font-medium text-foreground">{formatRunway(baseData.runway)}</span>.
-              {briefingCriticalCount > 0 && (
-                <span className="text-red-500 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
-              )}
-              {briefingCriticalCount === 0 && briefingWarningCount > 0 && (
-                <span className="text-amber-500 font-medium"> {briefingWarningCount} warning{briefingWarningCount > 1 ? 's' : ''} to review.</span>
-              )}
-              {briefingCriticalCount === 0 && briefingWarningCount === 0 && (
-                <span className="text-emerald-500 font-medium"> All systems green. No alerts triggered this week.</span>
-              )}
-            </p>
-            <p className="text-sm text-primary font-medium" data-testid="text-briefing-ai-suggestion">
-              <Sparkles className="h-3.5 w-3.5 inline-block mr-1 -translate-y-px" />
-              {briefingAiSuggestion}
-            </p>
-            <div className="flex items-center gap-2 flex-wrap pt-1">
-              <Button size="sm" onClick={() => setLocation('/scenarios')} data-testid="button-briefing-run-simulation">
-                <FlaskConical className="h-4 w-4 mr-1" />
-                Run Simulation
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setLocation('/truth')} data-testid="button-briefing-view-health">
-                <Search className="h-4 w-4 mr-1" />
-                View Health Check
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setLocation('/alerts')} data-testid="button-briefing-view-alerts">
-                <Bell className="h-4 w-4 mr-1" />
-                View All Alerts
-              </Button>
+            <div className="space-y-2 min-w-0 pr-8">
+              <div>
+                <p className="text-sm font-medium" data-testid="text-briefing-title">
+                  {briefingGreeting}
+                </p>
+                <p className="text-[11px] text-muted-foreground/60 font-mono" data-testid="text-briefing-date">{briefingDate}</p>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-briefing-summary">
+                MRR is at <span className="font-medium text-foreground">{formatCurrency(baseData.mrr)}</span> with{' '}
+                <span className="font-medium text-foreground">{safeToFixed(briefingMrrGrowth, 1)}%</span> growth.
+                Burn is {briefingBurnStatus} at{' '}
+                <span className="font-medium text-foreground">{formatCurrency(baseData.burnRate)}/mo</span>.
+                Runway is {briefingRunwayShift} at{' '}
+                <span className="font-medium text-foreground">{formatRunway(baseData.runway)}</span>.
+                {briefingCriticalCount > 0 && (
+                  <span className="text-red-400 font-medium"> {briefingCriticalCount} critical alert{briefingCriticalCount > 1 ? 's' : ''} detected.</span>
+                )}
+                {briefingCriticalCount === 0 && briefingWarningCount > 0 && (
+                  <span className="text-amber-400 font-medium"> {briefingWarningCount} warning{briefingWarningCount > 1 ? 's' : ''} to review.</span>
+                )}
+                {briefingCriticalCount === 0 && briefingWarningCount === 0 && (
+                  <span className="text-emerald-400 font-medium"> All clear.</span>
+                )}
+              </p>
+              <p className="text-sm text-primary/80 font-medium" data-testid="text-briefing-ai-suggestion">
+                {briefingAiSuggestion}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                <Button size="sm" variant="outline" className="h-7 text-xs border-white/[0.08] bg-white/[0.02]" onClick={() => setLocation('/scenarios')} data-testid="button-briefing-run-simulation">
+                  <FlaskConical className="h-3 w-3 mr-1" />
+                  Run Simulation
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLocation('/truth')} data-testid="button-briefing-view-health">
+                  View Health
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLocation('/alerts')} data-testid="button-briefing-view-alerts">
+                  View Alerts
+                </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
         </FadeIn>
       )}
 
-      <div data-testid="section-goal-tracker">
-        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Flag className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold" data-testid="text-goal-tracker-title">Goal Tracker</h2>
+      {flags.filter((f: any) => f.severity === 'high').length > 0 && (
+        <FadeIn delay={0.08}>
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-4 backdrop-blur-sm">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-red-400">Critical Issues</h3>
+              <ul className="mt-1 text-sm text-muted-foreground space-y-0.5">
+                {flags.filter((f: any) => f.severity === 'high').map((flag: any, i: number) => (
+                  <li key={i} className="text-xs">{flag.title}: {flag.description}</li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setLocation('/goals')} data-testid="button-add-goal">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Goal
-          </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
-            <CardContent className="pt-4 pb-4 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')} MRR</p>
-                <Badge variant={baseData.mrr >= 100000 ? "secondary" : baseData.mrr >= 50000 ? "secondary" : "destructive"} className={baseData.mrr >= 50000 ? "bg-emerald-500/10 text-emerald-500 shrink-0" : "shrink-0"} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</Badge>
-              </div>
-              <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-2" data-testid="progress-goal-mrr" />
-              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')}</span>
-                <span data-testid="text-goal-mrr-target">Target: Q4 2026</span>
-              </div>
-            </CardContent>
-          </Card>
+        </FadeIn>
+      )}
 
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
-            <CardContent className="pt-4 pb-4 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
-                <Badge variant={baseData.runway >= 36 ? "secondary" : baseData.runway >= 18 ? "secondary" : "destructive"} className={baseData.runway >= 18 ? "bg-primary/10 text-primary shrink-0" : "shrink-0"} data-testid="badge-goal-runway-status">{baseData.runway >= 36 ? 'Complete' : baseData.runway >= 18 ? 'In Progress' : 'Off Track'}</Badge>
-              </div>
-              <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-2" data-testid="progress-goal-runway" />
-              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 months</span>
-                <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}% complete</span>
-              </div>
-            </CardContent>
-          </Card>
+      {(metricsLoading || truthLoading) && (
+        <MetricGridSkeleton count={4} />
+      )}
 
-          <Card className="hover-elevate cursor-pointer" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
-            <CardContent className="pt-4 pb-4 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
-                <Badge variant={sharedMetrics.sources['churnRate'] === 'estimated' ? "secondary" : (baseData.churnRate <= 2 ? "secondary" : "destructive")} className={sharedMetrics.sources['churnRate'] === 'estimated' ? "shrink-0" : (baseData.churnRate <= 2 ? "bg-emerald-500/20 text-emerald-400 shrink-0" : "shrink-0")} data-testid="badge-goal-churn-status">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'No Data' : (baseData.churnRate <= 2 ? 'On Track' : 'Off Track')}</Badge>
-              </div>
-              <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-2" data-testid="progress-goal-churn" />
-              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
-                <span data-testid="text-goal-churn-progress">Current: {sharedMetrics.sources['churnRate'] === 'estimated' ? 'N/A' : `${baseData.churnRate.toFixed(1)}%`}</span>
-                <span data-testid="text-goal-churn-target">Target: 2.0%</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      {!metricsLoading && !truthLoading && (
+        <>
+          {isEmptyState ? (
+            <EmptyTable
+              title="No Financial Data Yet"
+              description="Start by uploading your financial data or connecting an integration to see your metrics appear here."
+              action={{
+                label: "Upload Data",
+                onClick: () => setLocation('/data'),
+                icon: Upload,
+              }}
+              secondaryAction={{
+                label: "Connect Integration",
+                onClick: () => setLocation('/integrations'),
+              }}
+            />
+          ) : (
+            <div className="space-y-6">
+              <StaggerChildren className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" staggerDelay={0.06}>
+                <StaggerItem><MetricCard
+                  title="MRR"
+                  value={formatCurrency(baseData.mrr)}
+                  subtitle="Monthly Recurring Revenue"
+                  trend="up"
+                  trendValue={`+${assumptions.growthRate}%`}
+                  metricSource={sharedMetrics.sources['mrr']}
+                  lastUpdated={truthScan?.computed_at}
+                  testId="metric-mrr"
+                  onClick={() => setSelectedDrillDownMetric('mrr')}
+                  provenance={{
+                    definition: 'Monthly Recurring Revenue from your validated financial data.',
+                    source: 'truth_scan',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+                <StaggerItem><MetricCard
+                  title="Cash on Hand"
+                  value={formatCurrency(baseData.cash)}
+                  subtitle={`Runway: ${formatRunway(baseData.runway)}`}
+                  variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
+                  metricSource={sharedMetrics.sources['cashOnHand']}
+                  lastUpdated={truthScan?.computed_at}
+                  testId="metric-cash"
+                  onClick={() => setSelectedDrillDownMetric('cash')}
+                  provenance={{
+                    definition: 'Current available cash on hand from your validated financial data.',
+                    source: 'truth_scan',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+                <StaggerItem><MetricCard
+                  title="Burn Rate"
+                  value={formatCurrency(baseData.burnRate)}
+                  subtitle="/month"
+                  metricSource={sharedMetrics.sources['netBurn']}
+                  lastUpdated={truthScan?.computed_at}
+                  onClick={() => setSelectedDrillDownMetric('burnRate')}
+                  testId="metric-burn-rate"
+                  provenance={{
+                    definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
+                    formula: 'Revenue - Total Expenses',
+                    source: 'truth_scan',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+                <StaggerItem><MetricCard
+                  title="ARR"
+                  value={formatCurrency(baseData.arr)}
+                  subtitle="Annual Recurring Revenue"
+                  trend="up"
+                  metricSource={sharedMetrics.sources['arr']}
+                  lastUpdated={truthScan?.computed_at}
+                  testId="metric-arr"
+                  onClick={() => setSelectedDrillDownMetric('arr')}
+                  provenance={{
+                    definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
+                    formula: 'MRR × 12',
+                    source: 'computed',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+              </StaggerChildren>
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-company-name">{currentCompany.name}</h1>
-          <p className="text-muted-foreground">Financial Intelligence Overview</p>
-        </div>
+              <StaggerChildren className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" staggerDelay={0.04} initialDelay={0.2}>
+                <StaggerItem><MetricCard
+                  title="CAC"
+                  value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
+                  subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
+                  metricSource={sharedMetrics.sources['cac']}
+                  lastUpdated={truthScan?.computed_at}
+                  testId="metric-cac"
+                  onClick={() => setSelectedDrillDownMetric('cac')}
+                  provenance={{
+                    definition: 'Customer Acquisition Cost - total cost to acquire a new customer.',
+                    formula: 'Sales & Marketing Spend / New Customers',
+                    source: 'truth_scan',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+                <StaggerItem><MetricCard
+                  title="LTV"
+                  value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
+                  subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
+                  variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
+                  metricSource={sharedMetrics.sources['ltv']}
+                  lastUpdated={truthScan?.computed_at}
+                  testId="metric-ltv"
+                  onClick={() => setSelectedDrillDownMetric('ltv')}
+                  provenance={{
+                    definition: 'Customer Lifetime Value - expected revenue from a customer over their lifetime.',
+                    formula: 'ARPU / Monthly Churn Rate',
+                    source: 'computed',
+                    timestamp: truthScan?.computed_at,
+                    confidence: truthScan?.data_confidence_score,
+                  }}
+                /></StaggerItem>
+                <StaggerItem>
+                  <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-arpu">
+                    <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">ARPU</span>
+                    <div className="mt-3">
+                      <span className="text-2xl font-semibold font-mono tracking-tight leading-none">{formatCurrency(sharedMetrics.arpu)}</span>
+                      <p className="text-[11px] text-muted-foreground/70 mt-1.5">/user/month</p>
+                    </div>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-active-users">
+                    <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">Customers</span>
+                    <div className="mt-3">
+                      <span className="text-2xl font-semibold font-mono tracking-tight leading-none">
+                        {sharedMetrics.sources['totalCustomers'] === 'estimated' || (!sharedMetrics.sources['totalCustomers'] && sharedMetrics.totalCustomers === 0) ? 'N/A' : sharedMetrics.totalCustomers.toLocaleString()}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground/70 mt-1.5">paying {terms.customers}</p>
+                    </div>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-nrr-inline">
+                    <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">NRR</span>
+                    <div className="mt-3">
+                      {(() => {
+                        const hasNdr = sharedMetrics.ndr > 0 && sharedMetrics.ndr <= 200 && sharedMetrics.sources['ndr'] !== 'estimated';
+                        const ndrValue = hasNdr
+                          ? sharedMetrics.ndr
+                          : (baseData.churnRate > 0 && sharedMetrics.sources['churnRate'] !== 'estimated')
+                            ? Math.max(0, Math.min(200, 100 - baseData.churnRate))
+                            : null;
+                        const ndrColor = ndrValue === null ? '' :
+                          ndrValue >= 100 ? 'text-emerald-400' :
+                          ndrValue >= 90 ? 'text-amber-400' : 'text-red-400';
+                        return (
+                          <span className={`text-2xl font-semibold font-mono tracking-tight leading-none ${ndrColor}`} data-testid="metric-nrr">
+                            {ndrValue !== null ? safeToFixed(ndrValue, 1, '%') : 'N/A'}
+                          </span>
+                        );
+                      })()}
+                      <p className="text-[11px] text-muted-foreground/70 mt-1.5">net revenue retention</p>
+                    </div>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-ltvcac-inline">
+                    <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">LTV:CAC</span>
+                    <div className="mt-3 flex items-baseline gap-2">
+                      <span className={`text-2xl font-semibold font-mono tracking-tight leading-none ${
+                        baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio >= 3 ? 'text-emerald-400' : baseData.ltvCacRatio >= 2 ? 'text-amber-400' : 'text-red-400') : ''
+                      }`} data-testid="metric-ltvcac-value">
+                        {baseData.ltvCacRatio > 0 ? safeToFixed(baseData.ltvCacRatio, 1, 'x') : 'N/A'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/70 mt-1.5">unit economics</p>
+                  </div>
+                </StaggerItem>
+              </StaggerChildren>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {getConfidenceBadge()}
-          <BoardExportButton companyId={currentCompany.id} />
+          <Button variant="outline" size="sm" className="h-7 text-xs border-white/[0.08] bg-white/[0.02]" onClick={exportToCSV} data-testid="button-export-csv">
+            <FileDown className="h-3 w-3 mr-1" />
+            Export CSV
+          </Button>
           <Sheet open={assumptionsPanelOpen} onOpenChange={setAssumptionsPanelOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm" data-testid="button-open-assumptions">
-                <SlidersHorizontal className="h-4 w-4 mr-1" />
+              <Button variant="outline" size="sm" className="h-7 text-xs border-white/[0.08] bg-white/[0.02]" data-testid="button-open-assumptions">
+                <SlidersHorizontal className="h-3 w-3 mr-1" />
                 Assumptions
               </Button>
             </SheetTrigger>
@@ -1503,430 +1678,111 @@ export default function OverviewPage() {
               </div>
             </SheetContent>
           </Sheet>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshScan}
-            disabled={runTruthScanMutation.isPending}
-            data-testid="button-refresh-scan"
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${runTruthScanMutation.isPending ? 'animate-spin' : ''}`} />
-            Refresh Scan
-          </Button>
         </div>
       </div>
-      
-      {flags.filter((f: any) => f.severity === 'high').length > 0 && (
-        <Card className="border-destructive/50 bg-destructive/10">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
-              <div>
-                <h3 className="font-medium text-destructive">Critical Issues Detected</h3>
-                <ul className="mt-1 text-sm text-muted-foreground space-y-1">
-                  {flags.filter((f: any) => f.severity === 'high').map((flag: any, i: number) => (
-                    <li key={i}>{flag.title}: {flag.description}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Loading state for metrics */}
-      {(metricsLoading || truthLoading) && (
-        <MetricGridSkeleton count={6} />
-      )}
-
-      {/* Metrics grid - only show when not loading */}
-      {!metricsLoading && !truthLoading && (
-        <>
-          {isEmptyState ? (
-            <EmptyTable
-              title="No Financial Data Yet"
-              description="Start by uploading your financial data or connecting an integration to see your metrics appear here."
-              action={{
-                label: "Upload Data",
-                onClick: () => setLocation('/data'),
-                icon: Upload,
-              }}
-              secondaryAction={{
-                label: "Connect Integration",
-                onClick: () => setLocation('/integrations'),
-              }}
-            />
-          ) : (
-            <StaggerChildren className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" staggerDelay={0.05}>
-              <StaggerItem><MetricCard
-                title="MRR"
-                value={formatCurrency(baseData.mrr)}
-                subtitle="Monthly Recurring Revenue"
-                trend="up"
-                trendValue={`+${assumptions.growthRate}%`}
-                metricSource={sharedMetrics.sources['mrr']}
-                lastUpdated={truthScan?.computed_at}
-                testId="metric-mrr"
-                onClick={() => setSelectedDrillDownMetric('mrr')}
-                provenance={{
-                  definition: 'Monthly Recurring Revenue from your validated financial data.',
-                  source: 'truth_scan',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-              <StaggerItem><MetricCard
-                title="ARR"
-                value={formatCurrency(baseData.arr)}
-                subtitle="Annual Recurring Revenue"
-                trend="up"
-                metricSource={sharedMetrics.sources['arr']}
-                lastUpdated={truthScan?.computed_at}
-                testId="metric-arr"
-                onClick={() => setSelectedDrillDownMetric('arr')}
-                provenance={{
-                  definition: 'Annual Recurring Revenue - your MRR multiplied by 12.',
-                  formula: 'MRR × 12',
-                  source: 'computed',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-              <StaggerItem><MetricCard
-                title="Cash on Hand"
-                value={formatCurrency(baseData.cash)}
-                subtitle={`Runway: ${formatRunway(baseData.runway)}`}
-                variant={baseData.runway < 6 ? 'danger' : baseData.runway < 12 ? 'warning' : 'success'}
-                metricSource={sharedMetrics.sources['cashOnHand']}
-                lastUpdated={truthScan?.computed_at}
-                testId="metric-cash"
-                onClick={() => setSelectedDrillDownMetric('cash')}
-                provenance={{
-                  definition: 'Current available cash on hand from your validated financial data.',
-                  source: 'truth_scan',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-              <StaggerItem><MetricCard
-                title="Burn Rate"
-                value={formatCurrency(baseData.burnRate)}
-                subtitle="/month"
-                metricSource={sharedMetrics.sources['netBurn']}
-                lastUpdated={truthScan?.computed_at}
-                onClick={() => setSelectedDrillDownMetric('burnRate')}
-                testId="metric-burn-rate"
-                provenance={{
-                  definition: 'Monthly cash consumption. Negative = burning cash, Positive = cash positive.',
-                  formula: 'Revenue - Total Expenses',
-                  source: 'truth_scan',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-              <StaggerItem><MetricCard
-                title="CAC"
-                value={baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
-                subtitle={baseData.cac > 0 ? "Cost to Acquire" : undefined}
-                metricSource={sharedMetrics.sources['cac']}
-                lastUpdated={truthScan?.computed_at}
-                testId="metric-cac"
-                onClick={() => setSelectedDrillDownMetric('cac')}
-                provenance={{
-                  definition: 'Customer Acquisition Cost - total cost to acquire a new customer.',
-                  formula: 'Sales & Marketing Spend / New Customers',
-                  source: 'truth_scan',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-              <StaggerItem><MetricCard
-                title="LTV"
-                value={baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'}
-                subtitle={baseData.ltvCacRatio > 0 ? `LTV:CAC = ${safeToFixed(baseData.ltvCacRatio, 1, 'x')}` : undefined}
-                variant={baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio < 3 ? 'warning' : 'success') : undefined}
-                metricSource={sharedMetrics.sources['ltv']}
-                lastUpdated={truthScan?.computed_at}
-                testId="metric-ltv"
-                onClick={() => setSelectedDrillDownMetric('ltv')}
-                provenance={{
-                  definition: 'Customer Lifetime Value - expected revenue from a customer over their lifetime.',
-                  formula: 'ARPU / Monthly Churn Rate',
-                  source: 'computed',
-                  timestamp: truthScan?.computed_at,
-                  confidence: truthScan?.data_confidence_score,
-                }}
-              /></StaggerItem>
-            </StaggerChildren>
-          )}
-        </>
-      )}
 
       {riskAlerts.length > 0 && (
-        <Card className="overflow-visible" data-testid="risk-alerts-section">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
-              Risk Alerts
-              <Badge variant="secondary">{riskAlerts.length}</Badge>
-            </CardTitle>
-            <CardDescription>Automatic alerts based on metric thresholds</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {riskAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg border ${
-                    alert.type === 'critical' ? 'border-red-500/30 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'
-                  }`}
-                  data-testid={`alert-${alert.id}`}
-                >
-                  {alert.type === 'critical' ? (
-                    <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <h4 className="font-medium text-sm">{alert.title}</h4>
-                      <Badge variant="secondary" className="text-xs">Threshold: {alert.threshold}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">{alert.description}</p>
-                  </div>
+        <FadeIn delay={0.1}>
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 backdrop-blur-sm space-y-3" data-testid="risk-alerts-section">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Risk Alerts</span>
+            <span className="text-[10px] font-mono text-muted-foreground/60 bg-white/[0.04] px-1.5 py-0.5 rounded">{riskAlerts.length}</span>
+          </div>
+          <div className="space-y-2">
+            {riskAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`flex items-start gap-3 p-3 rounded-lg border ${
+                  alert.type === 'critical' ? 'border-red-500/15 bg-red-500/[0.03]' : 'border-amber-500/15 bg-amber-500/[0.03]'
+                }`}
+                data-testid={`alert-${alert.id}`}
+              >
+                {alert.type === 'critical' ? (
+                  <XCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium">{alert.title}</h4>
+                  <p className="text-xs text-muted-foreground/70 mt-0.5">{alert.description}</p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            ))}
+          </div>
+        </div>
+        </FadeIn>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={exportToCSV} data-testid="button-export-csv">
-          <FileDown className="h-4 w-4 mr-1" />
-          Export CSV
-        </Button>
-      </div>
+      <FadeIn delay={0.15}>
+      <div data-testid="section-goal-tracker" className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+          <div className="flex items-center gap-2">
+            <Flag className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider" data-testid="text-goal-tracker-title">Goals</span>
+          </div>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setLocation('/goals')} data-testid="button-add-goal">
+            <Plus className="h-3 w-3 mr-1" />
+            Add Goal
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-mrr">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-medium" data-testid="text-goal-mrr-title">Reach {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')} MRR</p>
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${baseData.mrr >= 100000 ? 'bg-emerald-500/10 text-emerald-400' : baseData.mrr >= 50000 ? 'bg-primary/10 text-primary' : 'bg-red-500/10 text-red-400'}`} data-testid="badge-goal-mrr-status">{baseData.mrr >= 100000 ? 'Complete' : baseData.mrr >= 50000 ? 'On Track' : 'Off Track'}</span>
+            </div>
+            <Progress value={Math.min((baseData.mrr / 100000) * 100, 100)} className="h-1" data-testid="progress-goal-mrr" />
+            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
+              <span data-testid="text-goal-mrr-progress">{formatCurrencyAbbrev(baseData.mrr, currentCompany?.currency || 'USD')} / {formatCurrencyAbbrev(100000, currentCompany?.currency || 'USD')}</span>
+              <span data-testid="text-goal-mrr-target">Q4 2026</span>
+            </div>
+          </div>
 
-      {/* Additional KPIs Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="overflow-visible">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium text-muted-foreground">ARPU</span>
-                {sharedMetrics.sources['arpu'] && sharedMetrics.sources['arpu'] !== 'reported' && (
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-arpu">
-                    {sharedMetrics.sources['arpu'] === 'computed' ? 'Derived' : 'AI Est.'}
-                  </Badge>
-                )}
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-arpu">
-                    <Info className="h-3 w-3" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="font-medium">Average Revenue Per User</p>
-                  <p className="text-xs text-muted-foreground">MRR / Total Customers</p>
-                  <p className="text-xs mt-1">Good: &gt;$100 for SMB, &gt;$1K for Enterprise</p>
-                </TooltipContent>
-              </Tooltip>
+          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-runway">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-medium" data-testid="text-goal-runway-title">Extend Runway to 36 mo</p>
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${baseData.runway >= 36 ? 'bg-emerald-500/10 text-emerald-400' : baseData.runway >= 18 ? 'bg-primary/10 text-primary' : 'bg-red-500/10 text-red-400'}`} data-testid="badge-goal-runway-status">{baseData.runway >= 36 ? 'Complete' : baseData.runway >= 18 ? 'In Progress' : 'Off Track'}</span>
             </div>
-            <div className="mt-2">
-              <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="metric-arpu">
-                {formatCurrency(sharedMetrics.arpu)}
-              </span>
-              <p className="text-xs text-muted-foreground mt-1">/user/month</p>
+            <Progress value={Math.min((baseData.runway / 36) * 100, 100)} className="h-1" data-testid="progress-goal-runway" />
+            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
+              <span data-testid="text-goal-runway-progress">{formatRunway(baseData.runway, 36)} / 36.0 mo</span>
+              <span data-testid="text-goal-runway-pct">{Math.min(Math.round((baseData.runway / 36) * 100), 100)}%</span>
             </div>
-            {sharedMetrics.arpu > 0 && (() => {
-              const arpu = sharedMetrics.arpu;
-              const label = arpu >= 5000 ? 'Top 10% seed SaaS' : arpu >= 1000 ? 'Top 20% seed SaaS' : arpu >= 200 ? 'Above median' : arpu >= 50 ? 'Below median' : 'Needs improvement';
-              const color = arpu >= 1000 ? 'bg-primary/10 text-primary' : arpu >= 200 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
-              return (
-                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-arpu">
-                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
-                </Badge>
-              );
-            })()}
-          </CardContent>
-        </Card>
-        
-        <Card className="overflow-visible">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-medium text-muted-foreground">Active {terms.customers.charAt(0).toUpperCase() + terms.customers.slice(1)}</span>
-                {sharedMetrics.sources['totalCustomers'] && sharedMetrics.sources['totalCustomers'] !== 'reported' && (
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4" data-testid="badge-source-users">
-                    {sharedMetrics.sources['totalCustomers'] === 'computed' ? 'Derived' : 'AI Est.'}
-                  </Badge>
-                )}
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-users">
-                    <Info className="h-3 w-3" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="font-medium">Total Active Customers</p>
-                  <p className="text-xs text-muted-foreground">Paying customers with active subscriptions</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="mt-2">
-              <span className="text-2xl font-semibold font-mono tracking-tight" data-testid="metric-active-users">
-                {sharedMetrics.sources['totalCustomers'] === 'estimated' || (!sharedMetrics.sources['totalCustomers'] && sharedMetrics.totalCustomers === 0) ? 'N/A' : sharedMetrics.totalCustomers.toLocaleString()}
-              </span>
-              <p className="text-xs text-muted-foreground mt-1">paying {terms.customers}</p>
-            </div>
-            {sharedMetrics.totalCustomers > 0 && (() => {
-              const customers = sharedMetrics.totalCustomers;
-              const label = customers >= 500 ? 'Top 10% seed SaaS' : customers >= 100 ? 'Above median' : customers >= 20 ? 'Below median' : 'Early stage';
-              const color = customers >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
-              return (
-                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-users">
-                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
-                </Badge>
-              );
-            })()}
-          </CardContent>
-        </Card>
-        
-        <Card className="overflow-visible">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-sm font-medium text-muted-foreground">NRR</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-nrr">
-                    <Info className="h-3 w-3" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="font-medium">Net Revenue Retention</p>
-                  <p className="text-xs text-muted-foreground">(Revenue + Expansion - Churn) / Previous Revenue</p>
-                  <p className="text-xs mt-1 text-emerald-500">&gt;100%: Growing from existing customers</p>
-                  <p className="text-xs text-amber-500">90-100%: Stable, needs improvement</p>
-                  <p className="text-xs text-red-500">&lt;90%: Leaky bucket problem</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="mt-2">
-              {(() => {
-                const hasNdr = sharedMetrics.ndr > 0 && sharedMetrics.ndr <= 200 && sharedMetrics.sources['ndr'] !== 'estimated';
-                const ndrValue = hasNdr
-                  ? sharedMetrics.ndr
-                  : (baseData.churnRate > 0 && sharedMetrics.sources['churnRate'] !== 'estimated')
-                    ? Math.max(0, Math.min(200, 100 - baseData.churnRate))
-                    : null;
-                const ndrColor = ndrValue === null ? 'text-muted-foreground' :
-                  ndrValue >= 100 ? 'text-emerald-500' :
-                  ndrValue >= 90 ? 'text-amber-500' : 'text-red-500';
-                const ndrBenchmark = ndrValue === null ? null :
-                  ndrValue >= 120 ? 'Top 10% seed SaaS' :
-                  ndrValue >= 110 ? 'Top 25% seed SaaS' :
-                  ndrValue >= 100 ? 'Above median' :
-                  ndrValue >= 90 ? 'Below median' : 'Needs improvement';
-                const ndrBenchmarkColor = ndrValue !== null && ndrValue >= 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500';
-                return (
-                  <>
-                    <span className={`text-2xl font-semibold font-mono tracking-tight ${ndrColor}`} data-testid="metric-nrr">
-                      {ndrValue !== null ? safeToFixed(ndrValue, 1, '%') : 'N/A'}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">net revenue retention</p>
-                    {ndrBenchmark && (
-                      <Badge variant="secondary" className={`mt-1.5 text-[10px] ${ndrBenchmarkColor}`} data-testid="badge-benchmark-nrr">
-                        <BarChart3 className="h-3 w-3 mr-1" /> {ndrBenchmark}
-                      </Badge>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="overflow-visible">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-sm font-medium text-muted-foreground">LTV:CAC Ratio</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors" data-testid="info-ltvcac">
-                    <Info className="h-3 w-3" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="font-medium">Lifetime Value to Acquisition Cost</p>
-                  <p className="text-xs text-muted-foreground">LTV / CAC - measures unit economics health</p>
-                  <p className="text-xs mt-1 text-emerald-500">&gt;3x: Excellent, sustainable growth</p>
-                  <p className="text-xs text-amber-500">2-3x: Acceptable, room for improvement</p>
-                  <p className="text-xs text-red-500">&lt;2x: Poor, fix before scaling</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              {metricsLoading ? (
-                <div className="h-8 w-16 bg-muted animate-pulse rounded" data-testid="metric-ltvcac-loading" />
-              ) : baseData.ltvCacRatio > 0 ? (
-                <>
-                  <span className={`text-2xl font-semibold font-mono tracking-tight ${
-                    baseData.ltvCacRatio >= 3 ? 'text-emerald-500' : 
-                    baseData.ltvCacRatio >= 2 ? 'text-amber-500' : 'text-red-500'
-                  }`} data-testid="metric-ltvcac-value">
-                    {safeToFixed(baseData.ltvCacRatio, 1, 'x')}
-                  </span>
-                  <Badge 
-                    variant={baseData.ltvCacRatio >= 3 ? 'secondary' : 'destructive'}
-                    className="text-xs"
-                  >
-                    {baseData.ltvCacRatio >= 3 ? 'Healthy' : baseData.ltvCacRatio >= 2 ? 'Warning' : 'Critical'}
-                  </Badge>
-                </>
-              ) : (
-                <span className="text-2xl font-semibold font-mono tracking-tight text-muted-foreground" data-testid="metric-ltvcac-value">
-                  N/A
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              LTV: {metricsLoading ? '...' : baseData.ltv > 0 ? formatCurrency(baseData.ltv) : 'N/A'} / CAC: {metricsLoading ? '...' : baseData.cac > 0 ? formatCurrency(baseData.cac) : 'N/A'}
-            </p>
-            {baseData.ltvCacRatio > 0 && (() => {
-              const ratio = baseData.ltvCacRatio;
-              const label = ratio >= 5 ? 'Top 10% seed SaaS' : ratio >= 3 ? 'Above median' : ratio >= 2 ? 'Below median' : 'Needs improvement';
-              const color = ratio >= 3 ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-500';
-              return (
-                <Badge variant="secondary" className={`mt-1.5 text-[10px] ${color}`} data-testid="badge-benchmark-ltvcac">
-                  <BarChart3 className="h-3 w-3 mr-1" /> {label}
-                </Badge>
-              );
-            })()}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Segment Analysis Section */}
-      <Card className="overflow-visible" data-testid="segment-analysis-section">
+          <div className="rounded-lg border border-white/[0.06] p-4 cursor-pointer hover:border-white/[0.12] transition-all" onClick={() => setLocation('/goals')} data-testid="card-goal-churn">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-sm font-medium" data-testid="text-goal-churn-title">Churn Below 2%</p>
+              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${sharedMetrics.sources['churnRate'] === 'estimated' ? 'bg-white/[0.06] text-muted-foreground' : (baseData.churnRate <= 2 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400')}`} data-testid="badge-goal-churn-status">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'No Data' : (baseData.churnRate <= 2 ? 'On Track' : 'Off Track')}</span>
+            </div>
+            <Progress value={sharedMetrics.sources['churnRate'] === 'estimated' ? 0 : Math.min(((2 / Math.max(baseData.churnRate, 0.01)) * 100), 100)} className="h-1" data-testid="progress-goal-churn" />
+            <div className="flex items-center justify-between gap-2 mt-2 text-[11px] text-muted-foreground/60 font-mono">
+              <span data-testid="text-goal-churn-progress">{sharedMetrics.sources['churnRate'] === 'estimated' ? 'N/A' : `${baseData.churnRate.toFixed(1)}%`}</span>
+              <span data-testid="text-goal-churn-target">Target: 2.0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </FadeIn>
+
+      <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm" data-testid="segment-analysis-section">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <div className="space-y-1">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Scale className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+              <Scale className="h-4 w-4 text-primary" />
               Segment Analysis
             </CardTitle>
             <CardDescription>Break down metrics by acquisition channel, customer tier, or region</CardDescription>
           </div>
-          <div className="flex border rounded-md overflow-hidden">
+          <div className="flex border border-white/[0.06] rounded-md overflow-hidden">
             {(['all', 'channel', 'tier', 'region'] as const).map((seg) => (
               <Button
                 key={seg}
                 variant={selectedSegment === seg ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setSelectedSegment(seg)}
-                className="rounded-none px-3 capitalize"
+                className="rounded-none px-3 capitalize h-7 text-xs"
                 data-testid={`button-segment-${seg}`}
               >
                 {seg === 'all' ? 'Overview' : seg}
@@ -1937,17 +1793,17 @@ export default function OverviewPage() {
         <CardContent>
           {selectedSegment === 'all' ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg border bg-card">
+              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
                 <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x') : 'N/A'})</p>
                 <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x') : 'N/A'})</p>
               </div>
-              <div className="p-4 rounded-lg border bg-card">
+              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
                 <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x') : 'N/A'})</p>
                 <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5, 1, '%')})</p>
               </div>
-              <div className="p-4 rounded-lg border bg-card">
+              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">By Region</h4>
                 <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">North America</span> (50% of customers)</p>
                 <p className="text-xs text-muted-foreground">Growth opp: <span className="font-medium text-foreground">APAC</span> (lower CAC)</p>
@@ -1957,18 +1813,18 @@ export default function OverviewPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-3 font-medium">{selectedSegment === 'channel' ? 'Channel' : selectedSegment === 'tier' ? 'Tier' : 'Region'}</th>
-                    <th className="text-right py-2 px-3 font-medium">Customers</th>
-                    <th className="text-right py-2 px-3 font-medium">CAC</th>
-                    <th className="text-right py-2 px-3 font-medium">LTV</th>
-                    <th className="text-right py-2 px-3 font-medium">LTV:CAC</th>
-                    <th className="text-right py-2 px-3 font-medium">Churn</th>
+                  <tr className="border-b border-white/[0.06]">
+                    <th className="text-left py-2 px-3 font-medium text-xs text-muted-foreground">{selectedSegment === 'channel' ? 'Channel' : selectedSegment === 'tier' ? 'Tier' : 'Region'}</th>
+                    <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Customers</th>
+                    <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">CAC</th>
+                    <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">LTV</th>
+                    <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">LTV:CAC</th>
+                    <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Churn</th>
                   </tr>
                 </thead>
                 <tbody>
                   {segmentData[selectedSegment].map((seg, i) => (
-                    <tr key={seg.name} className="border-b last:border-0 hover-elevate" data-testid={`segment-row-${i}`}>
+                    <tr key={seg.name} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.02] transition-colors" data-testid={`segment-row-${i}`}>
                       <td className="py-2 px-3 font-medium">{seg.name}</td>
                       <td className="text-right py-2 px-3 font-mono">{seg.customers}</td>
                       <td className="text-right py-2 px-3 font-mono">{metricsLoading ? <span className="text-muted-foreground">...</span> : seg.cac > 0 ? formatCurrency(seg.cac) : <span className="text-muted-foreground">N/A</span>}</td>
@@ -1993,25 +1849,24 @@ export default function OverviewPage() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* KPI Health Status */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="space-y-1">
-              <CardTitle className="text-xl font-bold">KPI Health Status</CardTitle>
-              <CardDescription>Ground-truth financial health indicators</CardDescription>
+              <CardTitle className="text-base font-semibold tracking-tight">KPI Health Status</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground/60">Ground-truth financial health indicators</CardDescription>
             </div>
-            <Badge variant="outline" className="h-6">
-              <CheckCircle2 className="mr-1 h-3 w-3 text-emerald-500" />
+            <span className="text-[10px] font-mono text-emerald-400/80 bg-emerald-500/[0.06] px-2 py-1 rounded-md flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" />
               Validated
-            </Badge>
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
               {kpiHealthData.map((item) => {
                 const metricKey = item.metric === 'ltv_cac' ? 'ltvCacRatio' : item.metric;
                 const source = sharedMetrics.sources[metricKey];
                 return (
-                <div key={item.metric} className="flex flex-col space-y-2 p-4 rounded-lg border bg-card hover-elevate transition-all">
+                <div key={item.metric} className="flex flex-col space-y-2 p-4 rounded-lg border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] transition-all">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-sm font-medium text-muted-foreground">{item.name}</span>
@@ -2065,10 +1920,10 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="overflow-visible">
+        <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
               Quality of Growth Index
               <HoverCard>
                 <HoverCardTrigger asChild>
@@ -2115,10 +1970,10 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
         
-        <Card className="overflow-visible">
+        <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
               Milestones
             </CardTitle>
           </CardHeader>
@@ -2156,11 +2011,11 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="overflow-visible" data-testid="benchmarks-section">
+        <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm" data-testid="benchmarks-section">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Scale className="h-5 w-5 text-primary" />
+              <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+                <Scale className="h-4 w-4 text-primary" />
                 Industry Benchmarks
                 {benchmarksLoading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
               </CardTitle>
@@ -2267,7 +2122,7 @@ export default function OverviewPage() {
               </div>
             )}
             {dynamicBenchmarks?.sources && dynamicBenchmarks.sources.length > 0 && (
-              <div className="mt-4 pt-3 border-t">
+              <div className="mt-4 pt-3 border-t border-white/[0.06]">
                 <p className="text-xs text-muted-foreground">
                   Sources: {dynamicBenchmarks.sources.slice(0, 2).map((s, i) => (
                     <a key={i} href={s} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
@@ -2285,9 +2140,9 @@ export default function OverviewPage() {
       
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Top Recommendations</h2>
-          <Button variant="ghost" size="sm" onClick={() => { setCurrentStep('decision'); setLocation('/decisions'); }} data-testid="button-view-all-decisions">
-            View All <ArrowRight className="ml-1 h-4 w-4" />
+          <h2 className="text-base font-semibold tracking-tight">Top Recommendations</h2>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setCurrentStep('decision'); setLocation('/decisions'); }} data-testid="button-view-all-decisions">
+            View All <ArrowRight className="ml-1 h-3.5 w-3.5" />
           </Button>
         </div>
         
@@ -2324,9 +2179,9 @@ export default function OverviewPage() {
             ))}
           </div>
         ) : (
-          <Card>
+          <Card className="border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
             <CardContent className="py-8 text-center">
-              <p className="text-muted-foreground">Run your first simulation to unlock AI-powered recommendations tailored to your data.</p>
+              <p className="text-muted-foreground text-sm">Run your first simulation to unlock AI-powered recommendations tailored to your data.</p>
               <Button className="mt-4" onClick={() => { setCurrentStep('simulation'); setLocation('/scenarios'); }} data-testid="button-run-simulation">
                 Run Simulation
               </Button>
@@ -2335,11 +2190,11 @@ export default function OverviewPage() {
         )}
       </div>
 
-      <Card className="overflow-visible">
+      <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
-            Notes & Annotations
+          <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-primary" />
+            Notes
           </CardTitle>
           <CardDescription>Add notes about the current scenario or assumptions</CardDescription>
         </CardHeader>
@@ -2382,10 +2237,10 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
       
-      <Card className="overflow-visible">
+      <Card className="overflow-visible border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
             Ask Copilot
           </CardTitle>
           <CardDescription>Get AI-powered insights grounded in your data</CardDescription>
@@ -2465,9 +2320,10 @@ export default function OverviewPage() {
                     />
                     <RechartsTooltip
                       contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        border: '1px solid rgba(255,255,255,0.06)',
                         borderRadius: '8px',
+                        backdropFilter: 'blur(12px)',
                       }}
                       labelStyle={{ color: 'hsl(var(--foreground))' }}
                       formatter={(value: number) => [formatCurrency(value), '']}
@@ -2514,31 +2370,25 @@ export default function OverviewPage() {
                 
                 return (
                   <div className="grid grid-cols-3 gap-4 pt-2">
-                    <Card className="overflow-visible">
-                      <CardContent className="p-3">
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
                         <p className="text-xs text-muted-foreground">Current Value</p>
                         <p className="text-lg font-semibold font-mono">
                           {data.format(current)}
                         </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="overflow-visible">
-                      <CardContent className="p-3">
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
                         <p className="text-xs text-muted-foreground">Projected (12mo)</p>
                         <p className="text-lg font-semibold font-mono">
                           {data.format(projected)}
                         </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="overflow-visible">
-                      <CardContent className="p-3">
+                    </div>
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
                         <p className="text-xs text-muted-foreground">Change</p>
                         <p className={`text-lg font-semibold font-mono flex items-center gap-1 ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
                           {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                           {isPositive ? '+' : ''}{change.toFixed(1)}%
                         </p>
-                      </CardContent>
-                    </Card>
+                    </div>
                   </div>
                 );
               })()}
