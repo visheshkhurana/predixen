@@ -340,6 +340,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",
+    "/billing/webhook",
 ])
 
 app.add_middleware(

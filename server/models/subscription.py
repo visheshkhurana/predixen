@@ -18,7 +18,11 @@ class Subscription(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True)
     stripe_subscription_id = Column(String, nullable=True)
     stripe_customer_id = Column(String, nullable=True)
-    plan = Column(String, default="free")  # free, starter, pro, enterprise
+    razorpay_subscription_id = Column(String, nullable=True)
+    razorpay_customer_id = Column(String, nullable=True)
+    razorpay_payment_id = Column(String, nullable=True)
+    payment_gateway = Column(String, default="razorpay")  # razorpay, stripe
+    plan = Column(String, default="free")  # free, startup, growth
     status = Column(String, default=SubscriptionStatus.ACTIVE.value)
     seats = Column(Integer, default=1)
     monthly_price = Column(Float, default=0.0)
