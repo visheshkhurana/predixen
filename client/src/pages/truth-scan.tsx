@@ -1,4 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
+import { FadeIn, StaggerContainer, StaggerItem } from '@/components/motion/animated-container';
+import { FloatingOrbsBackground } from '@/components/motion/floating-orbs-background';
+import { PageTransition } from '@/components/motion/page-transition-wrapper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -876,8 +879,10 @@ export default function TruthScanPage() {
   };
   
   return (
-    <FadeIn delay={0.05} duration={0.4}>
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+    <PageTransition pageKey="truth-scan" className="relative">
+      <FloatingOrbsBackground />
+      <div className="relative p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <FadeIn delay={0.05} duration={0.4}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Health Check</h1>
@@ -906,7 +911,8 @@ export default function TruthScanPage() {
           </Button>
         </div>
       </div>
-      
+      </FadeIn>
+
       {flags.filter((f: any) => f.severity === 'high').length > 0 && (
         <Card className="border-destructive/50 bg-destructive/10">
           <CardContent className="p-4">
@@ -972,7 +978,8 @@ export default function TruthScanPage() {
         </CardContent>
       </Card>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StaggerItem>
         <Collapsible open={qualityExpanded} onOpenChange={setQualityExpanded}>
           <Card className="overflow-visible">
             <CardHeader className="pb-2">
@@ -1049,7 +1056,9 @@ export default function TruthScanPage() {
             </CardContent>
           </Card>
         </Collapsible>
-        
+        </StaggerItem>
+
+        <StaggerItem>
         <Collapsible open={confidenceExpanded} onOpenChange={setConfidenceExpanded}>
           <Card className="overflow-visible">
             <CardHeader className="pb-2">
@@ -1135,8 +1144,9 @@ export default function TruthScanPage() {
             </CardContent>
           </Card>
         </Collapsible>
-      </div>
-      
+        </StaggerItem>
+      </StaggerContainer>
+
       {/* Tier 1: Score Cards */}
       <Tier1ScoreCards
         dataConfidenceScore={confidence}
@@ -1573,6 +1583,6 @@ export default function TruthScanPage() {
         benchmarkData={selectedMetric.benchmark}
       />
     </div>
-    </FadeIn>
+    </PageTransition>
   );
 }

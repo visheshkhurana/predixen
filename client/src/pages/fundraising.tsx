@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSEO } from "@/lib/seo";
+import { FadeIn, StaggerContainer, StaggerItem } from "@/components/motion/animated-container";
+import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
+import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1065,8 +1068,11 @@ export default function FundraisingPage() {
   };
 
   return (
+    <PageTransition pageKey="fundraising" className="relative">
+      <FloatingOrbsBackground />
     <div className="p-4 md:p-6 space-y-5">
       <CrossPageIntelligence context="fundraising" className="mb-2" testId="fundraising-intelligence" />
+      <FadeIn>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -1078,6 +1084,7 @@ export default function FundraisingPage() {
           </div>
         </div>
       </div>
+      </FadeIn>
 
       <DashboardBanner />
 
@@ -1133,9 +1140,10 @@ export default function FundraisingPage() {
               action={{ label: "Create Cap Table", onClick: () => setShowCapTableDialog(true), icon: Plus }}
             />
           ) : (
-            <div className="space-y-4">
+            <StaggerContainer className="space-y-4">
               {capTables.map((ct: CapTable) => (
-                <Card key={ct.id} data-testid={`card-cap-table-${ct.id}`}>
+                <StaggerItem key={ct.id}>
+                <Card data-testid={`card-cap-table-${ct.id}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle>{ct.name}</CardTitle>
@@ -1185,8 +1193,9 @@ export default function FundraisingPage() {
                     <div className="mt-4 text-sm text-muted-foreground">Fully Diluted Shares: {ct.cap_table.fully_diluted_shares.toLocaleString()}</div>
                   </CardContent>
                 </Card>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerContainer>
           )}
         </TabsContent>
 
@@ -1207,9 +1216,10 @@ export default function FundraisingPage() {
               action={{ label: "Create Round", onClick: () => setShowRoundDialog(true), icon: Plus }}
             />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <StaggerContainer className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {rounds.map((round: FundraisingRound) => (
-                <Card key={round.id} className="hover-elevate cursor-pointer" data-testid={`card-round-${round.id}`}>
+                <StaggerItem key={round.id}>
+                <Card className="hover-elevate cursor-pointer" data-testid={`card-round-${round.id}`}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{round.name}</CardTitle>
@@ -1239,8 +1249,9 @@ export default function FundraisingPage() {
                     </div>
                   </CardContent>
                 </Card>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerContainer>
           )}
 
           <Card className="mt-6">
@@ -1408,5 +1419,6 @@ export default function FundraisingPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </PageTransition>
   );
 }

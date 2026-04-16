@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -137,11 +138,17 @@ export function EnhancedKPICard({
   };
 
   return (
+    <motion.div
+      whileHover={{ scale: 1.02, y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+    >
     <Card
       className={cn(
-        "overflow-visible transition-all",
+        "overflow-visible transition-shadow",
         highlighted && "ring-2 ring-primary shadow-lg",
-        onClick && "cursor-pointer hover-elevate"
+        onClick && "cursor-pointer",
+        "hover:shadow-md"
       )}
       onClick={onClick}
       data-testid={testId}
@@ -268,5 +275,6 @@ export function EnhancedKPICard({
         )}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }

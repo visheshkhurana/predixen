@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSEO } from "@/lib/seo";
+import { FadeIn } from "@/components/motion/animated-container";
+import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
+import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -546,7 +549,9 @@ export default function DecisionsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
+    <PageTransition pageKey="decisions" className="relative">
+      <FloatingOrbsBackground />
+      <div className="relative p-4 md:p-6 max-w-3xl mx-auto xl:mr-56" data-testid="page-decisions">
       {hasMeaningfulDiagnosis && <StickyTOC activeSection={activeSection} visibleSections={visibleSections} />}
 
       <ShareModal
@@ -992,5 +997,6 @@ export default function DecisionsPage() {
         </div>
       )}
     </div>
+    </PageTransition>
   );
 }

@@ -1,5 +1,9 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { StaggerContainer, StaggerItem, FadeIn } from "@/components/motion/animated-container";
+import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
+import { ThreeDimensionalMeshBackground } from "@/components/motion/three-dimensional-mesh-background";
+import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { EnhancedKPICard } from "@/components/enhanced-kpi-card";
 import { CashFlowChart } from "@/components/cash-flow-chart";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -287,7 +291,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+    <PageTransition pageKey="dashboard" className="relative">
+    <FloatingOrbsBackground />
+    <ThreeDimensionalMeshBackground variant="finance" className="opacity-60" />
+    <div className="relative p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {showVerificationBanner && (
         <Alert className="border-amber-500/50 bg-amber-500/5">
           <Mail className="h-4 w-4 text-amber-500" />
@@ -310,7 +317,8 @@ export default function Dashboard() {
         </Alert>
       )}
       <CrossPageIntelligence context="dashboard" className="mb-2" testId="dashboard-intelligence" />
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <FadeIn>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -425,6 +433,7 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+      </FadeIn>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList data-testid="tabs-dashboard-view">
@@ -488,8 +497,8 @@ export default function Dashboard() {
         </div>
       ) : overviewKpis && (overviewKpis.cashOnHand.currentValue > 0 || overviewKpis.mrr.currentValue > 0 || overviewKpis.netBurn.currentValue > 0) ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-1 lg:row-span-2">
+          <StaggerContainer className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <StaggerItem className="lg:col-span-1 lg:row-span-2">
               <EnhancedKPICard
                 data={overviewKpis.runway}
                 title="Runway (P50)"
@@ -498,8 +507,9 @@ export default function Dashboard() {
                 highlighted={true}
                 testId="kpi-runway"
               />
-            </div>
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.cashOnHand}
               title="Cash on Hand"
@@ -508,7 +518,9 @@ export default function Dashboard() {
               icon={<DollarSign className="h-4 w-4" />}
               testId="kpi-cash"
             />
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.netBurn}
               title="Net Burn Rate"
@@ -517,7 +529,9 @@ export default function Dashboard() {
               icon={<Flame className="h-4 w-4" />}
               testId="kpi-burn"
             />
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.mrr}
               title="MRR"
@@ -526,7 +540,9 @@ export default function Dashboard() {
               icon={<TrendingUp className="h-4 w-4" />}
               testId="kpi-mrr"
             />
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.grossMargin}
               title="Gross Margin"
@@ -534,9 +550,11 @@ export default function Dashboard() {
               icon={<Percent className="h-4 w-4" />}
               testId="kpi-margin"
             />
-          </div>
+            </StaggerItem>
+          </StaggerContainer>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StaggerContainer staggerDelay={0.06} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.revenueGrowth}
               title="Revenue Growth (YoY)"
@@ -544,7 +562,9 @@ export default function Dashboard() {
               icon={<BarChart3 className="h-4 w-4" />}
               testId="kpi-growth"
             />
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <EnhancedKPICard
               data={overviewKpis.burnMultiple}
               title="Burn Multiple"
@@ -552,7 +572,9 @@ export default function Dashboard() {
               icon={<Target className="h-4 w-4" />}
               testId="kpi-burn-multiple"
             />
-            
+            </StaggerItem>
+
+            <StaggerItem>
             <Card className="overflow-visible" data-testid="kpi-quality-of-growth">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-2">
@@ -606,7 +628,8 @@ export default function Dashboard() {
                 </p>
               </CardContent>
             </Card>
-          </div>
+            </StaggerItem>
+          </StaggerContainer>
 
           {overviewKpis.recommendations && overviewKpis.recommendations.length > 0 && (
             <Card>
@@ -1244,6 +1267,7 @@ export default function Dashboard() {
         </TabsContent>
       </Tabs>
     </div>
+    </PageTransition>
   );
 }
 

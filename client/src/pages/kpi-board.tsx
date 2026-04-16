@@ -13,6 +13,8 @@ import { Sparkline } from '@/components/Sparkline';
 import { formatCurrencyAbbrev, cn } from '@/lib/utils';
 import { useLocation } from 'wouter';
 import { FadeIn, StaggerChildren, StaggerItem, ScrollReveal } from '@/components/ui/motion-primitives';
+import { FloatingOrbsBackground } from '@/components/motion/floating-orbs-background';
+import { PageTransition } from '@/components/motion/page-transition-wrapper';
 import {
   TrendingUp,
   TrendingDown,
@@ -524,8 +526,10 @@ export default function KPIBoardPage() {
   }
 
   return (
-    <FadeIn delay={0.05} duration={0.4}>
-    <div className="p-4 md:p-6 space-y-6">
+    <PageTransition pageKey="kpi-board" className="relative">
+      <FloatingOrbsBackground />
+      <div className="relative p-4 md:p-6 space-y-6">
+      <FadeIn delay={0.05} duration={0.4}>
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold" data-testid="page-title-kpi-board">KPI Board</h1>
@@ -536,6 +540,7 @@ export default function KPIBoardPage() {
           {isConnected ? 'Live' : 'Disconnected'}
         </Badge>
       </div>
+      </FadeIn>
 
       <FilterBar
         dateRange={dateRange}
@@ -972,6 +977,6 @@ export default function KPIBoardPage() {
 
       <DataSourcesPanel onAddIntegration={() => navigate('/integrations')} />
     </div>
-    </FadeIn>
+    </PageTransition>
   );
 }
