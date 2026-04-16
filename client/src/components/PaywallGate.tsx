@@ -1,4 +1,6 @@
-import { useSubscription } from '@/hooks/use-subscription';
+// Paywall is currently DISABLED — every user has access to every feature.
+// To re-enable, restore the original gating logic from git history (commit 60e89bef).
+
 import { Lock, Sparkles, ArrowRight } from 'lucide-react';
 import { useLocation } from 'wouter';
 
@@ -25,13 +27,6 @@ const FEATURE_PLAN_MAP: Record<string, { label: string; minPlan: string; minPlan
   investor_room: { label: 'Investor Room', minPlan: 'scale', minPlanName: 'Scale' },
 };
 
-const PLAN_HIERARCHY = ['free', 'starter', 'growth', 'scale'];
-
-function planRank(plan: string): number {
-  const idx = PLAN_HIERARCHY.indexOf(plan);
-  return idx >= 0 ? idx : 0;
-}
-
 interface PaywallGateProps {
   feature: string;
   children: React.ReactNode;
@@ -39,147 +34,34 @@ interface PaywallGateProps {
   inline?: boolean;
 }
 
-export function PaywallGate({ feature, children, fallback, inline = false }: PaywallGateProps) {
-  // Paywall disabled — platform is free for all users. Re-enable by removing this early return.
+export function PaywallGate({ children }: PaywallGateProps) {
   return <>{children}</>;
-
-  // eslint-disable-next-line no-unreachable
-  const { data: sub, isLoading } = useSubscription();
-  const [, navigate] = useLocation();
-
-  if (isLoading) {
-    if (inline) return null;
-    return <div className="p-6"><div className="h-32 rounded-xl bg-white/[0.02] animate-pulse" /></div>;
-  }
-
-  const featureInfo = FEATURE_PLAN_MAP[feature];
-  if (!featureInfo) return <>{children}</>;
-
-  const effectivePlan = sub?.is_active ? (sub?.effective_plan || sub?.plan || 'free') : 'free';
-  const userRank = planRank(effectivePlan);
-  const requiredRank = planRank(featureInfo.minPlan);
-
-  if (userRank >= requiredRank) return <>{children}</>;
-
-  if (fallback) return <>{fallback}</>;
-
-  if (inline) {
-    return (
-      <button
-        onClick={() => navigate('/billing')}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
-          bg-white/[0.04] border border-white/[0.08] text-white/40
-          hover:bg-white/[0.06] hover:text-white/60 transition-all text-xs"
-        data-testid={`paywall-inline-${feature}`}
-      >
-        <Lock className="h-3 w-3" />
-        <span>{featureInfo.minPlanName} plan</span>
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className="relative rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 text-center"
-      data-testid={`paywall-gate-${feature}`}
-    >
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-10 w-10 rounded-full bg-white/[0.06] flex items-center justify-center">
-          <Lock className="h-5 w-5 text-white/40" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-white/70">{featureInfo.label}</p>
-          <p className="text-xs text-white/40 mt-1">
-            Available on the {featureInfo.minPlanName} plan and above
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/billing')}
-          className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg
-            bg-white/[0.08] border border-white/[0.1] text-white/80
-            hover:bg-white/[0.12] hover:text-white transition-all text-sm font-medium"
-          data-testid={`paywall-upgrade-${feature}`}
-        >
-          <Sparkles className="h-4 w-4" />
-          <span>Upgrade to {featureInfo.minPlanName}</span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export function TrialBanner() {
-  // Paywall disabled — no trial banner shown. Re-enable by removing this early return.
-  return null;
-
-  // eslint-disable-next-line no-unreachable
-  const { data: sub, isLoading } = useSubscription();
-  const [, navigate] = useLocation();
-
-  if (isLoading || !sub) return null;
-
-  if (sub.is_trial && sub.trial_days_remaining > 0) {
-    const urgent = sub.trial_days_remaining <= 7;
-    return (
-      <div
-        className={`flex items-center justify-between px-4 py-2 text-xs border-b
-          ${urgent
-            ? 'bg-amber-500/[0.08] border-amber-500/20 text-amber-400'
-            : 'bg-emerald-500/[0.06] border-emerald-500/15 text-emerald-400'
-          }`}
-        data-testid="banner-trial"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>
-            {urgent
-              ? `Trial ending in ${sub.trial_days_remaining} day${sub.trial_days_remaining !== 1 ? 's' : ''}`
-              : `Free trial — ${sub.trial_days_remaining} days remaining`
-            }
-          </span>
-        </div>
-        <button
-          onClick={() => navigate('/billing')}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md
-            bg-white/[0.08] hover:bg-white/[0.12] text-white/70 hover:text-white transition-all"
-          data-testid="button-upgrade-trial"
-        >
-          <span>View plans</span>
-          <ArrowRight className="h-3 w-3" />
-        </button>
-      </div>
-    );
-  }
-
-  if (!sub.is_active && sub.status !== 'none') {
-    return (
-      <div
-        className="flex items-center justify-between px-4 py-2 text-xs border-b
-          bg-red-500/[0.06] border-red-500/15 text-red-400"
-        data-testid="banner-expired"
-      >
-        <div className="flex items-center gap-2">
-          <Lock className="h-3.5 w-3.5" />
-          <span>Your trial has ended — upgrade to continue using all features</span>
-        </div>
-        <button
-          onClick={() => navigate('/billing')}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md
-            bg-white/[0.08] hover:bg-white/[0.12] text-white/70 hover:text-white transition-all"
-          data-testid="button-upgrade-expired"
-        >
-          <span>Upgrade now</span>
-          <ArrowRight className="h-3 w-3" />
-        </button>
-      </div>
-    );
-  }
-
   return null;
 }
 
 export function useHasFeature(_feature: string): { hasAccess: boolean; isLoading: boolean } {
-  // Paywall disabled — every feature is accessible. Re-enable by restoring the original logic below.
   return { hasAccess: true, isLoading: false };
+}
+
+export function UpgradeButton({ feature }: { feature: string }) {
+  const [, navigate] = useLocation();
+  const featureInfo = FEATURE_PLAN_MAP[feature];
+  if (!featureInfo) return null;
+  return (
+    <button
+      onClick={() => navigate('/billing')}
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+        bg-white/[0.08] border border-white/[0.1] text-white/80
+        hover:bg-white/[0.12] hover:text-white transition-all text-sm font-medium"
+      data-testid={`paywall-upgrade-${feature}`}
+    >
+      <Sparkles className="h-4 w-4" />
+      <span>Upgrade to {featureInfo.minPlanName}</span>
+      <ArrowRight className="h-3.5 w-3.5" />
+      <Lock className="h-3.5 w-3.5 sr-only" />
+    </button>
+  );
 }
