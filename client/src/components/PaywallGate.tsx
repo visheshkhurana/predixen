@@ -40,6 +40,10 @@ interface PaywallGateProps {
 }
 
 export function PaywallGate({ feature, children, fallback, inline = false }: PaywallGateProps) {
+  // Paywall disabled — platform is free for all users. Re-enable by removing this early return.
+  return <>{children}</>;
+
+  // eslint-disable-next-line no-unreachable
   const { data: sub, isLoading } = useSubscription();
   const [, navigate] = useLocation();
 
@@ -106,6 +110,10 @@ export function PaywallGate({ feature, children, fallback, inline = false }: Pay
 }
 
 export function TrialBanner() {
+  // Paywall disabled — no trial banner shown. Re-enable by removing this early return.
+  return null;
+
+  // eslint-disable-next-line no-unreachable
   const { data: sub, isLoading } = useSubscription();
   const [, navigate] = useLocation();
 
@@ -171,17 +179,7 @@ export function TrialBanner() {
   return null;
 }
 
-export function useHasFeature(feature: string): { hasAccess: boolean; isLoading: boolean } {
-  const { data: sub, isLoading } = useSubscription();
-
-  if (isLoading || !sub) return { hasAccess: true, isLoading: true };
-
-  const featureInfo = FEATURE_PLAN_MAP[feature];
-  if (!featureInfo) return { hasAccess: true, isLoading: false };
-
-  const effectivePlan = sub.is_active ? (sub.effective_plan || sub.plan || 'free') : 'free';
-  const userRank = planRank(effectivePlan);
-  const requiredRank = planRank(featureInfo.minPlan);
-
-  return { hasAccess: userRank >= requiredRank, isLoading: false };
+export function useHasFeature(_feature: string): { hasAccess: boolean; isLoading: boolean } {
+  // Paywall disabled — every feature is accessible. Re-enable by restoring the original logic below.
+  return { hasAccess: true, isLoading: false };
 }

@@ -334,7 +334,8 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 from server.core.subscription import PaywallMiddleware
-app.add_middleware(PaywallMiddleware)
+# Paywall disabled — platform is free for all users. Re-enable to gate features.
+# app.add_middleware(PaywallMiddleware)
 
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
