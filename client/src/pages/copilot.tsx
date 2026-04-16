@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { FadeIn } from "@/components/motion/animated-container";
+import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
+import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { useLocation } from 'wouter';
 import { isRunwaySustainable } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
@@ -1858,8 +1861,10 @@ Type **help** for a full list of what I can do.`,
   }
   
   return (
-    <FadeIn delay={0.05} duration={0.4} direction="none">
-    <div className="h-[calc(100vh-4rem)] flex relative overflow-hidden">
+    <PageTransition pageKey="copilot" className="relative">
+      <FloatingOrbsBackground />
+      <FadeIn delay={0.05} duration={0.4} direction="none">
+      <div className="relative h-[calc(100vh-4rem)] flex overflow-hidden">
       {/* Conversation History Sidebar */}
       {showConversationSidebar && (
         <>
@@ -1927,6 +1932,7 @@ Type **help** for a full list of what I can do.`,
       {/* Main Chat Container - Centered */}
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${isPanelOpen ? 'lg:mr-80' : ''}`}>
         {/* Minimal Header */}
+        <FadeIn>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Button 
@@ -1956,7 +1962,7 @@ Type **help** for a full list of what I can do.`,
             </Button>
           </div>
         </div>
-        
+        </FadeIn>
         {/* AI Disclaimer Banner */}
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2" data-testid="banner-ai-disclaimer">
           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
@@ -2572,5 +2578,6 @@ Type **help** for a full list of what I can do.`,
       </div>
     </div>
     </FadeIn>
+    </PageTransition>
   );
 }
