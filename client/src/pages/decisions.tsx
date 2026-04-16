@@ -6,7 +6,7 @@ import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FadeIn, StaggerChildren, StaggerItem, ScrollReveal } from '@/components/ui/motion-primitives';
+import { StaggerChildren, StaggerItem, ScrollReveal } from '@/components/ui/motion-primitives';
 
 import { RefreshCw, ArrowRight, Brain, Copy, Check, AlertTriangle, XCircle, Send, Mail, Loader2, CheckCircle2 } from 'lucide-react';
 import { useFounderStore } from '@/store/founderStore';
