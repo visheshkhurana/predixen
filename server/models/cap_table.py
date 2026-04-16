@@ -1,12 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Date, Text, Boolean, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Date, Text, Boolean, Index, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 import enum
 from server.core.db import Base
 
-JSONType = JSONB
+# Use JSON (SQLite-compatible) instead of JSONB (PostgreSQL-only)
+JSONType = JSON
 
 
 class SecurityType(str, enum.Enum):
