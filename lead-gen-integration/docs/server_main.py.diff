@@ -1,0 +1,38 @@
+# Router registration for server/main.py
+
+In `server/main.py`, find the function that registers routers — typically
+called `_register_remaining_routers` (after the critical ones like auth,
+companies, admin).
+
+Add these two imports + registrations at the end of that function:
+
+```python
+def _register_remaining_routers(app: FastAPI) -> None:
+    # ... existing registrations above ...
+
+    # Lead-gen admin API (gated via require_platform_admin)
+    from server.api.lead_gen import router as lead_gen_router
+    app.include_router(lead_gen_router)
+
+    # Lead-gen webhooks (HMAC-verified, no auth middleware)
+    from server.webhooks.lead_gen_webhooks import router as lead_gen_webhooks_router
+    app.include_router(lead_gen_webhooks_router)
+```
+
+If your app uses the alternate `_register_critical_routers` pattern for
+everything, put them in that one instead — both routers are self-contained
+and have no ordering dependencies.
+
+---
+
+# Required env var (add to your deployment)
+
+```bash
+# A shared secret used to HMAC-sign webhook payloads from n8n → predixen.
+# Generate with: openssl rand -hex 32
+# Set the same value in both predixen's env AND n8n's env.
+LEAD_GEN_WEBHOOK_SECRET=<64-hex-chars>
+```
+
+Without this, the `/webhooks/lead-gen/*` endpoints will refuse all traffic
+with HTTP 500. Set it before rolling out.

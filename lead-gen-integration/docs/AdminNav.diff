@@ -1,0 +1,34 @@
+# Admin nav sidebar addition
+
+In your `AdminLayout` (likely `client/src/components/admin/AdminLayout.tsx` or
+`client/src/pages/admin/layout.tsx` — wherever the admin sidebar lives), add
+a new nav item alongside the existing admin pages (users, companies, billing,
+email-templates, etc.):
+
+```tsx
+import { Megaphone } from "lucide-react";  // or any icon you prefer
+
+// Inside your nav items array:
+{
+  label: "Lead Gen",
+  href: "/admin/lead-gen",
+  icon: Megaphone,
+  // If your pattern uses a children/submenu array:
+  children: [
+    { label: "Overview", href: "/admin/lead-gen" },
+    { label: "Leads", href: "/admin/lead-gen/leads" },
+    { label: "Campaigns", href: "/admin/lead-gen/campaigns" },
+    { label: "Templates", href: "/admin/lead-gen/templates" },
+    { label: "Settings", href: "/admin/lead-gen/settings" },
+  ],
+},
+```
+
+If the sidebar is hand-rolled (just a list of `<Link>`s), just add:
+
+```tsx
+<Link href="/admin/lead-gen" className="...">
+  <Megaphone className="h-4 w-4" />
+  Lead Gen
+</Link>
+```

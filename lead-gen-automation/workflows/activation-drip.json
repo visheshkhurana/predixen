@@ -1,0 +1,273 @@
+{
+  "name": "FounderConsole \u2014 Activation Drip (new signups)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Activation drip\n\nFires when a new user signs up at founderconsole.ai. The FounderConsole backend should POST to this webhook with `{email, first_name, company_name, signup_source}`.\n\nFlow: upsert to Airtable \u2192 welcome email \u2192 wait 48h \u2192 check if they ran a simulation (Airtable `has_simulated` boolean) \u2192 nudge if not.",
+        "height": 200,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        -200
+      ],
+      "id": "sticky-activation-1",
+      "name": "Activation Note"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "founderconsole-signup",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -500,
+        100
+      ],
+      "id": "act-webhook",
+      "name": "Signup Webhook",
+      "webhookId": "founderconsole-signup"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "matchingColumns": [
+            "email"
+          ],
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ $json.body.email }}",
+            "first_name": "={{ $json.body.first_name }}",
+            "company_name": "={{ $json.body.company_name }}",
+            "signup_source": "={{ $json.body.signup_source }}",
+            "signed_up_at": "={{ $now.toISO() }}",
+            "has_simulated": false
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -260,
+        100
+      ],
+      "id": "act-airtable-upsert",
+      "name": "Airtable Upsert"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.email }}",
+        "subject": "welcome to FounderConsole \u2014 want me to walk you through it?",
+        "emailType": "text",
+        "message": "hey {{ $json.body.first_name }},\n\nthanks for signing up. FounderConsole is built so you can run your first survival simulation in under 5 minutes \u2014 just plug in your MRR, burn, and cash balance. it'll show you P50 / P90 survival probability and where the sensitivity is.\n\nstart here: https://founderconsole.ai/simulator\n\nthree things most founders miss on their first run:\n1. model hiring as a recurring expense, not one-time\n2. plug in realistic growth variance (not just an average)\n3. check the dilution tab after the sim \u2014 post-round cap table matters\n\nif you want, reply with your P50 and i'll tell you how it compares to other {{ $json.body.company_name }}-stage founders in our index.\n\n\u2014 Vishesh",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        100
+      ],
+      "id": "act-welcome-gmail",
+      "name": "Welcome Email"
+    },
+    {
+      "parameters": {
+        "amount": 48,
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        260,
+        100
+      ],
+      "id": "act-wait-48h",
+      "name": "Wait 48h"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "filterByFormula": "={{ \"{email} = '\" + $('Signup Webhook').item.json.body.email + \"'\" }}"
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        500,
+        100
+      ],
+      "id": "act-airtable-check",
+      "name": "Check Activation"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "activation-check",
+              "leftValue": "={{ $json.fields.has_simulated }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "notEqual"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        100
+      ],
+      "id": "act-if-simulated",
+      "name": "Already Simulated?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Signup Webhook').item.json.body.email }}",
+        "subject": "quick nudge on the simulator",
+        "emailType": "text",
+        "message": "hey {{ $('Signup Webhook').item.json.body.first_name }},\n\nnoticed you haven't run a simulation yet \u2014 no pressure, but the whole value is in seeing your actual P50.\n\nif you got stuck, the three inputs you need are:\n- current cash\n- monthly burn\n- MRR (or 0 if pre-revenue)\n\ntakes 90 seconds once you have those: https://founderconsole.ai/simulator\n\nor reply to this and i'll run one on a sample company close to yours so you can see the output first.\n\n\u2014 Vishesh",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1020,
+        0
+      ],
+      "id": "act-nudge-gmail",
+      "name": "Activation Nudge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        200
+      ],
+      "id": "act-noop",
+      "name": "Already Activated \u2014 done"
+    }
+  ],
+  "connections": {
+    "Signup Webhook": {
+      "main": [
+        [
+          {
+            "node": "Airtable Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable Upsert": {
+      "main": [
+        [
+          {
+            "node": "Welcome Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Email": {
+      "main": [
+        [
+          {
+            "node": "Wait 48h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 48h": {
+      "main": [
+        [
+          {
+            "node": "Check Activation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Activation": {
+      "main": [
+        [
+          {
+            "node": "Already Simulated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Simulated?": {
+      "main": [
+        [
+          {
+            "node": "Activation Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Already Activated \u2014 done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

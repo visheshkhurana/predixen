@@ -1,0 +1,2 @@
+email,first_name,last_name,company_name,linkedin_url,website,sector,stage,last_funding,summary,hook,hunter_status,enrichment_status,sent_email_1_at,sent_email_2_at,sent_email_3_at,sent_email_4_at,replied_at,unsubscribed_at,trial_signed_up_at,notes
+sarah@example.com,Sarah,Chen,Acme AI,https://linkedin.com/in/sarahchen,https://acme.ai,SaaS,seed,"$2M seed from a16z, Oct 2025","AI-native CRM for founders","Raised $2M seed from a16z last month, hiring 3 engineers",valid,enriched,,,,,,,,,EXAMPLE ROW

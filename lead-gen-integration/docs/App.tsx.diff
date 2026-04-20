@@ -1,0 +1,26 @@
+# Route additions for client/src/App.tsx
+
+Add this lazy import near the top of `App.tsx` with the other lazy page imports:
+
+```tsx
+const LeadGenAdmin = lazy(() => import("./pages/admin/lead-gen"));
+```
+
+Add this route inside the `AdminRoute`-protected section (wherever the other
+`/admin/*` routes are — the wrapper will handle auth gating):
+
+```tsx
+<Route path="/admin/lead-gen/:rest*">
+  <AdminRoute>
+    <LeadGenAdmin />
+  </AdminRoute>
+</Route>
+```
+
+Note: use `:rest*` (wouter wildcard) so all nested tabs under /admin/lead-gen
+(leads, campaigns, templates, settings) route through the layout component's
+internal `<Switch>`.
+
+If your existing admin route looks different (e.g. already uses a `/admin/*`
+catch-all with a nested router), just add `LeadGenAdmin` to that inner
+router's route table instead.
