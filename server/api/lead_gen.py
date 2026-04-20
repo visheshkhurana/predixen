@@ -28,7 +28,7 @@ from server.models import User
 from server.models.lead import Lead
 from server.models.lead_gen import LeadCampaign, LeadEvent, LeadGenSettings, LeadTemplate
 
-router = APIRouter(prefix="/api/admin/lead-gen", tags=["admin", "lead-gen"])
+router = APIRouter(prefix="/admin/lead-gen", tags=["admin", "lead-gen"])
 
 
 # ============================================================
