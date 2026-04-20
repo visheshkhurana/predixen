@@ -106,6 +106,8 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import intelligence_graph as intelligence_graph_api
     from server.api import agent_simulation as agent_simulation_api
     from server.api import simulation_v2 as simulation_v2_api
+    from server.api import lead_gen as lead_gen_api
+    from server.webhooks import lead_gen_webhooks as lead_gen_webhooks_api
     from server.realtime import routes as realtime_ws
     from server.api.domain import company_router, finance_router, simulation_router, decision_router, connector_router, ai_router, system_router
 
@@ -128,6 +130,9 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(comments_api.router)
     app.include_router(simulation_jobs_api.router)
     app.include_router(email_templates_api.router)
+    # Lead-gen feature: admin-gated REST API + HMAC-verified webhooks
+    app.include_router(lead_gen_api.router)
+    app.include_router(lead_gen_webhooks_api.router)
     app.include_router(scenarios.router)
     app.include_router(data_health_api.router)
     app.include_router(workstreams_api.router)

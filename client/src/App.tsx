@@ -85,6 +85,7 @@ import AdminEvals from "@/pages/admin/evals";
 import AiGovernancePage from "@/pages/admin/ai-governance";
 import AdminTeam from "@/pages/admin/team";
 import AdminSystemTools from "@/pages/admin/system-tools";
+import LeadGenAdmin from "@/pages/admin/lead-gen";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
@@ -492,6 +493,21 @@ function Router() {
       </Route>
       <Route path="/admin/system">
         {() => <AdminRoute component={AdminSystemTools} />}
+      </Route>
+      <Route path="/admin/lead-gen">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
+      <Route path="/admin/lead-gen/leads">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
+      <Route path="/admin/lead-gen/campaigns">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
+      <Route path="/admin/lead-gen/templates">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
+      <Route path="/admin/lead-gen/settings">
+        {() => <AdminRoute component={LeadGenAdmin} />}
       </Route>
       <Route path="/qa">
         {() => <AdminRoute component={QAFrontPage} />}
