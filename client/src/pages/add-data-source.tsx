@@ -143,12 +143,32 @@ export default function AddDataSourceWizard() {
   
   if (!connectorId) {
     return (
-      <div className="p-6 max-w-2xl mx-auto">
+      <div className="p-6 max-w-2xl mx-auto" data-testid="add-data-source-picker">
         <Card>
-          <CardContent className="p-8 text-center">
-            <p className="text-muted-foreground">No connector specified</p>
-            <Button className="mt-4" onClick={() => setLocation("/marketplace")}>
+          <CardHeader>
+            <CardTitle>
+              <h1 className="text-2xl font-semibold" data-testid="text-add-data-source-title">
+                Add a data source
+              </h1>
+            </CardTitle>
+            <CardDescription>
+              Pick a provider from the marketplace to start the connection wizard.
+              FounderConsole supports 30+ integrations — Stripe, QuickBooks, Gusto,
+              Shopify, and more.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4 py-8">
+            <Database className="h-12 w-12 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground text-center max-w-md">
+              You reached this page without selecting a connector. Browse the
+              marketplace to pick one.
+            </p>
+            <Button
+              onClick={() => setLocation("/marketplace")}
+              data-testid="button-browse-connectors"
+            >
               Browse Connectors
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>

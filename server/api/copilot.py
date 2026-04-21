@@ -1129,10 +1129,24 @@ async def _copilot_chat_inner(
             sanitized_content = PromptInjectionDefense.sanitize_user_input(msg.content)
             conversation_context.append({"role": msg.role, "content": sanitized_content})
     
+    # Fallback: if this company has no TruthScan yet but does have financial
+    # records (seeded demo, uploaded CSVs without running Truth Scan, etc.),
+    # synthesize a TruthScan-shaped dict from the latest FinancialRecord.
+    # Keeps the CFO agent / context pack on the canonical contract per
+    # HANDOVER.md §5 instead of silently reporting "No financial data."
+    truth_scan_payload = truth_scan.outputs_json if truth_scan else None
+    if truth_scan_payload is None:
+        from server.models.financial import FinancialRecord
+        from server.copilot.business_context import synthesize_truth_scan_from_records
+        _recent = db.query(FinancialRecord).filter(
+            FinancialRecord.company_id == company_id
+        ).order_by(FinancialRecord.period_end.desc()).limit(12).all()
+        truth_scan_payload = synthesize_truth_scan_from_records(_recent)
+
     context = {
         "has_document": False,
         "extracted_financials": None,
-        "truth_scan": truth_scan.outputs_json if truth_scan else None,
+        "truth_scan": truth_scan_payload,
         "mode": request.mode,
         "challenge_mode": request.challenge_mode,
         "investor_lens": request.investor_lens,

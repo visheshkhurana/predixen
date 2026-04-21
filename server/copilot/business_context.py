@@ -139,6 +139,63 @@ def _extract_financial_metrics(ts_data: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def synthesize_truth_scan_from_records(records: list) -> Optional[Dict[str, Any]]:
+    """Build a TruthScan-shaped outputs_json dict from FinancialRecord rows.
+
+    Used as a fallback when a company has no TruthScan yet but does have
+    financial records (e.g. seeded demo, or a founder who uploaded data but
+    hasn't run Truth Scan). The Copilot's CFO agent, context pack, and
+    anything else that reads `truth_scan.outputs_json` can then stay on the
+    canonical-shape contract documented in HANDOVER.md §5.
+    """
+    if not records:
+        return None
+    latest = records[0]
+
+    def _num(name):
+        v = getattr(latest, name, None)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    cash = _num("cash_balance")
+    burn = _num("net_burn")
+    runway = _num("runway_months")
+    if runway is None and cash is not None and burn and burn > 0:
+        runway = round(cash / burn, 1)
+
+    metrics_out = {
+        "monthly_revenue": _num("revenue"),
+        "mrr": _num("mrr"),
+        "arr": _num("arr"),
+        "cash_balance": cash,
+        "net_burn": burn,
+        "runway_months": runway,
+        "gross_margin": _num("gross_margin"),
+        "opex": _num("opex"),
+        "payroll": _num("payroll"),
+        "cogs": _num("cogs"),
+        "headcount": int(latest.headcount) if getattr(latest, "headcount", None) is not None else None,
+        "customers": int(latest.customers) if getattr(latest, "customers", None) is not None else None,
+        "ltv": _num("ltv"),
+        "cac": _num("cac"),
+        "ltv_cac_ratio": _num("ltv_cac_ratio"),
+        "arpu": _num("arpu"),
+        "revenue_growth_mom": _num("mom_growth"),
+    }
+    # Drop None keys so downstream readers see "missing" vs "zero" correctly.
+    metrics_out = {k: v for k, v in metrics_out.items() if v is not None}
+
+    return {
+        "metrics": metrics_out,
+        "data_confidence_score": 60,  # synthesized, not a real Truth Scan
+        "quality_of_growth_index": 0,
+        "computed_at": latest.period_end.isoformat() if getattr(latest, "period_end", None) else None,
+        "source": "financial_records_fallback",
+    }
+
+
 def _extract_from_record(rec) -> Dict[str, Any]:
     result = {}
     fields = ["revenue", "mrr", "arr", "cash_balance", "net_burn", "runway_months",
