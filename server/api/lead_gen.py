@@ -650,6 +650,151 @@ def patch_settings(
 
 
 # ============================================================
+# n8n monitoring proxy (read-only; uses stored n8n API key)
+# ============================================================
+
+class ExecutionOut(BaseModel):
+    id: str
+    workflow_id: Optional[str] = None
+    workflow_name: Optional[str] = None
+    mode: Optional[str] = None
+    status: str  # success | error | running | waiting | canceled | unknown
+    started_at: Optional[str] = None
+    stopped_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+    finished: Optional[bool] = None
+    error_message: Optional[str] = None
+    error_node: Optional[str] = None
+
+
+class ExecutionsListOut(BaseModel):
+    data: list[ExecutionOut]
+    source: str  # "n8n" | "empty" | "error"
+    error: Optional[str] = None
+
+
+def _n8n_config(s: LeadGenSettings) -> Optional[tuple[str, str]]:
+    if not s.n8n_base_url or not s.n8n_api_key_encrypted:
+        return None
+    try:
+        creds = get_encryptor().decrypt_credentials(s.n8n_api_key_encrypted)
+        api_key = creds.get("api_key")
+        if not api_key:
+            return None
+        return s.n8n_base_url.rstrip("/"), api_key
+    except Exception:
+        return None
+
+
+def _parse_execution(raw: dict) -> ExecutionOut:
+    """Shape n8n v1 execution response into our ExecutionOut model."""
+    started_at = raw.get("startedAt") or raw.get("started_at")
+    stopped_at = raw.get("stoppedAt") or raw.get("stopped_at")
+    duration_ms = None
+    if started_at and stopped_at:
+        try:
+            s = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            e = datetime.fromisoformat(stopped_at.replace("Z", "+00:00"))
+            duration_ms = int((e - s).total_seconds() * 1000)
+        except Exception:
+            pass
+
+    # Derive status
+    finished = raw.get("finished")
+    if raw.get("status"):
+        status_val = str(raw.get("status"))
+    elif raw.get("stoppedAt") is None and finished is False:
+        status_val = "running"
+    elif finished is True and ((raw.get("data") or {}).get("resultData", {}) or {}).get("error"):
+        status_val = "error"
+    elif finished is True:
+        status_val = "success"
+    else:
+        status_val = "unknown"
+
+    # Extract error detail if any
+    err_msg = None
+    err_node = None
+    result_data = (raw.get("data") or {}).get("resultData") or {}
+    err = result_data.get("error")
+    if err and isinstance(err, dict):
+        err_msg = err.get("message") or err.get("description")
+        node = err.get("node")
+        if isinstance(node, dict):
+            err_node = node.get("name")
+        elif isinstance(node, str):
+            err_node = node
+
+    wf = raw.get("workflowData") or {}
+    return ExecutionOut(
+        id=str(raw.get("id")),
+        workflow_id=str(raw.get("workflowId") or raw.get("workflow_id") or wf.get("id") or ""),
+        workflow_name=wf.get("name"),
+        mode=raw.get("mode"),
+        status=status_val,
+        started_at=started_at,
+        stopped_at=stopped_at,
+        duration_ms=duration_ms,
+        finished=finished,
+        error_message=err_msg,
+        error_node=err_node,
+    )
+
+
+@router.get("/executions", response_model=ExecutionsListOut)
+async def list_executions(
+    limit: int = Query(20, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status", pattern="^(success|error|waiting|running)$"),
+    workflow_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+):
+    """
+    Proxy to n8n /api/v1/executions. Returns recent workflow executions with
+    status, duration, and error details. Used by the Live Executions panel.
+    """
+    s = _get_settings_or_default(db)
+    cfg = _n8n_config(s)
+    if not cfg:
+        return ExecutionsListOut(
+            data=[],
+            source="empty",
+            error="n8n not configured — set base URL + API key in Settings",
+        )
+
+    base_url, api_key = cfg
+    params: dict[str, Any] = {"limit": limit, "includeData": "false"}
+    if status_filter:
+        params["status"] = status_filter
+    if workflow_id:
+        params["workflowId"] = workflow_id
+
+    url = f"{base_url}/api/v1/executions"
+    headers = {"X-N8N-API-KEY": api_key, "Accept": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(url, params=params, headers=headers)
+        if r.status_code != 200:
+            return ExecutionsListOut(
+                data=[],
+                source="error",
+                error=f"n8n returned {r.status_code}: {r.text[:200]}",
+            )
+        payload = r.json()
+        raw_executions = payload.get("data") if isinstance(payload, dict) else payload
+        raw_executions = raw_executions or []
+        parsed = [_parse_execution(e) for e in raw_executions]
+        return ExecutionsListOut(data=parsed, source="n8n")
+    except httpx.HTTPError as exc:
+        return ExecutionsListOut(
+            data=[],
+            source="error",
+            error=f"n8n request failed: {exc!s}",
+        )
+
+
+# ============================================================
 # Helpers
 # ============================================================
 
