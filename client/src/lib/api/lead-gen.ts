@@ -188,7 +188,39 @@ export const leadGenApi = {
   getSettings: () => apiFetch<Settings>(`${BASE}/settings`),
   patchSettings: (data: Partial<Settings> & { n8n_api_key?: string }) =>
     apiFetch<Settings>(`${BASE}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  // Smartlead KPI sync (external campaign analytics)
+  listSmartleadCampaigns: () =>
+    apiFetch<SmartleadCampaignsResponse>(`${BASE}/smartlead/campaigns`),
 };
+
+export interface SmartleadCampaign {
+  id: number;
+  name: string;
+  status: string | null;  // DRAFTED | ACTIVE | PAUSED | COMPLETED
+  created_at: string | null;
+  sequence_count: number;
+  sent_count: number;
+  unique_sent_count: number;
+  open_count: number;
+  unique_open_count: number;
+  click_count: number;
+  unique_click_count: number;
+  reply_count: number;
+  bounce_count: number;
+  block_count: number;
+  unsubscribed_count: number;
+  total_leads: number;
+  open_rate: number;   // 0..1
+  reply_rate: number;  // 0..1
+  bounce_rate: number; // 0..1
+}
+
+export interface SmartleadCampaignsResponse {
+  data: SmartleadCampaign[];
+  source: "smartlead" | "empty" | "error";
+  error?: string | null;
+}
 
 // React Query keys for easy cache invalidation
 export const leadGenKeys = {
@@ -199,4 +231,5 @@ export const leadGenKeys = {
   templates: () => ["lead-gen", "templates"] as const,
   stats: () => ["lead-gen", "stats"] as const,
   settings: () => ["lead-gen", "settings"] as const,
+  smartleadCampaigns: () => ["lead-gen", "smartlead-campaigns"] as const,
 };

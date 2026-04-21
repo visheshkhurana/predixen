@@ -11,6 +11,7 @@ Patterns follow server/api/admin.py + server/api/email_templates.py.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -660,3 +661,150 @@ def _jsonable(obj: Any) -> Any:
         return obj
     except Exception:
         return str(obj)
+
+
+# ============================================================
+# Smartlead KPI sync (read-only; reads SMARTLEAD_API_KEY from env)
+# ============================================================
+
+class SmartleadCampaignOut(BaseModel):
+    id: int
+    name: str
+    status: Optional[str] = None  # DRAFTED | ACTIVE | PAUSED | COMPLETED
+    created_at: Optional[str] = None
+    sequence_count: int = 0
+    sent_count: int = 0
+    unique_sent_count: int = 0
+    open_count: int = 0
+    unique_open_count: int = 0
+    click_count: int = 0
+    unique_click_count: int = 0
+    reply_count: int = 0
+    bounce_count: int = 0
+    block_count: int = 0
+    unsubscribed_count: int = 0
+    total_leads: int = 0
+    # Rates (computed server-side so FE doesn't repeat math)
+    open_rate: float = 0.0
+    reply_rate: float = 0.0
+    bounce_rate: float = 0.0
+
+
+class SmartleadCampaignsOut(BaseModel):
+    data: list[SmartleadCampaignOut]
+    source: str  # "smartlead" | "empty" | "error"
+    error: Optional[str] = None
+
+
+def _int(x: Any) -> int:
+    """Smartlead returns stringified ints. Coerce to int, defaulting to 0."""
+    if x is None:
+        return 0
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
+
+
+def _smartlead_analytics_to_out(raw: dict) -> SmartleadCampaignOut:
+    sent = _int(raw.get("unique_sent_count")) or _int(raw.get("sent_count"))
+    opens = _int(raw.get("unique_open_count")) or _int(raw.get("open_count"))
+    replies = _int(raw.get("reply_count"))
+    bounces = _int(raw.get("bounce_count"))
+    lead_stats = raw.get("campaign_lead_stats") or {}
+    total_leads = _int(lead_stats.get("total"))
+
+    return SmartleadCampaignOut(
+        id=_int(raw.get("id")),
+        name=str(raw.get("name") or ""),
+        status=raw.get("status"),
+        created_at=raw.get("created_at"),
+        sequence_count=_int(raw.get("sequence_count")),
+        sent_count=_int(raw.get("sent_count")),
+        unique_sent_count=_int(raw.get("unique_sent_count")),
+        open_count=_int(raw.get("open_count")),
+        unique_open_count=_int(raw.get("unique_open_count")),
+        click_count=_int(raw.get("click_count")),
+        unique_click_count=_int(raw.get("unique_click_count")),
+        reply_count=replies,
+        bounce_count=bounces,
+        block_count=_int(raw.get("block_count")),
+        unsubscribed_count=_int(raw.get("unsubscribed_count")),
+        total_leads=total_leads,
+        open_rate=_rate(opens, sent),
+        reply_rate=_rate(replies, sent),
+        bounce_rate=_rate(bounces, sent),
+    )
+
+
+@router.get("/smartlead/campaigns", response_model=SmartleadCampaignsOut)
+async def list_smartlead_campaigns(
+    admin: User = Depends(require_platform_admin),
+):
+    """
+    Proxy to Smartlead's analytics API. Reads SMARTLEAD_API_KEY from env.
+    For each campaign listed, enriches with per-campaign analytics (sent,
+    opens, replies, bounces) and computes rates. Used by the Smartlead KPI
+    card on the Live tab.
+    """
+    api_key = os.getenv("SMARTLEAD_API_KEY")
+    if not api_key:
+        return SmartleadCampaignsOut(
+            data=[],
+            source="empty",
+            error="SMARTLEAD_API_KEY not set in environment — add it to Replit Secrets.",
+        )
+
+    base = "https://server.smartlead.ai/api/v1"
+    list_url = f"{base}/campaigns"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(list_url, params={"api_key": api_key})
+            if r.status_code != 200:
+                return SmartleadCampaignsOut(
+                    data=[],
+                    source="error",
+                    error=f"Smartlead list returned {r.status_code}: {r.text[:200]}",
+                )
+            raw_campaigns = r.json() or []
+            if not isinstance(raw_campaigns, list):
+                raw_campaigns = raw_campaigns.get("data", []) if isinstance(raw_campaigns, dict) else []
+
+            # Fetch analytics per campaign in parallel
+            import asyncio
+
+            async def fetch_one(c: dict) -> dict:
+                cid = c.get("id")
+                if not cid:
+                    return c
+                try:
+                    ar = await client.get(
+                        f"{base}/campaigns/{cid}/analytics",
+                        params={"api_key": api_key},
+                    )
+                    if ar.status_code == 200:
+                        enriched = ar.json() or {}
+                        # Merge: analytics response already contains the id/name/status
+                        return enriched
+                except httpx.HTTPError:
+                    pass
+                return c
+
+            enriched_list = await asyncio.gather(*[fetch_one(c) for c in raw_campaigns])
+
+        parsed = [_smartlead_analytics_to_out(c) for c in enriched_list]
+        # Sort by most recently created first
+        parsed.sort(key=lambda c: c.created_at or "", reverse=True)
+        return SmartleadCampaignsOut(data=parsed, source="smartlead")
+    except httpx.HTTPError as exc:
+        return SmartleadCampaignsOut(
+            data=[],
+            source="error",
+            error=f"Smartlead request failed: {exc!s}",
+        )
