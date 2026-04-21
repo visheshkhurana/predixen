@@ -188,7 +188,37 @@ export const leadGenApi = {
   getSettings: () => apiFetch<Settings>(`${BASE}/settings`),
   patchSettings: (data: Partial<Settings> & { n8n_api_key?: string }) =>
     apiFetch<Settings>(`${BASE}/settings`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  // Live executions (n8n monitoring proxy)
+  listExecutions: (opts?: { limit?: number; status?: string; workflow_id?: string }) => {
+    const q = new URLSearchParams();
+    if (opts?.limit) q.set("limit", String(opts.limit));
+    if (opts?.status) q.set("status", opts.status);
+    if (opts?.workflow_id) q.set("workflow_id", opts.workflow_id);
+    const qs = q.toString();
+    return apiFetch<ExecutionsResponse>(`${BASE}/executions${qs ? "?" + qs : ""}`);
+  },
 };
+
+export interface Execution {
+  id: string;
+  workflow_id: string | null;
+  workflow_name: string | null;
+  mode: string | null;
+  status: "success" | "error" | "running" | "waiting" | "canceled" | "unknown" | string;
+  started_at: string | null;
+  stopped_at: string | null;
+  duration_ms: number | null;
+  finished: boolean | null;
+  error_message: string | null;
+  error_node: string | null;
+}
+
+export interface ExecutionsResponse {
+  data: Execution[];
+  source: "n8n" | "empty" | "error";
+  error?: string | null;
+}
 
 // React Query keys for easy cache invalidation
 export const leadGenKeys = {
@@ -199,4 +229,5 @@ export const leadGenKeys = {
   templates: () => ["lead-gen", "templates"] as const,
   stats: () => ["lead-gen", "stats"] as const,
   settings: () => ["lead-gen", "settings"] as const,
+  executions: (opts?: unknown) => ["lead-gen", "executions", opts] as const,
 };

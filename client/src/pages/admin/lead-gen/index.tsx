@@ -18,6 +18,8 @@ import LeadsPage from "./leads";
 import TemplatesPage from "./templates";
 import SettingsPage from "./settings";
 import CampaignsPage from "./campaigns";
+import LiveExecutionsPage from "./live";
+import { AlertCircle } from "lucide-react";
 
 export default function LeadGenAdminLayout() {
   return (
@@ -32,6 +34,7 @@ export default function LeadGenAdminLayout() {
         <nav className="flex gap-2">
           <Link href="/admin/lead-gen"><Button variant="ghost">Overview</Button></Link>
           <Link href="/admin/lead-gen/leads"><Button variant="ghost">Leads</Button></Link>
+          <Link href="/admin/lead-gen/live"><Button variant="ghost">Live</Button></Link>
           <Link href="/admin/lead-gen/campaigns"><Button variant="ghost">Campaigns</Button></Link>
           <Link href="/admin/lead-gen/templates"><Button variant="ghost">Templates</Button></Link>
           <Link href="/admin/lead-gen/settings">
@@ -44,6 +47,7 @@ export default function LeadGenAdminLayout() {
         <Route path="/admin/lead-gen" component={LeadGenOverview} />
         <Route path="/admin/lead-gen/leads" component={LeadsPage} />
         <Route path="/admin/lead-gen/leads/:id" component={LeadsPage} />
+        <Route path="/admin/lead-gen/live" component={LiveExecutionsPage} />
         <Route path="/admin/lead-gen/campaigns" component={CampaignsPage} />
         <Route path="/admin/lead-gen/templates" component={TemplatesPage} />
         <Route path="/admin/lead-gen/settings" component={SettingsPage} />
@@ -53,15 +57,56 @@ export default function LeadGenAdminLayout() {
 }
 
 function LeadGenOverview() {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: leadGenKeys.stats(),
     queryFn: leadGenApi.stats,
     refetchInterval: 30_000,
+    retry: false,
   });
   const { data: settings } = useQuery({
     queryKey: leadGenKeys.settings(),
     queryFn: leadGenApi.getSettings,
+    retry: false,
   });
+
+  // Fix for silent-401 bug (task #28): surface errors instead of infinite skeleton.
+  if (isError) {
+    const errMsg = (error as Error)?.message ?? "";
+    const isAuth = /401|not authenticated/i.test(errMsg);
+    return (
+      <Card className="border-red-500/30 bg-red-50/40 dark:bg-red-950/20">
+        <CardContent className="pt-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <h3 className="font-medium">
+              {isAuth ? "Your session has expired" : "Failed to load dashboard"}
+            </h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {isAuth
+              ? "Sign out and sign back in to refresh your session."
+              : errMsg || "Check your network connection and try again."}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => refetch()} data-testid="button-retry-stats">Retry</Button>
+            {isAuth && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  localStorage.removeItem("founderconsole-admin-session");
+                  window.location.href = "/admin/login";
+                }}
+                data-testid="button-signout-relogin"
+              >
+                Sign in again
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading || !stats) return <Skeleton />;
 
