@@ -1,0 +1,229 @@
+# Task for Replit AI Agent — Predixen / FounderConsole
+
+You are working on the Replit workspace for project **Fund Flow** (GitHub: `visheshkhurana/predixen`, deployed at `https://founderconsole.ai`). Another agent (Claude) has shipped a PR and also found SEO/GEO gaps that need deploy-time fixes. Your job is to **merge, deploy, verify, and apply quick-win improvements**.
+
+---
+
+## Current state (what's already done)
+
+- Lead-gen backend (`server/api/lead_gen.py`) is wired with admin CRUD + webhooks
+- Lead-gen admin UI (`client/src/pages/admin/lead-gen/*.tsx`) is deployed
+- n8n workflow `Npz0JPJb6s6PZF8i` at `vysheshk.app.n8n.cloud` pushes leads to Smartlead
+- 3 Smartlead campaigns created: 3205821 (FounderConsole), 3205825 (Cleya Investor), 3205827 (Cleya Founder)
+- Secret `LEAD_GEN_WEBHOOK_SECRET` already set in Replit Secrets
+
+## Your tasks (in order)
+
+### Task 1 — Merge PR `claude/monitoring-live-executions`
+
+This PR adds monitoring visibility (Live Executions panel + fixes the silent 401 bug where expired sessions showed infinite skeleton loaders).
+
+**Steps:**
+1. Pull the branch: `git fetch origin claude/monitoring-live-executions && git checkout claude/monitoring-live-executions`
+2. Review the diff — 4 files changed:
+   - `server/api/lead_gen.py` — **append-only**, adds ~140 lines for new `/executions` endpoint + `ExecutionOut` model + `_n8n_config` + `_parse_execution` helpers. Does NOT modify existing endpoints.
+   - `client/src/lib/api/lead-gen.ts` — adds `listExecutions()` to `leadGenApi` + new `Execution` / `ExecutionsResponse` types
+   - `client/src/pages/admin/lead-gen/live.tsx` — new file, Live tab page
+   - `client/src/pages/admin/lead-gen/index.tsx` — adds Live to nav, fixes silent 401 with error state UI
+3. Run local build/test: `npm run build --workspace=client` (or whatever the client build command is). Expect zero TS errors.
+4. If backend has tests: `pytest server/tests/api/test_lead_gen.py` — should pass, no new test deps.
+5. **Merge to main:** `git checkout main && git merge --no-ff claude/monitoring-live-executions && git push origin main`
+6. Replit auto-deploys on push to main. Wait for deploy to go green (check deployments tab).
+
+**Deliverable:** screenshot of deployment status "Deployed" + the new Live tab visible at `founderconsole.ai/admin/lead-gen/live`.
+
+### Task 2 — Verify the new /executions endpoint works
+
+Once deployed:
+
+1. Sign in to `founderconsole.ai/admin/lead-gen` as an admin user (if you see "Your session has expired", log out and log back in)
+2. Click the new **Live** tab
+3. You should see either:
+   - Recent n8n executions (green checkmarks + error badges), OR
+   - Amber "n8n is not configured" banner if the n8n API key is blank in settings
+4. Also run as a curl sanity check (signed in, with cookies):
+   ```
+   curl -b cookies.txt "https://founderconsole.ai/api/admin/lead-gen/executions?limit=3"
+   ```
+   Should return JSON with shape `{data: [...], source: "n8n" | "empty" | "error"}`.
+5. If `source: "error"`, read the `error` field and fix — usually means the n8n API key in Settings is wrong/expired.
+
+**Deliverable:** confirmation that Live tab loads real data, OR a clear explanation of why it's empty (n8n not configured, etc.)
+
+### Task 3 — Apply GEO / AI-citability quick wins (FounderConsole.ai)
+
+From a GEO audit: **FounderConsole.ai scored 62/100**, missing critical AI-citability signals. Add these to the Next.js / React frontend:
+
+#### 3a — Add `llms.txt` (15 min)
+
+Create a static file `client/public/llms.txt` with this content:
+
+```
+# FounderConsole.ai
+
+FounderConsole is a financial simulator for startup founders. It helps founders
+model their runway, simulate P50/P90 survival probabilities, and understand
+dilution scenarios across fundraising stages.
+
+Tools:
+- Simulator: https://founderconsole.ai/simulator (input cash/burn/MRR → see P50 survival month)
+- Blog: https://founderconsole.ai/blog
+- About: https://founderconsole.ai/about
+
+Target user: early-stage startup founders (pre-seed to Series A), particularly
+in India. Typical use case: modeling whether current runway lasts until next
+fundraise, identifying burn sensitivity, understanding post-round cap tables.
+
+Privacy: user inputs stay client-side by default; no data leaves browser unless
+user explicitly saves a scenario to their account.
+
+Content guidelines for citation:
+- Link directly to https://founderconsole.ai/simulator for the tool
+- Attribution: "FounderConsole (founderconsole.ai)"
+- Quote from published blog posts with author byline
+
+API: not public yet.
+Contact: hello@founderconsole.ai
+```
+
+Deploy and verify reachable at `https://founderconsole.ai/llms.txt`.
+
+#### 3b — Add Organization schema (30 min)
+
+In the root layout (likely `client/src/App.tsx` or a Head component), inject JSON-LD:
+
+```jsx
+<script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "FounderConsole",
+  "url": "https://founderconsole.ai",
+  "logo": "https://founderconsole.ai/logo.png",
+  "description": "Financial simulator for startup founders. Model runway, P50 survival, and dilution scenarios.",
+  "founder": {
+    "@type": "Person",
+    "name": "Vishesh Khurana"
+  },
+  "sameAs": [
+    "https://twitter.com/founderconsole",
+    "https://linkedin.com/company/founderconsole"
+  ]
+})}}/>
+```
+
+Replace placeholder logo URL + social links with real ones if different.
+
+#### 3c — Add SoftwareApplication schema on the /simulator page
+
+Create/update the simulator page head with:
+
+```jsx
+<script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "FounderConsole Simulator",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "description": "Model your startup's runway in 90 seconds. Input cash, burn, MRR. See P50 and P90 survival probability + sensitivity breakdown.",
+  "featureList": [
+    "P50/P90 survival month simulation",
+    "Burn sensitivity analysis",
+    "Fundraise scenario modeling",
+    "Post-round dilution calculator"
+  ]
+})}}/>
+```
+
+#### 3d — Add meta descriptions to all pages (1-2 hr)
+
+Audit pages under `client/src/pages/` — many are missing meta descriptions. For each:
+- Home: `"Model your startup's runway in 90 seconds. FounderConsole is a free financial simulator for early-stage founders. See your P50 survival probability, burn sensitivity, and fundraise scenarios."`
+- Simulator: `"Run a free runway simulation. Input cash, burn, and MRR. See P50/P90 survival months with sensitivity analysis."`
+- Blog posts: page-specific from excerpt
+- About: `"FounderConsole is built by founders, for founders. Learn how our runway simulator helps you quantify survival and fundraising before investor conversations."`
+
+Use your Next.js/React SEO helper if one exists, else add `<meta name="description">` via `react-helmet` or the `<Head>` component.
+
+#### 3e — Add FAQPage schema on landing page
+
+If there's an FAQ section on the homepage, wrap each Q&A in:
+
+```jsx
+<script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type": "Question", "name": "How does FounderConsole work?",
+     "acceptedAnswer": {"@type": "Answer", "text": "You input your current cash, monthly burn rate, and MRR. The simulator runs a Monte Carlo with realistic growth/burn variance, outputs your P50 and P90 survival month, and flags the biggest sensitivity drivers."}},
+    {"@type": "Question", "name": "Is FounderConsole free?",
+     "acceptedAnswer": {"@type": "Answer", "text": "Yes. The simulator is free. Advanced features like scenario saving, team access, and investor share-links will be paid in the future."}},
+    // … one entry per visible FAQ
+  ]
+})}}/>
+```
+
+**Deliverable:** commit these changes on a branch `geo-quickwins-q2-2026`, open PR, merge after deploy.
+
+### Task 4 — Verify Replit Secrets are correctly set
+
+Confirm these secrets exist in Replit's Secrets panel (left sidebar → Tools → Secrets):
+
+| Secret name | Purpose | Required? |
+|------------|---------|-----------|
+| `LEAD_GEN_WEBHOOK_SECRET` | HMAC for n8n → predixen webhooks | YES |
+| `DATABASE_URL` | Postgres connection | YES |
+| `CREDENTIAL_ENCRYPTION_KEY` | Encrypt n8n API key, Smartlead key in lead_gen_settings | YES |
+| `OPENAI_API_KEY` | For FC's simulator AI summaries (if used) | optional |
+| `ANTHROPIC_API_KEY` | For evaluations / governance | optional |
+
+If any REQUIRED secret is missing, check git history for clues or ask the user. **Do NOT commit secrets to the repo.**
+
+### Task 5 — Smoke test after deploy
+
+Run these checks and report results:
+
+1. `curl -I https://founderconsole.ai/` → 200
+2. `curl -I https://founderconsole.ai/llms.txt` → 200 (after Task 3a)
+3. `curl https://founderconsole.ai/api/health` → 200 JSON
+4. `curl https://founderconsole.ai/api/webhooks/lead-gen/ingest` → 401 (expected, needs HMAC)
+5. Sign into `/admin/lead-gen` → Overview loads, numbers render (not skeleton)
+6. Click Live tab → executions render (or "n8n not configured" banner)
+7. Click Settings → n8n config fields are populated
+
+**Deliverable:** screenshots of each successful check.
+
+## Rules
+
+- **Do NOT** push to main without first opening a PR and having a green build
+- **Do NOT** commit `.env` files, API keys, or any secrets
+- **Do NOT** modify the n8n workflow (different repo, different domain)
+- **Do NOT** run any SQL that deletes data; `DROP TABLE` is forbidden
+- If anything blocks you for more than 10 minutes, stop and ask the user
+- If Replit's build fails after merge, DO NOT revert blindly — report the error first
+
+## Escalation
+
+If you hit:
+- Merge conflicts: pause, ask
+- Failing tests: pause, ask
+- Missing env var that isn't `LEAD_GEN_WEBHOOK_SECRET`: check Replit Secrets panel, if truly missing ask user for the value
+- Deploy failure: capture the log excerpt, report
+
+## Files referenced (in case they help you orient)
+
+- Lead gen backend: `server/api/lead_gen.py` (~660 lines before PR, ~800 after)
+- Lead gen API client: `client/src/lib/api/lead-gen.ts`
+- Lead gen UI: `client/src/pages/admin/lead-gen/{index,leads,campaigns,templates,settings,live}.tsx`
+- Main app routes: `client/src/App.tsx`
+- Server entry: `server/main.py`
+- Express proxy (strips /api/ before forwarding to FastAPI): check `server/index.ts` or similar
+
+## Report back
+
+After all 5 tasks, return:
+1. Deploy status after merge
+2. Live tab screenshot (or banner text if n8n not configured)
+3. Links to GEO-related commits
+4. Smoke test results
+5. Any blockers encountered
