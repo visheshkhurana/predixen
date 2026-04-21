@@ -41,6 +41,16 @@ class GoogleSheetsConnector(BaseConnector):
         self.header_row = config.settings.get("header_row", 1)
         self.date_column = config.settings.get("date_column")
     
+    async def authenticate(self) -> bool:
+        """Authenticate with Google Sheets using the access token from credentials."""
+        access_token = self.config.credentials.get("access_token")
+        if not access_token:
+            logger.warning("Google Sheets authenticate failed: no access_token in credentials")
+            self._authenticated = False
+            return False
+        self._authenticated = True
+        return True
+
     async def test_connection(self) -> bool:
         """Test the connection to Google Sheets API."""
         try:

@@ -12,45 +12,54 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 const tiers = [
   {
-    name: "Free Beta",
+    name: "Free",
     price: "$0",
     period: "",
-    bullet: "Best for founders who want immediate insight.",
+    bullet: "Explore the platform.",
     features: [
-      "Connect key integrations",
+      "1 company",
+      "3 simulations / month",
+      "10 Copilot messages / month",
       "Baseline forecast",
-      "One scenario simulation",
       "AI explanation summary",
-      "Unlimited scenarios during beta",
-      "Data connectors & integrations",
-      "Team collaboration",
-      "Priority support",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Startup",
-    price: "$49",
-    period: "/month",
-    bullet: "Best for teams who make weekly decisions.",
-    features: [
-      "All free beta features",
-      "Unlimited scenarios",
-      "Investor report templates",
-      "Priority support",
-      "Email briefings",
-      "Saved scenarios & exports",
     ],
     highlighted: false,
   },
   {
+    name: "Starter",
+    price: "$29",
+    period: "/month",
+    bullet: "Best for founders making monthly decisions.",
+    features: [
+      "Everything in Free",
+      "Unlimited simulations",
+      "Data connectors & integrations",
+      "Email briefings",
+      "Saved scenarios & exports",
+    ],
+    highlighted: true,
+  },
+  {
     name: "Growth",
-    price: "$129",
+    price: "$49",
+    period: "/month",
+    bullet: "Best for teams making weekly decisions.",
+    features: [
+      "Everything in Starter",
+      "Investor report templates",
+      "Advanced scenario compare",
+      "Priority support",
+      "Team collaboration",
+    ],
+    highlighted: false,
+  },
+  {
+    name: "Scale",
+    price: "$99",
     period: "/month",
     bullet: "Best for revenue-finance collaboration.",
     features: [
-      "All startup features",
-      "Advanced scenario compare",
+      "Everything in Growth",
       "Team access controls",
       "Custom reporting",
       "Dedicated support",
@@ -105,26 +114,34 @@ export default function PricingPage() {
       offers: [
         {
           "@type": "Offer",
-          name: "Free Beta",
+          name: "Free",
           price: "0",
           priceCurrency: "USD",
-          description: "All features free during public beta. No credit card required.",
+          description: "Explore the platform.",
         },
         {
           "@type": "Offer",
-          name: "Startup",
-          price: "49",
+          name: "Starter",
+          price: "29",
           priceCurrency: "USD",
           billingIncrement: "month",
-          description: "Full platform access for growing startups.",
+          description: "Best for founders making monthly decisions.",
         },
         {
           "@type": "Offer",
           name: "Growth",
-          price: "129",
+          price: "49",
           priceCurrency: "USD",
           billingIncrement: "month",
-          description: "Advanced features for scaling companies.",
+          description: "Best for teams making weekly decisions.",
+        },
+        {
+          "@type": "Offer",
+          name: "Scale",
+          price: "99",
+          priceCurrency: "USD",
+          billingIncrement: "month",
+          description: "Best for revenue-finance collaboration.",
         },
       ],
     },
@@ -152,7 +169,7 @@ export default function PricingPage() {
       <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <StaggerChildren className="grid gap-6 md:grid-cols-3" staggerDelay={0.1}>
+          <StaggerChildren className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" staggerDelay={0.1}>
             {tiers.map((tier) => (
               <StaggerItem key={tier.name}>
               <Card
@@ -195,7 +212,7 @@ export default function PricingPage() {
                     onClick={() => navigate("/auth")}
                     data-testid={`button-cta-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
-                    {tier.highlighted ? "Get Started Free" : "Coming Soon"}
+                    {tier.name === "Free" ? "Start Free" : tier.highlighted ? "Start Free Trial" : "Get Started"}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </CardFooter>

@@ -35,3 +35,4 @@ npm-debug.log*
 *.sqlite3
 attached_assets/Pasted-Below-is-a-copy-paste-AI-prompt*
 server/models/__pycache__/
+.gstack/

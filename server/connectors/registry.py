@@ -61,17 +61,22 @@ class ConnectorRegistry:
         """
         connectors = []
         for provider_id, connector_class in cls._connectors.items():
-            if category and connector_class.PROVIDER_CATEGORY != category:
+            try:
+                if category and connector_class.PROVIDER_CATEGORY != category:
+                    continue
+
+                # Create temp instance to get provider info
+                temp_config = ConnectorConfig(
+                    provider_id=provider_id,
+                    company_id=0,
+                )
+                temp_instance = connector_class(temp_config)
+                connectors.append(temp_instance.get_provider_info())
+            except Exception as e:
+                # One broken connector should not blank the whole catalog.
+                logger.warning(f"Skipping connector {provider_id} in catalog (metadata failed): {e}")
                 continue
-            
-            # Create temp instance to get provider info
-            temp_config = ConnectorConfig(
-                provider_id=provider_id,
-                company_id=0,
-            )
-            temp_instance = connector_class(temp_config)
-            connectors.append(temp_instance.get_provider_info())
-        
+
         return connectors
     
     @classmethod

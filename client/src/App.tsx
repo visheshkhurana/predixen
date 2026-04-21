@@ -364,6 +364,21 @@ function Router() {
       <Route path="/data-input">
         {() => <Redirect to="/data" />}
       </Route>
+      <Route path="/data-verification">
+        {() => <Redirect to="/data" />}
+      </Route>
+      <Route path="/connector-marketplace">
+        {() => <Redirect to="/marketplace" />}
+      </Route>
+      <Route path="/intelligence-graph">
+        {() => <Redirect to="/intelligence" />}
+      </Route>
+      <Route path="/messaging">
+        {() => <Redirect to="/admin/messaging" />}
+      </Route>
+      <Route path="/admin/system-tools">
+        {() => <Redirect to="/admin/system" />}
+      </Route>
       <Route path="/scenarios">
         {() => <Redirect to="/simulate" />}
       </Route>
@@ -507,6 +522,9 @@ function Router() {
         {() => <AdminRoute component={LeadGenAdmin} />}
       </Route>
       <Route path="/admin/lead-gen/settings">
+        {() => <AdminRoute component={LeadGenAdmin} />}
+      </Route>
+      <Route path="/admin/lead-gen/live">
         {() => <AdminRoute component={LeadGenAdmin} />}
       </Route>
       <Route path="/qa">
