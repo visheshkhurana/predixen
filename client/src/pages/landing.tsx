@@ -439,7 +439,7 @@ export default function LandingPage() {
               <div className="rounded-2xl glass-medium p-6 md:p-8 shadow-xl">
                 <div className="grid grid-cols-3 gap-6">
                   <div className="text-center">
-                    <p className="text-2xl md:text-3xl font-bold font-mono text-foreground" data-testid="text-preview-runway">
+                    <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-preview-runway">
                       <NumberTicker value={18.2} decimals={1} />
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Months Runway</p>
@@ -448,7 +448,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl md:text-3xl font-bold font-mono text-foreground" data-testid="text-preview-growth">
+                    <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-preview-growth">
                       <NumberTicker value={23} suffix="%" />
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">MoM Growth</p>
@@ -457,7 +457,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl md:text-3xl font-bold font-mono text-foreground" data-testid="text-preview-survival">
+                    <p className="text-2xl md:text-3xl font-bold tabular-nums text-foreground" data-testid="text-preview-survival">
                       <NumberTicker value={84} suffix="%" />
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">Survival (P50)</p>
