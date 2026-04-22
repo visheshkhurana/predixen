@@ -416,9 +416,7 @@ export default function LandingPage() {
           </FadeIn>
           <FadeIn delay={0.35}>
             <p className="mx-auto mt-6 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
-              Connect your company data, simulate the future, and get AI-powered decisions.
-              <br className="hidden md:block" />
-              Run your startup like a simulation.
+              Connect your company data, simulate the future, and get AI-powered decisions. Run your startup like a simulation.
             </p>
           </FadeIn>
           <FadeIn delay={0.5}>
