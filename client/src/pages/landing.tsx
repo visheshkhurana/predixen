@@ -428,7 +428,7 @@ export default function LandingPage() {
                 </Link>
               </Button>
               <Button size="lg" variant="outline" className="h-12 px-8 text-base" asChild data-testid="button-hero-view-demo">
-                <Link href="/demo">View Demo</Link>
+                <Link href="/survival-simulator">Try Survival Simulator</Link>
               </Button>
             </div>
           </FadeIn>
