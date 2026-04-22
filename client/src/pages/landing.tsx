@@ -407,7 +407,7 @@ export default function LandingPage() {
           </FadeIn>
           <FadeIn delay={0.2}>
             <h1 className="text-4xl font-bold tracking-tight text-foreground md:text-6xl lg:text-7xl leading-tight" data-testid="text-hero-title">
-              The Flight Simulator
+              The Flight Simulator{" "}
               <br />
               <span className="bg-gradient-to-r from-primary via-violet-500 to-primary bg-[length:200%_auto] bg-clip-text text-transparent animate-[shimmer_3s_linear_infinite]">
                 for Founders
