@@ -22,7 +22,7 @@ function getErrorMessage(err: unknown): string {
 }
 
 export function registerJarvisRoutes(app: Express): void {
-  app.get("/__jarvis/health", (_req: Request, res: Response) => {
+  app.get("/jarvis/health", (_req: Request, res: Response) => {
     res.json({
       ok: true,
       workspace: "founderconsole",
@@ -31,7 +31,7 @@ export function registerJarvisRoutes(app: Express): void {
     });
   });
 
-  app.post("/__jarvis/rpc", async (req: Request, res: Response) => {
+  app.post("/jarvis/rpc", async (req: Request, res: Response) => {
     const expected = process.env.WORKSPACE_RPC_SECRET;
     if (!expected) {
       return res.status(500).json({
