@@ -1,3 +1,7 @@
+import { count, gte } from "drizzle-orm";
+import { db } from "./db";
+import { users } from "@shared/schema";
+
 export type ActionParams = Record<string, unknown>;
 
 export type ActionResult =
@@ -28,15 +32,48 @@ export const ACTIONS: Record<string, ActionHandler> = {
     workspace: "founderconsole",
   }),
 
-  snapshot: async () => ({
-    ok: true,
-    data: {
-      signups_today: 0,
-      visitors_today: 0,
-      conversion_pct: 0,
-      pages_live: 0,
-    },
-  }),
+  snapshot: async () => {
+    const startOfDayUtc = new Date();
+    startOfDayUtc.setUTCHours(0, 0, 0, 0);
+
+    let signups_today = 0;
+    try {
+      const rows = await db
+        .select({ value: count() })
+        .from(users)
+        .where(gte(users.created_at, startOfDayUtc));
+      const raw = rows[0]?.value ?? 0;
+      signups_today = typeof raw === "number" ? raw : Number(raw) || 0;
+    } catch {
+      signups_today = 0;
+    }
+
+    // No visitor/analytics table exists in the TS Drizzle schema; FC tracks visitors via PostHog externally.
+    const visitors_today = 0;
+
+    let conversion_pct = 0;
+    try {
+      conversion_pct =
+        signups_today > 0 && visitors_today > 0
+          ? Math.round((signups_today / visitors_today) * 1000) / 10
+          : 0;
+    } catch {
+      conversion_pct = 0;
+    }
+
+    // No pages/landing_pages/dashboards table exists in the TS Drizzle schema.
+    const pages_live = 0;
+
+    return {
+      ok: true,
+      data: {
+        signups_today,
+        visitors_today,
+        conversion_pct,
+        pages_live,
+      },
+    };
+  },
 
   list_pages: async () => ({ ok: true, data: [] }),
 
