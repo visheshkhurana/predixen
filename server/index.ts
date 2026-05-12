@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerJarvisRoutes } from "./jarvis-routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
@@ -798,6 +799,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  registerJarvisRoutes(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
