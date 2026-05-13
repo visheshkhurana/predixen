@@ -43,7 +43,19 @@ class RestAPIConnector(BaseConnector):
         self.date_field = config.settings.get("date_field")
         self.method = config.settings.get("method", "GET")
         self.headers = config.settings.get("headers", {})
-    
+
+    async def authenticate(self) -> bool:
+        """Authenticate against a generic REST endpoint. Accepts any creds the
+        user wired up (api_key / bearer / basic) — actual validation happens in
+        test_connection, which does a real HTTP call."""
+        if not self.endpoint_url:
+            logger.warning("REST API authenticate failed: endpoint_url missing")
+            self._authenticated = False
+            return False
+        # Credentials are optional for public endpoints; trust config.
+        self._authenticated = True
+        return True
+
     async def test_connection(self) -> bool:
         """Test the connection to the REST API."""
         try:

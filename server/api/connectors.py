@@ -244,17 +244,18 @@ async def get_catalog_connector(
 
 @router.get("/categories")
 async def list_categories(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> List[Dict[str, Any]]:
     """
     List connector categories with counts.
     """
-    catalog = await list_catalog(None, False, False, current_user)
+    catalog = await list_catalog(None, False, False, None, current_user, db)
     category_counts: Dict[str, int] = {}
     for c in catalog:
         cat = c.get("category", "other")
         category_counts[cat] = category_counts.get(cat, 0) + 1
-    
+
     return [{"name": name, "count": count} for name, count in category_counts.items()]
 
 
