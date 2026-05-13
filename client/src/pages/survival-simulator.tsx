@@ -12,7 +12,7 @@ import {
   Rocket, TrendingUp, DollarSign, Users, AlertTriangle,
   Share2, ArrowRight, BarChart3, Shield, Target, ChevronDown,
   Zap, CheckCircle, UserPlus, Clock, Copy, Twitter, Linkedin,
-  Gauge, ArrowLeft
+  Gauge, ArrowLeft, Download
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -504,15 +504,34 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
 function ShareResultPanel({ results }: { results: SimResults }) {
   const { toast } = useToast();
   const shareUrl = `${window.location.origin}/survival/${results.simulation_id}`;
-  const shareText = `My startup has a ${results.survival["12m"]}% chance of surviving 12 months (median runway: ${results.runway.p50}mo). Check yours:`;
+  const cardImageUrl = `${window.location.origin}/api/survival-sim/og-image/${results.simulation_id}.png`;
+  const downloadUrl = `${window.location.origin}/api/survival-sim/share-card/${results.simulation_id}.png`;
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(shareUrl);
-    toast({ title: "Link copied!" });
+  const grade = results.grade?.letter || "C";
+  const p50 = results.runway?.p50 ?? 0;
+  const surv12 = results.survival?.["12m"] ?? 0;
+
+  const shareText = `My startup scored a ${grade} on the FounderConsole Survival Simulator — ${p50} months median runway, ${surv12}% chance of surviving 12 months. What's yours?`;
+
+  const copy = (value: string, label: string) => {
+    navigator.clipboard.writeText(value);
+    toast({ title: `${label} copied` });
   };
 
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
   const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+
+  const nativeShare = async () => {
+    if (typeof navigator !== "undefined" && (navigator as any).share) {
+      try {
+        await (navigator as any).share({ title: "My Startup Survival Score", text: shareText, url: shareUrl });
+      } catch {
+        copy(shareUrl, "Link");
+      }
+    } else {
+      copy(shareUrl, "Link");
+    }
+  };
 
   return (
     <Card className="border-zinc-800 bg-zinc-900/80" data-testid="share-panel">
@@ -522,7 +541,37 @@ function ShareResultPanel({ results }: { results: SimResults }) {
           Share Your Results
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
+        <div className="rounded-md overflow-hidden border border-zinc-800 bg-zinc-950" data-testid="share-card-preview">
+          <img
+            src={cardImageUrl}
+            alt="Your survival score card"
+            className="w-full h-auto block"
+            loading="lazy"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => window.open(downloadUrl, "_blank")}
+            data-testid="button-download-card"
+          >
+            <Download className="h-4 w-4 mr-2" /> Download image
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => copy(shareText, "Caption")}
+            data-testid="button-copy-caption"
+          >
+            <Copy className="h-4 w-4 mr-2" /> Copy caption
+          </Button>
+        </div>
+
         <div className="flex gap-2">
           <Input
             value={shareUrl}
@@ -530,10 +579,11 @@ function ShareResultPanel({ results }: { results: SimResults }) {
             className="bg-zinc-800 border-zinc-700 text-sm"
             data-testid="input-share-url"
           />
-          <Button variant="outline" size="sm" onClick={copyLink} data-testid="button-copy-link">
+          <Button variant="outline" size="sm" onClick={() => copy(shareUrl, "Link")} data-testid="button-copy-link">
             <Copy className="h-4 w-4" />
           </Button>
         </div>
+
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -542,7 +592,7 @@ function ShareResultPanel({ results }: { results: SimResults }) {
             onClick={() => window.open(twitterUrl, "_blank")}
             data-testid="button-share-twitter"
           >
-            <Twitter className="h-4 w-4 mr-2" /> Twitter
+            <Twitter className="h-4 w-4 mr-2" /> X / Twitter
           </Button>
           <Button
             variant="outline"
@@ -553,7 +603,44 @@ function ShareResultPanel({ results }: { results: SimResults }) {
           >
             <Linkedin className="h-4 w-4 mr-2" /> LinkedIn
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={nativeShare}
+            data-testid="button-share-native"
+          >
+            <Share2 className="h-4 w-4 mr-2" /> Share
+          </Button>
         </div>
+
+        <p className="text-xs text-muted-foreground" data-testid="share-help-text">
+          Tip: download the image and post it on X, LinkedIn or your founder WhatsApp groups —
+          social previews use the image automatically when you paste the link.
+        </p>
+
+        <details className="rounded border border-zinc-800 bg-zinc-950/40 p-3 text-xs" data-testid="embed-snippet-block">
+          <summary className="cursor-pointer text-muted-foreground hover:text-zinc-200">
+            Embed the runway widget on your site
+          </summary>
+          <p className="mt-2 text-muted-foreground">
+            Drop this iframe anywhere — newsletter, landing page, founder community.
+          </p>
+          <pre className="mt-2 p-2 bg-zinc-900 rounded overflow-x-auto text-[11px] font-mono text-zinc-300">{`<iframe
+  src="${window.location.origin}/embed/survival"
+  width="420" height="540"
+  style="border:0;border-radius:12px;"
+  loading="lazy"
+  title="Startup runway calculator"
+></iframe>`}</pre>
+          <Button
+            variant="outline" size="sm" className="mt-2"
+            onClick={() => copy(`<iframe src="${window.location.origin}/embed/survival" width="420" height="540" style="border:0;border-radius:12px;" loading="lazy" title="Startup runway calculator"></iframe>`, "Embed code")}
+            data-testid="button-copy-embed"
+          >
+            <Copy className="h-3 w-3 mr-2" /> Copy embed code
+          </Button>
+        </details>
       </CardContent>
     </Card>
   );

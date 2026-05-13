@@ -87,6 +87,9 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import email_tracking as email_tracking_api
     from server.api import shared_scenarios as shared_scenarios_api
     from server.api import survival_simulator as survival_sim_api
+    from server.api import survival_og_card as survival_og_card_api
+    from server.api import admin_growth as admin_growth_api
+    from server.api import admin_onboarding as admin_onboarding_api
     from server.api import metric_trends as metric_trends_api
     from server.api import digest as digest_api
     from server.api import csv_import as csv_import_api
@@ -158,6 +161,9 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(email_tracking_api.router)
     app.include_router(shared_scenarios_api.router)
     app.include_router(survival_sim_api.router)
+    app.include_router(survival_og_card_api.router)
+    app.include_router(admin_growth_api.router)
+    app.include_router(admin_onboarding_api.router)
     app.include_router(metric_trends_api.router)
     app.include_router(digest_api.router)
     app.include_router(csv_import_api.router)
@@ -261,6 +267,14 @@ async def _run_deferred_startup():
             logger.info("AI governance permissions initialized")
         except Exception as e:
             logger.warning(f"AI governance init skipped: {e}")
+
+        try:
+            from server.email.onboarding_sequence import ensure_table, run_scheduler_loop
+            ensure_table(engine)
+            asyncio.create_task(run_scheduler_loop(interval_seconds=600))
+            logger.info("Onboarding email scheduler started")
+        except Exception as e:
+            logger.warning(f"Onboarding scheduler init skipped: {e}")
 
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")

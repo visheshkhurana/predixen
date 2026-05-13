@@ -144,4 +144,12 @@
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
+  <url><loc>https://founderconsole.ai/runway/saas</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/ecommerce</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/fintech</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/marketplace</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/ai</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/hardware</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/biotech</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://founderconsole.ai/runway/devtools</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
 </urlset>

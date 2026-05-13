@@ -29,14 +29,22 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
 
-        # Content Security Policy
-        response.headers["Content-Security-Policy"] = self.CSP_POLICY
+        is_embed = request.url.path.startswith("/embed/")
+
+        # Content Security Policy (relax frame-ancestors for embeddable widgets)
+        if is_embed:
+            response.headers["Content-Security-Policy"] = self.CSP_POLICY.replace(
+                "frame-ancestors 'none'", "frame-ancestors *"
+            )
+        else:
+            response.headers["Content-Security-Policy"] = self.CSP_POLICY
 
         # Prevent MIME-type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
 
-        # Prevent clickjacking
-        response.headers["X-Frame-Options"] = "DENY"
+        # Prevent clickjacking (skip for embeddable widget routes)
+        if not is_embed:
+            response.headers["X-Frame-Options"] = "DENY"
 
         # Disable old XSS filter (rely on CSP instead)
         response.headers["X-XSS-Protection"] = "0"

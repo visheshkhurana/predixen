@@ -204,6 +204,12 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
         ))
     except Exception as e:
         auth_logger.warning(f"Slack signup notification failed: {e}")
+
+    try:
+        from server.email.onboarding_sequence import enroll_new_signup
+        asyncio.create_task(enroll_new_signup(user.id, user.email, sanitized_name))
+    except Exception as e:
+        auth_logger.warning(f"Onboarding enrollment failed: {e}")
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)

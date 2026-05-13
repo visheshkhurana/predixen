@@ -30,8 +30,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use((_req, res, next) => {
-  res.setHeader("X-Frame-Options", "DENY");
+app.use((req, res, next) => {
+  const isEmbed = req.path.startsWith("/embed/");
+  if (!isEmbed) {
+    res.setHeader("X-Frame-Options", "DENY");
+  }
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-XSS-Protection", "0");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -44,7 +47,7 @@ app.use((_req, res, next) => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com",
     "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
-    "frame-src https://accounts.google.com",
+    isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com",
   ].join("; "));
   next();
 });

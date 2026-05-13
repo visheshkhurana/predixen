@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, UsersRound, Mail, Activity, BarChart3,
   Building2, CreditCard, LogOut, ChevronRight,
   Menu, X, FileText, Shield, FlaskConical, Brain, Send, MessageSquare, Wrench,
-  Megaphone
+  Megaphone, TrendingUp
 } from 'lucide-react';
 import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { title: 'Email Templates', href: '/admin/email-templates', icon: FileText },
   { title: 'Email Tracking', href: '/admin/email-tracking', icon: Send },
   { title: 'Lead Gen', href: '/admin/lead-gen', icon: Megaphone },
+  { title: 'Growth', href: '/admin/growth', icon: TrendingUp },
   { title: 'Companies', href: '/admin/companies', icon: Building2 },
   { title: 'Team', href: '/admin/team', icon: UsersRound },
   { title: 'Billing', href: '/admin/billing', icon: CreditCard },

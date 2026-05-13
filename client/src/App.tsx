@@ -86,6 +86,7 @@ import AiGovernancePage from "@/pages/admin/ai-governance";
 import AdminTeam from "@/pages/admin/team";
 import AdminSystemTools from "@/pages/admin/system-tools";
 import LeadGenAdmin from "@/pages/admin/lead-gen";
+import AdminGrowth from "@/pages/admin/growth";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import OwnerConsole from "@/pages/owner-console";
 import FundraisingPage from "@/pages/fundraising";
@@ -118,6 +119,8 @@ const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
+const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
+const EmbedSurvivalPage = lazy(() => import("@/pages/embed-survival"));
 const FAQPage = lazy(() => import("@/pages/faq"));
 const DemoPage = lazy(() => import("@/pages/demo"));
 const RunwayCalculatorPage = lazy(() => import("@/pages/runway-calculator"));
@@ -300,6 +303,8 @@ function Router() {
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
+        <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
+        <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
         <Route path="/auth/callback" component={AuthCallback} />
         <Route path="/auth" component={AuthPage} />
@@ -493,6 +498,9 @@ function Router() {
       </Route>
       <Route path="/admin/system">
         {() => <AdminRoute component={AdminSystemTools} />}
+      </Route>
+      <Route path="/admin/growth">
+        {() => <AdminRoute component={AdminGrowth} />}
       </Route>
       <Route path="/admin/lead-gen">
         {() => <AdminRoute component={LeadGenAdmin} />}

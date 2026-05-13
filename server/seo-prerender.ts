@@ -8,6 +8,7 @@ interface PageMeta {
   description: string;
   canonical: string;
   ogType?: string;
+  ogImage?: string;
   robots?: string;
   jsonLd?: object[];
   bodyContent?: string;
@@ -208,11 +209,65 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
+  const runwayIndustryMatch = path.match(/^\/runway\/([a-z0-9-]+)$/);
+  if (runwayIndustryMatch) {
+    const slug = runwayIndustryMatch[1];
+    const known = ["saas","ecommerce","fintech","marketplace","ai","hardware","biotech","devtools"];
+    if (known.includes(slug)) {
+      const titleMap: Record<string,string> = {
+        saas: "SaaS Startup Runway Calculator",
+        ecommerce: "Ecommerce Startup Runway Calculator",
+        fintech: "Fintech Startup Runway Calculator",
+        marketplace: "Marketplace Startup Runway Calculator",
+        ai: "AI Startup Runway Calculator",
+        hardware: "Hardware Startup Runway Calculator",
+        biotech: "Biotech Startup Runway Calculator",
+        devtools: "Developer Tools Startup Runway Calculator",
+      };
+      const title = titleMap[slug];
+      return {
+        title: `${title} | FounderConsole`,
+        description: `Free ${slug} startup runway calculator with industry benchmarks, Monte Carlo simulation, and AI-powered recommendations tuned for ${slug} economics.`,
+        canonical: `${SITE_URL}/runway/${slug}`,
+        jsonLd: [{
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          name: title,
+          url: `${SITE_URL}/runway/${slug}`,
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Web",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        }],
+      };
+    }
+  }
+
+  if (path === "/embed/survival") {
+    return {
+      title: "Startup Runway Widget — FounderConsole",
+      description: "Embeddable startup runway calculator widget powered by FounderConsole.",
+      canonical: `${SITE_URL}/embed/survival`,
+      robots: "noindex, follow",
+    };
+  }
+
   if (path === "/survival-simulator") {
     return {
       title: "Startup Survival Simulator | FounderConsole",
       description: "Free startup survival probability calculator. Enter your financials and get AI-powered survival analysis with Monte Carlo simulations.",
       canonical: SITE_URL + "/survival-simulator",
+    };
+  }
+
+  const survivalShareMatch = path.match(/^\/survival\/([A-Za-z0-9_-]+)$/);
+  if (survivalShareMatch) {
+    const simId = survivalShareMatch[1];
+    return {
+      title: "My Startup Survival Score — FounderConsole",
+      description: "I just simulated my startup's survival probability with FounderConsole. Run yours free in 60 seconds.",
+      canonical: `${SITE_URL}/survival/${simId}`,
+      ogType: "article",
+      ogImage: `${SITE_URL}/api/survival-sim/og-image/${simId}.png`,
     };
   }
 
@@ -321,6 +376,18 @@ export function injectSEO(html: string, path: string): string {
     /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/,
     `<meta name="twitter:description" content="${safeDesc}" />`
   );
+
+  if (meta.ogImage) {
+    const safeImg = escapeHtml(meta.ogImage);
+    result = result.replace(
+      /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/,
+      `<meta property="og:image" content="${safeImg}" />`
+    );
+    result = result.replace(
+      /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/,
+      `<meta name="twitter:image" content="${safeImg}" />`
+    );
+  }
 
   if (meta.jsonLd && meta.jsonLd.length > 0) {
     const newLdScripts = meta.jsonLd.map((ld) => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join("\n    ");
