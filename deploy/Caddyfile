@@ -1,0 +1,16 @@
+# Caddy handles HTTPS automatically (Let's Encrypt) once DNS points here.
+# DOMAIN comes from .env.production via docker-compose.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Long-lived connections for SSE (agent simulations) and WebSockets
+	reverse_proxy app:5000 {
+		flush_interval -1
+	}
+}
+
+# Redirect www -> apex
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}

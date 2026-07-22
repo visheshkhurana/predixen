@@ -1,0 +1,42 @@
+# VCS / envs / local state
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.venv
+.venv313
+node_modules
+dist
+__pycache__
+**/__pycache__
+*.pyc
+
+# Replit leftovers & local tooling
+.replit
+.config
+.configclient
+.local
+.agents
+Fund-Flow-replit-ready
+.pytest_cache
+test-results
+qa-lab
+
+# Docs, audits, screenshots — not needed inside the image
+*.md
+!README.md
+docs
+*.png
+*.docx
+*.patch
+AUDIT_RESULTS.txt
+sed46Ysgm
+
+# Deploy kit itself
+deploy
+docker-compose.yml
+
+# Misc
+*.tar.gz
+*.log
