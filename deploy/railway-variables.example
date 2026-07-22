@@ -17,9 +17,22 @@ ENVIRONMENT=production
 # JWT signing secret. Generate: openssl rand -hex 48
 SECRET_KEY=
 
-# Set to your real domain once DNS is cut over; use the *.up.railway.app URL while testing
+# Set to your real domain once DNS is cut over; use the *.up.railway.app URL while testing.
+# CORS_ORIGINS MUST match the origin actually serving the app — a mismatch makes every
+# frontend API call fail CORS, which looks like an auth bug rather than a config one.
 APP_BASE_URL=https://founderconsole.ai
 CORS_ORIGINS=https://founderconsole.ai
+
+# Google sign-in. Without both of these /api/auth/google/start returns 501 and the
+# "Continue with Google" button on /auth is dead. Get them from the Google Cloud
+# console -> APIs & Services -> Credentials -> OAuth 2.0 Client ID (Web application),
+# with $APP_BASE_URL/api/auth/google/callback as an authorized redirect URI.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Expose /docs, /redoc and /openapi.json. Off in production by default — leave blank
+# unless you intend the full API surface to be publicly browsable.
+EXPOSE_API_DOCS=
 
 # Email address granted platform-admin access
 ADMIN_MASTER_EMAIL=

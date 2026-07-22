@@ -327,11 +327,17 @@ async def lifespan(app: FastAPI):
 
 print(f"[main.py] Creating FastAPI app (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
 
+# Docs stay on outside production, and in production only when explicitly enabled.
+_docs_enabled = settings.EXPOSE_API_DOCS or not settings.is_production
+
 app = FastAPI(
     title="FounderConsole",
     description="AI-powered financial simulation and decision engine for startups",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 print(f"[main.py] Adding middleware... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)

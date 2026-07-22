@@ -25,6 +25,10 @@ class Settings(BaseSettings):
 
     FEATURE_INVESTOR_MODE: bool = os.getenv("FEATURE_INVESTOR_MODE", "false").lower() == "true"
 
+    # Expose /docs, /redoc and /openapi.json. Off by default in production so the
+    # full API surface isn't publicly browsable; set EXPOSE_API_DOCS=true to override.
+    EXPOSE_API_DOCS: bool = os.getenv("EXPOSE_API_DOCS", "false").lower() == "true"
+
     ADMIN_MASTER_EMAIL: str = os.getenv("ADMIN_MASTER_EMAIL", "")
     ADMIN_MASTER_PASSWORD_HASH: str = os.getenv("ADMIN_MASTER_PASSWORD_HASH", "")
 
