@@ -1,411 +1,208 @@
-# FounderConsole — Engineering Handover
+# FounderConsole — Project Handover Document
 
-> **Audience:** any AI coding agent (Claude, Cursor, Codex, etc.) or new engineer who needs full context to ship features against this codebase via GitHub PRs.
->
-> **Last updated:** April 2026 (post launch-prep cleanup, paywall disabled, lead-gen Live Executions merged).
+**Date:** June 14, 2026
+**Live URL:** https://founderconsole.ai
+**Repository:** github.com/visheshkhurana/predixen
+**Platform:** Built and hosted on Replit (deployed via Replit Deployments)
 
----
-
-## 1. What this product is
-
-**FounderConsole** is an AI-powered financial intelligence platform for early-stage startups. Tagline: "Flight Simulator for Founders."
-
-It replaces the founder's spreadsheet with:
-- **Monte Carlo simulations** (P10/P50/P90 runway, 24-month projections, sensitivity analysis)
-- **A multi-agent AI Copilot** that reads the company's data and answers strategic questions
-- **A "Digital Twin"** continuously updated representation of the company (health score, risk indicators)
-- **Fundraising OS** (cap table, dilution, exit waterfalls, investor room)
-- **38 data connectors** (QuickBooks, Stripe, Gusto, Shopify, etc.)
-- **Decision engine** that ranks recommended actions
-- **Free public tools** (Survival Simulator, Runway Calculator) for top-of-funnel
-
-**Live URLs:** https://founderconsole.ai (production), GitHub `https://github.com/visheshkhurana/predixen`
+> **Audience:** any new engineer, AI coding agent, or acquirer who needs full context to run, maintain, or migrate this platform.
 
 ---
 
-## 2. Tech stack
+## 1. What This Product Is
 
-| Layer | Choice | Why |
-|---|---|---|
-| Frontend | React 18 + TypeScript + Vite | Fast HMR, simple build |
-| Routing | Wouter | Lightweight, no boilerplate |
-| State | Zustand + TanStack React Query v5 | Minimal global state, server state cached |
-| Forms | React Hook Form + Zod | Validated forms |
-| UI | Tailwind CSS + shadcn/ui | Accessible primitives, consistent design |
-| Charts | Recharts | Composable, fits React |
-| Animation | Framer Motion + GSAP + tailwindcss-motion | Page/scroll/entrance |
-| SEO | react-helmet-async (`SEOHead.tsx`) | Per-page meta + JSON-LD |
-| Backend | FastAPI (Python 3.11) | Async, OpenAPI free |
-| ORM | SQLAlchemy + Alembic | Standard Python |
-| DB | PostgreSQL | Relational, JSON columns where needed |
-| Auth | JWT + refresh-token rotation, Google OAuth | Stateless API, social login |
-| Background | ThreadPoolExecutor worker reading Redis queues | No Celery needed |
-| Cache/queue | Redis (optional, fallback to `_NullRedis`) | Graceful degradation |
-| Realtime | WebSockets (`server/index.ts`) | Company-scoped channels |
-| Email | Resend | Transactional + activity emails |
-| SMS | Twilio | Notification channel |
-| LLMs | OpenAI, Anthropic, Gemini, Perplexity, OpenRouter (Grok) | Task-type routing |
-| Analytics | PostHog | Pageviews + custom events |
-| Hosting | Replit Deployments | One-click publish, autoscale |
-| CI / VCS | GitHub `visheshkhurana/predixen` | PR-based workflow |
+FounderConsole is an AI-powered financial intelligence platform for startup founders — "a flight simulator for founders." It provides:
+
+- **Investor-grade financial diligence** — automated validation of a startup's financial data (Truth Scan)
+- **Probabilistic runway simulation** — Monte Carlo engine (1,000+ paths, P10/P50/P90 outcomes)
+- **AI decision recommendations** — ranked, scored action lists for founders
+- **Full fundraising workflow** — cap table, dilution math, investor database (854 investors), outreach sequences, readiness scoring
+- **Multi-agent AI simulations** — LLM-powered "Flight Simulator" with 7 agent personas
+- **Free public growth tools** — Survival Simulator, 8 industry runway calculators, embeddable widget
+
+The platform is currently **fully free** — a 4-tier paywall (Free $0 / Starter $29 / Growth $49 / Scale $99 per month with 30-day trial) is built and infrastructure-ready but intentionally paused. Stripe is NOT yet connected.
 
 ---
 
-## 3. Top-level architecture
+## 2. Tech Stack
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                          BROWSER                               │
-│  React app (Vite-built static bundle) + Wouter routing         │
-└────────────────────┬───────────────────────────────────────────┘
-                     │ HTTPS
-                     ▼
-┌────────────────────────────────────────────────────────────────┐
-│  Express server  (server/index.ts)  — port 5000 in prod        │
-│   • Serves the built client                                    │
-│   • Vite middleware in dev                                     │
-│   • WebSocket server on /ws                                    │
-│   • Proxies /api/* to FastAPI on localhost:8001                │
-└────────────────────┬───────────────────────────────────────────┘
-                     │ /api/*
-                     ▼
-┌────────────────────────────────────────────────────────────────┐
-│  FastAPI app  (server/main.py)  — uvicorn on port 8001         │
-│   • 537 routes registered (lazy-loaded after startup)          │
-│   • Routers in server/api/*.py (73 files)                      │
-│   • Services in server/services/*.py                           │
-│   • Connectors in server/connectors/*.py                       │
-│   • Auth, RBAC, paywall middleware (paywall currently OFF)     │
-└────────┬───────────────────────────────────┬────────────────────┘
-         │                                   │
-         ▼                                   ▼
-┌──────────────────────────┐       ┌────────────────────────────┐
-│ PostgreSQL  (DATABASE_URL)│       │ Redis (optional)           │
-│  SQLAlchemy ORM           │       │  cache, queues, pub/sub    │
-└──────────────────────────┘       └────────────────────────────┘
+### Frontend (`client/` — ~11 MB source)
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript, Vite |
+| Routing | Wouter |
+| State | Zustand + TanStack React Query v5 |
+| UI | Tailwind CSS + shadcn/ui, dark mode default, glassmorphism design system |
+| Charts | Recharts |
+| Animation | Framer Motion + GSAP ScrollTrigger + tailwindcss-motion |
+| Forms | React Hook Form + Zod |
 
-┌────────────────────────────────────────────────────────────────┐
-│ Background worker (server/workers/simulation_worker.py)        │
-│  Polls Redis queues: SIMULATION, CONNECTOR_SYNC,               │
-│  AI_AGENT, NOTIFICATION                                        │
-└────────────────────────────────────────────────────────────────┘
-```
+### Backend (`server/` — ~14 MB source)
+| Layer | Technology |
+|---|---|
+| API | FastAPI (Python 3.11) on port 8001 |
+| Proxy/SSR | Express (Node) on port 5000 — proxies `/api/*` to FastAPI, serves SPA, SEO prerender |
+| Database | PostgreSQL (116 tables), SQLAlchemy ORM + Alembic migrations |
+| Auth | JWT with refresh token rotation; Google OAuth social login |
+| Cache/Queue | Redis (optional — graceful fallback to `_NullRedis` if unavailable) |
+| Workers | Unified background worker (ThreadPoolExecutor) on Redis queues: SIMULATION, CONNECTOR_SYNC, AI_AGENT, NOTIFICATION |
+| Realtime | WebSockets (company-scoped) + SSE streaming for agent simulations |
 
-Two long-running processes: **Express (Node)** and **FastAPI (Python)**, plus the **simulation worker**. Express is the public face and proxies API traffic. The Replit workflow `Start application` runs `npm run dev`, which starts Express, which spawns FastAPI as a child process.
+### Key Python dependencies
+fastapi, sqlalchemy, alembic, pydantic v2, numpy/pandas/scipy (simulation math), openai, resend, twilio, redis, pdfplumber/pdf2image (document ingestion), passlib/bcrypt/python-jose (auth). Full list in `pyproject.toml`.
 
 ---
 
-## 4. Repository layout
+## 3. External Services & Required Secrets
 
-```
-.
-├── client/
-│   ├── public/            # llms.txt, robots.txt, sitemap.xml, og-image.png
-│   └── src/
-│       ├── api/           # API client (api/client.ts) + per-feature wrappers
-│       ├── components/    # shadcn/ui under ui/, custom under root
-│       │   └── ui/        # motion-primitives, glass-card, sim-* components
-│       ├── hooks/         # use-toast, use-subscription, etc.
-│       ├── lib/           # seo.ts, queryClient.ts, utils
-│       ├── pages/         # 57 page components
-│       │   └── admin/     # admin/* including admin/lead-gen/*
-│       ├── styles/        # simulate-design.css (fc-* animations)
-│       ├── App.tsx        # Wouter routes + GatedRoute wrappers
-│       └── main.tsx
-├── server/
-│   ├── index.ts           # Express + WebSocket + FastAPI spawner
-│   ├── main.py            # FastAPI app + middleware + startup tasks
-│   ├── api/               # 73 routers, registered in main.py
-│   ├── services/          # business logic (digital_twin, simulation, etc.)
-│   ├── connectors/        # 38 connector implementations
-│   ├── core/              # config, db, auth, encryption, plans, subscription
-│   ├── copilot/           # multi-agent Copilot system
-│   ├── simulation/        # Monte Carlo + sensitivity engines
-│   ├── simulation_agents/ # Agent Simulation v1
-│   ├── services/simulation/ # Agent Simulation v2 (LLM-powered)
-│   ├── seed/              # demo data seeding
-│   ├── email/             # Resend templates + activity_triggers
-│   ├── workers/           # simulation_worker
-│   └── models/            # SQLAlchemy models
-├── shared/                # shared TS types if any
-├── scripts/               # build, launch_gate, migrations
-├── attached_assets/       # uploaded files
-├── .local/                # Replit agent skills + tasks (do not commit secrets)
-├── replit.md              # canonical project memory (READ THIS)
-├── HANDOVER.md            # this file
-├── package.json           # npm scripts: dev, build, start, db:push, check
-├── tsconfig.json
-├── vite.config.ts         # do not modify unless absolutely necessary
-└── tailwind.config.ts
-```
+Set these environment variables in any new hosting environment. **Values live in the Replit Secrets pane — export them before migrating.**
 
-`replit.md` is the **canonical project memory**. Read it before starting any task — it captures every architectural decision, data-flow gotcha, and feature inventory.
+| Secret | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `RESEND_API_KEY` | Transactional + campaign email (Resend) |
+| `PERPLEXITY_API_KEY` | Real-time web search / market research |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS notifications |
+| `SLACK_SIGNUP_WEBHOOK_URL` | Slack notification on new signups |
+| `VITE_POSTHOG_KEY` | PostHog analytics (frontend) |
+| OpenAI / Anthropic / Gemini / OpenRouter | Provided via Replit AI Integrations — **you need your own API keys off-Replit** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) |
+| `ADMIN_MASTER_EMAIL` | Email address granted platform-admin access |
+| `APP_BASE_URL` | Base URL used in emails (defaults to https://founderconsole.ai) |
+
+**Verified email sending domains (Resend):** founderconsole.ai, runora.xyz, runoraai.com.
+
+**Multi-LLM routing:** the platform routes tasks by type — OpenAI (financial analysis, vision, gpt-image-1 graphics), Anthropic (complex reasoning), Gemini (high-volume chat), Perplexity (web research), OpenRouter/Grok (news/trends). Agent Simulation v2 uses OpenAI gpt-4o-mini.
 
 ---
 
-## 5. Data model & critical data-flow rules
+## 4. How to Run It
 
-These are landmines. If you violate one, things will silently break.
-
-### Single source of truth
-- **`TruthScan.outputs_json.metrics`** is the canonical source for all financial metrics. Board Deck, Copilot, Health Check, Decisions all read from it.
-- Truth Scan stores `net_burn` (not `monthly_burn`), `runway_p50` (not `runway_months`), `headcount`, `is_profitable`, `runway_sustainable`.
-
-### API conventions
-- `GET /api/metrics` returns `{items: [...], total, page, page_size}` — handle the paginated wrapper.
-- All authenticated routes expect `Authorization: Bearer <jwt>`.
-- Webhooks expect HMAC headers (e.g., `/api/webhooks/lead-gen/ingest` requires HMAC signed with `LEAD_GEN_WEBHOOK_SECRET`).
-
-### Simulation engines
-- `simulation_engine.py` and `enhanced_monte_carlo.py` expect `baseline_growth_rate` and `gross_margin` as **raw percentages** (e.g., `5` for 5%, `70` for 70%). They divide by 100 internally. **Never pre-divide.**
-- Guardrails in `engine.py`: growth_rate capped 50%/mo, MRR hard cap $100M, customers cap 1M, `cash += MRR - burn` (no disconnect). LLM impact deltas clamped to ±30%. Agent personas use deterministic fallbacks when LLM unavailable.
-- `enhanced_monte_carlo.py` uses `max_cap=240` months. Profitable simulations compute proportional runway from growth trajectories instead of flat caps.
-- `sensitivityAnalysis.ts` projects up to 60 months (not 24) so stressed companies actually run out of cash within the window.
-
-### Decision scoring
-- `enhanced_engine.py` survival-weighted: survival 35%, downside 25%, upside 20%, optionality 10%, reversibility 10%.
-- Hard caps: survival <50% → max 4.5/10, <70% → max 6.5/10. Revenue decline (ARR ratio <0.7) applies 15% penalty.
-
-### Fallbacks
-- `digital_twin.py` falls back to TruthScan metrics (cash_balance, net_burn, revenue) when CompanyState has zero/missing values.
-- `fundraising_readiness.py` computes runway from cash/burn when `runway_months` is missing or zero.
-
-### NLP
-- `intent_parser.py` has `FINANCIAL_TERM_ALIASES` mapping 65+ industry abbreviations (ARR, MRR, ARPU, LTV, CAC, NRR, GMV, EBITDA, COGS, AOV, COD, RTO, etc.) → canonical keys.
-- `ingest.py` `field_mapping` covers 37+ canonical fields with extensive synonym lists for CSV/document extraction.
-
----
-
-## 6. Key features and where they live
-
-| Feature | Frontend | Backend |
-|---|---|---|
-| Auth (login/signup/Google OAuth) | `pages/auth.tsx`, `auth-callback.tsx` | `api/auth.py` |
-| Dashboard | `pages/dashboard.tsx` | `api/dashboards.py`, `api/dashboard_kpis.py` |
-| Truth Scan | `pages/truth-scan.tsx`, `data-verification.tsx` | `api/datasets.py`, `services/truth_scan.py` |
-| Simulation Console | `pages/scenarios.tsx`, plus Flight Simulator tab in `simulate.tsx` | `api/advanced_simulation.py`, `api/agent_simulation.py`, `services/simulation/` |
-| Copilot | `pages/copilot.tsx` | `api/copilot.py`, `copilot/` |
-| Cap Table | `pages/cap-table.tsx` | `api/cap_table.py` |
-| Fundraising | `pages/fundraising.tsx` | `api/fundraising.py` |
-| Hiring Planner | `pages/hiring-planner.tsx` | `api/hiring.py` |
-| Digital Twin | `pages/digital-twin.tsx` | `api/digital_twin.py`, `services/digital_twin.py` |
-| Decisions | `pages/decisions.tsx` | `api/decisions.py`, `decision/` |
-| Doc Generator | `pages/doc-generator.tsx` | `api/doc_generator.py` |
-| AI Graphics | `pages/ai-graphics.tsx` | `api/ai_graphics.py` (gpt-image-1) |
-| Connectors | `pages/integrations.tsx`, `connector-marketplace.tsx`, `add-data-source.tsx` | `api/connectors.py`, `connectors/*.py` |
-| Survival Simulator (public) | `pages/survival-simulator.tsx` | `api/survival.py` |
-| Runway Calculator (public) | `pages/runway-calculator.tsx` | client-side only |
-| Billing | `pages/billing.tsx` | `api/billing.py`, `core/plans.py`, `core/subscription.py` |
-| Admin | `pages/admin/*` | `api/admin.py` + admin-only deps |
-| Lead-gen (admin) | `pages/admin/lead-gen/*` | `api/lead_gen.py` |
-| Lead-gen Live Executions | `pages/admin/lead-gen/live.tsx` | `GET /api/admin/lead-gen/executions` (proxies n8n) |
-
-### Cross-cutting systems
-- **Multi-LLM router** (`copilot/llm_router.py`): picks OpenAI/Anthropic/Gemini/Perplexity/Grok by task type.
-- **Event Ledger** (`api/events.py` + `events/` table): append-only event sourcing.
-- **Feature Flags** (`core/feature_flags.py`): runtime toggles, per-company/user overrides.
-- **AI Governance** (`copilot/ai_governance.py`): per-agent permission + daily limits + human-approval flags.
-- **Data Confidence Engine** (`services/data_confidence.py`): freshness/diversity/consistency scoring.
-- **Founder Autopilot** (`services/founder_autopilot.py`): daily risk detection + briefing.
-- **Activity Email Triggers** (`email/activity_triggers.py`): auto-emails on simulation/doc/decision completion.
-- **AI Learning Loop** (`copilot/feedback_analyzer.py` + `learning_context.py`): user ratings → aggregated → injected into Copilot prompt. Admin UI in System Tools "AI Learning" tab.
-
----
-
-## 7. Authentication & users
-
-- JWT access tokens (1h expiry) + refresh tokens (rotated on use).
-- Roles: `owner`, `admin`, `member`, `viewer`. Admin pages require `owner`.
-- Google OAuth supported (`oauth_provider='google'`).
-- **Paywall is currently disabled** — `PaywallMiddleware` is commented out in `server/main.py`, and `client/src/components/PaywallGate.tsx` is a passthrough. Plan tiers preserved in `server/core/plans.py`. To re-enable: revert `PaywallGate.tsx` (commit `60e89bef` is the original) and uncomment `app.add_middleware(PaywallMiddleware)`.
-
-### Demo / test accounts (production)
-| Email | Password | Role | Notes |
-|---|---|---|---|
-| `demo@founderconsole.ai` | `demo123` | owner | Demo company "TechFlow Analytics" pre-loaded |
-| `owner@predixen.ai` | (founder's) | owner | Real owner |
-| `vysheshk@gmail.com` | Google OAuth | viewer | Founder's personal Google login |
-
-7 real users total. All test accounts have been purged.
-
----
-
-## 8. Local development
-
-### Prerequisites
-- Node 20+, Python 3.11, PostgreSQL (Replit provides this automatically via `DATABASE_URL`)
-- Redis is **optional** — the app gracefully falls back to `_NullRedis`
-
-### Run
 ```bash
+# Install
 npm install
-npm run dev          # starts Express + FastAPI + simulation worker
-```
-Express serves on **port 5000** (or 5001 if 5000 is busy), FastAPI internally on **8001**, Vite HMR on **5173**.
+pip install -e .        # pyproject.toml is the source of truth
 
-### Other scripts
-```bash
-npm run build        # production bundle
-npm run start        # run production bundle
-npm run check        # tsc typecheck
-npm run db:push      # drizzle-kit push (only if Drizzle schema changed)
-npm run launch:gate  # pre-launch sanity script
+# Run (dev) — single command starts both servers
+npm run dev
+# → Express on :5000 (public entry point), FastAPI on :8001 (internal)
+
+# Database migrations
+alembic upgrade head
 ```
 
-### Python dev quirks
-- The Python venv lives in `.pythonlibs` (managed by Replit). Use `python3 -m pip install <pkg>` only via the package management tooling (do not edit `pyproject.toml` by hand if you can avoid it).
-- DB migrations: SQL migrations are run automatically at startup by `server/core/migrations.py`. Add new tables there or in `server/models/` and let SQLAlchemy create them via the migration runner.
+- The public entry point is **Express on port 5000**. It proxies `/api/*` to FastAPI, injects SEO meta tags server-side (`server/seo-prerender.ts`), and serves the Vite-built SPA.
+- Do NOT add a Vite proxy — the Express layer already handles it.
+- Redis is optional; the app runs without it (jobs run inline).
 
 ---
 
-## 9. Environment variables / secrets
+## 5. Feature Map (What's Built)
 
-Required:
-- `DATABASE_URL` — Postgres connection string
-- `SECRET_KEY` — JWT signing + credential encryption (one key, used by `server/core/encryption.py` as a fallback)
-- `LEAD_GEN_WEBHOOK_SECRET` — HMAC for n8n → predixen webhook
+### Core financial engine
+- **Truth Scan** — multi-stage data validation; its output (`TruthScan.outputs_json.metrics`) is the **single source of truth** for all metrics platform-wide
+- **Simulation Console** (`/simulate`) — 5 tabs: Scenarios, Stress Tests, What-If, History, Flight Simulator
+- **Enhanced Monte Carlo** — 24-month projections, custom events, sensitivity analysis, scenario versioning, counter-move simulations
+- **Agent Simulation Engine v2** (`server/services/simulation/`) — 7 LLM agents (Founder, 2 Investors, Customer, Team, Market, Competitor) with personas + per-agent memory, SSE streaming at `POST /api/simulation/v2/run`
+- **Decision Engine** — survival-weighted scoring (survival 35%, downside 25%, upside 20%, optionality 10%, reversibility 10%)
+- **Forecasting & Alerts** — Holt-Winters, linear regression, Z-score anomaly detection, threshold monitoring
 
-Optional but recommended:
-- `RESEND_API_KEY` — email
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` — SMS
-- `SLACK_SIGNUP_WEBHOOK_URL` — Slack ping on every new signup
-- `PERPLEXITY_API_KEY` — direct (also via integrations)
-- `VITE_POSTHOG_KEY` — analytics
-- `VITE_SENTRY_DSN` — frontend error tracking (currently unset, Sentry is disabled)
+### Data
+- CSV upload, manual entry, AI extraction from documents (PDF), multi-currency
+- **38 production data connectors** (QuickBooks, Stripe, Gusto, Shopify, WooCommerce, etc.) with ecommerce-specific analytics (COD/RTO split, AOV, shipping cost, refund rates)
+- Event Ledger (append-only event sourcing), Digital Twin (live company health score), Data Confidence Engine, Intelligence Graph v2
 
-LLM keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`) are managed via Replit's AI integrations, **not** raw env vars. They're injected at runtime through the integration layer.
+### Fundraising OS
+- Cap table + dilution + exit waterfall, fundraising round tracking
+- Investor Room (shareable), 854-investor database, outreach sequences
+- Fundraising Readiness Score with radar chart + AI-generated one-pager
 
-**Never commit secrets** to the repo. Use Replit Secrets panel.
+### AI layer
+- **Fund Flow Copilot** — multi-agent router/orchestrator, company knowledge base, context-aware follow-ups, closed learning loop (user feedback → prompt injection via `learning_context.py`)
+- **Document Generator** — financial models, investor memos, KPI reports, board decks (PDF)
+- **AI Graphics Studio** — gpt-image-1 image generation
+- AI Governance (per-agent permissions, daily limits), Founder Autopilot (daily risk briefings), Simulation Accuracy Tracker (predictions vs actuals with auto-calibration)
+- Cross-company learning: privacy-first anonymized benchmarking
 
----
+### Growth features (June 2026)
+- **Shareable Survival Simulator** (`/survival-simulator`, public) — free tool with auto-generated OG social cards (1200×630 PNG, `server/api/survival_og_card.py`), shared results at `/survival/:simId` with server-injected og:image
+- **Programmatic SEO** — 8 industry runway calculators at `/runway/{saas,ecommerce,fintech,marketplace,ai,hardware,biotech,devtools}` with unique copy, benchmarks, JSON-LD; all in sitemap
+- **Embeddable widget** at `/embed/survival` (framing headers relaxed ONLY for `/embed/*`; copy-paste iframe snippet in the simulator share panel)
+- **7-day onboarding email drip** — 6 steps (welcome d0, truth scan d1, simulator d2, copilot d4, fundraising d5, feedback d7), idempotent claim-before-send with max 3 retries, 10-minute background scheduler (`server/email/onboarding_sequence.py`)
+- **Growth dashboard** at `/admin/growth` (signup funnel, time-series, weekly cohort retention, top pages)
+- **Activity email triggers** — auto-emails on simulation complete / document generated / decisions created
 
-## 10. Deployment
-
-- Replit Deployments. Pushes to `main` trigger an auto-build, but **publishing is manual** via the Replit workspace's Publish action.
-- The publish process: builds the client bundle (`npm run build`), bundles the server, deploys to a `.replit.app` domain, then routes to `founderconsole.ai` via custom domain.
-- Health check: `GET /api/health` → `{status:"healthy", database:"connected", ready:true}`.
-- After every merge into `main`, publish from Replit (or ask the user to). The remote runs the same `npm run dev`-style startup.
-
----
-
-## 11. GitHub workflow (for AI agents)
-
-The repo lives at `https://github.com/visheshkhurana/predixen`. Branch model:
-- `main` is protected-ish (the founder pushes directly when needed but prefers PRs).
-- Feature branches: `feat/<short-name>` or `claude/<feature>` (whatever the agent prefers).
-- Open a PR against `main` with a clear description.
-- The Replit environment is connected via a GitHub integration — when an agent pushes to `main`, the workspace can `git pull` and re-publish.
-
-### Recommended PR workflow for an external agent (e.g., Claude on a fresh checkout)
-1. Clone the repo, install dependencies (`npm install`).
-2. Read `replit.md` and this `HANDOVER.md`.
-3. Run `npm run check` to confirm a clean baseline.
-4. Create a feature branch: `git checkout -b feat/<thing>`.
-5. Implement the change. Touch as few files as possible. Mirror the existing patterns:
-   - Backend route → `server/api/<feature>.py`, register it in `server/main.py`'s router list.
-   - Frontend page → `client/src/pages/<page>.tsx`, register in `client/src/App.tsx`.
-   - API client wrapper → `client/src/lib/api/<feature>.ts` (or under `client/src/api/client.ts`).
-   - Reuse `SEOHead` for any new public page.
-   - Use `useSEO` or `<SEOHead>` to set title/description/JSON-LD.
-6. Add `data-testid` attributes to every new interactive element (`button-*`, `input-*`, `link-*`, `text-*`).
-7. Run typecheck (`npm run check`) and lint locally.
-8. Commit with conventional message (`feat: …`, `fix: …`).
-9. Push, open PR. Include a screenshot or steps-to-test.
-10. After merge to `main`, ask the founder to "Publish" to push to production.
-
-### Forbidden
-- **Don't edit `package.json` scripts** without asking.
-- **Don't modify `vite.config.ts` or `server/vite.ts`** unless absolutely required.
-- **Don't change primary key column types** (serial ↔ varchar) — breaks migrations.
-- **Don't commit `.env` or any secret** — use Replit Secrets.
-- **Don't disable typescript checks** to make a build pass.
-- **Don't remove pages or features** without the founder's explicit OK. The product is feature-rich on purpose.
+### Admin (`/admin/*`, gated by `require_platform_admin`)
+Users, companies, activity, metrics, billing, email templates + tracking, lead-gen suite (campaigns/leads/templates/settings), LLM audit, AI governance, login history, evals, system tools (6 tabs incl. AI Learning), growth dashboard.
 
 ---
 
-## 12. Testing strategy
+## 6. Critical Data-Flow Rules (Do Not Break)
 
-- No automated CI runs yet. Pre-launch QA was done with an AI QA agent (see the QA prompt in chat history).
-- Manual smoke tests after every deploy:
-  - `GET /` → 200
-  - `GET /api/health` → 200 + `database:"connected"`
-  - Login as `demo@founderconsole.ai` / `demo123` → can reach `/dashboard`
-  - `/admin/lead-gen` → Overview loads (no infinite skeleton — that bug is fixed)
-- Unit tests live in `server/tests/` (pytest). Run with `pytest server/tests/`. Coverage is partial.
-
----
-
-## 13. Known quirks / acceptable noise
-
-| Symptom | Cause | Action |
-|---|---|---|
-| `[Sentry] No DSN configured` warning in console | Sentry is intentionally off | ignore |
-| Vite HMR WebSocket connect failure in Replit preview | Replit proxy quirk in dev | ignore |
-| `Redis unavailable` log line at startup | Redis is optional | ignore |
-| `chrome-extension://hoklmmgfnpapgjgcpechhaamimifchmp/frame_ant.js` errors in console | User's browser extension | ignore |
-| `/connectors/catalog` (no `/api/` prefix) returns 500 | Legacy un-prefixed route | ignore — UI uses `/api/connectors/catalog` which returns 200 |
-| Express starts on 5001 instead of 5000 | Port 5000 was occupied at start | benign |
-| Demo seed prints "Could not remove duplicate company id=2..9, has references" | Old duplicate demo companies that have FK refs from financial_records etc. | benign — they're hidden in UI |
+1. **Truth Scan is the single source of truth.** All features read metrics from `TruthScan.outputs_json.metrics`. Keys: `net_burn` (not `monthly_burn`), `runway_p50` (not `runway_months`), `headcount`, `is_profitable`, `runway_sustainable`.
+2. **`/api/metrics` is paginated:** `{items, total, page, page_size}`.
+3. **Simulation engines expect raw percentages** (5 = 5%). They divide by 100 internally — never pre-divide.
+4. **Simulation guardrails:** growth capped 50%/mo, MRR cap $100M, customers cap 1M, LLM impact deltas clamped ±30%. Deterministic fallbacks when LLM unavailable.
+5. **Decision scores are capped by survival:** <50% survival → max 4.5/10; <70% → max 6.5/10. Revenue decline (ARR ratio <0.7) applies 15% penalty.
+6. **Stress tests project 60 months** (not 24) so distressed companies hit zero within the window.
+7. **Email drip idempotency:** `onboarding_email_log` uses claim-before-send with max 3 attempts. Table auto-created at startup via `ensure_table()`.
+8. **Security headers:** `X-Frame-Options: DENY` + `frame-ancestors 'none'` everywhere EXCEPT `/embed/*` paths — enforced in BOTH Express (`server/index.ts`) and FastAPI (`server/middleware/security_headers.py`). Keep both in sync.
+9. **NLP term aliases:** `intent_parser.py` maps 65+ financial abbreviations (ARR, MRR, LTV, CAC, EBITDA, AOV, RTO...) to canonical keys; `ingest.py` maps 37+ canonical fields with synonyms for CSV/document extraction.
 
 ---
 
-## 14. How to add a new feature (worked example)
+## 7. Repository Layout
 
-**Goal:** add a "Burn Multiple" widget to the dashboard.
-
-1. **Read `replit.md`** — confirm there's no existing burn-multiple feature. Confirm the formula: `burn_multiple = net_burn / net_new_arr` (industry standard).
-2. **Backend:**
-   - Add a method `compute_burn_multiple(company_id)` in `server/services/kpi_calculations.py`.
-   - Expose it as a route in `server/api/dashboard_kpis.py`: `GET /api/dashboard/burn-multiple?company_id=X` returning `{value: 1.4, classification: "good"}`.
-   - Register the router (it's already registered if you added to existing file).
-3. **Frontend:**
-   - Add `burnMultipleApi` in `client/src/lib/api/dashboards.ts` (or wherever similar wrappers live).
-   - Create `client/src/components/dashboard/BurnMultipleCard.tsx` reusing the existing `GlassCard` and `NumberTicker` motion primitives.
-   - Add `data-testid="text-burn-multiple"` and `data-testid="card-burn-multiple"`.
-   - Import and render on `pages/dashboard.tsx` in the metric grid.
-4. **Use TanStack Query** with `queryKey: ['/api/dashboard/burn-multiple', companyId]`.
-5. **Update `replit.md`** — add the feature under "Key Features".
-6. **Commit, PR, ask the founder to publish.**
-
-If the feature is bigger (new page + new tables), additionally:
-- Add the model in `server/models/` and migration in `server/core/migrations.py`.
-- Add the new page to `client/src/App.tsx` routes.
-- Add a sidebar entry in `client/src/components/app-sidebar.tsx` if it's user-facing.
-
----
-
-## 15. Useful one-liners
-
-```bash
-# Local API smoke
-curl -s http://localhost:5000/api/health | jq
-curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" \
-  -d '{"email":"demo@founderconsole.ai","password":"demo123"}'
-
-# List all FastAPI routes
-curl -s http://localhost:8001/openapi.json | jq -r '.paths | keys[]'
-
-# DB shell
-psql "$DATABASE_URL"
-
-# Tail FastAPI logs only
-tail -f /tmp/logs/Start_application_*.log | grep -E "fastapi|ERROR"
+```
+client/                  React SPA
+  src/pages/             ~60 route pages (incl. admin/ subdir)
+  src/components/ui/     shadcn + motion primitives + glass cards + sim-* components
+  src/data/              blog posts, runway industry profiles
+  public/sitemap.xml     includes 8 /runway/* SEO pages
+server/
+  index.ts               Express entry (port 5000): proxy, security headers, SSR meta
+  seo-prerender.ts       Per-route meta/OG/JSON-LD injection
+  main.py                FastAPI entry (port 8001), deferred startup, schedulers
+  api/                   FastAPI routers (auth, admin_*, survival_og_card, ...)
+  core/                  db, plans, subscription, config
+  email/                 service.py, onboarding_sequence.py, activity_triggers.py,
+                         send_update_v*.py (39 historical campaign scripts)
+  services/simulation/   Agent Simulation Engine v2
+  simulation_agents/     Agent Simulation Engine v1
+  middleware/            security headers, paywall middleware
+shared/                  Shared TypeScript schema
+alembic/                 DB migrations
+replit.md                Living architecture doc (keep updated)
 ```
 
 ---
 
-## 16. Where to ask for help
+## 8. Email Campaign System
 
-- `replit.md` for canonical project memory and gotchas.
-- This file (`HANDOVER.md`) for onboarding context.
-- Inline docstrings in `server/api/*.py` and `server/services/*.py`.
-- The founder: Vishesh Khurana (`vysheshk@gmail.com`).
+- One-off updates are sent via versioned scripts: `python server/email/send_update_vNN.py` (latest: v39, June 2026).
+- Pattern: per-recipient personalization, plain-text + HTML versions, open-tracking pixel via `/email-tracking/analytics`, UTM params, 2-second delay between sends.
+- Senders used: `arjun@founderconsole.ai`, `arjun@runora.xyz` (both verified in Resend).
+- Email open/click analytics visible at `/admin/email-tracking`.
+- Automated flows: onboarding drip (6 emails / 7 days) + activity triggers (simulation/document/decision completion emails).
 
 ---
 
-**TL;DR for an AI agent picking this up:**
-1. Read `replit.md` first.
-2. Read this file second.
-3. Branch off `main`, mirror existing patterns, keep PRs small and focused.
-4. Add `data-testid`s. Use SEOHead for new public pages. Don't pre-divide percentages going into simulation engines. Don't change primary-key types.
-5. After merging to `main`, ping the founder to publish.
+## 9. Current State & Known Items
+
+- **Paywall:** built but disabled — re-enable via `PaywallMiddleware` + `server/core/plans.py`; Stripe integration is the missing piece before charging.
+- **Security:** June 2026 CVE sweep fixed protobufjs, mako, python-multipart, urllib3. 2 high-severity npm advisories remain (transitive).
+- **Proposed next task:** upgrade AI models from gpt-4o family to gpt-5.
+- **Onboarding drip is live** — new signups get the welcome email immediately, then 5 more over 7 days.
+- **SEO:** sitemap.xml, per-route meta/OG/JSON-LD prerender, 8 programmatic industry pages, blog with 15+ articles.
+
+---
+
+## 10. Migration Checklist (Leaving Replit)
+
+1. `git clone` the repo (or push latest from Replit to GitHub — repo already connected).
+2. Provision PostgreSQL; migrate data (`pg_dump` from Replit DB → restore), then `alembic upgrade head`.
+3. Provision Redis (optional but recommended for production job queues).
+4. Copy all secrets (Section 3) into the new environment. **Obtain your own OpenAI/Anthropic/Gemini/OpenRouter keys** — Replit-managed AI integration credentials will NOT work off-platform.
+5. Build: `npm run build`; run Express via `npm start` and FastAPI via `uvicorn server.main:app --port 8001`.
+6. Point DNS for founderconsole.ai at the new host; TLS required (emails, OAuth callbacks, and OG cards all assume https://founderconsole.ai).
+7. Update Google OAuth authorized redirect URIs if the domain changes.
+8. Verify end-to-end: signup → welcome email, `/survival-simulator` + share card, `/simulate` Flight Simulator (needs OpenAI key), `/admin/growth` (needs `ADMIN_MASTER_EMAIL`), a data connector sync.

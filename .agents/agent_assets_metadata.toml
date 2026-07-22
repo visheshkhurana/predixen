@@ -12,3 +12,9 @@ id = "fM3t5LHwUsCG8frCuZ8Pc"
 uri = "file://attached_assets/SYSTEM_AUDIT_v2.md"
 type = "text"
 title = "FounderConsole System Audit v2 (Post-Restructuring)"
+
+[[outputs]]
+id = "yX3Tn-oDBO-lpOXVD0R1l"
+uri = "file://HANDOVER.md"
+type = "text"
+title = "FounderConsole Project Handover"
