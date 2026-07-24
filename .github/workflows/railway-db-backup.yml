@@ -1,0 +1,63 @@
+# .github/workflows/railway-db-backup.yml
+# Daily pg_dump of the Railway Postgres.
+# FAST PATH: stores each dump as a GitHub artifact — needs only one secret,
+#   RAILWAY_DATABASE_URL (the Railway Postgres PUBLIC connection string).
+# DURABLE (optional): if the BACKUP_S3_* secrets are set, also uploads to an
+#   S3-compatible bucket (AWS S3 / Backblaze B2) for long-term retention.
+name: railway-db-backup
+
+on:
+  schedule:
+    - cron: "0 7 * * *"      # 07:00 UTC daily (~12:30 IST)
+  workflow_dispatch: {}       # manual "Run workflow" button
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install postgresql-client 18
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update && sudo apt-get install -y postgresql-client-18
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::RAILWAY_DATABASE_URL secret is not set."; exit 1
+          fi
+          STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          echo "FILE=founderconsole_${STAMP}.dump" >> "$GITHUB_ENV"
+          pg_dump "$DATABASE_URL" -Fc -f "founderconsole_${STAMP}.dump"
+          ls -lh "founderconsole_${STAMP}.dump"
+
+      - name: Upload backup as artifact (fast path — always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: ${{ env.FILE }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload to S3/B2 (only if configured)
+        if: ${{ secrets.BACKUP_S3_BUCKET != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET }}
+          S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}   # AWS: blank; B2: https://s3.<region>.backblazeb2.com
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y awscli
+          ENDPOINT_ARG=""
+          [ -n "${S3_ENDPOINT:-}" ] && ENDPOINT_ARG="--endpoint-url $S3_ENDPOINT"
+          aws s3 cp "$FILE" "s3://${S3_BUCKET}/${FILE}" $ENDPOINT_ARG
+          echo "Uploaded s3://${S3_BUCKET}/${FILE}"

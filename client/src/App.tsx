@@ -48,72 +48,72 @@ import { AskAIButton } from "@/components/AskAIButton";
 
 import { CookieConsent } from "@/components/CookieConsent";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
-import AuthPage from "@/pages/auth";
-import AuthCallback from "@/pages/auth-callback";
-import ResetPasswordPage from "@/pages/reset-password";
-import VerifyEmailPage from "@/pages/verify-email";
-import PrivacyPolicyPage from "@/pages/privacy";
-import TermsOfServicePage from "@/pages/terms";
-import OnboardingPage from "@/pages/onboarding";
-import OverviewPage from "@/pages/overview";
-import TruthScanPage from "@/pages/truth-scan";
-import ScenariosPage from "@/pages/scenarios";
-import SimulateWorkspace from "@/pages/simulate-workspace";
+const AuthPage = lazy(() => import("@/pages/auth"));
+const AuthCallback = lazy(() => import("@/pages/auth-callback"));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
+const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
+const PrivacyPolicyPage = lazy(() => import("@/pages/privacy"));
+const TermsOfServicePage = lazy(() => import("@/pages/terms"));
+const OnboardingPage = lazy(() => import("@/pages/onboarding"));
+const OverviewPage = lazy(() => import("@/pages/overview"));
+const TruthScanPage = lazy(() => import("@/pages/truth-scan"));
+const ScenariosPage = lazy(() => import("@/pages/scenarios"));
+const SimulateWorkspace = lazy(() => import("@/pages/simulate-workspace"));
 import SimulateV2Page, { SharedSimulationPage } from "@/pages/simulate-v2";
-import DecisionsPage from "@/pages/decisions";
-import CopilotPage from "@/pages/copilot";
-import DataInputPage from "@/pages/data-input";
-import IntegrationsPage from "@/pages/integrations";
-import AlertsPage from "@/pages/alerts";
-import TemplatesPage from "@/pages/templates";
-import DataVerificationPage from "@/pages/data-verification";
-import NotFound from "@/pages/not-found";
-import DemoRedirectPage from "@/pages/demo-redirect";
-import AdminDashboard from "@/pages/admin/index";
-import AdminUsers from "@/pages/admin/users";
-import AdminCompanies from "@/pages/admin/companies";
-import AdminBilling from "@/pages/admin/billing";
-import AdminMetrics from "@/pages/admin/metrics";
-import AdminLoginHistory from "@/pages/admin/login-history";
-import AdminActivity from "@/pages/admin/activity";
-import AdminInvites from "@/pages/admin/invites";
-import AdminEmailTemplates from "@/pages/admin/email-templates";
-import AdminEmailTracking from "@/pages/admin/email-tracking";
-import AdminLoginPage from "@/pages/admin/login";
-import AdminLLMAudit from "@/pages/admin/llm-audit";
-import AdminEvals from "@/pages/admin/evals";
-import AiGovernancePage from "@/pages/admin/ai-governance";
-import AdminTeam from "@/pages/admin/team";
-import AdminSystemTools from "@/pages/admin/system-tools";
-import LeadGenAdmin from "@/pages/admin/lead-gen";
-import AdminGrowth from "@/pages/admin/growth";
+const DecisionsPage = lazy(() => import("@/pages/decisions"));
+const CopilotPage = lazy(() => import("@/pages/copilot"));
+const DataInputPage = lazy(() => import("@/pages/data-input"));
+const IntegrationsPage = lazy(() => import("@/pages/integrations"));
+const AlertsPage = lazy(() => import("@/pages/alerts"));
+const TemplatesPage = lazy(() => import("@/pages/templates"));
+const DataVerificationPage = lazy(() => import("@/pages/data-verification"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const DemoRedirectPage = lazy(() => import("@/pages/demo-redirect"));
+const AdminDashboard = lazy(() => import("@/pages/admin/index"));
+const AdminUsers = lazy(() => import("@/pages/admin/users"));
+const AdminCompanies = lazy(() => import("@/pages/admin/companies"));
+const AdminBilling = lazy(() => import("@/pages/admin/billing"));
+const AdminMetrics = lazy(() => import("@/pages/admin/metrics"));
+const AdminLoginHistory = lazy(() => import("@/pages/admin/login-history"));
+const AdminActivity = lazy(() => import("@/pages/admin/activity"));
+const AdminInvites = lazy(() => import("@/pages/admin/invites"));
+const AdminEmailTemplates = lazy(() => import("@/pages/admin/email-templates"));
+const AdminEmailTracking = lazy(() => import("@/pages/admin/email-tracking"));
+const AdminLoginPage = lazy(() => import("@/pages/admin/login"));
+const AdminLLMAudit = lazy(() => import("@/pages/admin/llm-audit"));
+const AdminEvals = lazy(() => import("@/pages/admin/evals"));
+const AiGovernancePage = lazy(() => import("@/pages/admin/ai-governance"));
+const AdminTeam = lazy(() => import("@/pages/admin/team"));
+const AdminSystemTools = lazy(() => import("@/pages/admin/system-tools"));
+const LeadGenAdmin = lazy(() => import("@/pages/admin/lead-gen"));
+const AdminGrowth = lazy(() => import("@/pages/admin/growth"));
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import OwnerConsole from "@/pages/owner-console";
-import FundraisingPage from "@/pages/fundraising";
-import CapTablePage from "@/pages/cap-table";
-import InvestorRoomPage from "@/pages/investor-room";
-import KPIBoardPage from "@/pages/kpi-board";
-import ConnectorMarketplacePage from "@/pages/connector-marketplace";
-import AddDataSourcePage from "@/pages/add-data-source";
-import DashboardsPage from "@/pages/dashboards";
-import DashboardBuilderPage from "@/pages/dashboard-builder";
-import MetricCatalogPage from "@/pages/metric-catalog";
-import SuggestedMetricsPage from "@/pages/suggested-metrics";
-import DocsPage from "@/pages/docs";
-import MessagingPage from "@/pages/messaging";
-import JournalPage from "@/pages/journal";
-import GoalsPage from "@/pages/goals";
-import HiringPlannerPage from "@/pages/hiring-planner";
-import SharedScenarioPage from "@/pages/shared-scenario";
-import QAFrontPage from "@/pages/qa";
-import PricingPage from "@/pages/pricing";
-import AIGraphicsPage from "@/pages/ai-graphics";
-import DocGeneratorPage from "@/pages/doc-generator";
-import DigitalTwinPage from "@/pages/digital-twin";
-import IntelligenceGraphPage from "@/pages/intelligence-graph";
-import SurvivalSimulatorPage from "@/pages/survival-simulator";
-import SettingsPage from "@/pages/settings";
-import BillingPage from "@/pages/billing";
+const OwnerConsole = lazy(() => import("@/pages/owner-console"));
+const FundraisingPage = lazy(() => import("@/pages/fundraising"));
+const CapTablePage = lazy(() => import("@/pages/cap-table"));
+const InvestorRoomPage = lazy(() => import("@/pages/investor-room"));
+const KPIBoardPage = lazy(() => import("@/pages/kpi-board"));
+const ConnectorMarketplacePage = lazy(() => import("@/pages/connector-marketplace"));
+const AddDataSourcePage = lazy(() => import("@/pages/add-data-source"));
+const DashboardsPage = lazy(() => import("@/pages/dashboards"));
+const DashboardBuilderPage = lazy(() => import("@/pages/dashboard-builder"));
+const MetricCatalogPage = lazy(() => import("@/pages/metric-catalog"));
+const SuggestedMetricsPage = lazy(() => import("@/pages/suggested-metrics"));
+const DocsPage = lazy(() => import("@/pages/docs"));
+const MessagingPage = lazy(() => import("@/pages/messaging"));
+const JournalPage = lazy(() => import("@/pages/journal"));
+const GoalsPage = lazy(() => import("@/pages/goals"));
+const HiringPlannerPage = lazy(() => import("@/pages/hiring-planner"));
+const SharedScenarioPage = lazy(() => import("@/pages/shared-scenario"));
+const QAFrontPage = lazy(() => import("@/pages/qa"));
+const PricingPage = lazy(() => import("@/pages/pricing"));
+const AIGraphicsPage = lazy(() => import("@/pages/ai-graphics"));
+const DocGeneratorPage = lazy(() => import("@/pages/doc-generator"));
+const DigitalTwinPage = lazy(() => import("@/pages/digital-twin"));
+const IntelligenceGraphPage = lazy(() => import("@/pages/intelligence-graph"));
+const SurvivalSimulatorPage = lazy(() => import("@/pages/survival-simulator"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const BillingPage = lazy(() => import("@/pages/billing"));
 const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
@@ -292,6 +292,7 @@ function Router() {
         console.error('Router Error:', error);
       }}
     >
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
       <Switch>
         <Route path="/survival-simulator" component={SurvivalSimulatorPage} />
         <Route path="/survival/:simId" component={SurvivalSimulatorPage} />
@@ -524,6 +525,7 @@ function Router() {
         <Route path="/owner-console" component={OwnerConsole} />
         <Route component={NotFound} />
       </Switch>
+      </Suspense>
     </ErrorBoundary>
   );
 }
