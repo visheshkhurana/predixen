@@ -19,6 +19,10 @@ jobs:
   dump:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Hoisted to job level so it can be used in the step `if:` below
+      # (the `secrets` context is not available in `if:` expressions).
+      S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
     steps:
       - name: Install postgresql-client 18
         run: |
@@ -48,11 +52,10 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to S3/B2 (only if configured)
-        if: ${{ secrets.BACKUP_S3_BUCKET != '' }}
+        if: ${{ env.S3_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET }}
-          S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
           S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}   # AWS: blank; B2: https://s3.<region>.backblazeb2.com
         run: |
           set -euo pipefail
