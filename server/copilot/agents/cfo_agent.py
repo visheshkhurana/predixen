@@ -291,36 +291,78 @@ class CFOAgent(BaseAgent):
         
         return metrics
     
+    @staticmethod
+    def _ts_val(ts_metrics: Dict[str, Any], *keys) -> Optional[float]:
+        """Extract a numeric metric value from Truth Scan outputs.
+
+        Truth Scan stores each metric as a nested dict such as
+        ``{"value": 24109, "benchmark_percentile": 55}`` (some upstream sources
+        store a plain number instead). Tries each key in order and returns the
+        first numeric value found, unwrapping the ``value`` field when present.
+        Returns ``None`` when no numeric value is available.
+        """
+        for key in keys:
+            val = ts_metrics.get(key)
+            if isinstance(val, dict):
+                val = val.get("value")
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                return float(val)
+        return None
+
     def _enrich_from_truth_scan(
-        self, 
-        metrics: FinancialMetrics, 
+        self,
+        metrics: FinancialMetrics,
         truth_scan: Dict[str, Any]
     ) -> FinancialMetrics:
-        """Enrich metrics with Truth Scan data."""
-        
-        ts_metrics = truth_scan.get("metrics", {})
-        
+        """Enrich metrics with Truth Scan data.
+
+        Truth Scan metrics are stored as nested ``{"value": X}`` dicts, so every
+        value must be unwrapped (via ``_ts_val``) before it is usable. Reading
+        them raw previously left all financial fields as dicts/None, which made
+        downstream number checks fail silently, skipped LLM insight generation,
+        and produced empty answers for general strategic questions.
+        """
+
+        ts_metrics = truth_scan.get("metrics", {}) or {}
+
         if metrics.revenue is None:
-            metrics.revenue = ts_metrics.get("monthly_revenue")
+            metrics.revenue = self._ts_val(ts_metrics, "monthly_revenue", "mrr")
         if metrics.gross_margin is None:
-            metrics.gross_margin = ts_metrics.get("gross_margin")
+            metrics.gross_margin = self._ts_val(ts_metrics, "gross_margin")
         if metrics.operating_margin is None:
-            metrics.operating_margin = ts_metrics.get("operating_margin")
+            metrics.operating_margin = self._ts_val(ts_metrics, "operating_margin")
         if metrics.burn_rate is None:
-            metrics.burn_rate = ts_metrics.get("net_burn")
+            metrics.burn_rate = self._ts_val(ts_metrics, "net_burn", "burn_rate")
         if metrics.cash_balance is None:
-            metrics.cash_balance = ts_metrics.get("cash_balance")
+            metrics.cash_balance = self._ts_val(ts_metrics, "cash_balance")
         if metrics.runway_months is None:
-            runway_val = ts_metrics.get("runway_months")
-            if isinstance(runway_val, (int, float)):
-                metrics.runway_months = runway_val
-        
-        if ts_metrics.get("revenue_growth_mom"):
-            metrics.revenue_growth_mom = ts_metrics.get("revenue_growth_mom")
-        
-        updated_gaps = [g for g in metrics.data_gaps if getattr(metrics, g) is None]
+            metrics.runway_months = self._ts_val(ts_metrics, "runway_months", "runway_p50")
+        if metrics.mrr is None:
+            metrics.mrr = self._ts_val(ts_metrics, "mrr")
+        if metrics.arr is None:
+            metrics.arr = self._ts_val(ts_metrics, "arr")
+        if metrics.arpu is None:
+            metrics.arpu = self._ts_val(ts_metrics, "arpu")
+        if metrics.cac is None:
+            metrics.cac = self._ts_val(ts_metrics, "cac")
+        if metrics.ltv is None:
+            metrics.ltv = self._ts_val(ts_metrics, "ltv")
+        if metrics.ltv_cac_ratio is None:
+            metrics.ltv_cac_ratio = self._ts_val(ts_metrics, "ltv_cac_ratio")
+        if metrics.churn_rate is None:
+            metrics.churn_rate = self._ts_val(ts_metrics, "churn_rate", "gross_churn_rate")
+        if metrics.headcount is None:
+            hc = self._ts_val(ts_metrics, "headcount")
+            if hc is not None:
+                metrics.headcount = int(hc)
+
+        growth = self._ts_val(ts_metrics, "revenue_growth_mom")
+        if growth is not None:
+            metrics.revenue_growth_mom = growth
+
+        updated_gaps = [g for g in metrics.data_gaps if getattr(metrics, g, None) is None]
         metrics.data_gaps = updated_gaps
-        
+
         return metrics
     
     def _load_from_ckb(self, financials: Dict[str, Any]) -> FinancialMetrics:

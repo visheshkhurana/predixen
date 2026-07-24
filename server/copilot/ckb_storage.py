@@ -157,25 +157,35 @@ class CKBStorage:
             return ckb
         
         ts_data = truth_scan.outputs_json or {}
-        metrics = ts_data.get("metrics", {})
-        
+        metrics = ts_data.get("metrics", {}) or {}
+
+        def _val(*keys):
+            """Unwrap Truth Scan nested ``{"value": X}`` metric dicts to a number."""
+            for key in keys:
+                v = metrics.get(key)
+                if isinstance(v, dict):
+                    v = v.get("value")
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    return float(v)
+            return None
+
         if metrics:
             ckb.financials.update({
                 "pnl": {
-                    "revenue": metrics.get("monthly_revenue"),
-                    "gross_margin": metrics.get("gross_margin"),
-                    "operating_margin": metrics.get("operating_margin"),
+                    "revenue": _val("monthly_revenue", "mrr"),
+                    "gross_margin": _val("gross_margin"),
+                    "operating_margin": _val("operating_margin"),
                 },
                 "cashflow": {
-                    "burn_rate": metrics.get("net_burn"),
-                    "runway_months": metrics.get("runway_p50")
+                    "burn_rate": _val("net_burn", "burn_rate"),
+                    "runway_months": _val("runway_months", "runway_p50")
                 },
                 "balance_sheet": {
-                    "cash_balance": metrics.get("cash_balance")
+                    "cash_balance": _val("cash_balance")
                 },
                 "team": {
-                    "headcount": metrics.get("headcount"),
-                    "revenue_per_employee": metrics.get("revenue_per_employee"),
+                    "headcount": _val("headcount"),
+                    "revenue_per_employee": _val("revenue_per_employee"),
                 },
                 "truth_scan_id": truth_scan.id,
                 "computed_at": truth_scan.created_at.isoformat()
