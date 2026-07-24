@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email-tracking", tags=["email-tracking"])
 
 WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
-ANALYTICS_TOKEN = os.getenv("ANALYTICS_ACCESS_TOKEN", "founderconsole-analytics-2026")
 
 
 def _verify_resend_signature(payload: bytes, signature: Optional[str]) -> bool:
@@ -277,10 +276,17 @@ async def submit_feedback_api(request: Request):
         db.close()
 
 
-def _verify_admin_jwt(auth_header: str) -> bool:
-    if not auth_header.startswith("Bearer "):
+def _extract_admin_token(request: Request) -> str:
+    """Admin token from the Authorization: Bearer header or the auth_token cookie."""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]
+    return request.cookies.get("auth_token", "") or ""
+
+
+def _verify_admin_jwt(token_str: str) -> bool:
+    if not token_str:
         return False
-    token_str = auth_header[7:]
     try:
         from server.core.security import decode_token
         payload = decode_token(token_str)
@@ -289,19 +295,19 @@ def _verify_admin_jwt(auth_header: str) -> bool:
         user_id = payload.get("sub")
         if not user_id:
             return False
-        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
-        if not admin_email:
+        # Master admin token (issued only to the configured master admin)
+        if user_id == "master" and payload.get("is_master"):
             return True
-            # Handle master admin token
-            if user_id == "master" and payload.get("is_master"):
-                return True
+        admin_email = (os.getenv("ADMIN_MASTER_EMAIL") or "").lower().strip()
         db = next(get_db())
         try:
             from server.models.user import User
             user = db.query(User).filter(User.id == int(user_id)).first()
-            if user and user.email.lower().strip() == admin_email:
+            if not user:
+                return False
+            if user.role == "owner":
                 return True
-            if user and user.role == "owner":
+            if admin_email and user.email.lower().strip() == admin_email:
                 return True
         finally:
             db.close()
@@ -315,12 +321,10 @@ async def email_analytics(
     request: Request,
     campaign: Optional[str] = None,
     days: int = Query(default=30, ge=1, le=365),
-    token: Optional[str] = Query(default=None)
 ):
-    auth_header = request.headers.get("authorization", "")
-    is_admin_jwt = _verify_admin_jwt(auth_header)
-    provided_token = token or ""
-    if not is_admin_jwt and (ANALYTICS_TOKEN and provided_token != ANALYTICS_TOKEN):
+    # Admin session only (Bearer header or auth_token cookie).
+    # The previous static-token bypass exposed all recipient PII.
+    if not _verify_admin_jwt(_extract_admin_token(request)):
         raise HTTPException(status_code=401, detail="Unauthorized")
     db = next(get_db())
     try:

@@ -1922,7 +1922,32 @@ export default function ScenariosPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" data-testid="button-adopt-strategy" onClick={() => toast({ title: 'Strategy adopted', description: `${currentScenarioName} saved as your active strategy.` })}>
+                    <Button size="sm" data-testid="button-adopt-strategy" onClick={async () => {
+                      if (!currentCompany) {
+                        toast({ title: 'No company selected', description: 'Select a company first.', variant: 'destructive' });
+                        return;
+                      }
+                      try {
+                        const res = await fetch(`/api/companies/${currentCompany.id}/decisions`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({
+                            title: `Adopt strategy: ${currentScenarioName}`,
+                            context: `Adopted from the "${currentScenarioName}" scenario simulation.`,
+                            status: 'accepted',
+                            tags: ['adopted-strategy'],
+                          }),
+                        });
+                        if (res.ok) {
+                          toast({ title: 'Strategy adopted', description: 'Saved to your Decision Log — open Decisions to track the outcome.' });
+                        } else {
+                          toast({ title: 'Could not adopt strategy', description: 'Please try again.', variant: 'destructive' });
+                        }
+                      } catch {
+                        toast({ title: 'Could not adopt strategy', description: 'Network error — please try again.', variant: 'destructive' });
+                      }
+                    }}>
                       <Shield className="h-3.5 w-3.5 mr-1.5" />
                       Adopt This Strategy
                     </Button>

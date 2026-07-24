@@ -7,6 +7,7 @@ import { spawn, execSync, spawnSync, ChildProcess } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { setupWebSocketServer } from "./websocket";
 import { registerTwilioRoutes } from "./twilio/routes";
+import { requireAuth } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -490,11 +491,12 @@ const FASTAPI_URL = process.env.FASTAPI_URL || `http://localhost:${getFastAPIPor
 const messagingRouter = express.Router();
 messagingRouter.use(express.json());
 registerTwilioRoutes(messagingRouter);
-app.use("/api/messaging", messagingRouter);
+// Auth-gate all messaging routes: unauthenticated SMS/WhatsApp send is toll-fraud/PII risk.
+app.use("/api/messaging", requireAuth, messagingRouter);
 
 // Register Notion routes before the API proxy (handled by Express, not FastAPI)
 import { getNotionClient, listPages, listDatabases } from "./notion/client";
-app.get("/api/notion/pages", async (req, res) => {
+app.get("/api/notion/pages", requireAuth, async (req, res) => {
   try {
     const pages = await listPages();
     const simplified = pages.map((p: any) => ({
@@ -512,7 +514,7 @@ app.get("/api/notion/pages", async (req, res) => {
   }
 });
 
-app.post("/api/notion/push-report", express.json(), async (req, res) => {
+app.post("/api/notion/push-report", requireAuth, express.json(), async (req, res) => {
   try {
     const notion = await getNotionClient();
     const { pageId } = req.body;
@@ -661,7 +663,7 @@ app.post("/api/notion/push-report", express.json(), async (req, res) => {
   }
 });
 
-app.get("/api/notion/databases", async (req, res) => {
+app.get("/api/notion/databases", requireAuth, async (req, res) => {
   try {
     const dbs = await listDatabases();
     const simplified = dbs.map((d: any) => ({

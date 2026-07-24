@@ -102,8 +102,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 logger.warning("Could not start rate limit cleanup task - no event loop")
 
     def _get_identifier(self, request: Request) -> str:
-        if "X-Forwarded-For" in request.headers:
-            return request.headers["X-Forwarded-For"].split(",")[0].strip()
+        # The trusted Railway edge appends the real client IP as the LAST X-Forwarded-For
+        # entry (Express proxies without xfwd, so it isn't rewritten downstream). Using the
+        # last entry — not the first — stops clients from minting a fresh rate-limit bucket
+        # per request by injecting their own X-Forwarded-For header.
+        xff = request.headers.get("X-Forwarded-For")
+        if xff:
+            parts = [p.strip() for p in xff.split(",") if p.strip()]
+            if parts:
+                return parts[-1]
         return request.client.host if request.client else "unknown"
 
     def _get_category(self, request: Request) -> Tuple[str, int]:

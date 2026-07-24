@@ -134,3 +134,10 @@ if settings.is_production:
         _cfg_logger.warning(f"PRODUCTION CONFIG: {_err}")
     if _config_errors:
         _cfg_logger.warning(f"Found {len(_config_errors)} production config issue(s) — server will start but may be insecure")
+    # Hard guardrail: never boot production with the built-in default signing key.
+    # A forged SECRET_KEY lets anyone mint admin JWTs, so refuse to start instead of warning.
+    if settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
+        raise RuntimeError(
+            "Refusing to start in production with the default SECRET_KEY/SESSION_SECRET. "
+            "Set the SECRET_KEY (or SESSION_SECRET) environment variable to a strong random value."
+        )

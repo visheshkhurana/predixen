@@ -724,6 +724,26 @@ export default function IntegrationsPage() {
     },
   });
 
+  const [disconnectingProvider, setDisconnectingProvider] = useState<string | null>(null);
+
+  const disconnectMutation = useMutation({
+    mutationFn: async ({ provider }: { provider: string }) => {
+      setDisconnectingProvider(provider);
+      const res = await apiRequest("POST", `/api/connectors/companies/${companyId}/disconnect/${provider}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Integration Disconnected", description: "The data source has been disconnected." });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/connectors/companies", companyId, "status"] });
+      setDisconnectingProvider(null);
+    },
+    onError: (error: unknown) => {
+      toast({ title: "Disconnect Failed", description: getErrorMessage(error, 'Could not disconnect integration'), variant: "destructive" });
+      setDisconnectingProvider(null);
+    },
+  });
+
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
   const testSampleMutation = useMutation({
@@ -874,8 +894,14 @@ export default function IntegrationsPage() {
                   )}
                   {isSyncing ? "Syncing..." : "Sync Now"}
                 </Button>
-                <Button size="sm" variant="ghost" data-testid={`button-disconnect-${provider.id}`}>
-                  Disconnect
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => disconnectMutation.mutate({ provider: provider.id })}
+                  disabled={disconnectingProvider === provider.id && disconnectMutation.isPending}
+                  data-testid={`button-disconnect-${provider.id}`}
+                >
+                  {disconnectingProvider === provider.id && disconnectMutation.isPending ? "Disconnecting..." : "Disconnect"}
                 </Button>
               </>
             ) : (

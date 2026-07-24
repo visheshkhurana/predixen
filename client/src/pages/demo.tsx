@@ -37,11 +37,22 @@ export default function DemoPage() {
         <div className="mx-auto max-w-4xl px-4 py-10">
           <div className="rounded-xl border bg-card overflow-hidden">
             <div className="aspect-video flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-              <div className="text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/20" role="img" aria-label="Demo video placeholder" data-testid="icon-play-demo">
+              <div className="text-center px-6">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/20" role="img" aria-label="Interactive demo" data-testid="icon-play-demo">
                   <Play className="h-8 w-8 text-primary ml-1" />
                 </div>
-                <p className="mt-4 text-sm text-muted-foreground">Product demo video coming soon</p>
+                <p className="mt-4 text-base font-semibold text-foreground">Take the interactive tour</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Explore a live founder workspace preloaded with sample company data — forecasts, simulations, and the AI copilot.
+                </p>
+                <div className="mt-4">
+                  <Button asChild data-testid="button-demo-launch">
+                    <Link href="/auth">
+                      Launch interactive demo
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </div>
 
