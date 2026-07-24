@@ -40,7 +40,9 @@ jobs:
           fi
           STAMP=$(date -u +%Y%m%dT%H%M%SZ)
           echo "FILE=founderconsole_${STAMP}.dump" >> "$GITHUB_ENV"
-          pg_dump "$DATABASE_URL" -Fc -f "founderconsole_${STAMP}.dump"
+          # Use the versioned binary — the runner pre-ships pg_dump 16 on PATH,
+          # which refuses to dump the 18.x server ("server version mismatch").
+          /usr/lib/postgresql/18/bin/pg_dump "$DATABASE_URL" -Fc -f "founderconsole_${STAMP}.dump"
           ls -lh "founderconsole_${STAMP}.dump"
 
       - name: Upload backup as artifact (fast path — always)
