@@ -254,40 +254,53 @@ class BaseAgent(ABC):
         system_prompt: str,
         task_type: str = "general_chat",
         model: Optional[str] = None,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None
     ) -> Optional[str]:
         """
         Call the LLM router with the given messages.
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             system_prompt: System prompt for the model
             task_type: Task type for model routing (e.g., 'financial_analysis', 'strategy')
             model: Optional explicit model override
             temperature: Sampling temperature
-        
+            max_tokens: Optional explicit output token cap. When omitted the
+                router falls back to the model's configured ceiling, which for
+                some models (e.g. gpt-4o at 16384) can be rejected by the
+                provider/proxy and cause the whole call to fail. Prefer passing
+                a bounded value, matching the known-good quick-chat path.
+
         Returns:
-            Response content as string, or None if LLM not available
+            Response content as string, or None if LLM not available / call failed
         """
         if not self.llm_router:
             self.logger.warning(f"LLM router not available for {self.agent_type.value} agent")
             return None
-        
+
         try:
             from server.lib.llm.llm_router import TaskType
             task = TaskType(task_type) if task_type in [t.value for t in TaskType] else TaskType.GENERAL_CHAT
-            
+
             result = self.llm_router.chat(
                 messages=messages,
                 task_type=task,
                 model=model,
                 system=system_prompt,
-                temperature=temperature
+                temperature=temperature,
+                max_tokens=max_tokens
             )
-            
+
             return result.get("content", "")
         except Exception as e:
-            self.logger.error(f"LLM call failed for {self.agent_type.value}: {e}")
+            # Surface, do not silently swallow: this previously hid provider
+            # errors (e.g. max_tokens too large) behind an empty response.
+            self.logger.error(
+                f"LLM call failed for {self.agent_type.value} agent "
+                f"(task_type={task_type}, model={model or 'auto'}): {e}",
+                exc_info=True
+            )
             return None
     
     def _smart_call(

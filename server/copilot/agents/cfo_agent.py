@@ -217,7 +217,9 @@ class CFOAgent(BaseAgent):
         
         llm_insights = await self._generate_llm_insights(query, metrics, ckb, context)
         if llm_insights:
-            findings.append(llm_insights)
+            # Lead with the grounded prose answer so it heads the executive
+            # summary (findings[:5]); metric bullets follow as supporting detail.
+            findings.insert(0, llm_insights)
         
         return AgentResponse(
             agent_type=AgentType.CFO,
@@ -513,18 +515,33 @@ class CFOAgent(BaseAgent):
         metrics_summary = []
         if self._is_number(metrics.revenue):
             metrics_summary.append(f"Monthly Revenue: {self.format_currency(metrics.revenue, metrics.currency_base)}")
+        if self._is_number(metrics.mrr):
+            metrics_summary.append(f"MRR: {self.format_currency(metrics.mrr, metrics.currency_base)}")
+        if self._is_number(metrics.arr):
+            metrics_summary.append(f"ARR: {self.format_currency(metrics.arr, metrics.currency_base)}")
+        if self._is_number(metrics.revenue_growth_mom):
+            metrics_summary.append(f"Revenue Growth (MoM): {float(metrics.revenue_growth_mom):.1f}%")
         if self._is_number(metrics.gross_margin):
             metrics_summary.append(f"Gross Margin: {float(metrics.gross_margin):.1f}%")
         if self._is_number(metrics.burn_rate):
             metrics_summary.append(f"Monthly Burn: {self.format_currency(metrics.burn_rate, metrics.currency_base)}")
+        if self._is_number(metrics.cash_balance):
+            metrics_summary.append(f"Cash Balance: {self.format_currency(metrics.cash_balance, metrics.currency_base)}")
         if self._is_number(metrics.runway_months):
             metrics_summary.append(f"Runway: {float(metrics.runway_months):.1f} months")
         if self._is_number(metrics.ltv_cac_ratio):
             metrics_summary.append(f"LTV/CAC: {float(metrics.ltv_cac_ratio):.1f}x")
+        if self._is_number(metrics.cac):
+            metrics_summary.append(f"CAC: {self.format_currency(metrics.cac, metrics.currency_base)}")
         if self._is_number(metrics.churn_rate):
             metrics_summary.append(f"Monthly Churn: {float(metrics.churn_rate):.1f}%")
+        if self._is_number(metrics.headcount):
+            metrics_summary.append(f"Headcount: {int(metrics.headcount)}")
 
         if not metrics_summary:
+            self.logger.warning(
+                "CFO LLM insight skipped: no numeric metrics available to ground an answer"
+            )
             return None
 
         # Sanitize user-controlled data before inclusion in prompt
@@ -542,24 +559,50 @@ class CFOAgent(BaseAgent):
         )
 
         # Build prompt with sanitized data wrapped in XML delimiters
-        prompt = f"""Based on the following financial metrics for <company>{sanitized_company_name}</company> (<industry>{sanitized_industry}</industry>):
+        prompt = f"""You are advising the founder of <company>{sanitized_company_name}</company> (<industry>{sanitized_industry}</industry>).
 
-{chr(10).join(metrics_summary)}
+Verified financial metrics (single source of truth -- use these exact numbers, never invent others):
+{chr(10).join(metrics_summary)}"""
+
+        # Enrich with additional grounded context when available (mirrors the
+        # working quick-chat path so general strategic questions get a real answer).
+        business_ctx = (context or {}).get("business_context")
+        if business_ctx:
+            sanitized_ctx = PromptInjectionDefense.sanitize_user_input(
+                str(business_ctx)[:2000], allow_newlines=True
+            )
+            prompt += f"\n\n<business_context>\n{sanitized_ctx}\n</business_context>"
+
+        web_research = (context or {}).get("web_research")
+        if web_research:
+            sanitized_research = PromptInjectionDefense.sanitize_user_input(
+                str(web_research)[:1500], allow_newlines=True
+            )
+            prompt += f"\n\n<web_research>\n{sanitized_research}\n</web_research>"
+
+        prompt += f"""
 
 <user_question>
 {sanitized_query}
 </user_question>
 
-Provide a brief, actionable financial insight (2-3 sentences) focused on the most important financial implication. Be specific and data-driven."""
+Answer the founder's question directly and specifically in 1-2 short paragraphs of plain prose (not bullet lists). Ground every claim in the metrics above, citing the actual numbers. If the question asks about risks or priorities, name the top items explicitly and explain why, using the data. Be opinionated and actionable. Do not restate the metrics as a list -- weave them into your analysis."""
 
-        try:
-            response = self._call_llm(
-                messages=[{"role": "user", "content": prompt}],
-                system_prompt=CFO_SYSTEM_PROMPT,
-                task_type="financial_analysis",
-                temperature=0.5
+        response = self._call_llm(
+            messages=[{"role": "user", "content": prompt}],
+            system_prompt=CFO_SYSTEM_PROMPT,
+            task_type="financial_analysis",
+            temperature=0.4,
+            max_tokens=1500,
+        )
+        if not response or not response.strip():
+            # _call_llm already logs the underlying provider error at error level;
+            # make the empty-analysis outcome explicit rather than silently
+            # returning only metric bullets.
+            self.logger.error(
+                "CFO LLM insight produced no content despite %d grounded metrics "
+                "(query=%r) -- founder will only see metric bullets",
+                len(metrics_summary), sanitized_query[:120]
             )
-            return response
-        except Exception as e:
-            self.logger.warning(f"LLM insight generation failed: {e}")
             return None
+        return response.strip()
