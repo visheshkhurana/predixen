@@ -191,22 +191,22 @@ def simulate_hiring_plan(
         FinancialRecord.company_id == company.id
     ).order_by(FinancialRecord.period_end.desc()).first()
 
-    ts_revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
-    fr_revenue = float(latest_record.revenue) if latest_record and latest_record.revenue else 0
-    baseline_revenue = max(0, ts_revenue if ts_revenue > 0 else fr_revenue)
-
-    ts_growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
-    fr_growth = float(latest_record.mom_growth) if latest_record and latest_record.mom_growth else 0
-    baseline_growth = ts_growth if ts_growth != 0 else fr_growth
-
-    ts_cash = extract_metric_value(metrics.get("cash_balance"), 0)
-    fr_cash = float(latest_record.cash_balance) if latest_record and latest_record.cash_balance else 0
-    baseline_cash = max(0, ts_cash if ts_cash > 0 else fr_cash)
-
-    fr_gm = float(latest_record.gross_margin) if latest_record and latest_record.gross_margin is not None else 0
-    fr_opex = max(0, float(latest_record.opex) if latest_record and latest_record.opex else 0)
-    fr_payroll = max(0, float(latest_record.payroll) if latest_record and latest_record.payroll else 0)
-    fr_other = max(0, float(latest_record.other_costs) if latest_record and latest_record.other_costs else 0)
+    # Resolve the simulation baseline the same way the dashboard and the scenario
+    # simulator do (server/api/simulations.py). Crucially this reconstructs the
+    # operating cost from the computed net burn when the P&L expense breakdown is
+    # empty -- the demo company (and any user with computed metrics but no
+    # uploaded P&L) has zero opex/payroll/other, which otherwise makes the Monte
+    # Carlo simulate ~zero burn and return N/A runway (leaving "Runway Impact"
+    # blank and P10/P50/P90 = N/A).
+    from server.api.simulations import resolve_baseline_financials
+    baseline = resolve_baseline_financials(metrics, latest_record)
+    baseline_revenue = baseline["revenue"]
+    baseline_growth = baseline["growth"]
+    baseline_cash = baseline["cash"]
+    baseline_gm = baseline["gross_margin"]
+    baseline_opex = baseline["opex"]
+    baseline_payroll = baseline["payroll"]
+    baseline_other = baseline["other_costs"]
 
     hires = plan.get("hires", [])
     hiring_plan_for_sim = []
@@ -228,10 +228,10 @@ def simulate_hiring_plan(
         sim_inputs = SimulationInputs(
             baseline_revenue=baseline_revenue,
             baseline_growth_rate=baseline_growth,
-            gross_margin=extract_metric_value(metrics.get("gross_margin"), fr_gm),
-            opex=extract_metric_value(metrics.get("opex"), fr_opex),
-            payroll=extract_metric_value(metrics.get("payroll"), fr_payroll),
-            other_costs=extract_metric_value(metrics.get("other_costs"), fr_other),
+            gross_margin=baseline_gm,
+            opex=baseline_opex,
+            payroll=baseline_payroll,
+            other_costs=baseline_other,
             cash_balance=baseline_cash,
             hiring_plan=hiring_plan_for_sim,
             n_simulations=500,
@@ -240,7 +240,7 @@ def simulate_hiring_plan(
 
         outputs = run_monte_carlo(sim_inputs)
 
-        total_costs = fr_opex + fr_payroll + fr_other
+        total_costs = baseline_opex + baseline_payroll + baseline_other
         net_burn = total_costs - baseline_revenue
         current_runway = baseline_cash / net_burn if net_burn > 0 else 120
 
