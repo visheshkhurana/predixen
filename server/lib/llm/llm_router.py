@@ -507,6 +507,73 @@ class LLMRouter:
         response_format: Optional[Dict[str, str]] = None,
         **kwargs
     ) -> Dict[str, Any]:
+        """Route a chat request, retrying down the fallback chain on failure.
+
+        A runtime error from the primary provider — an expired key, an OpenAI
+        "project has no access to model" 403, a rate limit — used to fail the
+        whole call even when another configured provider would have answered.
+        Now we walk [chosen model] + FALLBACK_CHAIN and return the first
+        success, so a single healthy provider keeps the copilot answering.
+        JSON (response_format) calls only try OpenAI, since the other providers
+        can't honor the requested schema.
+        """
+        if model is None:
+            model = self.get_model_for_task(task_type) if task_type else "gemini-2.5-flash"
+        if model not in MODELS:
+            model = "gemini-2.5-flash"
+
+        require_json = response_format is not None
+        if require_json and MODELS[model].provider != Provider.OPENAI and self.openai_available:
+            model = "gpt-4o"
+
+        chain: List[str] = []
+        seen: set = set()
+        for candidate in [model] + FALLBACK_CHAIN.get(model, []):
+            if candidate in seen or candidate not in MODELS:
+                continue
+            if require_json and MODELS[candidate].provider != Provider.OPENAI:
+                continue
+            seen.add(candidate)
+            chain.append(candidate)
+
+        last_error: Optional[Exception] = None
+        for candidate in chain:
+            try:
+                result = self._chat_once(
+                    messages,
+                    model=candidate,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    system=system,
+                    response_format=response_format,
+                    **kwargs
+                )
+                if candidate != model:
+                    logger.info(f"LLM fallback succeeded: {model} -> {candidate}")
+                return result
+            except Exception as e:
+                last_error = e
+                logger.warning(f"LLM attempt failed (model={candidate}): {e}")
+
+        if last_error is not None:
+            raise last_error
+        raise ValueError(
+            "No LLM provider available. Configure at least one of: "
+            "AI_INTEGRATIONS_OPENAI_API_KEY, AI_INTEGRATIONS_ANTHROPIC_API_KEY, "
+            "AI_INTEGRATIONS_GEMINI_API_KEY"
+        )
+
+    def _chat_once(
+        self,
+        messages: List[Dict[str, str]],
+        task_type: Optional[TaskType] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        system: Optional[str] = None,
+        response_format: Optional[Dict[str, str]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
         """
         Make a chat completion request, automatically routing to the best model.
         

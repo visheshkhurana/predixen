@@ -31,8 +31,13 @@ class PromptInjectionDefense:
         r"(?i)from.*now.*on",
         r"(?i)(role\s*play|roleplay)",
         r"(?i)new\s*(instructions|guidelines|rules)",
-        r"(?i)override",
-        r"(?i)execute|run|eval",
+        r"(?i)override.*(instructions|rules|system)",
+        # Target actual command-execution injection, not ordinary finance words.
+        # The old bare `run|eval|execute` matched the substring "run" inside
+        # "runway"/"run rate"/"running" and "eval" inside "evaluate", flagging
+        # nearly every legitimate founder question as a false-positive injection.
+        r"(?i)\beval\b\s*\(",
+        r"(?i)\bexec(ute)?\b\s+(the\s+)?(following|command|code|script|this|shell)",
     ]
 
     @staticmethod
