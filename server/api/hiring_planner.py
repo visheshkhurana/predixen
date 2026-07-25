@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel, validator
 from typing import Dict, Any, List, Optional
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -76,10 +78,29 @@ def _get_hiring_plans(company: Company) -> List[Dict]:
 
 
 def _save_hiring_plans(db: Session, company: Company, plans: List[Dict]):
-    meta = dict(company.metadata_json or {})
-    meta["hiring_plans"] = plans
-    company.metadata_json = meta
+    # Atomic per-key write. This used to be a full-dict read-modify-write on the
+    # shared metadata_json blob, which lost updates when another endpoint
+    # (smart-alerts evaluation, connector sync, demo re-seed) wrote a *different*
+    # key concurrently: the last full-dict writer clobbered the whole blob and
+    # dropped hiring_plans, so a freshly-created plan 404'd on /simulate.
+    # jsonb_set rewrites only the hiring_plans key and the row-level UPDATE lock
+    # serializes writers, so sibling keys survive. metadata_json is a `json`
+    # column, so cast to jsonb for the set and back to json for storage.
+    db.execute(
+        text(
+            "UPDATE companies "
+            "SET metadata_json = jsonb_set("
+            "    COALESCE(metadata_json::jsonb, '{}'::jsonb), "
+            "    '{hiring_plans}', CAST(:plans AS jsonb), true"
+            ")::json "
+            "WHERE id = :cid"
+        ),
+        {"plans": json.dumps(plans), "cid": company.id},
+    )
     db.commit()
+    # Reload so the in-session ORM object reflects DB truth (this key plus any
+    # concurrent sibling-key changes) without leaving a dirty full-dict write.
+    db.refresh(company)
 
 
 @router.get("/companies/{company_id}/hiring-plans")
