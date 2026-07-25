@@ -541,8 +541,11 @@ export default function DigitalTwinPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Gross Margin", value: derived.gross_margin != null ? `${(derived.gross_margin * 100).toFixed(0)}%` : "N/A" },
-                { label: "Churn Rate", value: derived.churn_rate != null ? `${(derived.churn_rate * 100).toFixed(1)}%` : "N/A" },
+                // gross_margin and churn_rate are stored as percentages already
+                // (twin seeds gross_margin=(1-cogs/rev)*100=72.3, churnRate=3.2),
+                // so don't multiply by 100 again -- that produced 7230% / 320.0%.
+                { label: "Gross Margin", value: derived.gross_margin != null ? `${derived.gross_margin.toFixed(0)}%` : "N/A" },
+                { label: "Churn Rate", value: derived.churn_rate != null ? `${derived.churn_rate.toFixed(1)}%` : "N/A" },
                 { label: "LTV", value: derived.ltv != null ? formatCurrency(derived.ltv) : "N/A" },
                 { label: "CAC", value: derived.cac != null ? formatCurrency(derived.cac) : "N/A" },
                 { label: "LTV/CAC", value: derived.ltv_cac_ratio != null ? `${derived.ltv_cac_ratio}x` : "N/A" },
