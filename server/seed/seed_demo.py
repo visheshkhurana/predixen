@@ -33,16 +33,20 @@ def _ensure_company_state(db: Session, company):
     existing = db.query(CompanyState).filter(CompanyState.company_id == company.id).first()
     if existing:
         return
+    # Keep these aligned with the canonical FinancialRecords final month so the
+    # Digital Twin agrees with the dashboard/Truth Scan. Previously customers=293
+    # /arpu=150/expenses=71949/burn=28000 contradicted the primary data
+    # (customers=20, arpu=2197, total cost=68058 incl COGS, burn=24109).
     demo_financials = {
         "cashBalance": 513746,
-        "monthlyBurn": 28000,
+        "monthlyBurn": 24109,
         "revenueMonthly": 43949,
         "revenueGrowthRate": 10.0,
-        "expensesMonthly": 71949,
+        "expensesMonthly": 68058,
         "mrr": 43949,
         "arr": 527388,
-        "arpu": 150,
-        "customers": 293
+        "arpu": 2197,
+        "customers": 20
     }
     state = CompanyState(
         company_id=company.id,
@@ -50,10 +54,10 @@ def _ensure_company_state(db: Session, company):
         state_json=json.dumps(demo_financials),
         snapshot_id=compute_snapshot_id(demo_financials),
         cash_balance=513746,
-        monthly_burn=28000,
+        monthly_burn=24109,
         revenue_monthly=43949,
         revenue_growth_rate="10.0",
-        expenses_monthly=71949
+        expenses_monthly=68058
     )
     db.add(state)
     db.commit()
@@ -138,8 +142,11 @@ def _recreate_financial_records(db: Session, demo_company):
             ndr=105.0 + i * 0.25,
             arpu=round(mrr_val / customers_count, 2),
             headcount=headcount_val,
-            net_burn=round(max(0, expenses - revenue), 2),
-            runway_months=round(max(cash, 50000) / max(expenses - revenue, 1), 1),
+            # Total monthly cost includes COGS (revenue*0.25) on top of
+            # opex+payroll+other (== `expenses`), so burn/runway match the
+            # canonical /metrics/computed derivation and the Truth Scan.
+            net_burn=round(max(0, (expenses + revenue * 0.25) - revenue), 2),
+            runway_months=round(max(cash, 50000) / max((expenses + revenue * 0.25) - revenue, 1), 1),
             mom_growth=round((growth_rate - 1) * 100, 1),
             ltv=4800.0,
             cac=1500.0,
@@ -286,8 +293,11 @@ def seed_demo_data(db: Session):
             ndr=105.0 + i * 0.25,
             arpu=round(mrr_val / customers_count, 2),
             headcount=headcount_val,
-            net_burn=round(max(0, expenses - revenue), 2),
-            runway_months=round(max(cash, 50000) / max(expenses - revenue, 1), 1),
+            # Total monthly cost includes COGS (revenue*0.25) on top of
+            # opex+payroll+other (== `expenses`), so burn/runway match the
+            # canonical /metrics/computed derivation and the Truth Scan.
+            net_burn=round(max(0, (expenses + revenue * 0.25) - revenue), 2),
+            runway_months=round(max(cash, 50000) / max((expenses + revenue * 0.25) - revenue, 1), 1),
             mom_growth=round((growth_rate - 1) * 100, 1),
             ltv=4800.0,
             cac=1500.0,

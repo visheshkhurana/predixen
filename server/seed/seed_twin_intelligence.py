@@ -76,13 +76,13 @@ def _enrich_company_state(db: Session, company_id: int):
             "expensesMonthly": 71949,
             "mrr": 43949,
             "arr": 527388,
-            "arpu": 150,
-            "customers": 293,
-            "grossMargin": 72.3,
-            "ltv": 4500,
-            "cac": 1200,
+            "arpu": 2197,
+            "customers": 20,
+            "grossMargin": 75.0,
+            "ltv": 4800,
+            "cac": 1500,
             "churnRate": 3.2,
-            "headcount": 18,
+            "headcount": 12,
             "customerCount": 293,
             "ndr": 115,
             "burnMultiple": 0.64,
@@ -94,7 +94,7 @@ def _enrich_company_state(db: Session, company_id: int):
             state_json=json.dumps(enriched),
             snapshot_id=compute_snapshot_id(enriched),
             cash_balance=513746,
-            monthly_burn=28000,
+            monthly_burn=24109,
             revenue_monthly=43949,
             revenue_growth_rate="10.5",
             expenses_monthly=71949,
@@ -112,13 +112,13 @@ def _enrich_company_state(db: Session, company_id: int):
         "expensesMonthly": 71949,
         "mrr": 43949,
         "arr": 527388,
-        "arpu": 150,
-        "customers": 293,
-        "grossMargin": 72.3,
-        "ltv": 4500,
-        "cac": 1200,
+        "arpu": 2197,
+        "customers": 20,
+        "grossMargin": 75.0,
+        "ltv": 4800,
+        "cac": 1500,
         "churnRate": 3.2,
-        "headcount": 18,
+        "headcount": 12,
         "customerCount": 293,
         "ndr": 115,
         "burnMultiple": 0.64,
@@ -127,10 +127,10 @@ def _enrich_company_state(db: Session, company_id: int):
     cs.state_json = json.dumps(enriched)
     cs.snapshot_id = compute_snapshot_id(enriched)
     cs.cash_balance = 513746
-    cs.monthly_burn = 28000
+    cs.monthly_burn = 24109
     cs.revenue_monthly = 43949
     cs.revenue_growth_rate = "10.5"
-    cs.expenses_monthly = 71949
+    cs.expenses_monthly = 68058
     cs.updated_at = datetime.utcnow()
     logger.info(f"Enriched CompanyState for company {company_id}")
 

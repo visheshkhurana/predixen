@@ -739,15 +739,28 @@ async def get_computed_metrics(
     mrr = fr_val('mrr') or fr_val('revenue') or ts_val('mrr', 0)
     arr = fr_val('arr') or (mrr * 12 if mrr else ts_val('arr', 0))
     cash = fr_val('cash_balance') or ts_val('cash_balance', 0)
-    net_burn = fr_val('net_burn') or ts_val('net_burn', 0)
-
     payroll = fr_val('payroll')
     marketing = fr_val('marketing_expense')
     opex = fr_val('opex')
     cogs = fr_val('cogs')
     other = fr_val('other_costs')
     total_expenses = payroll + marketing + opex + cogs + other
-    if total_expenses <= 0:
+
+    # Net burn MUST be consistent with the expense breakdown returned alongside
+    # it. The stored net_burn field was computed excluding COGS (seed + some
+    # ingest paths), so this endpoint used to return totalExpenses that implied
+    # one burn ($68K-$44K=$24K) while netBurn/runway reported another ($13K /
+    # 39mo) -- understating burn and overstating runway ~85%, and disagreeing
+    # with the Truth Scan (which correctly includes COGS -> 21mo). When we have
+    # an expense breakdown, derive burn from it (COGS included); this is a no-op
+    # for records whose stored net_burn already equals total_expenses - revenue,
+    # and only corrects the inconsistent ones. Fall back to the stored/TS value
+    # only when no breakdown is available.
+    revenue_for_burn = fr_val('revenue') or mrr
+    if total_expenses > 0:
+        net_burn = total_expenses - revenue_for_burn
+    else:
+        net_burn = fr_val('net_burn') or ts_val('net_burn', 0)
         total_expenses = net_burn + mrr if net_burn > 0 else 0
 
     if net_burn > 0 and cash > 0:
