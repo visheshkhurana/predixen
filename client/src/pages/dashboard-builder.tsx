@@ -326,8 +326,21 @@ function TableWidget({ widget, companyId }: { widget: Widget; companyId: number 
   );
 }
 
+// Legacy/seed widget_type strings mapped to the canonical set the renderer and
+// the Add-Widget UI use ({kpi,line,bar,table}). The demo seed writes
+// metric_card/line_chart/bar_chart, which otherwise all render as
+// "Unknown widget type" -- so normalize before dispatching.
+const WIDGET_TYPE_ALIASES: Record<string, string> = {
+  metric_card: 'kpi',
+  kpi_card: 'kpi',
+  line_chart: 'line',
+  bar_chart: 'bar',
+  data_table: 'table',
+};
+
 function WidgetRenderer({ widget, companyId }: { widget: Widget; companyId: number }) {
-  switch (widget.widget_type) {
+  const widgetType = WIDGET_TYPE_ALIASES[widget.widget_type] ?? widget.widget_type;
+  switch (widgetType) {
     case 'kpi':
       return <KPIWidget widget={widget} companyId={companyId} />;
     case 'line':

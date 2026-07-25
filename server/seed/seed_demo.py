@@ -1488,7 +1488,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
     widgets = [
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="mrr",
             title="Monthly Recurring Revenue",
             config={"format": "currency", "trend": True, "sparkline": True},
@@ -1496,7 +1496,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="arr",
             title="Annual Recurring Revenue",
             config={"format": "currency", "trend": True},
@@ -1504,7 +1504,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="runway_months",
             title="Runway (Months)",
             config={"format": "number", "trend": True, "alert_threshold": 12},
@@ -1512,7 +1512,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="burn_rate",
             title="Monthly Burn Rate",
             config={"format": "currency", "trend": True, "invert_color": True},
@@ -1520,7 +1520,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="line_chart",
+            widget_type="line",
             metric_key="mrr",
             title="MRR Trend",
             config={"period": "12m", "show_target": True, "target_value": 80000},
@@ -1528,7 +1528,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="bar_chart",
+            widget_type="bar",
             metric_key="burn_rate",
             title="Burn Rate by Month",
             config={"period": "6m", "stacked": False},
@@ -1536,7 +1536,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="gross_margin",
             title="Gross Margin",
             config={"format": "percent", "trend": True},
@@ -1544,7 +1544,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="net_revenue_retention",
             title="Net Revenue Retention",
             config={"format": "percent", "trend": True, "benchmark": 110},
@@ -1552,7 +1552,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="ltv_cac_ratio",
             title="LTV/CAC Ratio",
             config={"format": "number", "trend": True, "suffix": "x"},
@@ -1560,7 +1560,7 @@ def _seed_dashboard_widgets(db: Session, demo_company):
         ),
         DashboardWidget(
             dashboard_id=dashboard.id,
-            widget_type="metric_card",
+            widget_type="kpi",
             metric_key="customer_count",
             title="Active Customers",
             config={"format": "number", "trend": True},
