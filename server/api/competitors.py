@@ -142,11 +142,23 @@ def _scan_competitor_web(competitor: Competitor) -> List[Dict[str, Any]]:
         "Only include real, recent, verifiable items with real URLs. If you find nothing, return []."
     )
 
-    resp = client.chat.completions.create(
-        model="gpt-4o-search-preview",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1500,
-    )
+    # Try the full search model, fall back to the mini one (broadly allowed in
+    # restricted projects). Both do real web search; neither accepts temperature.
+    resp = None
+    last_err = None
+    for search_model in ("gpt-4o-search-preview", "gpt-4o-mini-search-preview"):
+        try:
+            resp = client.chat.completions.create(
+                model=search_model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1500,
+            )
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if resp is None:
+        raise last_err or RuntimeError("No web-search model available")
     content = resp.choices[0].message.content if resp.choices else ""
     items = _extract_json_array(content or "")
 
