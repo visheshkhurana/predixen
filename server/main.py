@@ -221,6 +221,12 @@ async def _run_deferred_startup():
                 bind=engine,
                 tables=[Competitor.__table__, CompetitorSignal.__table__],
             )
+            from sqlalchemy import text as _sa_text
+            with engine.connect() as _conn:
+                _conn.execute(_sa_text(
+                    "ALTER TABLE competitor_signals ADD COLUMN IF NOT EXISTS threat_level VARCHAR"
+                ))
+                _conn.commit()
             logger.info("Ensured competition-tracking tables exist")
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
@@ -290,6 +296,13 @@ async def _run_deferred_startup():
             logger.info("Onboarding email scheduler started")
         except Exception as e:
             logger.warning(f"Onboarding scheduler init skipped: {e}")
+
+        try:
+            from server.api.competitors import run_competitor_scan_loop
+            asyncio.create_task(run_competitor_scan_loop())
+            logger.info("Competitor auto-scan scheduler started")
+        except Exception as e:
+            logger.warning(f"Competitor auto-scan scheduler init skipped: {e}")
 
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")

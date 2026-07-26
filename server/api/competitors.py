@@ -76,6 +76,7 @@ def _signal_dict(s: CompetitorSignal) -> Dict[str, Any]:
         "url": s.url,
         "summary": s.summary,
         "sentiment": s.sentiment,
+        "threat_level": s.threat_level,
         "impact": s.impact,
         "published_at": s.published_at.isoformat() if s.published_at else None,
         "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -137,7 +138,9 @@ def _scan_competitor_web(competitor: Competitor) -> List[Dict[str, Any]]:
         '"title" (str), "url" (the real source URL), '
         '"source_type" (one of "news","blog","linkedin","x","web"), '
         '"summary" (one-sentence factual summary), '
-        '"sentiment" (one of "positive","neutral","negative" from the competitor\'s POV), '
+        '"sentiment" (how the news reads FOR THIS COMPETITOR: "positive" = a win/good news for them, '
+        '"negative" = a setback/bad news for them, "neutral" = neither), '
+        '"threat_level" (how much a rival founder should care: "high", "medium", or "low"), '
         '"impact" (one short sentence on why it matters to a rival founder). '
         "Only include real, recent, verifiable items with real URLs. If you find nothing, return []."
     )
@@ -164,16 +167,19 @@ def _scan_competitor_web(competitor: Competitor) -> List[Dict[str, Any]]:
 
     cleaned: List[Dict[str, Any]] = []
     allowed_sources = {"news", "blog", "linkedin", "x", "web"}
+    allowed_threat = {"high", "medium", "low"}
     for it in items[:8]:
         if not isinstance(it, dict) or not (it.get("title") or it.get("summary")):
             continue
         st = str(it.get("source_type", "web")).lower()
+        tl = str(it.get("threat_level", "medium")).lower()
         cleaned.append({
             "title": (it.get("title") or "")[:500],
             "url": (it.get("url") or "")[:1000] or None,
             "source_type": st if st in allowed_sources else "web",
             "summary": (it.get("summary") or "")[:1000] or None,
             "sentiment": str(it.get("sentiment", "neutral")).lower(),
+            "threat_level": tl if tl in allowed_threat else "medium",
             "impact": (it.get("impact") or "")[:1000] or None,
         })
     return cleaned
@@ -258,21 +264,14 @@ def list_signals(company_id: int, competitor_id: int, db: Session = Depends(get_
     return {"signals": [_signal_dict(s) for s in signals]}
 
 
-@router.post("/companies/{company_id}/competitors/{competitor_id}/scan")
-def scan_competitor(company_id: int, competitor_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Run a fresh web scan for one competitor and store new signals."""
-    company = get_user_company(db, company_id, current_user)
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id, Competitor.company_id == company.id).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+def _scan_and_store(db: Session, comp: Competitor) -> Dict[str, int]:
+    """Scan one competitor for fresh signals and persist the new ones.
 
-    try:
-        found = _scan_competitor_web(comp)
-    except Exception as e:
-        logger.error(f"Competitor scan failed for {comp.name}: {e}", exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Web scan unavailable: {e}")
+    Shared by the manual /scan endpoint and the weekly auto-scan loop.
+    Raises on web-search failure so callers can decide how to surface it.
+    """
+    found = _scan_competitor_web(comp)
 
-    # Dedupe against existing signals for this competitor.
     existing = db.query(CompetitorSignal).filter(CompetitorSignal.competitor_id == comp.id).all()
     seen = {_dedupe_key(s.source_type or "web", s.title or "", s.url or "") for s in existing}
 
@@ -284,20 +283,129 @@ def scan_competitor(company_id: int, competitor_id: int, db: Session = Depends(g
         seen.add(key)
         db.add(CompetitorSignal(
             competitor_id=comp.id,
-            company_id=company.id,
+            company_id=comp.company_id,
             source_type=item["source_type"],
             title=item.get("title"),
             url=item.get("url"),
             summary=item.get("summary"),
             sentiment=item.get("sentiment"),
+            threat_level=item.get("threat_level"),
             impact=item.get("impact"),
         ))
         added += 1
 
     comp.last_scanned_at = datetime.utcnow()
     db.commit()
+    return {"added": added, "found": len(found)}
+
+
+@router.post("/companies/{company_id}/competitors/{competitor_id}/scan")
+def scan_competitor(company_id: int, competitor_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Run a fresh web scan for one competitor and store new signals."""
+    company = get_user_company(db, company_id, current_user)
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id, Competitor.company_id == company.id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    try:
+        result = _scan_and_store(db, comp)
+    except Exception as e:
+        logger.error(f"Competitor scan failed for {comp.name}: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Web scan unavailable: {e}")
 
     signals = db.query(CompetitorSignal).filter(
         CompetitorSignal.competitor_id == comp.id
     ).order_by(CompetitorSignal.created_at.desc()).limit(50).all()
-    return {"added": added, "found": len(found), "signals": [_signal_dict(s) for s in signals]}
+    return {"added": result["added"], "found": result["found"], "signals": [_signal_dict(s) for s in signals]}
+
+
+# ----------------------------- Digest (a) -----------------------------
+@router.get("/companies/{company_id}/competitors/digest")
+def competitor_digest(company_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """One AI paragraph summarising what changed across all competitors recently."""
+    company = get_user_company(db, company_id, current_user)
+    comps = {c.id: c.name for c in db.query(Competitor).filter(Competitor.company_id == company.id).all()}
+    if not comps:
+        return {"digest": None, "signal_count": 0}
+
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    signals = db.query(CompetitorSignal).filter(
+        CompetitorSignal.company_id == company.id,
+        CompetitorSignal.created_at >= cutoff,
+    ).order_by(CompetitorSignal.created_at.desc()).limit(40).all()
+
+    if not signals:
+        return {"digest": None, "signal_count": 0}
+
+    lines = []
+    for s in signals:
+        name = comps.get(s.competitor_id, "A competitor")
+        lines.append(
+            f"- [{name}] ({s.source_type}, threat={s.threat_level or 'n/a'}) {s.title or s.summary}"
+            + (f" — {s.summary}" if (s.title and s.summary) else "")
+        )
+    facts = "\n".join(lines[:40])
+
+    try:
+        from server.lib.llm.llm_router import LLMRouter, TaskType
+        router_llm = LLMRouter(company_id=company.id, user_id=current_user.id)
+        result = router_llm.chat(
+            messages=[{
+                "role": "user",
+                "content": (
+                    "You are a competitive-intelligence analyst briefing a startup founder. "
+                    "Below are recent tracked signals about their competitors. Write ONE tight paragraph "
+                    "(4-6 sentences, plain English) summarising what changed, which moves matter most "
+                    "(call out high-threat items and who made them), and one thing the founder should watch "
+                    "or do. No bullet points, no preamble.\n\n" + facts
+                ),
+            }],
+            task_type=TaskType.STRATEGY,
+            temperature=0.4,
+            max_tokens=500,
+        )
+        digest = (result.get("content") or "").strip()
+    except Exception as e:
+        logger.error(f"Competitor digest generation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="Digest generation unavailable")
+
+    return {"digest": digest or None, "signal_count": len(signals)}
+
+
+# ----------------------------- Weekly auto-scan (c) -----------------------------
+async def run_competitor_scan_loop(interval_seconds: int = 21600) -> None:
+    """Background loop: re-scan every tracked competitor about weekly.
+
+    Runs a lightweight pass every `interval_seconds` (default 6h); within each
+    pass it only scans competitors that haven't been scanned in ~7 days, so the
+    feed stays fresh without hammering the web-search API.
+    """
+    import asyncio
+    from server.core.db import SessionLocal
+
+    logger.info(f"Competitor auto-scan loop started (tick every {interval_seconds}s)")
+    while True:
+        await asyncio.sleep(interval_seconds)
+        db = SessionLocal()
+        try:
+            stale_before = datetime.utcnow() - timedelta(days=7)
+            due = db.query(Competitor).filter(
+                (Competitor.last_scanned_at == None) | (Competitor.last_scanned_at < stale_before)  # noqa: E711
+            ).limit(25).all()
+            scanned = 0
+            for comp in due:
+                try:
+                    res = _scan_and_store(db, comp)
+                    scanned += 1
+                    if res["added"]:
+                        logger.info(f"Auto-scan: {comp.name} +{res['added']} signals")
+                except Exception as e:
+                    logger.warning(f"Auto-scan failed for competitor {comp.id} ({comp.name}): {e}")
+                    db.rollback()
+                await asyncio.sleep(3)  # be gentle on the search API
+            if scanned:
+                logger.info(f"Competitor auto-scan tick complete: {scanned} competitors scanned")
+        except Exception as e:
+            logger.exception(f"Competitor auto-scan tick crashed: {e}")
+        finally:
+            db.close()

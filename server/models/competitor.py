@@ -41,7 +41,8 @@ class CompetitorSignal(Base):
     title = Column(String, nullable=True)
     url = Column(String, nullable=True)
     summary = Column(Text, nullable=True)
-    sentiment = Column(String, nullable=True)           # positive | neutral | negative
+    sentiment = Column(String, nullable=True)           # how it reads FOR the competitor: positive | neutral | negative
+    threat_level = Column(String, nullable=True)         # how much YOU should care: high | medium | low
     impact = Column(Text, nullable=True)                 # short "why this matters to you"
     published_at = Column(DateTime, nullable=True)       # best-effort article date
 

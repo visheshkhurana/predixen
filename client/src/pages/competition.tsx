@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Target, Plus, RefreshCw, Trash2, ExternalLink, Globe, Linkedin,
-  Newspaper, ChevronDown, ChevronRight, Rss, X as XIcon,
+  Newspaper, ChevronDown, ChevronRight, Rss, X as XIcon, Sparkles,
 } from "lucide-react";
 
 interface Competitor {
@@ -32,9 +32,16 @@ interface Signal {
   url?: string | null;
   summary?: string | null;
   sentiment?: string | null;
+  threat_level?: string | null;
   impact?: string | null;
   created_at?: string | null;
 }
+
+const threatBadge = (t?: string | null) => {
+  if (t === "high") return "text-red-500 border-red-500/40 bg-red-500/10";
+  if (t === "low") return "text-emerald-500 border-emerald-500/30 bg-emerald-500/10";
+  return "text-amber-500 border-amber-500/30 bg-amber-500/10"; // medium / default
+};
 
 const sourceIcon = (t: string) => {
   switch (t) {
@@ -73,9 +80,10 @@ function SignalsFeed({ companyId, competitorId }: { companyId: number; competito
         <div key={s.id} className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <Badge variant="outline" className="gap-1 text-[10px] uppercase">{sourceIcon(s.source_type)}{s.source_type}</Badge>
-                {s.sentiment && <Badge variant="outline" className={`text-[10px] ${sentimentColor(s.sentiment)}`}>{s.sentiment}</Badge>}
+                {s.threat_level && <Badge variant="outline" className={`text-[10px] uppercase ${threatBadge(s.threat_level)}`}>{s.threat_level} threat</Badge>}
+                {s.sentiment && s.sentiment !== "neutral" && <Badge variant="outline" className={`text-[10px] ${sentimentColor(s.sentiment)}`}>for them: {s.sentiment}</Badge>}
               </div>
               <p className="font-medium text-sm">{s.title || s.summary}</p>
               {s.summary && s.title && <p className="text-sm text-muted-foreground mt-0.5">{s.summary}</p>}
@@ -145,7 +153,16 @@ export default function CompetitionPage() {
     onError: () => toast({ title: "Scan failed", description: "Web search is temporarily unavailable.", variant: "destructive" }),
   });
 
+  const digestMut = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("GET", `/api/companies/${companyId}/competitors/digest`);
+      return res.json();
+    },
+    onError: () => toast({ title: "Couldn't generate digest", variant: "destructive" }),
+  });
+
   const competitors: Competitor[] = competitorsQuery.data?.competitors || [];
+  const totalSignals = competitors.reduce((n, c) => n + (c.signal_count || 0), 0);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -180,6 +197,31 @@ export default function CompetitionPage() {
               </Button>
               <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {competitors.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> Competitor Digest</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => digestMut.mutate()} disabled={digestMut.isPending || totalSignals === 0} data-testid="button-digest">
+                <RefreshCw className={`h-4 w-4 mr-1 ${digestMut.isPending ? "animate-spin" : ""}`} />
+                {digestMut.data?.digest ? "Refresh" : "Generate"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {digestMut.isPending ? (
+              <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-11/12" /><Skeleton className="h-4 w-3/4" /></div>
+            ) : digestMut.data?.digest ? (
+              <p className="text-sm leading-relaxed">{digestMut.data.digest}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {totalSignals === 0 ? "Scan a competitor first, then generate a one-paragraph brief on what's changed." : "Get a one-paragraph AI brief on what's changed across all your competitors."}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
