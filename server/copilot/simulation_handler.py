@@ -721,9 +721,11 @@ The simulation accounts for uncertainty through Monte Carlo modeling, running hu
             questions.append("What if we pair the price change with a 15% burn reduction?")
 
         if net_burn > 0 and baseline_revenue > 0:
-            burn_multiple = net_burn / baseline_revenue
-            if burn_multiple > 2:
-                questions.append(f"Burn multiple is {burn_multiple:.1f}x — what's the fastest path to get it below 1.5x?")
+            # burn/revenue = burn-to-revenue ratio, not the SaaS burn multiple
+            # (net burn / net new ARR); label it for what it is.
+            burn_to_revenue = net_burn / baseline_revenue
+            if burn_to_revenue > 2:
+                questions.append(f"Burn is {burn_to_revenue:.1f}x revenue — what's the fastest path to get it below 1.5x?")
 
         if gross_margin < 50:
             questions.append(f"Gross margin is {gross_margin:.0f}% — what if we improve it by 10 points?")

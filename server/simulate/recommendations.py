@@ -158,7 +158,11 @@ def generate_recommendations(
             description=f"Monthly churn of {churn_rate:.1%} is high. Focus on retention.",
             priority=Priority.HIGH,
             impact={
-                "ltv_improvement": f"{(1 / (churn_rate - 0.05)) / (1 / churn_rate) - 1:.0%}",
+                # LTV is proportional to 1/churn, so cutting churn to the 5%
+                # target improves LTV by (churn/0.05 - 1). The old formula used
+                # (churn - 0.05) as the *new* churn, which both overstated the
+                # gain and divided by a negative when churn < 5%.
+                "ltv_improvement": f"{(churn_rate / 0.05 - 1):.0%}" if churn_rate > 0.05 else "0%",
                 "revenue_retention": "significant"
             },
             action_details={

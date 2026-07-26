@@ -490,9 +490,11 @@ class CFOAgent(BaseAgent):
             risks.append(f"Monthly churn of {metrics.churn_rate}% is above healthy threshold")
         
         if self._is_number(metrics.burn_rate) and self._is_number(metrics.revenue) and metrics.revenue > 0:
-            burn_multiple = metrics.burn_rate / metrics.revenue
-            if burn_multiple > 2:
-                risks.append(f"Burn multiple of {burn_multiple:.1f}x is high - focus on efficiency")
+            # burn/revenue is the burn-to-revenue ratio, NOT the SaaS burn
+            # multiple (which is net burn / net new ARR). Label it accurately.
+            burn_to_revenue = metrics.burn_rate / metrics.revenue
+            if burn_to_revenue > 2:
+                risks.append(f"Burn is {burn_to_revenue:.1f}x revenue - focus on efficiency")
         
         return risks
     

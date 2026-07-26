@@ -14,26 +14,31 @@ MIN_TEXT_LENGTH = 100  # Minimum characters to consider text extraction successf
 
 
 def parse_value_from_text(text: str) -> Optional[float]:
-    """Parse a numeric value from text, handling $, M, K, %, x suffixes.
-    
-    Returns the raw value as reported (e.g., "$14.2M" -> 14.2, "60.3%" -> 60.3)
-    Does NOT multiply by scale factors - stores in millions as millions.
+    """Parse a numeric value from text, handling $, M, K, B, %, x suffixes.
+
+    Scales magnitude suffixes to base units ("$14.2M" -> 14_200_000,
+    "$514K" -> 514_000). Percentages/ratios are returned as-is ("60.3%" -> 60.3,
+    "3.2x" -> 3.2).
     """
     if not text:
         return None
-    
+
     text = text.strip()
-    
+
     # Check for percentage
     is_percentage = '%' in text
-    
+
     # Check for 'x' suffix (multiplier/ratio)
     is_ratio = text.lower().endswith('x')
-    
-    # Check for M/K suffixes - we'll preserve millions as millions
-    is_millions = 'm' in text.lower() and not text.lower().endswith('month')
-    is_thousands = 'k' in text.lower()
-    is_billions = 'b' in text.lower()
+
+    # Magnitude suffix (M/K/B) taken from the END of the token only, ignoring a
+    # trailing % or x. The old code used substring checks ('m' in text), which
+    # misfired on any value string containing those letters -- e.g.
+    # "$5,200 marketing" was read as $5.2 billion.
+    core = text.lower().rstrip('%').rstrip('x').strip()
+    is_millions = core.endswith('m')
+    is_thousands = core.endswith('k')
+    is_billions = core.endswith('b')
     
     # Clean the string to extract just the number
     cleaned = text

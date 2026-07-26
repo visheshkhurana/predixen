@@ -177,7 +177,10 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
                     last_cashflows.append(cash_paths[sim, m_idx] - prev)
                 avg_net = np.mean(last_cashflows) if last_cashflows else 0
                 if avg_net > 0 and ending_cash > 0:
-                    runway_months[sim] = max_cap
+                    # Cash-flow positive with cash = sustainable; emit the 999
+                    # sentinel the frontend/metrics treat as "Sustainable" rather
+                    # than the 120 display cap (which read as a finite "120 mo").
+                    runway_months[sim] = 999
                 elif avg_net > 0:
                     noise = rng.normal(1.0, 0.15)
                     runway_months[sim] = min(horizon + abs(avg_net) * max(noise, 0.5) * 12, max_cap)
