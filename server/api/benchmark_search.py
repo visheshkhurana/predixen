@@ -58,7 +58,10 @@ def is_cache_valid(cache_entry: Dict[str, Any]) -> bool:
 async def search_benchmarks_with_perplexity(industry: str, stage: str) -> Dict[str, Any]:
     api_key = os.environ.get("PERPLEXITY_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="Perplexity API key not configured")
+        # Not a client error -- a missing optional integration. Raise a plain
+        # exception so the endpoint's generic handler returns the default
+        # benchmark set instead of surfacing a 500 to the founder.
+        raise RuntimeError("Perplexity API key not configured")
     
     search_query = f"""Find the latest SaaS industry benchmarks for {industry} companies at {stage} stage. 
 I need the following metrics with their 25th, 50th (median), and 75th percentile values:

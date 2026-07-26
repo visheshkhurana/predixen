@@ -192,6 +192,11 @@ def seed_demo_data(db: Session):
         company = db.query(Company).filter(Company.user_id == demo_user.id).first()
         if company:
             demo_company = company
+            # Normalize industry to a valid dropdown id ("saas"); older seeds used
+            # "general_saas", which isn't an option so the Industry field showed blank.
+            if demo_company.industry in (None, "", "general_saas"):
+                demo_company.industry = "saas"
+                db.commit()
             if demo_company.name != "TechFlow Analytics":
                 demo_company.name = "TechFlow Analytics"
                 demo_company.industry = "saas"
@@ -230,7 +235,7 @@ def seed_demo_data(db: Session):
                 user_id=demo_user.id,
                 name="TechFlow Analytics",
                 website="https://techflow.ai",
-                industry="general_saas",
+                industry="saas",
                 stage="seed",
                 currency="USD"
             )

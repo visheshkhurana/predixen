@@ -49,7 +49,22 @@ export default function AuthPage() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
-  
+
+  // Surface an expired session (redirected here with ?expired=1 by the API
+  // client) so the user understands why they're back at sign-in.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('expired') === '1') {
+      toast({
+        title: 'Session expired',
+        description: 'Please sign in again to continue.',
+      });
+      params.delete('expired');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    }
+  }, [toast]);
+
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});

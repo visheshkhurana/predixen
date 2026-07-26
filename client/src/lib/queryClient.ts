@@ -1,8 +1,38 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { ApiError, safeParseJSON } from "./errors";
 
+let sessionExpiredHandled = false;
+
+// Centralised handling for an expired/invalid session. A 401 on an authenticated
+// API call means the auth cookie lapsed while the user was in the app -- before,
+// this failed silently (e.g. the copilot input just cleared with no feedback).
+// Now we surface it once and send the user back to sign in.
+function handleSessionExpired(resUrl?: string) {
+  if (sessionExpiredHandled) return;
+  const url = resUrl || "";
+  // Bad credentials on the auth endpoints legitimately return 401 -- that is a
+  // failed login, not an expired session.
+  if (/\/auth\/(login|register|admin\/login|forgot-password|refresh)/.test(url)) return;
+  // Don't loop while already on the auth screen.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/auth")) return;
+
+  sessionExpiredHandled = true;
+  try {
+    window.dispatchEvent(new CustomEvent("session-expired"));
+  } catch {}
+  // Fallback hard redirect so the user isn't stranded on a half-broken page.
+  setTimeout(() => {
+    try {
+      window.location.assign("/auth?expired=1");
+    } catch {}
+  }, 200);
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    if (res.status === 401) {
+      handleSessionExpired(res.url);
+    }
     let detail: any = null;
     let message = res.statusText;
 
