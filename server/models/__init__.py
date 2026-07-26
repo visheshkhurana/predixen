@@ -38,6 +38,7 @@ from server.models.decision import Decision
 from server.models.chat import ChatSession, ChatMessage
 from server.models.subscription import Subscription, SubscriptionStatus
 from server.models.audit_log import AuditLog
+from server.models.competitor import Competitor, CompetitorSignal
 from server.models.login_history import LoginHistory, Notification
 from server.models.invite import Invite
 from server.models.company_decision import CompanyDecision, CompanyScenario

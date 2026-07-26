@@ -98,6 +98,7 @@ def _register_remaining_routers(app: FastAPI):
     from server.api import events as events_api
     from server.api import cap_table as cap_table_api
     from server.api import hiring_planner as hiring_planner_api
+    from server.api import competitors as competitors_api
     from server.api import fundraising_readiness as fundraising_readiness_api
     from server.api import board_export as board_export_api
     from server.api import smart_alerts as smart_alerts_api
@@ -172,6 +173,7 @@ def _register_remaining_routers(app: FastAPI):
     app.include_router(events_api.router)
     app.include_router(cap_table_api.router)
     app.include_router(hiring_planner_api.router)
+    app.include_router(competitors_api.router)
     app.include_router(fundraising_readiness_api.router)
     app.include_router(board_export_api.router)
     app.include_router(smart_alerts_api.router)
@@ -209,6 +211,19 @@ async def _run_deferred_startup():
             logger.info("Database tables created successfully")
         else:
             logger.info("Skipping schema creation (CREATE_SCHEMA=false)")
+
+        # Idempotently ensure newer feature tables exist even when CREATE_SCHEMA
+        # is off in prod. create_all only creates missing tables, so this is safe
+        # to run every boot and never touches existing tables/data.
+        try:
+            from server.models.competitor import Competitor, CompetitorSignal
+            Base.metadata.create_all(
+                bind=engine,
+                tables=[Competitor.__table__, CompetitorSignal.__table__],
+            )
+            logger.info("Ensured competition-tracking tables exist")
+        except Exception as e:
+            logger.warning(f"Could not ensure competitor tables: {e}")
 
         if settings.should_run_migrations:
             logger.info("Running migrations...")

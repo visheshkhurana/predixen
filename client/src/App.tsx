@@ -110,6 +110,7 @@ const PricingPage = lazy(() => import("@/pages/pricing"));
 const AIGraphicsPage = lazy(() => import("@/pages/ai-graphics"));
 const DocGeneratorPage = lazy(() => import("@/pages/doc-generator"));
 const DigitalTwinPage = lazy(() => import("@/pages/digital-twin"));
+const CompetitionPage = lazy(() => import("@/pages/competition"));
 const IntelligenceGraphPage = lazy(() => import("@/pages/intelligence-graph"));
 const SurvivalSimulatorPage = lazy(() => import("@/pages/survival-simulator"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
@@ -441,6 +442,9 @@ function Router() {
       </Route>
       <Route path="/digital-twin">
         {() => <GatedRoute component={DigitalTwinPage} feature="digital_twin" />}
+      </Route>
+      <Route path="/competition">
+        {() => <AuthenticatedRoute component={CompetitionPage} />}
       </Route>
       <Route path="/intelligence">
         {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
