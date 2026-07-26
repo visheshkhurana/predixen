@@ -375,6 +375,31 @@ def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growt
     return playbook
 
 
+def _derive_net_burn(latest_record, metrics, revenue):
+    """Net monthly burn, computed the SAME way the dashboard's 'Computed' burn is:
+    from the full expense breakdown INCLUDING COGS, minus revenue. This is
+    preferred over any stored `net_burn` scalar (FinancialRecord.net_burn or the
+    truth-scan metric), because those may predate the COGS-inclusive fix and
+    understate burn (e.g. $13K instead of $24K), which in turn inflates runway
+    (39mo instead of 21mo). Only fall back to the stored scalar when there is no
+    expense breakdown to compute from."""
+    breakdown_expenses = 0.0
+    if latest_record:
+        breakdown_expenses = (
+            float(latest_record.payroll or 0) +
+            float(latest_record.marketing_expense or 0) +
+            float(latest_record.opex or 0) +
+            float(latest_record.cogs or 0) +
+            float(latest_record.other_costs or 0)
+        )
+    if breakdown_expenses > 0:
+        return breakdown_expenses - revenue
+    fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0
+    if fr_net_burn:
+        return fr_net_burn
+    return extract_metric_value(metrics.get("net_burn"), 0)
+
+
 def _get_current_metrics(company, db):
     truth_scan = db.query(TruthScan).filter(
         TruthScan.company_id == company.id
@@ -398,23 +423,7 @@ def _get_current_metrics(company, db):
     if not revenue and latest_record and latest_record.revenue:
         revenue = float(latest_record.revenue)
 
-    net_burn = 0.0
-    fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0
-    ts_net_burn = extract_metric_value(metrics.get("net_burn"), 0)
-    if fr_net_burn:
-        net_burn = fr_net_burn
-    elif ts_net_burn:
-        net_burn = ts_net_burn
-    elif latest_record:
-        total_expenses = (
-            float(latest_record.payroll or 0) +
-            float(latest_record.marketing_expense or 0) +
-            float(latest_record.opex or 0) +
-            float(latest_record.cogs or 0) +
-            float(latest_record.other_costs or 0)
-        )
-        net_burn = total_expenses - revenue
-
+    net_burn = _derive_net_burn(latest_record, metrics, revenue)
     burn = net_burn + revenue if net_burn > 0 else revenue
 
     cash = extract_metric_value(metrics.get("cash_balance"), 0)
@@ -544,23 +553,7 @@ def generate_strategic_diagnosis(
         if not revenue and latest_record and latest_record.revenue:
             revenue = float(latest_record.revenue)
 
-        net_burn = 0.0
-        fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0
-        ts_net_burn = extract_metric_value(metrics.get("net_burn"), 0)
-        if fr_net_burn:
-            net_burn = fr_net_burn
-        elif ts_net_burn:
-            net_burn = ts_net_burn
-        elif latest_record:
-            total_expenses = (
-                float(latest_record.payroll or 0) +
-                float(latest_record.marketing_expense or 0) +
-                float(latest_record.opex or 0) +
-                float(latest_record.cogs or 0) +
-                float(latest_record.other_costs or 0)
-            )
-            net_burn = total_expenses - revenue
-
+        net_burn = _derive_net_burn(latest_record, metrics, revenue)
         burn = net_burn + revenue if net_burn > 0 else revenue
 
         cash = extract_metric_value(metrics.get("cash_balance"), 0)
