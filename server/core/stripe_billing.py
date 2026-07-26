@@ -6,6 +6,7 @@ connected Stripe account it is created on first use from PLAN_DETAILS, so no
 manual dashboard setup is required beyond enabling payment methods (card,
 PayPal, Apple/Google Pay) in Stripe settings.
 """
+import json
 import logging
 from typing import Optional
 
@@ -27,6 +28,16 @@ def stripe_enabled() -> bool:
     return bool(settings.STRIPE_SECRET_KEY)
 
 
+def to_plain(obj):
+    """Convert a StripeObject (not a dict subclass in SDK v15+) to plain dicts."""
+    if isinstance(obj, (dict, list)) or obj is None:
+        return obj
+    try:
+        return json.loads(str(obj))
+    except Exception:
+        return obj
+
+
 def _init():
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -44,9 +55,12 @@ def _ensure_product(plan: str) -> str:
             return found.data[0].id
     except Exception as e:  # Product.search unavailable on some accounts
         logger.warning(f"Stripe product search failed, falling back to list: {e}")
-        for p in stripe.Product.list(active=True, limit=100).auto_paging_iter():
-            if p.get("metadata", {}).get("fc_plan") == plan:
-                return p.id
+
+    # Search results can lag behind newly-created objects, so always
+    # double-check the full list before creating a duplicate product.
+    for p in stripe.Product.list(active=True, limit=100).auto_paging_iter():
+        if (to_plain(p).get("metadata") or {}).get("fc_plan") == plan:
+            return p.id
 
     product = stripe.Product.create(
         name=f"FounderConsole {info['name']}",
@@ -91,6 +105,7 @@ def plan_from_price(price) -> Optional[str]:
     _init()
     if isinstance(price, str):
         price = stripe.Price.retrieve(price)
+    price = to_plain(price) or {}
     plan = (price.get("metadata") or {}).get("fc_plan")
     if plan:
         return plan

@@ -63,8 +63,10 @@ def main():
             except Exception:
                 pass
             if not product_id:
+                import json as _json
                 for p in stripe.Product.list(active=True, limit=100).auto_paging_iter():
-                    if p.get("metadata", {}).get("fc_plan") == plan.value:
+                    meta = _json.loads(str(p)).get("metadata") or {}
+                    if meta.get("fc_plan") == plan.value:
                         product_id = p.id
                         break
             if not product_id:

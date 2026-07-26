@@ -161,6 +161,12 @@ def _upsert_subscription_from_stripe(db: Session, user_id: int, sub_obj: dict, p
     status = status_map.get(sub_obj.get("status"), "active")
     period_end = sub_obj.get("current_period_end")
     period_start = sub_obj.get("current_period_start")
+    # Stripe API 2025+ moved billing periods onto subscription items.
+    if not period_end:
+        _items = (sub_obj.get("items") or {}).get("data") or []
+        if _items:
+            period_start = period_start or _items[0].get("current_period_start")
+            period_end = _items[0].get("current_period_end")
     now = datetime.utcnow()
 
     items = (sub_obj.get("items") or {}).get("data") or []
@@ -248,12 +254,13 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     etype = event["type"]
-    obj = event["data"]["object"]
+    # StripeObject (SDK v15+) is not a dict — normalize to plain dicts up front.
+    obj = stripe_billing.to_plain(event["data"]["object"])
     db = SessionLocal()
     try:
         if etype == "checkout.session.completed" and obj.get("mode") == "subscription":
             import stripe as _stripe
-            sub_obj = _stripe.Subscription.retrieve(obj["subscription"])
+            sub_obj = stripe_billing.to_plain(_stripe.Subscription.retrieve(obj["subscription"]))
             user_id = _user_id_from_subscription(sub_obj)
             if user_id is None and obj.get("client_reference_id"):
                 try:
