@@ -14,6 +14,8 @@ export interface SubscriptionData {
   plan_price: number;
   plan_highlights: string[];
   trial_duration_days: number;
+  grandfathered?: boolean;
+  payments_enabled?: boolean;
 }
 
 export interface PlanData {
@@ -61,6 +63,40 @@ export function useStartTrial() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+    },
+  });
+}
+
+export function useSubscribe() {
+  return useMutation({
+    mutationFn: async ({ planId, interval = 'monthly' }: { planId: string; interval?: 'monthly' | 'annual' }) => {
+      const res = await fetch(`/api/billing/subscribe/${planId}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interval }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Could not start checkout' }));
+        throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not start checkout');
+      }
+      return res.json() as Promise<{ checkout_url?: string; message?: string }>;
+    },
+  });
+}
+
+export function useBillingPortal() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Could not open billing portal' }));
+        throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not open billing portal');
+      }
+      return res.json() as Promise<{ portal_url: string }>;
     },
   });
 }

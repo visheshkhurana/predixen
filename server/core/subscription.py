@@ -18,23 +18,25 @@ from server.core.plans import (
 
 logger = logging.getLogger(__name__)
 
+# NOTE: FastAPI sees paths WITHOUT the /api prefix (Express strips it when
+# proxying), but keep the prefix optional so this works in both contexts.
 ROUTE_FEATURE_MAP: List[tuple] = [
-    (re.compile(r"/api/companies/\d+/copilot"), Feature.COPILOT),
-    (re.compile(r"/api/companies/\d+/quick-chat"), Feature.COPILOT),
-    (re.compile(r"/api/companies/\d+/simulations"), Feature.SIMULATIONS),
-    (re.compile(r"/api/simulation/"), Feature.SIMULATIONS),
-    (re.compile(r"/api/simulator/"), Feature.FLIGHT_SIMULATOR),
-    (re.compile(r"/api/simulation-copilot/"), Feature.SIMULATIONS),
-    (re.compile(r"/api/companies/\d+/truth-scan"), Feature.TRUTH_SCAN),
-    (re.compile(r"/api/connectors/"), Feature.DATA_CONNECTORS),
-    (re.compile(r"/api/companies/\d+/fundraising"), Feature.FUNDRAISING_OS),
-    (re.compile(r"/api/companies/\d+/cap-table"), Feature.CAP_TABLE),
-    (re.compile(r"/api/export/board-deck"), Feature.BOARD_DECK),
-    (re.compile(r"/api/companies/\d+/hiring"), Feature.HIRING_PLANNER),
-    (re.compile(r"/api/companies/\d+/digital-twin"), Feature.DIGITAL_TWIN),
-    (re.compile(r"/api/companies/\d+/ai-graphics"), Feature.AI_GRAPHICS),
-    (re.compile(r"/api/companies/\d+/investor-room"), Feature.INVESTOR_ROOM),
-    (re.compile(r"/api/doc-generator/"), Feature.DOCUMENT_GENERATOR),
+    (re.compile(r"^(?:/api)?/companies/\d+/copilot"), Feature.COPILOT),
+    (re.compile(r"^(?:/api)?/companies/\d+/quick-chat"), Feature.COPILOT),
+    (re.compile(r"^(?:/api)?/companies/\d+/simulations"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/simulation/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/simulator/"), Feature.FLIGHT_SIMULATOR),
+    (re.compile(r"^(?:/api)?/simulation-copilot/"), Feature.SIMULATIONS),
+    (re.compile(r"^(?:/api)?/companies/\d+/truth-scan"), Feature.TRUTH_SCAN),
+    (re.compile(r"^(?:/api)?/connectors/"), Feature.DATA_CONNECTORS),
+    (re.compile(r"^(?:/api)?/companies/\d+/fundraising"), Feature.FUNDRAISING_OS),
+    (re.compile(r"^(?:/api)?/companies/\d+/cap-table"), Feature.CAP_TABLE),
+    (re.compile(r"^(?:/api)?/export/board-deck"), Feature.BOARD_DECK),
+    (re.compile(r"^(?:/api)?/companies/\d+/hiring"), Feature.HIRING_PLANNER),
+    (re.compile(r"^(?:/api)?/companies/\d+/digital-twin"), Feature.DIGITAL_TWIN),
+    (re.compile(r"^(?:/api)?/companies/\d+/ai-graphics"), Feature.AI_GRAPHICS),
+    (re.compile(r"^(?:/api)?/companies/\d+/investor-room"), Feature.INVESTOR_ROOM),
+    (re.compile(r"^(?:/api)?/doc-generator/"), Feature.DOCUMENT_GENERATOR),
 ]
 
 EXEMPT_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -53,7 +55,40 @@ def _required_plan_for_feature(feature: str) -> Optional[str]:
     return minimum_plan_for_feature(feature)
 
 
+def _grandfather_cutoff() -> Optional[datetime]:
+    """Users created before this date keep full free access (paywall launch)."""
+    import os
+    raw = os.getenv("PAYWALL_GRANDFATHER_BEFORE", "")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", ""))
+    except ValueError:
+        logger.warning(f"Invalid PAYWALL_GRANDFATHER_BEFORE value: {raw}")
+        return None
+
+
+def _is_grandfathered(db: Session, user_id: int) -> bool:
+    cutoff = _grandfather_cutoff()
+    if cutoff is None:
+        return False
+    try:
+        row = db.execute(
+            text("SELECT created_at FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        ).fetchone()
+        return bool(row and row[0] and row[0] < cutoff)
+    except Exception as e:
+        logger.warning(f"Grandfather check failed for user {user_id}: {e}")
+        return False
+
+
 def get_user_subscription(db: Session, user_id: int) -> dict:
+    # Founding members: accounts created before the paywall launch keep
+    # full (Scale-level) access for free, forever — unless they later buy
+    # a paid plan, which takes precedence below.
+    grandfathered = _is_grandfathered(db, user_id)
+
     row = db.execute(
         text("""
             SELECT plan, status, current_period_end, 
@@ -66,13 +101,26 @@ def get_user_subscription(db: Session, user_id: int) -> dict:
     ).fetchone()
 
     if not row:
+        if grandfathered:
+            return {
+                "plan": PlanTier.SCALE,
+                "effective_plan": PlanTier.SCALE,
+                "status": "grandfathered",
+                "is_trial": False,
+                "trial_days_remaining": 0,
+                "is_active": True,
+                "has_payment_method": False,
+                "grandfathered": True,
+            }
         return {
             "plan": PlanTier.FREE,
+            "effective_plan": PlanTier.FREE,
             "status": "none",
             "is_trial": False,
             "trial_days_remaining": 0,
             "is_active": False,
             "has_payment_method": False,
+            "grandfathered": False,
         }
 
     plan = row[0] or PlanTier.FREE
@@ -95,6 +143,22 @@ def get_user_subscription(db: Session, user_id: int) -> dict:
     if status == "active" and period_end and now > period_end:
         is_active = False
 
+    # Grandfathered users fall back to full access whenever they don't have
+    # an active paid subscription (e.g. expired trial, canceled plan).
+    if grandfathered and not is_active:
+        return {
+            "plan": PlanTier.SCALE,
+            "effective_plan": PlanTier.SCALE,
+            "status": "grandfathered",
+            "is_trial": False,
+            "trial_days_remaining": 0,
+            "trial_end": None,
+            "is_active": True,
+            "has_payment_method": bool(stripe_sub_id),
+            "current_period_end": None,
+            "grandfathered": True,
+        }
+
     return {
         "plan": plan if is_active else PlanTier.FREE,
         "effective_plan": plan if is_active else PlanTier.FREE,
@@ -105,6 +169,7 @@ def get_user_subscription(db: Session, user_id: int) -> dict:
         "is_active": is_active,
         "has_payment_method": bool(stripe_sub_id),
         "current_period_end": period_end.isoformat() if period_end else None,
+        "grandfathered": grandfathered,
     }
 
 
@@ -193,6 +258,10 @@ def check_feature_access(feature: str):
 
 class PaywallMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        import os
+        if os.getenv("PAYWALL_ENABLED", "false").lower() != "true":
+            return await call_next(request)
+
         path = request.url.path
         method = request.method
 

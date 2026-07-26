@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
     GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
 
+    # Billing (Stripe). Empty STRIPE_SECRET_KEY = payments disabled (stub mode).
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    APP_BASE_URL: str = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
+    # Paywall: gate premium features by plan. Users created before
+    # PAYWALL_GRANDFATHER_BEFORE (ISO date) keep full access for free.
+    PAYWALL_ENABLED: bool = os.getenv("PAYWALL_ENABLED", "false").lower() == "true"
+    PAYWALL_GRANDFATHER_BEFORE: str = os.getenv("PAYWALL_GRANDFATHER_BEFORE", "")
+
     # Environment: "development" or "production"
     ENVIRONMENT: str = os.getenv("NODE_ENV", os.getenv("ENVIRONMENT", "development"))
 

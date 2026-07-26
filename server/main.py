@@ -390,8 +390,14 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 from server.core.subscription import PaywallMiddleware
-# Paywall disabled — platform is free for all users. Re-enable to gate features.
-# app.add_middleware(PaywallMiddleware)
+# Paywall: gated by PAYWALL_ENABLED env var (also re-checked per-request inside
+# the middleware, so flipping the variable takes effect on redeploy without a
+# code change). Existing users are grandfathered via PAYWALL_GRANDFATHER_BEFORE.
+app.add_middleware(PaywallMiddleware)
+if settings.PAYWALL_ENABLED:
+    logger.info("Paywall ENABLED — premium features are gated by plan")
+else:
+    logger.info("Paywall disabled — set PAYWALL_ENABLED=true to gate features")
 
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/health",
@@ -400,6 +406,7 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/admin/login",
     "/auth/refresh",
     "/companies/*/seed-sample",
+    "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
 ])
 
 app.add_middleware(

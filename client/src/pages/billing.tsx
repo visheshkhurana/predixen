@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useSubscription, usePlans, useStartTrial, type PlanData } from '@/hooks/use-subscription';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal, type PlanData } from '@/hooks/use-subscription';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Sparkles, Zap, Crown, ArrowRight, Clock, CreditCard, AlertCircle } from 'lucide-react';
+import { Check, Sparkles, Zap, Crown, ArrowRight, Clock, CreditCard, AlertCircle, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const PLAN_ICONS: Record<string, typeof Sparkles> = {
@@ -130,17 +131,63 @@ export default function BillingPage() {
   const { data: sub, isLoading: subLoading } = useSubscription();
   const { data: plansData, isLoading: plansLoading } = usePlans();
   const startTrial = useStartTrial();
+  const subscribe = useSubscribe();
+  const portal = useBillingPortal();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   const plans = plansData?.plans || [];
   const isLoading = subLoading || plansLoading;
 
+  // Handle return from Stripe checkout (?checkout=success|cancelled)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('checkout');
+    if (!result) return;
+    if (result === 'success') {
+      toast({
+        title: 'Payment successful 🎉',
+        description: 'Your subscription is active. It may take a few seconds to reflect here.',
+      });
+      // Webhook may lag a moment behind the redirect — refetch shortly after.
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+      }, 2500);
+    } else if (result === 'cancelled') {
+      toast({ title: 'Checkout cancelled', description: 'No charge was made.' });
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSelectPlan = (planId: string) => {
     setSelectedPlan(planId);
-    toast({
-      title: 'Stripe not connected yet',
-      description: 'Payment processing will be available soon. You can start a free trial in the meantime.',
+    subscribe.mutate(
+      { planId },
+      {
+        onSuccess: (data) => {
+          if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+          } else if (data.message) {
+            toast({ title: data.message });
+          }
+        },
+        onError: (err: Error) => {
+          toast({ title: 'Could not start checkout', description: err.message, variant: 'destructive' });
+        },
+      },
+    );
+  };
+
+  const handleOpenPortal = () => {
+    portal.mutate(undefined, {
+      onSuccess: (data) => {
+        window.location.href = data.portal_url;
+      },
+      onError: (err: Error) => {
+        toast({ title: 'Could not open billing portal', description: err.message, variant: 'destructive' });
+      },
     });
   };
 
@@ -175,6 +222,23 @@ export default function BillingPage() {
         <h1 className="text-xl font-semibold tracking-tight text-white/90">Plans & Billing</h1>
         <p className="text-sm text-white/40">Choose the plan that fits your stage</p>
       </div>
+
+      {sub?.grandfathered && sub.status === 'grandfathered' && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl
+          bg-emerald-500/[0.06] border border-emerald-500/20"
+          data-testid="grandfathered-status"
+        >
+          <Crown className="h-4 w-4 text-emerald-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-emerald-400">
+              Founding member — full access, on us
+            </p>
+            <p className="text-xs text-white/40">
+              Your account predates our paid plans, so every feature stays free for you. Upgrading is optional (and appreciated!).
+            </p>
+          </div>
+        </div>
+      )}
 
       {sub?.is_trial && sub.trial_days_remaining > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl
@@ -252,14 +316,29 @@ export default function BillingPage() {
       </div>
 
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-white/40" />
-          <h3 className="text-sm font-medium text-white/70">Payment</h3>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-white/40" />
+            <h3 className="text-sm font-medium text-white/70">Payment</h3>
+          </div>
+          {sub?.has_payment_method && (
+            <button
+              onClick={handleOpenPortal}
+              disabled={portal.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06]
+                border border-white/[0.08] text-white/70 text-xs font-medium
+                hover:bg-white/[0.1] hover:text-white transition-all disabled:opacity-50"
+              data-testid="button-billing-portal"
+            >
+              {portal.isPending ? 'Opening…' : 'Manage billing'}
+              <ExternalLink className="h-3 w-3" />
+            </button>
+          )}
         </div>
         <p className="text-xs text-white/40">
-          Stripe integration coming soon. When connected, you'll be able to manage your payment
-          method, view invoices, and switch plans seamlessly. During the beta, start a free trial
-          to access all features.
+          {sub?.has_payment_method
+            ? 'Manage your payment method, invoices, plan changes, and cancellation in the secure Stripe billing portal.'
+            : 'Payments are processed securely by Stripe — pay by card, PayPal, Apple Pay, or Google Pay. Subscribe to a plan above to get started.'}
         </p>
       </div>
 

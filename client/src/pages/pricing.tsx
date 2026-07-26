@@ -12,51 +12,67 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 const tiers = [
   {
-    name: "Free Beta",
+    name: "Free",
     price: "$0",
     period: "",
-    bullet: "Best for founders who want immediate insight.",
+    bullet: "Explore the platform at your own pace.",
     features: [
-      "Connect key integrations",
-      "Baseline forecast",
-      "One scenario simulation",
-      "AI explanation summary",
-      "Unlimited scenarios during beta",
-      "Data connectors & integrations",
-      "Team collaboration",
-      "Priority support",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Startup",
-    price: "$49",
-    period: "/month",
-    bullet: "Best for teams who make weekly decisions.",
-    features: [
-      "All free beta features",
-      "Unlimited scenarios",
-      "Investor report templates",
-      "Priority support",
-      "Email briefings",
-      "Saved scenarios & exports",
+      "1 company",
+      "3 simulations / month",
+      "10 copilot messages / month",
+      "CSV upload & manual entry",
+      "Basic dashboard",
     ],
     highlighted: false,
+    cta: "Get Started Free",
+  },
+  {
+    name: "Starter",
+    price: "$29",
+    period: "/month",
+    bullet: "For early-stage founders finding their footing.",
+    features: [
+      "50 simulations / month",
+      "100 copilot messages / month",
+      "2 data connectors",
+      "Truth Scan & Stress Tests",
+      "Industry benchmarks",
+      "PDF export",
+    ],
+    highlighted: false,
+    cta: "Start 30-Day Free Trial",
   },
   {
     name: "Growth",
-    price: "$129",
+    price: "$49",
     period: "/month",
-    bullet: "Best for revenue-finance collaboration.",
+    bullet: "For scaling startups that decide weekly.",
     features: [
-      "All startup features",
-      "Advanced scenario compare",
-      "Team access controls",
-      "Custom reporting",
-      "Dedicated support",
-      "API access",
+      "Up to 3 companies",
+      "Unlimited simulations & copilot",
+      "10 data connectors",
+      "Fundraising OS & cap table",
+      "Board deck export",
+      "Fundraising readiness score",
+    ],
+    highlighted: true,
+    cta: "Start 30-Day Free Trial",
+  },
+  {
+    name: "Scale",
+    price: "$99",
+    period: "/month",
+    bullet: "Full power for serious founders.",
+    features: [
+      "Unlimited companies & connectors",
+      "Flight Simulator (AI agents)",
+      "Document Generator & AI Graphics",
+      "Digital Twin & Investor Room",
+      "Hiring Planner",
+      "Cross-company intelligence",
     ],
     highlighted: false,
+    cta: "Start 30-Day Free Trial",
   },
 ];
 
@@ -94,7 +110,7 @@ export default function PricingPage() {
 
   useSEO({
     title: "Pricing | FounderConsole",
-    description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta. No credit card required.",
+    description: "FounderConsole pricing: Free, Starter $29, Growth $49, Scale $99 per month. Every paid plan starts with a 30-day free trial — no credit card required.",
     path: "/pricing",
     jsonLd: {
       "@context": "https://schema.org",
@@ -105,26 +121,34 @@ export default function PricingPage() {
       offers: [
         {
           "@type": "Offer",
-          name: "Free Beta",
+          name: "Free",
           price: "0",
           priceCurrency: "USD",
-          description: "All features free during public beta. No credit card required.",
+          description: "Explore the platform: 1 company, basic dashboard, CSV upload.",
         },
         {
           "@type": "Offer",
-          name: "Startup",
-          price: "49",
+          name: "Starter",
+          price: "29",
           priceCurrency: "USD",
           billingIncrement: "month",
-          description: "Full platform access for growing startups.",
+          description: "For early-stage founders: simulations, copilot, Truth Scan, benchmarks.",
         },
         {
           "@type": "Offer",
           name: "Growth",
-          price: "129",
+          price: "49",
           priceCurrency: "USD",
           billingIncrement: "month",
-          description: "Advanced features for scaling companies.",
+          description: "For scaling startups: unlimited simulations, Fundraising OS, cap table.",
+        },
+        {
+          "@type": "Offer",
+          name: "Scale",
+          price: "99",
+          priceCurrency: "USD",
+          billingIncrement: "month",
+          description: "Full power: AI agent simulations, document generator, investor room.",
         },
       ],
     },
@@ -136,14 +160,14 @@ export default function PricingPage() {
       <FadeIn delay={0.05} duration={0.5}>
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
-          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-beta">
-            Free During Public Beta
+          <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
+            30-Day Free Trial — No Credit Card Required
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
             Choose the plan that matches how often you make hard decisions
           </h1>
           <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-            All features are unlocked during our public beta. Sign up and start making smarter financial decisions today.
+            Try everything free for 30 days. Pay by card, PayPal, Apple Pay, or Google Pay when you're ready.
           </p>
         </div>
       </section>
@@ -152,7 +176,7 @@ export default function PricingPage() {
       <ScrollReveal>
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <StaggerChildren className="grid gap-6 md:grid-cols-3" staggerDelay={0.1}>
+          <StaggerChildren className="grid gap-6 md:grid-cols-2 lg:grid-cols-4" staggerDelay={0.1}>
             {tiers.map((tier) => (
               <StaggerItem key={tier.name}>
               <Card
@@ -164,7 +188,7 @@ export default function PricingPage() {
                     <CardTitle className="text-lg">{tier.name}</CardTitle>
                     {tier.highlighted && (
                       <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                        Free Now
+                        Most Popular
                       </Badge>
                     )}
                   </div>
@@ -175,7 +199,7 @@ export default function PricingPage() {
                   <div className="mb-6">
                     <span className="text-3xl font-bold text-foreground">{tier.price}</span>
                     {tier.period && <span className="text-sm text-muted-foreground ml-1">{tier.period}</span>}
-                    {!tier.period && <span className="text-sm text-muted-foreground ml-1">during beta</span>}
+                    {!tier.period && <span className="text-sm text-muted-foreground ml-1">forever</span>}
                   </div>
 
                   <ul className="space-y-3">
@@ -195,7 +219,7 @@ export default function PricingPage() {
                     onClick={() => navigate("/auth")}
                     data-testid={`button-cta-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
-                    {tier.highlighted ? "Get Started Free" : "Coming Soon"}
+                    {tier.cta}
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </CardFooter>
@@ -251,7 +275,7 @@ export default function PricingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All features include SSL encryption, daily backups, and 99.9% uptime SLA. Free during beta — no credit card required.
+            All plans include SSL encryption, daily backups, and 99.9% uptime SLA. Every paid plan starts with a 30-day free trial — no credit card required. Cancel anytime.
           </p>
         </div>
       </section>
