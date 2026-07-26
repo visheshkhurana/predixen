@@ -24,6 +24,7 @@ class Competitor(Base):
     notes = Column(Text, nullable=True)                 # founder's own notes
 
     last_scanned_at = Column(DateTime, nullable=True)
+    last_viewed_at = Column(DateTime, nullable=True)   # for the "new since last visit" unread badge
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

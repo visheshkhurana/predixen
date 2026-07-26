@@ -22,6 +22,7 @@ interface Competitor {
   x_handle?: string | null;
   description?: string | null;
   signal_count: number;
+  unread_count?: number;
   last_scanned_at?: string | null;
 }
 
@@ -60,6 +61,7 @@ const sentimentColor = (s?: string | null) => {
 };
 
 function SignalsFeed({ companyId, competitorId }: { companyId: number; competitorId: number }) {
+  const { toast } = useToast();
   const { data, isLoading } = useQuery({
     queryKey: ["/api/companies", companyId, "competitors", competitorId, "signals"],
     enabled: !!companyId,
@@ -67,6 +69,15 @@ function SignalsFeed({ companyId, competitorId }: { companyId: number; competito
       const res = await apiRequest("GET", `/api/companies/${companyId}/competitors/${competitorId}/signals`);
       return res.json();
     },
+  });
+
+  const decisionMut = useMutation({
+    mutationFn: async (signalId: number) => {
+      const res = await apiRequest("POST", `/api/companies/${companyId}/competitors/signals/${signalId}/to-decision`);
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Tracked as a Decision", description: "Find it under Decisions." }),
+    onError: () => toast({ title: "Couldn't create decision", variant: "destructive" }),
   });
 
   if (isLoading) return <div className="p-4"><Skeleton className="h-16 w-full" /></div>;
@@ -88,6 +99,16 @@ function SignalsFeed({ companyId, competitorId }: { companyId: number; competito
               <p className="font-medium text-sm">{s.title || s.summary}</p>
               {s.summary && s.title && <p className="text-sm text-muted-foreground mt-0.5">{s.summary}</p>}
               {s.impact && <p className="text-xs text-primary mt-1">Why it matters: {s.impact}</p>}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 mt-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => decisionMut.mutate(s.id)}
+                disabled={decisionMut.isPending}
+                data-testid={`track-decision-${s.id}`}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Track as Decision
+              </Button>
             </div>
             {s.url && (
               <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0">
@@ -242,11 +263,16 @@ export default function CompetitionPage() {
           {competitors.map((c) => (
             <Card key={c.id} data-testid={`competitor-${c.id}`}>
               <div className="p-4 flex items-center justify-between gap-3">
-                <button className="flex items-center gap-2 text-left flex-1" onClick={() => setExpanded(expanded === c.id ? null : c.id)}>
+                <button className="flex items-center gap-2 text-left flex-1" onClick={() => {
+                  const willExpand = expanded !== c.id;
+                  setExpanded(willExpand ? c.id : null);
+                  if (willExpand) setTimeout(() => invalidate(), 900);
+                }}>
                   {expanded === c.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   <div>
                     <div className="font-semibold flex items-center gap-2">
                       {c.name}
+                      {(c.unread_count ?? 0) > 0 && <Badge className="bg-primary text-primary-foreground">{c.unread_count} new</Badge>}
                       {c.signal_count > 0 && <Badge variant="secondary">{c.signal_count} signals</Badge>}
                     </div>
                     {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}

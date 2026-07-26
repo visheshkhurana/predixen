@@ -50,7 +50,7 @@ class CompetitorUpdate(BaseModel):
 
 
 # ----------------------------- Serializers -----------------------------
-def _competitor_dict(c: Competitor, signal_count: int = 0) -> Dict[str, Any]:
+def _competitor_dict(c: Competitor, signal_count: int = 0, unread_count: int = 0) -> Dict[str, Any]:
     return {
         "id": c.id,
         "name": c.name,
@@ -62,7 +62,9 @@ def _competitor_dict(c: Competitor, signal_count: int = 0) -> Dict[str, Any]:
         "description": c.description,
         "notes": c.notes,
         "last_scanned_at": c.last_scanned_at.isoformat() if c.last_scanned_at else None,
+        "last_viewed_at": c.last_viewed_at.isoformat() if c.last_viewed_at else None,
         "signal_count": signal_count,
+        "unread_count": unread_count,
         "created_at": c.created_at.isoformat() if c.created_at else None,
     }
 
@@ -197,7 +199,11 @@ def list_competitors(company_id: int, db: Session = Depends(get_db), current_use
     result = []
     for c in comps:
         count = db.query(CompetitorSignal).filter(CompetitorSignal.competitor_id == c.id).count()
-        result.append(_competitor_dict(c, count))
+        unread_q = db.query(CompetitorSignal).filter(CompetitorSignal.competitor_id == c.id)
+        if c.last_viewed_at is not None:
+            unread_q = unread_q.filter(CompetitorSignal.created_at > c.last_viewed_at)
+        unread = unread_q.count()
+        result.append(_competitor_dict(c, count, unread))
     return {"competitors": result}
 
 
@@ -261,6 +267,9 @@ def list_signals(company_id: int, competitor_id: int, db: Session = Depends(get_
     signals = db.query(CompetitorSignal).filter(
         CompetitorSignal.competitor_id == comp.id
     ).order_by(CompetitorSignal.created_at.desc()).limit(50).all()
+    # Opening the feed marks this competitor's signals as seen (clears unread).
+    comp.last_viewed_at = datetime.utcnow()
+    db.commit()
     return {"signals": [_signal_dict(s) for s in signals]}
 
 
@@ -370,6 +379,53 @@ def competitor_digest(company_id: int, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=502, detail="Digest generation unavailable")
 
     return {"digest": digest or None, "signal_count": len(signals)}
+
+
+# ----------------------------- Signal -> Decision (3) -----------------------------
+@router.post("/companies/{company_id}/competitors/signals/{signal_id}/to-decision")
+def signal_to_decision(company_id: int, signal_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Turn a competitor signal into a tracked CompanyDecision in one click."""
+    company = get_user_company(db, company_id, current_user)
+    signal = db.query(CompetitorSignal).filter(
+        CompetitorSignal.id == signal_id, CompetitorSignal.company_id == company.id
+    ).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    comp = db.query(Competitor).filter(Competitor.id == signal.competitor_id).first()
+    comp_name = comp.name if comp else "a competitor"
+
+    from server.models.company_decision import CompanyDecision
+
+    headline = signal.title or (signal.summary or "competitor move")
+    title = f"Respond to {comp_name}: {headline}"[:300]
+    parts = []
+    if signal.summary:
+        parts.append(signal.summary)
+    if signal.impact:
+        parts.append(f"Why it matters: {signal.impact}")
+    if signal.threat_level:
+        parts.append(f"Threat level: {signal.threat_level}.")
+    if signal.url:
+        parts.append(f"Source: {signal.url}")
+    context = " ".join(parts)
+    conf = "high" if signal.threat_level == "high" else ("low" if signal.threat_level == "low" else "medium")
+
+    decision = CompanyDecision(
+        company_id=company.id,
+        title=title,
+        context=context,
+        options_json=[],
+        recommendation_json={},
+        status="proposed",
+        tags=["competition", comp_name],
+        confidence=conf,
+        sources_json=([{"label": comp_name, "url": signal.url}] if signal.url else []),
+    )
+    db.add(decision)
+    db.commit()
+    db.refresh(decision)
+    return {"decision_id": str(decision.id), "title": decision.title}
 
 
 # ----------------------------- Weekly auto-scan (c) -----------------------------

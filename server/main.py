@@ -226,6 +226,9 @@ async def _run_deferred_startup():
                 _conn.execute(_sa_text(
                     "ALTER TABLE competitor_signals ADD COLUMN IF NOT EXISTS threat_level VARCHAR"
                 ))
+                _conn.execute(_sa_text(
+                    "ALTER TABLE competitors ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP"
+                ))
                 _conn.commit()
             logger.info("Ensured competition-tracking tables exist")
         except Exception as e:
