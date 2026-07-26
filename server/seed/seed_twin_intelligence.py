@@ -23,30 +23,25 @@ SEED_MARKER = "twin_intel_seed_v3"
 
 
 def seed_twin_intelligence(db: Session, company_id: int = 168):
-    demo_ids = _get_demo_company_ids(db)
-    all_seeded = all(
-        db.query(TwinEvent).filter(
-            TwinEvent.company_id == cid,
-            TwinEvent.source == SEED_MARKER
-        ).first() is not None
-        for cid in demo_ids
-    )
-    if all_seeded:
-        logger.info("Twin/Intelligence seed data already exists for all companies, skipping")
-        return
-
     logger.info(f"Seeding Digital Twin & Intelligence Graph data for company {company_id}...")
 
     demo_company_ids = _get_demo_company_ids(db)
     for cid in demo_company_ids:
+        # Always refresh the CompanyState financials so the Digital Twin stays
+        # coherent with the canonical dashboard/Truth Scan (burn $24.1K, runway
+        # 21.3mo, customers 20, headcount 12). This used to be skipped once
+        # TwinEvents existed, which froze stale/incoherent values (burn $28K,
+        # headcount 18, LTV $5K) from an earlier seed. _enrich_company_state and
+        # _ensure_financial_records are idempotent (fixed values / skip-if-present).
+        _enrich_company_state(db, cid)
+        _ensure_financial_records(db, cid)
+
         already = db.query(TwinEvent).filter(
             TwinEvent.company_id == cid,
             TwinEvent.source == SEED_MARKER
         ).first()
         if already:
             continue
-        _enrich_company_state(db, cid)
-        _ensure_financial_records(db, cid)
         _seed_twin_events(db, cid)
         _seed_additional_decisions(db, cid)
 
@@ -70,10 +65,10 @@ def _enrich_company_state(db: Session, company_id: int):
     if not cs:
         enriched = {
             "cashBalance": 513746,
-            "monthlyBurn": 28000,
+            "monthlyBurn": 24109,
             "revenueMonthly": 43949,
             "revenueGrowthRate": 10.5,
-            "expensesMonthly": 71949,
+            "expensesMonthly": 68058,
             "mrr": 43949,
             "arr": 527388,
             "arpu": 2197,
@@ -83,7 +78,7 @@ def _enrich_company_state(db: Session, company_id: int):
             "cac": 1500,
             "churnRate": 3.2,
             "headcount": 12,
-            "customerCount": 293,
+            "customerCount": 20,
             "ndr": 115,
             "burnMultiple": 0.64,
             "paybackPeriod": 8
@@ -97,7 +92,7 @@ def _enrich_company_state(db: Session, company_id: int):
             monthly_burn=24109,
             revenue_monthly=43949,
             revenue_growth_rate="10.5",
-            expenses_monthly=71949,
+            expenses_monthly=68058,
         )
         db.add(cs)
         db.flush()
@@ -106,10 +101,10 @@ def _enrich_company_state(db: Session, company_id: int):
 
     enriched = {
         "cashBalance": 513746,
-        "monthlyBurn": 28000,
+        "monthlyBurn": 24109,
         "revenueMonthly": 43949,
         "revenueGrowthRate": 10.5,
-        "expensesMonthly": 71949,
+        "expensesMonthly": 68058,
         "mrr": 43949,
         "arr": 527388,
         "arpu": 2197,
@@ -119,7 +114,7 @@ def _enrich_company_state(db: Session, company_id: int):
         "cac": 1500,
         "churnRate": 3.2,
         "headcount": 12,
-        "customerCount": 293,
+        "customerCount": 20,
         "ndr": 115,
         "burnMultiple": 0.64,
         "paybackPeriod": 8
