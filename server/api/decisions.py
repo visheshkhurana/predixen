@@ -391,13 +391,36 @@ def _get_current_metrics(company, db):
         .first()
     )
     
-    burn = extract_metric_value(metrics.get("monthly_burn"), 0)
-    if not burn and latest_record:
-        burn = float(latest_record.opex or 0) + float(latest_record.payroll or 0)
+    # Mirror the diagnosis generator's derivation EXACTLY (see
+    # generate_strategic_diagnosis) so staleness compares like-for-like.
+    # Gross burn is total monthly cost *including COGS*; runway is off NET burn.
+    revenue = extract_metric_value(metrics.get("monthly_revenue"), 0)
+    if not revenue and latest_record and latest_record.revenue:
+        revenue = float(latest_record.revenue)
+
+    net_burn = 0.0
+    fr_net_burn = float(latest_record.net_burn) if latest_record and latest_record.net_burn else 0
+    ts_net_burn = extract_metric_value(metrics.get("net_burn"), 0)
+    if fr_net_burn:
+        net_burn = fr_net_burn
+    elif ts_net_burn:
+        net_burn = ts_net_burn
+    elif latest_record:
+        total_expenses = (
+            float(latest_record.payroll or 0) +
+            float(latest_record.marketing_expense or 0) +
+            float(latest_record.opex or 0) +
+            float(latest_record.cogs or 0) +
+            float(latest_record.other_costs or 0)
+        )
+        net_burn = total_expenses - revenue
+
+    burn = net_burn + revenue if net_burn > 0 else revenue
+
     cash = extract_metric_value(metrics.get("cash_balance"), 0)
     if not cash and latest_record and latest_record.cash_balance:
         cash = float(latest_record.cash_balance)
-    runway = cash / burn if burn > 0 else 24
+    runway = cash / net_burn if net_burn > 0 else 24
     return {"burn": burn, "cash": cash, "runway": runway}
 
 

@@ -76,7 +76,7 @@ function SignalsFeed({ companyId, competitorId }: { companyId: number; competito
       const res = await apiRequest("POST", `/api/companies/${companyId}/competitors/signals/${signalId}/to-decision`);
       return res.json();
     },
-    onSuccess: () => toast({ title: "Tracked as a Decision", description: "Find it under Decisions." }),
+    onSuccess: () => toast({ title: "Tracked as a Decision", description: "Find it in the Decision Journal." }),
     onError: () => toast({ title: "Couldn't create decision", variant: "destructive" }),
   });
 

@@ -42,6 +42,7 @@ interface ApiDecision {
   outcome_delta_json: Record<string, MetricDelta> | null;
   outcome_rating: string | null;
   followup_days: number;
+  tags?: string[];
 }
 
 interface MetricDelta {
@@ -313,6 +314,24 @@ export default function JournalPage() {
     (d) => d.status === "implemented" && d.metrics_snapshot_at_decision
   );
 
+  // Decisions that have been captured (e.g. via "Track as Decision" from
+  // Competition, Copilot, etc.) but not yet marked implemented. Without this
+  // list they'd have no home in the UI — the outcome-tracking section only
+  // shows implemented ones.
+  const trackedDecisions = (apiDecisions).filter((d) => d.status !== "implemented");
+
+  const implementMutation = useMutation({
+    mutationFn: async (decisionId: string) => {
+      await apiRequest("PATCH", `/api/companies/${companyId}/decisions/${decisionId}`, {
+        status: "implemented",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/companies/${companyId}/decisions?page_size=200`] });
+      toast({ title: "Marked as implemented", description: "Now tracking its outcome over time." });
+    },
+  });
+
   const outcomeStats = {
     tracked: implementedDecisions.length,
     completed: implementedDecisions.filter((d) => d.outcome_recorded_at).length,
@@ -429,6 +448,55 @@ export default function JournalPage() {
             <p className="text-sm text-muted-foreground" data-testid="text-loading-outcomes">Loading outcome tracking data...</p>
           </CardContent>
         </Card>
+      )}
+
+      {trackedDecisions.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider" data-testid="text-captured-decisions-header">
+            Tracked Decisions
+          </h2>
+          {trackedDecisions.map((decision) => (
+            <Card key={decision.id} className="hover-elevate" data-testid={`card-captured-decision-${decision.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="font-semibold text-sm" data-testid={`text-captured-title-${decision.id}`}>{decision.title}</h3>
+                      <Badge variant="outline" className="text-[10px] capitalize">{decision.status}</Badge>
+                      {decision.confidence && (
+                        <Badge variant="secondary" className="text-[10px] capitalize">{decision.confidence} confidence</Badge>
+                      )}
+                      {(decision.tags || []).slice(0, 3).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-[10px] bg-primary/5 text-primary/80 border-primary/20">{tag}</Badge>
+                      ))}
+                    </div>
+                    {decision.context && (
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-1 whitespace-pre-line">{decision.context}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      {decision.created_at
+                        ? new Date(decision.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : ""}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-[11px] h-7"
+                      disabled={implementMutation.isPending}
+                      onClick={() => implementMutation.mutate(decision.id)}
+                      data-testid={`button-implement-${decision.id}`}
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Mark Implemented
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {implementedDecisions.length > 0 && (
