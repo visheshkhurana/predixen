@@ -94,6 +94,12 @@ MODELS = {
         max_tokens=16384,
         description="Cheaper, broadly-accessible OpenAI model; fallback when a project lacks gpt-4o access"
     ),
+    "gpt-4.1": ModelConfig(
+        provider=Provider.OPENAI,
+        model_id="gpt-4.1",
+        max_tokens=16384,
+        description="Newer than gpt-4o: stronger instruction-following & reasoning, standard chat API"
+    ),
     "claude-opus-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
         model_id="claude-opus-4-5",
@@ -186,8 +192,8 @@ MODELS = {
 
 
 TASK_TO_MODEL: Dict[TaskType, str] = {
-    TaskType.FINANCIAL_ANALYSIS: "gpt-4o",
-    TaskType.METRICS_EXTRACTION: "gpt-4o",
+    TaskType.FINANCIAL_ANALYSIS: "gpt-4.1",
+    TaskType.METRICS_EXTRACTION: "gpt-4.1",
     TaskType.COMPLEX_REASONING: "claude-opus-4-5",
     TaskType.CODING: "claude-opus-4-5",
     TaskType.STRATEGY: "claude-sonnet-4-5",
@@ -209,6 +215,7 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
 
 
 FALLBACK_CHAIN: Dict[str, List[str]] = {
+    "gpt-4.1": ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
     "gpt-4o": ["gpt-4o-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
     "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro"],
     "claude-opus-4-5": ["gpt-4o", "gemini-2.5-pro"],
