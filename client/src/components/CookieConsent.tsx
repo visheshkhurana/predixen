@@ -14,7 +14,7 @@ export function CookieConsent() {
 
   return (
     <div
-      className="fixed bottom-5 left-5 z-[1000] max-w-[380px] rounded-xl border bg-background p-4 shadow-2xl"
+      className="fixed bottom-5 right-5 z-[9999] max-w-[380px] rounded-xl border bg-background p-4 shadow-2xl"
       data-testid="cookie-consent"
     >
       <div className="flex items-start gap-3">
