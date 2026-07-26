@@ -39,7 +39,7 @@ const DOC_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 const MODEL_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  "gpt-4o": { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", label: "GPT-4o" },
+  "gpt-5.6-terra": { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", label: "GPT-4o" },
   "claude": { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400", label: "Claude" },
   "gemini": { bg: "bg-indigo-500/10", text: "text-indigo-600 dark:text-indigo-400", label: "Gemini" },
   "sonar": { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", label: "Perplexity" },

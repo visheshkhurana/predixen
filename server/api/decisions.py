@@ -783,7 +783,7 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
             return llm_router.chat(
                 messages=[{"role": "user", "content": f"Provide a strategic diagnosis for this company:\n\n{company_context}"}],
                 task_type=TaskType.FINANCIAL_ANALYSIS,
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 system=system_prompt,
                 temperature=0.6,
                 max_tokens=8000,

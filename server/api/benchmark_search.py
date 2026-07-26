@@ -170,7 +170,7 @@ Only return valid JSON, no other text."""
                 "Content-Type": "application/json"
             },
             json={
-                "model": "gpt-4o-mini",
+                "model": "gpt-5.6-luna",
                 "messages": [
                     {"role": "system", "content": "You are a data parser. Return only valid JSON."},
                     {"role": "user", "content": parse_prompt}

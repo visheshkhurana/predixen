@@ -91,7 +91,7 @@ Be concise but insightful. Use specific numbers from the context when answering 
       res.setHeader("Connection", "keep-alive");
 
       const stream = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5.6-terra",
         messages: fullMessages,
         stream: true,
         max_tokens: 1024,
@@ -137,7 +137,7 @@ Be concise but insightful. Use specific numbers from the context when answering 
 ${context ? `Context: Cash $${context.cashOnHand?.toLocaleString()}, Revenue $${context.monthlyRevenue?.toLocaleString()}/mo, Expenses $${context.monthlyExpenses?.toLocaleString()}/mo, Growth ${context.growthRate}%` : ""}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5.6-terra",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question },

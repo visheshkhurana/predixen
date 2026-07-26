@@ -332,7 +332,7 @@ function buildSlideHeader(slideNum: number, totalSlides: number, companyName: st
     };
     const lower = modelUsed.toLowerCase();
     const badgeColor = Object.entries(modelColors).find(([k]) => lower.includes(k))?.[1] || COLORS.muted;
-    const displayName = lower.includes('claude') ? 'Claude' : lower.includes('gpt-4o') ? 'GPT-4o' : lower.includes('gemini') ? 'Gemini' : escHtml(modelUsed);
+    const displayName = lower.includes('claude') ? 'Claude' : lower.includes('gpt-5.6-terra') ? 'GPT-4o' : lower.includes('gemini') ? 'Gemini' : escHtml(modelUsed);
     modelBadge = `<span style="font-size:9px;color:${badgeColor};background:${badgeColor}15;padding:3px 8px;border-radius:20px;font-weight:600;letter-spacing:0.3px;">${displayName}</span>`;
   }
 

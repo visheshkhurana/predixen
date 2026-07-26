@@ -82,23 +82,17 @@ class ModelConfig:
 
 
 MODELS = {
-    "gpt-4o": ModelConfig(
+    "gpt-5.6-terra": ModelConfig(
         provider=Provider.OPENAI,
-        model_id="gpt-4o",
+        model_id="gpt-5.6-terra",
         max_tokens=16384,
         description="Best for structured data, financial analysis, vision tasks"
     ),
-    "gpt-4o-mini": ModelConfig(
+    "gpt-5.6-luna": ModelConfig(
         provider=Provider.OPENAI,
-        model_id="gpt-4o-mini",
+        model_id="gpt-5.6-luna",
         max_tokens=16384,
-        description="Cheaper, broadly-accessible OpenAI model; fallback when a project lacks gpt-4o access"
-    ),
-    "gpt-4.1": ModelConfig(
-        provider=Provider.OPENAI,
-        model_id="gpt-4.1",
-        max_tokens=16384,
-        description="Newer than gpt-4o: stronger instruction-following & reasoning, standard chat API"
+        description="Cost-efficient OpenAI model for high-volume tasks (chat, agents)"
     ),
     "claude-opus-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
@@ -192,8 +186,8 @@ MODELS = {
 
 
 TASK_TO_MODEL: Dict[TaskType, str] = {
-    TaskType.FINANCIAL_ANALYSIS: "gpt-4.1",
-    TaskType.METRICS_EXTRACTION: "gpt-4.1",
+    TaskType.FINANCIAL_ANALYSIS: "gpt-5.6-terra",
+    TaskType.METRICS_EXTRACTION: "gpt-5.6-terra",
     TaskType.COMPLEX_REASONING: "claude-opus-4-5",
     TaskType.CODING: "claude-opus-4-5",
     TaskType.STRATEGY: "claude-sonnet-4-5",
@@ -201,7 +195,7 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
     TaskType.GENERAL_CHAT: "gemini-2.5-flash",
     TaskType.QUICK_EXTRACTION: "gemini-2.5-flash",
     TaskType.SIMPLE_TASK: "gemini-2.5-flash",
-    TaskType.VISION: "gpt-4o",
+    TaskType.VISION: "gpt-5.6-terra",
     TaskType.DATA_PROCESSING: "gemini-2.5-pro",
     TaskType.WEB_SEARCH: "perplexity-sonar",
     TaskType.MARKET_RESEARCH: "perplexity-sonar-reasoning",
@@ -215,22 +209,21 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
 
 
 FALLBACK_CHAIN: Dict[str, List[str]] = {
-    "gpt-4.1": ["gpt-4o", "gpt-4o-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
-    "gpt-4o": ["gpt-4o-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
-    "gpt-4o-mini": ["gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro"],
-    "claude-opus-4-5": ["gpt-4o", "gemini-2.5-pro"],
-    "claude-sonnet-4-5": ["gpt-4o", "gemini-2.5-flash"],
-    "claude-haiku-4-5": ["gemini-2.5-flash", "gpt-4o"],
-    "gemini-2.5-flash": ["claude-haiku-4-5", "gpt-4o"],
-    "gemini-2.5-pro": ["claude-sonnet-4-5", "gpt-4o"],
+    "gpt-5.6-terra": ["gpt-5.6-luna", "claude-sonnet-4-5", "gemini-2.5-pro"],
+    "gpt-5.6-luna": ["gpt-5.6-terra", "claude-sonnet-4-5", "gemini-2.5-pro"],
+    "claude-opus-4-5": ["gpt-5.6-terra", "gemini-2.5-pro"],
+    "claude-sonnet-4-5": ["gpt-5.6-terra", "gemini-2.5-flash"],
+    "claude-haiku-4-5": ["gemini-2.5-flash", "gpt-5.6-terra"],
+    "gemini-2.5-flash": ["claude-haiku-4-5", "gpt-5.6-terra"],
+    "gemini-2.5-pro": ["claude-sonnet-4-5", "gpt-5.6-terra"],
     "gemini-3-flash-preview": ["gemini-2.5-flash", "claude-sonnet-4-5"],
     "gemini-3-pro-preview": ["gemini-2.5-pro", "claude-opus-4-5"],
-    "perplexity-sonar": ["perplexity-sonar-pro", "gpt-4o"],
-    "perplexity-sonar-pro": ["perplexity-sonar-reasoning", "gpt-4o"],
+    "perplexity-sonar": ["perplexity-sonar-pro", "gpt-5.6-terra"],
+    "perplexity-sonar-pro": ["perplexity-sonar-reasoning", "gpt-5.6-terra"],
     "perplexity-sonar-reasoning": ["perplexity-sonar-pro", "claude-sonnet-4-5"],
     "perplexity-sonar-deep-research": ["perplexity-sonar-reasoning", "claude-opus-4-5"],
-    "gpt-image-1": ["gpt-4o"],
-    "grok-4.1-fast": ["perplexity-sonar", "gpt-4o"],
+    "gpt-image-1": ["gpt-5.6-terra"],
+    "grok-4.1-fast": ["perplexity-sonar", "gpt-5.6-terra"],
     "grok-3-mini": ["grok-4.1-fast", "gemini-2.5-flash"],
 }
 
@@ -491,7 +484,7 @@ class LLMRouter:
             logger.warning("Perplexity not available, falling back to GPT-4o")
             fallback_result = self.chat(
                 messages=[{"role": "user", "content": query}],
-                model="gpt-4o",
+                model="gpt-5.6-terra",
                 system=system_prompt or "You are a helpful assistant. Answer based on your knowledge.",
                 **kwargs
             )
@@ -538,7 +531,7 @@ class LLMRouter:
 
         require_json = response_format is not None
         if require_json and MODELS[model].provider != Provider.OPENAI and self.openai_available:
-            model = "gpt-4o"
+            model = "gpt-5.6-terra"
 
         chain: List[str] = []
         seen: set = set()
@@ -620,7 +613,7 @@ class LLMRouter:
         
         if response_format and model_config.provider != Provider.OPENAI:
             if self.openai_available:
-                model = "gpt-4o"
+                model = "gpt-5.6-terra"
                 model_config = MODELS[model]
         
         if model_config.provider == Provider.PERPLEXITY:
@@ -638,7 +631,7 @@ class LLMRouter:
                 return result
             else:
                 logger.info("Perplexity not available, falling back to GPT-4o")
-                model = "gpt-4o"
+                model = "gpt-5.6-terra"
                 model_config = MODELS.get(model) or MODELS["gemini-2.5-flash"]
         
         if model_config.provider == Provider.OPENROUTER:
@@ -656,8 +649,8 @@ class LLMRouter:
                 )
                 return result
             else:
-                fallbacks = FALLBACK_CHAIN.get(model, ["gpt-4o"])
-                fallback_model = fallbacks[0] if fallbacks else "gpt-4o"
+                fallbacks = FALLBACK_CHAIN.get(model, ["gpt-5.6-terra"])
+                fallback_model = fallbacks[0] if fallbacks else "gpt-5.6-terra"
                 logger.info(f"OpenRouter not available, falling back to {fallback_model}")
                 model = fallback_model
                 model_config = MODELS.get(model) or MODELS["gemini-2.5-flash"]
@@ -725,7 +718,7 @@ class LLMRouter:
     def vision(
         self,
         messages: List[Dict[str, Any]],
-        model: str = "gpt-4o",
+        model: str = "gpt-5.6-terra",
         max_tokens: int = 4096,
         **kwargs
     ) -> Dict[str, Any]:
@@ -734,7 +727,7 @@ class LLMRouter:
         
         Args:
             messages: List of message dicts with multimodal content
-            model: Model to use (default: gpt-4o)
+            model: Model to use (default: gpt-5.6-terra)
             max_tokens: Maximum tokens in response
             **kwargs: Additional arguments
         

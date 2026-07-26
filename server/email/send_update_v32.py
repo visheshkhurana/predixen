@@ -51,7 +51,7 @@ Here's a comprehensive update on everything we've shipped on FounderConsole rece
 Completely rebuilt simulation engine with 7 LLM-powered AI agents (Founder, 2 Investors, Customer, Team, Market, Competitor). Each agent has:
 - Short-term + long-term memory
 - Stage-based activity levels (Founder early, Investors mid, Competitors late)
-- Chain-of-thought reasoning via OpenAI gpt-4o-mini
+- Chain-of-thought reasoning via OpenAI gpt-5.6-luna
 - Anti-repetition logic for varied strategies
 - Real-time SSE streaming with animated metrics
 - Post-simulation AI report with outcome score, risk factors, and recommendations

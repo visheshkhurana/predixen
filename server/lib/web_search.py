@@ -108,7 +108,7 @@ def _search_with_openai(company_name: str, website: Optional[str] = None) -> Dic
         search_query = _get_company_prompt(company_name, website)
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[
                 {
                     "role": "system",

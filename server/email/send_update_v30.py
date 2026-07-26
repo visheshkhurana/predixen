@@ -30,7 +30,7 @@ Major update shipped on FounderConsole — the Flight Simulator has been complet
 
 1. MIROFISH-INSPIRED MULTI-AGENT SIMULATION ENGINE
 
-The Flight Simulator now runs a full LLM-powered multi-agent simulation. Seven AI agents — Founder, two Investors, Customer, Team, Market, and Competitor — each with unique LLM-generated personas, make independent decisions every round using OpenAI gpt-4o-mini.
+The Flight Simulator now runs a full LLM-powered multi-agent simulation. Seven AI agents — Founder, two Investors, Customer, Team, Market, and Competitor — each with unique LLM-generated personas, make independent decisions every round using OpenAI gpt-5.6-luna.
 
 Each agent has:
 - Short-term memory (recent decisions) and long-term memory (accumulated learnings)
@@ -119,7 +119,7 @@ def build_html(rcpt: dict) -> str:
 <!-- 1. Multi-Agent Engine -->
 <h2 style="font-size:17px;color:#1e1b4b;margin:28px 0 12px;padding-bottom:6px;border-bottom:2px solid #6366f1;">1. MiroFish-Inspired Multi-Agent Simulation Engine</h2>
 
-<p style="font-size:13px;color:#4b5563;margin:0 0 12px;">Seven AI agents &mdash; Founder, two Investors, Customer, Team, Market, and Competitor &mdash; each with unique LLM-generated personas, make independent decisions every round using OpenAI gpt-4o-mini.</p>
+<p style="font-size:13px;color:#4b5563;margin:0 0 12px;">Seven AI agents &mdash; Founder, two Investors, Customer, Team, Market, and Competitor &mdash; each with unique LLM-generated personas, make independent decisions every round using OpenAI gpt-5.6-luna.</p>
 
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:10px 0;">
 <tr>

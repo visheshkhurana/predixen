@@ -57,7 +57,7 @@ async def generate_agent_personas(
     company_state: CompanyState,
     scenario_params: Dict[str, Any],
     llm_client,
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5.6-luna",
 ) -> List[AgentPersona]:
     prompt = f"""Generate realistic agent personas for a startup simulation.
 

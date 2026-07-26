@@ -1178,7 +1178,7 @@ def extract_onboarding_data_with_openai(text: str) -> Dict[str, Any]:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[
                 {
                     "role": "system",
@@ -1233,7 +1233,7 @@ def extract_onboarding_data_with_vision(image_base64_list: List[str]) -> Dict[st
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5.6-terra",
             messages=[
                 {
                     "role": "system",

@@ -268,7 +268,7 @@ class BaseAgent(ABC):
             temperature: Sampling temperature
             max_tokens: Optional explicit output token cap. When omitted the
                 router falls back to the model's configured ceiling, which for
-                some models (e.g. gpt-4o at 16384) can be rejected by the
+                some models (e.g. gpt-5.6-terra at 16384) can be rejected by the
                 provider/proxy and cause the whole call to fail. Prefer passing
                 a bounded value, matching the known-good quick-chat path.
 
