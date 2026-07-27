@@ -218,7 +218,7 @@ export default function MarketingFeaturesPage() {
             Start using FounderConsole today
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
-            Begin on the free plan or start a 30-day trial — no credit card required to start. Connect your data and get your first forecast in under 5 minutes.
+            Every feature is free while we're in early access — no credit card required. Connect your data and get your first forecast in under 5 minutes.
           </p>
           <div className="mt-6">
             <Button size="lg" asChild data-testid="button-features-get-started">

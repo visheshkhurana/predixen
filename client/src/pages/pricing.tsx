@@ -40,7 +40,7 @@ const tiers = [
       "PDF export",
     ],
     highlighted: false,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Growth",
@@ -56,7 +56,7 @@ const tiers = [
       "Fundraising readiness score",
     ],
     highlighted: true,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Scale",
@@ -72,7 +72,7 @@ const tiers = [
       "Cross-company intelligence",
     ],
     highlighted: false,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
 ];
 
@@ -110,7 +110,7 @@ export default function PricingPage() {
 
   useSEO({
     title: "Pricing | FounderConsole",
-    description: "FounderConsole pricing: Free, Starter $29, Growth $49, Scale $99 per month. Every paid plan starts with a 30-day free trial — no credit card required.",
+    description: "FounderConsole is free while in early access — every feature unlocked, no credit card required. Planned pricing: Free, Starter $29, Growth $49, Scale $99 per month.",
     path: "/pricing",
     jsonLd: {
       "@context": "https://schema.org",
@@ -161,13 +161,13 @@ export default function PricingPage() {
       <section>
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
           <Badge className="mb-4 bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/10" data-testid="badge-free-trial">
-            30-Day Free Trial — No Credit Card Required
+            Free During Early Access — No Credit Card
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-pricing-title">
-            Choose the plan that matches how often you make hard decisions
+            Everything's free while we're in early access
           </h1>
           <p className="mt-3 max-w-xl mx-auto text-lg text-muted-foreground" data-testid="text-pricing-subtitle">
-            Try everything free for 30 days. Pay by card, PayPal, Apple Pay, or Google Pay when you're ready.
+            Every feature is unlocked today — no credit card required. The plans below are our planned pricing for when we exit early access.
           </p>
         </div>
       </section>
@@ -275,7 +275,7 @@ export default function PricingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All plans include SSL encryption, daily backups, and reliable cloud hosting. Every paid plan starts with a 30-day free trial — no credit card required. Cancel anytime.
+            All plans include SSL encryption, daily backups, and reliable cloud hosting. Everything is free while we're in early access — no credit card required. We'll give plenty of notice before paid plans begin.
           </p>
         </div>
       </section>

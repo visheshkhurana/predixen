@@ -27,7 +27,7 @@ const faqSections = [
       {
         question: "Is FounderConsole free?",
         answer:
-          "There's a free plan with no time limit — 1 company, 3 simulations and 10 copilot messages per month. Paid plans (Starter $29, Growth $49, Scale $99 per month) unlock more simulations, data connectors, and the full Fundraising OS. Every paid plan starts with a 30-day free trial, and no credit card is required to start the trial.",
+          "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. The plans on our pricing page (Starter $29, Growth $49, Scale $99 per month) are our planned pricing for when we exit early access; we'll give plenty of notice before anything changes.",
       },
       {
         question: "What is a startup digital twin?",
@@ -62,7 +62,7 @@ const faqSections = [
       {
         question: "How many simulations can I run?",
         answer:
-          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. The Growth and Scale plans include unlimited scenarios, so you can compare them side by side and version your work over time.",
+          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. While we're in early access you can run unlimited scenarios, compare them side by side, and version your work over time.",
       },
     ],
   },
@@ -90,14 +90,14 @@ const faqSections = [
     title: "Pricing & Plans",
     items: [
       {
-        question: "Is there a free plan?",
+        question: "Do I need to pay anything right now?",
         answer:
-          "Yes. The free plan is free forever — 1 company, 3 simulations and 10 copilot messages per month, CSV upload, and the basic dashboard. It's the easiest way to explore the platform before upgrading.",
+          "No. Everything is free while we're in early access — every feature is unlocked, with no credit card required. We'll announce paid plans well in advance before anything changes.",
       },
       {
-        question: "What do the paid plans cost?",
+        question: "What will the paid plans cost later?",
         answer:
-          "Starter is $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth is $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale is $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). Every paid plan starts with a 30-day free trial.",
+          "Our planned pricing is Starter $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). None of this is active yet — it's what we intend to charge once we exit early access.",
       },
       {
         question: "Do you offer enterprise pricing?",

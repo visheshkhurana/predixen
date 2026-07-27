@@ -107,7 +107,7 @@ const landingFaqs = [
   },
   {
     q: "Is FounderConsole free?",
-    a: "FounderConsole has a free plan — 1 company, 3 simulations and 10 copilot messages per month — with no time limit. Paid plans (Starter $29, Growth $49, Scale $99 per month) unlock more simulations, connectors, and the full Fundraising OS. Every paid plan starts with a 30-day free trial, and no credit card is required to start the trial.",
+    a: "Yes — FounderConsole is completely free while we're in early access. Every feature is unlocked and no credit card is required. The plans shown on our pricing page (Starter $29, Growth $49, Scale $99 per month) are our planned pricing for when we exit early access, and we'll give plenty of notice before anything changes.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -164,7 +164,7 @@ const pricingTiers = [
       "Industry benchmarks",
     ],
     highlighted: false,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Growth",
@@ -179,7 +179,7 @@ const pricingTiers = [
       "Board deck export",
     ],
     highlighted: true,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
   {
     name: "Scale",
@@ -194,7 +194,7 @@ const pricingTiers = [
       "Cross-company intelligence",
     ],
     highlighted: false,
-    cta: "Start 30-Day Free Trial",
+    cta: "Get Started Free",
   },
 ];
 
@@ -214,7 +214,8 @@ function PricingPreview() {
             Simple, transparent pricing
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Start free. Upgrade when you need more power.
+            Every feature is free while we're in early access — no credit card required.
+            The plans below are our planned pricing for later.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
@@ -347,7 +348,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free plan available. Paid plans from $29/month, each starting with a 30-day free trial.",
+          description: "Free while in early access — every feature unlocked, no credit card required.",
         },
         featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
         screenshot: "https://founderconsole.ai/og-image.png",
@@ -635,13 +636,13 @@ export default function LandingPage() {
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Button size="lg" className="h-12 px-8 text-base shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild data-testid="button-bottom-start-trial">
                 <Link href="/auth">
-                  Start Free Trial
+                  Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
-              Free plan, no credit card. Paid plans start with a 30-day free trial.
+              Free while we're in early access. No credit card required.
             </p>
           </ScrollReveal>
         </div>
