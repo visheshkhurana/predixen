@@ -107,7 +107,7 @@ const landingFaqs = [
   },
   {
     q: "Is FounderConsole free?",
-    a: "Yes. All features are free during the public beta, including Monte Carlo simulations, AI copilot, cap table management, 37 data connectors, and board deck generation. No credit card is required.",
+    a: "FounderConsole has a free plan — 1 company, 3 simulations and 10 copilot messages per month — with no time limit. Paid plans (Starter $29, Growth $49, Scale $99 per month) unlock more simulations, connectors, and the full Fundraising OS. Every paid plan starts with a 30-day free trial, and no credit card is required to start the trial.",
   },
   {
     q: "How does FounderConsole help with fundraising?",
@@ -137,57 +137,72 @@ const landingFaqs = [
 
 const pricingTiers = [
   {
-    name: "Free Beta",
+    name: "Free",
     price: "$0",
     period: "",
-    description: "All features unlocked during beta",
+    description: "Explore the platform at your own pace.",
     features: [
-      "Monte Carlo simulations",
-      "AI Copilot (all LLMs)",
-      "37 data connectors",
-      "Cap table & fundraising",
-      "Board deck generator",
-      "Digital twin",
-      "Team collaboration",
-    ],
-    highlighted: true,
-  },
-  {
-    name: "Pro",
-    price: "$49",
-    period: "/month",
-    description: "For scaling startups",
-    features: [
-      "Everything in Free",
-      "Unlimited simulations",
-      "Priority AI processing",
-      "Custom connectors",
-      "Advanced analytics",
-      "Dedicated support",
-      "API access",
+      "1 company",
+      "3 simulations / month",
+      "10 copilot messages / month",
+      "CSV upload & manual entry",
+      "Basic dashboard",
     ],
     highlighted: false,
+    cta: "Get Started Free",
+  },
+  {
+    name: "Starter",
+    price: "$29",
+    period: "/month",
+    description: "For early-stage founders finding their footing.",
+    features: [
+      "50 simulations / month",
+      "100 copilot messages / month",
+      "2 data connectors",
+      "Truth Scan & Stress Tests",
+      "Industry benchmarks",
+    ],
+    highlighted: false,
+    cta: "Start 30-Day Free Trial",
+  },
+  {
+    name: "Growth",
+    price: "$49",
+    period: "/month",
+    description: "For scaling startups that decide weekly.",
+    features: [
+      "Up to 3 companies",
+      "Unlimited simulations & copilot",
+      "10 data connectors",
+      "Fundraising OS & cap table",
+      "Board deck export",
+    ],
+    highlighted: true,
+    cta: "Start 30-Day Free Trial",
+  },
+  {
+    name: "Scale",
+    price: "$99",
+    period: "/month",
+    description: "Full power for serious founders.",
+    features: [
+      "Unlimited companies & connectors",
+      "Flight Simulator (AI agents)",
+      "Digital Twin & Investor Room",
+      "Hiring Planner",
+      "Cross-company intelligence",
+    ],
+    highlighted: false,
+    cta: "Start 30-Day Free Trial",
   },
 ];
 
 const stats = [
-  { value: "2.4M+", label: "Scenarios Simulated" },
   { value: "37+", label: "Data Connectors" },
+  { value: "24+", label: "Metrics Tracked" },
   { value: "P10/P50/P90", label: "Confidence Bands" },
-  { value: "<3s", label: "Simulation Time" },
-];
-
-const testimonials = [
-  {
-    quote: "FounderConsole replaced our entire spreadsheet stack. The Monte Carlo simulations gave us the confidence to time our Series A perfectly.",
-    name: "Priya Sharma",
-    role: "Co-founder & CEO, NovaPay",
-  },
-  {
-    quote: "It's like having a CFO, strategist, and data scientist on call 24/7. The AI Copilot caught a burn rate issue we completely missed.",
-    name: "Marcus Chen",
-    role: "Founder, DataSync Labs",
-  },
+  { value: "10K", label: "Iterations / Simulation" },
 ];
 
 function PricingPreview() {
@@ -202,7 +217,7 @@ function PricingPreview() {
             Start free. Upgrade when you need more power.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
           {pricingTiers.map((tier) => (
             <Card
               key={tier.name}
@@ -238,7 +253,7 @@ function PricingPreview() {
                   data-testid={`button-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
                 >
                   <Link href="/auth">
-                    {tier.highlighted ? "Start Free" : "Get Started"}
+                    {tier.cta}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -332,7 +347,7 @@ export default function LandingPage() {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
-          description: "Free during public beta — all features unlocked, no credit card required",
+          description: "Free plan available. Paid plans from $29/month, each starting with a 30-day free trial.",
         },
         featureList: "Monte Carlo Simulation, AI Copilot, Fundraising CRM, Cap Table Management, 37 Data Connectors, Digital Twin, Strategic Briefings",
         screenshot: "https://founderconsole.ai/og-image.png",
@@ -416,7 +431,7 @@ export default function LandingPage() {
           </FadeIn>
           <FadeIn delay={0.35}>
             <p className="mx-auto mt-6 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
-              Connect your company data, simulate the future, and get AI-powered decisions.
+              Know your real runway, pressure-test every big decision before you commit, and get AI strategy you can take to your board.
               <br className="hidden md:block" />
               Run your startup like a simulation.
             </p>
@@ -604,29 +619,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="border-t">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
-          <StaggerChildren className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            {testimonials.map((t) => (
-              <StaggerItem key={t.name}>
-                <blockquote
-                  className="rounded-xl glass-subtle p-8 hover:shadow-lg transition-shadow duration-300 h-full"
-                  data-testid={`testimonial-${t.name.toLowerCase().replace(/\s+/g, "-")}`}
-                >
-                  <p className="text-foreground leading-relaxed italic">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                  <footer className="mt-4">
-                    <p className="font-semibold text-foreground text-sm">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
-                  </footer>
-                </blockquote>
-              </StaggerItem>
-            ))}
-          </StaggerChildren>
-        </div>
-      </section>
-
       <PricingPreview />
       <FAQSection />
 
@@ -649,7 +641,7 @@ export default function LandingPage() {
               </Button>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">
-              No credit card required. Free tier includes 50 simulations/month.
+              Free plan, no credit card. Paid plans start with a 30-day free trial.
             </p>
           </ScrollReveal>
         </div>

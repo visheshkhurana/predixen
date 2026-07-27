@@ -317,10 +317,10 @@ export default function AuthPage() {
 
           <div className="mt-12 pt-8 border-t border-white/[0.06]">
             <div className="grid grid-cols-4 gap-6">
-              <AnimatedMetric label="Scenarios Run" value="2.4M+" delay={200} />
-              <AnimatedMetric label="Startups" value="500+" delay={400} />
-              <AnimatedMetric label="Integrations" value="37" delay={600} />
-              <AnimatedMetric label="Time Saved" value="40hrs" delay={800} />
+              <AnimatedMetric label="Data Connectors" value="37+" delay={200} />
+              <AnimatedMetric label="Metrics Tracked" value="24+" delay={400} />
+              <AnimatedMetric label="Iterations / Sim" value="10K" delay={600} />
+              <AnimatedMetric label="Encryption" value="256-bit" delay={800} />
             </div>
           </div>
         </div>

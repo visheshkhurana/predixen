@@ -215,10 +215,10 @@ export default function MarketingFeaturesPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20 text-center">
           <h2 className="text-2xl font-semibold text-foreground" data-testid="text-features-cta">
-            Start using FounderConsole today — it's free during beta
+            Start using FounderConsole today
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-muted-foreground">
-            All features are unlocked. No credit card required. Connect your data and get your first forecast in under 5 minutes.
+            Begin on the free plan or start a 30-day trial — no credit card required to start. Connect your data and get your first forecast in under 5 minutes.
           </p>
           <div className="mt-6">
             <Button size="lg" asChild data-testid="button-features-get-started">

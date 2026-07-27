@@ -27,7 +27,7 @@ const faqSections = [
       {
         question: "Is FounderConsole free?",
         answer:
-          "Yes — FounderConsole is completely free during the public beta. All features are unlocked with no credit card required. After the beta, pricing will include a free tier for basic forecasting, a Startup tier ($49/month) for unlimited simulations, and a Growth tier ($129/month) for teams. Beta users will receive preferred rates.",
+          "There's a free plan with no time limit — 1 company, 3 simulations and 10 copilot messages per month. Paid plans (Starter $29, Growth $49, Scale $99 per month) unlock more simulations, data connectors, and the full Fundraising OS. Every paid plan starts with a 30-day free trial, and no credit card is required to start the trial.",
       },
       {
         question: "What is a startup digital twin?",
@@ -62,7 +62,7 @@ const faqSections = [
       {
         question: "How many simulations can I run?",
         answer:
-          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. You can create unlimited scenarios during the beta period, compare them side by side, and version your work over time.",
+          "Each Monte Carlo simulation runs 100 to 10,000 iterations depending on your settings. The Growth and Scale plans include unlimited scenarios, so you can compare them side by side and version your work over time.",
       },
     ],
   },
@@ -90,14 +90,14 @@ const faqSections = [
     title: "Pricing & Plans",
     items: [
       {
-        question: "Is FounderConsole really free during beta?",
+        question: "Is there a free plan?",
         answer:
-          "Yes. All features are unlocked during the public beta at no cost. No credit card required. We'll announce pricing tiers well in advance before the beta ends, and early users will receive preferred rates.",
+          "Yes. The free plan is free forever — 1 company, 3 simulations and 10 copilot messages per month, CSV upload, and the basic dashboard. It's the easiest way to explore the platform before upgrading.",
       },
       {
-        question: "What will pricing look like after beta?",
+        question: "What do the paid plans cost?",
         answer:
-          "We plan to offer a free tier for basic forecasting, a Startup tier ($49/month) for unlimited scenarios and investor reporting, and a Growth tier ($129/month) for teams with advanced features. Beta users will be grandfathered at preferred rates.",
+          "Starter is $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth is $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale is $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). Annual billing saves roughly two months, and every paid plan starts with a 30-day free trial.",
       },
       {
         question: "Do you offer enterprise pricing?",
