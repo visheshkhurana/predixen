@@ -48,6 +48,7 @@
   --font-sans: Inter, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: "IBM Plex Mono", monospace;
+  --font-display: "Bricolage Grotesque", Inter, sans-serif;
   --radius: .5rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(220 13% 12% / 0.02);
   --shadow-xs: 0px 2px 0px 0px hsl(220 13% 12% / 0.04);
@@ -385,4 +386,12 @@ textarea:focus {
   .no-print { display: none !important; }
   body { background: white !important; color: black !important; }
   main { overflow: visible !important; }
+}
+
+/* Marketing pages only: a distinctive display face (Bricolage Grotesque) for the
+   major headings. Scoped to .marketing-root so the authenticated app UI keeps its
+   clean Inter look. Existing Tailwind weight/tracking utilities still apply. */
+.marketing-root h1,
+.marketing-root h2 {
+  font-family: var(--font-display);
 }

@@ -244,7 +244,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="marketing-root flex min-h-screen flex-col bg-background text-foreground">
       <MarketingBackground />
       <Header />
       {prefersReducedMotion ? (
