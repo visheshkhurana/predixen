@@ -125,8 +125,8 @@ export default function PrivacyPolicyPage() {
         <Section icon={Mail} title="Contact" testId="section-contact">
           <p>If you have questions about this Privacy Policy or wish to exercise your data rights, contact us at:</p>
           <p className="font-medium text-foreground">
-            <a href="mailto:vk@founderconsole.com" className="text-indigo-400 hover:underline" data-testid="link-contact-email">
-              vk@founderconsole.com
+            <a href="mailto:hello@founderconsole.ai" className="text-indigo-400 hover:underline" data-testid="link-contact-email">
+              hello@founderconsole.ai
             </a>
           </p>
         </Section>
