@@ -221,13 +221,13 @@ function PricingPreview() {
           {pricingTiers.map((tier) => (
             <Card
               key={tier.name}
-              className={tier.highlighted ? "border-primary/40 shadow-lg shadow-primary/5" : ""}
+              className={`relative ${tier.highlighted ? "border-primary/60 shadow-xl shadow-primary/10 ring-1 ring-primary/20" : ""}`}
               data-testid={`card-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
             >
+              {tier.highlighted && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 shadow-md shadow-primary/20" data-testid="badge-popular">Most Popular</Badge>
+              )}
               <CardHeader>
-                {tier.highlighted && (
-                  <Badge className="w-fit mb-2" data-testid="badge-popular">Most Popular</Badge>
-                )}
                 <CardTitle className="text-xl">{tier.name}</CardTitle>
                 <div className="flex items-baseline gap-1 mt-2">
                   <span className="text-4xl font-bold text-foreground">{tier.price}</span>
