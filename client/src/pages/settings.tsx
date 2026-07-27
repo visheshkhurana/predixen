@@ -88,7 +88,7 @@ export default function SettingsPage() {
                 <Badge variant="outline" className="text-xs" data-testid="badge-user-role">
                   {user?.role || 'Member'}
                 </Badge>
-                {user?.email_verified && (
+                {user?.is_email_verified && (
                   <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500/30">
                     <Check className="h-3 w-3 mr-1" />
                     Verified
