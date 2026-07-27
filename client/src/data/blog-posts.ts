@@ -88,11 +88,11 @@ export const blogPosts: BlogPost[] = [
       "## Cap Table and Fundraising",
       "FounderConsole includes a full Fundraising OS with cap table management, dilution modeling, investor CRM, SAFE conversion modeling, and an exit waterfall analysis. Sturppy includes basic cap table features. Causal and Finmark do not include fundraising tools — you would need to use a separate tool like Carta or Pulley.",
       "## Pricing Comparison",
-      "FounderConsole is free during its public beta, with all features unlocked and no credit card required. Sturppy offers a free tier with limited features and paid plans starting at $25/month. Causal starts at $50/month for teams. Finmark pricing is less transparent since the BILL acquisition.",
+      "FounderConsole has a free plan plus paid tiers — Starter at $29/month, Growth at $49, and Scale at $99 — each starting with a 30-day free trial. Sturppy offers a free tier with limited features and paid plans starting at $25/month. Causal starts at $50/month for teams. Finmark pricing is less transparent since the BILL acquisition.",
       "## Who Should Use What",
       "FounderConsole is the best choice for founders who want probabilistic simulation, AI-powered insights, and an all-in-one platform that replaces multiple tools. Sturppy works for founders who want simple financial templates without Monte Carlo. Causal is better suited for finance teams at growth-stage companies who need a flexible modeling tool. Finmark is harder to recommend given the uncertainty around its product roadmap.",
       "## Bottom Line",
-      "For seed and Series A stage founders, FounderConsole offers the most comprehensive feature set at the best price (free). The combination of 37 data connectors, Monte Carlo simulation, AI copilot, and fundraising tools makes it uniquely suited for founders who want investor-grade financial intelligence without hiring a CFO.",
+      "For seed and Series A stage founders, FounderConsole offers one of the most comprehensive feature sets in the category — with a free plan to start and paid tiers from $29/month. The combination of 37 data connectors, Monte Carlo simulation, AI copilot, and fundraising tools makes it uniquely suited for founders who want investor-grade financial intelligence without hiring a CFO.",
     ],
   },
   {
@@ -107,7 +107,7 @@ export const blogPosts: BlogPost[] = [
     content: [
       "AI has transformed how startups approach financial planning. What used to require a full-time CFO or expensive consultant can now be done in minutes with the right tools. Here are the seven best AI-powered tools for startup financial planning in 2026.",
       "## 1. FounderConsole — Best All-in-One Platform",
-      "FounderConsole combines Monte Carlo simulation, multi-LLM AI copilot, 37 data connectors, cap table management, and a digital twin into a single platform. The AI copilot uses parallel agents specialized in finance, strategy, and market analysis to answer strategic questions in plain English. It automatically generates board deck narratives, strategic briefings, and investor-ready reports. Free during public beta.",
+      "FounderConsole combines Monte Carlo simulation, multi-LLM AI copilot, 37 data connectors, cap table management, and a digital twin into a single platform. The AI copilot uses parallel agents specialized in finance, strategy, and market analysis to answer strategic questions in plain English. It automatically generates board deck narratives, strategic briefings, and investor-ready reports. A free plan is available, with paid tiers from $29/month.",
       "## 2. ChatGPT / Claude — Best for Ad-Hoc Analysis",
       "General-purpose LLMs like ChatGPT (OpenAI) and Claude (Anthropic) can analyze financial data, build models, and explain complex concepts. They excel at ad-hoc questions but lack real-time data integration and structured financial modeling. Best used as a supplement to dedicated tools rather than a replacement.",
       "## 3. Runway (by Runway Financial) — Best for FP&A Teams",
@@ -121,7 +121,7 @@ export const blogPosts: BlogPost[] = [
       "## 7. Puzzle — Best for Real-Time Bookkeeping",
       "Puzzle automates bookkeeping and categorization using AI. It is not a financial planning tool per se, but it ensures your financial data is accurate and up-to-date, which is essential for any planning tool to work correctly. Clean books are the foundation of accurate forecasting.",
       "## How to Choose the Right Tool",
-      "For pre-seed and seed-stage founders who want one platform that handles forecasting, simulation, fundraising, and AI strategy advice, FounderConsole is the clear choice — especially since it is free during beta. For growth-stage companies with a finance team, consider Runway Financial or Jirav. For ad-hoc analysis, use ChatGPT or Claude. The key is to avoid relying solely on spreadsheets, which are error-prone, siloed, and incapable of probabilistic modeling.",
+      "For pre-seed and seed-stage founders who want one platform that handles forecasting, simulation, fundraising, and AI strategy advice, FounderConsole is the clear choice, with a free plan to start and paid tiers from $29/month. For growth-stage companies with a finance team, consider Runway Financial or Jirav. For ad-hoc analysis, use ChatGPT or Claude. The key is to avoid relying solely on spreadsheets, which are error-prone, siloed, and incapable of probabilistic modeling.",
     ],
   },
   {
@@ -201,7 +201,7 @@ export const blogPosts: BlogPost[] = [
       "Third, you can generate investor-ready reports instantly. Since the digital twin contains all your financial data in a structured format, generating a board deck, investor update, or metrics snapshot takes seconds instead of hours.",
       "## The Future of Founder Decision-Making",
       "The shift from spreadsheets to digital twins mirrors the shift from paper maps to GPS navigation. Both get you from A to B, but GPS adapts in real time, warns you about hazards ahead, and recalculates when conditions change. A startup digital twin does the same for your financial journey — it does not just show you where you are, it helps you see where you are going under different conditions.",
-      "FounderConsole makes digital twins accessible to every founder, not just companies with a CFO and a data team. Connect your data sources, and your digital twin is ready in minutes. All features are free during the public beta.",
+      "FounderConsole makes digital twins accessible to every founder, not just companies with a CFO and a data team. Connect your data sources, and your digital twin is ready in minutes. Start on the free plan, or a 30-day trial of any paid tier.",
     ],
   },
   {

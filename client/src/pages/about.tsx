@@ -31,13 +31,6 @@ const values = [
   },
 ];
 
-const team = [
-  { initials: "NK", name: "Nikita Kapoor", role: "CEO & Co-Founder" },
-  { initials: "AR", name: "Arjun Rao", role: "CTO & Co-Founder" },
-  { initials: "PS", name: "Priya Sharma", role: "Head of Product" },
-  { initials: "DM", name: "Dev Mehta", role: "Lead Engineer" },
-];
-
 gsap.registerPlugin(ScrollTrigger);
 
 export default function AboutPage() {
@@ -158,27 +151,6 @@ export default function AboutPage() {
               </StaggerItem>
             ))}
           </StaggerChildren>
-        </div>
-      </section>
-      </ScrollReveal>
-
-      <ScrollReveal delay={0.1}>
-      <section className="border-t">
-        <div className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="text-team-heading">
-            Our team
-          </h2>
-          <div className="mt-8 grid grid-cols-2 gap-6 md:grid-cols-4">
-            {team.map((member) => (
-              <div key={member.name} className="about-team-member flex flex-col items-center text-center" data-testid={`card-team-${member.initials.toLowerCase()}`}>
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <span className="text-lg font-semibold text-muted-foreground">{member.initials}</span>
-                </div>
-                <h3 className="mt-3 text-sm font-semibold text-foreground">{member.name}</h3>
-                <p className="text-sm text-muted-foreground">{member.role}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
       </ScrollReveal>

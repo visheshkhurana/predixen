@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Menu, Twitter, Linkedin, Github } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -169,17 +169,12 @@ function Footer() {
           <FooterLinkGroup title="Legal" links={footerLegal} />
           <div>
             <h3 className="mb-3 text-sm font-semibold text-foreground">Connect</h3>
-            <div className="flex items-center gap-3 flex-wrap">
-              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter" data-testid="footer-link-twitter" className="text-muted-foreground transition-colors hover:text-foreground">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" data-testid="footer-link-linkedin" className="text-muted-foreground transition-colors hover:text-foreground">
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" aria-label="GitHub" data-testid="footer-link-github" className="text-muted-foreground transition-colors hover:text-foreground">
-                <Github className="h-5 w-5" />
-              </a>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Questions or feedback?{" "}
+              <Link href="/contact" data-testid="footer-link-contact" className="text-foreground transition-colors hover:underline">
+                Get in touch
+              </Link>
+            </p>
           </div>
         </div>
 

@@ -275,7 +275,7 @@ export default function PricingPage() {
       <section className="border-t">
         <div className="mx-auto max-w-6xl px-4 py-10 text-center">
           <p className="text-sm text-muted-foreground" data-testid="text-pricing-footer">
-            All plans include SSL encryption, daily backups, and 99.9% uptime SLA. Every paid plan starts with a 30-day free trial — no credit card required. Cancel anytime.
+            All plans include SSL encryption, daily backups, and reliable cloud hosting. Every paid plan starts with a 30-day free trial — no credit card required. Cancel anytime.
           </p>
         </div>
       </section>

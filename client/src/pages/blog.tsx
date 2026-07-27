@@ -201,7 +201,7 @@ function BlogPost({ slug }: { slug: string }) {
               Ready to try this yourself?
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              All features are free during beta. Connect your data and get your first forecast in under 5 minutes.
+              Start free — no credit card. Connect your data and get your first forecast in under 5 minutes.
             </p>
             <div className="mt-4">
               <Button asChild data-testid="button-article-get-started">

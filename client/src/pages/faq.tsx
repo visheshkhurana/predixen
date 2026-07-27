@@ -97,7 +97,7 @@ const faqSections = [
       {
         question: "What do the paid plans cost?",
         answer:
-          "Starter is $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth is $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale is $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). Annual billing saves roughly two months, and every paid plan starts with a 30-day free trial.",
+          "Starter is $29/month (50 simulations, 100 copilot messages, 2 connectors, Truth Scan, benchmarks), Growth is $49/month (up to 3 companies, unlimited simulations and copilot, 10 connectors, Fundraising OS, board deck export), and Scale is $99/month (unlimited companies and connectors, AI-agent Flight Simulator, Digital Twin, Investor Room, and cross-company intelligence). Every paid plan starts with a 30-day free trial.",
       },
       {
         question: "Do you offer enterprise pricing?",
