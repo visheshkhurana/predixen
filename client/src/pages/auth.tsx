@@ -11,14 +11,24 @@ import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight, Sparkles } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
+import { trackEvent } from '@/lib/posthog';
 
 
 const identifyUser = (userId: number, email: string) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
+    (window as any).gtag('config', 'G-NGGN8216VZ', { user_id: String(userId) });
     (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }
+};
+
+// Signup is the key conversion for a free-first launch — fire it to both GA4
+// (mark "sign_up" as a conversion / import to Google Ads) and PostHog.
+const trackSignup = (userId: number, email: string, method = 'email') => {
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag('event', 'sign_up', { method });
+  }
+  trackEvent('sign_up', { method, user_id: userId });
 };
 
 function AnimatedMetric({ label, value, delay }: { label: string; value: string; delay: number }) {
@@ -194,6 +204,7 @@ export default function AuthPage() {
       const result = await api.auth.register(registerForm.email, registerForm.password);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
+      trackSignup(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
     } catch (err) {

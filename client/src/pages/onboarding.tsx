@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity } from 'lucide-react';
 import type { AmountScale } from '@/lib/utils';
+import { trackEvent } from '@/lib/posthog';
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -314,6 +315,11 @@ export default function OnboardingPage() {
   const handleFinishSetup = () => {
     markStepComplete(5);
     localStorage.setItem('founderConsoleOnboardingComplete', 'true');
+    // Activation conversion: the new user reached a live dashboard.
+    if (typeof window !== 'undefined' && (window as any).gtag) {
+      (window as any).gtag('event', 'onboarding_complete', {});
+    }
+    trackEvent('onboarding_complete', { company_id: currentCompany?.id });
     toast({ title: 'Setup complete!', description: 'Your dashboard is ready.' });
     setLocation('/');
   };
