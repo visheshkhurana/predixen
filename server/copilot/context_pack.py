@@ -11,6 +11,24 @@ from server.models.financial import FinancialRecord, FinancialMetricPoint
 
 
 def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
+    # Compute net burn / runway from the full expense breakdown INCLUDING COGS —
+    # the same "Computed" figure the dashboard shows — rather than trusting the
+    # stored net_burn/runway_months scalars, which can be stale and COGS-omitted
+    # (e.g. 39.2mo instead of 21.3mo). Keeps the copilot consistent with the UI.
+    _rev = float(rec.revenue or 0)
+    _total_costs = (
+        float(rec.opex or 0) + float(rec.payroll or 0)
+        + float(rec.cogs or 0) + float(rec.other_costs or 0)
+        + float(rec.marketing_expense or 0)
+    )
+    _computed_net_burn = _total_costs - _rev
+    if _computed_net_burn > 0:
+        _net_burn = _computed_net_burn
+        _runway = float(rec.cash_balance or 0) / _computed_net_burn
+    else:
+        # Profitable, or no breakdown available — fall back to stored values.
+        _net_burn = float(rec.net_burn) if rec.net_burn is not None else _computed_net_burn
+        _runway = float(rec.runway_months) if rec.runway_months is not None else None
     return {
         "period": rec.period_end.isoformat() if rec.period_end else None,
         "revenue": float(rec.revenue or 0),
@@ -22,8 +40,8 @@ def _serialize_financial_record(rec: FinancialRecord) -> Dict[str, Any]:
         "mrr": float(rec.mrr) if rec.mrr is not None else None,
         "arr": float(rec.arr) if rec.arr is not None else None,
         "gross_margin": float(rec.gross_margin) if rec.gross_margin is not None else None,
-        "net_burn": float(rec.net_burn) if rec.net_burn is not None else None,
-        "runway_months": float(rec.runway_months) if rec.runway_months is not None else None,
+        "net_burn": _net_burn,
+        "runway_months": _runway,
         "headcount": int(rec.headcount) if rec.headcount else None,
         "customers": int(rec.customers) if rec.customers else None,
         "ltv": float(rec.ltv) if rec.ltv is not None else None,
