@@ -49,7 +49,11 @@ class AuditedAnthropicClient:
         self.company_id = company_id
         self.user_id = user_id
         self.pii_mode = pii_mode
-        self.api_key = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY", "")
+        self.api_key = (
+            os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or ""
+        )
         self.base_url = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_BASE_URL", "https://api.anthropic.com")
     
     def _create_audit_log(

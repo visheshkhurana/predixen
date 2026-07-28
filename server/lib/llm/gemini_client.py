@@ -47,7 +47,11 @@ class GeminiClient:
         user_id: Optional[int] = None,
         pii_mode: str = "standard"
     ):
-        self.api_key = os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
+        self.api_key = (
+            os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+        )
         self.base_url = os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL")
         
         if not self.api_key or not self.base_url:
