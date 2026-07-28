@@ -94,6 +94,12 @@ MODELS = {
         max_tokens=16384,
         description="Cost-efficient OpenAI model for high-volume tasks (chat, agents)"
     ),
+    "gpt-4o": ModelConfig(
+        provider=Provider.OPENAI,
+        model_id="gpt-4o",
+        max_tokens=16384,
+        description="Proven-available OpenAI model; reliable fallback when gpt-5/Claude/Gemini are unavailable"
+    ),
     "claude-opus-4-5": ModelConfig(
         provider=Provider.ANTHROPIC,
         model_id="claude-opus-4-5",
@@ -209,14 +215,15 @@ TASK_TO_MODEL: Dict[TaskType, str] = {
 
 
 FALLBACK_CHAIN: Dict[str, List[str]] = {
-    "gpt-5": ["gpt-5-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
-    "gpt-5-mini": ["gpt-5", "claude-sonnet-4-5", "gemini-2.5-pro"],
-    "claude-opus-4-5": ["gpt-5", "gemini-2.5-pro"],
-    "claude-sonnet-4-5": ["gpt-5", "gemini-2.5-flash"],
-    "claude-haiku-4-5": ["gemini-2.5-flash", "gpt-5"],
-    "gemini-2.5-flash": ["claude-haiku-4-5", "gpt-5"],
-    "gemini-2.5-pro": ["claude-sonnet-4-5", "gpt-5"],
-    "gemini-3-flash-preview": ["gemini-2.5-flash", "claude-sonnet-4-5"],
+    "gpt-5": ["gpt-5-mini", "gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro"],
+    "gpt-5-mini": ["gpt-5", "gpt-4o", "claude-sonnet-4-5", "gemini-2.5-pro"],
+    "gpt-4o": ["gpt-5", "gpt-5-mini", "claude-sonnet-4-5", "gemini-2.5-pro"],
+    "claude-opus-4-5": ["gpt-5", "gpt-4o", "gemini-2.5-pro"],
+    "claude-sonnet-4-5": ["gpt-5", "gpt-4o", "gemini-2.5-flash"],
+    "claude-haiku-4-5": ["gpt-4o", "gemini-2.5-flash", "gpt-5"],
+    "gemini-2.5-flash": ["gpt-4o", "claude-haiku-4-5", "gpt-5"],
+    "gemini-2.5-pro": ["gpt-4o", "claude-sonnet-4-5", "gpt-5"],
+    "gemini-3-flash-preview": ["gpt-4o", "gemini-2.5-flash", "claude-sonnet-4-5"],
     "gemini-3-pro-preview": ["gemini-2.5-pro", "claude-opus-4-5"],
     "perplexity-sonar": ["perplexity-sonar-pro", "gpt-5"],
     "perplexity-sonar-pro": ["perplexity-sonar-reasoning", "gpt-5"],
