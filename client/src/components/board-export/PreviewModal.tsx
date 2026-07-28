@@ -65,7 +65,7 @@ function getModelDisplayName(model: string): string {
   if (!model || model === 'unknown' || model === 'fallback') return '';
   const lower = model.toLowerCase();
   if (lower.includes('claude')) return 'Claude';
-  if (lower.includes('gpt-5.6-terra')) return 'GPT-4o';
+  if (lower.includes('gpt-5')) return 'GPT-4o';
   if (lower.includes('gpt-4')) return 'GPT-4';
   if (lower.includes('gemini')) return 'Gemini';
   if (lower.includes('gpt-3')) return 'GPT-3.5';

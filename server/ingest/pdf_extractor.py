@@ -462,7 +462,7 @@ def extract_metrics_with_openai(pdf_text: str) -> Dict[str, Any]:
         client = get_openai_client()
         
         response = client.chat.completions.create(
-            model="gpt-5.6-terra",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",
@@ -523,7 +523,7 @@ def extract_metrics_with_vision(image_base64_list: List[str]) -> Dict[str, Any]:
             })
         
         response = client.chat.completions.create(
-            model="gpt-5.6-terra",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",

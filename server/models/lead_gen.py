@@ -80,7 +80,7 @@ class LeadTemplate(Base):
     system_prompt = Column(Text, nullable=False)
     sample_subject = Column(String(200), nullable=True)
     sample_body = Column(Text, nullable=True)
-    model = Column(String(60), nullable=True, default="gpt-5.6-luna")
+    model = Column(String(60), nullable=True, default="gpt-5-mini")
     is_active = Column(Boolean, nullable=False, default=True)
     updated_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

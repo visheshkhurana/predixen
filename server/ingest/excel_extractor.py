@@ -180,7 +180,7 @@ def extract_metrics_with_openai(excel_text: str) -> Dict[str, Any]:
         client = get_openai_client()
         
         response = client.chat.completions.create(
-            model="gpt-5.6-terra",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",
@@ -471,7 +471,7 @@ def generate_ai_summary(metrics: Dict[str, Any]) -> str:
                                    for k, v in metrics.items() if v is not None])
         
         response = client.chat.completions.create(
-            model="gpt-5.6-terra",
+            model="gpt-5",
             messages=[
                 {
                     "role": "system",

@@ -110,7 +110,7 @@ async def agent_decide(
     total_rounds: int,
     memory: List[str],
     llm_client,
-    model: str = "gpt-5.6-luna",
+    model: str = "gpt-5-mini",
 ) -> Optional[AgentAction]:
     system_prompt = build_agent_system_prompt(agent, company_state)
     user_prompt = build_agent_decision_prompt(

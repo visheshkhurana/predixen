@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class SimulationEngine:
-    def __init__(self, llm_client, model: str = "gpt-5.6-luna"):
+    def __init__(self, llm_client, model: str = "gpt-5-mini"):
         self.llm_client = llm_client
         self.model = model
         self.memory_manager = AgentMemoryManager()

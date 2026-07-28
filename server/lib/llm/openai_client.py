@@ -107,7 +107,7 @@ class AuditedOpenAIClient:
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
-        model: str = "gpt-5.6-terra",
+        model: str = "gpt-5",
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, str]] = None,
@@ -202,7 +202,7 @@ class AuditedOpenAIClient:
     def vision_completion(
         self,
         messages: List[Dict[str, Any]],
-        model: str = "gpt-5.6-terra",
+        model: str = "gpt-5",
         max_tokens: int = 4096,
         **kwargs
     ) -> Dict[str, Any]:

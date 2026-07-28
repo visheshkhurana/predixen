@@ -73,7 +73,7 @@ function TemplateRow({ template, isEditing, onEdit, onCancel, onSaved }: {
     system_prompt: template.system_prompt,
     sample_subject: template.sample_subject ?? "",
     sample_body: template.sample_body ?? "",
-    model: template.model ?? "gpt-5.6-luna",
+    model: template.model ?? "gpt-5-mini",
     is_active: template.is_active,
   });
 
@@ -149,7 +149,7 @@ function TemplateRow({ template, isEditing, onEdit, onCancel, onSaved }: {
             </div>
             <div>
               <Label>Model</Label>
-              <Input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="gpt-5.6-luna" />
+              <Input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="gpt-5-mini" />
             </div>
             <div className="flex items-center justify-between">
               <Label>Active</Label>

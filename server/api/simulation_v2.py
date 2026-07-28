@@ -75,7 +75,7 @@ async def run_simulation_v2_sse(
         "market_volatility": request.market_volatility,
     }
 
-    engine = SimulationEngine(llm_client=client, model="gpt-5.6-luna")
+    engine = SimulationEngine(llm_client=client, model="gpt-5-mini")
 
     event_queue: asyncio.Queue = asyncio.Queue()
 
