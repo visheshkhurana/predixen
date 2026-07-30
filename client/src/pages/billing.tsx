@@ -146,6 +146,13 @@ export default function BillingPage() {
     const result = params.get('checkout');
     if (!result) return;
     if (result === 'success') {
+      // Purchase conversion — fires to GA4 (mark "purchase_subscription" as a key
+      // event / import to Google Ads) and PostHog. Plan/value enrichment happens
+      // server-side via the Stripe webhook; this is the client-side ad signal.
+      try {
+        (window as any).gtag?.('event', 'purchase_subscription', { method: 'stripe_checkout' });
+        (window as any).posthog?.capture('purchase_subscription', { method: 'stripe_checkout' });
+      } catch {}
       toast({
         title: 'Payment successful 🎉',
         description: 'Your subscription is active. It may take a few seconds to reflect here.',
