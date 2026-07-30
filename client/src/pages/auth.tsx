@@ -16,7 +16,7 @@ import { trackEvent } from '@/lib/posthog';
 
 const identifyUser = (userId: number, email: string) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('config', 'G-NGGN8216VZ', { user_id: String(userId) });
+    (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
     (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }

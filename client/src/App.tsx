@@ -215,7 +215,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   useEffect(() => {
     if (user?.id && user?.email) {
       if ((window as any).gtag) {
-        (window as any).gtag('config', 'G-NGGN8216VZ', { user_id: String(user.id) });
+        (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(user.id) });
         (window as any).gtag('set', 'user_properties', { user_email: user.email });
       }
     }
