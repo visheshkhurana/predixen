@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
+import { metaPageView } from "@/lib/metaPixel";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
@@ -63,6 +64,10 @@ function NavLink({ href, label, onClick }: { href: string; label: string; onClic
 function Header() {
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
+
+  useEffect(() => {
+    metaPageView();
+  }, [location]);
 
   useEffect(() => {
     window.scrollTo(0, 0);

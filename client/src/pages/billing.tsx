@@ -152,6 +152,7 @@ export default function BillingPage() {
       try {
         (window as any).gtag?.('event', 'purchase_subscription', { method: 'stripe_checkout' });
         (window as any).posthog?.capture('purchase_subscription', { method: 'stripe_checkout' });
+        import('@/lib/metaPixel').then(m => m.metaTrack('Subscribe', { method: 'stripe_checkout' })).catch(() => {});
       } catch {}
       toast({
         title: 'Payment successful 🎉',

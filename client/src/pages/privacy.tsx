@@ -117,7 +117,7 @@ export default function PrivacyPolicyPage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li><strong className="text-foreground">Session Cookies:</strong> Essential for authentication and CSRF protection.</li>
             <li><strong className="text-foreground">Google Analytics (_ga, _gid):</strong> Traffic measurement and visitor behavior analysis. Retained for up to 2 years. Can be blocked without affecting functionality.</li>
-            <li><strong className="text-foreground">Meta Pixel (_fbp):</strong> Conversion tracking on marketing pages. Retained for up to 90 days. Only active on public marketing pages, not inside the app. Can be blocked without affecting functionality.</li>
+            <li><strong className="text-foreground">Meta Pixel (_fbp):</strong> Conversion tracking on marketing pages. Retained for up to 90 days. Active on public marketing pages and the subscription checkout confirmation, not elsewhere inside the app. Can be blocked without affecting functionality.</li>
             <li><strong className="text-foreground">PostHog Analytics:</strong> Anonymous usage tracking to improve the platform. Can be blocked without affecting functionality.</li>
           </ul>
         </Section>

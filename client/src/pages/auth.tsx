@@ -12,6 +12,7 @@ import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2,
 import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { trackEvent } from '@/lib/posthog';
+import { metaPageView, metaTrack } from '@/lib/metaPixel';
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -25,6 +26,7 @@ const identifyUser = (userId: number, email: string) => {
 // Signup is the key conversion for a free-first launch — fire it to both GA4
 // (mark "sign_up" as a conversion / import to Google Ads) and PostHog.
 const trackSignup = (userId: number, email: string, method = 'email') => {
+  metaTrack('CompleteRegistration', { method });
   if (typeof window !== 'undefined' && (window as any).gtag) {
     (window as any).gtag('event', 'sign_up', { method });
   }
