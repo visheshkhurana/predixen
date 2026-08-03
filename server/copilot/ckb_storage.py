@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
+from server.core.company_metadata import save_metadata_value
 from server.models.company import Company
 from server.models.truth_scan import TruthScan
 from server.copilot.agents.base import CompanyKnowledgeBase
@@ -74,9 +75,7 @@ class CKBStorage:
             logger.error(f"Company {ckb.company_id} not found")
             return False
         
-        metadata = company.metadata_json or {}
-        
-        metadata["ckb"] = {
+        save_metadata_value(self.db, company, "ckb", {
             "overview": ckb.overview,
             "financials": ckb.financials,
             "market": ckb.market,
@@ -90,10 +89,7 @@ class CKBStorage:
             "decisions_v2": ckb.decisions_v2,
             "outcomes": ckb.outcomes,
             "updated_at": datetime.utcnow().isoformat()
-        }
-        
-        company.metadata_json = metadata
-        self.db.commit()
+        })
         
         logger.info(f"Saved CKB for company {ckb.company_id}")
         return True

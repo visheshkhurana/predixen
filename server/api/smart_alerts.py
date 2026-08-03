@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.company_metadata import save_metadata_value
 from server.models.user import User
 from server.models.company import Company
 from server.models.truth_scan import TruthScan
@@ -46,11 +47,13 @@ def _get_metadata(company: Company) -> dict:
     return company.metadata_json or {}
 
 
-def _save_metadata(db: Session, company: Company, metadata: dict):
-    company.metadata_json = metadata
-    from sqlalchemy.orm.attributes import flag_modified
-    flag_modified(company, "metadata_json")
-    db.commit()
+def _save_key(db: Session, company: Company, key: str, value: Any):
+    """Persist a single metadata key without touching its siblings.
+
+    Writing the whole blob here used to drop keys owned by other features
+    (hiring plans, connectors) whenever the two wrote concurrently.
+    """
+    save_metadata_value(db, company, key, value)
 
 
 def _evaluate_alerts(company: Company, db: Session) -> List[Dict[str, Any]]:
@@ -218,8 +221,7 @@ def evaluate_alerts(
     metadata = _get_metadata(company)
     existing_alerts = metadata.get("smart_alerts", [])
     existing_alerts = new_alerts + existing_alerts
-    metadata["smart_alerts"] = existing_alerts
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "smart_alerts", existing_alerts)
 
     auto_simulations = []
     if new_alerts:
@@ -294,8 +296,7 @@ def acknowledge_alert(
     if not found:
         raise HTTPException(status_code=404, detail="Alert not found")
 
-    metadata["smart_alerts"] = alerts
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "smart_alerts", alerts)
 
     return {"status": "acknowledged", "alert_id": alert_id}
 
@@ -317,8 +318,7 @@ def delete_alert(
     if len(alerts) == original_len:
         raise HTTPException(status_code=404, detail="Alert not found")
 
-    metadata["smart_alerts"] = alerts
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "smart_alerts", alerts)
 
     return {"status": "deleted", "alert_id": alert_id}
 
@@ -359,8 +359,7 @@ def create_rule(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     rules.append(new_rule)
-    metadata["alert_rules"] = rules
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "alert_rules", rules)
 
     return {"rule": new_rule}
 
@@ -397,8 +396,7 @@ def update_rule(
     if not found:
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    metadata["alert_rules"] = rules
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "alert_rules", rules)
 
     return {"rule": next(r for r in rules if r.get("id") == rule_id)}
 
@@ -420,8 +418,7 @@ def delete_rule(
     if len(rules) == original_len:
         raise HTTPException(status_code=404, detail="Rule not found")
 
-    metadata["alert_rules"] = rules
-    _save_metadata(db, company, metadata)
+    _save_key(db, company, "alert_rules", rules)
 
     return {"status": "deleted", "rule_id": rule_id}
 

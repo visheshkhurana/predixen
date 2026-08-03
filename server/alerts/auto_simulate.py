@@ -9,6 +9,8 @@ from typing import Dict, Any, List, Optional
 
 from sqlalchemy.orm import Session
 
+from server.core.company_metadata import save_metadata_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -184,9 +186,7 @@ def create_auto_simulation_job(
 
         auto_sims.append(sim_record)
         auto_sims = auto_sims[-20:]
-        metadata["auto_simulations"] = auto_sims
-        company.metadata_json = metadata
-        db.commit()
+        save_metadata_value(db, company, "auto_simulations", auto_sims)
 
         logger.info(
             f"Auto-triggered simulation {config['simulation_id']} for company {company_id} "

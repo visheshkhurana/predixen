@@ -18,6 +18,7 @@ def _fmt_currency(val):
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.core.company_access import get_user_company
+from server.core.company_metadata import save_metadata_value
 from server.core.pagination import paginate, create_paginated_response
 from server.models.user import User
 from server.models.company import Company
@@ -825,11 +826,8 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         diagnosis.setdefault("health_label", "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"))
         diagnosis.setdefault("company_stage_label", "Early Revenue" if revenue > 0 else "Pre-Revenue")
         
-        meta = dict(company.metadata_json or {})
-        meta["strategic_diagnosis"] = diagnosis
-        company.metadata_json = meta
-        db.commit()
-        
+        save_metadata_value(db, company, "strategic_diagnosis", diagnosis)
+
         return diagnosis
         
     except Exception as e:
@@ -901,10 +899,7 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
             "error": str(e)
         }
         try:
-            meta = dict(company.metadata_json or {})
-            meta["strategic_diagnosis"] = fallback
-            company.metadata_json = meta
-            db.commit()
+            save_metadata_value(db, company, "strategic_diagnosis", fallback)
         except Exception:
             pass
         return fallback

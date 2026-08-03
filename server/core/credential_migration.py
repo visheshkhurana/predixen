@@ -13,6 +13,7 @@ import logging
 from typing import Dict, Tuple, List
 from sqlalchemy.orm import Session
 
+from server.core.company_metadata import save_metadata_value
 from server.core.encryption import encrypt_credentials, decrypt_credentials
 from server.models.company import Company
 
@@ -152,9 +153,9 @@ def migrate_plaintext_credentials(db: Session, dry_run: bool = True) -> Tuple[in
                 error_messages.append(error_msg)
                 total_errors += 1
 
-        # Save updated metadata
-        metadata["connectors"] = connectors
-        company.metadata_json = metadata
+        # Save updated metadata. commit=False so every company in this batch
+        # still lands in the single transaction committed below.
+        save_metadata_value(db, company, "connectors", connectors, commit=False)
 
     # Commit all changes
     if total_encrypted > 0 or total_errors == 0:

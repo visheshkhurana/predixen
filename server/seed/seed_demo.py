@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import json
 import logging
+from server.core.company_metadata import save_metadata_value
 from server.models.user import User
 from server.models.company import Company
 from server.models.financial import FinancialRecord
@@ -100,11 +101,9 @@ def _ensure_connector_metadata(db: Session, company):
     }
     metadata = company.metadata_json or {}
     if metadata.get("connectors") != connectors:
-        metadata["connectors"] = connectors
-        company.metadata_json = metadata
-        from sqlalchemy.orm.attributes import flag_modified
-        flag_modified(company, "metadata_json")
-        db.commit()
+        # Runs on every boot; a full-blob write here would wipe whatever the
+        # live app had written since (hiring plans, alerts, copilot state).
+        save_metadata_value(db, company, "connectors", connectors)
         logger.info("Updated demo company connector metadata")
 
 
