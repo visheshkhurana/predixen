@@ -290,10 +290,10 @@ class ConversationStateStore:
         
         company = db.query(Company).filter(Company.id == company_id).first()
         if company:
-            metadata = company.metadata_json or {}
-            metadata['copilot_state'] = state.to_dict()
-            company.metadata_json = metadata
-        
+            # commit=False: this and the Conversation update below are one unit.
+            from server.core.company_metadata import save_metadata_value
+            save_metadata_value(db, company, 'copilot_state', state.to_dict(), commit=False)
+
         conversation_id = self.get_or_create_conversation(db, company_id, user_id)
         conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
         if conversation:

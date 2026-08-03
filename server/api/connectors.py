@@ -18,6 +18,7 @@ import json
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_metadata import delete_metadata_value, save_metadata_value
 from server.core.encryption import (
     encrypt_credentials,
     decrypt_credentials,
@@ -348,23 +349,23 @@ async def connect_provider(
         if not auth_success:
             raise HTTPException(status_code=401, detail="Authentication failed. Check your credentials.")
 
-        # Store credentials securely (encrypted)
-        metadata = company.metadata_json or {}
-        if "connectors" not in metadata:
-            metadata["connectors"] = {}
-
         # Encrypt sensitive credentials before storing in database
         encrypted_creds = encrypt_credentials(credentials.credentials)
 
-        metadata["connectors"][provider_id] = {
-            "connected": True,
-            "credentials": encrypted_creds,  # Encrypted string
-            "settings": credentials.settings,
-            "connected_at": datetime.utcnow().isoformat(),
-        }
-
-        company.metadata_json = metadata
-        db.commit()
+        # Write just this provider's entry. A full-blob write here would drop a
+        # provider connected by a concurrent request, along with any other
+        # feature's metadata key.
+        save_metadata_value(
+            db,
+            company,
+            ("connectors", provider_id),
+            {
+                "connected": True,
+                "credentials": encrypted_creds,  # Encrypted string
+                "settings": credentials.settings,
+                "connected_at": datetime.utcnow().isoformat(),
+            },
+        )
 
         logger.info(f"Successfully connected provider {provider_id} for company {company_id}")
 
@@ -401,15 +402,9 @@ async def disconnect_provider(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    metadata = company.metadata_json or {}
-    connectors = metadata.get("connectors", {})
-    
-    if provider_id in connectors:
-        del connectors[provider_id]
-        metadata["connectors"] = connectors
-        company.metadata_json = metadata
-        db.commit()
-    
+    if provider_id in (company.metadata_json or {}).get("connectors", {}):
+        delete_metadata_value(db, company, ("connectors", provider_id))
+
     return {
         "success": True,
         "provider_id": provider_id,
@@ -509,8 +504,15 @@ async def sync_provider(
                 f"{result.records_synced} records synced"
             )
 
-            metadata["connectors"] = connectors
-            company.metadata_json = metadata
+            # commit=False: the sync status must land in the same transaction as
+            # the FinancialRecord below, so the caller's commit owns both.
+            save_metadata_value(
+                db,
+                company,
+                ("connectors", provider_id),
+                connectors[provider_id],
+                commit=False,
+            )
 
             if financial_record:
                 db.add(financial_record)
@@ -843,20 +845,19 @@ async def test_with_sample_data(
     record = _build_financial_record(company_id, provider_id, provider_name, sample, today)
     db.add(record)
 
-    metadata = company.metadata_json or {}
-    if "connectors" not in metadata:
-        metadata["connectors"] = {}
-
-    metadata["connectors"][provider_id] = {
-        "connected": True,
-        "credentials": {"mode": "sample_data"},
-        "connected_at": datetime.utcnow().isoformat(),
-        "last_sync": datetime.utcnow().isoformat(),
-        "records_synced": sum(1 for v in sample.values() if v is not None and isinstance(v, (int, float))),
-        "sample_mode": True,
-    }
-    company.metadata_json = metadata
-    db.commit()
+    save_metadata_value(
+        db,
+        company,
+        ("connectors", provider_id),
+        {
+            "connected": True,
+            "credentials": {"mode": "sample_data"},
+            "connected_at": datetime.utcnow().isoformat(),
+            "last_sync": datetime.utcnow().isoformat(),
+            "records_synced": sum(1 for v in sample.values() if v is not None and isinstance(v, (int, float))),
+            "sample_mode": True,
+        },
+    )
 
     stored = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company_id,
