@@ -56,7 +56,6 @@ export default function AuthPage() {
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
@@ -79,7 +78,7 @@ export default function AuthPage() {
   }, [toast]);
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ email: '', password: '', confirmPassword: '' });
+  const [registerForm, setRegisterForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [signupStarted, setSignupStarted] = useState(false);
 
@@ -216,10 +215,6 @@ export default function AuthPage() {
     const passwordError = validatePassword(registerForm.password);
     if (passwordError) {
       newErrors.password = passwordError;
-    }
-    
-    if (registerForm.password !== registerForm.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
     }
     
     if (Object.keys(newErrors).length > 0) {
@@ -385,10 +380,10 @@ export default function AuthPage() {
 
           <div className="mb-6">
             <Button
-              variant="outline"
+              variant={activeTab === 'register' ? 'default' : 'outline'}
               type="button"
               className="w-full h-11 gap-2.5 text-sm font-medium"
-              onClick={() => handleSocialLogin('google')}
+              onClick={() => { if (activeTab === 'register') handleSignupStart(); handleSocialLogin('google'); }}
               disabled={isLoading || socialLoadingProvider !== null}
               data-testid="button-google-login"
             >
@@ -598,45 +593,7 @@ export default function AuthPage() {
                   )}
                 </div>
                 
-                <div className="space-y-1.5">
-                  <Label htmlFor="register-confirm-password" className="text-sm font-medium">
-                    Confirm password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-                    <Input
-                      id="register-confirm-password"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      required
-                      placeholder="Confirm your password"
-                      className={`pl-10 pr-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.confirmPassword ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                      value={registerForm.confirmPassword}
-                      onChange={(e) => {
-                        setRegisterForm({ ...registerForm, confirmPassword: e.target.value });
-                        if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
-                      }}
-                      data-testid="input-register-confirm-password"
-                      aria-invalid={!!errors.confirmPassword}
-                      aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors focus:outline-none"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {errors.confirmPassword && (
-                    <p id="confirm-password-error" className="text-xs text-destructive flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      {errors.confirmPassword}
-                    </p>
-                  )}
-                </div>
-                
-                <Button 
+                <Button
                   type="submit" 
                   className="w-full h-11 text-sm font-medium mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all" 
                   disabled={isLoading} 

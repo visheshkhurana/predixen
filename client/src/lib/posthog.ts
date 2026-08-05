@@ -12,6 +12,12 @@ export function initPostHog() {
     capture_pageview: true,
     capture_pageleave: true,
     persistence: 'localStorage',
+    // Session replay: record marketing + auth funnel sessions so we can watch
+    // where ad visitors drop off. Inputs are masked by default for privacy.
+    disable_session_recording: false,
+    session_recording: {
+      maskAllInputs: true,
+    },
   });
   initialized = true;
 }

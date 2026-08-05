@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { trackFunnel } from "@/lib/funnel";
 import {
   ArrowRight,
   Calculator,
@@ -320,7 +321,7 @@ export default function RunwayCalculatorPage() {
               confidence bands — so you know your true runway probability.
             </p>
             <Button asChild className="mt-4" data-testid="button-cta-connect">
-              <Link href="/auth">
+              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "runway-calculator" })}>
                 Connect Your Real Data
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
