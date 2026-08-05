@@ -33,6 +33,7 @@ import { MonteCarloDemo } from "@/components/marketing/redesign/MonteCarloDemo";
 import { CopilotDemo } from "@/components/marketing/redesign/CopilotDemo";
 import { TwinDashboardDemo } from "@/components/marketing/redesign/TwinDashboardDemo";
 import { Marquee } from "@/components/marketing/redesign/Marquee";
+import { trackFunnel } from "@/lib/funnel";
 
 const integrations = [
   "Stripe", "QuickBooks", "Gusto", "Mercury", "Brex", "Plaid", "Xero", "Shopify",
@@ -236,7 +237,7 @@ function Hero() {
               asChild
               data-testid="button-hero-start-simulation"
             >
-              <Link href="/auth">
+              <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "hero" })}>
                 Start Simulation
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
@@ -649,7 +650,7 @@ function PricingPreview() {
                 variant={tier.highlighted ? "default" : "outline"}
                 data-testid={`button-pricing-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
               >
-                <Link href="/auth">
+                <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: `pricing-${tier.name.toLowerCase()}` })}>
                   {tier.cta}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
@@ -825,7 +826,7 @@ export default function LandingPage() {
                   asChild
                   data-testid="button-bottom-start-trial"
                 >
-                  <Link href="/auth">
+                  <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "footer-cta" })}>
                     Get Started Free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>

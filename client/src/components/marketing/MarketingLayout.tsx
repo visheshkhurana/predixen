@@ -12,6 +12,7 @@ import {
 import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
 import { metaPageView } from "@/lib/metaPixel";
+import { trackFunnel } from "@/lib/funnel";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
@@ -92,7 +93,7 @@ function Header() {
             <Link href="/demo">Watch Demo</Link>
           </Button>
           <Button size="sm" asChild data-testid="button-get-started">
-            <Link href="/auth">Get Started Free</Link>
+            <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
           </Button>
         </div>
 
@@ -132,7 +133,7 @@ function Header() {
                   <Link href="/demo" onClick={() => setOpen(false)}>Watch Demo</Link>
                 </Button>
                 <Button asChild data-testid="button-mobile-get-started">
-                  <Link href="/auth" onClick={() => setOpen(false)}>Get Started Free</Link>
+                  <Link href="/auth?tab=register" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>
                 </Button>
               </div>
             </SheetContent>
@@ -207,7 +208,7 @@ function MobileStickyCTA() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9998] border-t bg-background/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden" data-testid="mobile-sticky-cta">
       <Button className="w-full" size="lg" asChild>
-        <Link href="/auth">Get Started Free</Link>
+        <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "mobile-sticky" })}>Get Started Free</Link>
       </Button>
     </div>
   );

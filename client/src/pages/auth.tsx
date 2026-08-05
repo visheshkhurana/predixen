@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { trackEvent } from '@/lib/posthog';
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
+import { trackFunnel } from '@/lib/funnel';
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -80,6 +81,31 @@ export default function AuthPage() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ email: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [signupStarted, setSignupStarted] = useState(false);
+
+  // Marketing CTAs link to /auth?tab=register so ad traffic lands directly on
+  // the signup form instead of the login tab.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'register') {
+      setActiveTab('register');
+    }
+  }, []);
+
+  // Funnel: fire signup_view once when the register tab is shown.
+  useEffect(() => {
+    if (activeTab === 'register') {
+      trackFunnel('signup_view', {});
+    }
+  }, [activeTab]);
+
+  // Funnel: fire signup_start once on first interaction with the register form.
+  const handleSignupStart = () => {
+    if (!signupStarted) {
+      setSignupStarted(true);
+      trackFunnel('signup_start', {});
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -512,6 +538,7 @@ export default function AuthPage() {
                       placeholder="you@company.com"
                       className={`pl-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.email ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                       value={registerForm.email}
+                      onFocus={handleSignupStart}
                       onChange={(e) => {
                         setRegisterForm({ ...registerForm, email: e.target.value });
                         if (errors.email) setErrors({ ...errors, email: '' });
