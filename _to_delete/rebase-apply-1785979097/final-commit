@@ -1,0 +1,8 @@
+CRO improvements: Google-first signup, /ai-cfo landing page, session replay
+
+- Register form: remove confirm-password field (friction); Google button becomes
+  primary CTA on the register tab and fires signup_start
+- New /ai-cfo message-matched landing page for the AI CFO ad group (reuses
+  redesign components, Product jsonLd, funnel-tracked CTAs)
+- PostHog session recordings enabled (inputs masked)
+- Runway calculator CTA -> /auth?tab=register + cta_click tracking

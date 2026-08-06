@@ -1,0 +1,9 @@
+Fix /ai-cfo hero: aurora-hero is a background layer, not a section class
+
+The hero section had aurora-hero applied directly, which made the entire
+hero an absolutely-positioned blurred backdrop — headline and Start Free
+Trial CTA were invisible and unclickable. Moved it to a child background
+div like the landing page does.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY

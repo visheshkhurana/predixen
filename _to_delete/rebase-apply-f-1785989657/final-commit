@@ -1,0 +1,19 @@
+Fix CSV import: model has no 'expenses' column — every row failed
+
+The import-csv handler passed expenses= to FinancialRecord, which has
+cogs/opex/other_costs instead — SQLAlchemy raised on every row, so every
+CSV import ever attempted wrote 0 records while the toast said 'Import
+successful'. Found live during the founder role-play test.
+
+- store the mapped Expenses column as opex; add cogs/other_costs to
+  detection and import so full P&L CSVs keep their cost split
+- net burn now sums all present cost components minus revenue; gross
+  margin computed from revenue/cogs when not supplied
+- skip rows with unparseable dates instead of failing the whole commit
+  (period columns are non-nullable)
+- toast is now honest: destructive 'Import failed' at 0 rows, partial
+  count otherwise; 'Upload Financials' empty-state CTA now goes to
+  /data-input instead of bouncing off completed onboarding
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY

@@ -1,0 +1,10 @@
+CSV import: compute MoM growth from history + idempotent re-imports
+
+- after each import, recompute mom_growth across the company's full
+  record history — it was never set, so the baseline growth rate read
+  0% and every Monte Carlo ran off a flat-revenue assumption
+- upsert by (company, period_end, source_type) so re-importing a file
+  updates rows in place instead of duplicating periods
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY

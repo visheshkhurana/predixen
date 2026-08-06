@@ -13,6 +13,11 @@ export function initPostHog() {
   if (initialized || !POSTHOG_KEY) return;
   posthog.init(POSTHOG_KEY, {
     api_host: POSTHOG_HOST,
+    // Send over XMLHttpRequest rather than fetch. A number of common browser
+    // extensions (privacy blockers, anti-fingerprinting shims) monkey-patch
+    // window.fetch and throw inside it, which silently kills every capture on
+    // the default fetch transport while XHR sails through.
+    api_transport: 'XHR',
     capture_pageview: true,
     capture_pageleave: true,
     persistence: 'localStorage',

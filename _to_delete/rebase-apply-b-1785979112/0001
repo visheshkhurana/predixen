@@ -1,0 +1,39 @@
+From f32629e1378c4aa5acfcaaebaf9c6a6173de00f7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 6 Aug 2026 01:17:49 +0000
+Subject: [PATCH] Fix /ai-cfo hero: aurora-hero is a background layer, not a
+ section class
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The hero section had aurora-hero applied directly, which made the entire
+hero an absolutely-positioned blurred backdrop — headline and Start Free
+Trial CTA were invisible and unclickable. Moved it to a child background
+div like the landing page does.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY
+---
+ client/src/pages/ai-cfo.tsx | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/client/src/pages/ai-cfo.tsx b/client/src/pages/ai-cfo.tsx
+index 3094ac0..3d9485d 100644
+--- a/client/src/pages/ai-cfo.tsx
++++ b/client/src/pages/ai-cfo.tsx
+@@ -59,8 +59,9 @@ export default function AiCfoPage() {
+   return (
+     <MarketingLayout>
+       {/* hero */}
+-      <section className="relative overflow-hidden aurora-hero">
+-        <div className="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
++      <section className="relative overflow-hidden">
++        <div className="aurora-hero" aria-hidden />
++        <div className="relative mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
+           <motion.div
+             initial={reduced ? false : { opacity: 0, y: 12 }}
+             animate={{ opacity: 1, y: 0 }}
+-- 
+2.43.0
+

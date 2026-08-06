@@ -1,0 +1,87 @@
+From fbd08edf23bd0e6429f71ea44cec9430b1891d6e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 6 Aug 2026 04:14:00 +0000
+Subject: [PATCH] CSV import: compute MoM growth from history + idempotent
+ re-imports
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- after each import, recompute mom_growth across the company's full
+  record history — it was never set, so the baseline growth rate read
+  0% and every Monte Carlo ran off a flat-revenue assumption
+- upsert by (company, period_end, source_type) so re-importing a file
+  updates rows in place instead of duplicating periods
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY
+---
+ server/api/csv_import.py | 41 +++++++++++++++++++++++++++++++++++-----
+ 1 file changed, 36 insertions(+), 5 deletions(-)
+
+diff --git a/server/api/csv_import.py b/server/api/csv_import.py
+index c74895f..7ba4d0b 100644
+--- a/server/api/csv_import.py
++++ b/server/api/csv_import.py
+@@ -168,10 +168,7 @@ def import_csv_data(
+             if gm is None and revenue and cogs is not None:
+                 gm = round((revenue - cogs) / revenue * 100, 2)
+ 
+-            record = FinancialRecord(
+-                company_id=company_id,
+-                period_start=date_val,
+-                period_end=date_val,
++            field_values = dict(
+                 revenue=revenue,
+                 cogs=cogs,
+                 opex=expenses,
+@@ -188,11 +185,45 @@ def import_csv_data(
+                 cac=cac,
+                 source_type="csv_import",
+             )
+-            db.add(record)
++            # Idempotent by period: re-importing a file updates the existing
++            # csv_import row for that period instead of duplicating it
++            period_key = date_val.date() if isinstance(date_val, datetime) else date_val
++            existing = db.query(FinancialRecord).filter(
++                FinancialRecord.company_id == company_id,
++                FinancialRecord.period_end == period_key,
++                FinancialRecord.source_type == "csv_import",
++            ).first()
++            if existing:
++                for k, v in field_values.items():
++                    setattr(existing, k, v)
++            else:
++                db.add(FinancialRecord(
++                    company_id=company_id,
++                    period_start=date_val,
++                    period_end=date_val,
++                    **field_values,
++                ))
+             imported += 1
+         except Exception as e:
+             errors.append({"row": i, "error": str(e)})
+ 
++    db.flush()
++
++    # Recompute month-over-month revenue growth across the company's full
++    # history (imports never set mom_growth, which left the baseline growth
++    # rate at 0% and skewed every simulation pessimistic).
++    all_records = db.query(FinancialRecord).filter(
++        FinancialRecord.company_id == company_id,
++        FinancialRecord.period_end.isnot(None),
++    ).order_by(FinancialRecord.period_end.asc()).all()
++    prev_rev = None
++    for rec in all_records:
++        rev = float(rec.revenue or 0)
++        if prev_rev and prev_rev > 0 and rev > 0:
++            rec.mom_growth = round((rev / prev_rev - 1) * 100, 2)
++        if rev > 0:
++            prev_rev = rev
++
+     db.commit()
+ 
+     return {
+-- 
+2.43.0
+

@@ -1,0 +1,23 @@
+---
+ client/src/pages/ai-cfo.tsx | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/client/src/pages/ai-cfo.tsx b/client/src/pages/ai-cfo.tsx
+index 3094ac0..3d9485d 100644
+--- a/client/src/pages/ai-cfo.tsx
++++ b/client/src/pages/ai-cfo.tsx
+@@ -59,8 +59,9 @@ export default function AiCfoPage() {
+   return (
+     <MarketingLayout>
+       {/* hero */}
+-      <section className="relative overflow-hidden aurora-hero">
+-        <div className="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
++      <section className="relative overflow-hidden">
++        <div className="aurora-hero" aria-hidden />
++        <div className="relative mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
+           <motion.div
+             initial={reduced ? false : { opacity: 0, y: 12 }}
+             animate={{ opacity: 1, y: 0 }}
+-- 
+2.43.0
+

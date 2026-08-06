@@ -1,0 +1,8 @@
+The snippet in client/index.html and the Vite env default both carried
+a stale phc_ token that PostHog rejects with 401 — zero events or session
+replays were ever ingested. Replace with the real project token (public
+client key by design). Also allow GA4 regional collect endpoints
+(*.google-analytics.com / *.analytics.google.com) in the CSP.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY

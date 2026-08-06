@@ -1,0 +1,7 @@
+Open tabs from before a deploy 404 on old chunk hashes when navigating
+(e.g. clicking Watch Demo), surfacing the Something Went Wrong boundary.
+Listen for vite:preloadError and reload once (sessionStorage one-shot
+guard) so the tab picks up the new build transparently.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY

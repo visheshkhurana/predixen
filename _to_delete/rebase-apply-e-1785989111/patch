@@ -1,0 +1,92 @@
+---
+ client/src/components/CompanySwitcher.tsx | 14 +++++++++++++-
+ client/src/pages/onboarding.tsx           |  9 ++++++++-
+ client/src/store/founderStore.ts          | 23 ++++++++++++++++++++++-
+ 3 files changed, 43 insertions(+), 3 deletions(-)
+
+diff --git a/client/src/components/CompanySwitcher.tsx b/client/src/components/CompanySwitcher.tsx
+index 0249521..6146838 100644
+--- a/client/src/components/CompanySwitcher.tsx
++++ b/client/src/components/CompanySwitcher.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from 'react';
++import { useEffect, useState } from 'react';
+ import { useLocation } from 'wouter';
+ import { Button } from '@/components/ui/button';
+ import {
+@@ -113,6 +113,18 @@ export function CompanySwitcher() {
+     data_sharing_enabled: false,
+   });
+ 
++  // The persisted currentCompany can be stale — left over from the demo
++  // account, a different user, or a deleted company. Once the real list for
++  // this session loads, drop any selection that isn't in it so the app never
++  // renders another account's company.
++  useEffect(() => {
++    if (isLoading) return;
++    const list = (companies || []) as Company[];
++    if (currentCompany && !list.some((c) => c.id === currentCompany.id)) {
++      setCurrentCompany(list[0] ?? null);
++    }
++  }, [isLoading, companies, currentCompany, setCurrentCompany]);
++
+   if (isLoading) {
+     return <Skeleton className="h-9 w-40" />;
+   }
+diff --git a/client/src/pages/onboarding.tsx b/client/src/pages/onboarding.tsx
+index b859e37..3a82bd2 100644
+--- a/client/src/pages/onboarding.tsx
++++ b/client/src/pages/onboarding.tsx
+@@ -67,7 +67,14 @@ export default function OnboardingPage() {
+   useEffect(() => {
+     const completed = localStorage.getItem('founderConsoleOnboardingComplete');
+     if (completed === 'true') {
+-      setLocation('/');
++      if (useFounderStore.getState().currentCompany) {
++        setLocation('/');
++      } else {
++        // Stale flag from a previous account/demo session. Without a company,
++        // redirecting away just bounces back here forever (React #185) —
++        // clear the flag and let the user onboard.
++        localStorage.removeItem('founderConsoleOnboardingComplete');
++      }
+     }
+   }, [setLocation]);
+ 
+diff --git a/client/src/store/founderStore.ts b/client/src/store/founderStore.ts
+index 98c0b00..c3244cf 100644
+--- a/client/src/store/founderStore.ts
++++ b/client/src/store/founderStore.ts
+@@ -151,7 +151,28 @@ export const useFounderStore = create<FounderState>()(
+       lastExtraction: null,
+       extractionInProgress: false,
+       
+-      setUser: (user) => set({ user }),
++      setUser: (user) => {
++        const prev = get().user;
++        if (user && prev && prev.id !== user.id) {
++          // A different account signed in (e.g. demo -> real user). Persisted
++          // company-scoped state from the previous account must not leak
++          // across — it caused new users to see the demo company's dashboard
++          // and an /onboarding redirect loop (React #185).
++          localStorage.removeItem('founderConsoleOnboardingComplete');
++          set({
++            user,
++            currentCompany: null,
++            companies: [],
++            truthScan: null,
++            currentScenario: null,
++            latestRun: null,
++            financialBaseline: null,
++            lastExtraction: null,
++          });
++        } else {
++          set({ user });
++        }
++      },
+       setCurrentCompany: (company) => set({ 
+         currentCompany: company,
+         financialBaseline: null,
+-- 
+2.43.0
+

@@ -1,0 +1,14 @@
+Three related bugs, all traced from a live repro of the Something Went
+Wrong screen on /onboarding (React #185 redirect loop):
+
+- founderStore.setUser now resets company-scoped state (currentCompany,
+  baseline, scans) and the onboarding-complete flag when a different
+  user id signs in, so demo-session state can't leak into a real account
+- onboarding.tsx no longer bounces to / on a stale onboarding-complete
+  flag when the user has no company (this was the infinite loop)
+- CompanySwitcher drops a persisted currentCompany that isn't in the
+  fetched company list, so the app never renders another account's
+  company (was causing 403s + sample TechFlow data on real accounts)
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01ChWFzYUmmKjCBD1YWCdhQY
