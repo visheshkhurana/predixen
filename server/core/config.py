@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        # .env carries keys consumed outside this model (PORT/NODE_ENV for the
+        # Express gateway, CREATE_SCHEMA/SEED_* read via os.getenv in the
+        # properties above). Without this, copying .env.example to .env — as
+        # that file instructs — fails startup with extra_forbidden.
+        extra = "ignore"
 
 @lru_cache()
 def get_settings() -> Settings:
