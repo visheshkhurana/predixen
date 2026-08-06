@@ -51,9 +51,11 @@ app.use((req, res, next) => {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com",
     // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
-    // and www.google.com — not just www.google-analytics.com. Omitting them
-    // silently drops a share of measurement traffic.
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
+    // and www.google.com — not just www.google-analytics.com. Google also routes
+    // some traffic through regional endpoints (region1.google-analytics.com /
+    // region1.analytics.google.com). Omitting any of them silently drops a
+    // share of measurement traffic.
+    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
     isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com",
   ].join("; "));
   next();

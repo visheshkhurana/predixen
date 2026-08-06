@@ -1,6 +1,10 @@
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY || '';
+// PostHog client tokens are public by design (they ship in the JS bundle).
+// The default below is the real project token — the VITE_POSTHOG_KEY that was
+// previously configured at build time pointed at a nonexistent project, so
+// PostHog rejected every event with 401 and no analytics were ever ingested.
+const POSTHOG_KEY = 'phc_C3jjovUPQChwDJoJdCp6E7adYRKBYSPETq5bNJw7pt6M';
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 let initialized = false;
