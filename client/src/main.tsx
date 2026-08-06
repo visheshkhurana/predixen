@@ -14,6 +14,25 @@ import { Sentry } from "./lib/sentry";
 // Initialize Sentry error tracking
 initSentry();
 
+/**
+ * Stale-deploy recovery: after a new deploy, lazy route chunks from the old
+ * build 404 in already-open tabs ("Failed to fetch dynamically imported
+ * module"), which used to surface the Something Went Wrong boundary when the
+ * user clicked a nav link. Vite emits `vite:preloadError` for exactly this —
+ * reload once to pick up the new build (one-shot guard to avoid loops).
+ */
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  const key = "fc-chunk-reload";
+  if (sessionStorage.getItem(key)) return; // already retried — let the boundary show
+  sessionStorage.setItem(key, "1");
+  window.location.reload();
+});
+window.addEventListener("load", () => {
+  // successful load — clear the guard so the next deploy can retry again
+  setTimeout(() => sessionStorage.removeItem("fc-chunk-reload"), 10_000);
+});
+
 const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element not found. Ensure there is an element with id='root' in index.html.");
