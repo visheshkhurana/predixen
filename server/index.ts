@@ -43,11 +43,17 @@ app.use((req, res, next) => {
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
+    // us-assets.i.posthog.com serves array.js/recorder.js — the snippet in
+    // client/index.html rewrites api_host to it, so omitting it blocks
+    // PostHog analytics and session replay entirely.
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https://us.posthog.com https://www.facebook.com",
-    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://www.google-analytics.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
+    // GA4 sends /g/collect beacons to analytics.google.com, stats.g.doubleclick.net
+    // and www.google.com — not just www.google-analytics.com. Omitting them
+    // silently drops a share of measurement traffic.
+    "connect-src 'self' ws: wss: https://us.posthog.com https://us.i.posthog.com https://us-assets.i.posthog.com https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://www.google.com https://accounts.google.com https://oauth.platform.intuit.com https://quickbooks.api.intuit.com",
     isEmbed ? "frame-ancestors *" : "frame-src https://accounts.google.com",
   ].join("; "));
   next();
