@@ -1098,7 +1098,7 @@ export default function OverviewPage() {
                 {seedSampleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
                 Load Sample Data
               </Button>
-              <Link href="/onboarding">
+              <Link href="/data-input">
                 <Button variant="outline" data-testid="button-upload-financials">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Financials

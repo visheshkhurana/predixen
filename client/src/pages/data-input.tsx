@@ -1108,10 +1108,22 @@ export default function DataInput() {
       });
       if (res.ok) {
         const data = await res.json();
-        toast({ title: 'Import successful', description: `${data.imported} records imported${data.errors?.length ? `, ${data.errors.length} errors` : ''}` });
-        setCsvDetection(null);
-        setCsvMappings({});
-        setCsvRawRows([]);
+        if (!data.imported) {
+          const firstErr = data.errors?.[0]?.error;
+          toast({
+            title: 'Import failed',
+            description: `0 of ${data.total_rows} rows imported${firstErr ? ` — ${firstErr}` : ''}`,
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: data.errors?.length ? 'Import partially successful' : 'Import successful',
+            description: `${data.imported} of ${data.total_rows} records imported${data.errors?.length ? `, ${data.errors.length} rows failed` : ''}`,
+          });
+          setCsvDetection(null);
+          setCsvMappings({});
+          setCsvRawRows([]);
+        }
         queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id] });
       } else {
         const err = await res.json();

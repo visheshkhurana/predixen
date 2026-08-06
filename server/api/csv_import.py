@@ -21,8 +21,10 @@ MAX_CSV_ROWS = 10_000
 COLUMN_MAPPINGS = {
     "date": ["date", "period", "month", "period_end", "period_start"],
     "revenue": ["revenue", "total_revenue", "income", "sales"],
-    "expenses": ["expenses", "total_expenses", "costs", "total_costs", "opex"],
-    "cash_balance": ["cash", "cash_balance", "cash_on_hand", "bank_balance"],
+    "expenses": ["expenses", "total_expenses", "costs", "total_costs", "opex", "operating_expenses"],
+    "cogs": ["cogs", "cost_of_goods", "cost_of_sales", "direct_costs"],
+    "other_costs": ["other_costs", "other_expenses", "misc_costs"],
+    "cash_balance": ["cash", "cash_balance", "cash_on_hand", "bank_balance", "ending_cash"],
     "payroll": ["payroll", "salaries", "wages", "personnel"],
     "mrr": ["mrr", "monthly_recurring_revenue"],
     "arr": ["arr", "annual_recurring_revenue"],
@@ -122,6 +124,12 @@ def import_csv_data(
                     except ValueError:
                         continue
 
+            if date_val is None:
+                # period_start/period_end are non-nullable — a bad date would
+                # otherwise blow up the whole commit, not just this row
+                errors.append({"row": i, "error": f"Unrecognized or missing date: {row.get(date_col, '')!r}"})
+                continue
+
             def get_float(field):
                 col = mappings.get(field)
                 if not col or not row.get(col):
@@ -136,7 +144,9 @@ def import_csv_data(
                 return int(v) if v is not None else None
 
             revenue = get_float("revenue")
-            expenses = get_float("expenses")
+            expenses = get_float("expenses")  # stored as opex — the model splits costs
+            cogs = get_float("cogs")
+            other_costs = get_float("other_costs")
             cash = get_float("cash_balance")
             payroll = get_float("payroll")
             mrr_val = get_float("mrr")
@@ -147,19 +157,25 @@ def import_csv_data(
             gm = get_float("gross_margin")
             cac = get_float("cac")
 
+            cost_components = [c for c in (cogs, expenses, payroll, other_costs) if c is not None]
+            total_costs = sum(cost_components) if cost_components else None
             net_burn = burn if burn is not None else (
-                (expenses - revenue) if expenses is not None and revenue is not None else None
+                (total_costs - revenue) if total_costs is not None and revenue is not None else None
             )
             runway = None
             if cash is not None and net_burn is not None and net_burn > 0:
                 runway = cash / net_burn
+            if gm is None and revenue and cogs is not None:
+                gm = round((revenue - cogs) / revenue * 100, 2)
 
             record = FinancialRecord(
                 company_id=company_id,
                 period_start=date_val,
                 period_end=date_val,
                 revenue=revenue,
-                expenses=expenses,
+                cogs=cogs,
+                opex=expenses,
+                other_costs=other_costs,
                 cash_balance=cash,
                 payroll=payroll,
                 mrr=mrr_val,
