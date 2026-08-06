@@ -67,7 +67,14 @@ export default function OnboardingPage() {
   useEffect(() => {
     const completed = localStorage.getItem('founderConsoleOnboardingComplete');
     if (completed === 'true') {
-      setLocation('/');
+      if (useFounderStore.getState().currentCompany) {
+        setLocation('/');
+      } else {
+        // Stale flag from a previous account/demo session. Without a company,
+        // redirecting away just bounces back here forever (React #185) —
+        // clear the flag and let the user onboard.
+        localStorage.removeItem('founderConsoleOnboardingComplete');
+      }
     }
   }, [setLocation]);
 

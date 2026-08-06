@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import {
@@ -112,6 +112,18 @@ export function CompanySwitcher() {
     currency: 'USD',
     data_sharing_enabled: false,
   });
+
+  // The persisted currentCompany can be stale — left over from the demo
+  // account, a different user, or a deleted company. Once the real list for
+  // this session loads, drop any selection that isn't in it so the app never
+  // renders another account's company.
+  useEffect(() => {
+    if (isLoading) return;
+    const list = (companies || []) as Company[];
+    if (currentCompany && !list.some((c) => c.id === currentCompany.id)) {
+      setCurrentCompany(list[0] ?? null);
+    }
+  }, [isLoading, companies, currentCompany, setCurrentCompany]);
 
   if (isLoading) {
     return <Skeleton className="h-9 w-40" />;

@@ -151,7 +151,28 @@ export const useFounderStore = create<FounderState>()(
       lastExtraction: null,
       extractionInProgress: false,
       
-      setUser: (user) => set({ user }),
+      setUser: (user) => {
+        const prev = get().user;
+        if (user && prev && prev.id !== user.id) {
+          // A different account signed in (e.g. demo -> real user). Persisted
+          // company-scoped state from the previous account must not leak
+          // across — it caused new users to see the demo company's dashboard
+          // and an /onboarding redirect loop (React #185).
+          localStorage.removeItem('founderConsoleOnboardingComplete');
+          set({
+            user,
+            currentCompany: null,
+            companies: [],
+            truthScan: null,
+            currentScenario: null,
+            latestRun: null,
+            financialBaseline: null,
+            lastExtraction: null,
+          });
+        } else {
+          set({ user });
+        }
+      },
       setCurrentCompany: (company) => set({ 
         currentCompany: company,
         financialBaseline: null,
