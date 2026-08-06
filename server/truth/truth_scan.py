@@ -299,7 +299,17 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     else:
         metrics["logo_retention_12m"] = None
         metrics["net_revenue_retention"] = None
-    
+
+    # Metrics that are placeholders/derivations rather than things the company
+    # actually reported. The client uses this list to badge them "AI Estimated"
+    # instead of "Computed" — without it, an invented CAC of $500 was
+    # indistinguishable on screen from a CAC the founder's own data produced.
+    estimated_metrics: List[str] = []
+
+    # The 100% above is a placeholder, not a real cohort computation.
+    if metrics.get("net_revenue_retention") is not None:
+        estimated_metrics.append("net_revenue_retention")
+
     # Unit Economics Calculations
     # Calculate MRR/ARR from monthly revenue
     mrr = metrics.get("monthly_revenue", 0)
@@ -312,19 +322,24 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["arpu"] = mrr / customer_count
         metrics["customer_count"] = customer_count
     else:
-        # Mock values for demo if no customer data
+        # No customer data — assume a 150-customer book so downstream unit
+        # economics have something to divide by. Flagged as estimated.
         metrics["arpu"] = mrr / 150 if mrr else None  # Assume 150 customers
         metrics["customer_count"] = 150 if mrr else None
-    
+        if mrr:
+            estimated_metrics.extend(["arpu", "customer_count"])
+
     # Churn Rate calculation (mock if no data)
     if customers and len(customers) > 0:
         churned = sum(1 for c in customers if getattr(c, 'churned', False))
         metrics["churn_rate_customer"] = (churned / len(customers)) * 100
         metrics["churn_rate_revenue"] = metrics["churn_rate_customer"] * 1.2  # Revenue churn usually higher
+        estimated_metrics.append("churn_rate_revenue")  # 1.2x multiplier is an assumption
     else:
         metrics["churn_rate_customer"] = 3.2  # 3.2% monthly churn
         metrics["churn_rate_revenue"] = 4.1  # 4.1% revenue churn
-    
+        estimated_metrics.extend(["churn_rate_customer", "churn_rate_revenue", "churn_rate"])
+
     metrics["churn_rate"] = metrics["churn_rate_customer"]
     
     # CAC, LTV, LTV:CAC, Payback calculations with sensibility checks
@@ -339,7 +354,11 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     else:
         metrics["cac"] = 500  # Reasonable default CAC for SaaS
         cac = 500
-    
+    # CAC is never reported directly: even the computed branch infers marketing
+    # spend as 30% of payroll + 40% of opex and new customers as 8% of the
+    # (possibly assumed) customer count. Always an estimate.
+    estimated_metrics.append("cac")
+
     # LTV = ARPU * Gross Margin * (1 / Churn Rate)
     arpu = metrics.get("arpu") or 0
     gm_pct = (metrics.get("gross_margin", 65) or 65) / 100
@@ -353,10 +372,14 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         # LTV floor and ceiling for SaaS: $500 - $500k
         ltv = max(500, min(ltv, 500000))
         metrics["ltv"] = round(ltv, 2)
+        # Only as good as its inputs.
+        if "arpu" in estimated_metrics or "churn_rate_customer" in estimated_metrics:
+            estimated_metrics.append("ltv")
     else:
         metrics["ltv"] = 3000  # Reasonable default LTV
         ltv = 3000
-    
+        estimated_metrics.append("ltv")
+
     # LTV:CAC Ratio with sensibility bounds
     if cac and cac > 0 and ltv:
         ltv_cac = ltv / cac
@@ -365,7 +388,9 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["ltv_cac_ratio"] = round(ltv_cac, 2)
     else:
         metrics["ltv_cac_ratio"] = 5.0
-    
+    if "cac" in estimated_metrics or "ltv" in estimated_metrics:
+        estimated_metrics.append("ltv_cac_ratio")
+
     # Payback Period (months to recover CAC) with sensibility bounds
     if arpu > 0 and cac:
         payback = cac / (arpu * gm_pct)
@@ -374,11 +399,14 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         metrics["payback_months"] = round(payback, 1)
     else:
         metrics["payback_months"] = 12
-    
+    if "cac" in estimated_metrics or "arpu" in estimated_metrics:
+        estimated_metrics.append("payback_months")
+
     # Net Dollar Retention (NDR)
     if metrics.get("net_revenue_retention") is None:
         metrics["net_revenue_retention"] = 108  # Mock 108% NDR
-    
+        estimated_metrics.append("net_revenue_retention")
+
     # Expense Breakdown for burn chart
     # Use actual user-entered values - show exactly what user entered
     if financials:
@@ -407,8 +435,8 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
     else:
         metrics["expense_breakdown"] = None
     
-    estimated_metrics = []
-    
+    # (estimated_metrics was seeded above, before the unit-economics block.)
+
     if financials:
         latest = financials[0]
         stored_headcount = getattr(latest, 'headcount', None)
@@ -435,7 +463,7 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
             metrics["gross_margin"] = ((metrics["monthly_revenue"] - metrics["cogs"]) / metrics["monthly_revenue"]) * 100
             estimated_metrics.append("gross_margin")
     
-    metrics["_estimated_metrics"] = estimated_metrics
+    metrics["_estimated_metrics"] = list(dict.fromkeys(estimated_metrics))
     
     # Cash flow forecast (12 month projection)
     if financials and len(financials) > 0:

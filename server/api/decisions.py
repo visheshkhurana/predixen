@@ -30,6 +30,7 @@ from server.models.financial import FinancialRecord
 from server.decision.decision_engine import generate_recommendations
 from server.simulate.simulation_engine import SimulationInputs
 from server.api.simulations import extract_metric_value
+from server.utils.survival import survival_pct
 
 router = APIRouter(tags=["decisions"])
 
@@ -578,7 +579,11 @@ def generate_strategic_diagnosis(
         survival_prob = None
         if sim_data:
             survival = sim_data.get("survival", {})
-            survival_prob = survival.get("probability_18m") or survival.get("probability_12m")
+            # The engine emits "18m"/"12m"; "probability_18m" never existed, so
+            # this was always None and the diagnosis prompt lost the number.
+            survival_prob = survival_pct(survival, 18)
+            if survival_prob is None:
+                survival_prob = survival_pct(survival, 12)
         
         months_to_zero = cash / net_burn if net_burn > 0 else 99
         exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"

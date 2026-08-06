@@ -9,6 +9,7 @@ from server.core.security import get_current_user
 from server.models.user import User
 from server.models.company import Company
 from server.models.metric_snapshot import MetricSnapshot
+from server.utils.survival import survival_pct
 
 router = APIRouter(tags=["metric-trends"])
 
@@ -67,8 +68,9 @@ def save_simulation_snapshot(db: Session, company_id: int, simulation_data: dict
             metrics_to_save["cash_p50_final"] = last_cash
 
     survival = simulation_data.get("survival", {})
-    if survival.get("12_month") is not None:
-        metrics_to_save["survival_12m"] = survival["12_month"]
+    survival_12 = survival_pct(survival, 12)
+    if survival_12 is not None:
+        metrics_to_save["survival_12m"] = survival_12
 
     for metric_name, value in metrics_to_save.items():
         snapshot = MetricSnapshot(

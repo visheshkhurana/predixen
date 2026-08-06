@@ -361,6 +361,9 @@ function Router() {
       <Route path="/simulate">
         {() => <AuthenticatedRoute component={SimulateWorkspace} />}
       </Route>
+      <Route path="/simulator">
+        {() => <Redirect to="/simulate" />}
+      </Route>
       <Route path="/simulate-v2">
         {() => <AuthenticatedRoute component={SimulateV2Page} />}
       </Route>
@@ -748,14 +751,18 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     '/survival-simulator', '/privacy', '/terms',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
+    '/ai-cfo', '/embed/survival',
   ];
-  const isStandalonePage = typeof window !== 'undefined' && 
-    (marketingPaths.includes(window.location.pathname) ||
-     window.location.pathname.startsWith('/blog/') ||
-     window.location.pathname.startsWith('/tools/') ||
-     window.location.pathname.startsWith('/admin') ||
-     window.location.pathname.startsWith('/scenarios/shared/') ||
-     window.location.pathname.startsWith('/survival/'));
+  const marketingPrefixes = [
+    '/blog/', '/tools/', '/admin', '/scenarios/shared/',
+    '/survival/', '/runway/', '/embed/',
+  ];
+  // Use wouter's location (not window.location) so client-side navigations
+  // re-evaluate the shell instead of keeping whatever was true on hard load.
+  const currentPath = (location || (typeof window !== 'undefined' ? window.location.pathname : '/')).split('?')[0];
+  const isStandalonePage =
+    marketingPaths.includes(currentPath) ||
+    marketingPrefixes.some((p) => currentPath.startsWith(p));
   
   if (!user || isStandalonePage) {
     return <>{children}</>;

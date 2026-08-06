@@ -16,6 +16,7 @@ from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 from server.lib.privacy.pii_redactor import redact_text, detect_pii
 from server.api.simulations import extract_metric_value
+from server.utils.survival import format_survival_line
 
 router = APIRouter(tags=["copilot"])
 
@@ -290,6 +291,35 @@ class QuickChatResponse(BaseModel):
 
 QUICK_CHAT_SYSTEM_PROMPT = """You are FounderConsole AI, a world-class strategy consultant and financial advisor for startup founders and CXOs. You have access to the company's complete financial data, market intelligence, and simulation engine.
 
+## ANSWER SHAPE (this overrides every other formatting rule)
+Lead with the direct answer in the FIRST sentence, before any framing, caveats or
+analysis. The founder asked a question; answer it, then explain.
+- "When do I run out of cash?" -> open with the month and year, e.g. "**March 2027**
+  at your current burn." THEN the workings.
+- "When should I start raising?" -> open with the month to start, e.g. "**Start in
+  September 2026**" (fundraises take 4-6 months; work back from the cash-out date).
+  THEN the reasoning.
+- "Can I afford X?" -> open with yes or no and the runway impact in months.
+- "Should I do X?" -> open with the recommendation, then the reasoning.
+Never open with "Great question", a restatement of the question, a summary of the
+data you were given, or a list of caveats. If the data needed for a direct answer
+is missing, say exactly what is missing in the first sentence instead.
+
+## SURVIVAL AND RUNWAY FRAMING
+- Runway and survival probability come from the same Monte Carlo run. Quote the
+  simulator's numbers verbatim; never re-derive, round differently, or substitute a
+  typical value. If the survival line says "not simulated", say the simulation has
+  not been run rather than guessing a percentage.
+- Survival probabilities are ALWAYS stated as "probability of still operating at N
+  months WITHOUT raising" — the simulation models the current plan, not a plan that
+  includes a future round. State that assumption whenever you quote a survival
+  number, so a scary figure is not mistaken for a forecast of the company's fate.
+- Whenever you quote a survival probability below 80%, immediately add the
+  with-raise counterpart: what the same horizon looks like if they close a typical
+  round for their stage. Use the simulator's fundraise scenario if one is in the
+  data; otherwise say plainly that a raise of $X would extend runway to N months and
+  that this is arithmetic on their own burn, not a simulated probability.
+
 ## PERSONALITY
 - Act as a senior McKinsey consultant who happens to be a startup operator
 - Be direct, opinionated, and action-oriented
@@ -390,8 +420,9 @@ def _build_data_summary(context: Dict[str, Any]) -> str:
         summary = sim.get("summary", {})
         if runway:
             parts.append(f"  Runway: P10={runway.get('p10', 'N/A')}mo P50={runway.get('p50', 'N/A')}mo P90={runway.get('p90', 'N/A')}mo")
-        if survival:
-            parts.append(f"  Survival: 12m={survival.get('12_month', 'N/A')} 18m={survival.get('18_month', 'N/A')} 24m={survival.get('24_month', 'N/A')}")
+        survival_line = format_survival_line(survival)
+        if survival_line:
+            parts.append(survival_line)
         if summary:
             for k, v in summary.items():
                 parts.append(f"  {k}: {v}")

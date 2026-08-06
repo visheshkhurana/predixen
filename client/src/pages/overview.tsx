@@ -135,7 +135,10 @@ const DUMMY_BASE_DATA = {
   paybackPeriod: 10,
   totalCustomers: 200,
   churnRate: 5,
-  conversionRate: 3.5,
+  // Nothing in the product measures visitor->customer conversion yet, so this
+  // is nullable: the live baseData below sets it to null rather than shipping
+  // a made-up 3.5%.
+  conversionRate: 3.5 as number | null,
   profitabilityDate: 'Dec 2026',
 };
 
@@ -243,6 +246,21 @@ const getRiskAlerts = (metrics: any, assumptions: ScenarioAssumptions): RiskAler
   
   return alerts;
 };
+
+interface SegmentRow {
+  name: string;
+  cac: number;
+  ltv: number;
+  ltvCac: number;
+  churn: number;
+  customers: number;
+}
+
+interface SegmentBreakdown {
+  channel: SegmentRow[];
+  tier: SegmentRow[];
+  region: SegmentRow[];
+}
 
 interface ProjectedMetrics {
   mrr: number;
@@ -591,7 +609,7 @@ export default function OverviewPage() {
       paybackPeriod: sharedMetrics.paybackPeriod,
       totalCustomers: sharedMetrics.totalCustomers,
       churnRate: sharedMetrics.churnRatePct,
-      conversionRate: 3.5,
+      conversionRate: null,
       profitabilityDate: sharedMetrics.isProfitable ? 'Now' : 'TBD',
     };
   }, [sharedMetrics]);
@@ -952,41 +970,40 @@ export default function OverviewPage() {
     toast({ title: 'Export Complete', description: 'Metrics exported to CSV file.' });
   }, [baseData, currentCompany, toast]);
 
-  const segmentData = useMemo(() => {
-    const hasCac = baseData.cac > 0;
-    const hasLtv = baseData.ltv > 0;
-    const safeCac = hasCac ? baseData.cac : 0;
-    const safeLtv = hasLtv ? baseData.ltv : 0;
-    const safeChurn = baseData.churnRate;
-    const totalCust = Math.max(baseData.totalCustomers, 1);
+  /**
+   * Segment breakdowns come from the customers dataset (each row carries a
+   * segment/channel/region). They used to be manufactured client-side by
+   * multiplying the company-wide CAC/LTV by invented per-segment factors
+   * (Organic 0.6x, Enterprise 5x, "North America — 50% of customers"), which
+   * produced confident-looking numbers no data supported. If the truth scan
+   * has not published real segments, we show an empty state instead.
+   */
+  const segmentData = useMemo<SegmentBreakdown | null>(() => {
+    const raw = truthScan?.metrics?.segments;
+    if (!raw) return null;
 
-    const mkSeg = (name: string, cacMul: number, ltvMul: number, churnMul: number, custPct: number) => {
-      const cac = hasCac ? safeCac * cacMul : 0;
-      const ltv = hasLtv ? safeLtv * ltvMul : 0;
-      const ltvCac = cac > 0 && ltv > 0 ? ltv / cac : 0;
-      return { name, cac, ltv, ltvCac, churn: safeChurn * churnMul, customers: Math.round(totalCust * custPct) };
+    const normalize = (rows: any): SegmentRow[] | null => {
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+      return rows.map((r: any) => {
+        const cac = Number(r.cac) || 0;
+        const ltv = Number(r.ltv) || 0;
+        return {
+          name: String(r.name ?? 'Unknown'),
+          cac,
+          ltv,
+          ltvCac: cac > 0 && ltv > 0 ? ltv / cac : 0,
+          churn: Number(r.churn) || 0,
+          customers: Number(r.customers) || 0,
+        };
+      });
     };
 
-    return {
-      channel: [
-        mkSeg('Organic', 0.6, 1.2, 0.8, 0.35),
-        mkSeg('Paid Search', 1.2, 0.9, 1.1, 0.30),
-        mkSeg('Content', 0.8, 1.1, 0.9, 0.20),
-        mkSeg('Referral', 0.4, 1.3, 0.7, 0.15),
-      ],
-      tier: [
-        mkSeg('Enterprise', 2.5, 5, 0.5, 0.10),
-        mkSeg('Pro', 1.0, 1.5, 0.8, 0.30),
-        mkSeg('Starter', 0.5, 0.6, 1.5, 0.60),
-      ],
-      region: [
-        mkSeg('North America', 1.2, 1.3, 0.9, 0.50),
-        mkSeg('Europe', 1.0, 1.1, 1.0, 0.30),
-        mkSeg('APAC', 0.7, 0.8, 1.2, 0.15),
-        mkSeg('Other', 0.6, 0.7, 1.3, 0.05),
-      ],
-    };
-  }, [baseData]);
+    const channel = normalize(raw.channel);
+    const tier = normalize(raw.tier);
+    const region = normalize(raw.region);
+    if (!channel && !tier && !region) return null;
+    return { channel: channel ?? [], tier: tier ?? [], region: region ?? [] };
+  }, [truthScan]);
 
   const metrics = truthScan?.metrics || {};
   const flags = truthScan?.flags || [];
@@ -1464,8 +1481,20 @@ export default function OverviewPage() {
                   <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-arpu">
                     <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">ARPU</span>
                     <div className="mt-3">
-                      <span className="text-2xl font-semibold font-mono tracking-tight leading-none">{formatCurrency(sharedMetrics.arpu)}</span>
-                      <p className="text-[11px] text-muted-foreground/70 mt-1.5">/user/month</p>
+                      {/* ARPU is MRR / customer count, and the truth scan assumes a
+                          150-customer book when no customer data exists. Showing that
+                          number is worse than showing nothing. */}
+                      {sharedMetrics.sources['arpu'] === 'estimated' || !(sharedMetrics.arpu > 0) ? (
+                        <>
+                          <span className="text-2xl font-semibold font-mono tracking-tight leading-none text-muted-foreground">N/A</span>
+                          <p className="text-[11px] text-muted-foreground/70 mt-1.5">needs {terms.customers} data</p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-2xl font-semibold font-mono tracking-tight leading-none">{formatCurrency(sharedMetrics.arpu)}</span>
+                          <p className="text-[11px] text-muted-foreground/70 mt-1.5">/user/month</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </StaggerItem>
@@ -1508,13 +1537,28 @@ export default function OverviewPage() {
                   <div className="group relative rounded-xl border border-white/[0.06] p-5 bg-gradient-to-b from-white/[0.03] to-transparent backdrop-blur-xl hover:border-white/[0.12] transition-all" data-testid="metric-ltvcac-inline">
                     <span className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">LTV:CAC</span>
                     <div className="mt-3 flex items-baseline gap-2">
-                      <span className={`text-2xl font-semibold font-mono tracking-tight leading-none ${
-                        baseData.ltvCacRatio > 0 ? (baseData.ltvCacRatio >= 3 ? 'text-emerald-400' : baseData.ltvCacRatio >= 2 ? 'text-amber-400' : 'text-red-400') : ''
-                      }`} data-testid="metric-ltvcac-value">
-                        {baseData.ltvCacRatio > 0 ? safeToFixed(baseData.ltvCacRatio, 1, 'x') : 'N/A'}
-                      </span>
+                      {/* Both inputs (CAC, LTV) fall back to invented defaults when
+                          there is no customer data — don't present the ratio as fact. */}
+                      {(() => {
+                        const ratioIsReal =
+                          baseData.ltvCacRatio > 0 &&
+                          sharedMetrics.sources['ltvCacRatio'] !== 'estimated' &&
+                          sharedMetrics.sources['cac'] !== 'estimated' &&
+                          sharedMetrics.sources['ltv'] !== 'estimated';
+                        return (
+                          <span className={`text-2xl font-semibold font-mono tracking-tight leading-none ${
+                            ratioIsReal ? (baseData.ltvCacRatio >= 3 ? 'text-emerald-400' : baseData.ltvCacRatio >= 2 ? 'text-amber-400' : 'text-red-400') : 'text-muted-foreground'
+                          }`} data-testid="metric-ltvcac-value">
+                            {ratioIsReal ? safeToFixed(baseData.ltvCacRatio, 1, 'x') : 'N/A'}
+                          </span>
+                        );
+                      })()}
                     </div>
-                    <p className="text-[11px] text-muted-foreground/70 mt-1.5">unit economics</p>
+                    <p className="text-[11px] text-muted-foreground/70 mt-1.5">
+                      {sharedMetrics.sources['cac'] === 'estimated' || sharedMetrics.sources['ltv'] === 'estimated'
+                        ? `needs ${terms.customers} data`
+                        : 'unit economics'}
+                    </p>
                   </div>
                 </StaggerItem>
               </StaggerChildren>
@@ -1791,23 +1835,55 @@ export default function OverviewPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {selectedSegment === 'all' ? (
+          {!segmentData ? (
+            <div className="flex flex-col items-center justify-center text-center py-10 px-4" data-testid="segment-analysis-empty">
+              <Scale className="h-8 w-8 text-muted-foreground/40 mb-3" />
+              <p className="text-sm font-medium">No segment data yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                Segment breakdowns need a customers file with a channel, tier or region
+                column. Upload one and we&apos;ll split CAC, LTV and churn by segment here.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setLocation('/data')}
+                data-testid="button-segment-upload-customers"
+              >
+                Upload {terms.customers} data
+              </Button>
+            </div>
+          ) : selectedSegment === 'all' ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Channel</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Referral</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 1.3) / (baseData.cac * 0.4), 1, 'x') : 'N/A'})</p>
-                <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">Paid Search</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 0.9) / (baseData.cac * 1.2), 1, 'x') : 'N/A'})</p>
-              </div>
-              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Tier</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">Enterprise</span> (LTV:CAC {metricsLoading ? '...' : baseData.cac > 0 && baseData.ltv > 0 ? safeToFixed((baseData.ltv * 5) / (baseData.cac * 2.5), 1, 'x') : 'N/A'})</p>
-                <p className="text-xs text-muted-foreground">Highest churn: <span className="font-medium text-foreground">Starter</span> ({safeToFixed(baseData.churnRate * 1.5, 1, '%')})</p>
-              </div>
-              <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                <h4 className="text-sm font-medium text-muted-foreground mb-2">By Region</h4>
-                <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">North America</span> (50% of customers)</p>
-                <p className="text-xs text-muted-foreground">Growth opp: <span className="font-medium text-foreground">APAC</span> (lower CAC)</p>
-              </div>
+              {([
+                { key: 'channel' as const, label: 'By Channel' },
+                { key: 'tier' as const, label: 'By Tier' },
+                { key: 'region' as const, label: 'By Region' },
+              ]).map(({ key, label }) => {
+                const rows = segmentData[key];
+                const ranked = rows.filter((r) => r.ltvCac > 0).sort((a, b) => b.ltvCac - a.ltvCac);
+                const best = ranked[0];
+                const worst = ranked.length > 1 ? ranked[ranked.length - 1] : null;
+                return (
+                  <div key={key} className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.02]" data-testid={`segment-summary-${key}`}>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">{label}</h4>
+                    {best ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">Best: <span className="font-medium text-foreground">{best.name}</span> (LTV:CAC {safeToFixed(best.ltvCac, 1, 'x')})</p>
+                        {worst && (
+                          <p className="text-xs text-muted-foreground">Needs work: <span className="font-medium text-foreground">{worst.name}</span> (LTV:CAC {safeToFixed(worst.ltvCac, 1, 'x')})</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Not enough data to rank {key}s.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : segmentData[selectedSegment].length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground" data-testid={`segment-empty-${selectedSegment}`}>
+              No {selectedSegment} breakdown in your uploaded {terms.customers} data.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1997,7 +2073,9 @@ export default function OverviewPage() {
                 <Percent className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">Conversion Rate</span>
               </div>
-              <span className="font-mono font-medium">{baseData.conversionRate}%</span>
+              <span className="font-mono font-medium" data-testid="milestone-conversion-rate">
+                {baseData.conversionRate != null ? `${baseData.conversionRate}%` : <span className="text-muted-foreground font-normal">Not tracked</span>}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

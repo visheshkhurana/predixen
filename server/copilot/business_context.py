@@ -9,6 +9,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from server.utils.survival import format_survival_line
 
 logger = logging.getLogger(__name__)
 
@@ -412,8 +413,9 @@ def format_context_for_prompt(ctx: Dict[str, Any]) -> str:
         survival = sim.get("survival", {})
         if runway:
             parts.append(f"  Runway: P10={runway.get('p10', 'N/A')}mo, P50={runway.get('p50', 'N/A')}mo, P90={runway.get('p90', 'N/A')}mo")
-        if survival:
-            parts.append(f"  Survival: 12mo={survival.get('12_month', 'N/A')}, 18mo={survival.get('18_month', 'N/A')}, 24mo={survival.get('24_month', 'N/A')}")
+        survival_line = format_survival_line(survival)
+        if survival_line:
+            parts.append(survival_line)
         if sim.get("computed_at"):
             parts.append(f"  Computed: {sim['computed_at']}")
 

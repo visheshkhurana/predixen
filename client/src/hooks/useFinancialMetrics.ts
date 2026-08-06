@@ -42,6 +42,24 @@ export interface FinancialMetrics {
 
 const METRICS_CACHE_KEY = 'founderconsole-metrics-cache';
 
+/**
+ * truth-scan metric name -> the key this hook exposes it under.
+ * Used to translate the server's `_estimated_metrics` list into source badges.
+ */
+const TRUTH_TO_METRIC_KEY: Record<string, string> = {
+  cac: 'cac',
+  ltv: 'ltv',
+  ltv_cac_ratio: 'ltvCacRatio',
+  arpu: 'arpu',
+  customer_count: 'totalCustomers',
+  churn_rate: 'churnRate',
+  churn_rate_customer: 'churnRate',
+  net_revenue_retention: 'ndr',
+  payback_months: 'paybackPeriod',
+  headcount: 'headcount',
+  gross_margin: 'grossMargin',
+};
+
 function getCachedMetrics(companyId: number | null): { metrics: FinancialMetrics; timestamp: number } | null {
   if (!companyId) return null;
   try {
@@ -289,6 +307,16 @@ export function useFinancialMetrics(): { metrics: FinancialMetrics; isLoading: b
     sources['revenuePerEmployee'] = headcount > 0 ? 'computed' : 'estimated';
     sources['monthlyGrowthRate'] = tsVal('revenue_growth_mom') ? 'reported' : (fb?.monthlyGrowthRate ? 'estimated' : 'estimated');
     sources['ndr'] = tsVal('net_revenue_retention') ? 'reported' : 'estimated';
+
+    // The truth scan fills unit economics with placeholder defaults whenever
+    // the underlying customer/transaction data is missing — CAC $500, LTV
+    // $3,000, NDR 108%, churn 3.2%, a 150-customer book. Those come back as
+    // ordinary numbers, so every rule above happily badged them "Verified" or
+    // "Computed". `_estimated_metrics` is the server's own list of what it
+    // invented, and it overrides everything else.
+    for (const [truthKey, clientKey] of Object.entries(TRUTH_TO_METRIC_KEY)) {
+      if (tsEstimatedMap[truthKey]) sources[clientKey] = 'estimated';
+    }
 
     return {
       mrr, arr, cashOnHand, totalMonthlyExpenses: totalExpenses, burnRate, netBurn, runway, runwayDisplay,

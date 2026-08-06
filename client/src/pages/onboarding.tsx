@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +10,10 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ApiError } from '@/api/client';
 import { useFounderStore } from '@/store/founderStore';
-import { useCreateCompany, useManualBaseline, useRunTruthScan, useSeedSample } from '@/api/hooks';
+import { useCreateCompany, useManualBaseline, useRunTruthScan, useSeedSample, useTerminaExcelUpload, useTerminaPdfUpload } from '@/api/hooks';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity } from 'lucide-react';
+import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity, FileUp, FileText, X } from 'lucide-react';
 import type { AmountScale } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
 
@@ -103,6 +103,24 @@ export default function OnboardingPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [showManualInputs, setShowManualInputs] = useState(false);
   const [baselineSaved, setBaselineSaved] = useState(false);
+  // Has the founder actually supplied any baseline numbers — typed them,
+  // extracted them from an upload, or explicitly accepted the stage defaults?
+  // Until they have, the Health Check must say "no data" rather than present
+  // arithmetic over numbers nobody entered.
+  const [baselineTouched, setBaselineTouched] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<string | null>(null);
+  const [uploadDragActive, setUploadDragActive] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const stageDefaults = companyData.stage ? STAGE_DEFAULTS[companyData.stage] : undefined;
+
+  const updateBaseline = (patch: Partial<typeof baselineData>) => {
+    setBaselineTouched(true);
+    setBaselineSaved(false);
+    setBaselineData((prev) => ({ ...prev, ...patch }));
+  };
 
   const { data: existingCompaniesRaw } = useQuery<any>({
     queryKey: ['/api/companies'],
@@ -126,6 +144,9 @@ export default function OnboardingPage() {
   const manualBaselineMutation = useManualBaseline();
   const runTruthScanMutation = useRunTruthScan();
   const seedSampleMutation = useSeedSample();
+  const excelUploadMutation = useTerminaExcelUpload();
+  const pdfUploadMutation = useTerminaPdfUpload();
+  const isExtracting = excelUploadMutation.isPending || pdfUploadMutation.isPending;
 
   const isSeedingInProgress = createCompanyMutation.isPending || seedSampleMutation.isPending;
   const currentCompany = useFounderStore((s) => s.currentCompany);
@@ -148,6 +169,7 @@ export default function OnboardingPage() {
     setIsSampleMode(true);
     setCompanyData(SAMPLE_COMPANY);
     setBaselineData(SAMPLE_FINANCIALS);
+    setBaselineTouched(true);
 
     try {
       const company = await createCompanyMutation.mutateAsync(SAMPLE_COMPANY);
@@ -222,11 +244,12 @@ export default function OnboardingPage() {
       setCurrentCompany(company);
       markStepComplete(1);
 
-      const defaults = STAGE_DEFAULTS[companyData.stage];
-      if (defaults) {
-        setBaselineData(defaults);
-      }
-
+      // NOTE: we deliberately do NOT prefill baselineData from STAGE_DEFAULTS
+      // here. Doing so meant an untouched form produced a confident-looking
+      // Health Check ($30K burn / 33.3 mo runway / health 100) built entirely
+      // out of stage averages the founder never entered. Stage defaults are now
+      // opt-in via the "Use typical ... numbers" button and are shown as
+      // placeholders only.
       setStep(2);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -269,8 +292,90 @@ export default function OnboardingPage() {
     }
   };
 
+  const pickUploadFile = (file: File) => {
+    const ext = file.name.toLowerCase().split('.').pop() || '';
+    if (!['xlsx', 'xls', 'pdf'].includes(ext)) {
+      setUploadError('Please choose an .xlsx, .xls or .pdf file. CSV imports live on the Data page after setup.');
+      return;
+    }
+    setUploadError(null);
+    setUploadSummary(null);
+    setUploadFile(file);
+  };
+
+  /**
+   * Extract a baseline from an uploaded statement.
+   *
+   * The "Upload Files" option used to be a radio button that rendered nothing —
+   * picking it and hitting Next carried the founder into a Health Check built
+   * from stage averages. This wires it to the same extraction endpoints the
+   * Data page uses, then drops the extracted numbers into the review grid so
+   * they can be corrected before anything is saved.
+   */
+  const handleExtractUpload = async () => {
+    if (!uploadFile || !currentCompany) return;
+    setUploadError(null);
+    const ext = uploadFile.name.toLowerCase().split('.').pop() || '';
+
+    try {
+      const result: any = ext === 'pdf'
+        ? await pdfUploadMutation.mutateAsync({ companyId: currentCompany.id, file: uploadFile, saveAsBaseline: false })
+        : await excelUploadMutation.mutateAsync({ companyId: currentCompany.id, file: uploadFile, saveAsBaseline: false });
+
+      const m = result?.metrics || {};
+      const num = (...candidates: any[]): number | undefined => {
+        for (const c of candidates) {
+          if (typeof c === 'number' && Number.isFinite(c)) return c;
+        }
+        return undefined;
+      };
+
+      const extracted = {
+        monthly_revenue: num(m.monthly_revenue, m.revenue),
+        gross_margin_pct: num(m.gross_margin, m.gross_margin_pct),
+        opex: num(m.opex),
+        payroll: num(m.payroll),
+        other_costs: num(m.other_costs, m.cogs),
+        cash_balance: num(m.cash_balance),
+        headcount: num(m.headcount, m.employees),
+      };
+
+      const found = Object.entries(extracted).filter(([, v]) => v !== undefined);
+      if (found.length === 0) {
+        setUploadError("We couldn't find financial figures in that file. Enter the numbers manually below, or try a different export.");
+        setShowManualInputs(true);
+        return;
+      }
+
+      setBaselineData((prev) => ({
+        ...prev,
+        ...Object.fromEntries(found) as Partial<typeof prev>,
+      }));
+      setBaselineTouched(true);
+      setBaselineSaved(false);
+      setShowManualInputs(true);
+      setUploadSummary(
+        result?.summary ||
+        `Pulled ${found.length} figure${found.length === 1 ? '' : 's'} from ${uploadFile.name}. Check them below before continuing.`
+      );
+      toast({ title: 'File analyzed', description: 'Review the extracted numbers before continuing.' });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        toast({ title: 'Session expired', description: 'Please log in again.', variant: 'destructive' });
+        setLocation('/auth');
+        return;
+      }
+      const message = err instanceof ApiError ? err.message : 'We could not read that file.';
+      setUploadError(`${message} You can enter the numbers manually instead.`);
+      setShowManualInputs(true);
+    }
+  };
+
   const handleConnectDataNext = async () => {
-    if (dataSourceChoice === 'manual' && !baselineSaved) {
+    // Any branch that produced numbers must persist them — previously only the
+    // manual branch saved, so an upload-extracted baseline was silently dropped
+    // and the Health Check fell back to whatever was in state.
+    if (baselineTouched && !baselineSaved) {
       await handleSaveBaseline();
     }
     markStepComplete(2);
@@ -333,7 +438,13 @@ export default function OnboardingPage() {
 
   const totalExpenses = baselineData.opex + baselineData.payroll + baselineData.other_costs;
   const netBurn = totalExpenses - baselineData.monthly_revenue;
-  const runwayMonths = netBurn > 0 && baselineData.cash_balance > 0 ? baselineData.cash_balance / netBurn : null;
+  // Only treat the baseline as real if the founder actually put numbers in.
+  // Everything on the Health Check hangs off this: without it, an untouched
+  // form still rendered a burn rate, a runway and a health score.
+  const hasBaselineNumbers =
+    baselineTouched &&
+    (totalExpenses > 0 || baselineData.cash_balance > 0 || baselineData.monthly_revenue > 0);
+  const runwayMonths = hasBaselineNumbers && netBurn > 0 && baselineData.cash_balance > 0 ? baselineData.cash_balance / netBurn : null;
   const healthScore = (() => {
     let score = 50;
     if (runwayMonths !== null) {
@@ -347,6 +458,169 @@ export default function OnboardingPage() {
     if (baselineData.monthly_revenue > 0) score += 5;
     return Math.min(100, Math.max(0, score));
   })();
+
+  const baselineFieldsPanel = (
+    <div className="p-4 border rounded-md bg-muted/30 space-y-4" data-testid="section-manual-inputs">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="revenue">Monthly Revenue ($)</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p>Your total monthly recurring revenue (MRR).</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <Input
+            id="revenue"
+            type="number"
+            step="any"
+            value={baselineTouched || baselineData.monthly_revenue !== 0 ? baselineData.monthly_revenue : ''}
+            placeholder={stageDefaults ? String(stageDefaults.monthly_revenue) : '0'}
+            onChange={(e) => updateBaseline({ monthly_revenue: Number(e.target.value) })}
+            min={0}
+            data-testid="input-revenue"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="gross-margin">Gross Margin (%)</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p>SaaS companies typically have 70-85%.</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <Input
+            id="gross-margin"
+            type="number"
+            step="0.1"
+            value={baselineTouched || baselineData.gross_margin_pct !== 0 ? baselineData.gross_margin_pct : ''}
+            placeholder={stageDefaults ? String(stageDefaults.gross_margin_pct) : '0'}
+            onChange={(e) => updateBaseline({ gross_margin_pct: Number(e.target.value) })}
+            min={0}
+            max={100}
+            data-testid="input-gross-margin"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="opex">Opex ($)</Label>
+          <Input
+            id="opex"
+            type="number"
+            step="any"
+            value={baselineTouched || baselineData.opex !== 0 ? baselineData.opex : ''}
+            placeholder={stageDefaults ? String(stageDefaults.opex) : '0'}
+            onChange={(e) => updateBaseline({ opex: Number(e.target.value) })}
+            min={0}
+            data-testid="input-opex"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="payroll">Payroll ($)</Label>
+          <Input
+            id="payroll"
+            type="number"
+            step="any"
+            value={baselineTouched || baselineData.payroll !== 0 ? baselineData.payroll : ''}
+            placeholder={stageDefaults ? String(stageDefaults.payroll) : '0'}
+            onChange={(e) => updateBaseline({ payroll: Number(e.target.value) })}
+            min={0}
+            data-testid="input-payroll"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="other-costs">Other ($)</Label>
+          <Input
+            id="other-costs"
+            type="number"
+            step="any"
+            value={baselineTouched || baselineData.other_costs !== 0 ? baselineData.other_costs : ''}
+            placeholder={stageDefaults ? String(stageDefaults.other_costs) : '0'}
+            onChange={(e) => updateBaseline({ other_costs: Number(e.target.value) })}
+            min={0}
+            data-testid="input-other-costs"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-1">
+            <Label htmlFor="cash">Cash Balance ($)</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <p>Total cash currently in your bank accounts.</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <Input
+            id="cash"
+            type="number"
+            step="any"
+            value={baselineTouched || baselineData.cash_balance !== 0 ? baselineData.cash_balance : ''}
+            placeholder={stageDefaults ? String(stageDefaults.cash_balance) : '0'}
+            onChange={(e) => updateBaseline({ cash_balance: Number(e.target.value) })}
+            min={0}
+            data-testid="input-cash-balance"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="headcount">Headcount</Label>
+          <Input
+            id="headcount"
+            type="number"
+            value={baselineTouched || baselineData.headcount !== 0 ? baselineData.headcount : ''}
+            placeholder={stageDefaults ? String(stageDefaults.headcount) : '0'}
+            onChange={(e) => updateBaseline({ headcount: Number(e.target.value) })}
+            min={0}
+            data-testid="input-headcount"
+          />
+        </div>
+      </div>
+
+      {stageDefaults && !baselineTouched && (
+        <div className="flex items-start gap-2 text-xs text-muted-foreground">
+          <HelpCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Don't have exact figures yet? The greyed-out numbers are typical for a{' '}
+            {companyData.stage?.replace(/_/g, ' ')} company.{' '}
+            <Button
+              type="button"
+              variant="ghost"
+              className="px-1 h-auto underline align-baseline text-xs"
+              onClick={() => updateBaseline(stageDefaults)}
+              data-testid="button-use-stage-defaults"
+            >
+              Use them as a starting point
+            </Button>
+            {' '}— they're estimates, not your data.
+          </span>
+        </div>
+      )}
+
+
+      {baselineSaved && (
+        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+          <Check className="w-4 h-4" />
+          <span>Data saved</span>
+        </div>
+      )}
+    </div>
+  );
 
   const progress = (step / STEPS.length) * 100;
 
@@ -546,140 +820,7 @@ export default function OnboardingPage() {
                     </div>
                   </div>
 
-                  {dataSourceChoice === 'manual' && showManualInputs && (
-                    <div className="p-4 border rounded-md bg-muted/30 space-y-4" data-testid="section-manual-inputs">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1">
-                            <Label htmlFor="revenue">Monthly Revenue ($)</Label>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-xs">
-                                <p>Your total monthly recurring revenue (MRR).</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                          <Input
-                            id="revenue"
-                            type="number"
-                            step="any"
-                            value={baselineData.monthly_revenue}
-                            onChange={(e) => setBaselineData({ ...baselineData, monthly_revenue: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-revenue"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1">
-                            <Label htmlFor="gross-margin">Gross Margin (%)</Label>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-xs">
-                                <p>SaaS companies typically have 70-85%.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                          <Input
-                            id="gross-margin"
-                            type="number"
-                            step="0.1"
-                            value={baselineData.gross_margin_pct}
-                            onChange={(e) => setBaselineData({ ...baselineData, gross_margin_pct: Number(e.target.value) })}
-                            min={0}
-                            max={100}
-                            data-testid="input-gross-margin"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="opex">Opex ($)</Label>
-                          <Input
-                            id="opex"
-                            type="number"
-                            step="any"
-                            value={baselineData.opex}
-                            onChange={(e) => setBaselineData({ ...baselineData, opex: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-opex"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="payroll">Payroll ($)</Label>
-                          <Input
-                            id="payroll"
-                            type="number"
-                            step="any"
-                            value={baselineData.payroll}
-                            onChange={(e) => setBaselineData({ ...baselineData, payroll: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-payroll"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="other-costs">Other ($)</Label>
-                          <Input
-                            id="other-costs"
-                            type="number"
-                            step="any"
-                            value={baselineData.other_costs}
-                            onChange={(e) => setBaselineData({ ...baselineData, other_costs: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-other-costs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1">
-                            <Label htmlFor="cash">Cash Balance ($)</Label>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-xs">
-                                <p>Total cash currently in your bank accounts.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                          <Input
-                            id="cash"
-                            type="number"
-                            step="any"
-                            value={baselineData.cash_balance}
-                            onChange={(e) => setBaselineData({ ...baselineData, cash_balance: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-cash-balance"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="headcount">Headcount</Label>
-                          <Input
-                            id="headcount"
-                            type="number"
-                            value={baselineData.headcount}
-                            onChange={(e) => setBaselineData({ ...baselineData, headcount: Number(e.target.value) })}
-                            min={0}
-                            data-testid="input-headcount"
-                          />
-                        </div>
-                      </div>
-
-                      {baselineSaved && (
-                        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                          <Check className="w-4 h-4" />
-                          <span>Data saved</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {dataSourceChoice === 'manual' && showManualInputs && baselineFieldsPanel}
 
                   <div
                     className={`p-4 border rounded-md cursor-pointer transition-colors ${
@@ -700,13 +841,132 @@ export default function OnboardingPage() {
                         {dataSourceChoice === 'upload' && <Check className="w-3 h-3 text-primary-foreground" />}
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-medium">Upload Files</h3>
+                        <h3 className="font-medium">Upload a Statement</h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Upload PDF, Excel, or CSV files. We'll extract financial data automatically.
+                          Upload a PDF or Excel financial statement and we'll pull the numbers out for you to check.
                         </p>
                       </div>
                     </div>
                   </div>
+
+                  {dataSourceChoice === 'upload' && (
+                    <div className="p-4 border rounded-md bg-muted/30 space-y-4" data-testid="section-upload-panel">
+                      <div
+                        className={`border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+                          uploadDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
+                        }`}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setUploadDragActive(false);
+                          if (e.dataTransfer.files?.[0]) pickUploadFile(e.dataTransfer.files[0]);
+                        }}
+                        onDragOver={(e) => { e.preventDefault(); setUploadDragActive(true); }}
+                        onDragLeave={() => setUploadDragActive(false)}
+                        data-testid="dropzone-onboarding-upload"
+                      >
+                        <input
+                          ref={uploadInputRef}
+                          type="file"
+                          accept=".xlsx,.xls,.pdf"
+                          className="hidden"
+                          onChange={(e) => e.target.files?.[0] && pickUploadFile(e.target.files[0])}
+                          data-testid="input-onboarding-file"
+                        />
+                        {uploadFile ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <FileText className="h-7 w-7 text-primary shrink-0" />
+                            <div className="text-left">
+                              <p className="font-medium text-sm" data-testid="text-onboarding-selected-file">{uploadFile.name}</p>
+                              <p className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="ml-1"
+                              onClick={() => {
+                                setUploadFile(null);
+                                setUploadSummary(null);
+                                setUploadError(null);
+                                if (uploadInputRef.current) uploadInputRef.current.value = '';
+                              }}
+                              data-testid="button-clear-onboarding-file"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <FileUp className="h-9 w-9 mx-auto text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">
+                              Drop your statement here, or{' '}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="px-1 h-auto underline align-baseline"
+                                onClick={() => uploadInputRef.current?.click()}
+                                data-testid="button-browse-onboarding-file"
+                              >
+                                browse files
+                              </Button>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              .xlsx, .xls or .pdf — CSV imports are available on the Data page once you're set up.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {uploadFile && (
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={handleExtractUpload}
+                            disabled={isExtracting}
+                            data-testid="button-extract-onboarding-file"
+                          >
+                            {isExtracting ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Reading file...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="mr-2 h-4 w-4" />
+                                Extract Numbers
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      )}
+
+                      {uploadSummary && (
+                        <div className="flex items-start gap-2 text-sm text-muted-foreground" data-testid="text-upload-summary">
+                          <Check className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                          <span>{uploadSummary}</span>
+                        </div>
+                      )}
+
+                      {uploadError && (
+                        <div className="flex items-start gap-2 text-sm" data-testid="text-upload-error">
+                          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                          <span className="text-muted-foreground">{uploadError}</span>
+                        </div>
+                      )}
+
+                      {showManualInputs ? baselineFieldsPanel : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowManualInputs(true)}
+                          data-testid="button-enter-manually-instead"
+                        >
+                          Enter the numbers myself
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
                   <div
                     className={`p-4 border rounded-md cursor-pointer transition-colors ${
@@ -818,10 +1078,12 @@ export default function OnboardingPage() {
                         <span className="text-sm font-medium text-muted-foreground">Net Burn Rate</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-burn-value">
-                        {totalExpenses > 0 ? formatCurrency(Math.abs(netBurn)) : 'N/A'}
+                        {hasBaselineNumbers && totalExpenses > 0 ? formatCurrency(Math.abs(netBurn)) : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {netBurn < 0 ? 'Cash flow positive' : netBurn > 0 ? 'Monthly net burn' : 'Add expense data to calculate'}
+                        {!hasBaselineNumbers || totalExpenses === 0
+                          ? 'Add expense data to calculate'
+                          : netBurn < 0 ? 'Cash flow positive' : 'Monthly net burn'}
                       </p>
                     </CardContent>
                   </Card>
@@ -833,20 +1095,43 @@ export default function OnboardingPage() {
                         <span className="text-sm font-medium text-muted-foreground">Health Score</span>
                       </div>
                       <p className="text-2xl font-bold" data-testid="text-health-value">
-                        {totalExpenses > 0 || baselineData.cash_balance > 0 ? `${healthScore}/100` : 'N/A'}
+                        {hasBaselineNumbers ? `${healthScore}/100` : 'N/A'}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {healthScore >= 70
+                        {!hasBaselineNumbers
+                          ? 'Add data to calculate'
+                          : healthScore >= 70
                           ? 'Strong financial health'
                           : healthScore >= 50
                           ? 'Room for improvement'
-                          : totalExpenses > 0 || baselineData.cash_balance > 0
-                          ? 'Needs attention'
-                          : 'Add data to calculate'}
+                          : 'Needs attention'}
                       </p>
                     </CardContent>
                   </Card>
                 </div>
+
+                {!hasBaselineNumbers && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md flex items-start gap-2" data-testid="banner-no-baseline">
+                    <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">No financial data yet</p>
+                      <p className="text-xs text-muted-foreground">
+                        We won't invent numbers for you. Go back and enter or upload your financials and these
+                        metrics will fill in — or continue now and add them from the Data page later.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="px-1 h-auto underline mt-1"
+                        onClick={() => setStep(2)}
+                        data-testid="button-add-data-from-health-check"
+                      >
+                        Add my numbers
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-4 bg-muted/30 rounded-md border">
                   <div className="flex items-start gap-3">

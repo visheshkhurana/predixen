@@ -68,11 +68,40 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
+import { api } from "@/api/client";
+import { invalidateCompanyFinancials } from "@/api/hooks";
 import { getErrorMessage } from "@/lib/errors";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CrossPageIntelligence } from "@/components/CrossPageIntelligence";
 import { MetricTimeSeriesEditor } from "@/components/MetricTimeSeriesEditor";
 import { trackEvent } from '@/lib/posthog';
+
+/**
+ * The three dataset types the ingest pipeline accepts.
+ *
+ * The column lists mirror the alias patterns in server/ingest/parsers.py — they
+ * are what detect_column_mapping actually looks for, so showing them here means
+ * a founder can fix a header row instead of guessing why a field came back
+ * empty. Header matching is fuzzy (substring, case-insensitive), so these are
+ * the canonical spellings rather than the only accepted ones.
+ */
+const DATASET_GUIDES = {
+  financial: {
+    label: 'Financials',
+    blurb: 'Monthly P&L and cash position. You review the column mapping before anything is imported.',
+    columns: ['period_start', 'period_end', 'revenue', 'cogs', 'opex', 'payroll', 'other_costs', 'cash_balance'],
+  },
+  transactions: {
+    label: 'Transactions',
+    blurb: 'One row per order or invoice. Powers revenue by product, channel and cohort.',
+    columns: ['txn_date', 'customer_id', 'product', 'amount', 'cost', 'channel'],
+  },
+  customers: {
+    label: 'Customers',
+    blurb: 'One row per customer. Powers segment, region and plan analysis on the Overview.',
+    columns: ['customer_id', 'segment', 'signup_date', 'region', 'plan'],
+  },
+} as const;
 
 const dataInputSchema = z.object({
   companyName: z.string().min(1, "Company name is required").or(z.literal("")).default(""),
@@ -205,6 +234,13 @@ export default function DataInput() {
   const [csvMappings, setCsvMappings] = useState<Record<string, string>>({});
   const [csvDragActive, setCsvDragActive] = useState(false);
   const [csvImporting, setCsvImporting] = useState(false);
+  // Which dataset the CSV tab is currently importing. The transactions and
+  // customers endpoints have been live for a while but had no UI at all, so the
+  // only thing a founder could ever upload was a P&L — which is why segment and
+  // cohort analysis had nothing to work with.
+  const [datasetType, setDatasetType] = useState<'financial' | 'transactions' | 'customers'>('financial');
+  const [datasetUploading, setDatasetUploading] = useState(false);
+  const [datasetResult, setDatasetResult] = useState<{ type: string; file_name: string; row_count: number; detected_mapping?: Record<string, string> | null } | null>(null);
   const [csvRawRows, setCsvRawRows] = useState<Record<string, string>[]>([]);
   const [lastLoadedCompanyId, setLastLoadedCompanyId] = useState<number | null>(null);
   const [inputMode, setInputMode] = useState<'simple' | 'advanced'>('simple');
@@ -679,9 +715,7 @@ export default function DataInput() {
     }
 
     queryClient.invalidateQueries({ queryKey: ["/api/alerts/companies"] });
-    queryClient.invalidateQueries({ queryKey: ['truth', currentCompany.id] });
-    queryClient.invalidateQueries({ queryKey: ['truth-latest', currentCompany.id] });
-    queryClient.invalidateQueries({ queryKey: ["/api/companies"] });
+    invalidateCompanyFinancials(queryClient, currentCompany.id);
 
     if (financialSaveOk) {
       toast({
@@ -1062,6 +1096,46 @@ export default function DataInput() {
     window.location.reload();
   };
 
+  /**
+   * Upload a transactions or customers CSV.
+   *
+   * These go to POST /companies/{id}/datasets/upload?dataset_type=, which does
+   * its own column detection server-side (server/ingest/parsers.py) — there is
+   * no mapping review step for them, so we surface what was detected after the
+   * fact instead, and name any expected column that went unmatched.
+   */
+  const handleDatasetUpload = async (file: File) => {
+    if (!currentCompany) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast({ title: 'CSV files only', description: 'Export your data as CSV and try again.', variant: 'destructive' });
+      return;
+    }
+    setDatasetUploading(true);
+    setDatasetResult(null);
+    try {
+      const result: any = await api.datasets.upload(currentCompany.id, datasetType, file);
+      setDatasetResult(result);
+      trackEvent('data_dataset_uploaded', { dataset_type: datasetType, row_count: result?.row_count ?? 0 });
+      const matched = Object.keys(result?.detected_mapping || {}).length;
+      if (!result?.row_count) {
+        toast({
+          title: 'Nothing imported',
+          description: 'That file had no readable rows. Check it has a header row and at least one data row.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: `${result.row_count} ${datasetType} rows imported`,
+          description: `${matched} column${matched === 1 ? '' : 's'} recognised.`,
+        });
+      }
+      invalidateCompanyFinancials(queryClient, currentCompany.id);
+    } catch (error) {
+      toast({ title: 'Upload failed', description: getErrorMessage(error), variant: 'destructive' });
+    }
+    setDatasetUploading(false);
+  };
+
   const handleCsvDetect = async (file: File) => {
     if (!currentCompany) return;
     const formData = new FormData();
@@ -1124,7 +1198,7 @@ export default function DataInput() {
           setCsvMappings({});
           setCsvRawRows([]);
         }
-        queryClient.invalidateQueries({ queryKey: ['/api/companies', currentCompany.id] });
+        invalidateCompanyFinancials(queryClient, currentCompany.id);
       } else {
         const err = await res.json();
         toast({ title: 'Import failed', description: err.detail || 'Check column mappings', variant: 'destructive' });
@@ -1203,11 +1277,107 @@ export default function DataInput() {
                       Smart CSV Import
                     </CardTitle>
                     <CardDescription>
-                      Upload any CSV file and we'll automatically detect your columns. You can review and adjust the mapping before importing.
+                      {DATASET_GUIDES[datasetType].blurb}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {!csvDetection ? (
+                    <div className="space-y-2" data-testid="dataset-type-selector">
+                      <Label className="text-xs text-muted-foreground">What are you uploading?</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(['financial', 'transactions', 'customers'] as const).map((type) => (
+                          <Button
+                            key={type}
+                            type="button"
+                            size="sm"
+                            variant={datasetType === type ? 'default' : 'outline'}
+                            onClick={() => {
+                              setDatasetType(type);
+                              setDatasetResult(null);
+                              setCsvDetection(null);
+                              setCsvMappings({});
+                            }}
+                            data-testid={`button-dataset-type-${type}`}
+                          >
+                            {DATASET_GUIDES[type].label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {datasetType !== 'financial' ? (
+                      <div className="space-y-4" data-testid="section-dataset-upload">
+                        <div
+                          className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${csvDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}`}
+                          onDragOver={(e) => { e.preventDefault(); setCsvDragActive(true); }}
+                          onDragLeave={() => setCsvDragActive(false)}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            setCsvDragActive(false);
+                            const file = e.dataTransfer.files[0];
+                            if (file) await handleDatasetUpload(file);
+                          }}
+                          data-testid="dataset-drop-zone"
+                        >
+                          <FileUp className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                          <p className="font-medium mb-1">Drag and drop your {DATASET_GUIDES[datasetType].label.toLowerCase()} CSV here</p>
+                          <p className="text-sm text-muted-foreground mb-4">or click to browse</p>
+                          <Button
+                            variant="outline"
+                            disabled={datasetUploading}
+                            onClick={() => document.getElementById('dataset-csv-input')?.click()}
+                            data-testid="button-browse-dataset"
+                          >
+                            {datasetUploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+                            {datasetUploading ? 'Uploading...' : 'Browse Files'}
+                          </Button>
+                          <input
+                            id="dataset-csv-input"
+                            type="file"
+                            accept=".csv"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = '';
+                              if (file) await handleDatasetUpload(file);
+                            }}
+                            data-testid="input-dataset-csv"
+                          />
+                          <p className="text-xs text-muted-foreground mt-4">
+                            Expected columns: {DATASET_GUIDES[datasetType].columns.join(', ')}
+                          </p>
+                        </div>
+
+                        {datasetResult && (
+                          <div className="border rounded-lg p-4 space-y-2" data-testid="dataset-upload-result">
+                            <div className="flex items-center gap-2">
+                              <Check className="h-4 w-4 text-emerald-500" />
+                              <p className="text-sm font-medium">
+                                {datasetResult.row_count} row{datasetResult.row_count === 1 ? '' : 's'} imported from {datasetResult.file_name}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {DATASET_GUIDES[datasetType].columns.map((field) => {
+                                const matched = datasetResult.detected_mapping?.[field];
+                                return (
+                                  <Badge
+                                    key={field}
+                                    variant={matched ? 'secondary' : 'outline'}
+                                    className={`text-xs ${matched ? '' : 'text-muted-foreground'}`}
+                                    data-testid={`badge-dataset-field-${field}`}
+                                  >
+                                    {matched ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
+                                    {field}{matched ? ` → ${matched}` : ''}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Unmatched fields were left empty — rename the column in your export and upload again to fill them in.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : !csvDetection ? (
                       <div
                         className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${csvDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}`}
                         onDragOver={(e) => { e.preventDefault(); setCsvDragActive(true); }}
@@ -1238,7 +1408,7 @@ export default function DataInput() {
                           data-testid="input-csv-smart"
                         />
                         <p className="text-xs text-muted-foreground mt-4">
-                          Supported columns: date, revenue, expenses, cash, payroll, MRR, ARR, customers, headcount, burn, gross margin, CAC
+                          Supported columns: date, revenue, expenses, COGS, other costs, cash, payroll, MRR, ARR, customers, headcount, burn, gross margin, CAC
                         </p>
                       </div>
                     ) : (
@@ -1262,7 +1432,10 @@ export default function DataInput() {
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {["date", "revenue", "expenses", "cash_balance", "payroll", "mrr", "arr", "customers", "headcount", "burn", "gross_margin", "cac"].map((field) => (
+                          {/* Must stay in step with COLUMN_MAPPINGS in server/api/csv_import.py —
+                              cogs and other_costs were missing here even though the importer
+                              reads them and uses cogs to derive gross margin. */}
+                          {["date", "revenue", "expenses", "cogs", "other_costs", "cash_balance", "payroll", "mrr", "arr", "customers", "headcount", "burn", "gross_margin", "cac"].map((field) => (
                             <div key={field} className="space-y-1">
                               <Label className="text-xs capitalize">{field.replace("_", " ")}</Label>
                               <Select

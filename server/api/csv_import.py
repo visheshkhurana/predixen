@@ -226,8 +226,42 @@ def import_csv_data(
 
     db.commit()
 
+    # Data confidence and every derived metric come from the *cached* truth
+    # scan row, which nothing recomputed after an import. Without this, a
+    # founder could upload 12 months of real financials and still see the
+    # pre-import "0% confidence / no data" state until they manually re-ran
+    # the scan from the Data page.
+    truth_scan_id = None
+    if imported:
+        try:
+            from server.truth.truth_scan import compute_truth_scan
+            from server.models.truth_scan import TruthScan
+
+            db.refresh(company)
+            outputs = compute_truth_scan(company, db)
+            scan = TruthScan(company_id=company_id, outputs_json=outputs)
+            db.add(scan)
+            db.commit()
+            db.refresh(scan)
+            truth_scan_id = scan.id
+
+            try:
+                from server.utils.websocket_broadcast import broadcast_truth_scan_update_sync
+                broadcast_truth_scan_update_sync(
+                    company_id=company_id,
+                    metrics=outputs.get("metrics", {}),
+                    status="completed",
+                )
+            except Exception:
+                pass
+        except Exception as e:
+            # A failed rescan must not lose an otherwise-successful import.
+            db.rollback()
+            errors.append({"row": -1, "error": f"Import saved, but confidence rescan failed: {e}"})
+
     return {
         "imported": imported,
         "errors": errors,
         "total_rows": len(data.rows),
+        "truth_scan_id": truth_scan_id,
     }

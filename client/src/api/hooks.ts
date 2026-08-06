@@ -1,7 +1,33 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import { useFounderStore } from '../store/founderStore';
 import { trackEvent } from '@/lib/posthog';
+
+/**
+ * Every query key that depends on a company's financial data.
+ *
+ * These live under several different key namespaces (`useTruthScan` reads
+ * ['truth', id] while `useFinancialMetrics` reads ['truth-latest', id], and
+ * some callers used a nonexistent ['/api/companies', id]), so invalidating
+ * only one of them left the dashboard showing pre-import confidence and
+ * metric cards after a successful upload. Any mutation that changes a
+ * company's financials must call this rather than picking keys by hand.
+ */
+export const COMPANY_FINANCIAL_QUERY_KEYS = [
+  'companies',
+  'computed-metrics',
+  'truth',
+  'truth-latest',
+  'financials-baseline',
+] as const;
+
+export function invalidateCompanyFinancials(queryClient: QueryClient, companyId: number | null | undefined) {
+  if (companyId == null) return;
+  for (const key of COMPANY_FINANCIAL_QUERY_KEYS) {
+    queryClient.invalidateQueries({ queryKey: [key, companyId] });
+  }
+  queryClient.invalidateQueries({ queryKey: ['companies'] });
+}
 
 export function useCompanies() {
   return useQuery({
@@ -68,9 +94,7 @@ export function useSeedSample() {
   return useMutation({
     mutationFn: (companyId: number) => api.companies.seedSample(companyId),
     onSuccess: (_, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['computed-metrics', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      invalidateCompanyFinancials(queryClient, companyId);
     },
   });
 }
@@ -102,7 +126,7 @@ export function useRunTruthScan() {
   return useMutation({
     mutationFn: (companyId: number) => api.truth.run(companyId),
     onSuccess: (data, companyId) => {
-      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      invalidateCompanyFinancials(queryClient, companyId);
       setTruthScan(data);
     },
   });
@@ -250,8 +274,7 @@ export function useManualBaseline() {
     mutationFn: ({ companyId, data }: { companyId: number; data: any }) =>
       api.datasets.manualBaseline(companyId, data),
     onSuccess: (_, { companyId, data }) => {
-      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      invalidateCompanyFinancials(queryClient, companyId);
       
       // Sync onboarding data to store's financialBaseline format
       const totalExpenses = (data.opex || 0) + (data.payroll || 0) + (data.other_costs || 0);
@@ -355,8 +378,7 @@ export function useTerminaPdfUpload() {
       saveAsBaseline?: boolean;
     }) => api.datasets.uploadTerminaPdf(companyId, file, saveAsBaseline),
     onSuccess: (_, { companyId }) => {
-      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      invalidateCompanyFinancials(queryClient, companyId);
     },
   });
 }
@@ -371,8 +393,7 @@ export function useTerminaExcelUpload() {
       saveAsBaseline?: boolean;
     }) => api.datasets.uploadTerminaExcel(companyId, file, saveAsBaseline),
     onSuccess: (_, { companyId }) => {
-      queryClient.invalidateQueries({ queryKey: ['companies', companyId] });
-      queryClient.invalidateQueries({ queryKey: ['truth', companyId] });
+      invalidateCompanyFinancials(queryClient, companyId);
     },
   });
 }
