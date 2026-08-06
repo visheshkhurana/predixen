@@ -59,8 +59,9 @@ export default function AiCfoPage() {
   return (
     <MarketingLayout>
       {/* hero */}
-      <section className="relative overflow-hidden aurora-hero">
-        <div className="mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
+      <section className="relative overflow-hidden">
+        <div className="aurora-hero" aria-hidden />
+        <div className="relative mx-auto max-w-6xl px-4 pt-20 pb-16 text-center md:pt-28">
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
