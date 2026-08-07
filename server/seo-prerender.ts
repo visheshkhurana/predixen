@@ -259,6 +259,74 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
+  if (path === "/default-alive") {
+    return {
+      title: "Default Alive or Default Dead? Free Calculator for Founders | FounderConsole",
+      description: "Paul Graham's default alive test, as a calculator. Enter cash, revenue, expenses and growth rate to find out whether you reach profitability before the money runs out — and what it would take to flip the answer.",
+      canonical: SITE_URL + "/default-alive",
+      // Server-rendered body so the page is legible to crawlers and to the AI
+      // assistants that increasingly answer "am I default alive" without
+      // executing JavaScript. The interactive verdict is the client's job.
+      bodyContent: `<article>
+<h1>Default Alive or Default Dead?</h1>
+<p>Paul Graham's test, in 30 seconds: at your current growth rate and current expenses, do you reach profitability before the money runs out?</p>
+<h2>What default alive actually means</h2>
+<p>Paul Graham coined the term in 2015. The question is simple: assuming your current expenses and current growth rate, would you make it to profitability on the money you already have?</p>
+<p>If yes, you are default alive. Raising becomes a choice about going faster rather than a condition of survival, and that changes how you negotiate.</p>
+<p>If no, you are default dead, and the important part is that most founders in that position do not know it. The number feels abstract until you watch the date land in a specific month.</p>
+<h2>The caveat most calculators leave out</h2>
+<p>The test assumes expenses stay flat while revenue compounds. Almost no growing company works that way — you hire, and costs climb with revenue. This calculator lets you switch expense growth on. If your verdict flips the moment you allow expenses to grow at all, the "alive" answer was fragile to begin with.</p>
+<h2>The three levers</h2>
+<p>If you come out default dead, there are only three things that change the answer: cut expenses, grow faster, or raise more. The calculator shows how far each one would have to move on your specific numbers — how large a cut, what growth rate, and how much cash.</p>
+<h2>Why a single projection is not enough</h2>
+<p>This calculator holds one growth rate steady. Real revenue is lumpy, and the month your biggest customer churns is not the average month. FounderConsole runs the same question thousands of times over your actual financials and returns the odds rather than one line.</p>
+</article>`,
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          name: "Default Alive or Default Dead Calculator",
+          url: SITE_URL + "/default-alive",
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Web",
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          description: "Free calculator implementing Paul Graham's default alive test.",
+          creator: { "@type": "Organization", name: "FounderConsole", url: SITE_URL },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: [
+            {
+              "@type": "Question",
+              name: "What does default alive mean?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "A startup is default alive if, at its current growth rate and current expenses, it would reach profitability on the money it already has — without raising again.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "What does default dead mean?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "A startup is default dead if it runs out of cash before reaching profitability on its current trajectory. Survival then depends on raising more money, cutting expenses, or growing faster.",
+              },
+            },
+            {
+              "@type": "Question",
+              name: "Who coined default alive or default dead?",
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: "Paul Graham, co-founder of Y Combinator, introduced the framing in a 2015 essay as a way for founders to know whether raising money is a choice or a necessity.",
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   const survivalShareMatch = path.match(/^\/survival\/([A-Za-z0-9_-]+)$/);
   if (survivalShareMatch) {
     const simId = survivalShareMatch[1];

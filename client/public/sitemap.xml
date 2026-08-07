@@ -31,6 +31,18 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://founderconsole.ai/default-alive</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://founderconsole.ai/blog/finmark-shut-down-alternative</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://founderconsole.ai/blog/how-to-calculate-startup-runway</loc>
     <lastmod>2026-03-15</lastmod>
     <changefreq>monthly</changefreq>

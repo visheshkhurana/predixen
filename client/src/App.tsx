@@ -125,6 +125,7 @@ const EmbedSurvivalPage = lazy(() => import("@/pages/embed-survival"));
 const FAQPage = lazy(() => import("@/pages/faq"));
 const DemoPage = lazy(() => import("@/pages/demo"));
 const RunwayCalculatorPage = lazy(() => import("@/pages/runway-calculator"));
+const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
@@ -307,6 +308,7 @@ function Router() {
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/ai-cfo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AiCfoPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
+        <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>
         <Route path="/embed/survival">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><EmbedSurvivalPage /></Suspense>}</Route>
         <Route path="/demo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DemoPage /></Suspense>}</Route>
@@ -748,7 +750,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const marketingPaths = [
     '/', '/features', '/pricing', '/about', '/blog', '/faq',
     '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
-    '/survival-simulator', '/privacy', '/terms',
+    '/survival-simulator', '/default-alive', '/privacy', '/terms',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',
     '/ai-cfo', '/embed/survival',
