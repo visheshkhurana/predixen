@@ -913,16 +913,24 @@ export default function OverviewPage() {
         direction: runwayBenchmark.direction,
         status: getBenchmarkStatus(baseData.runway, runwayBenchmark),
       },
-      { 
-        metric: 'Churn Rate', 
-        value: baseData.churnRate, 
-        p25: churnBenchmark.p25, 
-        p50: churnBenchmark.p50, 
-        p75: churnBenchmark.p75,
-        unit: '%',
-        direction: churnBenchmark.direction,
-        status: getBenchmarkStatus(baseData.churnRate, churnBenchmark),
-      },
+      // Churn is only benchmarked when it is a real number. The server has no
+      // churn signal to derive it from, so it comes through as estimated/0 — and
+      // benchmarking a 0 rendered "Churn Rate 0% — Better than median (5%)",
+      // congratulating the founder on a metric nobody measured. The KPI Health
+      // row above already nulls churn on this same condition; this keeps the
+      // benchmarks card honest in the same way.
+      ...(sharedMetrics.sources['churnRate'] !== 'estimated' && baseData.churnRate > 0
+        ? [{
+            metric: 'Churn Rate',
+            value: baseData.churnRate,
+            p25: churnBenchmark.p25,
+            p50: churnBenchmark.p50,
+            p75: churnBenchmark.p75,
+            unit: '%',
+            direction: churnBenchmark.direction,
+            status: getBenchmarkStatus(baseData.churnRate, churnBenchmark),
+          }]
+        : []),
       { 
         metric: 'Burn Multiple', 
         value: baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, 
@@ -934,7 +942,7 @@ export default function OverviewPage() {
         status: getBenchmarkStatus(baseData.burnRate > 0 ? baseData.burnRate / Math.max(baseData.mrr, 1) : 0, burnBenchmark),
       },
     ];
-  }, [assumptions.growthRate, baseData, dynamicBenchmarks]);
+  }, [assumptions.growthRate, baseData, dynamicBenchmarks, sharedMetrics.sources]);
 
   const exportToCSV = useCallback(() => {
     const timestamp = new Date().toISOString();
@@ -1838,20 +1846,20 @@ export default function OverviewPage() {
           {!segmentData ? (
             <div className="flex flex-col items-center justify-center text-center py-10 px-4" data-testid="segment-analysis-empty">
               <Scale className="h-8 w-8 text-muted-foreground/40 mb-3" />
-              <p className="text-sm font-medium">No segment data yet</p>
+              <p className="text-sm font-medium">Segment breakdowns aren&apos;t available yet</p>
+              {/*
+                The old copy told founders to upload a customers file and promised
+                a CAC/LTV/churn split. Uploading changes nothing: no server path
+                emits metrics.segments, so this card cannot populate today. Saying
+                "upload and we'll..." sent people to do work with no payoff — the
+                exact trust problem the rest of this page was fixed for. State the
+                real status and drop the dead call to action.
+              */}
               <p className="text-xs text-muted-foreground mt-1 max-w-md">
-                Segment breakdowns need a customers file with a channel, tier or region
-                column. Upload one and we&apos;ll split CAC, LTV and churn by segment here.
+                Your customer file&apos;s segment, region and plan columns are stored, but
+                we don&apos;t split CAC, LTV and churn by segment yet. This lands when the
+                breakdown ships — nothing for you to do here.
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => setLocation('/data')}
-                data-testid="button-segment-upload-customers"
-              >
-                Upload {terms.customers} data
-              </Button>
             </div>
           ) : selectedSegment === 'all' ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

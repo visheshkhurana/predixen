@@ -329,18 +329,27 @@ def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
         if mrr:
             estimated_metrics.extend(["arpu", "customer_count"])
 
-    # Churn Rate calculation (mock if no data)
-    if customers and len(customers) > 0:
-        churned = sum(1 for c in customers if getattr(c, 'churned', False))
-        metrics["churn_rate_customer"] = (churned / len(customers)) * 100
-        metrics["churn_rate_revenue"] = metrics["churn_rate_customer"] * 1.2  # Revenue churn usually higher
-        estimated_metrics.append("churn_rate_revenue")  # 1.2x multiplier is an assumption
-    else:
-        metrics["churn_rate_customer"] = 3.2  # 3.2% monthly churn
-        metrics["churn_rate_revenue"] = 4.1  # 4.1% revenue churn
-        estimated_metrics.extend(["churn_rate_customer", "churn_rate_revenue", "churn_rate"])
-
-    metrics["churn_rate"] = metrics["churn_rate_customer"]
+    # Churn.
+    #
+    # There is no churn signal in the data model: CustomerRecord has no churned
+    # column and no cancelled_at date, so the old
+    # `getattr(c, 'churned', False)` counted zero every single time. With
+    # customers loaded that produced a hard 0.0%, which the benchmarks card then
+    # rendered as "Churn Rate 0% — Better than median (5%)" — a fabricated
+    # best-in-class number sold to the founder as a competitive win.
+    #
+    # Until a customer file can actually express churn, report nothing rather
+    # than something flattering.
+    #
+    # The keys are OMITTED rather than set to None on purpose. Dozens of
+    # downstream callers use `metrics.get("churn_rate", 0)` and then format the
+    # result (`:.1f`) or compare it (`> 1`) — `.get` with a default does not
+    # protect against a key that exists holding None, so None would turn a
+    # fabricated number into a 500. Omission gives every one of those callers
+    # its intended default, keeps churn out of compare_to_benchmarks entirely
+    # (no more "0% — Better than median" row), and reaches the client as
+    # undefined, which the estimated-metrics flag renders as N/A.
+    estimated_metrics.extend(["churn_rate_customer", "churn_rate_revenue", "churn_rate"])
     
     # CAC, LTV, LTV:CAC, Payback calculations with sensibility checks
     marketing_spend = metrics.get("payroll", 0) * 0.3 + (metrics.get("opex", 0) * 0.4)  # Estimate marketing

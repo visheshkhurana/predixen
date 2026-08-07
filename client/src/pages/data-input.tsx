@@ -93,12 +93,18 @@ const DATASET_GUIDES = {
   },
   transactions: {
     label: 'Transactions',
-    blurb: 'One row per order or invoice. Powers revenue by product, channel and cohort.',
+    // Only txn_date, customer_id and amount are actually consumed today (revenue
+    // concentration + logo retention in the truth scan). product and channel are
+    // stored but nothing reads them yet, so don't promise a breakdown by them.
+    blurb: 'One row per order or invoice. Used for revenue concentration and retention.',
     columns: ['txn_date', 'customer_id', 'product', 'amount', 'cost', 'channel'],
   },
   customers: {
     label: 'Customers',
-    blurb: 'One row per customer. Powers segment, region and plan analysis on the Overview.',
+    // segment, region and plan are stored but no read path consumes them yet —
+    // the Overview's Segment Analysis has no server-side source. Claim only the
+    // customer count / ARPU / retention that the truth scan really derives.
+    blurb: 'One row per customer. Gives the Overview a real customer count, ARPU and retention.',
     columns: ['customer_id', 'segment', 'signup_date', 'region', 'plan'],
   },
 } as const;

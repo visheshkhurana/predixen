@@ -150,7 +150,36 @@ async def upload_dataset(
                 db.add(cr)
     
     db.commit()
-    
+
+    # Every derived metric — confidence, ARPU, customer count, concentration —
+    # is read from the *cached* truth scan row. Nothing recomputed it after an
+    # upload, so a founder who imported 120 customers and 749 transactions still
+    # saw the pre-upload "0% confidence / No Financial Data" state, seconds after
+    # a green "rows imported" confirmation. Same fix csv_import.py already has.
+    try:
+        from server.truth.truth_scan import compute_truth_scan
+        from server.models.truth_scan import TruthScan
+
+        db.refresh(company)
+        outputs = compute_truth_scan(company, db)
+        scan = TruthScan(company_id=company_id, outputs_json=outputs)
+        db.add(scan)
+        db.commit()
+
+        try:
+            from server.utils.websocket_broadcast import broadcast_truth_scan_update_sync
+            broadcast_truth_scan_update_sync(
+                company_id=company_id,
+                metrics=outputs.get("metrics", {}),
+                status="completed",
+            )
+        except Exception:
+            pass
+    except Exception:
+        # A failed rescan must not lose an otherwise-successful import. The rows
+        # are committed above; the founder can still re-run the scan by hand.
+        db.rollback()
+
     return DatasetResponse(
         id=dataset.id,
         type=dataset.type,
