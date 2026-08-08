@@ -179,7 +179,7 @@ def generate_decisions(
         "recommendations": recommendations
     }
 
-def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
+def _build_fallback_key_risks(total_expenses, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
     _fmt = _fmt_currency
     scaled_net_burn = net_burn * scale_mult
     risks = []
@@ -221,9 +221,9 @@ def _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, grow
     return risks[:5]
 
 
-def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
+def _build_fallback_alternative_paths(total_expenses, revenue, cash, runway_months, net_burn, growth, scale_mult=1):
     _fmt = _fmt_currency
-    scaled_burn = burn * scale_mult
+    scaled_total_expenses = total_expenses * scale_mult
     scaled_revenue = revenue * scale_mult
     scaled_cash = cash * scale_mult
     paths = []
@@ -262,7 +262,7 @@ def _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_bu
     return paths
 
 
-def _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn):
+def _build_fallback_playbook(total_expenses, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn):
     vendor_target = burn * 0.08
     playbook = []
 
@@ -426,13 +426,60 @@ def _get_current_metrics(company, db):
         revenue = float(latest_record.revenue)
 
     net_burn = _derive_net_burn(latest_record, metrics, revenue)
-    burn = net_burn + revenue if net_burn > 0 else revenue
 
     cash = extract_metric_value(metrics.get("cash_balance"), 0)
     if not cash and latest_record and latest_record.cash_balance:
         cash = float(latest_record.cash_balance)
     runway = cash / net_burn if net_burn > 0 else 24
-    return {"burn": burn, "cash": cash, "runway": runway}
+
+    growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+    if not growth and latest_record and getattr(latest_record, "mom_growth", None):
+        growth = float(latest_record.mom_growth)
+
+    # "burn" here MUST be net burn, because that is now what the diagnosis writes
+    # into key_metrics_overview. Comparing a cached net figure against a gross one
+    # would read as a >25% drift on every request and regenerate the diagnosis
+    # (an LLM call) forever.
+    return {"burn": net_burn, "cash": cash, "runway": runway, "growth": growth}
+
+
+def _health_score_from_truth_scan(db, company_id, runway_months, growth):
+    """Single source of truth for the health number.
+
+    The Truth Scan already computes quality_of_growth_index from a real rubric
+    (growth, gross margin, burn multiple, concentration, data confidence). The
+    Decisions page must not publish a second, different score — a founder who
+    screenshots one for their board should not be contradicted by the other.
+
+    The runway/growth formula survives only as a fallback for companies that
+    have never run a scan.
+    """
+    try:
+        from server.models.truth_scan import TruthScan
+        scan = (
+            db.query(TruthScan)
+            .filter(TruthScan.company_id == company_id)
+            .order_by(TruthScan.created_at.desc())
+            .first()
+        )
+        if scan and scan.outputs_json:
+            qgi = scan.outputs_json.get("quality_of_growth_index")
+            if qgi is not None:
+                return int(qgi)
+    except Exception:
+        pass
+    return min(100, max(10, int(runway_months * 5 + growth * 2)))
+
+
+def _health_label(score):
+    """Thresholds on the SAME score the badge shows, so the two can't disagree."""
+    if score >= 70:
+        return "Healthy"
+    if score >= 50:
+        return "Stable"
+    if score >= 30:
+        return "Concerning"
+    return "Critical"
 
 
 def _is_diagnosis_stale(saved, current_metrics):
@@ -466,7 +513,23 @@ def _is_diagnosis_stale(saved, current_metrics):
                 return True
         except (ValueError, TypeError):
             pass
-    
+
+    # Growth was never part of the staleness test, so a diagnosis generated when
+    # the truth scan still read 0% growth would be served forever — telling a
+    # company growing 7.7%/mo that growth "has stalled at 0%" indefinitely.
+    cached_growth = None
+    for item in kmo:
+        if "growth" in (item.get("label") or "").lower():
+            cached_growth = item.get("value", "")
+    cur_growth = current_metrics.get("growth")
+    if cached_growth and cur_growth is not None:
+        try:
+            cached_g = float(str(cached_growth).replace("%", "").strip())
+            if abs(cached_g - cur_growth) > 2.0:
+                return True
+        except (ValueError, TypeError):
+            pass
+
     return False
 
 
@@ -520,7 +583,7 @@ def generate_strategic_diagnosis(
     company = get_user_company(db, company_id, current_user)
     
     revenue = 0.0
-    burn = 0.0
+    total_expenses = 0.0
     cash = 0.0
     growth = 0.0
     runway_months = 24.0
@@ -556,12 +619,22 @@ def generate_strategic_diagnosis(
             revenue = float(latest_record.revenue)
 
         net_burn = _derive_net_burn(latest_record, metrics, revenue)
-        burn = net_burn + revenue if net_burn > 0 else revenue
+        # This is GROSS spend, not burn. It used to be called `burn`, which is how
+        # it ended up in the narrative as "burning $216K/month" when net burn was
+        # $154K — a 40% overstatement, with "$7,200/day of inaction" derived from
+        # it. Only breakeven_growth_needed legitimately wants the gross figure.
+        total_expenses = net_burn + revenue if net_burn > 0 else revenue
 
         cash = extract_metric_value(metrics.get("cash_balance"), 0)
         if not cash and latest_record and latest_record.cash_balance:
             cash = float(latest_record.cash_balance)
         growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0)
+        # Same FinancialRecord fallback that revenue and cash get above. Without
+        # it, a truth-scan snapshot taken before mom_growth was backfilled yields
+        # 0, and the diagnosis tells a company growing 7.7%/mo that growth "has
+        # stalled at 0%" — the model copies that phrasing from the prompt example.
+        if not growth and latest_record and getattr(latest_record, "mom_growth", None):
+            growth = float(latest_record.mom_growth)
         runway_months = cash / net_burn if net_burn > 0 else 24
         
         from server.models.scenario import Scenario
@@ -587,7 +660,7 @@ def generate_strategic_diagnosis(
         
         months_to_zero = cash / net_burn if net_burn > 0 else 99
         exhaustion_date = (datetime.utcnow() + timedelta(days=int(months_to_zero * 30))).strftime("%B %Y") if months_to_zero < 99 else "beyond 24 months"
-        breakeven_growth_needed = ((burn / revenue) - 1) * 100 if revenue > 0 else 0
+        breakeven_growth_needed = ((total_expenses / revenue) - 1) * 100 if revenue > 0 else 0
     except Exception as data_err:
         logger.warning(f"Error gathering financial data for diagnosis: {data_err}")
     
@@ -596,7 +669,8 @@ def generate_strategic_diagnosis(
     amount_scale = getattr(company, 'amount_scale', None) or 'units'
     scale_mult = {'units': 1, 'thousands': 1000, 'millions': 1000000, 'crores': 10000000}.get(amount_scale.lower() if amount_scale else 'units', 1)
     scaled_revenue = revenue * scale_mult
-    scaled_burn = burn * scale_mult
+    # Gross monthly spend. Never render this next to the word "burn".
+    scaled_total_expenses = total_expenses * scale_mult
     scaled_cash = cash * scale_mult
     scaled_net_burn = net_burn * scale_mult
 
@@ -624,7 +698,7 @@ def generate_strategic_diagnosis(
         kmo = [
             {"label": "Monthly Revenue (MRR)", "value": _fmt(scaled_revenue), "trend": "up" if growth > 0 else ("flat" if growth == 0 else "down"), "note": f"{growth:.1f}% MoM growth"},
             {"label": "Annual Run Rate (ARR)", "value": _fmt(arr), "trend": "up" if growth > 0 else "flat", "note": ""},
-            {"label": "Monthly Burn Rate", "value": _fmt(scaled_burn), "trend": "neutral", "note": f"Net burn: {_fmt(scaled_net_burn)}/mo"},
+            {"label": "Monthly Burn Rate", "value": _fmt(scaled_net_burn), "trend": "neutral", "note": f"Net of {_fmt(scaled_revenue)}/mo revenue. Gross spend: {_fmt(scaled_total_expenses)}/mo"},
             {"label": "Cash Balance", "value": _fmt(scaled_cash), "trend": "down" if net_burn > 0 else "up", "note": f"Runway: {runway_months:.1f} months"},
             {"label": "Runway", "value": f"{runway_months:.1f} months", "trend": "up" if runway_months > 18 else ("down" if runway_months < 9 else "neutral"), "note": f"Cash exhaustion: {exhaustion_date}"},
         ]
@@ -655,7 +729,7 @@ def generate_strategic_diagnosis(
             mil.append({
                 "title": "Path to Breakeven",
                 "target_date": be_target.strftime("%B %Y"),
-                "description": f"Reach breakeven at {_fmt(scaled_burn)}/mo revenue. Requires {breakeven_growth_needed:.0f}% MoM growth." if breakeven_growth_needed > 0 else "Continue growing revenue to match expenses.",
+                "description": f"Reach breakeven at {_fmt(scaled_net_burn)}/mo revenue. Requires {breakeven_growth_needed:.0f}% MoM growth." if breakeven_growth_needed > 0 else "Continue growing revenue to match expenses.",
                 "status": "in_progress"
             })
         mil.append({
@@ -674,7 +748,7 @@ def generate_strategic_diagnosis(
         mil.append({
             "title": "Burn Rate Optimization Review",
             "target_date": (today + timedelta(days=30)).strftime("%B %Y"),
-            "description": f"Audit all vendor contracts, subscriptions, and headcount costs. Target: 10-15% burn reduction from current {_fmt(scaled_burn)}/mo.",
+            "description": f"Audit all vendor contracts, subscriptions, and headcount costs. Target: 10-15% burn reduction from current {_fmt(scaled_net_burn)}/mo.",
             "status": "upcoming"
         })
         if revenue > 0:
@@ -692,7 +766,8 @@ Company: {company.name}
 Industry: {getattr(company, 'industry', 'Technology')}
 Stage: {getattr(company, 'stage', 'Seed/Series A')}
 Monthly Revenue: {_fmt(scaled_revenue)}
-Monthly Burn: {_fmt(scaled_burn)}
+Monthly Net Burn (cash leaving the bank): {_fmt(scaled_net_burn)}
+Total Monthly Expenses (gross spend, before revenue): {_fmt(scaled_total_expenses)}
 Cash Balance: {_fmt(scaled_cash)}
 Revenue Growth (MoM): {growth:.1f}%
 Runway: {runway_months:.1f} months
@@ -827,8 +902,12 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         kmo, mil = _build_metrics_and_milestones()
         diagnosis["key_metrics_overview"] = kmo
         diagnosis["milestones"] = mil
-        diagnosis.setdefault("health_score", min(100, max(10, int(runway_months * 5 + growth * 2))))
-        diagnosis.setdefault("health_label", "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"))
+        # Health is NOT the model's to invent. It used to be a setdefault, so
+        # whatever score the LLM returned won — which is how this page showed
+        # "Concerning (40/100)" while the Truth Scan showed 70/100 for the same
+        # company at the same moment. One number, one source.
+        diagnosis["health_score"] = _health_score_from_truth_scan(db, company_id, runway_months, growth)
+        diagnosis["health_label"] = _health_label(diagnosis["health_score"])
         diagnosis.setdefault("company_stage_label", "Early Revenue" if revenue > 0 else "Pre-Revenue")
         
         save_metadata_value(db, company, "strategic_diagnosis", diagnosis)
@@ -840,39 +919,42 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
         logger.error(f"Strategic diagnosis failed: {traceback.format_exc()}")
         growth_text = "Revenue growth is positive, which is encouraging, but it is not yet enough to close the gap between what you earn and what you spend." if growth > 0 else f"Revenue growth is at {growth:.1f}%, which means the gap between what you earn and what you spend is not closing."
         crisis_months = max(1, int(runway_months - 2))
-        daily_burn = burn / 30
-        weekly_burn = burn / 4
-        cash_at_crisis = max(0, cash - burn * crisis_months)
+        # "Every week of delay costs you $X" must be cash actually leaving the
+        # bank, i.e. net burn — not gross spend, which double-counts the portion
+        # already covered by revenue.
+        daily_burn = net_burn / 30
+        weekly_burn = net_burn / 4
+        cash_at_crisis = max(0, cash - net_burn * crisis_months)
         be_growth_text = f" Revenue would need to grow by {breakeven_growth_needed:.0f}% month-over-month to reach break-even, which is significantly above your current trajectory of {growth:.1f}%." if revenue > 0 and breakeven_growth_needed > 0 else ""
 
         if runway_months < 12:
             rec_headline = "Cut Monthly Burn by 25% and Launch an Emergency Revenue Sprint"
             rec_p1 = f"Your most urgent priority is survival. With {_fmt(scaled_cash)} in the bank and a net monthly burn of {_fmt(scaled_net_burn)}, you have roughly {runway_months:.0f} months before cash runs out. The single highest-leverage action right now is to reduce burn immediately. This means auditing every vendor contract, pausing all non-essential hiring, consolidating overlapping tools, and renegotiating payment terms where possible. A 25% burn reduction would extend your runway by approximately {runway_months * 0.25 / (1 - 0.25):.0f} months — time that could mean the difference between a strong fundraise and a fire sale."
-            rec_p2 = f"If you wait even 30 days to act, you will have consumed another {_fmt(scaled_burn)}, and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development and strain team morale. But the alternative — running out of cash entirely — eliminates all options. Every week of delay costs you ${weekly_burn:,.0f} and makes each subsequent decision more constrained."
+            rec_p2 = f"If you wait even 30 days to act, you will have consumed another {_fmt(scaled_net_burn)}, and your negotiating position with investors, vendors, and partners weakens with every passing week. The trade-off is real: cutting costs may slow product development and strain team morale. But the alternative — running out of cash entirely — eliminates all options. Every week of delay costs you ${weekly_burn:,.0f} and makes each subsequent decision more constrained."
             rec_p3 = f"Start this week. Pull your team leads into a room, lay out the numbers, and identify the three largest non-essential cost lines. Simultaneously, identify your highest-conversion revenue channels and double down on them. The goal is not just to cut — it is to buy yourself the runway to execute a focused revenue sprint that changes the trajectory."
             rec_narrative = f"{rec_p1}\n\n{rec_p2}\n\n{rec_p3}"
         else:
             rec_headline = "Accelerate Revenue Growth While Maintaining Capital Efficiency"
             rec_p1 = f"With {runway_months:.0f} months of runway and {_fmt(scaled_cash)} in reserves, you are not in immediate danger — but you are also not in a position of strength. Your current revenue of {_fmt(scaled_revenue)}/month growing at {growth:.1f}% is not on a trajectory to reach profitability before your cash runs out. The highest-leverage move right now is to accelerate revenue growth while keeping burn flat. This means reallocating resources from infrastructure and internal tooling toward direct revenue-generating activities."
-            rec_p2 = f"The trade-off is clear: investing aggressively in growth now means accepting some short-term inefficiency, but the compounding effect of even a few additional percentage points of monthly growth will dramatically extend your effective runway and strengthen your position for future fundraising. If you wait 2-3 months to make this shift, you will have spent ${burn * 2.5:,.0f} without meaningfully changing your trajectory, and your fundraising window will be narrower."
+            rec_p2 = f"The trade-off is clear: investing aggressively in growth now means accepting some short-term inefficiency, but the compounding effect of even a few additional percentage points of monthly growth will dramatically extend your effective runway and strengthen your position for future fundraising. If you wait 2-3 months to make this shift, you will have spent ${net_burn * 2.5:,.0f} without meaningfully changing your trajectory, and your fundraising window will be narrower."
             rec_p3 = f"Start by identifying your top-performing acquisition channel and allocating 80% of marketing resources there. Simultaneously, have your product team audit which features drive the most upgrades and retention — then ruthlessly prioritize those on the roadmap. Schedule a board update within 2 weeks to align stakeholders on the growth-first strategy and secure any incremental budget needed for the push."
             rec_narrative = f"{rec_p1}\n\n{rec_p2}\n\n{rec_p3}"
 
-        urgency = f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. At your current burn of {_fmt(scaled_burn)}/month, each day of inaction costs {_fmt(scaled_burn/30)}. {'Your fundraising window effectively closes when you drop below 3 months of runway, which happens in approximately ' + f'{max(1, int(runway_months - 3)):.0f}' + ' months.' if runway_months < 12 else 'This decision becomes materially less effective after 60 days as your runway shortens and fundraising leverage decreases.'}"
+        urgency = f"Act within the next {'2 weeks' if runway_months < 6 else '30 days'}. At your current burn of {_fmt(scaled_net_burn)}/month, each day of inaction costs {_fmt(scaled_net_burn/30)}. {'Your fundraising window effectively closes when you drop below 3 months of runway, which happens in approximately ' + f'{max(1, int(runway_months - 3)):.0f}' + ' months.' if runway_months < 12 else 'This decision becomes materially less effective after 60 days as your runway shortens and fundraising leverage decreases.'}"
 
-        inaction_p1 = f"If no action is taken, at your current burn rate of {_fmt(scaled_burn)}/month against revenue of {_fmt(scaled_revenue)}/month, runway will be exhausted by approximately {exhaustion_date}.{be_growth_text} The math is unforgiving: every month that passes without a change in trajectory consumes {_fmt(scaled_net_burn)} in net cash."
+        inaction_p1 = f"If no action is taken, at your current burn rate of {_fmt(scaled_net_burn)}/month against revenue of {_fmt(scaled_revenue)}/month, runway will be exhausted by approximately {exhaustion_date}.{be_growth_text} The math is unforgiving: every month that passes without a change in trajectory consumes {_fmt(scaled_net_burn)} in net cash."
         inaction_p2 = f"The consequences begin well before cash actually hits zero. Within {max(1, crisis_months - 2)} months, your cash position will be visible to employees — expect your best people to start exploring other options. Within {crisis_months} months, you will have approximately ${cash_at_crisis:,.0f} remaining, which puts you below the threshold where investors consider you a viable investment. At that point, fundraising shifts from 'raising a round' to 'negotiating a rescue' — terms become punitive, dilution becomes severe, and board control may shift."
         inaction_p3 = f"By the time cash reserves approach zero, your options narrow to three: a distressed acquisition at a fraction of your peak valuation, a bridge round with onerous terms from existing investors, or an orderly wind-down. None of these outcomes are inevitable today — but they become increasingly likely with each month of inaction."
 
         key_metrics_overview, milestones = _build_metrics_and_milestones()
 
         fallback = {
-            "situation_narrative": f"{company.name} is currently burning {_fmt(scaled_burn)}/month against {_fmt(scaled_revenue)} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
+            "situation_narrative": f"{company.name} is currently burning {_fmt(scaled_net_burn)}/month against {_fmt(scaled_revenue)} in monthly revenue. At this rate, you have approximately {runway_months:.1f} months of runway remaining. {growth_text} This puts you in a {'critical' if runway_months < 6 else 'challenging'} position where decisive action in the next {'2-4 weeks' if runway_months < 6 else '1-2 months'} will significantly impact your outcomes.",
             "recommendation_headline": rec_headline,
             "recommendation_narrative": rec_narrative,
             "urgency_text": urgency,
             "inaction_narrative": f"{inaction_p1}\n\n{inaction_p2}\n\n{inaction_p3}",
-            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of {_fmt(scaled_burn)}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
+            "diagnosis_narrative": f"Based on your current metrics, {company.name} has approximately {runway_months:.0f} months of runway at the current burn rate of {_fmt(scaled_net_burn)}/month. {growth_text} Focus on extending runway while pursuing growth opportunities.",
             "company_stage_label": "Early Revenue" if revenue > 0 else "Pre-Revenue",
             "health_score": min(100, max(10, int(runway_months * 5 + growth * 2))),
             "health_label": "Stable" if runway_months > 12 else ("Concerning" if runway_months > 6 else "Critical"),
@@ -880,12 +962,12 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
             "milestones": milestones,
             "inaction_projection": {
                 "months_to_crisis": crisis_months,
-                "crisis_description": f"Cash reserves depleted at current burn rate of {_fmt(scaled_burn)}/month",
+                "crisis_description": f"Cash reserves depleted at current burn rate of {_fmt(scaled_net_burn)}/month",
                 "probability": 70 if runway_months < 12 else 40,
                 "cash_at_crisis": 0,
                 "key_trigger": "Cash balance drops below 2 months of operating expenses"
             },
-            "execution_playbook": _build_fallback_playbook(burn, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn),
+            "execution_playbook": _build_fallback_playbook(total_expenses, revenue, cash, runway_months, net_burn, growth, weekly_burn, daily_burn),
             "top_3_priorities": [
                 {"priority": "Extend runway", "why_now": "Current runway is limited", "expected_impact": "Add 3-6 months of operating time"},
                 {"priority": "Accelerate revenue", "why_now": "Revenue growth compounds over time", "expected_impact": "Reduce dependency on external funding"},
@@ -896,8 +978,8 @@ CRITICAL INSTRUCTION FOR alternative_paths: Generate exactly 3 alternative strat
                 "Team capacity constraints that could limit growth execution",
                 "Market timing risk as conditions may shift"
             ],
-            "key_risks": _build_fallback_key_risks(burn, revenue, cash, runway_months, net_burn, growth, scale_mult),
-            "alternative_paths": _build_fallback_alternative_paths(burn, revenue, cash, runway_months, net_burn, growth, scale_mult),
+            "key_risks": _build_fallback_key_risks(total_expenses, revenue, cash, runway_months, net_burn, growth, scale_mult),
+            "alternative_paths": _build_fallback_alternative_paths(total_expenses, revenue, cash, runway_months, net_burn, growth, scale_mult),
             "company_name": company.name,
             "generated_at": datetime.utcnow().isoformat(),
             "model_used": "fallback",
