@@ -356,12 +356,16 @@ export function AppSidebar() {
     enabled: !!currentCompany?.id,
   });
 
-  const { data: smartAlertsData } = useQuery<{ alerts: any[]; total: number; unacknowledged: number }>({
+  // The API field is unacknowledged_count, not unacknowledged — this was reading
+  // a key that never exists and silently relying on the client-side fallback.
+  // Harmless today, but it would have masked a real count if the array were ever
+  // paginated. Same shape the header now reads, so the two cannot diverge.
+  const { data: smartAlertsData } = useQuery<{ alerts: any[]; total: number; unacknowledged_count?: number }>({
     queryKey: ["/api/companies", currentCompany?.id, "smart-alerts"],
     enabled: !!currentCompany?.id,
   });
 
-  const unreadAlertCount = smartAlertsData?.unacknowledged ?? smartAlertsData?.alerts?.filter((a: any) => !a.acknowledged)?.length ?? 0;
+  const unreadAlertCount = smartAlertsData?.unacknowledged_count ?? smartAlertsData?.alerts?.filter((a: any) => !a.acknowledged)?.length ?? 0;
 
   const scenarioCount = scenarios?.length ?? 0;
   const pendingDecisionCount = decisions?.filter((d: any) => d.status === "pending" || d.status === "open")?.length ?? 0;

@@ -3,7 +3,7 @@ const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ defau
 import { Switch, Route, Redirect, useLocation, Link } from "wouter";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { queryClient, apiRequest } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -23,7 +23,7 @@ import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
-import { Bell, Sun, AlertTriangle, TrendingDown, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
+import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -704,6 +704,26 @@ function CopilotDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v
   );
 }
 
+/**
+ * Relative age for an alert timestamp.
+ *
+ * The server stores naive UTC ISO strings with no trailing Z. Parsed as-is the
+ * browser reads them as local time, which is how the dashboard ended up showing
+ * data as "in about 7 hours". Append the Z when it is missing.
+ */
+function formatAlertAge(timestamp: string): string {
+  const iso = /[zZ]|[+-]\d{2}:?\d{2}$/.test(timestamp) ? timestamp : `${timestamp}Z`;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, currentCompany, truthScan, currentStep, currentScenario, latestRun } = useFounderStore();
   const [location, navigate] = useLocation();
@@ -711,6 +731,30 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const { metrics: liveMetrics, isLoading: metricsLoading } = useFinancialMetrics();
   const confidence = truthScan?.data_confidence_score || 0;
+
+  /**
+   * Real alerts for the header bell.
+   *
+   * This used to be three hardcoded <DropdownMenuItem>s — "Runway below 12
+   * months / 2 hours ago", "Monthly burn up from $18K to $20.7K", a "3 active"
+   * badge and an unconditional red dot — none of it tied to any company. A
+   * founder with zero alerts saw a clean sidebar and, inches away, a red dot
+   * claiming three, with dollar figures belonging to nobody. The churn item even
+   * fell back to the literal '3.2%', the same invented churn figure that was
+   * removed from the truth scan.
+   *
+   * Same query key the sidebar already uses, so the two read from one source and
+   * cannot disagree.
+   */
+  const { data: smartAlertsData } = useQuery<{ alerts: any[]; total: number; unacknowledged_count?: number }>({
+    queryKey: ["/api/companies", currentCompany?.id, "smart-alerts"],
+    enabled: !!currentCompany?.id,
+  });
+
+  const headerAlerts = (smartAlertsData?.alerts ?? []).filter((a: any) => !a.acknowledged);
+  // The API returns unacknowledged_count; keep the client-side count as a
+  // fallback so a shape change degrades to "no badge" rather than a wrong one.
+  const unreadAlertCount = smartAlertsData?.unacknowledged_count ?? headerAlerts.length;
 
   useEffect(() => {
     initPostHog();
@@ -814,41 +858,65 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative shrink-0" data-testid="button-header-alerts">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative shrink-0"
+                    data-testid="button-header-alerts"
+                    aria-label={unreadAlertCount > 0 ? `Alerts, ${unreadAlertCount} unread` : "Alerts, none unread"}
+                  >
                     <Bell className="h-4 w-4" />
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" data-testid="indicator-alert-dot" />
+                    {/* Gated on the real count. It used to render unconditionally,
+                        so every account permanently looked like it had alerts. */}
+                    {unreadAlertCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" data-testid="indicator-alert-dot" />
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
                   <DropdownMenuLabel className="flex items-center justify-between gap-2 flex-wrap">
                     <span>Recent Alerts</span>
-                    <Badge variant="destructive" className="text-[10px]" data-testid="badge-alert-count">3 active</Badge>
+                    {unreadAlertCount > 0 && (
+                      <Badge variant="destructive" className="text-[10px]" data-testid="badge-alert-count">
+                        {unreadAlertCount} active
+                      </Badge>
+                    )}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-runway">
-                    <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-sm font-medium" data-testid="text-alert-runway-title">Runway below 12 months</p>
-                      <p className="text-xs text-muted-foreground">Cash reserves declining faster than projected</p>
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />2 hours ago</p>
+                  {headerAlerts.length === 0 ? (
+                    <div className="px-3 py-6 text-center" data-testid="alerts-empty">
+                      <p className="text-sm text-muted-foreground">No active alerts</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        We&apos;ll flag runway, burn and retention changes here as they happen.
+                      </p>
                     </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-burn">
-                    <TrendingDown className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-sm font-medium" data-testid="text-alert-burn-title">Burn rate increased 15%</p>
-                      <p className="text-xs text-muted-foreground">Monthly burn up from $18K to $20.7K</p>
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />5 hours ago</p>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-start gap-3 p-3 cursor-pointer" onClick={() => navigate('/alerts')} data-testid="alert-item-churn">
-                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-sm font-medium" data-testid="text-alert-churn-title">Churn spike detected</p>
-                      <p className="text-xs text-muted-foreground">Churn rate at {liveMetrics.churnRatePct > 0 ? `${liveMetrics.churnRatePct.toFixed(1)}%` : '3.2%'}, above 2% target</p>
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap"><Clock className="h-3 w-3" />1 day ago</p>
-                    </div>
-                  </DropdownMenuItem>
+                  ) : (
+                    headerAlerts.slice(0, 4).map((alert: any) => (
+                      <DropdownMenuItem
+                        key={alert.id}
+                        className="flex items-start gap-3 p-3 cursor-pointer"
+                        onClick={() => navigate('/alerts')}
+                        data-testid={`alert-item-${alert.type || 'generic'}`}
+                      >
+                        <AlertTriangle
+                          className={`h-4 w-4 mt-0.5 shrink-0 ${alert.severity === 'critical' ? 'text-red-500' : 'text-amber-500'}`}
+                          aria-hidden="true"
+                        />
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-sm font-medium">{alert.title}</p>
+                          {alert.message && (
+                            <p className="text-xs text-muted-foreground">{alert.message}</p>
+                          )}
+                          {alert.timestamp && (
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                              <Clock className="h-3 w-3" aria-hidden="true" />
+                              {formatAlertAge(alert.timestamp)}
+                            </p>
+                          )}
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="justify-center text-sm text-primary cursor-pointer" onClick={() => navigate('/alerts')} data-testid="button-view-all-alerts">
                     View All Alerts
