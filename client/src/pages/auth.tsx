@@ -378,11 +378,23 @@ export default function AuthPage() {
             </p>
           </div>
 
+          {/*
+            Google is the path that actually converts. The product's first real
+            signup — a paid Google Ads click on 8 Aug — came through here: they
+            looked at the email form for 39 seconds, fired signup_start, then
+            went to Google and landed on /onboarding as a new user. Nobody has
+            ever completed the email form.
+
+            So on the register tab this is the primary action, labelled for the
+            intent ("Sign up with Google", not the ambiguous "Continue with"),
+            and slightly taller than the form's submit button. On the login tab
+            it stays a secondary outline button.
+          */}
           <div className="mb-6">
             <Button
               variant={activeTab === 'register' ? 'default' : 'outline'}
               type="button"
-              className="w-full h-11 gap-2.5 text-sm font-medium"
+              className={`w-full gap-2.5 text-sm font-medium ${activeTab === 'register' ? 'h-12' : 'h-11'}`}
               onClick={() => { if (activeTab === 'register') handleSignupStart(); handleSocialLogin('google'); }}
               disabled={isLoading || socialLoadingProvider !== null}
               data-testid="button-google-login"
@@ -392,8 +404,13 @@ export default function AuthPage() {
               ) : (
                 <SiGoogle className="h-3.5 w-3.5" />
               )}
-              Continue with Google
+              {activeTab === 'register' ? 'Sign up with Google' : 'Continue with Google'}
             </Button>
+            {activeTab === 'register' && (
+              <p className="mt-2 text-center text-[11px] text-muted-foreground" data-testid="text-google-signup-hint">
+                Fastest way in — no password to create
+              </p>
+            )}
           </div>
 
           <div className="relative mb-6">
@@ -564,6 +581,12 @@ export default function AuthPage() {
                       placeholder="Min. 8 characters"
                       className={`pl-10 pr-10 h-11 bg-muted/30 border-border/60 focus:bg-background transition-colors ${errors.password ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                       value={registerForm.password}
+                      // signup_start previously fired only from the email field
+                      // and the Google button, so anyone who tabbed or clicked
+                      // into the password box first was recorded as never having
+                      // started. handleSignupStart is idempotent, so covering
+                      // both fields just closes the blind spot.
+                      onFocus={handleSignupStart}
                       onChange={(e) => {
                         setRegisterForm({ ...registerForm, password: e.target.value });
                         if (errors.password) setErrors({ ...errors, password: '' });
