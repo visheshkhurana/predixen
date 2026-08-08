@@ -20,6 +20,11 @@ export function initPostHog() {
     api_transport: 'XHR',
     capture_pageview: true,
     capture_pageleave: true,
+    // Without this, $exception is never ingested and a JS error on the signup
+    // page is completely invisible to us — we would see the drop-off and have
+    // no way to tell a broken form from a bored visitor. Cheap insurance on the
+    // one funnel step we cannot afford to be blind on.
+    capture_exceptions: true,
     persistence: 'localStorage',
     // Session replay: record marketing + auth funnel sessions so we can watch
     // where ad visitors drop off. Inputs are masked by default for privacy.

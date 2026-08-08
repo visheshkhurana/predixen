@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
-import { Switch, Route, Redirect, useLocation, Link } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -318,17 +318,21 @@ function Router() {
         <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
+      {/* /login means login. The other three mean "I want an account" — they
+          used to drop the query string and land people on the login tab, so
+          anyone typing founderconsole.ai/signup or following an old link was
+          shown the wrong form. */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
       </Route>
       <Route path="/signup">
-        {() => <Redirect to="/auth" />}
+        {() => <Redirect to="/auth?tab=register" />}
       </Route>
       <Route path="/register">
-        {() => <Redirect to="/auth" />}
+        {() => <Redirect to="/auth?tab=register" />}
       </Route>
       <Route path="/join">
-        {() => <Redirect to="/auth" />}
+        {() => <Redirect to="/auth?tab=register" />}
       </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
@@ -839,7 +843,34 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           {user?.email === 'demo@founderconsole.ai' && (
             <div className="no-print flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400" data-testid="banner-demo-mode">
               <FlaskConical className="h-3.5 w-3.5 shrink-0" />
-              <span>Demo Mode — You are viewing simulated sample data. <Link href="/auth" className="underline hover:text-amber-300">Sign up free</Link> to use your own.</span>
+              {/*
+                This is the ONLY way out of the demo, so it has to actually
+                work. It previously linked to bare /auth, which lands on the
+                login tab — and because the demo session is still active,
+                PublicOrAuthHome bounced the user straight back to /overview.
+                A recorded visitor tried /auth and / in turn and was returned
+                to /overview both times before giving up.
+
+                Signing out first is what makes the escape real: it clears the
+                demo session so /auth?tab=register renders instead of
+                redirecting.
+              */}
+              <span>
+                Demo Mode — You are viewing simulated sample data.{" "}
+                <button
+                  type="button"
+                  className="underline hover:text-amber-300"
+                  data-testid="button-demo-exit-signup"
+                  onClick={async () => {
+                    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+                    useFounderStore.getState().logout();
+                    navigate('/auth?tab=register');
+                  }}
+                >
+                  Sign up free
+                </button>{" "}
+                to use your own.
+              </span>
             </div>
           )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">

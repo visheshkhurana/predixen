@@ -622,32 +622,51 @@ export default function AuthPage() {
             </TabsContent>
           </Tabs>
           
-          <div className="mt-6 pt-5 border-t border-border/50">
-            <button
-              type="button"
-              className="w-full group flex items-center justify-between p-3.5 rounded-xl bg-muted/30 hover:bg-muted/50 border border-border/50 hover:border-border transition-all"
-              onClick={handleDemoLogin}
-              disabled={isDemoLoading || isLoading}
-              data-testid="button-demo-login"
-            >
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center border border-amber-500/20">
-                  {isDemoLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
-                  ) : (
-                    <Sparkles className="h-4 w-4 text-amber-500" />
-                  )}
+          {/*
+            The demo entry point is deliberately NOT shown on the register tab.
+
+            It used to sit under both tabs as the most visually distinctive
+            element on the page — amber gradient, sparkle icon, arrow — directly
+            beneath the signup form. We have a recorded session of the one
+            genuine Google Ads visitor doing exactly what you would predict:
+            landed on /auth?tab=register, fired signup_view, clicked the demo
+            card five seconds later, and was logged into the shared demo account
+            and redirected to /overview. They then tried /auth and / to get back,
+            were bounced into /overview both times, and left after 28 seconds.
+            A paid click, spent on a dead end.
+
+            On the login tab it is genuinely useful — a returning visitor who
+            can't remember whether they made an account may well want a look
+            around. On the register tab it competes with the one action we want.
+          */}
+          {activeTab === 'login' && (
+            <div className="mt-6 pt-5 border-t border-border/50">
+              <button
+                type="button"
+                className="w-full group flex items-center justify-between p-3.5 rounded-xl bg-muted/30 hover:bg-muted/50 border border-border/50 hover:border-border transition-all"
+                onClick={handleDemoLogin}
+                disabled={isDemoLoading || isLoading}
+                data-testid="button-demo-login"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center border border-border/50">
+                    {isDemoLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium">{isDemoLoading ? 'Loading demo...' : 'Try the live demo'}</div>
+                    <div className="text-[11px] text-muted-foreground">Sample company, no account needed</div>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <div className="text-sm font-medium">{isDemoLoading ? 'Loading demo...' : 'Try the live demo'}</div>
-                  <div className="text-[11px] text-muted-foreground">Pre-loaded SaaS company data</div>
-                </div>
-              </div>
-              {!isDemoLoading && (
-                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
-              )}
-            </button>
-          </div>
+                {!isDemoLoading && (
+                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                )}
+              </button>
+            </div>
+          )}
 
           <p className="text-center text-[11px] text-muted-foreground/60 mt-6">
             TLS encryption &middot; Secure cloud infrastructure &middot; Role-based access control
