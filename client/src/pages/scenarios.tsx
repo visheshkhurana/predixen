@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { FadeIn, ScrollReveal } from '@/components/ui/motion-primitives';
+import { ScrollReveal } from '@/components/ui/motion-primitives';
 import { SurvivalCurveChart } from '@/components/SurvivalCurveChart';
 import { BandsChart } from '@/components/BandsChart';
 import { ExportButton } from '@/components/ExportButton';
@@ -1226,7 +1226,10 @@ export default function ScenariosPage() {
   }, [simulation, currentScenarioName, currentCompany, scenarioP90, scenarioP50, scenarioP10, baselineComparison, sensitivityBars]);
 
   return (
-    <FadeIn delay={0.05} duration={0.4}>
+    // No page-level FadeIn here. AnimatedRouteWrapper in App.tsx already fades
+    // every route, so this was a second opacity animation multiplying with the
+    // first — and it is the wrapper that was observed stuck at opacity 0 with
+    // the whole page inside it.
     <div className="space-y-8">
       {/* STEP 1: "What's the question?" */}
       <section data-testid="section-question">
@@ -2881,6 +2884,5 @@ export default function ScenariosPage() {
         />
       )}
     </div>
-    </FadeIn>
   );
 }

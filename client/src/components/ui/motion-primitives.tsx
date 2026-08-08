@@ -21,6 +21,39 @@ export function FadeIn({
   direction?: "up" | "down" | "left" | "right" | "none";
 } & Omit<HTMLMotionProps<"div">, "children">) {
   const prefersReducedMotion = useReducedMotion();
+  const safetyRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Failsafe: never leave content stuck at the initial opacity.
+   *
+   * `initial={{opacity: 0}}` is written straight to the element's inline style
+   * on mount, and only the enter animation raises it. If that animation is
+   * cancelled before it commits — which happens when React suspends and reveals
+   * a subtree across a Suspense boundary, and framer-motion has handed the
+   * opacity to WAAPI — the inline `opacity: 0` simply stays.
+   *
+   * That is not hypothetical here. On /simulate this left a single div holding
+   * 1,414 descendants and the entire page's text at `opacity: 0;
+   * transform: translateY(24px)` — the flagship feature rendering invisible.
+   *
+   * After the animation has had its full duration plus a buffer, if the element
+   * is still faded, put it back. A visible page with no animation beats an
+   * invisible one with a nice one.
+   */
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    const el = safetyRef.current;
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      const stuck = el.style.opacity !== "" && parseFloat(el.style.opacity) < 1;
+      if (stuck) {
+        el.style.opacity = "1";
+        el.style.transform = "none";
+      }
+    }, (delay + duration) * 1000 + 400);
+    return () => window.clearTimeout(timer);
+  }, [delay, duration, prefersReducedMotion]);
+
   const directionMap = {
     up: { y: 24 },
     down: { y: -24 },
@@ -36,6 +69,7 @@ export function FadeIn({
 
   return (
     <motion.div
+      ref={safetyRef}
       initial={{ opacity: 0, ...directionMap[direction] }}
       animate={{ opacity: 1, x: 0, y: 0 }}
       transition={{ duration, delay, ease: [0.16, 1, 0.3, 1] }}
