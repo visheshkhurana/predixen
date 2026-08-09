@@ -1,4 +1,5 @@
 export const blogPosts = [
+  { slug: "startup-fpa-tools-acquired-timeline", title: "Every Startup FP&A Tool Got Acquired. Here's the Timeline.", excerpt: "Finmark, Pry, Causal and Mosaic were all absorbed into larger companies. Last month Runway lost the runway.com domain to an AI video startup. A field guide to where each one went and why the seed-stage end of the market is now empty.", date: "Aug 8, 2026", author: "Vishesh Khurana" },
   { slug: "finmark-shut-down-alternative", title: "Finmark Is Gone. Here's Where Your Runway Model Goes Next.", excerpt: "BILL sunset Finmark on 1 April 2026. Pry, Causal and Mosaic were absorbed too, and Runway just lost its domain. Here's what actually happened to startup FP&A — and what a seed-stage founder should do about it.", date: "Aug 8, 2026", author: "Vishesh Khurana" },
   { slug: "how-to-calculate-startup-runway", title: "How to Calculate Startup Runway: The Complete Guide for Founders", excerpt: "Runway is the single most important number for any startup. This guide covers the basic formula, common pitfalls, and why Monte Carlo simulation gives you a more accurate picture than a spreadsheet ever could.", date: "Mar 15, 2026", author: "Vishesh Khurana" },
   { slug: "seed-stage-saas-benchmarks-2026", title: "Seed-Stage SaaS Benchmarks 2026: What Good Looks Like", excerpt: "Updated benchmarks for seed-stage SaaS companies in 2026, covering ARR growth, net revenue retention, burn multiples, and the metrics that matter most for your next raise.", date: "Mar 12, 2026", author: "Vishesh Khurana" },
@@ -17,6 +18,18 @@ export const blogPosts = [
 ];
 
 export const blogPostContent: Record<string, string[]> = {
+  "startup-fpa-tools-acquired-timeline": [
+    "In 2022 a seed-stage founder had five or six credible options for modelling runway. Today they have almost none — not because the products failed, but because every one of them was bought and moved upmarket.",
+    "## The timeline",
+    "Pry was acquired by Brex for $90M in April 2022; pry.co deep links now 404 outright, while Pry's Academy guides still rank in search. Causal joined Lucanet in October 2024 and now redirects to an enterprise Extended Planning & Analysis page. Mosaic was acquired by HiBob for around $35M and is now a module inside an HR suite. BILL sunset Finmark on 1 April 2026, and bill.com has no Finmark destination page at all. And on 22 July 2026, Runway Financial lost the runway.com domain to Runway AI, the video-generation company, moving to cfo.ai.",
+    "## The pattern",
+    "Read those five together and it is not consolidation, it is a migration upmarket. Runway's pricing page publishes no prices, no free tier and no self-serve signup, and its paid landing pages segment audiences as 50-500, 500-1,500 and 1,500+ employees. Jirav, the only tool still operating independently, sells to accounting firms and does not use the words runway or burn rate on its homepage.",
+    "Enterprise FP&A is a better business than seed FP&A. Every one of these companies followed the money. But the arithmetic leaves someone behind: the founder with three employees, nine months of cash and a board meeting in a fortnight.",
+    "## What to do if your tool disappeared",
+    "Export your historical actuals while you still can — revenue, COGS, opex, payroll and cash balance are the only things genuinely expensive to reconstruct. Do not rebuild the model you had; rebuilding forces you to decide what you actually look at. Separate what you measured from what you assumed. And insist on a range rather than a date: runway is a distribution, and a tool that cannot give you a tenth and ninetieth percentile is offering false precision.",
+    "## Where FounderConsole fits",
+    "FounderConsole was built for the segment this timeline emptied out. Upload a CSV of monthly financials and get a runway distribution with P10, P50 and P90 bands rather than a single date, model scenarios directly, and see metrics marked as estimates or N/A where the data cannot honestly support them. The runway calculator and the default-alive check are both free, with no signup and no demo call.",
+  ],
   "finmark-shut-down-alternative": [
     "If you went looking for finmark.com recently, you landed on bill.com's homepage. No migration guide, no explanation, no page acknowledging that Finmark ever existed. BILL sunset the product on 1 April 2026, and bill.com/finmark returns a 404 today.",
     "Over the past four years, essentially every financial planning tool built for early-stage startups has been acquired and folded into something larger and more expensive. Not one of them left a forwarding address that a seed-stage founder can use.",
