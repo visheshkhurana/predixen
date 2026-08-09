@@ -307,6 +307,17 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Competitor auto-scan scheduler init skipped: {e}")
 
+        try:
+            # Derived metrics are read from the newest stored TruthScan row, and
+            # nothing wrote one unless a founder clicked Refresh or imported
+            # data. That is how a fabricated-churn fix could be live for hours
+            # while the dashboard still served the old value.
+            from server.services.truth_refresh import run_truth_scan_refresh_loop
+            asyncio.create_task(run_truth_scan_refresh_loop())
+            logger.info("Truth scan refresh scheduler started")
+        except Exception as e:
+            logger.warning(f"Truth scan refresh scheduler init skipped: {e}")
+
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")
 
