@@ -26,7 +26,7 @@
   </url>
   <url>
     <loc>https://founderconsole.ai/blog</loc>
-    <lastmod>2026-03-17</lastmod>
+    <lastmod>2026-08-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -38,13 +38,13 @@
   </url>
   <url>
     <loc>https://founderconsole.ai/blog/startup-fpa-tools-acquired-timeline</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://founderconsole.ai/blog/finmark-shut-down-alternative</loc>
-    <lastmod>2026-08-08</lastmod>
+    <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -62,9 +62,9 @@
   </url>
   <url>
     <loc>https://founderconsole.ai/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal</loc>
-    <lastmod>2026-03-10</lastmod>
+    <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://founderconsole.ai/blog/best-ai-tools-startup-financial-planning</loc>
@@ -170,4 +170,16 @@
   <url><loc>https://founderconsole.ai/runway/hardware</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://founderconsole.ai/runway/biotech</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://founderconsole.ai/runway/devtools</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url>
+    <loc>https://founderconsole.ai/privacy</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://founderconsole.ai/terms</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>

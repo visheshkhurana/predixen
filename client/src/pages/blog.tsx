@@ -96,6 +96,56 @@ function dateToISO(dateStr: string): string {
   return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
 }
 
+/**
+ * Minimal inline markdown for post bodies: **bold** and [text](/path).
+ *
+ * The renderer previously emitted each paragraph as a raw string, so every
+ * `**word**` in a post shipped to readers as literal asterisks, and there was no
+ * way to link between articles at all — which is why the posts had no internal
+ * links. Deliberately tiny: two constructs, no library, no dangerouslySetInnerHTML.
+ * External URLs get noopener; internal ones stay in the tab.
+ */
+function renderInline(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  // One pass, alternating between [label](href) and **bold**.
+  const pattern = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const [, linkLabel, href, boldText] = match;
+    if (linkLabel && href) {
+      const isExternal = /^https?:\/\//i.test(href);
+      nodes.push(
+        <a
+          key={`l${key++}`}
+          href={href}
+          className="text-primary underline underline-offset-2 hover:no-underline"
+          {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          {linkLabel}
+        </a>,
+      );
+    } else if (boldText) {
+      nodes.push(
+        <strong key={`b${key++}`} className="font-semibold text-foreground">
+          {boldText}
+        </strong>,
+      );
+    }
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes.length ? nodes : [text];
+}
+
 function BlogPost({ slug }: { slug: string }) {
   const post = blogPosts.find((p) => p.slug === slug);
   const isoDate = post ? dateToISO(post.date) : "";
@@ -189,7 +239,7 @@ function BlogPost({ slug }: { slug: string }) {
             }
             return (
               <p key={i} className="mb-4 text-muted-foreground leading-relaxed">
-                {paragraph}
+                {renderInline(paragraph)}
               </p>
             );
           })}

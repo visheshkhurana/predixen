@@ -59,6 +59,28 @@ function buildBlogListBodyContent(): string {
   return `<section><h1>Insights for Founders</h1><p>Practical decision science for founders. Runway, fundraising, hiring, and strategy — through the lens of probability.</p>${postsHtml}</section>`;
 }
 
+/**
+ * Escape first, then promote the two inline markdown constructs the client
+ * renderer supports: **bold** and [text](/path).
+ *
+ * Order matters. Everything is HTML-escaped up front, so nothing a post author
+ * writes can inject markup; only the escaped forms of our own two patterns are
+ * turned back into tags afterwards. Without this, crawlers and the AI assistants
+ * that read these pages without executing JavaScript saw literal asterisks, and
+ * internal links between articles were invisible to them — which defeats the
+ * point of adding the links.
+ */
+function renderInlineHtml(text: string): string {
+  const escaped = escapeHtml(text);
+  return escaped
+    // [label](href) — href is restricted to a safe subset, so no javascript: URLs.
+    .replace(
+      /\[([^\]]+)\]\((\/[A-Za-z0-9\-._~/?#=&%]*|https?:&#x2F;&#x2F;[^)]+|https?:\/\/[^)]+)\)/g,
+      (_m, label, href) => `<a href="${href}">${label}</a>`,
+    )
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
 function buildBlogPostBodyContent(slug: string): string | null {
   const post = blogPosts.find((p) => p.slug === slug);
   const content = blogPostContent[slug];
@@ -66,7 +88,7 @@ function buildBlogPostBodyContent(slug: string): string | null {
   const paragraphs = content || [];
   const bodyParagraphs = paragraphs.map((p: string) => {
     if (p.startsWith("## ")) return `<h2>${escapeHtml(p.replace("## ", ""))}</h2>`;
-    return `<p>${escapeHtml(p)}</p>`;
+    return `<p>${renderInlineHtml(p)}</p>`;
   }).join("");
   return `<article><h1>${escapeHtml(post.title)}</h1><p><em>By ${escapeHtml(post.author)} — ${escapeHtml(post.date)}</em></p>${bodyParagraphs}</article>`;
 }
@@ -380,6 +402,16 @@ function getPageMeta(path: string): PageMeta | null {
         }],
       };
     }
+    // Unknown slug. Without this the request falls through to the untouched
+    // index.html, which advertises "index, follow" and a canonical pointing at
+    // the homepage — a soft 404 that invites Google to crawl every mistyped or
+    // retired blog URL. The React app already renders "Article not found" here.
+    return {
+      title: "Article not found | FounderConsole",
+      description: "The article you're looking for doesn't exist.",
+      canonical: `${SITE_URL}/blog`,
+      robots: "noindex, follow",
+    };
   }
 
   return null;
