@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
@@ -91,13 +91,32 @@ function computeVerdict(
   return { alive, profitableMonth, outOfCashMonth, lowestCash, series };
 }
 
+const DA_DEFAULTS = { cash: 500000, revenue: 25000, expenses: 75000, growthRate: 8 };
+
 export default function DefaultAlivePage() {
-  const [cash, setCash] = useState(500000);
-  const [revenue, setRevenue] = useState(25000);
-  const [expenses, setExpenses] = useState(75000);
-  const [growthRate, setGrowthRate] = useState(8);
+  const [cash, setCash] = useState(DA_DEFAULTS.cash);
+  const [revenue, setRevenue] = useState(DA_DEFAULTS.revenue);
+  const [expenses, setExpenses] = useState(DA_DEFAULTS.expenses);
+  const [growthRate, setGrowthRate] = useState(DA_DEFAULTS.growthRate);
   const [includeExpenseGrowth, setIncludeExpenseGrowth] = useState(false);
   const [expenseGrowth, setExpenseGrowth] = useState(3);
+
+  // See the matching comment in runway-calculator.tsx: a page view here says
+  // nothing about whether the visitor actually asked the question. This is the
+  // first real signal of intent on the page.
+  const usageTracked = useRef(false);
+  useEffect(() => {
+    if (usageTracked.current) return;
+    const touched =
+      cash !== DA_DEFAULTS.cash ||
+      revenue !== DA_DEFAULTS.revenue ||
+      expenses !== DA_DEFAULTS.expenses ||
+      growthRate !== DA_DEFAULTS.growthRate ||
+      includeExpenseGrowth;
+    if (!touched) return;
+    usageTracked.current = true;
+    trackFunnel("calculator_used", { calculator: "default-alive" });
+  }, [cash, revenue, expenses, growthRate, includeExpenseGrowth]);
 
   const effectiveExpenseGrowth = includeExpenseGrowth ? expenseGrowth : 0;
 

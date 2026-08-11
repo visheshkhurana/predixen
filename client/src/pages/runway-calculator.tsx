@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,34 @@ function formatDate(months: number): string {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
+const DEFAULTS = { cash: 500000, revenue: 20000, expenses: 60000, growthRate: 5 };
+
 export default function RunwayCalculatorPage() {
-  const [cash, setCash] = useState(500000);
-  const [revenue, setRevenue] = useState(20000);
-  const [expenses, setExpenses] = useState(60000);
-  const [growthRate, setGrowthRate] = useState(5);
+  const [cash, setCash] = useState(DEFAULTS.cash);
+  const [revenue, setRevenue] = useState(DEFAULTS.revenue);
+  const [expenses, setExpenses] = useState(DEFAULTS.expenses);
+  const [growthRate, setGrowthRate] = useState(DEFAULTS.growthRate);
+
+  // Fire once, the first time a visitor changes any input away from the
+  // pre-filled example.
+  //
+  // Page views told us nothing useful: 28 people viewed this page and 26 never
+  // touched it, which is invisible if the only event is the CTA click at the
+  // bottom. This is the step that separates "landed here" from "actually asked
+  // the question", and it is the signal ad platforms should optimise toward —
+  // waiting for signups gives them almost no data to learn from.
+  const usageTracked = useRef(false);
+  useEffect(() => {
+    if (usageTracked.current) return;
+    const touched =
+      cash !== DEFAULTS.cash ||
+      revenue !== DEFAULTS.revenue ||
+      expenses !== DEFAULTS.expenses ||
+      growthRate !== DEFAULTS.growthRate;
+    if (!touched) return;
+    usageTracked.current = true;
+    trackFunnel("calculator_used", { calculator: "runway" });
+  }, [cash, revenue, expenses, growthRate]);
 
   const results = useMemo(() => {
     const monthlyBurn = expenses - revenue;

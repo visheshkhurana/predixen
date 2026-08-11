@@ -23,6 +23,7 @@ import { BackendStatusBanner } from "@/components/BackendStatusBanner";
 import { TrialBanner, PaywallGate } from "@/components/PaywallGate";
 import { useFounderStore } from "@/store/founderStore";
 import { initPostHog, identifyUser, resetUser, trackPageView, trackEvent } from "@/lib/posthog";
+import { initXAds } from "@/lib/xads";
 import { Bell, Sun, AlertTriangle, Clock, Sparkles, DollarSign, Flame, Timer, BarChart3, Send, Command, Loader2, FlaskConical, User, Settings, LogOut } from "lucide-react";
 import {
   DropdownMenu,
@@ -762,6 +763,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     initPostHog();
+    initXAds();
   }, []);
 
   useEffect(() => {
