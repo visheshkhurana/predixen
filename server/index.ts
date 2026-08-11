@@ -12,9 +12,14 @@ import { existsSync } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import compression from "compression";
+import { geoRestrict } from "./middleware/geoRestrict";
 
 const app = express();
 app.disable("x-powered-by");
+// Railway terminates TLS and forwards the real client address in
+// X-Forwarded-For. Without this, req.ip is the proxy and every visitor looks
+// like the same private address.
+app.set("trust proxy", true);
 
 app.use((req, res, next) => {
   const requestId = (req.headers["x-request-id"] as string) || randomUUID();
@@ -62,6 +67,10 @@ app.use((req, res, next) => {
 });
 
 app.use(compression());
+
+// Country gate. Placed after the security headers (so a blocked response still
+// carries them) and before every route, static asset and the SEO prerenderer.
+app.use(geoRestrict());
 
 const httpServer = createServer(app);
 
