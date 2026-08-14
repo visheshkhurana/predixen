@@ -32,12 +32,54 @@ function allowedCountries(): Set<string> {
 const EXEMPT_PREFIXES = ["/api/", "/embed/", "/healthz", "/health", "/assets/"];
 const EXEMPT_EXACT = new Set(["/robots.txt", "/sitemap.xml", "/favicon.ico", "/og-image.png"]);
 
-// Search and AI crawlers. robots.txt explicitly invites GPTBot, ClaudeBot and
-// PerplexityBot; geo-blocking them would contradict that and quietly undo the
-// SEO/GEO work. Googlebot in particular crawls from shifting IP ranges, and a
-// blocked crawl is indistinguishable from a dead site.
+// Search, ad and AI crawlers — never geo-blocked.
+//
+// This list is generous on purpose. Getting it wrong in the strict direction
+// has already cost real money once: the first version matched "googlebot" but
+// not "adsbot-google", so Google's ad landing-page crawler hit a 403 from a
+// non-allowed country and disapproved every ad in the account with
+// "Destination not working". Ad delivery stopped for two days.
+//
+// The asymmetry is the whole point. Letting a crawler through costs nothing —
+// they are not the traffic this gate exists to stop. Blocking one silently
+// breaks ads, search indexing or link previews, and the symptom shows up days
+// later somewhere else entirely.
 const CRAWLER_UA =
-  /(googlebot|google-inspectiontool|google-extended|bingbot|slurp|duckduckbot|baiduspider|yandex(bot)?|applebot|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|whatsapp|embedly|quora link preview|redditbot|gptbot|chatgpt-user|oai-searchbot|claudebot|claude-web|anthropic-ai|perplexitybot|ccbot|bytespider|petalbot|ahrefsbot|semrushbot|screaming frog)/i;
+  new RegExp(
+    [
+      // Google — search, ads, and infrastructure. AdsBot verifies ad landing
+      // pages; Mediapartners serves AdSense; the rest verify or fetch.
+      "googlebot", "adsbot-google", "mediapartners-google", "google-inspectiontool",
+      "google-extended", "google-site-verification", "apis-google", "feedfetcher-google",
+      "storebot-google", "google-safety", "google-read-aloud", "googleother",
+      // Bing, including its ads crawler
+      "bingbot", "adidxbot", "bingpreview",
+      // Other search
+      "slurp", "duckduckbot", "baiduspider", "yandex", "applebot", "seznambot", "naver",
+      // Social / link unfurling
+      "facebookexternalhit", "facebookcatalog", "twitterbot", "linkedinbot", "slackbot",
+      "discordbot", "telegrambot", "whatsapp", "embedly", "quora link preview",
+      "redditbot", "pinterest", "tiktok",
+      // AI crawlers robots.txt explicitly invites
+      "gptbot", "chatgpt-user", "oai-searchbot", "claudebot", "claude-web", "anthropic-ai",
+      "perplexitybot", "ccbot", "cohere-ai", "diffbot",
+      // SEO tooling the team may run
+      "ahrefsbot", "semrushbot", "screaming frog", "mj12bot", "dotbot",
+      // Misc
+      "bytespider", "petalbot", "uptimerobot", "pingdom", "statuscake",
+    ].join("|"),
+    "i",
+  );
+
+/**
+ * Generic non-browser heuristic, applied after the explicit list above.
+ *
+ * A backstop for the crawler we have not thought of yet. Given the gate fails
+ * open everywhere else, letting an unrecognised bot through is consistent and
+ * costs nothing; blocking one is what breaks things quietly.
+ */
+const GENERIC_BOT_UA =
+  /(bot\b|\bbot|crawler|spider|crawl|fetcher|scraper|monitor|preview|validator|feedparser|headlesschrome|python-requests|curl\/|wget\/|axios\/|go-http-client|okhttp|java\/|libwww|undici|node-fetch|^node$)/i;
 
 /**
  * Private, loopback, link-local and carrier-grade-NAT ranges.
@@ -135,7 +177,9 @@ export function geoRestrict() {
       if (EXEMPT_PREFIXES.some((p) => path.startsWith(p))) return next();
 
       const ua = String(req.headers["user-agent"] || "");
+      if (!ua) return next(); // no UA at all → treat as a tool, not a visitor
       if (CRAWLER_UA.test(ua)) return next();
+      if (GENERIC_BOT_UA.test(ua)) return next();
 
       if (hasSessionCookie(req)) return next();
 

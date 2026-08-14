@@ -27,10 +27,23 @@ function startServer(): Promise<{ base: string; server: Server }> {
   });
 }
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+
+/**
+ * Defaults to a real browser user agent.
+ *
+ * Node's fetch otherwise sends "node", which the gate correctly treats as a
+ * bot and lets through — so every block-expecting assertion would silently
+ * pass for the wrong reason. Tests that care about bot handling pass their own
+ * user-agent header.
+ */
 async function status(path: string, headers: Record<string, string> = {}): Promise<number> {
   const { base, server } = await startServer();
   try {
-    const res = await fetch(base + path, { headers });
+    const res = await fetch(base + path, {
+      headers: { "user-agent": BROWSER_UA, ...headers },
+    });
     return res.status;
   } finally {
     server.close();
@@ -76,6 +89,78 @@ test("never blocks search or AI crawlers", async () => {
       `expected ${ua} allowed`,
     );
   }
+});
+
+test("never blocks AD crawlers — regression, this broke production", async () => {
+  // The first version of CRAWLER_UA matched "googlebot" but not
+  // "adsbot-google". Google's ad landing-page crawler hit a 403 from a
+  // non-allowed country and disapproved every ad in the account with
+  // "Destination not working". Ad delivery stopped for two days before anyone
+  // noticed, because the site itself looked perfectly healthy.
+  const agents = [
+    "AdsBot-Google (+http://www.google.com/adsbot.html)",
+    "Mozilla/5.0 (Linux; Android 6.0.1;) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 (compatible; AdsBot-Google-Mobile; +http://www.google.com/mobile/adsbot.html)",
+    "AdsBot-Google-Mobile-Apps",
+    "Mediapartners-Google",
+    "adidxbot/2.0",
+  ];
+  for (const ua of agents) {
+    assert.equal(
+      await status("/", { "x-forwarded-for": IP.china, "user-agent": ua }),
+      200,
+      `expected ${ua} allowed — a blocked ad crawler disapproves the whole account`,
+    );
+  }
+});
+
+test("falls open for unrecognised bots", async () => {
+  // Backstop for the crawler nobody thought of. Consistent with the gate
+  // failing open everywhere else: letting a bot through costs nothing.
+  const agents = ["SomeNewCrawler/1.0", "acme-monitor", "curl/8.4.0", "python-requests/2.31"];
+  for (const ua of agents) {
+    assert.equal(
+      await status("/", { "x-forwarded-for": IP.china, "user-agent": ua }),
+      200,
+      `expected "${ua}" allowed`,
+    );
+  }
+});
+
+test("falls open when there is no user agent at all", async () => {
+  // Uses raw http rather than fetch: node's fetch always sends "node" as the
+  // UA, so it cannot express a genuinely absent header.
+  const { base, server } = await startServer();
+  try {
+    const http = await import("node:http");
+    const url = new URL(base);
+    const code: number = await new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          host: url.hostname,
+          port: url.port,
+          path: "/",
+          headers: { "x-forwarded-for": IP.china },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    assert.equal(code, 200);
+  } finally {
+    server.close();
+  }
+});
+
+test("still blocks a real browser from a disallowed country", async () => {
+  // The bot heuristics must not swallow the actual use case.
+  const chrome =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+  assert.equal(await status("/", { "x-forwarded-for": IP.china, "user-agent": chrome }), 403);
+  assert.equal(await status("/", { "x-forwarded-for": IP.us, "user-agent": chrome }), 200);
 });
 
 test("never locks out an existing signed-in user abroad", async () => {
