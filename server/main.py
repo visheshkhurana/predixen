@@ -318,6 +318,18 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Truth scan refresh scheduler init skipped: {e}")
 
+        try:
+            # A geo-conditional break is invisible from one vantage point: when
+            # the country gate blocked AdsBot, every manual check still returned
+            # 200 because it came from an allowed country, and Google quietly
+            # disapproved every ad for two days. This probes our own front door
+            # with the user agents that matter.
+            from server.services.crawler_health import run_crawler_health_loop
+            asyncio.create_task(run_crawler_health_loop())
+            logger.info("Crawler health check scheduler started")
+        except Exception as e:
+            logger.warning(f"Crawler health check init skipped: {e}")
+
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")
 
