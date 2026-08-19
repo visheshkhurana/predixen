@@ -502,10 +502,28 @@ export function injectSEO(html: string, path: string): string {
   }
 
   if (meta.bodyContent) {
-    result = result.replace(
-      '<div id="root"></div>',
-      `<div id="root"></div><div id="ssr-content" style="position:absolute;left:-9999px;top:-9999px;overflow:hidden;width:1px;height:1px">${meta.bodyContent}</div>`
-    );
+    // Rendered INSIDE #root, and visibly.
+    //
+    // This content used to sit outside #root at left:-9999px — present for
+    // crawlers, invisible to people. The consequence was that a human saw a
+    // blank white page until ~890KB of JavaScript downloaded and parsed, which
+    // on a mid-tier phone is several seconds. Measured behaviour matched:
+    // 21 of 21 mobile visitors left without reaching a second page, and typical
+    // sessions were 4-20 seconds — at or below time-to-interactive.
+    //
+    // createRoot() (not hydrateRoot) discards whatever is in #root on its first
+    // render, so this needs no hydration, no matching markup, and no extra
+    // JavaScript: the browser paints real text as soon as CSS lands, and React
+    // silently replaces it on mount.
+    //
+    // Styles are inline on purpose. The stylesheet is render-blocking and
+    // large; relying on a class from it would reintroduce the very dependency
+    // this is meant to remove.
+    //
+    // Bonus: if JS fails outright — stale chunk, blocked bundle, dead network —
+    // the visitor now keeps a readable page instead of a white screen.
+    const preview = `<div id="ssr-content" style="max-width:46rem;margin:0 auto;padding:5rem 1.25rem;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.65;color:#1a1d24">${meta.bodyContent}</div>`;
+    result = result.replace('<div id="root"></div>', `<div id="root">${preview}</div>`);
   }
 
   return result;

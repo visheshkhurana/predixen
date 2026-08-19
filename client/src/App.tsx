@@ -50,6 +50,14 @@ import { AskAIButton } from "@/components/AskAIButton";
 import { CookieConsent } from "@/components/CookieConsent";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 const AuthPage = lazy(() => import("@/pages/auth"));
+// Lazy, like every other page. This one being a static import is what put
+// recharts — the whole charting library — into the entry bundle that every
+// visitor downloads, including someone who clicked an ad for the free runway
+// calculator and never touches a chart.
+const SimulateV2Page = lazy(() => import("@/pages/simulate-v2"));
+const SharedSimulationPage = lazy(() =>
+  import("@/pages/simulate-v2").then((m) => ({ default: m.SharedSimulationPage })),
+);
 const AuthCallback = lazy(() => import("@/pages/auth-callback"));
 const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
 const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
@@ -60,7 +68,6 @@ const OverviewPage = lazy(() => import("@/pages/overview"));
 const TruthScanPage = lazy(() => import("@/pages/truth-scan"));
 const ScenariosPage = lazy(() => import("@/pages/scenarios"));
 const SimulateWorkspace = lazy(() => import("@/pages/simulate-workspace"));
-import SimulateV2Page, { SharedSimulationPage } from "@/pages/simulate-v2";
 const DecisionsPage = lazy(() => import("@/pages/decisions"));
 const CopilotPage = lazy(() => import("@/pages/copilot"));
 const DataInputPage = lazy(() => import("@/pages/data-input"));
