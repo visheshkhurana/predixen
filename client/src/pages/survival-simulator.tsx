@@ -662,12 +662,12 @@ function GrowthGate() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button
             className="bg-gradient-to-r from-primary to-violet-600"
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/auth?tab=register&utm_source=survival_simulator&utm_campaign=sim_to_account")}
             data-testid="button-create-account"
           >
             Create Free Account <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
-          <Button variant="outline" onClick={() => navigate("/login")} data-testid="button-login">
+          <Button variant="outline" onClick={() => navigate("/auth")} data-testid="button-login">
             Already have an account? Log in
           </Button>
         </div>
@@ -834,10 +834,10 @@ export default function SurvivalSimulatorPage() {
             </div>
             <div className="flex items-center gap-2">
               {results && <ExportButton results={results} />}
-              <Button variant="ghost" size="sm" onClick={() => navigate("/login")} data-testid="button-header-login">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/auth")} data-testid="button-header-login">
                 Log in
               </Button>
-              <Button size="sm" onClick={() => navigate("/login")} className="bg-primary" data-testid="button-header-signup">
+              <Button size="sm" onClick={() => navigate("/auth?tab=register&utm_source=survival_simulator&utm_campaign=sim_to_account")} className="bg-primary" data-testid="button-header-signup">
                 Sign up free
               </Button>
             </div>
