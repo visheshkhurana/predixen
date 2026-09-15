@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
 (Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-GitHub tip: folding CoS parked-queue cleanup after `1d3b1b18` (#9 evidence retained).
+GitHub tip: `daae90bf`+ (CoS dropped shipped SEO row from parked).
 **Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
 Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
 
@@ -32,7 +32,6 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 
 ## Parked queues (do not expand without Bot)
 | Agent | Queued item | Notes |
-| Growth | SEO hygiene (sitemap privacy/terms + strip shell JSON-LD) | **shipped #9** `08995787` — drop from parked queue on next docs touch |
 | Growth | SSR cross-links + contact pack | `content-drafts/ssr-crosslinks-contact-v1.md` ready |
 | Product | Rage-click replays; `lead_captured` proof | needs PostHog / session replay |
 | Reliability | Deploy-landed monitor (hash + body) | — |
@@ -58,6 +57,7 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 | Feedback GET + company forecasting auth | `#10` `29b282e1` (+ docs `ed91d54c`) | CoS 23:53 GST recheck: GET `/api/feedback`→401; POST trend/forecast→401; POST feedback public per RM note | closes Reviewer-found holes |
 | CoS honesty pass (stale #8 rows + HANDOVER tip) | `3bdf080f` | on main; §2 tips `ed91d54c` | records |
 | Fold CoS STATE cleanup | `1d3b1b18` | on main | records |
+| Growth SEO queue marked shipped | `daae90bf` | on main | records |
 
 
 ### Pasteable evidence — #10 feedback+forecast lock (2026-09-15T19:52:40Z)
