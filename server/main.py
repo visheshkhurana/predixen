@@ -330,6 +330,16 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Crawler health check init skipped: {e}")
 
+        try:
+            # Railway can lag 40+ minutes after a git push; bundle hash alone
+            # is not a deploy proof (backend/SSR/auth can keep the same
+            # index-*.js). This diffs served hash plus real response bodies.
+            from server.services.deploy_landed import run_deploy_landed_loop
+            asyncio.create_task(run_deploy_landed_loop())
+            logger.info("Deploy-landed monitor scheduler started")
+        except Exception as e:
+            logger.warning(f"Deploy-landed monitor init skipped: {e}")
+
         _startup_state["ready"] = True
         logger.info("Deferred startup tasks completed successfully")
 
