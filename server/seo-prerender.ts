@@ -305,6 +305,8 @@ function buildFaqBodyContent(): string {
 ${sectionsHtml}
 <h2>Still have questions?</h2>
 <p>We're happy to help. Reach out and we'll get back to you within 24 hours. <a href="/contact">Contact Us</a></p>
+<h2>Related free tools</h2>
+<p>Try a free tool with no account required: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>. When you want live connected data, <a href="/auth">get started free</a>.</p>
 </article>`;
 }
 
