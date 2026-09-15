@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import {
   Rocket, TrendingUp, DollarSign, Users, AlertTriangle,
   Share2, ArrowRight, BarChart3, Shield, Target, ChevronDown,
   Zap, CheckCircle, UserPlus, Clock, Copy, Twitter, Linkedin,
-  Gauge, ArrowLeft, Download
+  Gauge, ArrowLeft, Download, Mail, Check, Loader2
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -20,6 +20,7 @@ import {
 } from "recharts";
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
+import { trackFunnel } from "@/lib/funnel";
 
 const STORAGE_KEY = "fc_survival_sim_count";
 
@@ -44,6 +45,12 @@ const formatCurrency = (val: number) => {
   if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`;
   return `$${val.toFixed(0)}`;
 };
+
+function formatDate(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + Math.floor(months));
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
 const gradeColors: Record<string, string> = {
   emerald: "from-emerald-500 to-emerald-600",
@@ -501,6 +508,109 @@ function RecommendationsPanel({ recommendations }: { recommendations: SimResults
   );
 }
 
+function EmailResultPanel({ results }: { results: SimResults }) {
+  // Same conversion as /tools/runway-calculator: one field, no account, the
+  // result in their inbox so they can forward it. Server /api/leads already
+  // stores the lead and queues lead_captured; we still track client-side
+  // after a 2xx, matching the calculator.
+  const [email, setEmail] = useState("");
+  const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  const p50 = results.runway.p50;
+  const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
+  const runwayDate = formatDate(p50);
+
+  async function handleEmailResult(e: FormEvent) {
+    e.preventDefault();
+    if (sendState === "sending" || !email.trim()) return;
+    setSendState("sending");
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          source: "survival-simulator",
+          plan: "survival-simulator",
+          notes: `Grade ${results.grade.letter} (${results.grade.label}). Median runway ${p50} months (P10 ${results.runway.p10} – P90 ${results.runway.p90}). 12-month survival ${results.survival["12m"]}%. Cash ${results.inputs.cash_on_hand}, revenue ${results.inputs.monthly_revenue}, expenses ${results.inputs.monthly_expenses}, growth ${results.inputs.growth_rate}%/mo, churn ${results.inputs.monthly_churn}%, net burn ${monthlyBurn}.`,
+          // Server only queues the outbound email when these three are present.
+          runway_months: String(p50),
+          runway_date: runwayDate,
+          monthly_burn: formatCurrency(monthlyBurn) + "/mo",
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setSendState("done");
+      trackFunnel("lead_captured", {
+        location: "survival-simulator",
+        runway_months: p50,
+        grade: results.grade.letter,
+        survival_12m: results.survival["12m"],
+      });
+    } catch {
+      // Deliberately not a toast. The visitor still has their result on screen.
+      setSendState("error");
+    }
+  }
+
+  return (
+    <Card className="border-zinc-800 bg-zinc-900/80" data-testid="email-result-panel">
+      <CardContent className="pt-6">
+        {sendState === "done" ? (
+          <div className="flex items-center gap-3 justify-center py-2" data-testid="text-email-sent">
+            <Check className="h-5 w-5 text-emerald-500 shrink-0" />
+            <p className="text-sm text-foreground">
+              Sent. Check your inbox for your survival summary.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary shrink-0" />
+              <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
+                Email me this result
+              </h3>
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Your survival grade, median runway and 12-month odds, sent to you so you can
+              forward it to a co-founder or investor. No account needed.
+            </p>
+            <form onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="email"
+                required
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@yourstartup.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="sm:flex-1 bg-zinc-800 border-zinc-700"
+                aria-label="Your email address"
+                data-testid="input-lead-email"
+              />
+              <Button type="submit" disabled={sendState === "sending"} data-testid="button-email-result">
+                {sendState === "sending" ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending
+                  </>
+                ) : (
+                  "Send it to me"
+                )}
+              </Button>
+            </form>
+            {sendState === "error" && (
+              <p className="mt-2 text-sm text-destructive" data-testid="text-email-error">
+                That did not go through. Try again in a moment.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ShareResultPanel({ results }: { results: SimResults }) {
   const { toast } = useToast();
   const shareUrl = `${window.location.origin}/survival/${results.simulation_id}`;
@@ -882,6 +992,8 @@ export default function SurvivalSimulatorPage() {
               </div>
 
               <SimulationResultsCard results={results} />
+
+              <EmailResultPanel results={results} />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <RunwayDistributionChart histogram={results.histogram} />
