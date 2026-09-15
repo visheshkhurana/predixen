@@ -16,6 +16,8 @@ import { Badge } from '@/components/ui/badge';
 import { HelpCircle, Sparkles, Check, AlertCircle, Loader2, ArrowRight, ArrowLeft, TrendingDown, DollarSign, Activity, FileUp, FileText, X } from 'lucide-react';
 import type { AmountScale } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
+import { SAMPLE_COMPANY, SAMPLE_FINANCIALS } from '@/lib/sampleCompany';
+import { SampleFirstRunCard } from '@/components/sample-data/SampleFirstRunCard';
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -32,25 +34,6 @@ const STAGE_DEFAULTS: Record<string, { monthly_revenue: number; gross_margin_pct
   series_a: { monthly_revenue: 150000, gross_margin_pct: 70, opex: 40000, payroll: 80000, other_costs: 15000, cash_balance: 2000000, headcount: 25 },
   series_b: { monthly_revenue: 500000, gross_margin_pct: 72, opex: 100000, payroll: 200000, other_costs: 30000, cash_balance: 5000000, headcount: 60 },
   growth: { monthly_revenue: 1000000, gross_margin_pct: 75, opex: 200000, payroll: 400000, other_costs: 50000, cash_balance: 10000000, headcount: 120 },
-};
-
-const SAMPLE_COMPANY = {
-  name: 'TechFlow AI',
-  website: 'https://techflow.ai',
-  industry: 'general_saas',
-  stage: 'seed',
-  currency: 'USD',
-  amount_scale: 'UNITS' as AmountScale,
-};
-
-const SAMPLE_FINANCIALS = {
-  monthly_revenue: 85000,
-  gross_margin_pct: 75,
-  opex: 25000,
-  payroll: 45000,
-  other_costs: 8000,
-  cash_balance: 750000,
-  headcount: 12,
 };
 
 function formatCurrency(value: number): string {
@@ -176,13 +159,15 @@ export default function OnboardingPage() {
       setCurrentCompany(company);
 
       await seedSampleMutation.mutateAsync(company.id);
+      useFounderStore.getState().markCurrentCompanySample();
 
       localStorage.setItem('founderConsoleOnboardingComplete', 'true');
+      trackEvent('sample_first_run_started', { company_id: company.id });
       toast({
-        title: 'Sample data loaded!',
-        description: 'Redirecting to dashboard...'
+        title: 'Sample insight ready',
+        description: 'These numbers are simulated — not your company.'
       });
-      setLocation("/");
+      setLocation('/overview');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         toast({
@@ -628,28 +613,14 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-2xl space-y-6">
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold" data-testid="text-onboarding-title">Getting Started</h1>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={loadSampleCompany}
-              disabled={isSubmitting || isSeedingInProgress}
-              data-testid="button-load-sample"
-            >
-              {isSeedingInProgress ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Try Sample Company
-                </>
-              )}
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold" data-testid="text-onboarding-title">Getting Started</h1>
+
+          {step === 1 && (
+            <SampleFirstRunCard
+              onStart={loadSampleCompany}
+              loading={isSubmitting || isSeedingInProgress}
+            />
+          )}
 
           <div className="flex items-center gap-1">
             {STEPS.map((s, idx) => (
@@ -689,7 +660,7 @@ export default function OnboardingPage() {
           <Card>
             <CardHeader>
               <CardTitle data-testid="text-step1-title">Welcome to FounderConsole</CardTitle>
-              <CardDescription>Tell us about your startup so we can find relevant benchmarks and insights.</CardDescription>
+              <CardDescription>Or set up your own company to use real numbers. Sample data stays labelled.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCompanySubmit} className="space-y-4">

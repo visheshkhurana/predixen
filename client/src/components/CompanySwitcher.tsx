@@ -47,6 +47,7 @@ interface Company {
   currency: string;
   description?: string;
   data_sharing_enabled?: boolean;
+  is_sample?: boolean;
 }
 
 const INDUSTRIES = [
@@ -93,6 +94,7 @@ const CURRENCY_LABELS: Record<string, string> = {
 export function CompanySwitcher() {
   const { currentCompany, setCurrentCompany, user } = useFounderStore();
   const isDemoUser = user?.email === 'demo@founderconsole.ai';
+  const isSample = !!currentCompany?.is_sample && !isDemoUser;
   const { data: companies, isLoading } = useCompanies();
   const updateCompany = useUpdateCompany();
   const deleteCompany = useDeleteCompany();
@@ -204,15 +206,17 @@ export function CompanySwitcher() {
             data-testid="button-company-switcher"
             aria-label="Switch company"
           >
-            {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" /> : <Building2 className="h-4 w-4 shrink-0" />}
+            {isDemoUser || isSample ? <FlaskConical className="h-4 w-4 text-amber-400 shrink-0" /> : <Building2 className="h-4 w-4 shrink-0" />}
             <div className="flex flex-col items-start min-w-0">
               <div className="flex items-center gap-1">
                 <span className="truncate max-w-[120px]">
                   {currentCompany?.name || 'Select Company'}
                 </span>
                 {isDemoUser && <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0" data-testid="badge-demo-company">Demo</Badge>}
+                {isSample && <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0" data-testid="badge-sample-company">Sample</Badge>}
               </div>
               {isDemoUser && <span className="text-[10px] text-amber-400/70 leading-3" data-testid="text-demo-subtitle">Simulated data only</span>}
+              {isSample && <span className="text-[10px] text-amber-400/70 leading-3" data-testid="text-sample-subtitle">Simulated data only</span>}
             </div>
             <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
           </Button>
@@ -262,6 +266,9 @@ export function CompanySwitcher() {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   {isDemoUser ? <FlaskConical className="h-4 w-4 text-amber-400/60 flex-shrink-0" /> : <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                   <span className="truncate">{company.name}</span>
+                  {company.is_sample && !isDemoUser && (
+                    <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-amber-400 text-[10px] px-1 py-0 leading-4 shrink-0">Sample</Badge>
+                  )}
                   {currentCompany?.id === company.id && (
                     <Check className="h-4 w-4 text-primary flex-shrink-0" />
                   )}
