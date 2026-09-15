@@ -720,6 +720,8 @@ function getPageMeta(path: string): PageMeta | null {
 <p>If you come out default dead, there are only three things that change the answer: cut expenses, grow faster, or raise more. The calculator shows how far each one would have to move on your specific numbers — how large a cut, what growth rate, and how much cash.</p>
 <h2>Why a single projection is not enough</h2>
 <p>This calculator holds one growth rate steady. Real revenue is lumpy, and the month your biggest customer churns is not the average month. FounderConsole runs the same question thousands of times over your actual financials and returns the odds rather than one line.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/survival-simulator">startup survival simulator</a> — both free, no account required. See <a href="/features">features</a> for the full platform. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
 </article>`,
       jsonLd: [
         {
