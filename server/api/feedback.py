@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from server.core.db import get_db
+from server.api.admin import require_platform_admin
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,10 @@ async def submit_feedback(
 
 
 @router.get("")
-async def list_feedback(db: Session = Depends(get_db)):
+async def list_feedback(
+    db: Session = Depends(get_db),
+    _admin=Depends(require_platform_admin),
+):
     rows = db.execute(
         text("SELECT id, user_id, email, type, message, page, created_at FROM beta_feedback ORDER BY created_at DESC LIMIT 100")
     ).fetchall()
