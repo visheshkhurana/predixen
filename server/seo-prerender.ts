@@ -164,7 +164,7 @@ function buildAiCfoBodyContent(): string {
 <h2>What it does not do</h2>
 <p>It is not a replacement for an accountant, a bookkeeper or a tax advisor. It is a decision tool for the questions between those things: pacing, hiring, pricing and timing.</p>
 <h2>Start without connecting anything</h2>
-<p>The free runway calculator gives you months of runway and a cash-out date from four numbers, with no account required.</p>
+<p>Try free tools with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a> — answers from your numbers in under a minute. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
 </article>`;
 }
 
@@ -229,7 +229,7 @@ function buildFeaturesBodyContent(): string {
 
 <h2>Start using FounderConsole today</h2>
 <p>Every feature is free while we're in early access — no credit card required. Connect your data and get your first forecast in under 5 minutes.</p>
-<p><a href="/auth">Get Started Free</a> · Prefer a quick answer first? Try the <a href="/tools/runway-calculator">runway calculator</a> or <a href="/default-alive">default alive test</a> with no signup.</p>
+<p><a href="/auth">Get Started Free</a> · Prefer a quick answer first? Try the <a href="/tools/runway-calculator">runway calculator</a>, the <a href="/default-alive">default alive test</a>, or the <a href="/survival-simulator">survival simulator</a> with no signup.</p>
 </article>`;
 }
 
@@ -577,6 +577,16 @@ function getPageMeta(path: string): PageMeta | null {
       description: "An AI CFO for founders without a finance team. Ask about runway, burn rate and hiring, and get answers from your real numbers with Monte Carlo confidence bands.",
       canonical: SITE_URL + "/ai-cfo",
       bodyContent: buildAiCfoBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "AI CFO for Startups",
+        url: SITE_URL + "/ai-cfo",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        description: "An AI CFO for founders without a finance team. Ask about runway, burn rate and hiring, and get answers from your real numbers with Monte Carlo confidence bands.",
+      }],
     };
   }
 
