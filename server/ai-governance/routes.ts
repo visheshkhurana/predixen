@@ -357,9 +357,8 @@ export function registerAiGovernanceRoutes(app: Express) {
     }
   });
 
-  app.use("/admin/ai-governance", admin);
-
-  // POST /admin/ai-governance/callback — FROM n8n only (HMAC, not session auth)
+  // POST /admin/ai-governance/callback — FROM n8n only (HMAC, not session auth).
+  // Registered BEFORE the admin mount so requirePlatformAdmin does not catch it.
   app.post("/admin/ai-governance/callback", async (req: Request, res: Response) => {
     try {
       if (!governanceSecret()) {
@@ -477,4 +476,6 @@ export function registerAiGovernanceRoutes(app: Express) {
       res.status(500).json({ error: "Failed to process callback" });
     }
   });
+
+  app.use("/admin/ai-governance", admin);
 }
