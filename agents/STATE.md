@@ -1,4 +1,4 @@
-# Team State — updated 16 Sep 2026 ~00:33 GST by Chief of Staff
+# Team State — updated 16 Sep 2026 ~00:36 GST by Release Manager
 
 ## Staffing (ORG-22 · Phase 1 · 9 agents)
 **Active:** Chief of Staff · Reviewer · Release Manager · Analytics · Conversion Eng · SEO & AI Search · Reliability · QA Engineer · Finance Watcher  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11 | lead_captured: 0 (never seen)
 (Source: HANDOVER week of 13 Sep — Analytics must refresh **after** PostHog connector)
-GitHub tip: `9c706b55`
+GitHub tip: `d4b3bcb1` (#11 Phase 1 ORG-22/CHARTER/STATE shipped). Site health still green (docs-only; bundle unchanged).
 **Auth locks CLOSED (evidence):** `/api/events` GET+POST → 401; `/admin/ai-governance` → 401; GET `/api/feedback` → 401; company forecasting → 401.
 **OPEN CRITICAL (CoS curl 16 Sep 00:32 GST, tip still `9c706b55`):** GET `/api/notifications/email-stats` → **200**, 98 rows, keys include `to`; GET `/api/integrations/available` → **200**; GET `/api/integrations/companies/1/status` → **200**; GET `/api/templates/` → **200**; POST `/api/templates/companies/1/apply/1` → **404** (not 401). “Created scenario 55” **not re-proven** this pass — do not treat as verified write.
 
@@ -27,6 +27,7 @@ GitHub tip: `9c706b55`
 Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1 + Core/Ops.
 
 ## In flight
+| Release Manager | SEO cross-links PR held for Gate 1 / after P0 auth | seo-prerender, sitemap | #12 | **held** — Reviewer standing block on templates/integrations/notifications |
 | Agent | Item | Files claimed | PR | Status |
 | Reviewer | Blast-radius of #6/#10 + 16 Sep critical opens (templates/integrations/notifications) | — | — | **P0** |
 | Analytics | Prove devices≈sessions; verify lead_captured; add signup_completed | — | — | **blocked** — PostHog connector |
@@ -45,6 +46,7 @@ Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1
 | Money/ads restart | human only | standing |
 
 ## Shipped this week (evidence required)
+| Phase 1 ORG-22 / CHARTER / STATE | `#11` `d4b3bcb1` | on origin/main; `git show HEAD:agents/ORG-22.md` | org records |
 (see prior rows through #9/#10 — tip `9c706b55`)
 
 ## Corrections — things we believed that were false
