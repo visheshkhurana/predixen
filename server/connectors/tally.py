@@ -15,7 +15,7 @@ Documentation: https://developers.tallysolutions.com/
 
 import httpx
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 import xml.etree.ElementTree as ET
 
@@ -132,6 +132,32 @@ def classify_tally_ledger(parent: str, name: str = "") -> Optional[str]:
     return None
 
 
+def tally_reporting_window(
+    now: Optional[datetime] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> Tuple[datetime, datetime]:
+    """Calendar month in progress, unless the caller already bounded the fetch."""
+    now = now or datetime.utcnow()
+    start = start_date or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = end_date or now
+    return start, end
+
+
+def tally_period_flow(kind: str, opening: float, closing: float) -> float:
+    """Period movement from signed Tally balances (positive=debit, negative=credit).
+
+    CLOSINGBALANCE is a point-in-time stock, often YTD/mid-FY. Revenue/COGS/opex
+    on a FinancialRecord are flows for period_start..period_end, so we take
+    closing minus opening (flipped for credit-nature income).
+    """
+    if kind == "revenue":
+        return opening - closing
+    if kind in {"cogs", "opex"}:
+        return closing - opening
+    return 0.0
+
+
 @ConnectorRegistry.register
 class TallyConnector(BaseConnector):
     """
@@ -187,6 +213,9 @@ class TallyConnector(BaseConnector):
         filters = filters or {}
         
         if request_type == "ledgers":
+            start, end = tally_reporting_window()
+            from_date = filters.get("from_date", start.strftime("%d-%b-%Y"))
+            to_date = filters.get("to_date", end.strftime("%d-%b-%Y"))
             return f'''
             <ENVELOPE>
                 <HEADER>
@@ -199,6 +228,8 @@ class TallyConnector(BaseConnector):
                     <DESC>
                         <STATICVARIABLES>
                             <SVCURRENTCOMPANY>{self._company_name}</SVCURRENTCOMPANY>
+                            <SVFROMDATE>{from_date}</SVFROMDATE>
+                            <SVTODATE>{to_date}</SVTODATE>
                         </STATICVARIABLES>
                         <TDL>
                             <TDLMESSAGE>
@@ -214,8 +245,9 @@ class TallyConnector(BaseConnector):
             '''
         
         elif request_type == "vouchers":
-            from_date = filters.get("from_date", "01-Apr-2024")
-            to_date = filters.get("to_date", "31-Mar-2025")
+            start, end = tally_reporting_window()
+            from_date = filters.get("from_date", start.strftime("%d-%b-%Y"))
+            to_date = filters.get("to_date", end.strftime("%d-%b-%Y"))
             
             return f'''
             <ENVELOPE>
@@ -255,16 +287,17 @@ class TallyConnector(BaseConnector):
             
             if data_type == "ledgers":
                 for ledger in root.findall(".//LEDGER"):
-                    results.append({
+                    row: Dict[str, Any] = {
                         "name": tally_xml_text(ledger, "NAME"),
                         "parent": tally_xml_text(ledger, "PARENT"),
-                        "opening_balance": parse_tally_amount(
-                            tally_xml_text(ledger, "OPENINGBALANCE", "0")
-                        ),
                         "closing_balance": parse_tally_amount(
                             tally_xml_text(ledger, "CLOSINGBALANCE", "0")
                         ),
-                    })
+                    }
+                    opening_raw = tally_xml_text(ledger, "OPENINGBALANCE")
+                    if opening_raw != "":
+                        row["opening_balance"] = parse_tally_amount(opening_raw)
+                    results.append(row)
             
             elif data_type == "vouchers":
                 for voucher in root.findall(".//VOUCHER"):
@@ -326,18 +359,27 @@ class TallyConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> List[LedgerEntry]:
-        """Fetch ledger entries from Tally."""
+        """Fetch ledger accounts for the current reporting window.
+
+        SVFROMDATE/SVTODATE make OPENINGBALANCE the start-of-window stock and
+        CLOSINGBALANCE the end-of-window stock. P&L flows are the difference;
+        cash uses closing as a point-in-time balance.
+        """
         if not self._authenticated:
             if not await self.authenticate():
                 return []
         
+        period_start, period_end = tally_reporting_window(
+            start_date=start_date, end_date=end_date
+        )
         entries = []
         
         try:
             client = await self._get_client()
-            
-            # Fetch ledger accounts
-            xml_request = self._build_xml_request("ledgers")
+            xml_request = self._build_xml_request("ledgers", {
+                "from_date": period_start.strftime("%d-%b-%Y"),
+                "to_date": period_end.strftime("%d-%b-%Y"),
+            })
             response = await client.post("/", content=xml_request)
             
             if response.status_code == 200:
@@ -345,14 +387,22 @@ class TallyConnector(BaseConnector):
                 
                 for ledger in ledgers:
                     closing = ledger.get("closing_balance", 0)
+                    meta: Dict[str, Any] = {
+                        "closing_balance": closing,
+                        "period_start": period_start.date().isoformat(),
+                        "period_end": period_end.date().isoformat(),
+                    }
+                    if "opening_balance" in ledger:
+                        meta["opening_balance"] = ledger["opening_balance"]
                     entries.append(LedgerEntry(
                         external_id=ledger.get("name", ""),
-                        date=datetime.now(),  # Ledger balance as of now
+                        date=period_end,
                         account_code=ledger.get("name", ""),
                         account_name=ledger.get("name", ""),
                         debit=closing if closing > 0 else 0,
                         credit=abs(closing) if closing < 0 else 0,
                         category=ledger.get("parent", ""),
+                        metadata=meta,
                     ))
             
             logger.info(f"Fetched {len(entries)} ledger entries from Tally")
@@ -367,23 +417,22 @@ class TallyConnector(BaseConnector):
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> List[InvoiceRecord]:
-        """Fetch sales vouchers/invoices from Tally."""
+        """Fetch sales vouchers/invoices from Tally for the reporting window."""
         if not self._authenticated:
             if not await self.authenticate():
                 return []
         
+        period_start, period_end = tally_reporting_window(
+            start_date=start_date, end_date=end_date
+        )
         invoices = []
         
         try:
             client = await self._get_client()
-            
-            filters = {}
-            if start_date:
-                filters["from_date"] = start_date.strftime("%d-%b-%Y")
-            if end_date:
-                filters["to_date"] = end_date.strftime("%d-%b-%Y")
-            
-            xml_request = self._build_xml_request("vouchers", filters)
+            xml_request = self._build_xml_request("vouchers", {
+                "from_date": period_start.strftime("%d-%b-%Y"),
+                "to_date": period_end.strftime("%d-%b-%Y"),
+            })
             response = await client.post("/", content=xml_request)
             
             if response.status_code == 200:
@@ -422,10 +471,10 @@ class TallyConnector(BaseConnector):
     ) -> Dict[str, Any]:
         """Turn Tally ledgers/vouchers into the fields /connectors sync persists.
 
-        BaseConnector.map_to_financials only copies invoice totals and dumps
-        ledgers into expense_breakdown — which _build_financial_record ignores.
-        Indian Tally companies often have P&L and cash in ledger groups, not
-        in Sales-typed vouchers, so first sync used to 400 with no numbers.
+        P&L fields are period *flows* (closing − opening for the fetch window).
+        Unbounded CLOSINGBALANCE is a stock — often YTD at mid-FY — and is not
+        written as monthly revenue/COGS/opex. Cash closing is a point-in-time
+        cash_balance. period_start/period_end on the result match the window.
         """
         result: Dict[str, Any] = {
             "source_type": f"connector_{self.PROVIDER_ID}",
@@ -437,26 +486,46 @@ class TallyConnector(BaseConnector):
         opex = 0.0
         cash = 0.0
         saw = {"revenue": False, "cogs": False, "opex": False, "cash": False}
+        period_start = None
+        period_end = None
+
+        def note_period(meta: Dict[str, Any]) -> None:
+            nonlocal period_start, period_end
+            if period_start is None and meta.get("period_start"):
+                period_start = meta["period_start"]
+            if period_end is None and meta.get("period_end"):
+                period_end = meta["period_end"]
 
         if ledger_entries:
             for entry in ledger_entries:
                 kind = classify_tally_ledger(entry.category or "", entry.account_name or "")
                 if not kind:
                     continue
-                debit = entry.debit or 0.0
-                credit = entry.credit or 0.0
+                meta = entry.metadata or {}
+                note_period(meta)
+                closing = meta.get("closing_balance")
+                if closing is None:
+                    closing = (entry.debit or 0.0) - (entry.credit or 0.0)
+
+                if kind == "cash":
+                    # Stock, not a flow.
+                    cash += closing
+                    saw["cash"] = True
+                    continue
+
+                if "opening_balance" not in meta:
+                    # Lifetime/YTD close with no window opening — skip P&L.
+                    continue
+                flow = tally_period_flow(kind, float(meta["opening_balance"]), float(closing))
                 if kind == "revenue":
-                    revenue += credit - debit
+                    revenue += flow
                     saw["revenue"] = True
                 elif kind == "cogs":
-                    cogs += debit - credit
+                    cogs += flow
                     saw["cogs"] = True
                 elif kind == "opex":
-                    opex += debit - credit
+                    opex += flow
                     saw["opex"] = True
-                elif kind == "cash":
-                    cash += debit - credit
-                    saw["cash"] = True
 
         if invoices:
             invoice_revenue = sum(
@@ -464,12 +533,19 @@ class TallyConnector(BaseConnector):
                 for inv in invoices
                 if (inv.status or "").lower() in {"paid", "completed"}
             )
-            # Ledgers are the P&L source of truth; vouchers fill revenue only
-            # when Sales Accounts were missing from the collection.
             if not saw["revenue"] and invoice_revenue:
                 revenue = invoice_revenue
                 saw["revenue"] = True
+                if period_start is None and invoices:
+                    dates = [inv.date for inv in invoices if inv.date]
+                    if dates:
+                        period_start = min(dates)
+                        period_end = max(dates)
 
+        if period_start is not None:
+            result["period_start"] = period_start
+        if period_end is not None:
+            result["period_end"] = period_end
         if saw["revenue"]:
             result["revenue"] = revenue
         if saw["cogs"]:

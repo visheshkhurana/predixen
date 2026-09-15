@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, date
 import logging
 import json
 
@@ -523,7 +523,9 @@ async def sync_provider(
                 # Dashboards read the cached TruthScan row, not the FinancialRecord
                 # insert. csv_import already recomputes this; connector sync did not,
                 # so a successful first Tally/Stripe sync still showed 0% confidence.
-                refresh_truth_scan_after_sync(db, company, company_id)
+                refresh_truth_scan_after_sync(
+                    db, company, company_id, financial_record_id=financial_record.id
+                )
 
             try:
                 from server.services.digital_twin import emit_twin_event
@@ -614,6 +616,21 @@ async def get_sync_history(
     }
 
 
+def _period_date(value: Any, fallback: date) -> date:
+    if value is None:
+        return fallback
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return fallback
+    return fallback
+
+
 def _build_financial_record(company_id: int, provider_id: str, provider_name: str, financials: Dict[str, Any], today) -> FinancialRecord:
     revenue = financials.get("revenue")
     cogs = financials.get("cogs")
@@ -648,10 +665,13 @@ def _build_financial_record(company_id: int, provider_id: str, provider_name: st
     if mrr is not None and arr is None:
         arr = mrr * 12
 
+    period_end = _period_date(financials.get("period_end"), today)
+    period_start = _period_date(financials.get("period_start"), period_end.replace(day=1))
+
     record = FinancialRecord(
         company_id=company_id,
-        period_start=today.replace(day=1),
-        period_end=today,
+        period_start=period_start,
+        period_end=period_end,
         source_type=f"connector_{provider_id}",
         extraction_summary=financials.get("extraction_summary", f"Synced from {provider_name}"),
         revenue=revenue,
@@ -699,14 +719,22 @@ def persist_connector_last_error(db, company, provider_id: str, error: str) -> N
         logger.error(f"Failed to persist last_error for {provider_id}: {persist_error}")
 
 
-def refresh_truth_scan_after_sync(db, company, company_id: int):
-    """Recompute the cached truth scan so first-sync numbers actually appear."""
+def refresh_truth_scan_after_sync(
+    db, company, company_id: int, financial_record_id: Optional[int] = None
+):
+    """Recompute the cached truth scan so first-sync numbers actually appear.
+
+    Pass financial_record_id so a same-day second sync is the row truth_scan
+    reads, not an older insert that shares period_end.
+    """
     try:
         from server.truth.truth_scan import compute_truth_scan
         from server.models.truth_scan import TruthScan
 
         db.refresh(company)
-        outputs = compute_truth_scan(company, db)
+        outputs = compute_truth_scan(
+            company, db, prefer_record_id=financial_record_id
+        )
         scan = TruthScan(company_id=company_id, outputs_json=outputs)
         db.add(scan)
         db.commit()

@@ -110,10 +110,20 @@ def format_currency(value: float) -> Dict[str, Any]:
         }
 
 
-def compute_truth_scan(company: Company, db: Session) -> Dict[str, Any]:
+def compute_truth_scan(
+    company: Company, db: Session, prefer_record_id: Optional[int] = None
+) -> Dict[str, Any]:
     financials = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company.id
-    ).order_by(FinancialRecord.period_end.desc()).all()
+    ).order_by(
+        FinancialRecord.period_end.desc(),
+        FinancialRecord.id.desc(),
+    ).all()
+    if prefer_record_id:
+        preferred = [r for r in financials if r.id == prefer_record_id]
+        rest = [r for r in financials if r.id != prefer_record_id]
+        if preferred:
+            financials = preferred + rest
     
     transactions = db.query(TransactionRecord).filter(
         TransactionRecord.company_id == company.id
