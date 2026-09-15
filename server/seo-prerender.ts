@@ -488,6 +488,14 @@ function getPageMeta(path: string): PageMeta | null {
       description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
       canonical: SITE_URL + "/pricing",
       bodyContent: buildPricingBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Pricing | FounderConsole",
+        url: SITE_URL + "/pricing",
+        description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
     };
   }
 
@@ -883,10 +891,15 @@ export function injectSEO(html: string, path: string): string {
     );
   }
 
-  if (meta.jsonLd && meta.jsonLd.length > 0) {
-    const newLdScripts = meta.jsonLd.map((ld) => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join("\n    ");
+  // Always clear shell homepage JSON-LD when this path has none of its own,
+  // otherwise /pricing /privacy /terms (etc.) inherit Organization+SoftwareApplication for "/".
+  {
+    const newLdScripts =
+      meta.jsonLd && meta.jsonLd.length > 0
+        ? meta.jsonLd.map((ld) => `<script type="application/ld+json">${JSON.stringify(ld)}</script>`).join("\n    ")
+        : "";
     let replaced = false;
-    result = result.replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, (match) => {
+    result = result.replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/g, () => {
       if (!replaced) {
         replaced = true;
         return newLdScripts;
