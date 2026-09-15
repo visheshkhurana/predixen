@@ -1,6 +1,6 @@
 # FounderConsole — Engineering Handover
 
-**Rewritten 15 September 2026; git tip + #12 re-verified 16 Sep ~00:41 GST by Chief of Staff.** Facts below were
+**Rewritten 15 September 2026; Phase 2 override + #16 live re-verified 16 Sep ~00:49 GST by Chief of Staff.** Facts below were
 re-checked against the live site and `origin/main` on that timestamp. Inference
 is labeled as such.
 
@@ -18,27 +18,27 @@ is labeled as such.
 | Analytics | PostHog project **522965** — https://us.posthog.com/project/522965 |
 | Google Ads | account **550-259-2868** (FOUNDER CONSOLE), `ocid=8450324777` |
 | Payments | Stripe, live mode |
-| Team memory | `HANDOVER.md` + `agents/STATE.md` + `agents/CHARTER.md` |
+| Team memory | `HANDOVER.md` + `agents/STATE.md` + `agents/CHARTER.md` + `DECISIONS.md` + `AUTONOMY.md` + `ORG-22.md` |
 
-Useful commit links (tip of `main` as of 16 Sep 00:41 GST):
+Useful commit links (tip of `main` as of 16 Sep 00:49 GST):
 
-- `77410c22 (#13 docs) ← 3c2f1094 (#13 CI) ← 23520ef3` — docs: mark #12 shipped with Googlebot SSR + sitemap evidence
-- `9d559d17` / `#12` — SEO: SSR cross-links + contact enrich + `/ai-cfo` sitemap
-- `d4b3bcb1` / `#11` — Phase 1 ORG-22 / CHARTER / STATE
-- `ed91d54c` — docs: mark #10 shipped with live 401 evidence
-- `29b282e1` / `#10` — lock GET /api/feedback and company forecasting
-- `26791cd7` / `#6` — events + ai-governance auth lock
+- `34ce49e7` / `#16` — `/ai-cfo` free-tool SSR links + WebApplication JSON-LD (**live** 00:47 GST)
+- `f48f71e3` — docs: tip after #14/#15
+- `cb04e17d` / `#14` — deploy-landed monitor (**code on main; control asset still 200 HTML — not shipped live**)
+- `295aedb5` / `#15` — CoS STATE/HANDOVER fold (**still Phase 1 parked staffing — superseded by this follow-up**)
+- `3c2f1094` / `#13` — dispatch-only RM check suite
+- `9d559d17` / `#12` — SEO SSR cross-links + `/ai-cfo` sitemap
 
 ---
 
 ## 2. Git / deploy state (verified)
 
 ```
-origin/main   23520ef3  docs: mark #12 shipped with Googlebot SSR + sitemap evidence
-              9d559d17  seo: SSR cross-links + contact enrich + /ai-cfo sitemap (#12)
-              74655640  docs: tip d4b3bcb1 — mark #11 shipped; hold #12 behind P0 auth
-              d4b3bcb1  docs: Phase 1 ORG-22 / CHARTER / STATE (#11)
-              9c706b55  docs: drop shipped SEO hygiene from parked queue
+origin/main   34ce49e7  seo: /ai-cfo free-tool cross-links + WebApplication JSON-LD (#16)
+              f48f71e3  docs: tip cb04e17d — mark #14/#15 shipped
+              cb04e17d  Add queued deploy-landed monitor (#14) — control NOT proven live
+              295aedb5  docs: CoS STATE/HANDOVER after #12 (#15) — staffing still Phase 1
+              3c2f1094  ci: workflow_dispatch-only RM check suite (#13)
 ```
 
 **Production (curl 16 Sep 00:40 GST, Googlebot UA):**
@@ -117,6 +117,9 @@ refresh after identity ship.
 ## 6. Known open items (Chief of Staff ranking)
 
 1. **P0 auth lock trio** (templates / integrations / notifications) — **Vishesh held**; no agent works it.
+1a. **Phase 2 is live by OVERRIDE** (18 agents). Metric gate unmet. Do **not** spawn Phase 3.
+1b. ~~`/ai-cfo` SSR links + JSON-LD~~ — **#16 live** (CoS Googlebot 00:47 GST). Remaining SEO gap: `/faq` free-tool links.
+1c. **#14 deploy-landed** code on main but control asset still **200 HTML** — do not mark shipped.
 2. ~~Lock `/api/events` (+ ai-governance)~~ — **done live** (`#6`/`#7`).
 3. ~~SEO SSR cross-links + `/ai-cfo` sitemap~~ — **#12 live** (`9d559d17`; CoS Googlebot recheck 00:40 GST).
 4. **Analytics:** prove one visitor ≈ one identity (PostHog connector blocked).
