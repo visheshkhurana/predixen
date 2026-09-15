@@ -1,4 +1,4 @@
-# Team State — updated 16 Sep 2026 ~00:40 GST by Release Manager
+# Team State — updated 16 Sep 2026 ~00:41 GST by Release Manager
 
 ## Staffing (ORG-22 · Phase 1 · 9 agents)
 **Active:** Chief of Staff · Reviewer · Release Manager · Analytics · Conversion Eng · SEO & AI Search · Reliability · QA Engineer · Finance Watcher  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11 | lead_captured: 0 (never seen)
 (Source: HANDOVER week of 13 Sep — Analytics must refresh **after** PostHog connector)
-GitHub tip: `9d559d17` (#12 SEO cross-links) after `#11` `d4b3bcb1`. Auth locks closed; P0 templates/integrations/notifications **held by Vishesh**.
+GitHub tip: `3c2f1094` (#13 workflow_dispatch CI) after `#12` `9d559d17`.
 **Auth locks CLOSED (evidence):** `/api/events` GET+POST → 401; `/admin/ai-governance` → 401; GET `/api/feedback` → 401; company forecasting → 401.
 **OPEN CRITICAL (CoS curl 16 Sep 00:32 GST, tip still `9c706b55`):** GET `/api/notifications/email-stats` → **200**, 98 rows, keys include `to`; GET `/api/integrations/available` → **200**; GET `/api/integrations/companies/1/status` → **200**; GET `/api/templates/` → **200**; POST `/api/templates/companies/1/apply/1` → **404** (not 401). “Created scenario 55” **not re-proven** this pass — do not treat as verified write.
 
@@ -61,6 +61,14 @@ sitemap ai-cfo=1
 /about hrefs=6 chars=1573
 /contact hrefs=9 chars=1195 meta=143
 health uptime≈94.3s; tip `9d559d17`; bundle index-eWXmctMP.js
+```
+
+
+### Pasteable evidence — #13 CI workflow (2026-09-16)
+```
+on main: .github/workflows/pr-checks.yml + scripts/tsc-error-budget.sh
+trigger: workflow_dispatch only (no pull_request/push/schedule)
+tip: 3c2f1094
 ```
 
 ## Corrections — things we believed that were false
