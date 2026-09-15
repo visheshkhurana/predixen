@@ -26,9 +26,11 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 
 ## In flight (active agents only)
 | Agent | Item | Files claimed | PR | Status |
-| Reviewer | Audit blast radius of #6 / newly reachable routes | — | after #6 | due — auth lock live-proven |
 | Reviewer | Gate 1 on docs PR | HANDOVER + STATE | [#8](https://github.com/visheshkhurana/predixen/pull/8) | open |
-| Release Manager | Docs PR #8 (+ follow-up: role remap + GET/POST leads clarity) | HANDOVER.md, agents/STATE.md | #8 | open; CoS asked amend for remap |
+| Release Manager | Docs PR #8 (staffing trim + leads GET/POST) | HANDOVER.md, agents/STATE.md, CHARTER | #8 | amended `d9da2d40`; awaiting Reviewer |
+| Release Manager | SEO hygiene (sitemap + strip shell JSON-LD) | sitemap.xml, seo-prerender.ts | #9 | open for Reviewer (started while Growth active) |
+| Release Manager | Lock GET feedback + company forecasting | feedback.py, forecasting.py | #10 | open for Reviewer (Sep sweep residual) |
+| Reviewer | Gate 1 clear on #6+#7 auth lock | — | #6 #7 | **passed** 15 Sep — residual: POST /events caller `company_id` |
 | Analytics | Prove devices≈sessions post identity fix | — | — | **blocked** — PostHog connector needs Vishesh |
 | Chief of Staff | Keep STATE/HANDOVER/Corrections honest | agents/STATE.md, HANDOVER.md | via RM | active |
 
