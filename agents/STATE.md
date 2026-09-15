@@ -36,6 +36,7 @@ Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1
 | Conversion Eng | Rage-click replays → one change | — | — | blocked on replay connector |
 | Finance Watcher | Spend register | records | — | $ **UNKNOWN** |
 | Chief of Staff | DECISIONS.md + AUTONOMY.md follow-up | agents/ | later | stubs on shared box |
+| Connectors | Rank use→activation; fix top /connectors failure | server/api/connectors.py, server/connectors/tally.py | [#18](https://github.com/visheshkhurana/predixen/pull/18) | claimed — Tally first-sync only |
 | — | P0 auth lock trio | templates/integrations/notifications | none | **frozen** — Vishesh held |
 
 ## Blocked
