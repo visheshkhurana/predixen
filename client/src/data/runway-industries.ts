@@ -211,3 +211,11 @@ export const RUNWAY_INDUSTRIES: IndustryProfile[] = [
 export function getIndustry(slug: string): IndustryProfile | undefined {
   return RUNWAY_INDUSTRIES.find((i) => i.slug === slug);
 }
+
+export type RunwayRelatedLink = { href: string; label: string };
+export const RUNWAY_RELATED_FREE_TOOLS: RunwayRelatedLink[] = [
+  { href: "/tools/runway-calculator", label: "startup runway calculator" },
+  { href: "/survival-simulator", label: "survival simulator" },
+  { href: "/default-alive", label: "default alive or default dead test" },
+  { href: "/ai-cfo", label: "AI CFO" },
+];

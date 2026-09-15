@@ -5,7 +5,7 @@ import { blogPosts, blogPostContent } from "./seo-data";
 // of its own, so pulling it in costs the server bundle nothing and means the
 // eight vertical pages cannot drift between what the page renders and what a
 // crawler is served.
-import { RUNWAY_INDUSTRIES } from "../client/src/data/runway-industries";
+import { RUNWAY_INDUSTRIES, RUNWAY_RELATED_FREE_TOOLS } from "../client/src/data/runway-industries";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -433,9 +433,22 @@ function buildIndustryBodyContent(slug: string): string | null {
   if (!ind) return null;
   const notes = ind.notes.map((n) => `<li>${esc(n)}</li>`).join("");
   const risks = ind.primaryRiskFactors.map((r) => `<li>${esc(r)}</li>`).join("");
+  const burn = esc(ind.defaultBurn.toLocaleString("en-US"));
+  const revenue = esc(ind.defaultRevenue.toLocaleString("en-US"));
+  const margin = esc(String(ind.grossMargin));
+  const growth = esc(String(ind.growthRate));
+  const relatedTools = RUNWAY_RELATED_FREE_TOOLS.map(
+    (t) => `<a href="${esc(t.href)}">${esc(t.label)}</a>`,
+  );
+  const relatedList =
+    relatedTools.length <= 2
+      ? relatedTools.join(" and the ")
+      : `${relatedTools.slice(0, -1).join(", the ")}, and the ${relatedTools[relatedTools.length - 1]}`;
   return `<article>
 <h1>${esc(ind.name)}</h1>
 <p>Calculate runway against real ${esc(ind.shortName.toLowerCase())} benchmarks. The relevant benchmark here is ${esc(ind.benchmarkRunway)}.</p>
+<h2>Typical starting inputs</h2>
+<p>This page starts from $${burn}/mo burn, $${revenue}/mo revenue, ${margin}% gross margin, and ${growth}% monthly growth — adjust them to match your books.</p>
 <h2>What ${esc(ind.shortName)} founders should watch</h2>
 <ul>${notes}</ul>
 <h2>Burn multiple</h2>
@@ -444,6 +457,8 @@ function buildIndustryBodyContent(slug: string): string | null {
 <p>${esc(ind.fundraisingNotes)}</p>
 <h2>What usually goes wrong</h2>
 <ul>${risks}</ul>
+<h2>Related free tools</h2>
+<p>Also try the ${relatedList} — all free, no account required. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
 </article>`;
 }
 
