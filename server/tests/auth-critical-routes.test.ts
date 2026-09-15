@@ -19,4 +19,11 @@ assert.match(gov, /Invalid or missing callback signature/, "unsigned callbacks m
 
 assert.match(auth, /export async function requirePlatformAdmin/, "requirePlatformAdmin exported");
 
+const feedback = readFileSync("server/api/feedback.py", "utf8");
+assert.match(feedback, /require_platform_admin/, "GET /api/feedback must require platform admin");
+
+const forecasting = readFileSync("server/api/forecasting.py", "utf8");
+assert.match(forecasting, /require_company_access/, "company forecasting must require company access");
+assert.match(forecasting, /require_company_access_by_path/, "forecast+trend must use path access helper");
+
 console.log("PASS  auth-critical-routes source checks");

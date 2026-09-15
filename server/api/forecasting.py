@@ -8,6 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from server.core.db import get_db
+from server.core.security import get_current_user, require_company_access
 from server.models.company import Company
 from server.models.financial import FinancialRecord
 from server.forecasting import (
@@ -20,6 +21,16 @@ from server.forecasting import (
 from server.forecasting.models import ForecastMethod
 
 router = APIRouter(prefix="/forecasting", tags=["forecasting"])
+
+async def require_company_access_by_path(
+    company_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Path company_id must belong to the caller (or MasterUser)."""
+    return await require_company_access(company_id)(current_user=current_user, db=db)
+
+
 
 
 class ForecastRequest(BaseModel):
@@ -39,6 +50,7 @@ def create_company_forecast(
     company_id: int,
     request: ForecastRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_company_access_by_path),
 ):
     """
     Generate a forecast for a company metric.
@@ -109,6 +121,7 @@ def analyze_company_trend(
     company_id: int,
     metric: str = "revenue",
     db: Session = Depends(get_db),
+    _user=Depends(require_company_access_by_path),
 ):
     """
     Analyze trend for a company metric.
