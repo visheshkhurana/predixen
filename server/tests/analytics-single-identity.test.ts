@@ -83,6 +83,27 @@ test("successful lead creates emit lead_captured on the server", () => {
   assert.doesNotMatch(leads, /posthog.*identify/i);
 });
 
+test("the survival simulator sends the same lead fields the email is keyed off", () => {
+  // Mirror of the calculator contract: /survival-simulator promises an inbox
+  // summary, and /api/leads only queues the send when runway_months AND
+  // runway_date are present. Source must be survival-simulator so these leads
+  // stay distinguishable from calculator ones.
+  const page = readFileSync("client/src/pages/survival-simulator.tsx", "utf8");
+  const api = readFileSync("server/api/leads.py", "utf8");
+  assert.match(page, /source:\s*"survival-simulator"/);
+  assert.match(page, /plan:\s*"survival-simulator"/);
+  assert.match(page, /trackFunnel\(\s*"lead_captured"/);
+  for (const field of ["runway_months", "runway_date", "monthly_burn"]) {
+    assert.match(page, new RegExp(`${field}:`), `survival-sim must send ${field}`);
+    assert.match(api, new RegExp(field), `server must accept ${field}`);
+  }
+  assert.match(page, /data-testid="input-lead-email"/);
+  assert.match(page, /data-testid="button-email-result"/);
+  const resultsIdx = page.indexOf("{results && (");
+  const emailIdx = page.indexOf("<EmailResultPanel results={results} />");
+  assert.ok(resultsIdx !== -1 && emailIdx > resultsIdx, "email capture must render inside the results block");
+});
+
 test("the calculator sends the fields the runway email is keyed off", () => {
   // server/api/leads.py only queues the email when runway_months AND
   // runway_date are present. The UI promises "check your inbox" the moment the
