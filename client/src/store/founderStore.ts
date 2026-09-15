@@ -18,6 +18,7 @@ interface Company {
   currency: string;
   description?: string;
   data_sharing_enabled?: boolean;
+  is_sample?: boolean;
 }
 
 interface TruthScan {
@@ -101,6 +102,7 @@ interface FounderState {
   
   setUser: (user: User | null) => void;
   setCurrentCompany: (company: Company | null) => void;
+  markCurrentCompanySample: () => void;
   setCompanies: (companies: Company[]) => void;
   setTruthScan: (scan: TruthScan | null) => void;
   setCurrentStep: (step: 'truth' | 'simulation' | 'decision') => void;
@@ -182,6 +184,11 @@ export const useFounderStore = create<FounderState>()(
         lastExtraction: null,
         currentStep: 'truth',
       }),
+      markCurrentCompanySample: () => {
+        const current = get().currentCompany;
+        if (!current) return;
+        set({ currentCompany: { ...current, is_sample: true } });
+      },
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),
       setCurrentStep: (step) => set({ currentStep: step }),

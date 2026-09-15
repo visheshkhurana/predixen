@@ -90,11 +90,16 @@ export function useDeleteCompany() {
 
 export function useSeedSample() {
   const queryClient = useQueryClient();
+  const markCurrentCompanySample = useFounderStore((s) => s.markCurrentCompanySample);
 
   return useMutation({
     mutationFn: (companyId: number) => api.companies.seedSample(companyId),
     onSuccess: (_, companyId) => {
       invalidateCompanyFinancials(queryClient, companyId);
+      const current = useFounderStore.getState().currentCompany;
+      if (current?.id === companyId) {
+        markCurrentCompanySample();
+      }
     },
   });
 }
