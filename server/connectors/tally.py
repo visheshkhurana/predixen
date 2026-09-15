@@ -31,6 +31,106 @@ from .registry import ConnectorRegistry
 
 logger = logging.getLogger(__name__)
 
+# Tally XML encodes credit as a trailing minus (`1234.00-`) or a Cr/Dr suffix.
+# float("1234.00-") raises ValueError and used to abort the whole ledger parse,
+# so first sync landed zero financials even when Tally responded 200.
+_SALES_VOUCHER_TYPES = {
+    "sales",
+    "invoice",
+    "sales invoice",
+    "tax invoice",
+    "gst sales",
+    "gst invoice",
+}
+
+_REVENUE_GROUPS = {
+    "sales accounts",
+    "direct incomes",
+    "direct income",
+}
+_COGS_GROUPS = {
+    "purchase accounts",
+    "direct expenses",
+    "direct expense",
+}
+_OPEX_GROUPS = {
+    "indirect expenses",
+    "indirect expense",
+}
+_CASH_GROUPS = {
+    "bank accounts",
+    "cash-in-hand",
+    "cash in hand",
+    "cash",
+}
+
+
+def parse_tally_amount(raw: Any) -> float:
+    """Parse a Tally XML amount into a signed float.
+
+    Credit balances are `1234.00-` or `1234.00Cr`; debits may carry `Dr`.
+    Commas are thousands separators. Unparseable values return 0.0 rather
+    than raising, so one bad ledger cannot wipe the rest of the sync.
+    """
+    if raw is None:
+        return 0.0
+    text = str(raw).strip()
+    if not text:
+        return 0.0
+
+    sign = 1.0
+    if text.startswith("(") and text.endswith(")"):
+        sign = -1.0
+        text = text[1:-1].strip()
+
+    text = text.replace(",", "").replace(" ", "")
+    lower = text.lower()
+    if lower.endswith("cr") or text.endswith("-"):
+        sign = -1.0
+        text = text[:-2] if lower.endswith("cr") else text[:-1]
+    elif lower.endswith("dr"):
+        text = text[:-2]
+
+    text = text.strip()
+    if not text:
+        return 0.0
+    try:
+        return sign * float(text)
+    except ValueError:
+        logger.warning("Unparseable Tally amount: %r", raw)
+        return 0.0
+
+
+def tally_xml_text(element: ET.Element, tag: str, default: str = "") -> str:
+    """Read a Tally field from a child, NAME.LIST wrapper, or attribute."""
+    child = element.find(tag)
+    if child is not None and (child.text or "").strip():
+        return child.text.strip()
+    wrapped = element.find(f"{tag}.LIST")
+    if wrapped is not None:
+        nested = wrapped.find(tag)
+        if nested is not None and (nested.text or "").strip():
+            return nested.text.strip()
+    attr = element.get(tag)
+    if attr and str(attr).strip():
+        return str(attr).strip()
+    return default
+
+
+def classify_tally_ledger(parent: str, name: str = "") -> Optional[str]:
+    """Map a Tally ledger group to a FounderConsole financial field."""
+    parent_n = (parent or "").strip().lower()
+    name_n = (name or "").strip().lower()
+    if parent_n in _CASH_GROUPS or name_n in {"cash", "petty cash"}:
+        return "cash"
+    if parent_n in _REVENUE_GROUPS:
+        return "revenue"
+    if parent_n in _COGS_GROUPS:
+        return "cogs"
+    if parent_n in _OPEX_GROUPS:
+        return "opex"
+    return None
+
 
 @ConnectorRegistry.register
 class TallyConnector(BaseConnector):
@@ -156,20 +256,26 @@ class TallyConnector(BaseConnector):
             if data_type == "ledgers":
                 for ledger in root.findall(".//LEDGER"):
                     results.append({
-                        "name": ledger.findtext("NAME", ""),
-                        "parent": ledger.findtext("PARENT", ""),
-                        "opening_balance": float(ledger.findtext("OPENINGBALANCE", "0").replace(",", "") or 0),
-                        "closing_balance": float(ledger.findtext("CLOSINGBALANCE", "0").replace(",", "") or 0),
+                        "name": tally_xml_text(ledger, "NAME"),
+                        "parent": tally_xml_text(ledger, "PARENT"),
+                        "opening_balance": parse_tally_amount(
+                            tally_xml_text(ledger, "OPENINGBALANCE", "0")
+                        ),
+                        "closing_balance": parse_tally_amount(
+                            tally_xml_text(ledger, "CLOSINGBALANCE", "0")
+                        ),
                     })
             
             elif data_type == "vouchers":
                 for voucher in root.findall(".//VOUCHER"):
                     results.append({
-                        "date": voucher.findtext("DATE", ""),
-                        "number": voucher.findtext("VOUCHERNUMBER", ""),
-                        "type": voucher.findtext("VOUCHERTYPENAME", ""),
-                        "party": voucher.findtext("PARTYLEDGERNAME", ""),
-                        "amount": float(voucher.findtext("AMOUNT", "0").replace(",", "") or 0),
+                        "date": tally_xml_text(voucher, "DATE"),
+                        "number": tally_xml_text(voucher, "VOUCHERNUMBER"),
+                        "type": tally_xml_text(voucher, "VOUCHERTYPENAME"),
+                        "party": tally_xml_text(voucher, "PARTYLEDGERNAME"),
+                        "amount": parse_tally_amount(
+                            tally_xml_text(voucher, "AMOUNT", "0")
+                        ),
                     })
             
         except ET.ParseError as e:
@@ -284,21 +390,21 @@ class TallyConnector(BaseConnector):
                 vouchers = self._parse_xml_response(response.text, "vouchers")
                 
                 for v in vouchers:
-                    if v.get("type", "").lower() in ["sales", "invoice"]:
-                        try:
-                            date = datetime.strptime(v.get("date", ""), "%Y%m%d")
-                        except ValueError:
-                            date = datetime.now()
-                        
-                        invoices.append(InvoiceRecord(
-                            external_id=v.get("number", ""),
-                            date=date,
-                            customer_name=v.get("party"),
-                            total=abs(v.get("amount", 0)),
-                            currency="INR",
-                            status="completed",
-                            metadata={"voucher_type": v.get("type")},
-                        ))
+                    if v.get("type", "").lower() not in _SALES_VOUCHER_TYPES:
+                        continue
+                    try:
+                        date = datetime.strptime(v.get("date", ""), "%Y%m%d")
+                    except ValueError:
+                        date = datetime.now()
+                    invoices.append(InvoiceRecord(
+                        external_id=v.get("number", ""),
+                        date=date,
+                        customer_name=v.get("party"),
+                        total=abs(v.get("amount", 0)),
+                        currency="INR",
+                        status="completed",
+                        metadata={"voucher_type": v.get("type")},
+                    ))
             
             logger.info(f"Fetched {len(invoices)} invoices from Tally")
             
@@ -306,6 +412,79 @@ class TallyConnector(BaseConnector):
             logger.error(f"Error fetching Tally invoices: {e}")
         
         return invoices
+
+    def map_to_financials(
+        self,
+        employees=None,
+        payroll_runs=None,
+        ledger_entries=None,
+        invoices=None,
+    ) -> Dict[str, Any]:
+        """Turn Tally ledgers/vouchers into the fields /connectors sync persists.
+
+        BaseConnector.map_to_financials only copies invoice totals and dumps
+        ledgers into expense_breakdown — which _build_financial_record ignores.
+        Indian Tally companies often have P&L and cash in ledger groups, not
+        in Sales-typed vouchers, so first sync used to 400 with no numbers.
+        """
+        result: Dict[str, Any] = {
+            "source_type": f"connector_{self.PROVIDER_ID}",
+            "extraction_summary": f"Synced from {self.PROVIDER_NAME}",
+        }
+
+        revenue = 0.0
+        cogs = 0.0
+        opex = 0.0
+        cash = 0.0
+        saw = {"revenue": False, "cogs": False, "opex": False, "cash": False}
+
+        if ledger_entries:
+            for entry in ledger_entries:
+                kind = classify_tally_ledger(entry.category or "", entry.account_name or "")
+                if not kind:
+                    continue
+                debit = entry.debit or 0.0
+                credit = entry.credit or 0.0
+                if kind == "revenue":
+                    revenue += credit - debit
+                    saw["revenue"] = True
+                elif kind == "cogs":
+                    cogs += debit - credit
+                    saw["cogs"] = True
+                elif kind == "opex":
+                    opex += debit - credit
+                    saw["opex"] = True
+                elif kind == "cash":
+                    cash += debit - credit
+                    saw["cash"] = True
+
+        if invoices:
+            invoice_revenue = sum(
+                inv.total or 0.0
+                for inv in invoices
+                if (inv.status or "").lower() in {"paid", "completed"}
+            )
+            # Ledgers are the P&L source of truth; vouchers fill revenue only
+            # when Sales Accounts were missing from the collection.
+            if not saw["revenue"] and invoice_revenue:
+                revenue = invoice_revenue
+                saw["revenue"] = True
+
+        if saw["revenue"]:
+            result["revenue"] = revenue
+        if saw["cogs"]:
+            result["cogs"] = cogs
+        if saw["opex"]:
+            result["opex"] = opex
+        if saw["cash"]:
+            result["cash_balance"] = cash
+
+        mapped = [k for k, v in saw.items() if v]
+        if mapped:
+            result["extraction_summary"] = (
+                f"Synced from {self.PROVIDER_NAME}: " + ", ".join(mapped)
+            )
+        return result
     
     async def close(self):
         """Close the HTTP client."""

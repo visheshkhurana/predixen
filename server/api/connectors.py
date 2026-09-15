@@ -519,6 +519,12 @@ async def sync_provider(
 
             db.commit()
 
+            if financial_record:
+                # Dashboards read the cached TruthScan row, not the FinancialRecord
+                # insert. csv_import already recomputes this; connector sync did not,
+                # so a successful first Tally/Stripe sync still showed 0% confidence.
+                refresh_truth_scan_after_sync(db, company, company_id)
+
             try:
                 from server.services.digital_twin import emit_twin_event
                 emit_twin_event(db, company_id, "connector_sync", f"connector:{provider_id}", {
@@ -545,14 +551,17 @@ async def sync_provider(
         }
 
     except ValueError as validation_error:
-        # Validation error - ensure rollback
+        # Validation error - ensure rollback, then persist last_error so the
+        # next GET /connectors status/catalog does not look like a quiet no-op.
         db.rollback()
         logger.error(f"Sync validation error for {provider_id}: {validation_error}")
+        persist_connector_last_error(db, company, provider_id, str(validation_error))
         raise HTTPException(status_code=400, detail=str(validation_error))
     except Exception as e:
         # Unexpected error - ensure rollback
         db.rollback()
         logger.error(f"Sync error for {provider_id}: {e}")
+        persist_connector_last_error(db, company, provider_id, str(e))
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await connector.close()
@@ -672,6 +681,40 @@ def _build_financial_record(company_id: int, provider_id: str, provider_name: st
         marketing_expense=financials.get("marketing_expense"),
     )
     return record
+
+
+def persist_connector_last_error(db, company, provider_id: str, error: str) -> None:
+    """Write last_error without dropping sibling connector keys.
+
+    Failed /connectors syncs used to rollback and return 400/500 with no
+    metadata write, so status still showed connected + last_error=None.
+    """
+    metadata = company.metadata_json or {}
+    connectors = metadata.get("connectors") or {}
+    entry = dict(connectors.get(provider_id) or {})
+    entry["last_error"] = error
+    try:
+        save_metadata_value(db, company, ("connectors", provider_id), entry, commit=True)
+    except Exception as persist_error:
+        logger.error(f"Failed to persist last_error for {provider_id}: {persist_error}")
+
+
+def refresh_truth_scan_after_sync(db, company, company_id: int):
+    """Recompute the cached truth scan so first-sync numbers actually appear."""
+    try:
+        from server.truth.truth_scan import compute_truth_scan
+        from server.models.truth_scan import TruthScan
+
+        db.refresh(company)
+        outputs = compute_truth_scan(company, db)
+        scan = TruthScan(company_id=company_id, outputs_json=outputs)
+        db.add(scan)
+        db.commit()
+        return scan.id
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Connector sync saved, but confidence rescan failed: {e}")
+        return None
 
 
 SAMPLE_DATA: Dict[str, Dict[str, Any]] = {
