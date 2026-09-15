@@ -45,7 +45,7 @@ import { api } from "@/api/client";
 import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { formatCurrencyAbbrev } from "@/lib/utils";
 import GlobalLoadingBar from "@/components/GlobalLoadingBar";
-import { AskAIButton } from "@/components/AskAIButton";
+import { SampleDataBanner } from "@/components/sample-data/SampleDataBanner";
 
 import { CookieConsent } from "@/components/CookieConsent";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
@@ -893,6 +893,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                 to use your own.
               </span>
             </div>
+          )}
+          {currentCompany?.is_sample && user?.email !== 'demo@founderconsole.ai' && (
+            <SampleDataBanner />
           )}
           <header className="no-print flex items-center justify-between gap-2 p-2 px-3 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl sticky top-0 z-50">
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">

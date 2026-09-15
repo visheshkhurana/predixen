@@ -28,6 +28,7 @@ Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1
 
 ## In flight
 | Agent | Item | Files claimed | PR | Status |
+| App Engineer (Build pod) | Sample-data first run / signup→first-insight | `server/services/sample_data.py`, onboarding/overview/App sample labels | this PR | claimed 15 Sep 2026 |
 | SEO & AI Search | Re-audit post #12 | — | — | **#12 live**; re-audit next |
 | Reliability | Deploy-landed monitor | server/services/deploy_landed.py | [#14](https://github.com/visheshkhurana/predixen/pull/14) | in review (control must 404) |
 | QA Engineer | Dispatch-only CI | .github/workflows/pr-checks.yml | [#13](https://github.com/visheshkhurana/predixen/pull/13) | Gate 1 PASS; with RM; still dispatch-only |

@@ -84,6 +84,7 @@ class CompanyResponse(BaseModel):
     amount_scale: str
     description: Optional[str] = None
     data_sharing_enabled: bool = False
+    is_sample: bool = False
     
     class Config:
         from_attributes = True
@@ -342,7 +343,7 @@ def seed_sample(
     result = seed_sample_company(db, company_id)
     from server.models.analytics_event import AnalyticsEvent
     from datetime import datetime
-    event = AnalyticsEvent(event_name="sample_seed_success", company_id=company_id, user_id=current_user.id, meta_json={"template": "saas_series_a"}, created_at=datetime.utcnow())
+    event = AnalyticsEvent(event_name="sample_seed_success", company_id=company_id, user_id=current_user.id, meta_json={"template": "saas_seed"}, created_at=datetime.utcnow())
     db.add(event)
     db.commit()
     return result
