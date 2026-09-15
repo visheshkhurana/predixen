@@ -1,4 +1,4 @@
-# Team State — updated 15 Sep 2026 ~23:55 GST by Chief of Staff
+# Team State — updated 15 Sep 2026 ~23:58 GST by Chief of Staff
 
 ## Staffing (Bot, 15 Sep)
 **Active (4):** Release Manager · Reviewer (Gate 1) · Analytics · Chief of Staff  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
 (Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-GitHub tip: `b91d1f82` (docs after `#9` `08995787`). Auth + SEO hygiene live-proven.
+GitHub tip: folding CoS parked-queue cleanup after `1d3b1b18` (#9 evidence retained).
 **Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
 Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
 
@@ -32,7 +32,7 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 
 ## Parked queues (do not expand without Bot)
 | Agent | Queued item | Notes |
-| Growth | SEO hygiene (sitemap privacy/terms + strip shell JSON-LD) | with Release Manager when unparked / RM capacity |
+| Growth | SEO hygiene (sitemap privacy/terms + strip shell JSON-LD) | **shipped #9** `08995787` — drop from parked queue on next docs touch |
 | Growth | SSR cross-links + contact pack | `content-drafts/ssr-crosslinks-contact-v1.md` ready |
 | Product | Rage-click replays; `lead_captured` proof | needs PostHog / session replay |
 | Reliability | Deploy-landed monitor (hash + body) | — |
@@ -54,9 +54,10 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 | Auth lock `/api/events` + ai-governance | `#6` `26791cd7` (+ `#7` `65c7ca01`) | CoS 23:43 GST: events GET+POST **401**; `/admin/ai-governance` **401** | **CLOSED** — public events ID leak |
 | Team CHARTER + STATE on main | `f29f978b` | on origin/main | — |
 | Docs sync HANDOVER + STATE | `#8` `344ab340` | merged; staffing + GET/POST leads on main | records |
-| SEO sitemap noindex + strip shell JSON-LD | `#9` `08995787` | RM 19:57Z live | crawl hygiene |
+| SEO sitemap noindex + strip shell JSON-LD | `#9` `08995787` (+ docs `b91d1f82`) | RM 19:57Z + CoS 23:57 GST: sitemap 35/privacy0/terms0; pricing WebPage only; privacy/terms ld=0 | crawl hygiene |
 | Feedback GET + company forecasting auth | `#10` `29b282e1` (+ docs `ed91d54c`) | CoS 23:53 GST recheck: GET `/api/feedback`→401; POST trend/forecast→401; POST feedback public per RM note | closes Reviewer-found holes |
 | CoS honesty pass (stale #8 rows + HANDOVER tip) | `3bdf080f` | on main; §2 tips `ed91d54c` | records |
+| Fold CoS STATE cleanup | `1d3b1b18` | on main | records |
 
 
 ### Pasteable evidence — #10 feedback+forecast lock (2026-09-15T19:52:40Z)
