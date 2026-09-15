@@ -12,5 +12,6 @@ Monday 09:00 GST council: CoS + Product/Engineering/Growth Leads + Finance Watch
 | 16 Sep | records | #12 live (`9d559d17`); CoS Googlebot recheck 00:40 GST | RM / CoS | tip then `23520ef3` |
 | 16 Sep | records | #13 dispatch-only CI (`3c2f1094`) | RM / QA | `workflow_dispatch` only; docs `77410c22` |
 | 16 Sep | Type 2 | **OVERRIDE:** start Phase 2 (9 agents + Exec/Build/Growth/Gates rooms) **before** identity/signup/`lead_captured`×2w tripwire. Gate unmet (`lead_captured`=0). Do not spawn Phase 3. | Vishesh via Bot | Bot 00:42 GST; CoS log. Auth locks remain human-hold. |
-| 16 Sep | records | Do **not** mark `#16` or `#14` shipped: git has them; live `/ai-cfo` 0 hrefs and control asset 200 HTML | CoS curl 00:45 GST | tip `34ce49e7` |
+| 16 Sep | records | Mid-restart: do not cite `#16` live (uptime ~7s; `/ai-cfo` 0 hrefs) | CoS curl 00:45 GST | tip `34ce49e7` |
+| 16 Sep | records | `#16` **live** after settle: `/ai-cfo` hrefs runway/survival/default-alive/auth + WebApplication ld=1; uptime 57.7s. `#14` still **not** shipped — control asset 200 HTML | CoS curl 00:47 GST | tip `34ce49e7` |
 | 16 Sep | records | `#15` merged `295aedb5` still Phase 1 parked; DECISIONS/AUTONOMY absent on origin | CoS | follow-up docs PR |
