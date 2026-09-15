@@ -1,4 +1,4 @@
-# Team State — updated 16 Sep 2026 ~00:36 GST by Release Manager
+# Team State — updated 16 Sep 2026 ~00:40 GST by Release Manager
 
 ## Staffing (ORG-22 · Phase 1 · 9 agents)
 **Active:** Chief of Staff · Reviewer · Release Manager · Analytics · Conversion Eng · SEO & AI Search · Reliability · QA Engineer · Finance Watcher  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11 | lead_captured: 0 (never seen)
 (Source: HANDOVER week of 13 Sep — Analytics must refresh **after** PostHog connector)
-GitHub tip: `d4b3bcb1` (#11 Phase 1 ORG-22/CHARTER/STATE shipped). Site health still green (docs-only; bundle unchanged).
+GitHub tip: `9d559d17` (#12 SEO cross-links) after `#11` `d4b3bcb1`. Auth locks closed; P0 templates/integrations/notifications **held by Vishesh**.
 **Auth locks CLOSED (evidence):** `/api/events` GET+POST → 401; `/admin/ai-governance` → 401; GET `/api/feedback` → 401; company forecasting → 401.
 **OPEN CRITICAL (CoS curl 16 Sep 00:32 GST, tip still `9c706b55`):** GET `/api/notifications/email-stats` → **200**, 98 rows, keys include `to`; GET `/api/integrations/available` → **200**; GET `/api/integrations/companies/1/status` → **200**; GET `/api/templates/` → **200**; POST `/api/templates/companies/1/apply/1` → **404** (not 401). “Created scenario 55” **not re-proven** this pass — do not treat as verified write.
 
@@ -27,7 +27,7 @@ GitHub tip: `d4b3bcb1` (#11 Phase 1 ORG-22/CHARTER/STATE shipped). Site health s
 Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1 + Core/Ops.
 
 ## In flight
-| Release Manager | SEO cross-links PR held for Gate 1 / after P0 auth | seo-prerender, sitemap | #12 | **held** — Reviewer standing block on templates/integrations/notifications |
+| Release Manager | SEO cross-links PR held for Gate 1 / after P0 auth | seo-prerender, sitemap | #12 | **SHIPPED** `9d559d17` — live Googlebot proof 20:39Z |
 | Agent | Item | Files claimed | PR | Status |
 | Reviewer | Blast-radius of #6/#10 + 16 Sep critical opens (templates/integrations/notifications) | — | — | **P0** |
 | Analytics | Prove devices≈sessions; verify lead_captured; add signup_completed | — | — | **blocked** — PostHog connector |
@@ -46,8 +46,22 @@ Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1
 | Money/ads restart | human only | standing |
 
 ## Shipped this week (evidence required)
+| SSR cross-links + contact enrich + /ai-cfo sitemap | `#12` `9d559d17` | RM Googlebot 20:39Z pasteable above | SEO pack |
 | Phase 1 ORG-22 / CHARTER / STATE | `#11` `d4b3bcb1` | on origin/main; `git show HEAD:agents/ORG-22.md` | org records |
 (see prior rows through #9/#10 — tip `9c706b55`)
+
+
+### Pasteable evidence — #12 SSR cross-links (2026-09-15T20:39:55Z Googlebot)
+```
+sitemap ai-cfo=1
+/ hrefs=6 chars=3264
+/pricing hrefs=5 chars=1088
+/tools/runway-calculator hrefs=4 chars=2086
+/default-alive hrefs=4 chars=1895
+/about hrefs=6 chars=1573
+/contact hrefs=9 chars=1195 meta=143
+health uptime≈94.3s; tip `9d559d17`; bundle index-eWXmctMP.js
+```
 
 ## Corrections — things we believed that were false
 | Believed | Actually | Found by | Cost |
