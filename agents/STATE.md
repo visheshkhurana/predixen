@@ -1,4 +1,4 @@
-# Team State — updated 15 Sep 2026 ~23:48 GST by Chief of Staff
+# Team State — updated 15 Sep 2026 ~23:53 GST by Release Manager
 
 ## Staffing (Bot, 15 Sep)
 **Active (4):** Release Manager · Reviewer (Gate 1) · Analytics · Chief of Staff  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
 (Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-Last verified deploy: GitHub tip `65c7ca01` (#7) after `#6` `26791cd7`.  
+Last verified deploy: GitHub tip `29b282e1` (#10) after `#8` `344ab340`. Auth locks live-proven (events + governance + feedback GET + company forecasting).
 **Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
 Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
 
@@ -55,6 +55,18 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 | Marketing SSR ×7 | `#5` `586dbbf8` + `cc2642c4` | CoS 23:40 GST ssr-content=1 on seven+ paths | SEO surface |
 | Auth lock `/api/events` + ai-governance | `#6` `26791cd7` (+ `#7` `65c7ca01`) | CoS 23:43 GST: events GET+POST **401**; `/admin/ai-governance` **401** | **CLOSED** — public events ID leak |
 | Team CHARTER + STATE on main | `f29f978b` | on origin/main | refresh via #8 |
+
+
+### Pasteable evidence — #10 feedback+forecast lock (2026-09-15T19:52:40Z)
+```
+GET  /api/feedback -> 401 {"detail":"Not authenticated"}
+POST /api/feedback -> 200 {"ok":true}   # public beta capture OK
+POST /api/forecasting/companies/1/trend -> 401
+POST /api/forecasting/companies/1/forecast -> 401
+GET  /api/leads -> 401 ; POST /api/leads -> 200
+GET  /api/events -> 401
+health uptime≈42.8s after roll; tip main `29b282e1`; bundle index-eWXmctMP.js
+```
 
 ## Corrections — things we believed that were false
 | Believed | Actually | Found by | Cost |

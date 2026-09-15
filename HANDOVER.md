@@ -22,7 +22,7 @@ is labeled as such.
 
 Useful commit links (tip of `main` as of rewrite):
 
-- `65c7ca01` — Fix ai-governance callback caught by platform-admin mount (#7)
+- `29b282e1 (#10 feedback+forecast) ← 65c7ca01` — Fix ai-governance callback caught by platform-admin mount (#7)
 - `26791cd7` — Lock `/api/events` and `/admin/ai-governance` behind auth (#6)
 - `f29f978b` — Add team CHARTER and STATE
 - `cc2642c4` / `#5` — marketing SSR
@@ -33,10 +33,12 @@ Useful commit links (tip of `main` as of rewrite):
 ## 2. Git / deploy state (verified)
 
 ```
-origin/main   cc2642c4  Prerender remaining blank marketing pages for crawlers
-              586dbbf8  Add SSR bodyContent for remaining blank marketing pages (#5)
-              4ef45867  Make the free tools convert, and count the people who use them
-              1e55b1e5  Merge pull request #4 …
+origin/main   344ab340  docs: sync HANDOVER and agents STATE (#8)
+              ea19a61a  Mark auth lock shipped with live 401 evidence in STATE
+              65c7ca01  Fix ai-governance callback caught by platform-admin mount (#7)
+              26791cd7  Lock /api/events and /admin/ai-governance behind auth (#6)
+              f29f978b  Add team CHARTER and STATE for autonomous coordination
+              cc2642c4  Prerender remaining blank marketing pages for crawlers
 ```
 
 **Production (curl 15 Sep 23:40 GST):**
