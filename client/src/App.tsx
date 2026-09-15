@@ -45,6 +45,7 @@ import { api } from "@/api/client";
 import { useFinancialMetrics } from "@/hooks/useFinancialMetrics";
 import { formatCurrencyAbbrev } from "@/lib/utils";
 import GlobalLoadingBar from "@/components/GlobalLoadingBar";
+import { AskAIButton } from "@/components/AskAIButton";
 import { SampleDataBanner } from "@/components/sample-data/SampleDataBanner";
 
 import { CookieConsent } from "@/components/CookieConsent";
