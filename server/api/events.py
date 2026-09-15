@@ -6,7 +6,11 @@ from server.models.analytics_event import AnalyticsEvent
 from datetime import datetime
 from typing import Optional
 
-router = APIRouter(prefix="/api/events", tags=["events"])
+# Prefix deliberately excludes /api. Express proxies /api/* to this app
+# with pathRewrite {"^/api": ""} (server/index.ts), so a prefix of
+# "/api/events" would be looked up here as "/api/events" while the request
+# actually arrives as "/events" — a guaranteed 404 for every caller.
+router = APIRouter(prefix="/events", tags=["events"])
 
 class EventCreate(BaseModel):
     event_name: str

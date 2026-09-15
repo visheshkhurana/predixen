@@ -777,11 +777,23 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     trackPageView(location);
   }, [location]);
 
+  // Identify on sign-in; reset ONLY on an actual sign-out.
+  //
+  // This used to call resetUser() whenever `user` was falsy, which on every
+  // marketing page is the very first render. posthog.reset() mints a new
+  // distinct_id and a new session_id, so each anonymous visitor was silently
+  // split into two identities and two sessions — and an ad click could never
+  // be joined to a later signup. The ref remembers whether we were previously
+  // identified, so a reset fires on the identified -> anonymous transition and
+  // nowhere else.
+  const wasIdentified = useRef(false);
   useEffect(() => {
     if (user) {
       identifyUser(user.id, user.email, user.role);
-    } else {
+      wasIdentified.current = true;
+    } else if (wasIdentified.current) {
       resetUser();
+      wasIdentified.current = false;
     }
   }, [user]);
 

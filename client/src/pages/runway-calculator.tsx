@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, type FormEvent } from "react";
 import { Link } from "wouter";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,9 @@ import {
   DollarSign,
   Percent,
   BarChart3,
+  Mail,
+  Check,
+  Loader2,
 } from "lucide-react";
 
 function formatCurrency(val: number): string {
@@ -32,11 +35,35 @@ function formatDate(months: number): string {
 
 const DEFAULTS = { cash: 500000, revenue: 20000, expenses: 60000, growthRate: 5 };
 
+/**
+ * Parse a field's raw text into a number for the model.
+ *
+ * The fields hold TEXT, not numbers, and this is the whole point. They used to
+ * hold numbers with `onChange={e => setCash(Number(e.target.value))}`, and
+ * Number("") is 0 — so the moment a visitor deleted the last digit of the
+ * pre-filled 500000 the field snapped back to "0" and refused to empty. To
+ * enter their own figure they had to know to select-all first; anyone who
+ * simply backspaced was left fighting a zero that would not go away.
+ *
+ * On 19 August one visitor spent 138 seconds here, typed 47 keystrokes, and
+ * rage-clicked twice before leaving. That is the single deepest engagement any
+ * paid visitor produced, and it ended in frustration on a four-field form.
+ */
+function toNumber(text: string): number {
+  const n = parseFloat(text);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function RunwayCalculatorPage() {
-  const [cash, setCash] = useState(DEFAULTS.cash);
-  const [revenue, setRevenue] = useState(DEFAULTS.revenue);
-  const [expenses, setExpenses] = useState(DEFAULTS.expenses);
-  const [growthRate, setGrowthRate] = useState(DEFAULTS.growthRate);
+  const [cashText, setCashText] = useState(String(DEFAULTS.cash));
+  const [revenueText, setRevenueText] = useState(String(DEFAULTS.revenue));
+  const [expensesText, setExpensesText] = useState(String(DEFAULTS.expenses));
+  const [growthText, setGrowthText] = useState(String(DEFAULTS.growthRate));
+
+  const cash = toNumber(cashText);
+  const revenue = toNumber(revenueText);
+  const expenses = toNumber(expensesText);
+  const growthRate = toNumber(growthText);
 
   // Fire once, the first time a visitor changes any input away from the
   // pre-filled example.
@@ -83,6 +110,55 @@ export default function RunwayCalculatorPage() {
 
     return { monthlyBurn, runwayMonths, runwayDate, months, maxCash };
   }, [cash, revenue, expenses, growthRate]);
+
+  // The one conversion on this page that does not cost the visitor an account.
+  //
+  // Until now the only way to convert was "Connect Your Real Data" -> full
+  // signup. That asks someone who has known this product for forty seconds to
+  // hand over their company's financials. Nobody did: across 15-19 August,
+  // zero signup_view, zero signup_start, zero cta_click, on AED 1,900 of ads.
+  //
+  // This asks for one field, and gives something back — their own result,
+  // in their inbox, where it can be forwarded to a co-founder.
+  const [email, setEmail] = useState("");
+  const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  async function handleEmailResult(e: FormEvent) {
+    e.preventDefault();
+    if (sendState === "sending" || !email.trim()) return;
+    setSendState("sending");
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          source: "runway-calculator",
+          plan: "runway-calculator",
+          // The numbers matter more than the address. An email alone is a
+          // stranger; an email plus "4 months of runway, burning $40K" is a
+          // conversation with an opening line.
+          notes: `Runway ${results.runwayMonths >= 36 ? "36+" : results.runwayMonths} months (until ${results.runwayDate}). Cash ${cash}, revenue ${revenue}, expenses ${expenses}, growth ${growthRate}%/mo, net burn ${results.monthlyBurn}.`,
+          // The server keys the outbound email off these three. Send them or
+          // the lead is stored silently and the "check your inbox" line above
+          // becomes a lie.
+          runway_months: results.runwayMonths >= 36 ? "36+" : String(results.runwayMonths),
+          runway_date: results.runwayMonths >= 36 ? "beyond 36 months" : results.runwayDate,
+          monthly_burn: formatCurrency(results.monthlyBurn) + "/mo",
+        }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setSendState("done");
+      trackFunnel("lead_captured", {
+        location: "runway-calculator",
+        runway_months: results.runwayMonths,
+      });
+    } catch {
+      // Deliberately not a toast. If this fails the visitor still has their
+      // answer on screen; the worst outcome is asking them to try again.
+      setSendState("error");
+    }
+  }
 
   useSEO({
     title: "Free Startup Runway Calculator — How Long Until You Run Out of Cash | FounderConsole",
@@ -161,8 +237,8 @@ export default function RunwayCalculatorPage() {
                       <Input
                         id="cash"
                         type="number"
-                        value={cash}
-                        onChange={(e) => setCash(Number(e.target.value))}
+                        value={cashText}
+                        onChange={(e) => setCashText(e.target.value)}
                         className="pl-7"
                         data-testid="input-cash"
                       />
@@ -179,8 +255,8 @@ export default function RunwayCalculatorPage() {
                       <Input
                         id="revenue"
                         type="number"
-                        value={revenue}
-                        onChange={(e) => setRevenue(Number(e.target.value))}
+                        value={revenueText}
+                        onChange={(e) => setRevenueText(e.target.value)}
                         className="pl-7"
                         data-testid="input-revenue"
                       />
@@ -197,8 +273,8 @@ export default function RunwayCalculatorPage() {
                       <Input
                         id="expenses"
                         type="number"
-                        value={expenses}
-                        onChange={(e) => setExpenses(Number(e.target.value))}
+                        value={expensesText}
+                        onChange={(e) => setExpensesText(e.target.value)}
                         className="pl-7"
                         data-testid="input-expenses"
                       />
@@ -212,8 +288,8 @@ export default function RunwayCalculatorPage() {
                       <Input
                         id="growth"
                         type="number"
-                        value={growthRate}
-                        onChange={(e) => setGrowthRate(Number(e.target.value))}
+                        value={growthText}
+                        onChange={(e) => setGrowthText(e.target.value)}
                         className="pr-7"
                         data-testid="input-growth"
                       />
@@ -328,6 +404,63 @@ export default function RunwayCalculatorPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-b">
+        <div className="mx-auto max-w-6xl px-4 pt-12">
+          <div className="rounded-xl border bg-card/50 p-6 max-w-2xl mx-auto">
+            {sendState === "done" ? (
+              <div className="flex items-center gap-3 justify-center py-2" data-testid="text-email-sent">
+                <Check className="h-5 w-5 text-emerald-500 shrink-0" />
+                <p className="text-sm text-foreground">
+                  Sent. Check your inbox for your runway summary.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary shrink-0" />
+                  <h3 className="text-base font-semibold text-foreground" data-testid="text-email-heading">
+                    Email me this result
+                  </h3>
+                </div>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Your runway, burn rate and cash-out date, sent to you so you can
+                  forward it to a co-founder or investor. No account needed.
+                </p>
+                <form onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    inputMode="email"
+                    placeholder="you@yourstartup.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="sm:flex-1"
+                    aria-label="Your email address"
+                    data-testid="input-lead-email"
+                  />
+                  <Button type="submit" disabled={sendState === "sending"} data-testid="button-email-result">
+                    {sendState === "sending" ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending
+                      </>
+                    ) : (
+                      "Send it to me"
+                    )}
+                  </Button>
+                </form>
+                {sendState === "error" && (
+                  <p className="mt-2 text-sm text-destructive" data-testid="text-email-error">
+                    That did not go through. Try again in a moment.
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       </section>

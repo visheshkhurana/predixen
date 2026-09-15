@@ -23,7 +23,11 @@ from server.simulate.enhanced_monte_carlo import (
     DistributionParams
 )
 
-router = APIRouter(prefix="/api/simulations", tags=["simulations"])
+# Prefix deliberately excludes /api. Express proxies /api/* to this app
+# with pathRewrite {"^/api": ""} (server/index.ts), so a prefix of
+# "/api/simulations" would be looked up here as "/api/simulations" while the request
+# actually arrives as "/simulations" — a guaranteed 404 for every caller.
+router = APIRouter(prefix="/simulations", tags=["simulations"])
 logger = logging.getLogger(__name__)
 
 

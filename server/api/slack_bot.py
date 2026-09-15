@@ -28,7 +28,11 @@ from server.models.financial import FinancialRecord
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/slack", tags=["slack"])
+# Prefix deliberately excludes /api. Express proxies /api/* to this app
+# with pathRewrite {"^/api": ""} (server/index.ts), so a prefix of
+# "/api/slack" would be looked up here as "/api/slack" while the request
+# actually arrives as "/slack" — a guaranteed 404 for every caller.
+router = APIRouter(prefix="/slack", tags=["slack"])
 
 
 def _verify_slack_signature(

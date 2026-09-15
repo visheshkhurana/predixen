@@ -1,4 +1,11 @@
 import { blogPosts, blogPostContent } from "./seo-data";
+// Relative, not the "@/" alias: this module is bundled by esbuild from
+// server/index.ts and a path alias is one more thing that can silently resolve
+// differently at build time. runway-industries.ts is pure data with no imports
+// of its own, so pulling it in costs the server bundle nothing and means the
+// eight vertical pages cannot drift between what the page renders and what a
+// crawler is served.
+import { RUNWAY_INDUSTRIES } from "../client/src/data/runway-industries";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -110,6 +117,66 @@ function buildRunwayCalculatorBodyContent(): string {
 </article>`;
 }
 
+function esc(t: string): string {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function buildPricingBodyContent(): string {
+  return `<article>
+<h1>Pricing</h1>
+<p>Every FounderConsole feature is free during the public beta. No credit card is required to start, and there is no trial clock running in the background.</p>
+<h2>What is included</h2>
+<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 37 data connectors.</p>
+<h2>What happens after the beta</h2>
+<p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
+<h2>Free tools that need no account at all</h2>
+<p>The runway calculator and the default alive test are open to anyone, with no signup and no email required to see your result.</p>
+</article>`;
+}
+
+function buildDemoBodyContent(): string {
+  return `<article>
+<h1>See FounderConsole in action</h1>
+<p>An interactive walkthrough of the product using a sample company, so you can see how simulation, the AI copilot and the fundraising tools fit together before connecting any of your own data.</p>
+<h2>What the demo covers</h2>
+<p>Building a digital twin from connected financial data, running a Monte Carlo simulation to get a probabilistic runway rather than a single number, asking the copilot a question about the model, and exporting a board-ready summary.</p>
+<h2>Prefer to try something immediately</h2>
+<p>The runway calculator and the default alive test are free, need no account, and give you a real answer about your own numbers in under a minute.</p>
+</article>`;
+}
+
+function buildAiCfoBodyContent(): string {
+  return `<article>
+<h1>AI CFO for startups</h1>
+<p>FounderConsole answers the financial questions a founder actually asks — how long the money lasts, what a hire costs in runway, when to start raising — using your connected data rather than a spreadsheet you have to maintain.</p>
+<h2>What it does</h2>
+<p>It connects your financial sources, keeps a continuously updated model of the company, runs Monte Carlo simulations so the answer is a probability rather than a single guess, and explains its reasoning in plain language.</p>
+<h2>What it does not do</h2>
+<p>It is not a replacement for an accountant, a bookkeeper or a tax advisor. It is a decision tool for the questions between those things: pacing, hiring, pricing and timing.</p>
+<h2>Start without connecting anything</h2>
+<p>The free runway calculator gives you months of runway and a cash-out date from four numbers, with no account required.</p>
+</article>`;
+}
+
+function buildIndustryBodyContent(slug: string): string | null {
+  const ind = RUNWAY_INDUSTRIES.find((i) => i.slug === slug);
+  if (!ind) return null;
+  const notes = ind.notes.map((n) => `<li>${esc(n)}</li>`).join("");
+  const risks = ind.primaryRiskFactors.map((r) => `<li>${esc(r)}</li>`).join("");
+  return `<article>
+<h1>${esc(ind.name)}</h1>
+<p>Calculate runway against real ${esc(ind.shortName.toLowerCase())} benchmarks. The relevant benchmark here is ${esc(ind.benchmarkRunway)}.</p>
+<h2>What ${esc(ind.shortName)} founders should watch</h2>
+<ul>${notes}</ul>
+<h2>Burn multiple</h2>
+<p>${esc(ind.burnMultipleNotes)}</p>
+<h2>When to raise</h2>
+<p>${esc(ind.fundraisingNotes)}</p>
+<h2>What usually goes wrong</h2>
+<ul>${risks}</ul>
+</article>`;
+}
+
 function getPageMeta(path: string): PageMeta | null {
   if (path === "/" || path === "") {
     return {
@@ -163,6 +230,7 @@ function getPageMeta(path: string): PageMeta | null {
       title: "Pricing | FounderConsole",
       description: "FounderConsole pricing tiers with fast time-to-value. All features free during public beta — no credit card required.",
       canonical: SITE_URL + "/pricing",
+      bodyContent: buildPricingBodyContent(),
     };
   }
 
@@ -195,6 +263,41 @@ function getPageMeta(path: string): PageMeta | null {
       title: "Demo | FounderConsole",
       description: "See FounderConsole in action with an interactive demo.",
       canonical: SITE_URL + "/demo",
+      bodyContent: buildDemoBodyContent(),
+    };
+  }
+
+  if (path === "/ai-cfo") {
+    return {
+      title: "AI CFO for Startups — Runway, Burn and Hiring Answers | FounderConsole",
+      description: "An AI CFO for founders without a finance team. Ask about runway, burn rate and hiring, and get answers from your real numbers with Monte Carlo confidence bands.",
+      canonical: SITE_URL + "/ai-cfo",
+      bodyContent: buildAiCfoBodyContent(),
+    };
+  }
+
+  // The eight industry pages had no entry here at all, which meant no title, no
+  // description, no canonical and no server-rendered text — eight programmatic
+  // pages competing for search traffic while presenting a crawler with an empty
+  // div and the generic site title.
+  if (path.startsWith("/runway/")) {
+    const slug = path.slice("/runway/".length).replace(/\/+$/, "");
+    const ind = RUNWAY_INDUSTRIES.find((i) => i.slug === slug);
+    if (!ind) {
+      // Unknown vertical renders the app's not-found page. Saying "index" here
+      // would ask Google to index a 404 that answers with HTTP 200.
+      return {
+        title: "Page not found | FounderConsole",
+        description: "This page does not exist. Browse the free runway calculator and industry benchmarks instead.",
+        canonical: SITE_URL + "/tools/runway-calculator",
+        robots: "noindex, follow",
+      };
+    }
+    return {
+      title: `${ind.name} — Free Benchmarked Runway Tool | FounderConsole`,
+      description: `Free ${ind.shortName} startup runway calculator with industry benchmarks. ${ind.benchmarkRunway}. Run a Monte Carlo simulation tuned to ${ind.shortName} economics.`,
+      canonical: `${SITE_URL}/runway/${ind.slug}`,
+      bodyContent: buildIndustryBodyContent(ind.slug) || undefined,
     };
   }
 
