@@ -1,4 +1,5 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { eq, desc, and } from "drizzle-orm";
@@ -10,19 +11,43 @@ import {
   aiApprovals,
   aiSystemState,
 } from "../../shared/models/aiGovernance";
+import { requirePlatformAdmin } from "../middleware/requireAuth";
 
 const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_BASE || "https://vysheshk.app.n8n.cloud/webhook";
-const SHARED_SECRET = process.env.AI_GOVERNANCE_SECRET || "founderconsole-ai-governance-secret-change-me";
 const CALLBACK_TOLERANCE_MS = 5 * 60 * 1000; // 5 min replay protection
 
+function governanceSecret(): string | null {
+  const secret = process.env.AI_GOVERNANCE_SECRET;
+  if (!secret || !secret.trim()) return null;
+  return secret;
+}
+
 function signPayload(body: string): string {
-  return crypto.createHmac("sha256", SHARED_SECRET).update(body).digest("hex");
+  const secret = governanceSecret();
+  if (!secret) {
+    throw new Error("AI_GOVERNANCE_SECRET is not configured");
+  }
+  return crypto.createHmac("sha256", secret).update(body).digest("hex");
 }
 
 function verifySignature(body: string, signature: string | undefined): boolean {
   if (!signature) return false;
+  const secret = governanceSecret();
+  if (!secret) return false;
   const expected = signPayload(body);
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  // timingSafeEqual throws if lengths differ — guard first.
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function publicAppBase(): string {
+  return (process.env.APP_BASE_URL || "https://founderconsole.ai").replace(/\/$/, "");
+}
+
+function asyncPlatformAdmin(req: Request, res: Response, next: NextFunction): void {
+  void requirePlatformAdmin(req, res, next);
 }
 
 function generateRequestId(): string {
@@ -45,6 +70,10 @@ async function getOrCreateSystemState() {
 
 async function forwardToN8n(endpoint: string, payload: any): Promise<boolean> {
   try {
+    if (!governanceSecret()) {
+      console.error("[AI-GOV] Refusing n8n forward — AI_GOVERNANCE_SECRET is not set");
+      return false;
+    }
     const enrichedPayload = { ...payload, action: endpoint };
     const body = JSON.stringify(enrichedPayload);
     const signature = signPayload(body);
@@ -64,8 +93,11 @@ async function forwardToN8n(endpoint: string, payload: any): Promise<boolean> {
 }
 
 export function registerAiGovernanceRoutes(app: Express) {
+  const admin = Router();
+  admin.use(asyncPlatformAdmin);
+
   // GET /admin/ai-governance/state - Full boardroom state
-  app.get("/admin/ai-governance/state", async (_req: Request, res: Response) => {
+  admin.get("/state", async (_req: Request, res: Response) => {
     try {
       const systemState = await getOrCreateSystemState();
       const recentRequests = await db.select().from(aiRequests).orderBy(desc(aiRequests.createdAt)).limit(20);
@@ -107,7 +139,7 @@ export function registerAiGovernanceRoutes(app: Express) {
   });
 
   // POST /admin/ai-governance/ask - Founder asks a question
-  app.post("/admin/ai-governance/ask", async (req: Request, res: Response) => {
+  admin.post("/ask", async (req: Request, res: Response) => {
     try {
       const { question, constraints, type } = req.body;
       if (!question) {
@@ -159,7 +191,7 @@ export function registerAiGovernanceRoutes(app: Express) {
   });
 
   // POST /admin/ai-governance/approve - Approve a decision
-  app.post("/admin/ai-governance/approve", async (req: Request, res: Response) => {
+  admin.post("/approve", async (req: Request, res: Response) => {
     try {
       const { requestId, decisionId, reason } = req.body;
       if (!requestId) {
@@ -200,7 +232,7 @@ export function registerAiGovernanceRoutes(app: Express) {
   });
 
   // POST /admin/ai-governance/reject - Reject a decision
-  app.post("/admin/ai-governance/reject", async (req: Request, res: Response) => {
+  admin.post("/reject", async (req: Request, res: Response) => {
     try {
       const { requestId, decisionId, reason } = req.body;
       if (!requestId) {
@@ -239,7 +271,7 @@ export function registerAiGovernanceRoutes(app: Express) {
   });
 
   // POST /admin/ai-governance/emergency - Emergency controls
-  app.post("/admin/ai-governance/emergency", async (req: Request, res: Response) => {
+  admin.post("/emergency", async (req: Request, res: Response) => {
     try {
       const { action } = req.body;
       const validActions = ["pause_all", "freeze_code", "manual_only", "resume_all"];
@@ -284,7 +316,7 @@ export function registerAiGovernanceRoutes(app: Express) {
   // POST /admin/ai-governance/callback - FROM n8n only
 
   // ============ EXECUTE DECISION ===============
-  app.post("/admin/ai-governance/execute", async (req: Request, res: Response) => {
+  admin.post("/execute", async (req: Request, res: Response) => {
     try {
       const { requestId, decisionId, decision, agentPositions } = req.body;
       if (!requestId || !decisionId) {
@@ -309,7 +341,7 @@ export function registerAiGovernanceRoutes(app: Express) {
         agent_positions: agentPositions || {},
         action: "execute_decision",
         timestamp: new Date().toISOString(),
-        callback_url: `${process.env.REPLIT_DEV_DOMAIN ? "https://" + process.env.REPLIT_DEV_DOMAIN : "https://fund-flow--vysheshk.replit.app"}/admin/ai-governance/callback`,
+        callback_url: `${publicAppBase()}/admin/ai-governance/callback`,
       };
       // Forward to n8n (non-blocking - don't fail if n8n is unavailable)
       try {
@@ -325,20 +357,27 @@ export function registerAiGovernanceRoutes(app: Express) {
     }
   });
 
+  app.use("/admin/ai-governance", admin);
+
+  // POST /admin/ai-governance/callback — FROM n8n only (HMAC, not session auth)
   app.post("/admin/ai-governance/callback", async (req: Request, res: Response) => {
     try {
-      // Verify n8n signature
+      if (!governanceSecret()) {
+        return res.status(503).json({ error: "AI governance callback not configured" });
+      }
+
+      // Verify n8n signature (required — unsigned callbacks are rejected)
       const rawBody = JSON.stringify(req.body);
       const signature = req.headers["x-founderconsole-signature"] as string;
 
-      if (signature && !verifySignature(rawBody, signature)) {
-        console.warn("[AI-GOV] Invalid callback signature");
+      if (!verifySignature(rawBody, signature)) {
+        console.warn("[AI-GOV] Invalid or missing callback signature");
         return res.status(401).json({ error: "Invalid signature" });
       }
 
-      // Timestamp replay protection (only enforce when signature is present)
+      // Timestamp replay protection
       const { timestamp } = req.body;
-      if (signature && timestamp) {
+      if (timestamp) {
         const eventTime = new Date(timestamp).getTime();
         const now = Date.now();
         if (Math.abs(now - eventTime) > CALLBACK_TOLERANCE_MS) {
