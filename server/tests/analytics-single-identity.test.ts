@@ -70,6 +70,19 @@ test("listing leads requires platform admin", () => {
   assert.match(getBlock, /require_platform_admin/, "GET /leads must not be open");
 });
 
+test("successful lead creates emit lead_captured on the server", () => {
+  // Client trackFunnel("lead_captured") after fetch is in the live calculator
+  // chunk but PostHog 522965 has never ingested the event. The conversion
+  // must fire from POST /api/leads after the row is committed.
+  const leads = readFileSync("server/api/leads.py", "utf8");
+  const posthog = readFileSync("server/services/posthog.py", "utf8");
+  assert.match(leads, /background\.add_task\(_emit_lead_captured,/);
+  assert.match(leads, /posthog_capture\(\s*"lead_captured"/);
+  assert.match(posthog, /\/capture\//);
+  assert.doesNotMatch(posthog, /\.identify\(/);
+  assert.doesNotMatch(leads, /posthog.*identify/i);
+});
+
 test("the calculator sends the fields the runway email is keyed off", () => {
   // server/api/leads.py only queues the email when runway_months AND
   // runway_date are present. The UI promises "check your inbox" the moment the

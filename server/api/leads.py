@@ -16,6 +16,7 @@ without also restoring the lock would have turned a dead endpoint into a live
 disclosure of every address collected.
 """
 
+import hashlib
 import logging
 from datetime import datetime
 from typing import Optional
@@ -28,6 +29,7 @@ from sqlalchemy.orm import Session
 from server.api.admin import require_platform_admin
 from server.core.db import get_db
 from server.models.lead import Lead
+from server.services.posthog import capture as posthog_capture
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,40 @@ async def _send_runway_email(data: LeadCreate) -> None:
         logger.exception("[leads] could not email the runway result")
 
 
+def _lead_distinct_id(email: str) -> str:
+    digest = hashlib.sha256(email.lower().strip().encode("utf-8")).hexdigest()[:32]
+    return f"lead:{digest}"
+
+
+def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
+    """Server-side conversion event. Client trackFunnel after fetch is unproven.
+
+    PostHog project 522965 has calculator_used / cta_click / signup_view but
+    zero lead_captured over 90d, even though the calculator chunk still calls
+    trackFunnel("lead_captured") after a 2xx. Fire here after the row is
+    committed so a successful POST always emits, independent of the browser.
+    Does not identify or reset anyone.
+    """
+    try:
+        location = (data.source or "website").strip() or "website"
+        properties = {
+            "location": location,
+            "source": location,
+            "created": created,
+        }
+        if data.runway_months:
+            properties["runway_months"] = data.runway_months
+        if data.plan:
+            properties["plan"] = data.plan
+        posthog_capture(
+            "lead_captured",
+            _lead_distinct_id(str(data.email)),
+            properties,
+        )
+    except Exception:
+        logger.exception("[leads] could not emit lead_captured")
+
+
 @router.post("")
 def create_lead(
     data: LeadCreate,
@@ -135,8 +171,10 @@ def create_lead(
         # nothing with it, and a stack trace on a lead form is its own problem.
         raise HTTPException(status_code=503, detail="Could not save that right now")
 
-    # Queued, not awaited: the visitor's request must not wait on Resend, and a
-    # provider outage must not turn a captured lead into a visible failure.
+    # Queued, not awaited: the visitor's request must not wait on Resend or
+    # PostHog, and a provider outage must not turn a captured lead into a
+    # visible failure.
+    background.add_task(_emit_lead_captured, data, created)
     if data.runway_months and data.runway_date:
         background.add_task(_send_runway_email, data)
 
