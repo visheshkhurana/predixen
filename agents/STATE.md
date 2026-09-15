@@ -1,4 +1,4 @@
-# Team State — updated 15 Sep 2026 ~23:54 GST by Chief of Staff (refreshed origin + verified #10)
+# Team State — updated 15 Sep 2026 ~23:57 GST by Release Manager
 
 ## Staffing (Bot, 15 Sep)
 **Active (4):** Release Manager · Reviewer (Gate 1) · Analytics · Chief of Staff  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
 (Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-GitHub tip: `ed91d54c` (docs after `#10` `29b282e1`). Auth locks live-proven: events, governance, feedback GET, company forecasting (CoS recheck 23:53 GST).
+GitHub tip: `08995787` (#9 SEO) after `#10` `29b282e1`. Auth + SEO hygiene live-proven.
 **Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
 Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
 
@@ -55,6 +55,7 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 | Auth lock `/api/events` + ai-governance | `#6` `26791cd7` (+ `#7` `65c7ca01`) | CoS 23:43 GST: events GET+POST **401**; `/admin/ai-governance` **401** | **CLOSED** — public events ID leak |
 | Team CHARTER + STATE on main | `f29f978b` | on origin/main | — |
 | Docs sync HANDOVER + STATE | `#8` `344ab340` | merged; staffing + GET/POST leads on main | records |
+| SEO sitemap noindex + strip shell JSON-LD | `#9` `08995787` | RM 19:57Z: sitemap 35 locs, no privacy/terms; pricing WebPage only | crawl hygiene |
 | Feedback GET + company forecasting auth | `#10` `29b282e1` (+ docs `ed91d54c`) | CoS 23:53 GST recheck: GET `/api/feedback`→401; POST trend/forecast→401; POST feedback public per RM note | closes Reviewer-found holes |
 
 
@@ -67,6 +68,15 @@ POST /api/forecasting/companies/1/forecast -> 401
 GET  /api/leads -> 401 ; POST /api/leads -> 200
 GET  /api/events -> 401
 health uptime≈42.8s after roll; tip main `29b282e1`; bundle index-eWXmctMP.js
+```
+
+
+### Pasteable evidence — #9 SEO hygiene (2026-09-15T19:57:19Z)
+```
+sitemap.xml: privacy=0 terms=0 loc_count=35
+/pricing: 1 ld+json WebPage only; SoftwareApplication leak=false
+/privacy /terms: ld_count=0 (shell stripped)
+health uptime≈95.8s; tip `08995787`; bundle index-eWXmctMP.js
 ```
 
 ## Corrections — things we believed that were false
