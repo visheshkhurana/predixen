@@ -8,12 +8,13 @@ This module implements the trust contract for Copilot:
 - Contradiction detection
 """
 
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any, Union
 from sqlalchemy.orm import Session
 from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import re
 
 
 class GroundingStatus(Enum):
@@ -456,3 +457,248 @@ def detect_output_mode(prompt: str) -> str:
         return "TOKEN"
     
     return "NARRATIVE"
+
+
+NOT_AVAILABLE_MESSAGE = (
+    "NOT_AVAILABLE: The requested figure is not in verified company data or a "
+    "completed simulation run. I will not invent runway, survival, cash, burn, "
+    "churn, or other investor-facing numbers. Run a simulation or add the missing metric."
+)
+
+# User-facing metrics that must come from truth-scan / run outputs — never defaults.
+_METRIC_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "runway": ("runway", "runway_months", "runway_p50"),
+    "survival": ("survival", "survival_probability", "survival_18mo", "survival18mo"),
+    "churn": ("churn", "churn_rate", "monthly_churn"),
+    "nrr": ("nrr", "ndr", "net_revenue_retention", "net_dollar_retention"),
+    "cac": ("cac", "customer_acquisition_cost"),
+    "ltv": ("ltv", "lifetime_value"),
+    "arpu": ("arpu", "average_revenue_per_user"),
+    "customers": ("active_customers", "customers", "customer_count"),
+    "burn": ("net_burn", "monthly_burn", "burn_rate"),
+    "cash": ("cash_balance", "cash", "cash_on_hand"),
+    "revenue": ("monthly_revenue", "revenue", "mrr"),
+}
+
+_QUESTION_PATTERNS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\brunway\b", re.I), "runway"),
+    (re.compile(r"\bsurvival\b", re.I), "survival"),
+    (re.compile(r"\bchurn\b", re.I), "churn"),
+    (re.compile(r"\b(?:nrr|ndr|net revenue retention|net dollar retention)\b", re.I), "nrr"),
+    (re.compile(r"\bcac\b|\bcustomer acquisition\b", re.I), "cac"),
+    (re.compile(r"\bltv\b|\blifetime value\b", re.I), "ltv"),
+    (re.compile(r"\barpu\b", re.I), "arpu"),
+    (re.compile(r"\bactive customers?\b", re.I), "customers"),
+]
+
+
+@dataclass
+class FabricationGuardResult:
+    """Result of applying the fabrication → NOT_AVAILABLE guard."""
+    output: Dict[str, Any]
+    grounding_status: str
+    refused: bool
+    reason: Optional[str] = None
+    text: Optional[str] = None
+
+
+def _status_value(grounding_status: Union[GroundingStatus, str, None]) -> str:
+    if grounding_status is None:
+        return GroundingStatus.NOT_AVAILABLE.value
+    if isinstance(grounding_status, GroundingStatus):
+        return grounding_status.value
+    return str(grounding_status)
+
+
+def extract_available_metrics(raw: Any) -> Dict[str, Any]:
+    """Flatten truth-scan / context metrics into a {key: payload} map."""
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    metrics = raw.get("metrics")
+    if isinstance(metrics, dict):
+        return metrics
+    return raw
+
+
+def metric_is_present(available_metrics: Optional[Dict[str, Any]], *keys: str) -> bool:
+    """True when a metric key exists and is not an explicit null (0 is present)."""
+    if not available_metrics:
+        return False
+    for key in keys:
+        if key not in available_metrics:
+            continue
+        value = available_metrics[key]
+        if value is None:
+            continue
+        if isinstance(value, dict) and "value" in value and value.get("value") is None:
+            continue
+        return True
+    return False
+
+
+def requested_metrics(user_message: str) -> List[str]:
+    """Which guarded metrics the user asked for, if any."""
+    if not user_message:
+        return []
+    found: List[str] = []
+    for pattern, metric in _QUESTION_PATTERNS:
+        if pattern.search(user_message) and metric not in found:
+            found.append(metric)
+    return found
+
+
+def missing_requested_metrics(
+    user_message: str,
+    available_metrics: Optional[Dict[str, Any]],
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """Metrics the user asked for that are absent from verified data."""
+    missing: List[str] = []
+    combined: Dict[str, Any] = {}
+    if available_metrics:
+        combined.update(available_metrics)
+    if run_outputs:
+        combined.update(run_outputs)
+        survival = run_outputs.get("survival_probability")
+        if isinstance(survival, dict):
+            combined["survival_18mo"] = survival.get("18mo", survival.get("18"))
+            combined["survival"] = combined.get("survival_18mo")
+        runway = run_outputs.get("runway_months") or run_outputs.get("runway")
+        if isinstance(runway, dict):
+            combined["runway_months"] = runway.get("p50")
+            combined["runway"] = runway.get("p50")
+        elif runway is not None:
+            combined["runway_months"] = runway
+            combined["runway"] = runway
+    for metric in requested_metrics(user_message):
+        aliases = _METRIC_ALIASES.get(metric, (metric,))
+        if not metric_is_present(combined, *aliases):
+            missing.append(metric)
+    return missing
+
+
+def flatten_output_text(output: Any) -> str:
+    """Concatenate user-visible strings from a copilot structured output."""
+    chunks: List[str] = []
+
+    def walk(obj: Any, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(obj, str):
+            chunks.append(obj)
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item, depth + 1)
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                walk(value, depth + 1)
+
+    walk(output)
+    return " ".join(chunks)
+
+
+def contains_numeric_financial_claims(text: str) -> bool:
+    """True when the text includes investor-facing numeric claims."""
+    if not text:
+        return False
+    return should_include_provenance(text)
+
+
+def _not_available_output(reason: str) -> Dict[str, Any]:
+    return {
+        "executive_summary": [NOT_AVAILABLE_MESSAGE],
+        "company_snapshot": [],
+        "financials": None,
+        "market_and_customers": None,
+        "strategy_options": None,
+        "recommendations": None,
+        "assumptions": [],
+        "risks": [],
+        "causal_drivers": None,
+        "fabrication_refused": True,
+        "fabrication_reason": reason,
+    }
+
+
+def apply_not_available_guard(
+    output: Optional[Dict[str, Any]],
+    grounding_status: Union[GroundingStatus, str, None],
+    *,
+    user_message: str = "",
+    available_metrics: Optional[Dict[str, Any]] = None,
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> FabricationGuardResult:
+    """
+    Replace fabricated numeric answers with NOT_AVAILABLE.
+
+    Does not change prompts or model routing. Call after the copilot has produced
+    an output (or instead of sending one) so missing data cannot become a number.
+    """
+    status = _status_value(grounding_status)
+    current = dict(output or {})
+    missing = missing_requested_metrics(user_message, available_metrics, run_outputs)
+    if missing:
+        reason = f"missing_metrics:{','.join(missing)}"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    asked = requested_metrics(user_message)
+    if "survival" in asked and status != GroundingStatus.VERIFIED.value:
+        reason = "survival_requires_verified_run"
+        return FabricationGuardResult(
+            output=_not_available_output(reason),
+            grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+            refused=True,
+            reason=reason,
+            text=NOT_AVAILABLE_MESSAGE,
+        )
+
+    text = flatten_output_text(current)
+    if status == GroundingStatus.NOT_AVAILABLE.value and contains_numeric_financial_claims(text):
+        projection_like = bool(re.search(r"\bP(?:10|50|90)\b|\bsurvival\b", text, re.I))
+        if not available_metrics or projection_like:
+            reason = "ungrounded_numeric_claims"
+            return FabricationGuardResult(
+                output=_not_available_output(reason),
+                grounding_status=GroundingStatus.NOT_AVAILABLE.value,
+                refused=True,
+                reason=reason,
+                text=NOT_AVAILABLE_MESSAGE,
+            )
+
+    return FabricationGuardResult(
+        output=current,
+        grounding_status=status,
+        refused=False,
+        text=None,
+    )
+
+
+def apply_not_available_guard_to_text(
+    response_text: str,
+    grounding_status: Union[GroundingStatus, str, None],
+    *,
+    user_message: str = "",
+    available_metrics: Optional[Dict[str, Any]] = None,
+    run_outputs: Optional[Dict[str, Any]] = None,
+) -> FabricationGuardResult:
+    """Text-response variant for quick-chat (Cmd+K) answers."""
+    wrapped = {"executive_summary": [response_text or ""]}
+    result = apply_not_available_guard(
+        wrapped,
+        grounding_status,
+        user_message=user_message,
+        available_metrics=available_metrics,
+        run_outputs=run_outputs,
+    )
+    if result.refused:
+        return result
+    result.text = response_text
+    return result
