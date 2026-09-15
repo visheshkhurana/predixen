@@ -1,6 +1,6 @@
 # FounderConsole — Engineering Handover
 
-**Rewritten 15 September 2026; events lock re-verified ~23:43 GST by Historian.** Facts below were
+**Rewritten 15 September 2026; events lock re-verified ~23:43 GST by Chief of Staff (ex Historian).** Facts below were
 re-checked against the live site and `origin/main` on that timestamp. Inference
 is labeled as such.
 
@@ -56,7 +56,8 @@ The August uncommitted Mac work is **no longer pending**. It landed as
 
 | Check | Expect | Observed 23:40 GST |
 |---|---|---|
-| `GET /api/leads` | not 404; auth on list | **401** `Not authenticated` |
+| `GET /api/leads` | auth on list | **401** `Not authenticated` |
+| `POST /api/leads` | public capture | **200** `{"status":"ok","created":true}` (23:45 GST probe) |
 | `GET /api/simulations/jobs` | router live | **401** |
 | `GET /api/slack/events` | POST-only route exists | **405** Method Not Allowed |
 | `GET /api/events` | locked | **401** (also POST → 401) at 23:43 GST after `#6`/`#7` |
@@ -67,8 +68,8 @@ The August uncommitted Mac work is **no longer pending**. It landed as
 
 1. **API prefix fix** — routers use bare prefixes (`/leads`, `/events`, …) so Express `pathRewrite {"^/api": ""}` can reach them.
 2. **Leads auth** — `GET /api/leads` behind platform admin; `POST` stays public for calculator email capture.
-3. **PostHog single-identity** — stop double pageview + `reset()` on anonymous first paint (Instrument must prove devices≈sessions).
-4. **Calculator clearable inputs + email-capture CTA** — Conversion owns `lead_captured` proof in PostHog.
+3. **PostHog single-identity** — stop double pageview + `reset()` on anonymous first paint (Analytics must prove devices≈sessions).
+4. **Calculator clearable inputs + email-capture CTA** — Product owns `lead_captured` proof in PostHog.
 5. **SSR / prerender** — expanded in `#5` / `cc2642c4` after the conversion ship.
 
 ### Trap that shipped with the prefix fix (closed)
@@ -85,7 +86,7 @@ POST both return **401**; `/admin/ai-governance` returns **401**. Bundle may sta
 ## 4. What is live right now
 
 - Conversion + identity client changes from `4ef45867` are in the served bundle.
-- Broad marketing SSR is live (see table above). Discovery should audit SEO impact.
+- Broad marketing SSR is live (see table above). Growth owns SEO follow-through; audit done SEO impact.
 - **Geo gate is OFF** (fails open). Ad crawlers remain unblocked by design after the August AdsBot mistake.
 - Entry bundle ~888 KB class; stylesheet still large/render-blocking (not re-measured this pass).
 
@@ -94,7 +95,7 @@ POST both return **401**; `/admin/ai-governance` returns **401**. Bundle may sta
 ## 5. Traffic and conversion (last measured)
 
 Weekly PostHog snapshot from the prior handover (week of 13 Sep). **Do not treat
-sessions as people** until Instrument confirms the identity fix:
+sessions as people** until Analytics confirms the identity fix:
 
 | Week of | Devices | Sessions | Pageviews | Paid pageviews |
 |---|---|---|---|---|
@@ -111,13 +112,13 @@ refresh after identity ship.
 
 ---
 
-## 6. Known open items (Historian ranking)
+## 6. Known open items (Chief of Staff ranking)
 
 1. **Reviewer sweep** of blast radius from `#6` and other Sep-reachable routes.
 2. ~~Lock `/api/events` (+ ai-governance)~~ — **done live** (`#6`/`#7`, 401 at 23:43 GST).
-3. **Instrument:** prove one visitor ≈ one identity (PostHog connector blocked).
-4. **Conversion:** rage-click replays; confirm `lead_captured` exists and fires.
-5. **Discovery:** SEO audit now that SSR surface is wide.
+3. **Analytics:** prove one visitor ≈ one identity (PostHog connector blocked).
+4. **Product:** rage-click replays; confirm `lead_captured` exists and fires.
+5. **Growth:** SEO hygiene + SSR cross-link packs with Release Manager.
 6. **Reliability:** deploy-landed monitor (served hash).
 7. Remaining product debt from older audits (silent logout, billing theme, dead routes, a11y, bundle size).
 8. Ads / money decisions stay with Vishesh.
@@ -126,7 +127,7 @@ refresh after identity ship.
 
 ## 7. Operating constraints
 
-- **Only Integrator pushes/merges to `main`.** Other agents open PRs; Reviewer reviews.
+- **Only Release Manager pushes/merges to `main`.** Other agents open PRs; Reviewer (Gate 1) reviews.
 - **Evidence rule:** no "shipped/fixed" in STATE without pasteable proof (hash, curl body, test output, query).
 - Vite inlines `import.meta.env` at **build** time.
 - `createRoot()` discards `#root` children — load-bearing for prerender; do not casually switch to `hydrateRoot`.
@@ -143,6 +144,7 @@ refresh after identity ship.
 |---|---|---|
 | §3 pending forever on Mac | Shipped `4ef45867` 15 Sep | month of dead tools |
 | Prefix fix alone is safe | `/api/events` public until `#6` | live data leak window |
+| `/api/leads→401` means all methods | GET 401; POST 200 by design | almost doc-locked capture |
 | Events still open after 23:40 probe | Pre-roll; 401 by 23:43 | almost left docs wrong |
 | Bundle hash must move for auth ship | Bodies can change alone | wrong deploy signal |
 | Push = deployed | Must diff served hash | stranded commits under unpaid Railway |
@@ -160,5 +162,5 @@ Vishesh prioritized **fix conversion before more traffic**, and work that runs
 without a daily posting habit. §3 was the first instalment and is now live;
 measurement trust and the events auth hole are the immediate follow-through.
 
-Coordinate via `agents/STATE.md`. Historian owns honesty of that file and this
-handover; Integrator merges doc PRs.
+Coordinate via `agents/STATE.md`. Chief of Staff owns honesty of that file and this
+handover; Release Manager merges doc PRs.
