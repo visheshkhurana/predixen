@@ -1,4 +1,4 @@
-# Team State — updated 16 Sep 2026 ~00:41 GST by Release Manager
+# Team State — updated 16 Sep 2026 ~00:41 GST by Chief of Staff
 
 ## Staffing (ORG-22 · Phase 1 · 9 agents)
 **Active:** Chief of Staff · Reviewer · Release Manager · Analytics · Conversion Eng · SEO & AI Search · Reliability · QA Engineer · Finance Watcher  
@@ -8,9 +8,9 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11 | lead_captured: 0 (never seen)
 (Source: HANDOVER week of 13 Sep — Analytics must refresh **after** PostHog connector)
-GitHub tip: `3c2f1094` (#13 workflow_dispatch CI) after `#12` `9d559d17`.
+GitHub tip: `77410c22` (STATE/HANDOVER fold after `#13`/`#12`).
 **Auth locks CLOSED (evidence):** `/api/events` GET+POST → 401; `/admin/ai-governance` → 401; GET `/api/feedback` → 401; company forecasting → 401.
-**OPEN CRITICAL (CoS curl 16 Sep 00:32 GST, tip still `9c706b55`):** GET `/api/notifications/email-stats` → **200**, 98 rows, keys include `to`; GET `/api/integrations/available` → **200**; GET `/api/integrations/companies/1/status` → **200**; GET `/api/templates/` → **200**; POST `/api/templates/companies/1/apply/1` → **404** (not 401). “Created scenario 55” **not re-proven** this pass — do not treat as verified write.
+**OPEN CRITICAL (CoS curl 16 Sep 00:32 GST; still live after #12 docs/SEO):** GET `/api/notifications/email-stats` → **200**, 98 rows, keys include `to`; GET `/api/integrations/available` → **200**; GET `/api/integrations/companies/1/status` → **200**; GET `/api/templates/` → **200**; POST `/api/templates/companies/1/apply/1` → **404** (not 401). “Created scenario 55” **not re-proven** this pass — do not treat as verified write.
 
 ## Org map (phase 1)
 | Role | Agent | Status | Push to main? |
@@ -27,22 +27,22 @@ GitHub tip: `3c2f1094` (#13 workflow_dispatch CI) after `#12` `9d559d17`.
 Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1 + Core/Ops.
 
 ## In flight
-| Release Manager | SEO cross-links PR held for Gate 1 / after P0 auth | seo-prerender, sitemap | #12 | **SHIPPED** `9d559d17` — live Googlebot proof 20:39Z |
 | Agent | Item | Files claimed | PR | Status |
-| Reviewer | Blast-radius of #6/#10 + 16 Sep critical opens (templates/integrations/notifications) | — | — | **P0** |
-| Analytics | Prove devices≈sessions; verify lead_captured; add signup_completed | — | — | **blocked** — PostHog connector |
-| Conversion Eng | Rage-click replays → one conversion change | — | — | blocked on PostHog replay until connector |
-| SEO & AI Search | Ship SSR cross-links + contact pack; add /ai-cfo to sitemap | content-drafts/… | — | queued |
-| Reliability | Deploy-landed monitor (hash + body) | — | — | queued |
-| QA Engineer | GitHub Actions test CI on every PR | .github/workflows | — | needs Vishesh Actions minutes |
-| Finance Watcher | Spend register + Railway/LLM billing watch | — | — | starting |
-| Chief of Staff | Docs pack for RM: ORG-22 + CHARTER + STATE + DECISIONS.md + AUTONOMY.md | agents/* | via RM | stubs seeded; tip stays `9c706b55` until RM proves ship |
-| Release Manager | Throughput for docs + P0 auth locks once Reviewer clears | — | — | standing |
+| SEO & AI Search | Re-audit post #12 | — | — | **#12 live**; re-audit next |
+| Reliability | Deploy-landed monitor | server/services/deploy_landed.py | [#14](https://github.com/visheshkhurana/predixen/pull/14) | in review (control must 404) |
+| QA Engineer | Dispatch-only CI | .github/workflows/pr-checks.yml | [#13](https://github.com/visheshkhurana/predixen/pull/13) | Gate 1 PASS; with RM; still dispatch-only |
+| Reviewer | Remaining reachable-route sweep | — | — | P0 trio **human-hold** |
+| Analytics | devices≈sessions; lead_captured; signup_completed | — | — | **blocked** PostHog |
+| Conversion Eng | Rage-click replays → one change | — | — | blocked on replay connector |
+| Finance Watcher | Spend register | records | — | $ **UNKNOWN** |
+| Chief of Staff | DECISIONS.md + AUTONOMY.md follow-up | agents/ | later | stubs on shared box |
+| — | P0 auth lock trio | templates/integrations/notifications | none | **frozen** — Vishesh held |
 
 ## Blocked
 | Item | Blocked on | Since |
-| Analytics identity + replay | Vishesh authorizes PostHog connector (522965) | 15 Sep |
-| QA CI | Vishesh approves GitHub Actions minutes | 16 Sep |
+| P0 auth lock trio | **Vishesh held** | 16 Sep |
+| Analytics identity + replay | PostHog connector | 15 Sep |
+| QA CI auto-run | Vishesh Actions minutes | 16 Sep |
 | Money/ads restart | human only | standing |
 
 ## Shipped this week (evidence required)
@@ -61,14 +61,7 @@ sitemap ai-cfo=1
 /about hrefs=6 chars=1573
 /contact hrefs=9 chars=1195 meta=143
 health uptime≈94.3s; tip `9d559d17`; bundle index-eWXmctMP.js
-```
-
-
-### Pasteable evidence — #13 CI workflow (2026-09-16)
-```
-on main: .github/workflows/pr-checks.yml + scripts/tsc-error-budget.sh
-trigger: workflow_dispatch only (no pull_request/push/schedule)
-tip: 3c2f1094
+CoS recheck 00:40 GST Googlebot: sitemap loc=36 ai-cfo=1 privacy=0 terms=0; contact meta_len=143; same href pattern. Match. Git tip now `23520ef3`.
 ```
 
 ## Corrections — things we believed that were false

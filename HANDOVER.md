@@ -1,6 +1,6 @@
 # FounderConsole — Engineering Handover
 
-**Rewritten 15 September 2026; events lock re-verified ~23:43 GST by Chief of Staff (ex Historian).** Facts below were
+**Rewritten 15 September 2026; git tip + #12 re-verified 16 Sep ~00:41 GST by Chief of Staff.** Facts below were
 re-checked against the live site and `origin/main` on that timestamp. Inference
 is labeled as such.
 
@@ -20,29 +20,28 @@ is labeled as such.
 | Payments | Stripe, live mode |
 | Team memory | `HANDOVER.md` + `agents/STATE.md` + `agents/CHARTER.md` |
 
-Useful commit links (tip of `main` as of 23:54 GST):
+Useful commit links (tip of `main` as of 16 Sep 00:41 GST):
 
-- `ed91d54c` — docs: mark #10 shipped with live 401 evidence; refresh HANDOVER tip
-- `29b282e1` — Lock GET /api/feedback and company forecasting behind auth (#10)
-- `344ab340` — docs: sync HANDOVER and agents STATE (#8)
-- `65c7ca01` / `#7` — ai-governance callback fix
+- `77410c22 (#13 docs) ← 3c2f1094 (#13 CI) ← 23520ef3` — docs: mark #12 shipped with Googlebot SSR + sitemap evidence
+- `9d559d17` / `#12` — SEO: SSR cross-links + contact enrich + `/ai-cfo` sitemap
+- `d4b3bcb1` / `#11` — Phase 1 ORG-22 / CHARTER / STATE
+- `ed91d54c` — docs: mark #10 shipped with live 401 evidence
+- `29b282e1` / `#10` — lock GET /api/feedback and company forecasting
 - `26791cd7` / `#6` — events + ai-governance auth lock
-- `4ef45867` — conversion / identity / leads
 
 ---
 
 ## 2. Git / deploy state (verified)
 
 ```
-origin/main   ed91d54c  docs: mark #10 shipped with live 401 evidence; refresh HANDOVER tip
-              29b282e1  Lock GET /api/feedback and company forecasting behind auth (#10)
-              344ab340  docs: sync HANDOVER and agents STATE (#8)
-              ea19a61a  Mark auth lock shipped with live 401 evidence in STATE
-              65c7ca01  Fix ai-governance callback caught by platform-admin mount (#7)
-              26791cd7  Lock /api/events and /admin/ai-governance behind auth (#6)
+origin/main   23520ef3  docs: mark #12 shipped with Googlebot SSR + sitemap evidence
+              9d559d17  seo: SSR cross-links + contact enrich + /ai-cfo sitemap (#12)
+              74655640  docs: tip d4b3bcb1 — mark #11 shipped; hold #12 behind P0 auth
+              d4b3bcb1  docs: Phase 1 ORG-22 / CHARTER / STATE (#11)
+              9c706b55  docs: drop shipped SEO hygiene from parked queue
 ```
 
-**Production (curl 15 Sep 23:40 GST):**
+**Production (curl 16 Sep 00:40 GST, Googlebot UA):**
 
 - Served entry bundle: `index-eWXmctMP.js`
 - `/health` → healthy, `routers_loaded: true`, DB + Redis connected
@@ -89,7 +88,7 @@ POST both return **401**; `/admin/ai-governance` returns **401**. Bundle may sta
 ## 4. What is live right now
 
 - Conversion + identity client changes from `4ef45867` are in the served bundle.
-- Broad marketing SSR is live (see table above). Growth owns SEO follow-through; audit done SEO impact.
+- Broad marketing SSR is live. **#12 SEO pack is live** (CoS Googlebot 00:40 GST: sitemap 36 locs, `/ai-cfo`=1, privacy/terms=0; SSR cross-links on `/` `/pricing` `/contact`; contact meta 143). SEO next = re-audit.
 - **Geo gate is OFF** (fails open). Ad crawlers remain unblocked by design after the August AdsBot mistake.
 - Entry bundle ~888 KB class; stylesheet still large/render-blocking (not re-measured this pass).
 
@@ -117,14 +116,14 @@ refresh after identity ship.
 
 ## 6. Known open items (Chief of Staff ranking)
 
-1. **Reviewer sweep** of blast radius from `#6` and other Sep-reachable routes.
-2. ~~Lock `/api/events` (+ ai-governance)~~ — **done live** (`#6`/`#7`, 401 at 23:43 GST).
-3. **Analytics:** prove one visitor ≈ one identity (PostHog connector blocked).
-4. **Product:** rage-click replays; confirm `lead_captured` exists and fires.
-5. **Growth:** SEO hygiene + SSR cross-link packs with Release Manager.
-6. **Reliability:** deploy-landed monitor (served hash).
-7. Remaining product debt from older audits (silent logout, billing theme, dead routes, a11y, bundle size).
-8. Ads / money decisions stay with Vishesh.
+1. **P0 auth lock trio** (templates / integrations / notifications) — **Vishesh held**; no agent works it.
+2. ~~Lock `/api/events` (+ ai-governance)~~ — **done live** (`#6`/`#7`).
+3. ~~SEO SSR cross-links + `/ai-cfo` sitemap~~ — **#12 live** (`9d559d17`; CoS Googlebot recheck 00:40 GST).
+4. **Analytics:** prove one visitor ≈ one identity (PostHog connector blocked).
+5. **Conversion Eng:** rage-click replays; confirm `lead_captured` exists and fires.
+6. **Reliability:** deploy-landed monitor (#14 in review).
+7. **QA:** dispatch-only CI (#13 Gate 1 PASS; Actions minutes still Vishesh).
+8. Remaining product debt from older audits. Ads / money stay with Vishesh.
 
 ---
 
