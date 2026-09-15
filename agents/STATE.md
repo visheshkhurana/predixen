@@ -1,94 +1,55 @@
-# Team State — updated 15 Sep 2026 ~23:58 GST by Chief of Staff
+# Team State — updated 16 Sep 2026 ~00:30 GST by Bot (phase-1 spin-up)
 
-## Staffing (Bot, 15 Sep)
-**Active (4):** Release Manager · Reviewer (Gate 1) · Analytics · Chief of Staff  
-**Parked:** Product · Growth · Reliability (work queued; do not assign new in-flight without Bot)  
-**Blocked:** Analytics → PostHog connector until Vishesh authorizes  
+## Staffing (ORG-22 · Phase 1 · 9 agents)
+**Active:** Chief of Staff · Reviewer · Release Manager · Analytics · Conversion Eng · SEO & AI Search · Reliability · QA Engineer · Finance Watcher  
+**Phase 2 parked (do not spawn):** Product Lead · Engineering Lead · Growth Lead · App Engineer · Modeling & AI · Connectors · Lifecycle · User Research · Data Trust  
+**Phase 3 parked:** Content · Partnerships · Paid Acquisition · Support  
 
 ## Baseline (refresh weekly, cite the query)
-devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
-(Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-GitHub tip: `daae90bf`+ (CoS dropped shipped SEO row from parked).
-**Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
-Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
+devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11 | lead_captured: 0 (never seen)
+(Source: HANDOVER week of 13 Sep — Analytics must refresh **after** PostHog connector)
+GitHub tip: `9c706b55`
+**Auth locks CLOSED (evidence):** `/api/events` GET+POST → 401; `/admin/ai-governance` → 401; GET `/api/feedback` → 401; company forecasting → 401.
+**OPEN CRITICAL (16 Sep audit @ 9c706b55):** unauth `POST /api/templates/companies/*/apply/*` (created scenario 55); unauth `/api/integrations/*` connect/sync/status; unauth `GET /api/notifications/email-stats` (PII) + send endpoints.
 
-## Org (charter roles — renamed 15 Sep)
+## Org map (phase 1)
 | Role | Agent | Status | Push to main? |
-| Release Manager (ex Integrator) | Release Manager | **active** | YES — only |
-| Reviewer (Gate 1) | Reviewer | **active** | no |
-| Analytics (ex Instrument) | Analytics | **active / blocked** (PostHog) | no |
-| Chief of Staff (ex Historian) | Chief of Staff | **active** (records only) | no |
-| Product (ex Conversion) | Product | **parked** | no |
-| Growth (ex Discovery) | Growth | **parked** | no |
-| Reliability | Reliability | **parked** | no |
+| Chief of Staff | Chief of Staff | active (records) | no |
+| Reviewer (Gate 1) | Reviewer | active | no |
+| Release Manager (Gate 2) | Release Manager | active | YES — only |
+| Analytics | Analytics | active / blocked PostHog | no |
+| Conversion Eng (ex Product) | Conversion Eng | active | no |
+| SEO & AI Search (ex Growth) | SEO & AI Search | active | no |
+| Reliability | Reliability | active | no |
+| QA Engineer | QA Engineer | active (new) | no |
+| Finance Watcher | Finance Watcher | active (new, read-only) | no |
 
-Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + STATE.md.
+Coordination: this file + HANDOVER.md + ORG-22.md. Rooms: FounderConsole Phase 1 + Core/Ops.
 
-## In flight (active agents only)
+## In flight
 | Agent | Item | Files claimed | PR | Status |
-| Reviewer | Audit blast radius of #6/#10 newly reachable routes | — | after #6+#10 | due — locks live-proven |
-| Analytics | Prove devices≈sessions post identity fix | — | — | **blocked** — PostHog connector needs Vishesh |
-| Chief of Staff | Keep STATE/HANDOVER/Corrections honest | agents/STATE.md, HANDOVER.md | via RM | active |
-
-## Parked queues (do not expand without Bot)
-| Agent | Queued item | Notes |
-| Growth | SSR cross-links + contact pack | `content-drafts/ssr-crosslinks-contact-v1.md` ready |
-| Product | Rage-click replays; `lead_captured` proof | needs PostHog / session replay |
-| Reliability | Deploy-landed monitor (hash + body) | — |
-
-## Done this session (evidence)
-| Agent | Item | Evidence |
-| Growth (while active) | Post-SSR SEO audit | `/workspace/content-drafts/seo-audit-post-ssr.md` (~23:40 GST) |
-| Release Manager | Auth lock live | CoS 23:43 GST: events GET/POST 401; `/admin/ai-governance` 401 after `#6`/`#7` |
+| Reviewer | Blast-radius of #6/#10 + 16 Sep critical opens (templates/integrations/notifications) | — | — | **P0** |
+| Analytics | Prove devices≈sessions; verify lead_captured; add signup_completed | — | — | **blocked** — PostHog connector |
+| Conversion Eng | Rage-click replays → one conversion change | — | — | blocked on PostHog replay until connector |
+| SEO & AI Search | Ship SSR cross-links + contact pack; add /ai-cfo to sitemap | content-drafts/… | — | queued |
+| Reliability | Deploy-landed monitor (hash + body) | — | — | queued |
+| QA Engineer | GitHub Actions test CI on every PR | .github/workflows | — | needs Vishesh Actions minutes |
+| Finance Watcher | Spend register + Railway/LLM billing watch | — | — | starting |
+| Chief of Staff | Commit ORG-22 + CHARTER/STATE via RM; seed DECISIONS.md + AUTONOMY.md | agents/* | via RM | active |
+| Release Manager | Throughput for docs + P0 auth locks once Reviewer clears | — | — | standing |
 
 ## Blocked
 | Item | Blocked on | Since |
-| Analytics identity proof | Vishesh authorizes PostHog connector | 15 Sep |
+| Analytics identity + replay | Vishesh authorizes PostHog connector (522965) | 15 Sep |
+| QA CI | Vishesh approves GitHub Actions minutes | 16 Sep |
 | Money/ads restart | human only | standing |
 
 ## Shipped this week (evidence required)
-| Item | PR/commit | Verified by | Metric effect |
-| Section-3 conversion | `4ef45867` | CoS 23:40–23:45 GST: **GET** `/api/leads`→401; **POST** `/api/leads`→200; `/api/simulations/jobs`→401; slack POST-only live; bundle `index-eWXmctMP.js` | calculator capture; `lead_captured` still unproven |
-| Marketing SSR ×7 | `#5` `586dbbf8` + `cc2642c4` | CoS 23:40 GST ssr-content=1 on seven+ paths | SEO surface |
-| Auth lock `/api/events` + ai-governance | `#6` `26791cd7` (+ `#7` `65c7ca01`) | CoS 23:43 GST: events GET+POST **401**; `/admin/ai-governance` **401** | **CLOSED** — public events ID leak |
-| Team CHARTER + STATE on main | `f29f978b` | on origin/main | — |
-| Docs sync HANDOVER + STATE | `#8` `344ab340` | merged; staffing + GET/POST leads on main | records |
-| SEO sitemap noindex + strip shell JSON-LD | `#9` `08995787` (+ docs `b91d1f82`) | RM 19:57Z + CoS 23:57 GST: sitemap 35/privacy0/terms0; pricing WebPage only; privacy/terms ld=0 | crawl hygiene |
-| Feedback GET + company forecasting auth | `#10` `29b282e1` (+ docs `ed91d54c`) | CoS 23:53 GST recheck: GET `/api/feedback`→401; POST trend/forecast→401; POST feedback public per RM note | closes Reviewer-found holes |
-| CoS honesty pass (stale #8 rows + HANDOVER tip) | `3bdf080f` | on main; §2 tips `ed91d54c` | records |
-| Fold CoS STATE cleanup | `1d3b1b18` | on main | records |
-| Growth SEO queue marked shipped | `daae90bf` | on main | records |
-
-
-### Pasteable evidence — #10 feedback+forecast lock (2026-09-15T19:52:40Z)
-```
-GET  /api/feedback -> 401 {"detail":"Not authenticated"}
-POST /api/feedback -> 200 {"ok":true}   # public beta capture OK
-POST /api/forecasting/companies/1/trend -> 401
-POST /api/forecasting/companies/1/forecast -> 401
-GET  /api/leads -> 401 ; POST /api/leads -> 200
-GET  /api/events -> 401
-health uptime≈42.8s after roll; tip main `29b282e1`; bundle index-eWXmctMP.js
-```
-
-### Pasteable evidence — #9 SEO hygiene (2026-09-15T19:57:19Z)
-```
-sitemap.xml: privacy=0 terms=0 loc_count=35
-/pricing: 1 ld+json WebPage only; SoftwareApplication leak=false
-/privacy /terms: ld_count=0 (shell stripped)
-health uptime≈95.8s; tip `08995787`; bundle index-eWXmctMP.js
-```
-
+(see prior rows through #9/#10 — tip `9c706b55`)
 
 ## Corrections — things we believed that were false
 | Believed | Actually | Found by | Cost |
 | Pending §3 uncommitted forever | Shipped `4ef45867` 15 Sep | Bot/RM | month of dead tools |
-| `/api/leads` still 404 | GET 401 + POST public after ship | Ops/Bot; CoS | — |
-| `/api/leads→401` (shorthand) means all methods | **GET 401; POST 200** (capture by design) | Release Manager catch 15 Sep | almost locked the conversion endpoint in docs |
-| Blank marketing pages after prerender PRs | Live ssr-content on all 7 | Ops/Bot; CoS | — |
-| Prefix fix alone is safe | `/api/events` public until `#6` | Audit 15 Sep | live ID leak window |
-| Events still open at 23:40 GST forever | Pre-roll of `#6`; live 401 at 23:43 GST | Bot + CoS | almost left STATE saying open |
-| Merged = shipped | Must prove live 401 / changed body | RM 15 Sep | almost claimed early |
+| Prefix fix alone is safe | `/api/events` public until #6 | Audit 15 Sep | live ID leak window |
+| Auth locks closed everything | templates/integrations/notifications still open | Audit 16 Sep | live PII + company writes |
 | Bundle hash must change for backend/SSR | Auth/SSR can land with same `index-*.js` | Bot 15 Sep | wrong deploy signal |
-| Deploy = push | Must wait for new process / probe | HANDOVER §8 | stranded commits |
-| Display path = Final URL (Ads) | Cosmetic only | HANDOVER §8 | wrong diagnoses ×2 |
