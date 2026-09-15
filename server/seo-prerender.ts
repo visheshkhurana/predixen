@@ -56,6 +56,8 @@ function buildLandingBodyContent(): string {
 </ul>
 <h2>Frequently Asked Questions</h2>
 ${faqHtml}
+<h2>Try a free tool first</h2>
+<p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
 </article>`;
 }
 
@@ -114,6 +116,8 @@ function buildRunwayCalculatorBodyContent(): string {
 <h3>When to Start Fundraising Based on Runway</h3>
 <p>Most venture capital firms recommend starting your fundraise when you have 9 to 12 months of runway remaining. This gives you enough time to run a proper process without the desperation that comes from having only 3 months of cash left.</p>
 <p>FounderConsole connects to your actual financial data sources and runs Monte Carlo simulations to show you probabilistic runway projections with P10/P50/P90 confidence bands.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/default-alive">default alive or default dead</a> test and the <a href="/survival-simulator">startup survival simulator</a> — both free, no account required. Explore <a href="/features">features</a> when you want the full product. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
 </article>`;
 }
 
@@ -126,11 +130,17 @@ function buildPricingBodyContent(): string {
 <h1>Pricing</h1>
 <p>Every FounderConsole feature is free during the public beta. No credit card is required to start, and there is no trial clock running in the background.</p>
 <h2>What is included</h2>
-<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 37 data connectors.</p>
+<p>Monte Carlo simulation with P10/P50/P90 confidence bands, the AI copilot, Truth Scan data validation, cap table and dilution modelling, the fundraising CRM, board deck generation, and all 37 data connectors. See the full list on <a href="/features">features</a>.</p>
 <h2>What happens after the beta</h2>
 <p>Paid tiers will be introduced once the beta ends. Anyone using FounderConsole during the beta keeps access to their data and will be told well before anything changes.</p>
 <h2>Free tools that need no account at all</h2>
-<p>The runway calculator and the default alive test are open to anyone, with no signup and no email required to see your result.</p>
+<p>Try these before you sign up — results in under a minute, no email required to see the answer:</p>
+<ul>
+<li><a href="/tools/runway-calculator">Startup runway calculator</a> — months of runway and a cash-out date from your numbers</li>
+<li><a href="/default-alive">Default alive or default dead</a> — Paul Graham's test as a calculator</li>
+<li><a href="/survival-simulator">Startup survival simulator</a> — 1,000 Monte Carlo runs for survival probability</li>
+</ul>
+<p>When you're ready for live connectors and ongoing forecasts, <a href="/auth">get started free</a> — still no credit card during beta.</p>
 </article>`;
 }
 
@@ -238,7 +248,8 @@ function buildAboutBodyContent(): string {
 <li><strong>Privacy-First</strong> — Your financial data is encrypted at rest and in transit. Read-only integrations. No data resale. Ever.</li>
 </ul>
 <h2>Join us on our mission</h2>
-<p>We're building the financial intelligence layer for the next generation of startups. <a href="/contact">Get in touch</a> or <a href="/auth">get started free</a>.</p>
+<p>We're building the financial intelligence layer for the next generation of startups.</p>
+<p>Try a free tool with no signup: <a href="/tools/runway-calculator">runway calculator</a>, <a href="/default-alive">default alive test</a>, or <a href="/survival-simulator">survival simulator</a>. Browse <a href="/features">features</a>, <a href="/contact">get in touch</a>, or <a href="/auth">get started free</a>.</p>
 </article>`;
 }
 
@@ -315,15 +326,24 @@ function buildFaqJsonLd(): object {
 function buildContactBodyContent(): string {
   return `<article>
 <h1>Get in Touch</h1>
-<p>Questions, feedback, or partnership inquiries — we'd love to hear from you.</p>
+<p>Questions, feedback, or partnership inquiries — we'd love to hear from you. Whether you need product help, want to talk sales, or are exploring a partnership, the FounderConsole team reads every message.</p>
 <h2>Send us a message</h2>
-<p>Use the contact form on this page for general inquiries, sales, support, or partnership conversations. We respond within 24 hours.</p>
+<p>Use the contact form on this page. Choose a subject so we can route you correctly:</p>
+<ul>
+<li><strong>General Inquiry</strong> — product questions, feedback, or anything that does not fit the other buckets</li>
+<li><strong>Sales</strong> — pricing after beta, team plans, or enterprise options</li>
+<li><strong>Support</strong> — account help, data connectors, or troubleshooting</li>
+<li><strong>Partnership</strong> — integrations, co-marketing, or other collaborations</li>
+</ul>
+<p>Include your name, work email, and a short note so we know how to help. We respond within 24 hours.</p>
 <h2>Contact info</h2>
 <ul>
 <li><strong>Email</strong> — <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a></li>
 <li><strong>Response time</strong> — Within 24 hours</li>
 </ul>
-<p>Prefer to try the product first? <a href="/auth">Get started free</a>, explore the <a href="/demo">interactive demo</a>, or run the <a href="/tools/runway-calculator">runway calculator</a> with no account.</p>
+<p>Prefer email? Write <a href="mailto:hello@founderconsole.ai">hello@founderconsole.ai</a> directly and use the same subjects above in your subject line.</p>
+<h2>Prefer to explore first?</h2>
+<p>Try free tools with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/default-alive">default alive test</a>, or the <a href="/survival-simulator">startup survival simulator</a>. See what is included on <a href="/features">features</a> and <a href="/pricing">pricing</a>, or walk through the <a href="/demo">interactive demo</a>. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
 </article>`;
 }
 
@@ -519,7 +539,7 @@ function getPageMeta(path: string): PageMeta | null {
   if (path === "/contact") {
     return {
       title: "Contact | FounderConsole",
-      description: "Get in touch with the FounderConsole team.",
+      description: "Contact FounderConsole at hello@founderconsole.ai for general inquiries, sales, support, or partnerships. We typically respond within 24 hours.",
       canonical: SITE_URL + "/contact",
       bodyContent: buildContactBodyContent(),
       jsonLd: [{
@@ -527,7 +547,7 @@ function getPageMeta(path: string): PageMeta | null {
         "@type": "ContactPage",
         name: "Contact FounderConsole",
         url: SITE_URL + "/contact",
-        description: "Get in touch with the FounderConsole team. We respond within 24 hours.",
+        description: "Contact FounderConsole at hello@founderconsole.ai for general inquiries, sales, support, or partnerships. We typically respond within 24 hours.",
       }],
     };
   }
@@ -700,6 +720,8 @@ function getPageMeta(path: string): PageMeta | null {
 <p>If you come out default dead, there are only three things that change the answer: cut expenses, grow faster, or raise more. The calculator shows how far each one would have to move on your specific numbers — how large a cut, what growth rate, and how much cash.</p>
 <h2>Why a single projection is not enough</h2>
 <p>This calculator holds one growth rate steady. Real revenue is lumpy, and the month your biggest customer churns is not the average month. FounderConsole runs the same question thousands of times over your actual financials and returns the odds rather than one line.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/survival-simulator">startup survival simulator</a> — both free, no account required. See <a href="/features">features</a> for the full platform. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
 </article>`,
       jsonLd: [
         {
