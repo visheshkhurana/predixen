@@ -1,0 +1,86 @@
+# Release Manager check suite + pytest, against the checkout — never production.
+#
+# Trigger is workflow_dispatch ONLY. Vishesh has not approved paid GitHub
+# Actions minutes; pull_request / push / schedule would burn minutes on every
+# PR and must not be added in this file (not even in a form that still fires).
+# After he approves, a follow-up PR will add `pull_request`.
+#
+# Out of scope (they hit live founderconsole.ai / Railway):
+#   scripts/launch_gate.sh, Playwright journeys, Google signup, lead capture.
+#
+# Do not wire RAILWAY_DATABASE_URL or any backup secret. Postgres-backed
+# pytest cases already skip when no local DB is reachable.
+name: pr-checks
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node build, tsc budget, TS tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Measured on this branch at 9c706b55 with:
+      #   npm run check -- --pretty false --incremental false
+      #   grep -cE ': error TS[0-9]+'
+      # Result: 82. That is also the historical Release Manager note in
+      # agents/ORG-22.md ("82 errors counts as a pass") — a snapshot of main,
+      # not a forever target. Fail only if the count rises. Prefer 0; if it
+      # drops, lower this number.
+      TSC_ERROR_BUDGET: "82"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Typecheck (must not exceed error budget)
+        run: bash scripts/tsc-error-budget.sh
+
+      - name: geoRestrict tests
+        run: npx tsx --test server/tests/geoRestrict.test.ts
+
+      - name: analytics-single-identity tests
+        run: npx tsx server/tests/analytics-single-identity.test.ts
+
+      - name: auth-critical-routes tests
+        run: npx tsx server/tests/auth-critical-routes.test.ts
+
+      - name: Production build
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: prerender coverage
+        run: npx tsx server/tests/prerender-coverage.test.ts
+
+  python:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv (Python 3.11)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --no-dev --no-install-project
+
+      - name: Run pytest
+        run: uv run --no-sync pytest -ra
