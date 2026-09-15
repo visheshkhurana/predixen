@@ -11,7 +11,8 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
-  "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools"];
+  "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
+  "/features", "/about", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
 
 function textOf(html: string): string {
