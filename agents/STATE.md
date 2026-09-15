@@ -1,4 +1,4 @@
-# Team State — updated 15 Sep 2026 ~23:53 GST by Release Manager
+# Team State — updated 15 Sep 2026 ~23:54 GST by Chief of Staff (refreshed origin + verified #10)
 
 ## Staffing (Bot, 15 Sep)
 **Active (4):** Release Manager · Reviewer (Gate 1) · Analytics · Chief of Staff  
@@ -8,7 +8,7 @@
 ## Baseline (refresh weekly, cite the query)
 devices/week: 31 | sessions/week: 48 | signup_view: 23 | calculator_used: 11
 (Source: HANDOVER week of 13 Sep — Analytics must refresh post single-identity ship **after** connector)
-Last verified deploy: GitHub tip `29b282e1` (#10) after `#8` `344ab340`. Auth locks live-proven (events + governance + feedback GET + company forecasting).
+GitHub tip: `ed91d54c` (docs after `#10` `29b282e1`). Auth locks live-proven: events, governance, feedback GET, company forecasting (CoS recheck 23:53 GST).
 **Auth lock CLOSED (evidence):** 23:43–23:45 GST — `/api/events` GET+POST → **401**; `/admin/ai-governance` → **401**.  
 Also: **GET** `/api/leads` → **401**; **POST** `/api/leads` → **200** (public capture). Bundle still `index-eWXmctMP.js` — cite response bodies for auth/SSR ships.
 
@@ -26,10 +26,9 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 
 ## In flight (active agents only)
 | Agent | Item | Files claimed | PR | Status |
-| Reviewer | Audit blast radius of #6 / newly reachable routes | — | after #6 | due — auth lock live-proven |
-| Reviewer | Gate 1 on docs PR | HANDOVER + STATE | [#8](https://github.com/visheshkhurana/predixen/pull/8) | **PASS** (nit: §2 tip log — CoS fixed on shared box) |
-| Release Manager | Docs PR #8 | HANDOVER.md, agents/STATE.md | [#8](https://github.com/visheshkhurana/predixen/pull/8) | Gate 1 **PASS** — merge when ready; optional follow-up: §2 tip log + staffing cut from shared box |
+| Reviewer | Audit blast radius of #6/#10 newly reachable routes | — | after #6+#10 | due — locks live-proven |
 | Analytics | Prove devices≈sessions post identity fix | — | — | **blocked** — PostHog connector needs Vishesh |
+| Release Manager | HANDOVER tip still lags actual tip (`ed91d54c`) in §2 block | HANDOVER.md | — | tip links partially refreshed; §2 still shows `344ab340` |
 | Chief of Staff | Keep STATE/HANDOVER/Corrections honest | agents/STATE.md, HANDOVER.md | via RM | active |
 
 ## Parked queues (do not expand without Bot)
@@ -54,7 +53,9 @@ Coordination: this file + HANDOVER.md. Prefer FounderConsole Core / Ops rooms + 
 | Section-3 conversion | `4ef45867` | CoS 23:40–23:45 GST: **GET** `/api/leads`→401; **POST** `/api/leads`→200; `/api/simulations/jobs`→401; slack POST-only live; bundle `index-eWXmctMP.js` | calculator capture; `lead_captured` still unproven |
 | Marketing SSR ×7 | `#5` `586dbbf8` + `cc2642c4` | CoS 23:40 GST ssr-content=1 on seven+ paths | SEO surface |
 | Auth lock `/api/events` + ai-governance | `#6` `26791cd7` (+ `#7` `65c7ca01`) | CoS 23:43 GST: events GET+POST **401**; `/admin/ai-governance` **401** | **CLOSED** — public events ID leak |
-| Team CHARTER + STATE on main | `f29f978b` | on origin/main | refresh via #8 |
+| Team CHARTER + STATE on main | `f29f978b` | on origin/main | — |
+| Docs sync HANDOVER + STATE | `#8` `344ab340` | merged; staffing + GET/POST leads on main | records |
+| Feedback GET + company forecasting auth | `#10` `29b282e1` (+ docs `ed91d54c`) | CoS 23:53 GST recheck: GET `/api/feedback`→401; POST trend/forecast→401; POST feedback public per RM note | closes Reviewer-found holes |
 
 
 ### Pasteable evidence — #10 feedback+forecast lock (2026-09-15T19:52:40Z)
