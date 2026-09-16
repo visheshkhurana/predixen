@@ -261,6 +261,25 @@ function buildProductBodyContent(): string {
 </article>`;
 }
 
+function buildHowItWorksBodyContent(): string {
+  return `<article>
+<h1>How FounderConsole works</h1>
+<p>FounderConsole turns connected financial data into a range you can defend. This page walks through the product in the order it actually runs: connect or upload data, validate with Truth Scan, simulate with Monte Carlo P10/P50/P90, ask the AI copilot, then use fundraising tools. It is a capability walkthrough — not a timeline, a success rate, or a customer story.</p>
+<h2>1. Connect or upload data</h2>
+<p>Link the tools founders already use, or upload a CSV. FounderConsole has 37 data connectors, including QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid. You can also start without connecting anything: try the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a> with no account.</p>
+<h2>2. Truth Scan validation</h2>
+<p>Truth Scan is multi-stage data validation. It catches errors, inconsistencies, and anomalies before numbers reach a board deck. Z-score anomaly detection flags outliers, and confidence scoring quantifies how reliable each metric is. Automated reconciliation between accounting and bank feeds is part of the same validation path.</p>
+<h2>3. Monte Carlo simulation (P10/P50/P90)</h2>
+<p>The simulation engine runs thousands of Monte Carlo iterations so runway is a distribution, not a single spreadsheet cash-out date. P10/P50/P90 confidence bands make the range visible. Side-by-side scenarios let you test hiring plans, pricing, fundraising timing, and growth assumptions before you commit. The deeper catalog is on <a href="/features">features</a>; jobs this maps to are on <a href="/use-cases">use cases</a>.</p>
+<h2>4. AI copilot and decisions</h2>
+<p>A multi-LLM copilot answers strategic questions in plain English, grounded in your connected financials. Simulation results become narrative briefings and ranked recommendations (GO / CONDITIONAL / NO-GO). Every answer shows its reasoning, assumptions, and data sources — so you can defend the decision, not just the chart.</p>
+<h2>5. Fundraising tools</h2>
+<p>Fundraising OS covers cap table management, SAFE and convertible note conversion modeling, dilution modeling, and an investor room with secure document sharing. Use these after you have a range from the simulation — not instead of it. The product overview is on <a href="/product">product</a>.</p>
+<h2>Evaluate the product, not a timeline</h2>
+<p>Read the <a href="/product">product</a> overview, the <a href="/features">features</a> catalog, <a href="/use-cases">use cases</a>, and <a href="/pricing">pricing</a> (every feature is free during early access). When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function buildUseCasesBodyContent(): string {
   return `<article>
 <h1>FounderConsole use cases — runway, hiring, fundraising, and board readiness</h1>
@@ -654,6 +673,23 @@ function getPageMeta(path: string): PageMeta | null {
         name: "FounderConsole Product",
         description: "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
         url: SITE_URL + "/product",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
+    };
+  }
+
+  if (path === "/how-it-works") {
+    return {
+      title: "How FounderConsole Works — Connect, Validate, Simulate, Decide",
+      description: "How FounderConsole works: connect or upload data, Truth Scan validation, Monte Carlo P10/P50/P90 simulation, AI copilot decisions, and fundraising tools. A capability walkthrough — no invented timings or case studies.",
+      canonical: SITE_URL + "/how-it-works",
+      bodyContent: buildHowItWorksBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "How FounderConsole Works — Connect, Validate, Simulate, Decide",
+        description: "How FounderConsole works: connect or upload data, Truth Scan validation, Monte Carlo P10/P50/P90 simulation, AI copilot decisions, and fundraising tools.",
+        url: SITE_URL + "/how-it-works",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };
