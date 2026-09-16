@@ -241,6 +241,24 @@ function buildFeaturesBodyContent(): string {
 </article>`;
 }
 
+function buildCompareBodyContent(): string {
+  return `<article>
+<h1>Compare FounderConsole to startup FP&amp;A and runway tools</h1>
+<p>Founders comparing startup financial-planning and runway tools usually want a range they can defend, not a single spreadsheet date. This page states what FounderConsole already ships — Monte Carlo P10/P50/P90 bands, an AI copilot, and free tools that need no account — and points to the longer comparison we published.</p>
+<h2>What FounderConsole is built to do</h2>
+<p>FounderConsole is an AI-powered financial intelligence platform for startup founders. Connect your data (or upload a CSV), run Monte Carlo simulations, and ask the copilot questions against your own numbers.</p>
+<ul>
+<li><strong>Monte Carlo with P10/P50/P90</strong> — thousands of runs produce a runway distribution instead of one cash-out date.</li>
+<li><strong>AI copilot</strong> — strategic questions in plain English, grounded in your connected financials, with reasoning you can show a board.</li>
+<li><strong>Free tools</strong> — runway, default-alive, and survival calculators you can use without signing up.</li>
+</ul>
+<h2>The comparison we already published</h2>
+<p>Read <a href="/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal">FounderConsole vs Sturppy vs Finmark vs Causal</a> for the sourced product-status notes. As of August 2026, Finmark has been sunset and Causal has been absorbed into an enterprise suite.</p>
+<h2>Related free tools</h2>
+<p>Try these with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>. See the full product on <a href="/features">features</a>. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function buildAboutBodyContent(): string {
   return `<article>
 <h1>Built by Founders, for Founders</h1>
@@ -565,6 +583,23 @@ function getPageMeta(path: string): PageMeta | null {
         url: SITE_URL,
         logo: OG_IMAGE,
         description: "AI-powered financial intelligence platform for startups built by founders who lived the uncertainty.",
+      }],
+    };
+  }
+
+  if (path === "/compare") {
+    return {
+      title: "Compare FounderConsole to Startup FP&A and Runway Tools",
+      description: "See how FounderConsole compares to startup FP&A and runway tools: Monte Carlo P10/P50/P90 forecasts, an AI copilot, and free tools — plus the Finmark sunset and Causal absorption notes we already published.",
+      canonical: SITE_URL + "/compare",
+      bodyContent: buildCompareBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Compare FounderConsole to Startup FP&A and Runway Tools",
+        description: "How FounderConsole compares to startup FP&A and runway tools: Monte Carlo P10/P50/P90, AI copilot, and free tools.",
+        url: SITE_URL + "/compare",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };
   }
