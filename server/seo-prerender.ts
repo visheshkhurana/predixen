@@ -444,6 +444,12 @@ function buildIndustryBodyContent(slug: string): string | null {
     relatedTools.length <= 2
       ? relatedTools.join(" and the ")
       : `${relatedTools.slice(0, -1).join(", the ")}, and the ${relatedTools[relatedTools.length - 1]}`;
+  // Sibling hrefs come from the typed array at runtime so a new IndustryProfile
+  // cannot appear on one page and be missing from the others. Do not list slugs
+  // here — RUNWAY_INDUSTRIES is the source of truth.
+  const siblings = RUNWAY_INDUSTRIES.filter((i) => i.slug !== ind.slug)
+    .map((i) => `<li><a href="/runway/${esc(i.slug)}">${esc(i.shortName)}</a></li>`)
+    .join("");
   return `<article>
 <h1>${esc(ind.name)}</h1>
 <p>Calculate runway against real ${esc(ind.shortName.toLowerCase())} benchmarks. The relevant benchmark here is ${esc(ind.benchmarkRunway)}.</p>
@@ -459,6 +465,8 @@ function buildIndustryBodyContent(slug: string): string | null {
 <ul>${risks}</ul>
 <h2>Related free tools</h2>
 <p>Also try the ${relatedList} — all free, no account required. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
+<h2>Other industry runway calculators</h2>
+<ul>${siblings}</ul>
 </article>`;
 }
 
@@ -629,6 +637,18 @@ function getPageMeta(path: string): PageMeta | null {
       description: `Free ${ind.shortName} startup runway calculator with industry benchmarks. ${ind.benchmarkRunway}. Run a Monte Carlo simulation tuned to ${ind.shortName} economics.`,
       canonical: `${SITE_URL}/runway/${ind.slug}`,
       bodyContent: buildIndustryBodyContent(ind.slug) || undefined,
+      // Reachable handler. A later /runway/:slug block used to emit this
+      // WebApplication graph, but it sat after this early return so live
+      // pages shipped ld_count=0. Name and url come from IndustryProfile only.
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: ind.name,
+        url: `${SITE_URL}/runway/${ind.slug}`,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }],
     };
   }
 
@@ -663,39 +683,6 @@ function getPageMeta(path: string): PageMeta | null {
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       }],
     };
-  }
-
-  const runwayIndustryMatch = path.match(/^\/runway\/([a-z0-9-]+)$/);
-  if (runwayIndustryMatch) {
-    const slug = runwayIndustryMatch[1];
-    const known = ["saas","ecommerce","fintech","marketplace","ai","hardware","biotech","devtools"];
-    if (known.includes(slug)) {
-      const titleMap: Record<string,string> = {
-        saas: "SaaS Startup Runway Calculator",
-        ecommerce: "Ecommerce Startup Runway Calculator",
-        fintech: "Fintech Startup Runway Calculator",
-        marketplace: "Marketplace Startup Runway Calculator",
-        ai: "AI Startup Runway Calculator",
-        hardware: "Hardware Startup Runway Calculator",
-        biotech: "Biotech Startup Runway Calculator",
-        devtools: "Developer Tools Startup Runway Calculator",
-      };
-      const title = titleMap[slug];
-      return {
-        title: `${title} | FounderConsole`,
-        description: `Free ${slug} startup runway calculator with industry benchmarks, Monte Carlo simulation, and AI-powered recommendations tuned for ${slug} economics.`,
-        canonical: `${SITE_URL}/runway/${slug}`,
-        jsonLd: [{
-          "@context": "https://schema.org",
-          "@type": "WebApplication",
-          name: title,
-          url: `${SITE_URL}/runway/${slug}`,
-          applicationCategory: "BusinessApplication",
-          operatingSystem: "Web",
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-        }],
-      };
-    }
   }
 
   if (path === "/embed/survival") {

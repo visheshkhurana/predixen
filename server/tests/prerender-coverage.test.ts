@@ -1,6 +1,10 @@
 // Proves the prerenderer emits visible text INSIDE #root for every path that
 // was blank before, and that it did not regress the ones that already worked.
 import { injectSEO } from "../seo-prerender";
+import {
+  RUNWAY_INDUSTRIES,
+  RUNWAY_RELATED_FREE_TOOLS,
+} from "../../client/src/data/runway-industries";
 
 // The real built shell, not a hand-written stub. injectSEO REPLACES the
 // canonical and robots tags rather than inserting them, so a minimal shell
@@ -44,6 +48,31 @@ const bogus = injectSEO(SHELL, "/runway/definitely-not-a-vertical");
 const noindex = bogus.includes('content="noindex, follow"');
 console.log(`${noindex ? "PASS" : "FAIL"}  /runway/<unknown> -> noindex=${noindex}`);
 if (!noindex) failures++;
+
+// E10.2: each industry page links the other seven from RUNWAY_INDUSTRIES and
+// the reachable handler emits WebApplication JSON-LD (the dead titleMap block
+// never did). E10.1 starting-inputs + free-tool hrefs must still be present.
+const RUNWAY_PATHS = WAS_BLANK.filter((p) => p.startsWith("/runway/"));
+for (const path of RUNWAY_PATHS) {
+  const slug = path.slice("/runway/".length);
+  const out = injectSEO(SHELL, path);
+  const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
+  const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+    .map((m) => JSON.parse(m[1]));
+  const app = ld.find((b) => b["@type"] === "WebApplication");
+  const ind = RUNWAY_INDUSTRIES.find((i) => i.slug === slug);
+  const siblingOk = RUNWAY_INDUSTRIES
+    .filter((i) => i.slug !== slug)
+    .every((i) => body.includes(`href="/runway/${i.slug}"`));
+  const toolsOk = RUNWAY_RELATED_FREE_TOOLS.every((t) => body.includes(`href="${t.href}"`));
+  const jsonOk = !!app && app.name === ind?.name && app.url === `https://founderconsole.ai/runway/${slug}`;
+  const e101 = body.includes("Typical starting inputs") && toolsOk;
+  const ok = siblingOk && jsonOk && e101 && body.includes("Other industry runway calculators");
+  if (!ok) failures++;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  ${path.padEnd(26)} siblings=${siblingOk}  jsonLd=${jsonOk}  e10.1=${e101}`,
+  );
+}
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
