@@ -30,6 +30,7 @@ const footerProduct = [
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
   { label: "Demo", href: "/demo" },
+  { label: "Get started", href: "/signup" },
   { label: "Runway Calculator", href: "/tools/runway-calculator" },
   { label: "Survival Simulator", href: "/survival-simulator" },
 ];

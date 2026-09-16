@@ -360,6 +360,18 @@ function buildAlternativesBodyContent(): string {
 </article>`;
 }
 
+function buildSignupBodyContent(): string {
+  return `<article>
+<h1>Get started with FounderConsole</h1>
+<p>This is the create-account page. Create a free FounderConsole account when you want live connectors and ongoing runway forecasts. During early access every feature is free, and no credit card is required — the same terms already on <a href="/pricing">pricing</a>.</p>
+<h2>Create a free account</h2>
+<p>Sign up to connect your data (or upload a CSV), run Monte Carlo simulations with P10/P50/P90 bands, and ask the copilot against your own numbers. Read the <a href="/product">product</a> overview and the <a href="/features">features</a> catalog if you want more detail first.</p>
+<p><a href="/auth?tab=register">Create a free account</a> — no credit card during early access.</p>
+<h2>Prefer a free tool first</h2>
+<p>No account required. Try the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>.</p>
+</article>`;
+}
+
 function buildAboutBodyContent(): string {
   return `<article>
 <h1>Built by Founders, for Founders</h1>
@@ -785,6 +797,23 @@ function getPageMeta(path: string): PageMeta | null {
         name: "Startup FP&A Alternatives — After Finmark and Causal | FounderConsole",
         description: "Looking for a Finmark or Causal alternative? BILL sunset Finmark; Causal joined Lucanet. Summarizes the FP&A consolidation we already published and what FounderConsole ships.",
         url: SITE_URL + "/alternatives",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
+    };
+  }
+
+  if (path === "/signup") {
+    return {
+      title: "Get Started — Create a Free FounderConsole Account",
+      description: "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. Every feature is free during early access — no credit card required. Prefer a quick answer first? Try the free tools with no account.",
+      canonical: SITE_URL + "/signup",
+      bodyContent: buildSignupBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Get Started — Create a Free FounderConsole Account",
+        description: "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. Every feature is free during early access — no credit card required.",
+        url: SITE_URL + "/signup",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };

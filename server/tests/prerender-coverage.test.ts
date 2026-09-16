@@ -16,7 +16,7 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
   "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
-  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
+  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
 
 function textOf(html: string): string {
@@ -260,6 +260,34 @@ for (const path of RUNWAY_PATHS) {
   if (!alternativesOk) failures++;
   console.log(
     `${alternativesOk ? "PASS" : "FAIL"}  ${"/alternatives".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
+  );
+}
+
+// /signup was a blank SPA shell (empty #ssr-content) because the route
+// redirected to /auth?tab=register. Body must be non-empty and keep the
+// register funnel plus product / free-tool hrefs.
+{
+  const out = injectSEO(SHELL, "/signup");
+  const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
+  const txt = textOf(out);
+  const hrefs = [
+    "/auth?tab=register",
+    "/product",
+    "/features",
+    "/pricing",
+    "/tools/runway-calculator",
+    "/survival-simulator",
+    "/default-alive",
+  ];
+  const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
+  const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+    .map((m) => JSON.parse(m[1]));
+  const page = ld.find((b) => b["@type"] === "WebPage");
+  const jsonOk = !!page && page.url === "https://founderconsole.ai/signup";
+  const signupOk = txt.length > 200 && hrefsOk && jsonOk && body.includes("<h1>");
+  if (!signupOk) failures++;
+  console.log(
+    `${signupOk ? "PASS" : "FAIL"}  ${"/signup".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
   );
 }
 

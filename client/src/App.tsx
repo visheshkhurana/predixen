@@ -132,6 +132,7 @@ const CustomersPage = lazy(() => import("@/pages/customers"));
 const UseCasesPage = lazy(() => import("@/pages/use-cases"));
 const HowItWorksPage = lazy(() => import("@/pages/how-it-works"));
 const AlternativesPage = lazy(() => import("@/pages/alternatives"));
+const SignupPage = lazy(() => import("@/pages/signup"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
@@ -322,6 +323,7 @@ function Router() {
         <Route path="/use-cases">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><UseCasesPage /></Suspense>}</Route>
         <Route path="/how-it-works">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><HowItWorksPage /></Suspense>}</Route>
         <Route path="/alternatives">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AlternativesPage /></Suspense>}</Route>
+        <Route path="/signup">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><SignupPage /></Suspense>}</Route>
         <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
         <Route path="/blog/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
@@ -338,15 +340,11 @@ function Router() {
         <Route path="/verify-email" component={VerifyEmailPage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
-      {/* /login means login. The other three mean "I want an account" — they
-          used to drop the query string and land people on the login tab, so
-          anyone typing founderconsole.ai/signup or following an old link was
-          shown the wrong form. */}
+      {/* /login means login. /register and /join still land on the register
+          tab so old links do not drop people on the login form. /signup is a
+          public get-started page; its primary CTA goes to /auth?tab=register. */}
       <Route path="/login">
         {() => <Redirect to="/auth" />}
-      </Route>
-      <Route path="/signup">
-        {() => <Redirect to="/auth?tab=register" />}
       </Route>
       <Route path="/register">
         {() => <Redirect to="/auth?tab=register" />}
