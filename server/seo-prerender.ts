@@ -103,6 +103,12 @@ function buildBlogPostBodyContent(slug: string): string | null {
 }
 
 function buildRunwayCalculatorBodyContent(): string {
+  // Industry hrefs come from the typed array at runtime so the hub cannot
+  // drift from runway-industries.ts. Do not list slugs here — same rule as
+  // E10.2 siblings on the vertical pages.
+  const industryLinks = RUNWAY_INDUSTRIES.map(
+    (i) => `<li><a href="/runway/${esc(i.slug)}">${esc(i.shortName)}</a></li>`,
+  ).join("");
   return `<article>
 <h1>Startup Runway Calculator</h1>
 <p>Enter your financials to instantly see how many months of runway you have, when you'll run out of cash, and how growth affects your timeline.</p>
@@ -118,6 +124,8 @@ function buildRunwayCalculatorBodyContent(): string {
 <p>FounderConsole connects to your actual financial data sources and runs Monte Carlo simulations to show you probabilistic runway projections with P10/P50/P90 confidence bands.</p>
 <h2>Related free tools</h2>
 <p>Also try the <a href="/default-alive">default alive or default dead</a> test and the <a href="/survival-simulator">startup survival simulator</a> — both free, no account required. Explore <a href="/features">features</a> when you want the full product. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
+<h2>Industry runway calculators</h2>
+<ul>${industryLinks}</ul>
 </article>`;
 }
 
@@ -640,6 +648,8 @@ function getPageMeta(path: string): PageMeta | null {
       // Reachable handler. A later /runway/:slug block used to emit this
       // WebApplication graph, but it sat after this early return so live
       // pages shipped ld_count=0. Name and url come from IndustryProfile only.
+      // BreadcrumbList sits alongside it: Home → hub → this vertical, with
+      // the last name/url from the typed profile and every URL via SITE_URL.
       jsonLd: [{
         "@context": "https://schema.org",
         "@type": "WebApplication",
@@ -648,6 +658,14 @@ function getPageMeta(path: string): PageMeta | null {
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
+          { "@type": "ListItem", position: 3, name: ind.name, item: `${SITE_URL}/runway/${ind.slug}` },
+        ],
       }],
     };
   }

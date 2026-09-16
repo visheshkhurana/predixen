@@ -1,4 +1,6 @@
 // E10.2: sibling /runway links + reachable WebApplication JSON-LD.
+// E10.3: hub /tools/runway-calculator lists every RUNWAY_INDUSTRIES slug;
+// vertical pages also emit BreadcrumbList alongside WebApplication.
 //
 // The early path.startsWith("/runway/") handler used to return without jsonLd
 // (live ld_count=0). A later block hardcoded known=["saas",...] + titleMap and
@@ -36,13 +38,35 @@ function jsonLdBlocks(html: string): object[] {
   return blocks;
 }
 
-test("the hardcoded slug map is gone — siblings come from RUNWAY_INDUSTRIES", () => {
+test("the hardcoded slug map is gone — siblings and hub links come from RUNWAY_INDUSTRIES", () => {
   assert.doesNotMatch(PRERENDER_SRC, /runwayIndustryMatch/);
   assert.doesNotMatch(PRERENDER_SRC, /const known = \["saas"/);
   assert.doesNotMatch(PRERENDER_SRC, /titleMap/);
   assert.match(PRERENDER_SRC, /RUNWAY_INDUSTRIES\.filter/);
+  assert.match(PRERENDER_SRC, /Industry runway calculators/);
+  assert.match(PRERENDER_SRC, /RUNWAY_INDUSTRIES\.map/);
   assert.equal(RUNWAY_INDUSTRIES.length, 8);
   assert.match(INDUSTRIES_SRC, /export const RUNWAY_RELATED_FREE_TOOLS/);
+});
+
+test("hub SSR lists every typed industry as /runway/{slug} and keeps Related free tools", () => {
+  const out = injectSEO(SHELL, "/tools/runway-calculator");
+  const body = ssrBody(out);
+  assert.match(body, /Related free tools/);
+  assert.match(body, /href="\/default-alive"/);
+  assert.match(body, /href="\/survival-simulator"/);
+  assert.match(body, /Industry runway calculators/);
+  assert.equal(RUNWAY_INDUSTRIES.length, 8);
+  for (const industry of RUNWAY_INDUSTRIES) {
+    assert.ok(
+      body.includes(`href="/runway/${industry.slug}"`),
+      `hub must link /runway/${industry.slug} from RUNWAY_INDUSTRIES`,
+    );
+    assert.ok(
+      body.includes(`>${industry.shortName}<`) || body.includes(`>${industry.name}<`),
+      `hub link text must be typed name or shortName for ${industry.slug}`,
+    );
+  }
 });
 
 test("every /runway/<slug> page links the other 7 industries and keeps E10.1", () => {
@@ -105,14 +129,44 @@ test("reachable /runway/<slug> handler emits WebApplication JSON-LD from Industr
     assert.equal(app.offers["@type"], "Offer");
     assert.equal(app.offers.price, "0");
     assert.equal(app.offers.priceCurrency, "USD");
+
+    const crumbs = blocks.filter((b) => (b as { "@type"?: string })["@type"] === "BreadcrumbList");
+    assert.equal(crumbs.length, 1, `${industry.slug} must emit exactly one BreadcrumbList`);
+    const crumb = crumbs[0] as {
+      itemListElement: Array<{ "@type": string; position: number; name: string; item: string }>;
+    };
+    assert.equal(crumb.itemListElement.length, 3);
+    assert.deepEqual(crumb.itemListElement[0], {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: "https://founderconsole.ai/",
+    });
+    assert.deepEqual(crumb.itemListElement[1], {
+      "@type": "ListItem",
+      position: 2,
+      name: "Runway calculator",
+      item: "https://founderconsole.ai/tools/runway-calculator",
+    });
+    assert.deepEqual(crumb.itemListElement[2], {
+      "@type": "ListItem",
+      position: 3,
+      name: industry.name,
+      item: `https://founderconsole.ai/runway/${industry.slug}`,
+    });
   }
 });
 
 test("unknown /runway/<slug> stays noindex and does not emit industry JSON-LD", () => {
   const out = injectSEO(SHELL, "/runway/definitely-not-a-vertical");
   assert.match(out, /content="noindex, follow"/);
-  const apps = jsonLdBlocks(out).filter(
+  const blocks = jsonLdBlocks(out);
+  const apps = blocks.filter(
     (b) => (b as { "@type"?: string })["@type"] === "WebApplication",
   );
+  const crumbs = blocks.filter(
+    (b) => (b as { "@type"?: string })["@type"] === "BreadcrumbList",
+  );
   assert.equal(apps.length, 0);
+  assert.equal(crumbs.length, 0);
 });

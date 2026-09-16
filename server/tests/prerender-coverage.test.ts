@@ -67,10 +67,31 @@ for (const path of RUNWAY_PATHS) {
   const toolsOk = RUNWAY_RELATED_FREE_TOOLS.every((t) => body.includes(`href="${t.href}"`));
   const jsonOk = !!app && app.name === ind?.name && app.url === `https://founderconsole.ai/runway/${slug}`;
   const e101 = body.includes("Typical starting inputs") && toolsOk;
-  const ok = siblingOk && jsonOk && e101 && body.includes("Other industry runway calculators");
+  const crumbs = ld.filter((b) => b["@type"] === "BreadcrumbList");
+  const crumb = crumbs[0];
+  const crumbOk =
+    crumbs.length === 1 &&
+    crumb?.itemListElement?.[2]?.name === ind?.name &&
+    crumb?.itemListElement?.[2]?.item === `https://founderconsole.ai/runway/${slug}` &&
+    crumb?.itemListElement?.[1]?.item === "https://founderconsole.ai/tools/runway-calculator";
+  const ok = siblingOk && jsonOk && e101 && crumbOk && body.includes("Other industry runway calculators");
   if (!ok) failures++;
   console.log(
-    `${ok ? "PASS" : "FAIL"}  ${path.padEnd(26)} siblings=${siblingOk}  jsonLd=${jsonOk}  e10.1=${e101}`,
+    `${ok ? "PASS" : "FAIL"}  ${path.padEnd(26)} siblings=${siblingOk}  jsonLd=${jsonOk}  e10.1=${e101}  crumb=${crumbOk}`,
+  );
+}
+
+// E10.3: the hub must emit every typed /runway/{slug} (live hub had none)
+// without dropping Related free tools.
+{
+  const out = injectSEO(SHELL, "/tools/runway-calculator");
+  const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
+  const hubLinks = RUNWAY_INDUSTRIES.every((i) => body.includes(`href="/runway/${i.slug}"`));
+  const hubTools = body.includes("Related free tools") && body.includes('href="/default-alive"');
+  const hubOk = hubLinks && hubTools && body.includes("Industry runway calculators");
+  if (!hubOk) failures++;
+  console.log(
+    `${hubOk ? "PASS" : "FAIL"}  ${"/tools/runway-calculator".padEnd(26)} hubIndustries=${hubLinks}  freeTools=${hubTools}`,
   );
 }
 
