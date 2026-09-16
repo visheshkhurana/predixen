@@ -37,6 +37,7 @@ const footerProduct = [
 const footerCompany = [
   { label: "About", href: "/about" },
   { label: "Compare", href: "/compare" },
+  { label: "Customers", href: "/customers" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
 ];
