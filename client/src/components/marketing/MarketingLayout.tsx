@@ -40,6 +40,7 @@ const footerCompany = [
   { label: "Customers", href: "/customers" },
   { label: "Use cases", href: "/use-cases" },
   { label: "How it works", href: "/how-it-works" },
+  { label: "Alternatives", href: "/alternatives" },
   { label: "Blog", href: "/blog" },
   { label: "Contact", href: "/contact" },
 ];
