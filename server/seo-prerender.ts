@@ -333,6 +333,33 @@ function buildCompareBodyContent(): string {
 </article>`;
 }
 
+function buildAlternativesBodyContent(): string {
+  return `<article>
+<h1>Startup FP&amp;A alternatives — after Finmark, Causal, and the rest</h1>
+<p>This is a category page for founders looking for an alternative to the startup FP&amp;A tools that disappeared. BILL sunset Finmark. Causal was absorbed into Lucanet. The sourced notes live on pages we already published — this page summarizes that consolidation and points to FounderConsole as a seed-stage option. It does not invent competitor pricing, market share, or new product-status claims.</p>
+<h2>What happened to the category</h2>
+<p>As of August 2026, the seed-stage FP&amp;A field is thinner than it was. We tracked the timeline in full:</p>
+<ul>
+<li>BILL sunset Finmark on 1 April 2026. finmark.com redirects to bill.com with no destination page or migration guide. If Finmark is the tool you lost, read <a href="/blog/finmark-shut-down-alternative">where your runway model goes next</a>.</li>
+<li>Causal joined Lucanet in October 2024 and redirects to an enterprise Extended Planning &amp; Analysis page rather than a founder product.</li>
+<li>Pry was acquired by Brex. Mosaic was acquired by HiBob. In July 2026 Runway Financial lost the runway.com domain to an AI video company.</li>
+</ul>
+<p>The full sequence, with what each redirect lands on, is in <a href="/blog/startup-fpa-tools-acquired-timeline">Every Startup FP&amp;A Tool Got Acquired. Here's the Timeline.</a></p>
+<h2>The comparison we already published</h2>
+<p>Product-versus-product notes — including that Sturppy is still aimed at early-stage companies — are on <a href="/compare">compare</a> and in <a href="/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal">FounderConsole vs Sturppy vs Finmark vs Causal</a>. We do not repeat competitor pricing here; those posts are the source.</p>
+<h2>What FounderConsole ships</h2>
+<p>FounderConsole is an AI-powered financial intelligence platform for startup founders. Connect data (or upload a CSV), run Monte Carlo simulations, and ask an AI copilot against your own numbers.</p>
+<ul>
+<li><strong>Monte Carlo with P10/P50/P90</strong> — thousands of runs produce a runway distribution instead of one cash-out date.</li>
+<li><strong>AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.</li>
+<li><strong>37 data connectors</strong> — or a CSV of monthly actuals so you can reconstruct a model after an acquired tool goes away.</li>
+</ul>
+<p>The product overview is on <a href="/product">product</a>. The deeper catalog is on <a href="/features">features</a>. Every feature is free during early access — see <a href="/pricing">pricing</a>.</p>
+<h2>Try a free tool first</h2>
+<p>No account required: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function buildAboutBodyContent(): string {
   return `<article>
 <h1>Built by Founders, for Founders</h1>
@@ -741,6 +768,23 @@ function getPageMeta(path: string): PageMeta | null {
         name: "Compare FounderConsole to Startup FP&A and Runway Tools",
         description: "How FounderConsole compares to startup FP&A and runway tools: Monte Carlo P10/P50/P90, AI copilot, and free tools.",
         url: SITE_URL + "/compare",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
+    };
+  }
+
+  if (path === "/alternatives") {
+    return {
+      title: "Startup FP&A Alternatives — After Finmark and Causal | FounderConsole",
+      description: "Looking for a Finmark or Causal alternative? BILL sunset Finmark; Causal joined Lucanet. This page summarizes the FP&A consolidation we already published and what FounderConsole ships — Monte Carlo P10/P50/P90, an AI copilot, and free tools.",
+      canonical: SITE_URL + "/alternatives",
+      bodyContent: buildAlternativesBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Startup FP&A Alternatives — After Finmark and Causal | FounderConsole",
+        description: "Looking for a Finmark or Causal alternative? BILL sunset Finmark; Causal joined Lucanet. Summarizes the FP&A consolidation we already published and what FounderConsole ships.",
+        url: SITE_URL + "/alternatives",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };

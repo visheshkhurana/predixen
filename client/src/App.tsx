@@ -131,6 +131,7 @@ const ProductPage = lazy(() => import("@/pages/product"));
 const CustomersPage = lazy(() => import("@/pages/customers"));
 const UseCasesPage = lazy(() => import("@/pages/use-cases"));
 const HowItWorksPage = lazy(() => import("@/pages/how-it-works"));
+const AlternativesPage = lazy(() => import("@/pages/alternatives"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
@@ -320,6 +321,7 @@ function Router() {
         <Route path="/customers">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><CustomersPage /></Suspense>}</Route>
         <Route path="/use-cases">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><UseCasesPage /></Suspense>}</Route>
         <Route path="/how-it-works">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><HowItWorksPage /></Suspense>}</Route>
+        <Route path="/alternatives">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AlternativesPage /></Suspense>}</Route>
         <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
         <Route path="/blog/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
         <Route path="/blog">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BlogPage /></Suspense>}</Route>
@@ -827,7 +829,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   };
   
   const marketingPaths = [
-    '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/blog', '/faq',
+    '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
     '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
     '/survival-simulator', '/default-alive', '/privacy', '/terms',
     '/reset-password', '/verify-email', '/auth/callback',
