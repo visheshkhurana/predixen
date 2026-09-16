@@ -66,6 +66,9 @@ jobs:
       - name: customers SSR tests
         run: npx tsx --test server/tests/customers-ssr.test.ts
 
+      - name: use-cases SSR tests
+        run: npx tsx --test server/tests/use-cases-ssr.test.ts
+
       - name: auth-critical-routes tests
         run: npx tsx server/tests/auth-critical-routes.test.ts
 

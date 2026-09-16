@@ -261,6 +261,23 @@ function buildProductBodyContent(): string {
 </article>`;
 }
 
+function buildUseCasesBodyContent(): string {
+  return `<article>
+<h1>FounderConsole use cases — runway, hiring, fundraising, and board readiness</h1>
+<p>This page maps FounderConsole to founder jobs the product already covers: runway planning, hiring and fundraising scenario simulation, board and investor readiness, and default-alive checks. It is not a case-study wall — we have not published customer stories or outcome metrics, and this page does not invent them.</p>
+<h2>Runway planning</h2>
+<p>Founders need a range they can defend, not a single spreadsheet cash-out date. FounderConsole runs Monte Carlo simulations with P10/P50/P90 bands so runway is a distribution. Start without an account on the <a href="/tools/runway-calculator">startup runway calculator</a>, or use the <a href="/runway/saas">SaaS runway calculator</a> when you want industry-tuned starting inputs.</p>
+<h2>Hiring and fundraising scenario simulation</h2>
+<p>The simulation engine is built to test decisions before you commit: hiring plans, fundraising timing, and growth assumptions. Connect data (or upload a CSV) and compare scenarios side by side instead of rewriting a model for each what-if. The deeper catalog is on <a href="/features">features</a>; the product overview is on <a href="/product">product</a>.</p>
+<h2>Board and investor readiness</h2>
+<p>When the question is what to show a board or an investor, FounderConsole turns simulation results into narrative briefings and investor-ready materials — Fundraising OS covers cap table, dilution modeling, and related reports. Truth Scan exists so numbers are validated before they land in a deck. None of that is a published customer result; it is what the product ships.</p>
+<h2>Default-alive checks</h2>
+<p>Paul Graham's default-alive test asks whether you reach profitability on the money you already have. Run it with no account on the <a href="/default-alive">default alive test</a>. For a probabilistic survival view, use the <a href="/survival-simulator">startup survival simulator</a> (1,000 Monte Carlo runs).</p>
+<h2>Evaluate the product, not unnamed stories</h2>
+<p>Read the <a href="/product">product</a> overview, the <a href="/features">features</a> catalog, and <a href="/pricing">pricing</a> (every feature is free during early access). When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function buildCustomersBodyContent(): string {
   return `<article>
 <h1>Who FounderConsole is for</h1>
@@ -637,6 +654,23 @@ function getPageMeta(path: string): PageMeta | null {
         name: "FounderConsole Product",
         description: "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
         url: SITE_URL + "/product",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
+    };
+  }
+
+  if (path === "/use-cases") {
+    return {
+      title: "Use Cases — Runway, Hiring, Fundraising, and Board Readiness | FounderConsole",
+      description: "How founders use FounderConsole: runway planning, hiring and fundraising scenario simulation, board and investor readiness, and default-alive checks. No invented case studies — evaluate with the product and free tools.",
+      canonical: SITE_URL + "/use-cases",
+      bodyContent: buildUseCasesBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Use Cases — Runway, Hiring, Fundraising, and Board Readiness | FounderConsole",
+        description: "How founders use FounderConsole: runway planning, hiring and fundraising scenario simulation, board and investor readiness, and default-alive checks. No invented case studies.",
+        url: SITE_URL + "/use-cases",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };
