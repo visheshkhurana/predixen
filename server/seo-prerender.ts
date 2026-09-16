@@ -241,6 +241,26 @@ function buildFeaturesBodyContent(): string {
 </article>`;
 }
 
+function buildProductBodyContent(): string {
+  return `<article>
+<h1>FounderConsole — financial intelligence for startup founders</h1>
+<p>FounderConsole is an AI-powered financial intelligence platform built for startup founders. Connect your data, run Monte Carlo simulations with P10/P50/P90 bands, ask an AI copilot against your own numbers, and manage fundraising from one place — without a spreadsheet as the source of truth.</p>
+<h2>Who it is for</h2>
+<p>Founders who are asked to be CFO and CEO at once: operators without a finance team who need a range they can defend to a board rather than a single cash-out date. This page is the product overview. The deeper catalog lives on <a href="/features">features</a>.</p>
+<h2>What you get</h2>
+<ul>
+<li><strong>Monte Carlo P10/P50/P90</strong> — thousands of runs produce a runway distribution instead of one forecast.</li>
+<li><strong>AI copilot</strong> — strategic questions in plain English, grounded in your connected financials.</li>
+<li><strong>Connectors</strong> — 37 data connectors for the tools founders already use, or upload a CSV so the model stays current.</li>
+<li><strong>Fundraising OS</strong> — cap table, dilution modeling, and investor-ready materials in one place.</li>
+</ul>
+<h2>Free during early access</h2>
+<p>Every feature is free while we are in early access — no credit card required. Planned paid tiers after early access are on the <a href="/pricing">pricing</a> page.</p>
+<h2>Related pages and free tools</h2>
+<p>See how we stack up on <a href="/compare">compare</a>. Try these with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function buildCompareBodyContent(): string {
   return `<article>
 <h1>Compare FounderConsole to startup FP&amp;A and runway tools</h1>
@@ -583,6 +603,23 @@ function getPageMeta(path: string): PageMeta | null {
         url: SITE_URL,
         logo: OG_IMAGE,
         description: "AI-powered financial intelligence platform for startups built by founders who lived the uncertainty.",
+      }],
+    };
+  }
+
+  if (path === "/product") {
+    return {
+      title: "Product — Financial Intelligence for Startup Founders | FounderConsole",
+      description: "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+      canonical: SITE_URL + "/product",
+      bodyContent: buildProductBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "FounderConsole Product",
+        description: "FounderConsole is an AI-powered financial intelligence platform for startup founders. Monte Carlo P10/P50/P90, AI copilot, connectors, and Fundraising OS — free during early access.",
+        url: SITE_URL + "/product",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };
   }

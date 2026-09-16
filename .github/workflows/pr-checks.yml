@@ -60,6 +60,9 @@ jobs:
       - name: compare SSR tests
         run: npx tsx --test server/tests/compare-ssr.test.ts
 
+      - name: product SSR tests
+        run: npx tsx --test server/tests/product-ssr.test.ts
+
       - name: auth-critical-routes tests
         run: npx tsx server/tests/auth-critical-routes.test.ts
 

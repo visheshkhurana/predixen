@@ -127,6 +127,7 @@ const LandingPage = lazy(() => import("@/pages/landing"));
 const MarketingFeaturesPage = lazy(() => import("@/pages/marketing-features"));
 const AboutPage = lazy(() => import("@/pages/about"));
 const ComparePage = lazy(() => import("@/pages/compare"));
+const ProductPage = lazy(() => import("@/pages/product"));
 const ContactPage = lazy(() => import("@/pages/contact"));
 const BlogPage = lazy(() => import("@/pages/blog"));
 const RunwayByIndustryPage = lazy(() => import("@/pages/runway-by-industry"));
@@ -310,6 +311,7 @@ function Router() {
         <Route path="/survival/:simId" component={SurvivalSimulatorPage} />
         <Route path="/pricing" component={PricingPage} />
         <Route path="/features">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><MarketingFeaturesPage /></Suspense>}</Route>
+        <Route path="/product">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ProductPage /></Suspense>}</Route>
         <Route path="/about">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AboutPage /></Suspense>}</Route>
         <Route path="/compare">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ComparePage /></Suspense>}</Route>
         <Route path="/contact">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><ContactPage /></Suspense>}</Route>
@@ -819,7 +821,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   };
   
   const marketingPaths = [
-    '/', '/features', '/pricing', '/about', '/compare', '/blog', '/faq',
+    '/', '/features', '/product', '/pricing', '/about', '/compare', '/blog', '/faq',
     '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
     '/survival-simulator', '/default-alive', '/privacy', '/terms',
     '/reset-password', '/verify-email', '/auth/callback',

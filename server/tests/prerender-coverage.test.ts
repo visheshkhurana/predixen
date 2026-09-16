@@ -16,7 +16,7 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
   "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
-  "/features", "/about", "/compare", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
+  "/features", "/product", "/about", "/compare", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
 
 function textOf(html: string): string {
@@ -118,6 +118,33 @@ for (const path of RUNWAY_PATHS) {
   if (!compareOk) failures++;
   console.log(
     `${compareOk ? "PASS" : "FAIL"}  ${"/compare".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
+  );
+}
+
+// /product was a blank SPA shell (ssr_chars=0). Body must be non-empty and
+// expose the features / pricing / compare / free-tool / auth hrefs.
+{
+  const out = injectSEO(SHELL, "/product");
+  const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
+  const txt = textOf(out);
+  const hrefs = [
+    "/features",
+    "/pricing",
+    "/compare",
+    "/tools/runway-calculator",
+    "/survival-simulator",
+    "/default-alive",
+    "/auth",
+  ];
+  const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
+  const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+    .map((m) => JSON.parse(m[1]));
+  const page = ld.find((b) => b["@type"] === "WebPage");
+  const jsonOk = !!page && page.url === "https://founderconsole.ai/product";
+  const productOk = txt.length > 200 && hrefsOk && jsonOk && body.includes("<h1>");
+  if (!productOk) failures++;
+  console.log(
+    `${productOk ? "PASS" : "FAIL"}  ${"/product".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
   );
 }
 
