@@ -372,6 +372,25 @@ function buildSignupBodyContent(): string {
 </article>`;
 }
 
+function buildSecurityBodyContent(): string {
+  return `<article>
+<h1>Security at FounderConsole</h1>
+<p>FounderConsole is privacy-first: your financial data is encrypted at rest and in transit. Read-only integrations. No data resale. Ever. This page restates the security claims already published on our FAQ, Privacy Policy, and About pages.</p>
+<h2>Encryption at rest and in transit</h2>
+<p>All data is encrypted using AES-256 at rest and TLS in transit. All connections use HTTPS/TLS encryption in transit.</p>
+<h2>Integrations and credentials</h2>
+<p>Integrations use OAuth2 with read-only access where possible. Credentials are stored encrypted. Passwords are hashed using bcrypt before storage.</p>
+<h2>Where data is stored</h2>
+<p>Your data is stored in US-based PostgreSQL databases with automated daily backups. See the <a href="/product">product</a> overview for what the platform does with connected data.</p>
+<h2>Compliance</h2>
+<p>We are fully GDPR compliant and are actively working toward SOC2 Type II certification. We do not claim SOC2 certification. You can request a full data export or deletion at any time.</p>
+<h2>No data resale</h2>
+<p>We never sell your data to third parties. No data resale. Ever. The full legal text is on our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>.</p>
+<h2>Questions</h2>
+<p><a href="/contact">Contact us</a> if you have a privacy or security question. When you are ready to connect live data, <a href="/signup">get started free</a>.</p>
+</article>`;
+}
+
 function buildAboutBodyContent(): string {
   return `<article>
 <h1>Built by Founders, for Founders</h1>
@@ -814,6 +833,23 @@ function getPageMeta(path: string): PageMeta | null {
         name: "Get Started — Create a Free FounderConsole Account",
         description: "Create a free FounderConsole account to connect live data and run ongoing runway forecasts. Every feature is free during early access — no credit card required.",
         url: SITE_URL + "/signup",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }],
+    };
+  }
+
+  if (path === "/security") {
+    return {
+      title: "Security — Encryption, Privacy, and Compliance | FounderConsole",
+      description: "How FounderConsole protects your data: AES-256 at rest, TLS in transit, OAuth2 read-only integrations, encrypted credentials, bcrypt passwords, US PostgreSQL with backups, GDPR, and work toward SOC2 Type II. We do not sell your data.",
+      canonical: SITE_URL + "/security",
+      bodyContent: buildSecurityBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Security — Encryption, Privacy, and Compliance | FounderConsole",
+        description: "How FounderConsole protects your data: AES-256 at rest, TLS in transit, OAuth2 read-only integrations, US PostgreSQL with backups, GDPR, and work toward SOC2 Type II. We do not sell your data.",
+        url: SITE_URL + "/security",
         isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
       }],
     };
