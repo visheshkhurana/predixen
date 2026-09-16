@@ -16,7 +16,7 @@ const SHELL = readFileSync("dist/public/index.html", "utf8");  // run from the r
 const WAS_BLANK = ["/pricing", "/demo", "/ai-cfo",
   "/runway/saas", "/runway/ecommerce", "/runway/fintech", "/runway/marketplace",
   "/runway/ai", "/runway/hardware", "/runway/biotech", "/runway/devtools",
-  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
+  "/features", "/product", "/about", "/compare", "/customers", "/use-cases", "/how-it-works", "/alternatives", "/signup", "/security", "/faq", "/contact", "/privacy", "/terms", "/survival-simulator"];
 const ALREADY_WORKED = ["/", "/tools/runway-calculator", "/default-alive", "/blog"];
 
 function textOf(html: string): string {
@@ -288,6 +288,31 @@ for (const path of RUNWAY_PATHS) {
   if (!signupOk) failures++;
   console.log(
     `${signupOk ? "PASS" : "FAIL"}  ${"/signup".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
+  );
+}
+
+// /security was a blank SPA shell (ssr_chars=0). Body must be non-empty and
+// restates published FAQ/privacy claims with product / legal / signup hrefs.
+{
+  const out = injectSEO(SHELL, "/security");
+  const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
+  const txt = textOf(out);
+  const hrefs = [
+    "/product",
+    "/privacy",
+    "/terms",
+    "/signup",
+    "/contact",
+  ];
+  const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));
+  const ld = [...out.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+    .map((m) => JSON.parse(m[1]));
+  const page = ld.find((b) => b["@type"] === "WebPage");
+  const jsonOk = !!page && page.url === "https://founderconsole.ai/security";
+  const securityOk = txt.length > 200 && hrefsOk && jsonOk && body.includes("<h1>");
+  if (!securityOk) failures++;
+  console.log(
+    `${securityOk ? "PASS" : "FAIL"}  ${"/security".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
   );
 }
 
