@@ -25,6 +25,7 @@ const navLinks = [
 ];
 
 const footerProduct = [
+  { label: "Product", href: "/product" },
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
