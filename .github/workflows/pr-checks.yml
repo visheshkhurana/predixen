@@ -60,6 +60,9 @@ jobs:
       - name: activation-path dead-route tests
         run: npx tsx server/tests/activation-dead-routes.test.ts
 
+      - name: residual dead-route alias tests
+        run: npx tsx server/tests/residual-dead-routes.test.ts
+
       - name: entry-bundle no framer-motion on critical path
         run: npx tsx server/tests/entry-no-framer-motion.test.ts
 
