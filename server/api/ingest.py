@@ -517,6 +517,8 @@ async def ingest_financials(
                     extraction_summary=extraction_summary,
                 )
                 db.add(record)
+                from server.services.sample_data import on_real_financials_written
+                on_real_financials_written(db, companyId, commit=False)
                 db.commit()
                 
                 logger.info(f"Saved comprehensive financial record for company {companyId} with {len([v for v in [mrr_val, arr_val, headcount_val, ndr_val, ltv_val, cac_val] if v])} extended metrics")
@@ -939,6 +941,8 @@ async def save_financial_baseline(
         for k, v in computed.items():
             if hasattr(existing_record, k):
                 setattr(existing_record, k, v)
+        if existing_record.source_type == "sample":
+            existing_record.source_type = "manual"
         record = existing_record
     else:
         record = FinancialRecord(
@@ -954,6 +958,7 @@ async def save_financial_baseline(
             marketing_expense=marketing_val,
             mom_growth=mom_growth,
             headcount=headcount,
+            source_type="manual",
             **computed,
         )
         db.add(record)
@@ -965,6 +970,9 @@ async def save_financial_baseline(
         row_count=1
     )
     db.add(dataset)
+
+    from server.services.sample_data import on_real_financials_written
+    on_real_financials_written(db, company_id, commit=False)
     
     db.commit()
     
@@ -1055,9 +1063,11 @@ async def save_financial_baseline(
     
     logger.info(f"[SAVE] Return: totalExpenses={final_total}, netBurn={final_burn}, runway={final_runway}")
     
+    db.refresh(company)
     return {
         'success': True,
         'message': 'Financial baseline saved successfully',
+        'is_sample': bool(company.is_sample),
         'calculatedMetrics': {
             'netBurnRate': final_burn,
             'runwayMonths': round(final_runway, 1) if final_runway else None,

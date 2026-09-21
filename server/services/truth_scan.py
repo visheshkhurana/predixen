@@ -916,6 +916,15 @@ def run_truth_scan_pipeline(
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Failed to broadcast truth scan update: {e}")
+
+    # Truth Scan does not write FinancialRecords. Only clear the sample
+    # label when real rows already replaced sample (no mixed leftover).
+    try:
+        from server.services.sample_data import clear_is_sample
+        if clear_is_sample(db, company_id, commit=True):
+            logger.info(f"Cleared is_sample for company {company_id} after truth scan")
+    except Exception as e:
+        logger.warning(f"is_sample clear after truth scan skipped: {e}")
     
     return {
         "upload_id": upload.id,

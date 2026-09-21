@@ -710,6 +710,9 @@ export default function DataInput() {
       console.log('[SAVE] API response:', JSON.stringify(result));
 
       setFinancialBaseline(baseline);
+      if (result?.is_sample === false) {
+        useFounderStore.getState().syncCurrentCompanyIsSample(false);
+      }
       financialSaveOk = true;
     } catch (error) {
       console.error('[SAVE] Error:', error);

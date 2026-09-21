@@ -134,10 +134,81 @@ def build_sample_months(n: int = 12) -> list[dict]:
     return months
 
 
+SAMPLE_SOURCE_TYPE = "sample"
+
+
+def is_sample_source(source_type: Any) -> bool:
+    return source_type == SAMPLE_SOURCE_TYPE
+
+
 def _mark_company_sample(db, company) -> None:
     from server.core.company_metadata import save_metadata_value
 
     save_metadata_value(db, company, "is_sample", True, commit=False)
+
+
+def financial_source_counts(db, company_id: int) -> tuple[int, int]:
+    """Return (sample_count, real_count) for a company's financial records."""
+    from server.models.financial import FinancialRecord
+
+    rows = (
+        db.query(FinancialRecord.source_type)
+        .filter(FinancialRecord.company_id == company_id)
+        .all()
+    )
+    sample = sum(1 for (source_type,) in rows if is_sample_source(source_type))
+    return sample, len(rows) - sample
+
+
+def replace_sample_financials(db, company_id: int) -> int:
+    """Delete remaining ``source_type=sample`` rows. Caller owns the transaction."""
+    from server.models.financial import FinancialRecord
+
+    deleted = (
+        db.query(FinancialRecord)
+        .filter(
+            FinancialRecord.company_id == company_id,
+            FinancialRecord.source_type == SAMPLE_SOURCE_TYPE,
+        )
+        .delete(synchronize_session="fetch")
+    )
+    return int(deleted or 0)
+
+
+def clear_is_sample(db, company_id: int, *, commit: bool = False) -> bool:
+    """Clear ``metadata_json.is_sample`` only when real rows exist and no sample rows remain.
+
+    Mixed leftover sample rows keep the flag on so the banner cannot claim
+    "your numbers" while simulated records are still in the table.
+    """
+    from server.core.company_metadata import save_metadata_value
+    from server.models.company import Company
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if company is None or not company.is_sample:
+        return False
+    sample_count, real_count = financial_source_counts(db, company_id)
+    if real_count < 1 or sample_count > 0:
+        return False
+    save_metadata_value(db, company, "is_sample", False, commit=commit)
+    return True
+
+
+def on_real_financials_written(db, company_id: int, *, commit: bool = False) -> bool:
+    """Atomic replace of sample rows, then clear ``is_sample`` if only real rows remain.
+
+    Call after staging real (non-sample) ``FinancialRecord`` writes for
+    ``company_id``, before the caller's commit. No-op when no real row is
+    staged (so a /data click or empty upload cannot wipe sample). Mixed
+    leftover sample rows after a failed replace keep the label on.
+    """
+    db.flush()
+    _sample_count, real_count = financial_source_counts(db, company_id)
+    if real_count < 1:
+        return False
+    replace_sample_financials(db, company_id)
+    db.flush()
+    return clear_is_sample(db, company_id, commit=commit)
 
 
 def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
@@ -159,6 +230,18 @@ def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
     )
 
     if existing:
+        already_sample = bool(company.is_sample) if company is not None else False
+        has_real = any(not is_sample_source(row.source_type) for row in existing)
+        # A cleared real company (is_sample already false, or real rows present)
+        # must not be re-labelled sample just because records exist.
+        if has_real or not already_sample:
+            insight = insight_from_record(existing[0])
+            return {
+                "already_seeded": True,
+                "record_count": len(existing),
+                "is_sample": already_sample,
+                **insight,
+            }
         if company is not None:
             _mark_company_sample(db, company)
             db.commit()
@@ -204,7 +287,7 @@ def seed_sample_company(db, company_id: int, template: str = "saas_seed"):
             ltv=4800.0,
             cac=1500.0,
             ltv_cac_ratio=3.2,
-            source_type="sample",
+            source_type=SAMPLE_SOURCE_TYPE,
             extraction_summary="Seeded sample data — not the founder's company.",
         )
         db.add(fin_record)

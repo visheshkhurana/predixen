@@ -119,13 +119,22 @@ export function CompanySwitcher() {
   // account, a different user, or a deleted company. Once the real list for
   // this session loads, drop any selection that isn't in it so the app never
   // renders another account's company.
+  const syncCurrentCompanyIsSample = useFounderStore((s) => s.syncCurrentCompanyIsSample);
+
   useEffect(() => {
     if (isLoading) return;
     const list = (companies || []) as Company[];
     if (currentCompany && !list.some((c) => c.id === currentCompany.id)) {
       setCurrentCompany(list[0] ?? null);
+      return;
     }
-  }, [isLoading, companies, currentCompany, setCurrentCompany]);
+    if (currentCompany) {
+      const fresh = list.find((c) => c.id === currentCompany.id);
+      if (fresh && !!fresh.is_sample !== !!currentCompany.is_sample) {
+        syncCurrentCompanyIsSample(!!fresh.is_sample);
+      }
+    }
+  }, [isLoading, companies, currentCompany, setCurrentCompany, syncCurrentCompanyIsSample]);
 
   if (isLoading) {
     return <Skeleton className="h-9 w-40" />;
