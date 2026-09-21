@@ -1,4 +1,9 @@
 import { ApiError, safeParseJSON } from '@/lib/errors';
+import {
+  attemptTokenRefresh,
+  hardRedirectToLogin,
+  shouldHardRedirectOn401,
+} from '@/lib/authSession';
 export { ApiError };
 
 const API_BASE = '/api';
@@ -16,29 +21,9 @@ function getCSRFToken(): string | null {
   return null;
 }
 
-let _redirecting401 = false;
-let _refreshingToken: Promise<boolean> | null = null;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 const RETRYABLE_STATUS_CODES = [502, 503, 504, 429];
-
-async function attemptTokenRefresh(): Promise<boolean> {
-  if (_refreshingToken) return _refreshingToken;
-  _refreshingToken = (async () => {
-    try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      _refreshingToken = null;
-    }
-  })();
-  return _refreshingToken;
-}
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -170,19 +155,10 @@ async function request<T>(
           }
         }
       }
-      if (!window.location.pathname.startsWith('/auth') && !_redirecting401) {
-        _redirecting401 = true;
-        try {
-          const raw = localStorage.getItem('founderconsole-founder-storage');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed?.state) {
-              parsed.state.user = null;
-              localStorage.setItem('founderconsole-founder-storage', JSON.stringify(parsed));
-            }
-          }
-        } catch {}
-        setTimeout(() => { window.location.href = '/auth'; }, 100);
+      const method = (options.method || 'GET').toUpperCase();
+      const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (shouldHardRedirectOn401(method, pathname)) {
+        hardRedirectToLogin();
       }
     }
 
