@@ -59,6 +59,17 @@
   animation: fc-fadeUpIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Replaces the App.tsx framer-motion route wrapper (opacity + 6px y, 250ms).
+   Same easing as fc-fadeUpIn. Exit-wait was dropped: it delayed navigation
+   and required shipping AnimatePresence on the entry path. */
+@keyframes fc-routeEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fc-route-enter {
+  animation: fc-routeEnter 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .fc-animate-scale-in {
   animation: fc-scaleFadeIn 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -163,6 +174,7 @@
   .fc-animate-shimmer,
   .fc-animate-status-pulse,
   .fc-animate-glow,
+  .fc-route-enter,
   .fc-stagger > *,
   [class*="fc-float"],
   [class*="fc-drift"],
