@@ -18,6 +18,9 @@ A second replica doubles those jobs. Reliability’s #14 deploy-landed monitor i
 ## Decision
 Move periodic background loops to a **dedicated worker process** (or single elected leader) before horizontal scale. Web process stays request-serving; health reports worker liveness separately. Feature-flag or process type gates which loops run where.
 
+## Implementation gate / council amendment
+No ADR-0003 runtime work until https://github.com/visheshkhurana/predixen/pull/38 is green, or until explicitly coordinated with Reliability. Also kill/rollback if a worker cutover interferes with the deploy-landed monitor path.
+
 ## Consequences
 - Positive: safe replica count; clearer ownership of silent-failure monitors.
 - Negative: new process to deploy and watch; short dual-run window during cutover.
