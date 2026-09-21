@@ -354,6 +354,17 @@ function Router() {
       <Route path="/join">
         {() => <Redirect to="/auth?tab=register" />}
       </Route>
+      {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
+          product exists — send visitors to a live marketing page, not 404. */}
+      <Route path="/apply">
+        {() => <Redirect to="/signup" />}
+      </Route>
+      <Route path="/matches">
+        {() => <Redirect to="/" />}
+      </Route>
+      <Route path="/referral">
+        {() => <Redirect to="/signup" />}
+      </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
       </Route>
@@ -383,6 +394,10 @@ function Router() {
       </Route>
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
+      </Route>
+      {/* Unmounted pages/dashboard.tsx still links here; live ingest is /data. */}
+      <Route path="/ingest">
+        {() => <Redirect to="/data" />}
       </Route>
       <Route path="/data/verify/:sessionId">
         {() => <AuthenticatedRoute component={DataVerificationPage} />}
@@ -433,6 +448,11 @@ function Router() {
       </Route>
       <Route path="/add-data-source">
         {() => <AuthenticatedRoute component={AddDataSourcePage} />}
+      </Route>
+      {/* Marketplace "manage" and add-data-source complete navigated here.
+          No connector-detail page exists — Integrations is the live dest. */}
+      <Route path="/data-source/:id">
+        {() => <Redirect to="/integrations" />}
       </Route>
       <Route path="/alerts">
         {() => <AuthenticatedRoute component={AlertsPage} />}
@@ -495,6 +515,11 @@ function Router() {
         {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/account/notifications">
+        {() => <Redirect to="/settings" />}
+      </Route>
+      {/* Email footers still link here. Settings already has email-prefs;
+          this is a Switch alias only — not a tokenized legal unsubscribe page. */}
+      <Route path="/unsubscribe">
         {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/settings">
