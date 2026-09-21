@@ -98,6 +98,9 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: no render-blocking Google Fonts stylesheet
+        run: npx tsx server/tests/no-google-fonts-blocking.test.ts
+
       - name: prerender coverage
         run: npx tsx server/tests/prerender-coverage.test.ts
 
