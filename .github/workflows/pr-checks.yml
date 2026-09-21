@@ -57,6 +57,9 @@ jobs:
       - name: session-401-redirect tests
         run: npx tsx --test server/tests/session-401-redirect.test.ts
 
+      - name: activation-path dead-route tests
+        run: npx tsx server/tests/activation-dead-routes.test.ts
+
       - name: runway-industry SSR tests
         run: npx tsx --test server/tests/runway-industry-ssr.test.ts
 

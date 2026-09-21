@@ -41,7 +41,7 @@ COLORS = {
 FONT_STACK = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 
 APP_URL = "https://founderconsole.ai"
-PREFERENCES_URL = f"{APP_URL}/settings/notifications"
+PREFERENCES_URL = f"{APP_URL}/settings"
 COMPANY_ADDRESS = "FounderConsole, Inc."
 
 
@@ -395,7 +395,7 @@ def render_welcome_template(
     greeting = f"Welcome aboard, {user_name}!" if user_name else "Welcome aboard!"
     dashboard_url = f"{APP_URL}/overview"
     data_url = f"{APP_URL}/data-input"
-    sim_url = f"{APP_URL}/simulation"
+    sim_url = f"{APP_URL}/simulate"
 
     steps_html = ""
     steps_html += get_numbered_step("1", "Enter your financials", "Upload a CSV/PDF or type in your key numbers. Takes about 2 minutes.", url=data_url)
@@ -784,7 +784,7 @@ def render_simulation_report_template(
                 {rows}
             </table>"""
 
-    sim_url = f"{APP_URL}/simulation"
+    sim_url = f"{APP_URL}/simulate"
 
     content = f"""
     {get_header_html("SIMULATION REPORT")}
@@ -939,7 +939,7 @@ def render_decision_report_template(
 
             {recs_html}
 
-            {get_cta_row(decisions_url, "View All Recommendations", f"{APP_URL}/simulation", "Run New Simulation")}
+            {get_cta_row(decisions_url, "View All Recommendations", f"{APP_URL}/simulate", "Run New Simulation")}
 
             {get_callout_box("<strong>How scoring works:</strong> Each recommendation is evaluated across survival rate improvement (45%), runway extension (20%), efficiency gains (15%), and growth impact (20%), with risk penalties applied.")}
         </td>

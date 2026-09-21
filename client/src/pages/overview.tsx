@@ -809,7 +809,7 @@ export default function OverviewPage() {
       title: 'Opening Scenario Builder',
       description: `Create a scenario based on "${recTitle}"`,
     });
-    setLocation('/scenarios');
+    setLocation('/simulate');
   };
 
   const handleStatusChange = (recId: string, status: DecisionStatus) => {
@@ -1354,7 +1354,7 @@ export default function OverviewPage() {
                 {briefingAiSuggestion}
               </p>
               <div className="flex items-center gap-2 flex-wrap pt-1">
-                <Button size="sm" variant="outline" className="h-7 text-xs border-white/[0.08] bg-white/[0.02]" onClick={() => setLocation('/scenarios')} data-testid="button-briefing-run-simulation">
+                <Button size="sm" variant="outline" className="h-7 text-xs border-white/[0.08] bg-white/[0.02]" onClick={() => setLocation('/simulate')} data-testid="button-briefing-run-simulation">
                   <FlaskConical className="h-3 w-3 mr-1" />
                   Run Simulation
                 </Button>
@@ -2297,7 +2297,7 @@ export default function OverviewPage() {
           <Card className="border-white/[0.06] bg-white/[0.02] backdrop-blur-sm">
             <CardContent className="py-8 text-center">
               <p className="text-muted-foreground text-sm">Run your first simulation to unlock AI-powered recommendations tailored to your data.</p>
-              <Button className="mt-4" onClick={() => { setCurrentStep('simulation'); setLocation('/scenarios'); }} data-testid="button-run-simulation">
+              <Button className="mt-4" onClick={() => { setCurrentStep('simulation'); setLocation('/simulate'); }} data-testid="button-run-simulation">
                 Run Simulation
               </Button>
             </CardContent>
