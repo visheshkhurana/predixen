@@ -1,7 +1,8 @@
 # ADR-0002: Reversible migrations off web startup
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-16
+- Accepted: 2026-09-21 (Gate 2 after #17)
 - Deciders: Engineering Lead
 - Consulted: Reliability, Release Manager, QA Engineer
 
