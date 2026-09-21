@@ -74,6 +74,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { SCENARIO_TEMPLATES } from '@/config/templates';
 import {
+  parseSimulatePrefill,
+  rememberSimulationAttribution,
+  clearSimulationAttribution,
+  attributionFromPrefill,
+} from '@/lib/truthScanSuggestedActions';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -177,6 +183,18 @@ export default function ScenariosPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<{ open: boolean; existingId?: number; scenarioData?: any }>({ open: false });
   const [advancedTab, setAdvancedTab] = useState('builder');
+  const truthScanPrefill = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return parseSimulatePrefill(window.location.search);
+  }, []);
+
+  useEffect(() => {
+    if (truthScanPrefill) {
+      rememberSimulationAttribution(attributionFromPrefill(truthScanPrefill));
+    } else {
+      clearSimulationAttribution();
+    }
+  }, [truthScanPrefill]);
 
   const multiSimMutation = useMultiScenarioSimulation();
   const [multiSimResults, setMultiSimResults] = useState<any>(null);
@@ -1425,6 +1443,47 @@ export default function ScenariosPage() {
           ))}
         </div>
 
+        {truthScanPrefill && (
+          <Card className="mb-6 border-blue-500/30 bg-blue-500/5" data-testid="card-truth-scan-prefill">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                Ready to run: {truthScanPrefill.name}
+              </CardTitle>
+              <CardDescription>
+                Prefilled from Truth Scan Suggested Actions. Levers match the reddest metric — review and run.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2" data-testid="list-truth-scan-prefill-levers">
+                {Object.entries(truthScanPrefill.params)
+                  .filter(([, value]) => value !== 0 && value !== null)
+                  .map(([key, value]) => (
+                    <Badge key={key} variant="secondary" className="text-xs font-mono">
+                      {key.replace(/_/g, ' ')}: {String(value)}
+                    </Badge>
+                  ))}
+              </div>
+              <Button
+                onClick={() => handleWizardComplete({
+                  name: truthScanPrefill.name,
+                  ...truthScanPrefill.params,
+                  tags: [truthScanPrefill.goal, 'truth-scan'],
+                })}
+                disabled={isCreating || isRunning}
+                data-testid="button-run-truth-scan-prefill"
+              >
+                {(isCreating || isRunning) ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                Run this scenario
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {baseMetrics && (
           <div className="mb-6" data-testid="section-sensitivity-sliders">
             <SensitivitySliders
@@ -2452,6 +2511,10 @@ export default function ScenariosPage() {
                   onSaveScenario={async (params) => { await handleWizardComplete(params); }}
                   isRunning={isCreating || isRunning}
                   simulation={simulation}
+                  initialGoal={truthScanPrefill?.goal}
+                  initialStrategyId={truthScanPrefill?.strategyId}
+                  initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params } : undefined}
+                  prefillLabel={truthScanPrefill ? `Prefilled from Truth Scan: ${truthScanPrefill.name}` : undefined}
                 />
               </TabsContent>
 
@@ -2462,6 +2525,9 @@ export default function ScenariosPage() {
                   isRunning={isCreating || isRunning}
                   companyId={currentCompany.id}
                   baseMetrics={baseMetrics}
+                  initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params, tags: [truthScanPrefill.goal] } : undefined}
+                  initialStep={truthScanPrefill ? 5 : undefined}
+                  prefillLabel={truthScanPrefill ? `Prefilled from Truth Scan: ${truthScanPrefill.name}` : undefined}
                 />
               </TabsContent>
 

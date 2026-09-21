@@ -42,6 +42,11 @@ interface StrategicScenarioBuilderProps {
   onSaveScenario: (params: SimulationParams) => Promise<void>;
   isRunning?: boolean;
   simulation?: SimulationResult | null;
+  initialGoal?: SimulationGoal;
+  initialStrategyId?: string;
+  initialParams?: Partial<SimulationParams>;
+  initialStep?: BuilderStep;
+  prefillLabel?: string;
 }
 
 interface SimulationParams {
@@ -98,12 +103,22 @@ export function StrategicScenarioBuilder({
   onSaveScenario,
   isRunning = false,
   simulation,
+  initialGoal,
+  initialStrategyId,
+  initialParams,
+  initialStep,
+  prefillLabel,
 }: StrategicScenarioBuilderProps) {
-  const [step, setStep] = useState<BuilderStep>('goal');
-  const [selectedGoal, setSelectedGoal] = useState<SimulationGoal | undefined>();
-  const [selectedStrategy, setSelectedStrategy] = useState<StrategyTemplate | undefined>();
+  const bootstrapped = getStrategyById(initialStrategyId || '');
+  const [step, setStep] = useState<BuilderStep>(
+    initialStep || (bootstrapped ? 'customize' : 'goal'),
+  );
+  const [selectedGoal, setSelectedGoal] = useState<SimulationGoal | undefined>(
+    initialGoal || bootstrapped?.goal,
+  );
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyTemplate | undefined>(bootstrapped);
   const [pendingStrategyId, setPendingStrategyId] = useState<string | null>(null);
-  const [customParams, setCustomParams] = useState<Partial<SimulationParams>>({});
+  const [customParams, setCustomParams] = useState<Partial<SimulationParams>>(initialParams || {});
   const [isSaving, setIsSaving] = useState(false);
   
   const strategies = useMemo(() => {
@@ -178,14 +193,14 @@ export function StrategicScenarioBuilder({
     const rawGMDelta = currentParams.gross_margin_delta_pct || 0;
     const clampedGMDelta = Math.max(-baseGM, Math.min(100 - baseGM, rawGMDelta));
     const params: SimulationParams = {
-      name: selectedStrategy?.name || 'Custom Scenario',
+      name: customParams.name || selectedStrategy?.name || 'Custom Scenario',
       pricing_change_pct: currentParams.pricing_change_pct || 0,
       growth_uplift_pct: currentParams.growth_uplift_pct || 0,
       burn_reduction_pct: currentParams.burn_reduction_pct || 0,
       gross_margin_delta_pct: clampedGMDelta,
       churn_change_pct: currentParams.churn_change_pct || 0,
-      cac_change_pct: 0,
-      fundraise_month: currentParams.fundraise_amount ? 3 : null,
+      cac_change_pct: currentParams.cac_change_pct || 0,
+      fundraise_month: currentParams.fundraise_month ?? (currentParams.fundraise_amount ? 3 : null),
       fundraise_amount: currentParams.fundraise_amount || 0,
       tags: selectedGoal ? [selectedGoal] : [],
       start_month: currentParams.start_month || 1,
@@ -203,14 +218,14 @@ export function StrategicScenarioBuilder({
       const rawGMDeltaSave = currentParams.gross_margin_delta_pct || 0;
       const clampedGMDeltaSave = Math.max(-baseGMSave, Math.min(100 - baseGMSave, rawGMDeltaSave));
       const params: SimulationParams = {
-        name: selectedStrategy?.name || 'Custom Scenario',
+        name: customParams.name || selectedStrategy?.name || 'Custom Scenario',
         pricing_change_pct: currentParams.pricing_change_pct || 0,
         growth_uplift_pct: currentParams.growth_uplift_pct || 0,
         burn_reduction_pct: currentParams.burn_reduction_pct || 0,
         gross_margin_delta_pct: clampedGMDeltaSave,
         churn_change_pct: currentParams.churn_change_pct || 0,
-        cac_change_pct: 0,
-        fundraise_month: currentParams.fundraise_amount ? 3 : null,
+        cac_change_pct: currentParams.cac_change_pct || 0,
+        fundraise_month: currentParams.fundraise_month ?? (currentParams.fundraise_amount ? 3 : null),
         fundraise_amount: currentParams.fundraise_amount || 0,
         tags: selectedGoal ? [selectedGoal] : [],
         start_month: currentParams.start_month || 1,
@@ -248,6 +263,18 @@ export function StrategicScenarioBuilder({
   
   return (
     <div className="space-y-6 pb-20">
+      {prefillLabel && (
+        <div
+          className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex items-center gap-2"
+          data-testid="banner-truth-scan-prefill"
+        >
+          <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>
+            <span className="font-medium">{prefillLabel}</span>
+            <span className="text-muted-foreground"> — levers are filled in. Review and run.</span>
+          </span>
+        </div>
+      )}
       {step !== 'goal' && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Button
