@@ -68,7 +68,7 @@ export default function DemoRedirectPage() {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Link href="/auth">
+              <Link href="/auth?tab=register">
                 <Button variant="outline" data-testid="button-demo-signup">
                   <UserPlus className="h-4 w-4 mr-2" />
                   Sign Up Instead

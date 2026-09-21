@@ -84,7 +84,9 @@ export default function AuthPage() {
   // the signup form instead of the login tab.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'register') {
+    // ?mode=signup and ?tab=signup are aliases some older links use.
+    const tab = params.get('tab');
+    if (tab === 'register' || tab === 'signup' || params.get('mode') === 'signup') {
       setActiveTab('register');
     }
   }, []);

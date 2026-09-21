@@ -102,6 +102,9 @@ jobs:
       - name: auth-critical-routes tests
         run: npx tsx server/tests/auth-critical-routes.test.ts
 
+      - name: signup CTAs open the register tab
+        run: npx tsx server/tests/signup-cta-register-tab.test.ts
+
       - name: Production build
         run: npm run build
         env:
