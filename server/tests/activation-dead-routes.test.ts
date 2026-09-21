@@ -1,8 +1,8 @@
-// Source assertions for dead client routes on signup → first trusted insight.
+// Client Switch aliases on signup → first trusted insight.
 // Server SPA fallback returns 200 HTML for every path, so 404s are client-side:
-// unmatched Switch entries render NotFound. Email CTA sources stay on Vishesh
-// hold; this PR only locks client Switch aliases (and the in-app navigations
-// that used to emit those unmatched paths).
+// unmatched Switch entries render NotFound. This file only reads client sources
+// (App.tsx + in-app navigations). It must not open templates.py or
+// onboarding_sequence.py.
 import { readFileSync } from "fs";
 import assert from "assert";
 
@@ -11,6 +11,12 @@ const gate = readFileSync("client/src/components/TruthScanGate.tsx", "utf8");
 const suggested = readFileSync("client/src/components/TruthScanSuggestedActions.tsx", "utf8");
 const stepper = readFileSync("client/src/components/Layout/Stepper.tsx", "utf8");
 const overview = readFileSync("client/src/pages/overview.tsx", "utf8");
+
+assert.doesNotMatch(
+  readFileSync(new URL(import.meta.url).pathname, "utf8"),
+  /readFileSync\(["']server\/email\/(templates|onboarding_sequence)\.py["']/,
+  "this test must not read templates.py or onboarding_sequence.py",
+);
 
 const owned = [
   "/onboarding",
@@ -28,7 +34,7 @@ for (const path of owned) {
 assert.match(app, /path="\/onboard"/, "stale /onboard alias must exist");
 assert.match(app, /Redirect to="\/onboarding"/, "/onboard must redirect to /onboarding");
 
-assert.match(app, /path="\/simulation"/, "email /simulation alias must exist");
+assert.match(app, /path="\/simulation"/, "/simulation alias must exist");
 assert.match(app, /path="\/simulator"/, "/simulator alias must exist");
 
 assert.match(
@@ -37,8 +43,8 @@ assert.match(
   "TruthScanGate leftover /companies/:id/scenarios must alias",
 );
 
-assert.match(app, /path="\/account\/notifications"/, "onboarding-email /account/notifications alias");
-assert.match(app, /path="\/settings\/notifications"/, "email /settings/notifications alias");
+assert.match(app, /path="\/account\/notifications"/, "/account/notifications alias must exist");
+assert.match(app, /path="\/settings\/notifications"/, "/settings/notifications alias must exist");
 
 assert.doesNotMatch(
   gate,
