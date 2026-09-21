@@ -102,6 +102,9 @@ jobs:
       - name: auth-critical-routes tests
         run: npx tsx server/tests/auth-critical-routes.test.ts
 
+      - name: legacy redirect tests
+        run: npx tsx --test server/tests/legacy-redirects.test.ts
+
       - name: Production build
         run: npm run build
         env:
