@@ -478,6 +478,15 @@ def run_truth_scan(
     db.add(scan)
     db.commit()
     db.refresh(scan)
+
+    from server.services.activation import maybe_emit_founder_activated
+    maybe_emit_founder_activated(
+        db,
+        user_id=current_user.id,
+        company=company,
+        source="truth_scan",
+        exclude_truth_scan_id=scan.id,
+    )
     
     broadcast_truth_scan_update_sync(
         company_id=company_id,

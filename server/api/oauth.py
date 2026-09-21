@@ -86,6 +86,12 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
     except Exception as e:
         logger.warning(f"Slack signup notification failed: {e}")
 
+    try:
+        from server.services.activation import emit_signup_completed
+        emit_signup_completed(user_id=user.id, method="google")
+    except Exception as e:
+        logger.warning(f"signup_completed emit failed: {e}")
+
     return user
 
 

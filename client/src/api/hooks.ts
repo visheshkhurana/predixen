@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { api } from './client';
 import { useFounderStore } from '../store/founderStore';
 import { trackEvent } from '@/lib/posthog';
+import { trackFounderActivated } from '@/lib/funnel';
 
 /**
  * Every query key that depends on a company's financial data.
@@ -133,6 +134,14 @@ export function useRunTruthScan() {
     onSuccess: (data, companyId) => {
       invalidateCompanyFinancials(queryClient, companyId);
       setTruthScan(data);
+      const company = useFounderStore.getState().currentCompany;
+      if (company?.id === companyId && company.is_sample === false) {
+        trackFounderActivated({
+          source: 'truth_scan',
+          company_id: companyId,
+          is_sample: false,
+        });
+      }
     },
   });
 }
@@ -168,6 +177,14 @@ export function useRunSimulation() {
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
       trackEvent('simulation_run', { scenario_id: scenarioId, n_sims: nSims || 1000 });
+      const company = useFounderStore.getState().currentCompany;
+      if (company?.id != null && company.is_sample === false) {
+        trackFounderActivated({
+          source: 'simulation',
+          company_id: company.id,
+          is_sample: false,
+        });
+      }
     },
   });
 }

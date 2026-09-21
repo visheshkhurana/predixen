@@ -11,7 +11,6 @@ import { useFounderStore } from '@/store/founderStore';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, TrendingUp, Shield, Zap, Loader2, ArrowRight, BarChart3, Brain, Target, ChevronRight, Sparkles } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
-import { trackEvent } from '@/lib/posthog';
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
 
@@ -24,14 +23,13 @@ const identifyUser = (userId: number, email: string) => {
   }
 };
 
-// Signup is the key conversion for a free-first launch — fire it to both GA4
-// (mark "sign_up" as a conversion / import to Google Ads) and PostHog.
+// Signup is the key conversion for a free-first launch — fire it through
+// trackFunnel so GA4 / PostHog / X stay in sync. Keep the GA4 recommended
+// `sign_up` name alongside `signup_completed` (the product-bet event).
 const trackSignup = (userId: number, email: string, method = 'email') => {
   metaTrack('CompleteRegistration', { method });
-  if (typeof window !== 'undefined' && (window as any).gtag) {
-    (window as any).gtag('event', 'sign_up', { method });
-  }
-  trackEvent('sign_up', { method, user_id: userId });
+  trackFunnel('signup_completed', { method, user_id: userId });
+  trackFunnel('sign_up', { method, user_id: userId });
 };
 
 function AnimatedMetric({ label, value, delay }: { label: string; value: string; delay: number }) {

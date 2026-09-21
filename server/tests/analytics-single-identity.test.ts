@@ -70,6 +70,46 @@ test("listing leads requires platform admin", () => {
   assert.match(getBlock, /require_platform_admin/, "GET /leads must not be open");
 });
 
+test("signup_completed fires through trackFunnel and the server first-success path", () => {
+  const funnel = readFileSync("client/src/lib/funnel.ts", "utf8");
+  const auth = readFileSync("client/src/pages/auth.tsx", "utf8");
+  const callback = readFileSync("client/src/pages/auth-callback.tsx", "utf8");
+  const authApi = readFileSync("server/api/auth.py", "utf8");
+  const oauth = readFileSync("server/api/oauth.py", "utf8");
+  const activation = readFileSync("server/services/activation.py", "utf8");
+
+  assert.match(funnel, /signup_completed/);
+  assert.match(auth, /trackFunnel\(\s*['"]signup_completed['"]/);
+  assert.match(callback, /trackFunnel\(\s*['"]signup_completed['"]/);
+  assert.match(authApi, /emit_signup_completed\(user_id=user\.id, method="email"\)/);
+  assert.match(oauth, /emit_signup_completed\(user_id=user\.id, method="google"\)/);
+  assert.match(activation, /posthog_capture\(\s*"signup_completed"/);
+  assert.doesNotMatch(authApi, /emit_signup_completed.*login/i);
+});
+
+test("founder_activated is gated on is_sample and wired on first real success", () => {
+  const funnel = readFileSync("client/src/lib/funnel.ts", "utf8");
+  const hooks = readFileSync("client/src/api/hooks.ts", "utf8");
+  const truth = readFileSync("server/api/truth_scan.py", "utf8");
+  const sims = readFileSync("server/api/simulations.py", "utf8");
+  const sample = readFileSync("server/services/sample_data.py", "utf8");
+  const activation = readFileSync("server/services/activation.py", "utf8");
+
+  assert.match(funnel, /params\.is_sample !== false/);
+  assert.match(funnel, /trackFunnel\(\s*['"]founder_activated['"]/);
+  assert.match(hooks, /trackFounderActivated\(\{\s*source: 'truth_scan'/);
+  assert.match(hooks, /trackFounderActivated\(\{\s*source: 'simulation'/);
+  assert.match(hooks, /company\.is_sample === false/);
+  assert.match(truth, /maybe_emit_founder_activated/);
+  assert.match(truth, /source="truth_scan"/);
+  assert.match(sims, /maybe_emit_founder_activated/);
+  assert.match(sims, /source="simulation"/);
+  assert.match(activation, /company_is_sample/);
+  assert.match(activation, /metadata_json/);
+  assert.match(activation, /"founder_activated"/);
+  assert.doesNotMatch(sample, /founder_activated|emit_signup_completed|maybe_emit_founder/);
+});
+
 test("successful lead creates emit lead_captured on the server", () => {
   // Client trackFunnel("lead_captured") after fetch is in the live calculator
   // chunk but PostHog 522965 has never ingested the event. The conversion

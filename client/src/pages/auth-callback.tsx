@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { useFounderStore } from '@/store/founderStore';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/api/client';
+import { trackFunnel } from '@/lib/funnel';
 import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
@@ -63,6 +64,10 @@ export default function AuthCallback() {
         }
         toast({ title: 'Welcome!' });
         if (!isAdmin && (!companies || companies.length === 0)) {
+          // First-success OAuth path: a new account has no company yet.
+          // Returning Google users already have a company and must not
+          // re-fire signup_completed. Server also emits on user-row create.
+          trackFunnel('signup_completed', { method: 'google', user_id: parseInt(userId) });
           setLocation('/onboarding');
         } else {
           setLocation('/');
