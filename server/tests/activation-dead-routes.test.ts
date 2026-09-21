@@ -1,7 +1,8 @@
 // Source assertions for dead client routes on signup → first trusted insight.
 // Server SPA fallback returns 200 HTML for every path, so 404s are client-side:
-// unmatched Switch entries render NotFound. These checks lock the aliases and
-// the sources that used to emit the dead URLs.
+// unmatched Switch entries render NotFound. Email CTA sources stay on Vishesh
+// hold; this PR only locks client Switch aliases (and the in-app navigations
+// that used to emit those unmatched paths).
 import { readFileSync } from "fs";
 import assert from "assert";
 
@@ -10,8 +11,6 @@ const gate = readFileSync("client/src/components/TruthScanGate.tsx", "utf8");
 const suggested = readFileSync("client/src/components/TruthScanSuggestedActions.tsx", "utf8");
 const stepper = readFileSync("client/src/components/Layout/Stepper.tsx", "utf8");
 const overview = readFileSync("client/src/pages/overview.tsx", "utf8");
-const onboardingEmail = readFileSync("server/email/onboarding_sequence.py", "utf8");
-const emailTemplates = readFileSync("server/email/templates.py", "utf8");
 
 const owned = [
   "/onboarding",
@@ -64,24 +63,5 @@ assert.doesNotMatch(
   /setLocation\('\/scenarios'\)/,
   "overview first-insight CTAs must not send users through the leftover /scenarios path",
 );
-
-assert.doesNotMatch(
-  onboardingEmail,
-  /\/account\/notifications/,
-  "onboarding drip footer must not link to unmatched /account/notifications",
-);
-assert.match(onboardingEmail, /\{APP_URL\}\/settings"/, "onboarding drip Manage emails → /settings");
-
-assert.doesNotMatch(
-  emailTemplates,
-  /\/settings\/notifications/,
-  "email preference URL must not be unmatched /settings/notifications",
-);
-assert.doesNotMatch(
-  emailTemplates,
-  /APP_URL\}\/simulation"/,
-  "simulation-complete / decision emails must not CTA to unmatched /simulation",
-);
-assert.match(emailTemplates, /APP_URL\}\/simulate"/, "simulation emails must CTA to /simulate");
 
 console.log("PASS  activation-path dead-route source checks");

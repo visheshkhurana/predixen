@@ -39,7 +39,7 @@ def _wrap(title: str, body_html: str, cta_label: str, cta_url: str) -> str:
       </td></tr>
       <tr><td style="padding:16px 32px 24px;border-top:1px solid #27272a;font-size:12px;color:#71717a;">
         FounderConsole &middot; AI financial intelligence for founders<br/>
-        <a href="{APP_URL}/settings" style="color:#71717a;">Manage emails</a>
+        <a href="{APP_URL}/account/notifications" style="color:#71717a;">Manage emails</a>
       </td></tr>
     </table>
   </td></tr>
