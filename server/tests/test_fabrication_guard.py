@@ -10,8 +10,10 @@ from server.copilot.trust import (
     NOT_AVAILABLE_MESSAGE,
     apply_not_available_guard,
     apply_not_available_guard_to_text,
+    extract_available_metrics,
     flatten_output_text,
     missing_requested_metrics,
+    requested_metrics,
 )
 from server.lib.evals.eval_runner import run_fabrication_refusal_eval
 from server.lib.evals.golden_datasets import FABRICATION_REFUSAL_TESTS, get_datasets_by_category
@@ -43,7 +45,7 @@ def _assert_golden(case: dict) -> None:
 
 def test_all_fabrication_refusal_goldens():
     cases = get_datasets_by_category("fabrication_refusal")
-    assert len(cases) == 7
+    assert len(cases) == 12
     assert cases == FABRICATION_REFUSAL_TESTS
     for case in cases:
         _assert_golden(case)
@@ -52,7 +54,7 @@ def test_all_fabrication_refusal_goldens():
 def test_eval_runner_fabrication_suite_is_perfect():
     scored = asyncio.run(run_fabrication_refusal_eval({}, db=None))
     assert scored["overall_score"] == 100
-    assert scored["scores"]["fabrication_refusal"]["details"]["successful"] == 7
+    assert scored["scores"]["fabrication_refusal"]["details"]["successful"] == 12
 
 
 def test_missing_churn_is_detected():
@@ -137,3 +139,66 @@ def test_inr_and_shorthand_figures_count_as_numeric_claims():
         "Talk to your top 5 customers this week.",
     ]:
         assert not contains_numeric_financial_claims(text), text
+
+
+def test_estimated_truth_scan_placeholders_are_not_available():
+    verified = extract_available_metrics({
+        "metrics": {
+            "monthly_revenue": 45000,
+            "cash_balance": 600000,
+            "cac": 500,
+            "ltv": 3000,
+            "net_revenue_retention": 108,
+            "customer_count": 150,
+            "_estimated_metrics": [
+                "cac", "ltv", "net_revenue_retention", "customer_count",
+            ],
+        }
+    })
+    assert "monthly_revenue" in verified
+    assert "cash_balance" in verified
+    assert "cac" not in verified
+    assert "ltv" not in verified
+    assert "net_revenue_retention" not in verified
+    assert "customer_count" not in verified
+    assert missing_requested_metrics(
+        "What is our NRR?",
+        {"net_revenue_retention": 108, "_estimated_metrics": ["net_revenue_retention"]},
+        {"runway_months": {"p50": 11}},
+    ) == ["nrr"]
+
+
+def test_cash_burn_revenue_questions_are_recognized():
+    assert "cash" in requested_metrics("What is our cash balance?")
+    assert "burn" in requested_metrics("What is our monthly burn?")
+    assert "revenue" in requested_metrics("What is our MRR?")
+
+
+def test_structured_numeric_leaf_is_a_figure():
+    result = apply_not_available_guard(
+        {
+            "executive_summary": ["Snapshot attached."],
+            "financials": {"unit_economics": {"cac": 500}},
+        },
+        GroundingStatus.VERIFIED,
+        user_message="What is our CAC?",
+        available_metrics={"monthly_revenue": {"value": 10000}},
+    )
+    assert result.refused is True
+
+
+def test_estimated_nrr_qualitative_advice_still_passes():
+    advice = {"executive_summary": [
+        "Tighten logo churn and expand seats if you want NRR to move."
+    ]}
+    result = apply_not_available_guard(
+        advice,
+        GroundingStatus.VERIFIED,
+        user_message="How do I improve NRR?",
+        available_metrics={
+            "net_revenue_retention": 108,
+            "_estimated_metrics": ["net_revenue_retention"],
+        },
+    )
+    assert result.refused is False
+    assert result.output == advice

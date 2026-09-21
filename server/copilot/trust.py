@@ -488,8 +488,38 @@ _QUESTION_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bcac\b|\bcustomer acquisition\b", re.I), "cac"),
     (re.compile(r"\bltv\b|\blifetime value\b", re.I), "ltv"),
     (re.compile(r"\barpu\b", re.I), "arpu"),
-    (re.compile(r"\bactive customers?\b", re.I), "customers"),
+    (re.compile(r"\b(?:active\s+)?customers?\b|\bcustomer count\b", re.I), "customers"),
+    (re.compile(r"\b(?:cash(?:\s+balance)?|cash on hand|how much cash)\b", re.I), "cash"),
+    (re.compile(r"\b(?:net\s+)?burn(?:\s+rate)?\b", re.I), "burn"),
+    (re.compile(r"\b(?:monthly\s+)?(?:revenue|mrr|arr)\b", re.I), "revenue"),
 ]
+
+# Phrases used to spot "CAC is 500" / "150 active customers" next to a asked metric.
+_METRIC_PROSE: Dict[str, Tuple[str, ...]] = {
+    "runway": ("runway",),
+    "survival": ("survival",),
+    "churn": ("churn",),
+    "nrr": ("nrr", "ndr", "net revenue retention", "net dollar retention"),
+    "cac": ("cac", "customer acquisition cost"),
+    "ltv": ("ltv", "lifetime value"),
+    "arpu": ("arpu",),
+    "customers": ("active customers", "customer count", "customers"),
+    "burn": ("net burn", "burn rate", "monthly burn", "burn"),
+    "cash": ("cash balance", "cash on hand", "cash"),
+    "revenue": ("monthly revenue", "revenue", "mrr", "arr"),
+}
+
+_NUMBER_TOKEN = r"\d[\d,]*(?:\.\d+)?"
+
+_ESTIMATED_SOURCE_MARKERS = frozenset({
+    "estimated",
+    "imputed",
+    "benchmark",
+    "benchmark_imputed",
+    "placeholder",
+    "default",
+    "assumed",
+})
 
 
 _EXTRA_FIGURE_PATTERN = re.compile(
@@ -518,20 +548,62 @@ def _status_value(grounding_status: Union[GroundingStatus, str, None]) -> str:
     return str(grounding_status)
 
 
+def _estimated_names(raw: Dict[str, Any], metrics: Dict[str, Any]) -> set:
+    names: set = set()
+    for blob in (raw, metrics):
+        listed = blob.get("_estimated_metrics")
+        if isinstance(listed, list):
+            names.update(str(item) for item in listed if item)
+    return names
+
+
+def _payload_is_estimated(key: str, value: Any, estimated_names: set) -> bool:
+    if key in estimated_names:
+        return True
+    if not isinstance(value, dict):
+        return False
+    markers = [
+        value.get("source"),
+        value.get("confidence"),
+        value.get("status"),
+        value.get("origin"),
+    ]
+    for marker in markers:
+        if marker is None:
+            continue
+        token = str(marker).lower()
+        if token in _ESTIMATED_SOURCE_MARKERS or "estimat" in token or "imput" in token:
+            return True
+    return False
+
+
 def extract_available_metrics(raw: Any) -> Dict[str, Any]:
-    """Flatten truth-scan / context metrics into a {key: payload} map."""
+    """Flatten truth-scan / context metrics, dropping estimated placeholders.
+
+    Production truth_scan writes CAC/LTV/NRR (and a 150-customer default) into
+    `metrics` and lists them on `_estimated_metrics`. Those must not count as
+    verified availability or the guard will quote the placeholder.
+    """
     if not raw:
         return {}
     if not isinstance(raw, dict):
         return {}
     metrics = raw.get("metrics")
-    if isinstance(metrics, dict):
-        return metrics
-    return raw
+    if not isinstance(metrics, dict):
+        metrics = raw
+    estimated = _estimated_names(raw, metrics)
+    verified: Dict[str, Any] = {}
+    for key, value in metrics.items():
+        if key.startswith("_"):
+            continue
+        if _payload_is_estimated(key, value, estimated):
+            continue
+        verified[key] = value
+    return verified
 
 
 def metric_is_present(available_metrics: Optional[Dict[str, Any]], *keys: str) -> bool:
-    """True when a metric key exists and is not an explicit null (0 is present)."""
+    """True when a verified metric key exists and is not an explicit null (0 is present)."""
     if not available_metrics:
         return False
     for key in keys:
@@ -566,7 +638,7 @@ def missing_requested_metrics(
     missing: List[str] = []
     combined: Dict[str, Any] = {}
     if available_metrics:
-        combined.update(available_metrics)
+        combined.update(extract_available_metrics(available_metrics))
     if run_outputs:
         combined.update(run_outputs)
         survival = run_outputs.get("survival_probability")
@@ -588,20 +660,33 @@ def missing_requested_metrics(
 
 
 def flatten_output_text(output: Any) -> str:
-    """Concatenate user-visible strings from a copilot structured output."""
+    """Concatenate user-visible strings and numeric leaves from a copilot output.
+
+    Structured fields such as financials.unit_economics.cac = 500 are included
+    as "cac 500" so the guard can see invented numbers that never appear in prose.
+    """
     chunks: List[str] = []
 
     def walk(obj: Any, depth: int = 0) -> None:
         if depth > 8:
             return
+        if isinstance(obj, bool):
+            return
         if isinstance(obj, str):
             chunks.append(obj)
+        elif isinstance(obj, (int, float)):
+            chunks.append(str(obj))
         elif isinstance(obj, list):
             for item in obj:
                 walk(item, depth + 1)
         elif isinstance(obj, dict):
-            for value in obj.values():
-                walk(value, depth + 1)
+            for key, value in obj.items():
+                if isinstance(value, bool):
+                    continue
+                if isinstance(value, (int, float)):
+                    chunks.append(f"{key} {value}")
+                else:
+                    walk(value, depth + 1)
 
     walk(output)
     return " ".join(chunks)
@@ -616,6 +701,33 @@ def contains_numeric_financial_claims(text: str) -> bool:
     # should_include_provenance only knows "$"; founders on Tally/Zoho talk in
     # INR (lakh/crore) and others in EUR/GBP or k/M shorthand.
     return bool(_EXTRA_FIGURE_PATTERN.search(text))
+
+
+def prose_states_metric_figure(text: str, metric: str) -> bool:
+    """True when prose (or flattened structured keys) puts a number next to a metric."""
+    if not text:
+        return False
+    for alias in _METRIC_PROSE.get(metric, (metric,)):
+        escaped = re.escape(alias)
+        if re.search(rf"{escaped}.{{0,24}}{_NUMBER_TOKEN}", text, re.I):
+            return True
+        if re.search(rf"{_NUMBER_TOKEN}.{{0,16}}{escaped}", text, re.I):
+            return True
+    return False
+
+
+def output_states_figures(
+    output: Optional[Dict[str, Any]],
+    asked: Optional[List[str]] = None,
+) -> bool:
+    """Whether the answer states a figure — currency/percent/months or a bare metric number."""
+    text = flatten_output_text(output or {})
+    if contains_numeric_financial_claims(text):
+        return True
+    for metric in asked or []:
+        if prose_states_metric_figure(text, metric):
+            return True
+    return False
 
 
 def _not_available_output(reason: str) -> Dict[str, Any]:
@@ -650,11 +762,13 @@ def apply_not_available_guard(
     """
     status = _status_value(grounding_status)
     current = dict(output or {})
-    text = flatten_output_text(current)
+    asked = requested_metrics(user_message)
     # Refuse only when the answer actually states a figure. "How do I reduce
     # churn?" with no churn data should still get qualitative advice; truth_scan
     # never emits a churn key, so a keyword-only refusal would block it forever.
-    states_numbers = contains_numeric_financial_claims(text)
+    # Bare "CAC is 500" / structured financials.cac=500 count as figures too.
+    states_numbers = output_states_figures(current, asked)
+    text = flatten_output_text(current)
     missing = missing_requested_metrics(user_message, available_metrics, run_outputs)
     if missing and states_numbers:
         reason = f"missing_metrics:{','.join(missing)}"
@@ -666,7 +780,6 @@ def apply_not_available_guard(
             text=NOT_AVAILABLE_MESSAGE,
         )
 
-    asked = requested_metrics(user_message)
     if "survival" in asked and status != GroundingStatus.VERIFIED.value and states_numbers:
         reason = "survival_requires_verified_run"
         return FabricationGuardResult(
