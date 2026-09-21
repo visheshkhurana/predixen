@@ -246,10 +246,22 @@ class TestTallyMapToFinancials:
         assert "<SVFROMDATE>01-Sep-2026</SVFROMDATE>" in xml
         assert "<SVTODATE>15-Sep-2026</SVTODATE>" in xml
 
-    def test_reporting_window_defaults_to_month_in_progress(self):
+    def test_reporting_window_defaults_to_last_complete_month(self):
+        # Mid-September: a partial month would be read as a full month's burn.
         start, end = tally_reporting_window(now=SEP_END)
-        assert start == datetime(2026, 9, 1, 0, 0, 0)
-        assert end == SEP_END
+        assert start == datetime(2026, 8, 1, 0, 0, 0)
+        assert end == datetime(2026, 8, 31, 0, 0, 0)
+
+    def test_reporting_window_crosses_year_boundary(self):
+        start, end = tally_reporting_window(now=datetime(2027, 1, 3, 9, 30))
+        assert start == datetime(2026, 12, 1, 0, 0, 0)
+        assert end == datetime(2026, 12, 31, 0, 0, 0)
+
+    def test_reporting_window_respects_explicit_bounds(self):
+        start, end = tally_reporting_window(
+            now=SEP_END, start_date=datetime(2026, 9, 1), end_date=SEP_END
+        )
+        assert (start, end) == (datetime(2026, 9, 1), SEP_END)
 
     def test_mid_fy_closing_does_not_become_monthly_pnl(self):
         financials = _tally().map_to_financials(

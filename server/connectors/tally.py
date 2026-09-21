@@ -16,7 +16,7 @@ Documentation: https://developers.tallysolutions.com/
 import httpx
 import logging
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 
 from .base import (
@@ -137,10 +137,17 @@ def tally_reporting_window(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> Tuple[datetime, datetime]:
-    """Calendar month in progress, unless the caller already bounded the fetch."""
+    """Last complete calendar month, unless the caller already bounded the fetch.
+
+    truth_scan reads a FinancialRecord's revenue/costs as *monthly* figures, so
+    a month-in-progress window (1st..today) would report e.g. 5 days of spend
+    as a month's burn and overstate runway. A closed month is the honest unit.
+    """
     now = now or datetime.utcnow()
-    start = start_date or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    end = end_date or now
+    first_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_end = first_this_month - timedelta(days=1)
+    start = start_date or last_month_end.replace(day=1)
+    end = end_date or last_month_end
     return start, end
 
 
