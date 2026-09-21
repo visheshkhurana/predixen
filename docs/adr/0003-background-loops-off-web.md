@@ -22,6 +22,7 @@ Move periodic background loops to a **dedicated worker process** (or single elec
 - Positive: safe replica count; clearer ownership of silent-failure monitors.
 - Negative: new process to deploy and watch; short dual-run window during cutover.
 - Follow-ups: inventory every `asyncio.create_task` in lifespan; coordinate crawler health with Reliability (do not fork #14).
+- Constraint: do not start runtime implementation until PR #38 is green, or explicitly coordinate with Reliability (do not collide with #38 / deploy-landed monitor).
 
 ## Kill criteria
 Revert cutover if worker miss rate exceeds web-embedded baseline for 24h, or if deploy complexity blocks a P0 ship.
