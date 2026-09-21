@@ -132,10 +132,15 @@ async def upload_dataset(
     
     if dataset_type == "financial":
         records = parse_financial_records(df, mapping)
+        wrote_financials = False
         for rec in records:
             if rec["period_start"] and rec["period_end"]:
                 fr = FinancialRecord(company_id=company_id, **rec)
                 db.add(fr)
+                wrote_financials = True
+        if wrote_financials:
+            from server.services.sample_data import on_real_financials_written
+            on_real_financials_written(db, company_id, commit=False)
     elif dataset_type == "transactions":
         records = parse_transaction_records(df, mapping)
         for rec in records:
@@ -230,6 +235,9 @@ def manual_baseline(
         row_count=1
     )
     db.add(dataset)
+
+    from server.services.sample_data import on_real_financials_written
+    on_real_financials_written(db, company_id, commit=False)
     
     db.commit()
     
@@ -300,6 +308,8 @@ async def upload_termina_pdf(
                 row_count=1
             )
             db.add(dataset)
+            from server.services.sample_data import on_real_financials_written
+            on_real_financials_written(db, company_id, commit=False)
             db.commit()
         
         return {
@@ -387,6 +397,8 @@ async def upload_termina_excel(
                 row_count=1
             )
             db.add(dataset)
+            from server.services.sample_data import on_real_financials_written
+            on_real_financials_written(db, company_id, commit=False)
             db.commit()
         
         return {

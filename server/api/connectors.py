@@ -516,6 +516,8 @@ async def sync_provider(
 
             if financial_record:
                 db.add(financial_record)
+                from server.services.sample_data import on_real_financials_written
+                on_real_financials_written(db, company_id, commit=False)
 
             db.commit()
 

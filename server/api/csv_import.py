@@ -208,6 +208,10 @@ def import_csv_data(
             errors.append({"row": i, "error": str(e)})
 
     db.flush()
+    if imported:
+        from server.services.sample_data import on_real_financials_written
+        on_real_financials_written(db, company_id, commit=False)
+        db.flush()
 
     # Recompute month-over-month revenue growth across the company's full
     # history (imports never set mom_growth, which left the baseline growth

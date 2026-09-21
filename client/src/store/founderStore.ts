@@ -103,6 +103,7 @@ interface FounderState {
   setUser: (user: User | null) => void;
   setCurrentCompany: (company: Company | null) => void;
   markCurrentCompanySample: () => void;
+  syncCurrentCompanyIsSample: (isSample: boolean) => void;
   setCompanies: (companies: Company[]) => void;
   setTruthScan: (scan: TruthScan | null) => void;
   setCurrentStep: (step: 'truth' | 'simulation' | 'decision') => void;
@@ -188,6 +189,16 @@ export const useFounderStore = create<FounderState>()(
         const current = get().currentCompany;
         if (!current) return;
         set({ currentCompany: { ...current, is_sample: true } });
+      },
+      syncCurrentCompanyIsSample: (isSample) => {
+        const current = get().currentCompany;
+        if (!current || !!current.is_sample === !!isSample) return;
+        set({
+          currentCompany: { ...current, is_sample: isSample },
+          companies: get().companies.map((c) =>
+            c.id === current.id ? { ...c, is_sample: isSample } : c
+          ),
+        });
       },
       setCompanies: (companies) => set({ companies }),
       setTruthScan: (scan) => set({ truthScan: scan }),

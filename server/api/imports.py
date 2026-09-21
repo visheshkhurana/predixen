@@ -546,6 +546,9 @@ async def save_import(
     )
     
     db.add(record)
+
+    from server.services.sample_data import on_real_financials_written
+    on_real_financials_written(db, session.company_id, commit=False)
     
     db.execute(
         ImportSession.__table__.update()
