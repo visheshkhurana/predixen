@@ -492,6 +492,14 @@ _QUESTION_PATTERNS: List[Tuple[re.Pattern, str]] = [
 ]
 
 
+_EXTRA_FIGURE_PATTERN = re.compile(
+    r"[₹€£]\s?[\d,]+"
+    r"|\b(?:rs\.?|inr|usd|eur|gbp)\s?[\d,]+"
+    r"|\b\d[\d,]*(?:\.\d+)?\s?(?:k|m|mn|bn|l|cr|lakh|lakhs|crore|crores)\b",
+    re.I,
+)
+
+
 @dataclass
 class FabricationGuardResult:
     """Result of applying the fabrication → NOT_AVAILABLE guard."""
@@ -603,7 +611,11 @@ def contains_numeric_financial_claims(text: str) -> bool:
     """True when the text includes investor-facing numeric claims."""
     if not text:
         return False
-    return should_include_provenance(text)
+    if should_include_provenance(text):
+        return True
+    # should_include_provenance only knows "$"; founders on Tally/Zoho talk in
+    # INR (lakh/crore) and others in EUR/GBP or k/M shorthand.
+    return bool(_EXTRA_FIGURE_PATTERN.search(text))
 
 
 def _not_available_output(reason: str) -> Dict[str, Any]:
@@ -638,8 +650,13 @@ def apply_not_available_guard(
     """
     status = _status_value(grounding_status)
     current = dict(output or {})
+    text = flatten_output_text(current)
+    # Refuse only when the answer actually states a figure. "How do I reduce
+    # churn?" with no churn data should still get qualitative advice; truth_scan
+    # never emits a churn key, so a keyword-only refusal would block it forever.
+    states_numbers = contains_numeric_financial_claims(text)
     missing = missing_requested_metrics(user_message, available_metrics, run_outputs)
-    if missing:
+    if missing and states_numbers:
         reason = f"missing_metrics:{','.join(missing)}"
         return FabricationGuardResult(
             output=_not_available_output(reason),
@@ -650,7 +667,7 @@ def apply_not_available_guard(
         )
 
     asked = requested_metrics(user_message)
-    if "survival" in asked and status != GroundingStatus.VERIFIED.value:
+    if "survival" in asked and status != GroundingStatus.VERIFIED.value and states_numbers:
         reason = "survival_requires_verified_run"
         return FabricationGuardResult(
             output=_not_available_output(reason),
@@ -660,8 +677,7 @@ def apply_not_available_guard(
             text=NOT_AVAILABLE_MESSAGE,
         )
 
-    text = flatten_output_text(current)
-    if status == GroundingStatus.NOT_AVAILABLE.value and contains_numeric_financial_claims(text):
+    if status == GroundingStatus.NOT_AVAILABLE.value and states_numbers:
         projection_like = bool(re.search(r"\bP(?:10|50|90)\b|\bsurvival\b", text, re.I))
         if not available_metrics or projection_like:
             reason = "ungrounded_numeric_claims"

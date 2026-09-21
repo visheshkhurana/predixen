@@ -83,3 +83,57 @@ def test_quick_chat_text_guard_strips_fabricated_runway():
     assert result.refused is True
     assert result.text == NOT_AVAILABLE_MESSAGE
     assert "11.7" not in (result.text or "")
+
+
+def test_qualitative_answer_about_missing_metric_is_not_refused():
+    """No churn data + advice with no figures -> answer passes through."""
+    advice = {"executive_summary": [
+        "Talk to churned customers, tighten onboarding, and add an annual plan."
+    ]}
+    result = apply_not_available_guard(
+        advice,
+        GroundingStatus.NOT_AVAILABLE,
+        user_message="How do I reduce churn?",
+        available_metrics={"monthly_revenue": {"value": 40000}},
+    )
+    assert result.refused is False
+    assert result.output == advice
+
+
+def test_survival_question_without_run_passes_when_no_number_is_stated():
+    result = apply_not_available_guard_to_text(
+        "Survival odds depend on burn and time to next raise; run a simulation to see them.",
+        GroundingStatus.NOT_AVAILABLE,
+        user_message="What drives my survival odds?",
+        available_metrics={"net_burn": {"value": 20000}},
+    )
+    assert result.refused is False
+
+
+def test_missing_metric_with_invented_figure_is_still_refused():
+    result = apply_not_available_guard_to_text(
+        "Your monthly churn is 4.2% which is above benchmark.",
+        GroundingStatus.NOT_AVAILABLE,
+        user_message="What is my churn?",
+        available_metrics={"monthly_revenue": {"value": 40000}},
+    )
+    assert result.refused is True
+    assert result.text == NOT_AVAILABLE_MESSAGE
+
+
+def test_inr_and_shorthand_figures_count_as_numeric_claims():
+    from server.copilot.trust import contains_numeric_financial_claims
+
+    for text in [
+        "You have ₹12,00,000 in the bank.",
+        "Cash on hand is about 1.2 Cr.",
+        "Monthly burn is Rs 4,50,000.",
+        "Burn is roughly 45k a month.",
+        "ARR is 2.4M.",
+    ]:
+        assert contains_numeric_financial_claims(text), text
+    for text in [
+        "Tighten onboarding and add an annual plan.",
+        "Talk to your top 5 customers this week.",
+    ]:
+        assert not contains_numeric_financial_claims(text), text
