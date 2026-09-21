@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef, useCallback, lazy, Suspense, type ReactNode } from "react";
 const ReactMarkdownLazy = lazy(() => import("react-markdown").then(m => ({ default: m.default })));
 import { Switch, Route, Redirect, useLocation } from "wouter";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -1154,24 +1153,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AnimatedRouteWrapper({ children }: { children: ReactNode }) {
   const [location] = useLocation();
-  const prefersReducedMotion = useReducedMotion();
-
-  if (prefersReducedMotion) {
-    return <>{children}</>;
-  }
-
+  // CSS enter animation (fc-route-enter), not framer-motion. A static import
+  // of AnimatePresence here is what put the whole library into the entry
+  // bundle that signup / onboarding / first insight all wait on.
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={location}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -6 }}
-        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div key={location} className="fc-route-enter">
+      {children}
+    </div>
   );
 }
 

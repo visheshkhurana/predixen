@@ -60,6 +60,9 @@ jobs:
       - name: activation-path dead-route tests
         run: npx tsx server/tests/activation-dead-routes.test.ts
 
+      - name: entry-bundle no framer-motion on critical path
+        run: npx tsx server/tests/entry-no-framer-motion.test.ts
+
       - name: runway-industry SSR tests
         run: npx tsx --test server/tests/runway-industry-ssr.test.ts
 
