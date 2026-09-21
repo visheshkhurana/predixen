@@ -3,6 +3,11 @@ import { api } from './client';
 import { useFounderStore } from '../store/founderStore';
 import { trackEvent } from '@/lib/posthog';
 import { trackFounderActivated } from '@/lib/funnel';
+import {
+  peekSimulationAttribution,
+  consumeSimulationAttribution,
+  TRUTH_SCAN_SIM_SOURCE,
+} from '@/lib/truthScanSuggestedActions';
 
 /**
  * Every query key that depends on a company's financial data.
@@ -175,13 +180,36 @@ export function useRunSimulation() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) =>
-      api.simulations.run(scenarioId, nSims, seed),
+    mutationFn: async ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) => {
+      const attr = peekSimulationAttribution();
+      if (attr?.source === TRUTH_SCAN_SIM_SOURCE) {
+        trackEvent('simulation_started', {
+          source: TRUTH_SCAN_SIM_SOURCE,
+          from: attr.from,
+          action_id: attr.action_id,
+          action_type: attr.action_type,
+          scenario_id: scenarioId,
+        });
+      }
+      return api.simulations.run(scenarioId, nSims, seed);
+    },
     onSuccess: (_, { scenarioId, nSims }) => {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
-      trackEvent('simulation_run', { scenario_id: scenarioId, n_sims: nSims || 1000 });
+      const attr = consumeSimulationAttribution();
+      trackEvent('simulation_run', {
+        scenario_id: scenarioId,
+        n_sims: nSims || 1000,
+        ...(attr?.source === TRUTH_SCAN_SIM_SOURCE
+          ? {
+              source: TRUTH_SCAN_SIM_SOURCE,
+              from: attr.from,
+              action_id: attr.action_id,
+              action_type: attr.action_type,
+            }
+          : {}),
+      });
       const company = useFounderStore.getState().currentCompany;
       if (company?.id != null && company.is_sample === false) {
         trackFounderActivated({

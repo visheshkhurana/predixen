@@ -9,6 +9,7 @@ import assert from "assert";
 const app = readFileSync("client/src/App.tsx", "utf8");
 const gate = readFileSync("client/src/components/TruthScanGate.tsx", "utf8");
 const suggested = readFileSync("client/src/components/TruthScanSuggestedActions.tsx", "utf8");
+const suggestedLib = readFileSync("client/src/lib/truthScanSuggestedActions.ts", "utf8");
 const stepper = readFileSync("client/src/components/Layout/Stepper.tsx", "utf8");
 const overview = readFileSync("client/src/pages/overview.tsx", "utf8");
 
@@ -55,8 +56,18 @@ assert.match(gate, /setLocation\('\/simulate'\)/, "TruthScanGate finalize must g
 
 assert.match(
   suggested,
-  /`\/simulate\$\{params/,
+  /buildSimulateUrl\(action/,
+  "truth-scan suggested actions must deep-link via buildSimulateUrl",
+);
+assert.match(
+  suggestedLib,
+  /`\/simulate\$\{qs/,
   "truth-scan suggested actions must open /simulate, not the /scenarios redirect",
+);
+assert.doesNotMatch(
+  suggested,
+  /navigate\(`\/scenarios/,
+  "suggested actions must not navigate to the leftover /scenarios path",
 );
 
 assert.match(stepper, /path: '\/simulate'/, "first-run stepper Simulate must link to /simulate");

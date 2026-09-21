@@ -3,17 +3,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lightbulb, ArrowRight } from 'lucide-react';
 import { useLocation } from 'wouter';
-
-interface SuggestedAction {
-  id: string;
-  title: string;
-  description: string;
-  metricIssue: string; // e.g., "Churn is 40% above benchmark"
-  actionType: 'retention' | 'runway' | 'burn' | 'margin' | 'growth' | 'acquisition';
-  scenarioName?: string;
-  scenarioParams?: Record<string, any>;
-  priority: 'high' | 'medium' | 'low';
-}
+import { trackEvent } from '@/lib/posthog';
+import {
+  type SuggestedAction,
+  SUGGESTED_ACTIONS_MAX,
+  buildSimulateUrl,
+  rememberSimulationAttribution,
+  TRUTH_SCAN_SIM_SOURCE,
+  TRUTH_SCAN_SIM_FROM,
+} from '@/lib/truthScanSuggestedActions';
 
 interface TruthScanSuggestedActionsProps {
   actions: SuggestedAction[];
@@ -84,48 +82,44 @@ export function TruthScanSuggestedActions({
   };
 
   const handleActionClick = (action: SuggestedAction) => {
-    // Build scenario URL with pre-populated parameters
-    const params = new URLSearchParams();
-
-    if (companyId) {
-      params.append('company', String(companyId));
-    }
-
-    // Add scenario-specific parameters
-    if (action.scenarioParams) {
-      Object.entries(action.scenarioParams).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          params.append(key, String(value));
-        }
-      });
-    }
-
-    // Add scenario name/type to guide the user
-    if (action.scenarioName) {
-      params.append('scenario', action.scenarioName);
-    }
-
-    const url = `/simulate${params.toString() ? `?${params.toString()}` : ''}`;
+    rememberSimulationAttribution({
+      source: TRUTH_SCAN_SIM_SOURCE,
+      from: TRUTH_SCAN_SIM_FROM,
+      action_id: action.id,
+      action_type: action.actionType,
+    });
+    trackEvent('cta_click', {
+      location: 'truth_scan_suggested_action',
+      action_id: action.id,
+      action_type: action.actionType,
+      source: TRUTH_SCAN_SIM_SOURCE,
+    });
+    const url = buildSimulateUrl(action, companyId);
     navigate(url);
   };
 
+  const visible = actions.slice(0, SUGGESTED_ACTIONS_MAX);
+
   return (
-    <Card className="border-blue-500/20 bg-blue-500/5">
+    <Card className="border-blue-500/20 bg-blue-500/5" data-testid="section-suggested-actions">
       <CardContent className="p-6">
         <div className="space-y-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             Suggested Actions
           </h3>
+          <p className="text-sm text-muted-foreground">
+            From your reddest metrics. Each opens Scenarios already filled in — review the levers and run.
+          </p>
 
           <div className="space-y-3">
-            {actions.slice(0, 4).map((action) => (
+            {visible.map((action) => (
               <div
                 key={action.id}
                 className={`border rounded-lg p-4 transition-all ${getActionColor(action.actionType)}`}
+                data-testid={`card-suggested-action-${action.id}`}
               >
                 <div className="space-y-3">
-                  {/* Header: Title + Priority + Type */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-sm">{action.title}</h4>
@@ -141,10 +135,8 @@ export function TruthScanSuggestedActions({
                     </div>
                   </div>
 
-                  {/* Description */}
                   <p className="text-sm text-muted-foreground">{action.description}</p>
 
-                  {/* CTA Button */}
                   <div className="pt-1">
                     <Button
                       variant="outline"
@@ -152,6 +144,7 @@ export function TruthScanSuggestedActions({
                       onClick={() => handleActionClick(action)}
                       disabled={isLoading}
                       className="w-full"
+                      data-testid={`button-suggested-action-${action.id}`}
                     >
                       Run Scenario
                       <ArrowRight className="h-3.5 w-3.5 ml-2" />
@@ -162,9 +155,9 @@ export function TruthScanSuggestedActions({
             ))}
           </div>
 
-          {actions.length > 4 && (
+          {actions.length > SUGGESTED_ACTIONS_MAX && (
             <p className="text-xs text-muted-foreground text-center pt-2">
-              Showing {Math.min(4, actions.length)} of {actions.length} suggested actions
+              Showing {Math.min(SUGGESTED_ACTIONS_MAX, actions.length)} of {actions.length} suggested actions
             </p>
           )}
         </div>
