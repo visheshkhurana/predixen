@@ -88,6 +88,8 @@ import { FieldHelp } from '@/components/ui/field-help';
 import { IOLegend } from '@/components/ui/io-legend';
 import { getFieldHelp } from '@/lib/field-help-data';
 import { BoardExportButton } from '@/components/board-export/ExportButton';
+import { SampleInsightExplainer } from '@/components/sample-data/SampleInsightExplainer';
+import { deriveSampleInsight, isSampleCompany } from '@/lib/sampleCompany';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1078,12 +1080,13 @@ export default function OverviewPage() {
                 <Sparkles className="h-8 w-8 text-primary" />
               </div>
             </div>
-            <CardTitle className="text-2xl">Let's get you to your first simulation</CardTitle>
+            <CardTitle className="text-2xl">Let's get you to your first insight</CardTitle>
             <CardDescription className="text-base mt-1">
-              Your dashboard shows N/A because no financial data has been added yet.
+              No financials yet — load labelled sample data to see how inputs become burn and runway, or upload your own.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
+            <SampleInsightExplainer />
             <div className="flex flex-col gap-2 mb-2">
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1106,7 +1109,10 @@ export default function OverviewPage() {
                 onClick={() => {
                   seedSampleMutation.mutate(currentCompany.id, {
                     onSuccess: () => {
-                      toast({ title: 'Sample data loaded!' });
+                      toast({
+                        title: 'Sample insight ready',
+                        description: 'These numbers are simulated — not your company.',
+                      });
                       setTimeout(() => window.location.reload(), 1200);
                     },
                     onError: (err: any) => {
@@ -1121,7 +1127,7 @@ export default function OverviewPage() {
                 }}
               >
                 {seedSampleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Database className="h-4 w-4 mr-2" />}
-                Load Sample Data
+                Load labelled sample data
               </Button>
               <Link href="/data-input">
                 <Button variant="outline" data-testid="button-upload-financials">
@@ -1280,6 +1286,29 @@ export default function OverviewPage() {
           </div>
         </div>
       </FadeIn>
+
+      {isSampleCompany(currentCompany) && (
+        <SampleInsightExplainer
+          insight={
+            sharedMetrics?.mrr > 0 && sharedMetrics?.totalMonthlyExpenses > 0 && sharedMetrics?.cashOnHand > 0
+              ? {
+                  inputs: {
+                    monthly_revenue: sharedMetrics.mrr,
+                    monthly_expenses: sharedMetrics.totalMonthlyExpenses,
+                    cash_balance: sharedMetrics.cashOnHand,
+                  },
+                  outputs: {
+                    monthly_burn: sharedMetrics.netBurn,
+                    runway_months: Number.isFinite(sharedMetrics.runway)
+                      ? Math.round(sharedMetrics.runway * 10) / 10
+                      : null,
+                  },
+                }
+              : deriveSampleInsight()
+          }
+          currency={currentCompany.currency || 'USD'}
+        />
+      )}
 
       {!briefingDismissed && (
         <FadeIn delay={0.05}>

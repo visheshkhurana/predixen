@@ -240,7 +240,13 @@ export const api = {
         method: 'DELETE',
       }),
     seedSample: (id: number) =>
-      request<{ already_seeded: boolean; record_count: number }>(`/companies/${id}/seed-sample`, {
+      request<{
+        already_seeded: boolean;
+        record_count: number;
+        is_sample: boolean;
+        inputs?: { monthly_revenue: number; monthly_expenses: number; cash_balance: number };
+        outputs?: { monthly_burn: number; runway_months: number | null };
+      }>(`/companies/${id}/seed-sample`, {
         method: 'POST',
       }),
   },
