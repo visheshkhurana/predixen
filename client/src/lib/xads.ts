@@ -19,6 +19,8 @@ const EVENT_IDS: Record<string, string | undefined> = {
   signup_view: import.meta.env.VITE_X_EVENT_SIGNUP_VIEW,
   signup_start: import.meta.env.VITE_X_EVENT_SIGNUP_START,
   sign_up: import.meta.env.VITE_X_EVENT_SIGN_UP,
+  signup_completed: import.meta.env.VITE_X_EVENT_SIGNUP_COMPLETED,
+  founder_activated: import.meta.env.VITE_X_EVENT_FOUNDER_ACTIVATED,
   onboarding_complete: import.meta.env.VITE_X_EVENT_ONBOARDING_COMPLETE,
   calculator_used: import.meta.env.VITE_X_EVENT_CALCULATOR_USED,
 };

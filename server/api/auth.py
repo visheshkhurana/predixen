@@ -210,6 +210,12 @@ async def register(req: RegisterRequest, request: Request, response: Response, d
         asyncio.create_task(enroll_new_signup(user.id, user.email, sanitized_name))
     except Exception as e:
         auth_logger.warning(f"Onboarding enrollment failed: {e}")
+
+    try:
+        from server.services.activation import emit_signup_completed
+        emit_signup_completed(user_id=user.id, method="email")
+    except Exception as e:
+        auth_logger.warning(f"signup_completed emit failed: {e}")
     
     admin_email = (settings.ADMIN_MASTER_EMAIL or "").lower().strip()
     is_platform_admin = bool(admin_email and user.email.lower().strip() == admin_email)

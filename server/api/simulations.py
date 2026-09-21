@@ -622,6 +622,15 @@ def run_simulation(
         db.add(sim_run)
         db.commit()
         db.refresh(sim_run)
+
+        from server.services.activation import maybe_emit_founder_activated
+        maybe_emit_founder_activated(
+            db,
+            user_id=current_user.id,
+            company=company,
+            source="simulation",
+            exclude_simulation_run_id=sim_run.id,
+        )
         
         broadcast_metric_update_sync(
             company_id=company.id,

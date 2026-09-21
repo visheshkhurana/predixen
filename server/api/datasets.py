@@ -166,6 +166,15 @@ async def upload_dataset(
         db.add(scan)
         db.commit()
 
+        from server.services.activation import maybe_emit_founder_activated
+        maybe_emit_founder_activated(
+            db,
+            user_id=current_user.id,
+            company=company,
+            source="truth_scan",
+            exclude_truth_scan_id=scan.id,
+        )
+
         try:
             from server.utils.websocket_broadcast import broadcast_truth_scan_update_sync
             broadcast_truth_scan_update_sync(
