@@ -25,7 +25,7 @@ Move periodic background loops to a **dedicated worker process** (or single elec
 - Constraint: do not start runtime implementation until PR #38 is green, or explicitly coordinate with Reliability (do not collide with #38 / deploy-landed monitor).
 
 ## Kill criteria
-Revert cutover if worker miss rate exceeds web-embedded baseline for 24h, or if deploy complexity blocks a P0 ship.
+Revert cutover if worker miss rate exceeds web-embedded baseline for 24h, or if deploy complexity blocks a P0 ship. Kill/rollback if a worker cutover interferes with the deploy-landed monitor path (#14/#38 family).
 
 ## Out of scope
 Changing crawler_health semantics owned by Reliability; paid infra plan changes (escalate to Vishesh).
