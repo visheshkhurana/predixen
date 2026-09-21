@@ -10,9 +10,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
+import { flushPostHogQueue, type QueuedPostHogCall } from "../../client/src/lib/posthog-queue";
 
 const posthogLib = readFileSync("client/src/lib/posthog.ts", "utf8");
 const app = readFileSync("client/src/App.tsx", "utf8");
+const funnel = readFileSync("client/src/lib/funnel.ts", "utf8");
+const indexHtml = readFileSync("client/index.html", "utf8");
 
 test("the SDK does not also capture pageviews itself", () => {
   // App.tsx fires trackPageView() on every route change including first render.
@@ -26,6 +29,76 @@ test("exactly one thing sends a pageview", () => {
   // One import reference plus one call site.
   assert.ok(manual >= 1, "App.tsx must still send pageviews itself");
   assert.match(app, /useEffect\(\(\) => \{\s*trackPageView\(location\);/);
+});
+
+test("posthog-js is dynamic-imported from the public API module only", () => {
+  assert.doesNotMatch(
+    posthogLib,
+    /^import\s+posthog\s+from\s+['"]posthog-js['"]/m,
+    "static import puts ~240KB in the entry bundle",
+  );
+  assert.doesNotMatch(posthogLib, /^import\s+['"]posthog-js['"]/m);
+  assert.match(posthogLib, /import\(\s*["']posthog-js["']\s*\)/);
+  assert.doesNotMatch(app, /posthog-js/);
+  assert.doesNotMatch(funnel, /posthog-js/);
+});
+
+test("init options stay XHR, manual pageview, pageleave, exceptions, localStorage", () => {
+  assert.match(posthogLib, /api_transport:\s*["']XHR["']/);
+  assert.match(posthogLib, /capture_pageview:\s*false/);
+  assert.doesNotMatch(posthogLib, /capture_pageview:\s*true/);
+  assert.match(posthogLib, /capture_pageleave:\s*true/);
+  assert.match(posthogLib, /capture_exceptions:\s*true/);
+  assert.match(posthogLib, /persistence:\s*["']localStorage["']/);
+  assert.match(posthogLib, /maskAllInputs:\s*true/);
+});
+
+test("captures before init are queued; idle load flushes on first capture", () => {
+  assert.match(posthogLib, /requestIdleCallback/);
+  assert.match(posthogLib, /pending\.push/);
+  assert.match(posthogLib, /flushPostHogQueue/);
+  assert.match(posthogLib, /ensureClient/);
+  assert.match(posthogLib, /Flush-on-first-capture/);
+});
+
+test("queued identify / reset / capture flush in insertion order", () => {
+  const seen: string[] = [];
+  const fake = {
+    identify: (id: string, traits?: Record<string, unknown>) => {
+      seen.push(`identify:${id}:${String(traits?.email ?? "")}`);
+    },
+    reset: () => {
+      seen.push("reset");
+    },
+    capture: (event: string, properties?: Record<string, unknown>) => {
+      seen.push(`capture:${event}:${String(properties?.path ?? "")}`);
+    },
+  };
+  const queue: QueuedPostHogCall[] = [
+    { kind: "capture", event: "$pageview", properties: { path: "/" } },
+    { kind: "capture", event: "cta_click", properties: { path: "" } },
+    { kind: "capture", event: "signup_view", properties: { path: "" } },
+    { kind: "identify", distinctId: "42", traits: { email: "a@b.c", role: "viewer" } },
+    { kind: "reset" },
+  ];
+  flushPostHogQueue(fake, queue);
+  assert.deepEqual(seen, [
+    "capture:$pageview:/",
+    "capture:cta_click:",
+    "capture:signup_view:",
+    "identify:42:a@b.c",
+    "reset",
+  ]);
+  assert.equal(queue.length, 0, "flush must drain the queue");
+});
+
+test("index.html does not load a second PostHog snippet", () => {
+  // The HTML comment documents the old array.js snippet; a real second SDK
+  // would be a <script src="...array.js"> (or posthog.init in a script body).
+  assert.doesNotMatch(indexHtml, /<script[^>]+array\.js/i);
+  assert.doesNotMatch(indexHtml, /<script[^>]+posthog/i);
+  assert.doesNotMatch(indexHtml, /cdn\.posthog/);
+  assert.match(indexHtml, /initialized once, from client\/src\/lib\/posthog\.ts/);
 });
 
 test("reset fires on sign-out, never on an anonymous page load", () => {

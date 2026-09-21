@@ -63,6 +63,9 @@ jobs:
       - name: entry-bundle no framer-motion on critical path
         run: npx tsx server/tests/entry-no-framer-motion.test.ts
 
+      - name: entry-bundle no static posthog-js
+        run: npx tsx server/tests/entry-no-posthog-js.test.ts
+
       - name: runway-industry SSR tests
         run: npx tsx --test server/tests/runway-industry-ssr.test.ts
 
@@ -97,6 +100,9 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+
+      - name: entry-bundle posthog-js is a lazy chunk
+        run: npx tsx server/tests/entry-no-posthog-js.test.ts
 
       - name: no render-blocking Google Fonts stylesheet
         run: npx tsx server/tests/no-google-fonts-blocking.test.ts

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal, type PlanData } from '@/hooks/use-subscription';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent } from '@/lib/posthog';
 import { Check, Sparkles, Zap, Crown, ArrowRight, Clock, CreditCard, AlertCircle, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -151,7 +152,7 @@ export default function BillingPage() {
       // server-side via the Stripe webhook; this is the client-side ad signal.
       try {
         (window as any).gtag?.('event', 'purchase_subscription', { method: 'stripe_checkout' });
-        (window as any).posthog?.capture('purchase_subscription', { method: 'stripe_checkout' });
+        trackEvent('purchase_subscription', { method: 'stripe_checkout' });
         import('@/lib/metaPixel').then(m => m.metaTrack('Subscribe', { method: 'stripe_checkout' })).catch(() => {});
       } catch {}
       toast({
