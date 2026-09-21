@@ -9,15 +9,19 @@ interface StepperProps {
 
 const steps = [
   { id: 'truth', label: 'Know Your Truth', path: '/truth', icon: ShieldCheck },
-  { id: 'simulation', label: 'Simulate', path: '/scenarios', icon: FlaskConical },
+  { id: 'simulation', label: 'Simulate', path: '/simulate', icon: FlaskConical },
   { id: 'decision', label: 'Decide & Act', path: '/decisions', icon: Lightbulb },
 ];
 
 const routeToStep: Record<string, string> = {
   '/truth': 'truth',
+  '/truth-scan': 'truth',
+  '/health-check': 'truth',
   '/data': 'truth',
   '/overview': 'truth',
+  '/dashboard': 'truth',
   '/scenarios': 'simulation',
+  '/simulate': 'simulation',
   '/decisions': 'decision',
   '/alerts': 'decision',
   '/goals': 'decision',

@@ -358,6 +358,9 @@ function Router() {
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
       </Route>
+      <Route path="/onboard">
+        {() => <Redirect to="/onboarding" />}
+      </Route>
       <Route path="/">
         {() => <PublicOrAuthHome />}
       </Route>
@@ -391,6 +394,9 @@ function Router() {
       <Route path="/simulator">
         {() => <Redirect to="/simulate" />}
       </Route>
+      <Route path="/simulation">
+        {() => <Redirect to="/simulate" />}
+      </Route>
       <Route path="/simulate-v2">
         {() => <AuthenticatedRoute component={SimulateV2Page} />}
       </Route>
@@ -408,6 +414,11 @@ function Router() {
       </Route>
       <Route path="/scenarios/:id">
         {() => <AuthenticatedRoute component={ScenariosPage} />}
+      </Route>
+      {/* TruthScanGate previously sent founders here after finalize. No client
+          route existed, so the SPA catch-all rendered the 404 page. */}
+      <Route path="/companies/:companyId/scenarios">
+        {() => <Redirect to="/simulate" />}
       </Route>
       <Route path="/decisions">
         {() => <AuthenticatedRoute component={DecisionsPage} />}
@@ -480,6 +491,12 @@ function Router() {
       </Route>
       <Route path="/intelligence">
         {() => <AuthenticatedRoute component={IntelligenceGraphPage} />}
+      </Route>
+      <Route path="/settings/notifications">
+        {() => <Redirect to="/settings" />}
+      </Route>
+      <Route path="/account/notifications">
+        {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/settings">
         {() => <AuthenticatedRoute component={SettingsPage} allowWithoutCompany />}
@@ -831,7 +848,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   
   const marketingPaths = [
     '/', '/features', '/product', '/pricing', '/about', '/compare', '/customers', '/use-cases', '/how-it-works', '/alternatives', '/blog', '/faq',
-    '/contact', '/demo', '/auth', '/onboarding', '/owner-console',
+    '/contact', '/demo', '/auth', '/onboarding', '/onboard', '/owner-console',
     '/survival-simulator', '/default-alive', '/privacy', '/terms', '/security',
     '/reset-password', '/verify-email', '/auth/callback',
     '/login', '/signup', '/register', '/join',

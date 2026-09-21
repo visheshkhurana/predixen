@@ -105,7 +105,7 @@ export function TruthScanSuggestedActions({
       params.append('scenario', action.scenarioName);
     }
 
-    const url = `/scenarios${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = `/simulate${params.toString() ? `?${params.toString()}` : ''}`;
     navigate(url);
   };
 
