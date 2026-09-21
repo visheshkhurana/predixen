@@ -18,6 +18,7 @@ import type { AmountScale } from '@/lib/utils';
 import { trackEvent } from '@/lib/posthog';
 import { SAMPLE_COMPANY, SAMPLE_FINANCIALS } from '@/lib/sampleCompany';
 import { SampleFirstRunCard } from '@/components/sample-data/SampleFirstRunCard';
+import { toNumber } from '@/lib/clearableNumber';
 
 const STEPS = [
   { id: 1, title: 'Welcome', description: 'Tell us about your startup' },
@@ -40,6 +41,53 @@ function formatCurrency(value: number): string {
   if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
   if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
   return `$${value.toLocaleString()}`;
+}
+
+type BaselineNumbers = {
+  monthly_revenue: number;
+  gross_margin_pct: number;
+  opex: number;
+  payroll: number;
+  other_costs: number;
+  cash_balance: number;
+  headcount: number;
+};
+
+type BaselineText = {
+  [K in keyof BaselineNumbers]: string;
+};
+
+const EMPTY_BASELINE_TEXT: BaselineText = {
+  monthly_revenue: '',
+  gross_margin_pct: '',
+  opex: '',
+  payroll: '',
+  other_costs: '',
+  cash_balance: '',
+  headcount: '',
+};
+
+function baselineNumbersToText(nums: Partial<BaselineNumbers>): Partial<BaselineText> {
+  const patch: Partial<BaselineText> = {};
+  (Object.keys(EMPTY_BASELINE_TEXT) as (keyof BaselineNumbers)[]).forEach((key) => {
+    const value = nums[key];
+    if (value !== undefined && value !== null) {
+      patch[key] = String(value);
+    }
+  });
+  return patch;
+}
+
+function baselineTextToNumbers(text: BaselineText): BaselineNumbers {
+  return {
+    monthly_revenue: toNumber(text.monthly_revenue),
+    gross_margin_pct: toNumber(text.gross_margin_pct),
+    opex: toNumber(text.opex),
+    payroll: toNumber(text.payroll),
+    other_costs: toNumber(text.other_costs),
+    cash_balance: toNumber(text.cash_balance),
+    headcount: toNumber(text.headcount),
+  };
 }
 
 export default function OnboardingPage() {
@@ -71,15 +119,11 @@ export default function OnboardingPage() {
     currency: 'USD',
     amount_scale: 'UNITS' as AmountScale,
   });
-  const [baselineData, setBaselineData] = useState({
-    monthly_revenue: 0,
-    gross_margin_pct: 0,
-    opex: 0,
-    payroll: 0,
-    other_costs: 0,
-    cash_balance: 0,
-    headcount: 0,
-  });
+  // Optional financials hold TEXT, same as the runway calculator. Parsing
+  // Number(e.target.value) on every keystroke made Number("") snap a cleared
+  // field back to 0 (session 01a08122 @ t=50s on #payroll / #opex / #gross-margin).
+  const [baselineText, setBaselineText] = useState<BaselineText>(EMPTY_BASELINE_TEXT);
+  const baselineData = baselineTextToNumbers(baselineText);
   const [dataSourceChoice, setDataSourceChoice] = useState<'manual' | 'upload' | 'connect' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSampleMode, setIsSampleMode] = useState(false);
@@ -99,10 +143,14 @@ export default function OnboardingPage() {
 
   const stageDefaults = companyData.stage ? STAGE_DEFAULTS[companyData.stage] : undefined;
 
-  const updateBaseline = (patch: Partial<typeof baselineData>) => {
+  const updateBaselineText = (patch: Partial<BaselineText>) => {
     setBaselineTouched(true);
     setBaselineSaved(false);
-    setBaselineData((prev) => ({ ...prev, ...patch }));
+    setBaselineText((prev) => ({ ...prev, ...patch }));
+  };
+
+  const applyBaselineNumbers = (patch: Partial<BaselineNumbers>) => {
+    updateBaselineText(baselineNumbersToText(patch));
   };
 
   const { data: existingCompaniesRaw } = useQuery<any>({
@@ -151,8 +199,7 @@ export default function OnboardingPage() {
     setIsSubmitting(true);
     setIsSampleMode(true);
     setCompanyData(SAMPLE_COMPANY);
-    setBaselineData(SAMPLE_FINANCIALS);
-    setBaselineTouched(true);
+    applyBaselineNumbers(SAMPLE_FINANCIALS);
 
     try {
       const company = await createCompanyMutation.mutateAsync(SAMPLE_COMPANY);
@@ -260,7 +307,7 @@ export default function OnboardingPage() {
     try {
       await manualBaselineMutation.mutateAsync({
         companyId: currentCompany.id,
-        data: baselineData,
+        data: baselineTextToNumbers(baselineText),
       });
       setBaselineSaved(true);
       toast({ title: 'Financial data saved!' });
@@ -332,12 +379,7 @@ export default function OnboardingPage() {
         return;
       }
 
-      setBaselineData((prev) => ({
-        ...prev,
-        ...Object.fromEntries(found) as Partial<typeof prev>,
-      }));
-      setBaselineTouched(true);
-      setBaselineSaved(false);
+      applyBaselineNumbers(Object.fromEntries(found) as Partial<BaselineNumbers>);
       setShowManualInputs(true);
       setUploadSummary(
         result?.summary ||
@@ -463,9 +505,9 @@ export default function OnboardingPage() {
             id="revenue"
             type="number"
             step="any"
-            value={baselineTouched || baselineData.monthly_revenue !== 0 ? baselineData.monthly_revenue : ''}
+            value={baselineText.monthly_revenue}
             placeholder={stageDefaults ? String(stageDefaults.monthly_revenue) : '0'}
-            onChange={(e) => updateBaseline({ monthly_revenue: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ monthly_revenue: e.target.value })}
             min={0}
             data-testid="input-revenue"
           />
@@ -487,9 +529,9 @@ export default function OnboardingPage() {
             id="gross-margin"
             type="number"
             step="0.1"
-            value={baselineTouched || baselineData.gross_margin_pct !== 0 ? baselineData.gross_margin_pct : ''}
+            value={baselineText.gross_margin_pct}
             placeholder={stageDefaults ? String(stageDefaults.gross_margin_pct) : '0'}
-            onChange={(e) => updateBaseline({ gross_margin_pct: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ gross_margin_pct: e.target.value })}
             min={0}
             max={100}
             data-testid="input-gross-margin"
@@ -504,9 +546,9 @@ export default function OnboardingPage() {
             id="opex"
             type="number"
             step="any"
-            value={baselineTouched || baselineData.opex !== 0 ? baselineData.opex : ''}
+            value={baselineText.opex}
             placeholder={stageDefaults ? String(stageDefaults.opex) : '0'}
-            onChange={(e) => updateBaseline({ opex: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ opex: e.target.value })}
             min={0}
             data-testid="input-opex"
           />
@@ -517,9 +559,9 @@ export default function OnboardingPage() {
             id="payroll"
             type="number"
             step="any"
-            value={baselineTouched || baselineData.payroll !== 0 ? baselineData.payroll : ''}
+            value={baselineText.payroll}
             placeholder={stageDefaults ? String(stageDefaults.payroll) : '0'}
-            onChange={(e) => updateBaseline({ payroll: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ payroll: e.target.value })}
             min={0}
             data-testid="input-payroll"
           />
@@ -530,9 +572,9 @@ export default function OnboardingPage() {
             id="other-costs"
             type="number"
             step="any"
-            value={baselineTouched || baselineData.other_costs !== 0 ? baselineData.other_costs : ''}
+            value={baselineText.other_costs}
             placeholder={stageDefaults ? String(stageDefaults.other_costs) : '0'}
-            onChange={(e) => updateBaseline({ other_costs: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ other_costs: e.target.value })}
             min={0}
             data-testid="input-other-costs"
           />
@@ -556,9 +598,9 @@ export default function OnboardingPage() {
             id="cash"
             type="number"
             step="any"
-            value={baselineTouched || baselineData.cash_balance !== 0 ? baselineData.cash_balance : ''}
+            value={baselineText.cash_balance}
             placeholder={stageDefaults ? String(stageDefaults.cash_balance) : '0'}
-            onChange={(e) => updateBaseline({ cash_balance: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ cash_balance: e.target.value })}
             min={0}
             data-testid="input-cash-balance"
           />
@@ -568,9 +610,9 @@ export default function OnboardingPage() {
           <Input
             id="headcount"
             type="number"
-            value={baselineTouched || baselineData.headcount !== 0 ? baselineData.headcount : ''}
+            value={baselineText.headcount}
             placeholder={stageDefaults ? String(stageDefaults.headcount) : '0'}
-            onChange={(e) => updateBaseline({ headcount: Number(e.target.value) })}
+            onChange={(e) => updateBaselineText({ headcount: e.target.value })}
             min={0}
             data-testid="input-headcount"
           />
@@ -587,7 +629,7 @@ export default function OnboardingPage() {
               type="button"
               variant="ghost"
               className="px-1 h-auto underline align-baseline text-xs"
-              onClick={() => updateBaseline(stageDefaults)}
+              onClick={() => applyBaselineNumbers(stageDefaults)}
               data-testid="button-use-stage-defaults"
             >
               Use them as a starting point
