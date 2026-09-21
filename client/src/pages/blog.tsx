@@ -255,7 +255,7 @@ function BlogPost({ slug }: { slug: string }) {
             </p>
             <div className="mt-4">
               <Button asChild data-testid="button-article-get-started">
-                <Link href="/auth">
+                <Link href="/auth?tab=register">
                   Get Started Free
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
