@@ -55,6 +55,11 @@ Env:
   DEPLOY_LANDED_INTERVAL_SECONDS   default 600 (10 min)
   CRAWLER_ALERT_EMAIL          where failures are emailed (same helper as
                                crawler_health)
+  DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED=true
+                               email on control-failed (default: mute —
+                               SPA catch-all makes fake-asset 404 impossible,
+                               so control-failed would otherwise spam every
+                               interval)
   DEPLOY_LANDED_EXTRA_BODY_PROBES  `|`-separated `path::substring` pairs
   DEPLOY_LANDED_CONTROL_ASSET      fake asset path (default as above)
 """
@@ -494,7 +499,29 @@ def _alert_html(report: DeployReport) -> str:
     )
 
 
+def _alert_on_control_failed() -> bool:
+    """Control-failed is expected until missing /assets/* return 404 (not SPA HTML).
+
+    Default mute avoids inbox spam every DEPLOY_LANDED_INTERVAL_SECONDS while the
+    catch-all still serves index.html for fake assets. Opt in with
+    DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED=true once static assets 404 correctly.
+    """
+    return os.environ.get("DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 async def _send_alert(report: DeployReport) -> None:
+    if report.status == "control-failed" and not _alert_on_control_failed():
+        logger.error(
+            "[deploy-landed] CONTROL FAILED (email muted — set "
+            "DEPLOY_LANDED_ALERT_ON_CONTROL_FAILED=true to alert): %s",
+            report.note or format_report(report),
+        )
+        return
+
     to = os.environ.get("CRAWLER_ALERT_EMAIL")
     if not to:
         logger.warning("[deploy-landed] CRAWLER_ALERT_EMAIL unset — no alert sent")
