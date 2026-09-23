@@ -216,7 +216,7 @@ export default function PricingPage() {
                   <Button
                     variant={tier.highlighted ? "default" : "outline"}
                     className="w-full gap-2"
-                    onClick={() => navigate("/auth")}
+                    onClick={() => navigate("/auth?tab=register")}
                     data-testid={`button-cta-${tier.name.toLowerCase().replace(/\s+/g, "-")}`}
                   >
                     {tier.cta}
