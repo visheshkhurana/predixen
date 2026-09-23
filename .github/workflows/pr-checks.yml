@@ -1,9 +1,9 @@
 # Release Manager check suite + pytest, against the checkout — never production.
 #
-# Trigger is workflow_dispatch ONLY. Vishesh has not approved paid GitHub
-# Actions minutes; pull_request / push / schedule would burn minutes on every
-# PR and must not be added in this file (not even in a form that still fires).
-# After he approves, a follow-up PR will add `pull_request`.
+# Runs on every PR to main (and on demand). The earlier dispatch-only hold was
+# about paid Actions minutes; predixen is a PUBLIC repo, and GitHub-hosted
+# runners are free for public repos, so gating every PR costs nothing.
+# `pull_request` (not `pull_request_target`) gets no secrets on fork PRs.
 #
 # Out of scope (they hit live founderconsole.ai / Railway):
 #   scripts/launch_gate.sh, Playwright journeys, Google signup, lead capture.
@@ -13,10 +13,17 @@
 name: pr-checks
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
   contents: read
+
+# A new push to the same PR supersedes the previous run.
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   node:
