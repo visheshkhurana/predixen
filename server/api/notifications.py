@@ -2,7 +2,7 @@
 API endpoints for notification management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
@@ -196,12 +196,34 @@ def classify_email_event(event: Dict[str, Any], db: Session) -> None:
 
 
 @router.post("/resend-webhook")
-async def handle_resend_webhook(event: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, str]:
+async def handle_resend_webhook(request: Request, db: Session = Depends(get_db)) -> Dict[str, str]:
     """
     Receive Resend webhook events and classify email opens.
     Configure this endpoint in Resend dashboard:
     - Subscribe to: email.delivered, email.opened, email.clicked
+    - Copy the signing secret into RESEND_WEBHOOK_SECRET. When it is set,
+      unsigned or forged events get 401; when unset, events are accepted
+      unverified (legacy behaviour) and a warning is logged.
     """
+    import json
+    import logging
+    from server.services import resend_webhook
+
+    body = await request.body()
+    secret = resend_webhook.webhook_secret()
+    if secret:
+        if not resend_webhook.verify(secret, request.headers, body):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        logging.getLogger(__name__).warning(
+            "[resend-webhook] RESEND_WEBHOOK_SECRET unset; accepting unverified event"
+        )
+    try:
+        event = json.loads(body or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Invalid payload")
     try:
         classify_email_event(event, db)
         return {"status": "ok"}
