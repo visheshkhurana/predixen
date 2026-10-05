@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
 import { trackFunnel } from "@/lib/funnel";
+import { useViewedOnce } from "@/hooks/use-viewed-once";
 import {
   ArrowRight,
   Calculator,
@@ -122,6 +123,9 @@ export default function RunwayCalculatorPage() {
   // in their inbox, where it can be forwarded to a co-founder.
   const [email, setEmail] = useState("");
   const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const leadFormRef = useViewedOnce("lead_form_viewed", {
+    location: "runway-calculator",
+  });
 
   async function handleEmailResult(e: FormEvent) {
     e.preventDefault();
@@ -430,7 +434,7 @@ export default function RunwayCalculatorPage() {
                   Your runway, burn rate and cash-out date, sent to you so you can
                   forward it to a co-founder or investor. No account needed.
                 </p>
-                <form onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <Input
                     type="email"
                     required
