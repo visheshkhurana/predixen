@@ -78,6 +78,7 @@ import {
   rememberSimulationAttribution,
   clearSimulationAttribution,
   attributionFromPrefill,
+  OVERVIEW_SUGGESTED_ACTION_FROM,
 } from '@/lib/truthScanSuggestedActions';
 import {
   Dialog,
@@ -195,6 +196,14 @@ export default function ScenariosPage() {
       clearSimulationAttribution();
     }
   }, [truthScanPrefill]);
+  const prefillBlurb = truthScanPrefill?.from === OVERVIEW_SUGGESTED_ACTION_FROM
+    ? 'Prefilled from your Overview suggested action. Levers match the reddest metric — review and run.'
+    : 'Prefilled from Truth Scan Suggested Actions. Levers match the reddest metric — review and run.';
+  const prefillLabel = truthScanPrefill
+    ? truthScanPrefill.from === OVERVIEW_SUGGESTED_ACTION_FROM
+      ? `Prefilled from Overview: ${truthScanPrefill.name}`
+      : `Prefilled from Truth Scan: ${truthScanPrefill.name}`
+    : undefined;
 
   const multiSimMutation = useMultiScenarioSimulation();
   const [multiSimResults, setMultiSimResults] = useState<any>(null);
@@ -1451,7 +1460,7 @@ export default function ScenariosPage() {
                 Ready to run: {truthScanPrefill.name}
               </CardTitle>
               <CardDescription>
-                Prefilled from Truth Scan Suggested Actions. Levers match the reddest metric — review and run.
+                {prefillBlurb}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2514,7 +2523,7 @@ export default function ScenariosPage() {
                   initialGoal={truthScanPrefill?.goal}
                   initialStrategyId={truthScanPrefill?.strategyId}
                   initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params } : undefined}
-                  prefillLabel={truthScanPrefill ? `Prefilled from Truth Scan: ${truthScanPrefill.name}` : undefined}
+                  prefillLabel={prefillLabel}
                 />
               </TabsContent>
 
@@ -2527,7 +2536,7 @@ export default function ScenariosPage() {
                   baseMetrics={baseMetrics}
                   initialParams={truthScanPrefill ? { name: truthScanPrefill.name, ...truthScanPrefill.params, tags: [truthScanPrefill.goal] } : undefined}
                   initialStep={truthScanPrefill ? 5 : undefined}
-                  prefillLabel={truthScanPrefill ? `Prefilled from Truth Scan: ${truthScanPrefill.name}` : undefined}
+                  prefillLabel={prefillLabel}
                 />
               </TabsContent>
 

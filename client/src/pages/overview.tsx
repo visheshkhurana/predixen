@@ -90,6 +90,8 @@ import { getFieldHelp } from '@/lib/field-help-data';
 import { BoardExportButton } from '@/components/board-export/ExportButton';
 import { SampleInsightExplainer } from '@/components/sample-data/SampleInsightExplainer';
 import { deriveSampleInsight, isSampleCompany } from '@/lib/sampleCompany';
+import { FEATURE_FLAGS } from '@/config/features';
+import { OverviewSuggestedActionCard } from '@/components/TruthScanSuggestedActions';
 
 const DECISION_STATUSES_KEY = 'decision_statuses_';
 const SCENARIOS_STORAGE_KEY = 'overview_scenarios_';
@@ -1286,6 +1288,14 @@ export default function OverviewPage() {
           </div>
         </div>
       </FadeIn>
+
+      <OverviewSuggestedActionCard
+        key={currentCompany.id}
+        enabled={FEATURE_FLAGS.OVERVIEW_SUGGESTED_ACTION}
+        isSample={currentCompany.is_sample}
+        scan={truthScan ?? null}
+        companyId={currentCompany.id}
+      />
 
       {isSampleCompany(currentCompany) && (
         <SampleInsightExplainer

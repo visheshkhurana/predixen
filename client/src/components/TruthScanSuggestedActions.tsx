@@ -1,3 +1,4 @@
+import React, { useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,77 +10,103 @@ import {
   SUGGESTED_ACTIONS_MAX,
   buildSimulateUrl,
   rememberSimulationAttribution,
+  resolveOverviewSuggestedAction,
   TRUTH_SCAN_SIM_SOURCE,
   TRUTH_SCAN_SIM_FROM,
+  OVERVIEW_SUGGESTED_ACTION_FROM,
 } from '@/lib/truthScanSuggestedActions';
+
+type TrackFn = (event: string, properties?: Record<string, any>) => void;
 
 interface TruthScanSuggestedActionsProps {
   actions: SuggestedAction[];
   companyId?: string | number;
   isLoading?: boolean;
+  /**
+   * `panel` is the /truth list (default, unchanged).
+   * `overview` renders only the top-ranked action as one card.
+   */
+  variant?: 'panel' | 'overview';
+  /** Test seam. Production uses the posthog.ts public API. */
+  track?: TrackFn;
+}
+
+function getActionColor(actionType: string) {
+  switch (actionType) {
+    case 'retention':
+      return 'bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20';
+    case 'runway':
+      return 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20';
+    case 'burn':
+      return 'bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20';
+    case 'margin':
+      return 'bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20';
+    case 'growth':
+      return 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20';
+    case 'acquisition':
+      return 'bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20';
+    default:
+      return 'bg-secondary/50';
+  }
+}
+
+function getActionLabel(actionType: string) {
+  switch (actionType) {
+    case 'retention':
+      return 'Retention';
+    case 'runway':
+      return 'Fundraising';
+    case 'burn':
+      return 'Cost Control';
+    case 'margin':
+      return 'Margin';
+    case 'growth':
+      return 'Growth';
+    case 'acquisition':
+      return 'Acquisition';
+    default:
+      return actionType;
+  }
+}
+
+function getPriorityColor(priority: string) {
+  switch (priority) {
+    case 'high':
+      return 'bg-red-500/20 text-red-700 dark:text-red-300';
+    case 'medium':
+      return 'bg-amber-500/20 text-amber-700 dark:text-amber-300';
+    case 'low':
+      return 'bg-blue-500/20 text-blue-700 dark:text-blue-300';
+    default:
+      return 'bg-secondary text-muted-foreground';
+  }
 }
 
 export function TruthScanSuggestedActions({
   actions,
   companyId,
   isLoading = false,
+  variant = 'panel',
+  track = trackEvent,
 }: TruthScanSuggestedActionsProps) {
   const [, navigate] = useLocation();
+  const impressed = useRef(false);
+  const top = variant === 'overview' ? actions?.[0] : undefined;
+
+  useEffect(() => {
+    if (variant !== 'overview' || !top) return;
+    if (impressed.current) return;
+    impressed.current = true;
+    track('suggested_action_impression', {
+      location: 'overview',
+      action_id: top.id,
+      action_type: top.actionType,
+    });
+  }, [variant, top, track]);
 
   if (!actions || actions.length === 0) {
     return null;
   }
-
-  const getActionColor = (actionType: string) => {
-    switch (actionType) {
-      case 'retention':
-        return 'bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20';
-      case 'runway':
-        return 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20';
-      case 'burn':
-        return 'bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20';
-      case 'margin':
-        return 'bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20';
-      case 'growth':
-        return 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20';
-      case 'acquisition':
-        return 'bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20';
-      default:
-        return 'bg-secondary/50';
-    }
-  };
-
-  const getActionLabel = (actionType: string) => {
-    switch (actionType) {
-      case 'retention':
-        return 'Retention';
-      case 'runway':
-        return 'Fundraising';
-      case 'burn':
-        return 'Cost Control';
-      case 'margin':
-        return 'Margin';
-      case 'growth':
-        return 'Growth';
-      case 'acquisition':
-        return 'Acquisition';
-      default:
-        return actionType;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-red-500/20 text-red-700 dark:text-red-300';
-      case 'medium':
-        return 'bg-amber-500/20 text-amber-700 dark:text-amber-300';
-      case 'low':
-        return 'bg-blue-500/20 text-blue-700 dark:text-blue-300';
-      default:
-        return 'bg-secondary text-muted-foreground';
-    }
-  };
 
   const handleActionClick = (action: SuggestedAction) => {
     rememberSimulationAttribution({
@@ -97,6 +124,72 @@ export function TruthScanSuggestedActions({
     const url = buildSimulateUrl(action, companyId);
     navigate(url);
   };
+
+  if (variant === 'overview') {
+    const action = actions[0];
+    const href = buildSimulateUrl(action, companyId, OVERVIEW_SUGGESTED_ACTION_FROM);
+    return (
+      <Card
+        className={`border ${getActionColor(action.actionType)}`}
+        data-testid="card-overview-suggested-action"
+      >
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1">
+                  <Lightbulb className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  Suggested action
+                </p>
+                <h4 className="font-medium text-sm">{action.title}</h4>
+                <p className="text-xs text-muted-foreground mt-1">{action.metricIssue}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="secondary" className={`text-xs ${getPriorityColor(action.priority)}`}>
+                  {action.priority === 'high' ? 'High' : action.priority === 'medium' ? 'Medium' : 'Low'}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {getActionLabel(action.actionType)}
+                </Badge>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">{action.description}</p>
+            <div className="pt-1">
+              <Button variant="outline" size="sm" className="w-full" asChild disabled={isLoading}>
+                <a
+                  href={href}
+                  data-testid="link-overview-suggested-action"
+                  onClick={(event) => {
+                    if (isLoading) {
+                      event.preventDefault();
+                      return;
+                    }
+                    rememberSimulationAttribution({
+                      source: OVERVIEW_SUGGESTED_ACTION_FROM,
+                      from: OVERVIEW_SUGGESTED_ACTION_FROM,
+                      action_id: action.id,
+                      action_type: action.actionType,
+                    });
+                    track('cta_click', {
+                      location: 'overview_suggested_action',
+                      action_id: action.id,
+                      action_type: action.actionType,
+                      source: OVERVIEW_SUGGESTED_ACTION_FROM,
+                    });
+                    event.preventDefault();
+                    navigate(href);
+                  }}
+                >
+                  Run Scenario
+                  <ArrowRight className="h-3.5 w-3.5 ml-2" />
+                </a>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const visible = actions.slice(0, SUGGESTED_ACTIONS_MAX);
 
@@ -163,5 +256,30 @@ export function TruthScanSuggestedActions({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+export function OverviewSuggestedActionCard({
+  enabled,
+  isSample,
+  scan,
+  companyId,
+  track = trackEvent,
+}: {
+  enabled: boolean;
+  isSample?: boolean;
+  scan: { metrics?: unknown; flags?: unknown[] } | null | undefined;
+  companyId?: string | number;
+  track?: TrackFn;
+}) {
+  const action = resolveOverviewSuggestedAction({ enabled, isSample, scan });
+  if (!action) return null;
+  return (
+    <TruthScanSuggestedActions
+      actions={[action]}
+      companyId={companyId}
+      variant="overview"
+      track={track}
+    />
   );
 }

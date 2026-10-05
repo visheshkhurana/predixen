@@ -66,6 +66,9 @@ jobs:
       - name: truth-scan suggested actions tests
         run: npx tsx server/tests/truth-scan-suggested-actions.test.ts
 
+      - name: overview suggested action tests
+        run: npx tsx server/tests/overview-suggested-action.test.ts
+
       - name: entry-bundle no framer-motion on critical path
         run: npx tsx server/tests/entry-no-framer-motion.test.ts
 
