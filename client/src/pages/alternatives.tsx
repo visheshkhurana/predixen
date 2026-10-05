@@ -127,7 +127,7 @@ export default function AlternativesPage() {
         </p>
         <div className="mt-8">
           <Button asChild data-testid="button-alt-auth">
-            <Link href="/auth">
+            <Link href="/auth?tab=register">
               Get started free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

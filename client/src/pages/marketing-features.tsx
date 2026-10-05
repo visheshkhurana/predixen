@@ -222,7 +222,7 @@ export default function MarketingFeaturesPage() {
           </p>
           <div className="mt-6">
             <Button size="lg" asChild data-testid="button-features-get-started">
-              <Link href="/auth">
+              <Link href="/auth?tab=register">
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
