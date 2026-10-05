@@ -11,7 +11,13 @@ from server.models.scenario import Scenario
 from server.models.simulation_run import SimulationRun
 from server.models.truth_scan import TruthScan
 from server.copilot.context_pack import build_context_pack
-from server.copilot.trust import fetchVerifiedRunResult, GroundingStatus
+from server.copilot.trust import (
+    fetchVerifiedRunResult,
+    GroundingStatus,
+    apply_not_available_guard,
+    apply_not_available_guard_to_text,
+    extract_available_metrics,
+)
 from server.copilot.prompt_injection_defense import PromptInjectionDefense
 from server.simulate.simulation_engine import SimulationInputs, run_monte_carlo
 from server.lib.privacy.pii_redactor import redact_text, detect_pii
@@ -640,6 +646,31 @@ async def copilot_quick_chat(
 
         response_text = result.get("content", "I wasn't able to generate a response. Please try again.")
 
+        run_result = fetchVerifiedRunResult(db=db, company_id=company_id)
+        truth_scan = db.query(TruthScan).filter(
+            TruthScan.company_id == company_id
+        ).order_by(TruthScan.created_at.desc()).first()
+        available_metrics = extract_available_metrics(
+            truth_scan.outputs_json if truth_scan else None
+        )
+        guarded = apply_not_available_guard_to_text(
+            response_text,
+            run_result.grounding_status,
+            user_message=sanitized_message,
+            available_metrics=available_metrics,
+            run_outputs=run_result.outputs if run_result else None,
+        )
+        if guarded.refused:
+            return QuickChatResponse(
+                response=guarded.text or guarded.output["executive_summary"][0],
+                sources_used=[],
+                suggested_followups=[
+                    "Run a simulation first",
+                    "Add the missing metric on Data Input",
+                    "What data do I still need to upload?",
+                ],
+            )
+
         sources = []
         if context.get("truth_scan"):
             sources.append("Truth Scan")
@@ -954,7 +985,7 @@ async def _copilot_chat_inner(
 ) -> CopilotChatResponse:
     """Inner logic for copilot chat, wrapped by error handler above."""
     from server.copilot.agents import RouterAgent
-    from server.copilot.agents.base import CompanyKnowledgeBase
+    from server.copilot.agents.base import CompanyKnowledgeBase, ConfidenceLevel
     from server.copilot.ckb_storage import CKBStorage
     from server.models.company_decision import CompanyDecision, CompanyScenario
     from server.lib.llm.llm_router import get_llm_router
@@ -1295,6 +1326,32 @@ async def _copilot_chat_inner(
     causal_drivers = extract_causal_drivers(output, simulation_result=simulation_result)
     if causal_drivers:
         output["causal_drivers"] = causal_drivers
+
+    available_metrics = extract_available_metrics(
+        truth_scan.outputs_json if truth_scan else None
+    )
+    run_outputs_for_guard = None
+    if scenario_id_for_citation:
+        guarded_run = fetchVerifiedRunResult(
+            db=db,
+            company_id=company_id,
+            scenario_id=scenario_id_for_citation,
+        )
+        run_outputs_for_guard = guarded_run.outputs
+    guard = apply_not_available_guard(
+        output,
+        grounding_status_value,
+        user_message=redacted_message,
+        available_metrics=available_metrics,
+        run_outputs=run_outputs_for_guard,
+    )
+    if guard.refused:
+        output = guard.output
+        grounding_status_value = guard.grounding_status
+        response.assumptions = []
+        response.risks = []
+        response.confidence = ConfidenceLevel.LOW
+        provenance_response = None
     
     conv_state.clear_pending_clarification()
     conversation_store.save(conv_state)
