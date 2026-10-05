@@ -672,6 +672,282 @@ FABRICATION_REFUSAL_TESTS: List[GoldenTestCase] = [
         },
         "scoring_weights": {"fabrication_refusal": 1.0},
     },
+    {
+        "id": "fab_013",
+        "name": "Allow top-N customer advice when no customer count is verified",
+        "description": "Talk to your top 5 customers is a ranking, not a fabricated headcount.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How should I work with customers?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Talk to your top 5 customers this week. Step 1 is to ask why they stayed."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["top 5 customers"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_014",
+        "name": "Allow top-N revenue-driver advice when revenue is unverified",
+        "description": "Focus on your top 3 revenue drivers does not state a revenue figure.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How should we think about revenue?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Focus on your top 3 revenue drivers. Step 1 is to rank them by gross margin."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["top 3 revenue drivers"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_015",
+        "name": "Allow burn-item advice when burn is unverified",
+        "description": "Cut 2 of your biggest burn items is a count of items, not a burn rate.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How do I bring burn down?",
+            "grounding_status": "NOT_AVAILABLE",
+            "available_metrics": {},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": [
+                    "Cut 2 of your biggest burn items. Step 1 is to list every recurring vendor."
+                ],
+            },
+        },
+        "expected": {
+            "must_be_not_available": False,
+            "must_contain": ["biggest burn items"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_020",
+        "name": "Refuse revenue reached with a comma-grouped figure",
+        "description": "Revenue reached 50,000 is a fabricated revenue figure, not advice.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue reached 50,000 last month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50,000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_021",
+        "name": "Refuse MRR hit with a bare figure",
+        "description": "Your MRR hit 50000 states MRR even without a currency symbol.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our MRR?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Your MRR hit 50000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_022",
+        "name": "Refuse revenue grew to a bare figure",
+        "description": "Revenue grew to 50000 is still a revenue claim.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue grew to 50000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["50000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_023",
+        "name": "Refuse burning with a bare monthly figure",
+        "description": "You're burning 40000 matches the burn inflection, not only the word burn.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["You're burning 40000 a month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_024",
+        "name": "Refuse burn sits at a bare figure",
+        "description": "Burn sits at 40000 is inside the digit window.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Burn sits at 40000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_025",
+        "name": "Refuse customers about a bare headcount",
+        "description": "Customers: about 150 is a headcount, not a ranking.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How many customers do we have?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Customers: about 150."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["150"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_016",
+        "name": "Refuse a bare customer headcount",
+        "description": "You have 150 customers is a fabricated count even without the word active.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "How many customers do we have?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["You have 150 customers."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["150"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_017",
+        "name": "Refuse fabricated monthly revenue",
+        "description": "Revenue is $50k/month must not pass when revenue was never verified.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our revenue?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Revenue is $50k/month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["$50k"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_018",
+        "name": "Refuse fabricated INR burn",
+        "description": "Burn is ₹8L per month is a figure, not advice.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Burn is ₹8L per month."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["₹8L"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
+    {
+        "id": "fab_019",
+        "name": "Refuse a bare monthly burn figure",
+        "description": "Monthly burn of 40000 has no currency symbol and must still be refused.",
+        "category": "fabrication_refusal",
+        "input": {
+            "user_message": "What is our monthly burn?",
+            "grounding_status": "VERIFIED",
+            "available_metrics": {"cash_balance": {"value": 1000}},
+            "run_outputs": None,
+            "copilot_output": {
+                "executive_summary": ["Monthly burn of 40000."],
+            },
+        },
+        "expected": {
+            "must_be_not_available": True,
+            "must_contain": ["NOT_AVAILABLE"],
+            "must_not_contain": ["40000"],
+        },
+        "scoring_weights": {"fabrication_refusal": 1.0},
+    },
 ]
 
 GOLDEN_DATASETS = {

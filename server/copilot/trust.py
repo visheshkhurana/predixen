@@ -490,11 +490,11 @@ _QUESTION_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\barpu\b", re.I), "arpu"),
     (re.compile(r"\b(?:active\s+)?customers?\b|\bcustomer count\b", re.I), "customers"),
     (re.compile(r"\b(?:cash(?:\s+balance)?|cash on hand|how much cash)\b", re.I), "cash"),
-    (re.compile(r"\b(?:net\s+)?burn(?:\s+rate)?\b", re.I), "burn"),
-    (re.compile(r"\b(?:monthly\s+)?(?:revenue|mrr|arr)\b", re.I), "revenue"),
+    (re.compile(r"\b(?:net\s+)?burn(?:ing|ed|s)?(?:\s+rate)?\b", re.I), "burn"),
+    (re.compile(r"\b(?:monthly\s+)?(?:revenues?|mrr|arr)\b", re.I), "revenue"),
 ]
 
-# Phrases used to spot "CAC is 500" / "150 active customers" next to a asked metric.
+# Phrases used to spot "CAC is 500" / "150 active customers" next to an asked metric.
 _METRIC_PROSE: Dict[str, Tuple[str, ...]] = {
     "runway": ("runway",),
     "survival": ("survival",),
@@ -510,6 +510,42 @@ _METRIC_PROSE: Dict[str, Tuple[str, ...]] = {
 }
 
 _NUMBER_TOKEN = r"\d[\d,]*(?:\.\d+)?"
+_NUMBER_RE = re.compile(_NUMBER_TOKEN)
+
+# Same windows as the original guard: a number starting within 24 characters
+# after the metric phrase, or ending within 16 characters before it.
+_FIGURE_WINDOW_AFTER = 24
+_FIGURE_WINDOW_BEFORE = 16
+
+# Exemptions on top of that window, for customers / revenue / burn only.
+# Nothing else is skipped: "Revenue reached 50,000" still counts.
+_COUNT_WORDS = frozenset({"top", "step", "steps"})
+_OF_YOUR_ITEMS_RE = re.compile(
+    r"\s+of\s+your\b(?:\s+\w+){0,6}\s+items\b",
+    re.I,
+)
+
+# Inflections so "burning"/"burned" and "customer"/"customers" hit the window.
+# MRR and ARR stay in the revenue set.
+_INFLECTED_PROSE: Dict[str, Tuple[str, ...]] = {
+    "customers": (
+        r"active\s+customers?",
+        r"customer\s+count",
+        r"customers?",
+    ),
+    "burn": (
+        r"net\s+burn(?:ing|ed|s)?",
+        r"burn(?:ing|ed|s)?\s+rate",
+        r"monthly\s+burn(?:ing|ed|s)?",
+        r"burn(?:ing|ed|s)?",
+    ),
+    "revenue": (
+        r"monthly\s+revenues?",
+        r"revenues?",
+        r"mrr",
+        r"arr",
+    ),
+}
 
 _ESTIMATED_SOURCE_MARKERS = frozenset({
     "estimated",
@@ -703,16 +739,54 @@ def contains_numeric_financial_claims(text: str) -> bool:
     return bool(_EXTRA_FIGURE_PATTERN.search(text))
 
 
+def _preceding_word(text: str, index: int) -> str:
+    match = re.search(r"([A-Za-z]+)\W*$", text[:index])
+    if not match:
+        return ""
+    return match.group(1).lower()
+
+
+def _number_is_window_exempt(text: str, number: re.Match) -> bool:
+    """Skip only a top/step count, or the N in "N of your ... items"."""
+    if _preceding_word(text, number.start()) in _COUNT_WORDS:
+        return True
+    return _OF_YOUR_ITEMS_RE.match(text, number.end()) is not None
+
+
+def _alias_patterns(metric: str) -> Tuple[re.Pattern, ...]:
+    if metric in _INFLECTED_PROSE:
+        return tuple(re.compile(pattern, re.I) for pattern in _INFLECTED_PROSE[metric])
+    aliases = _METRIC_PROSE.get(metric, (metric,))
+    return tuple(re.compile(re.escape(alias), re.I) for alias in aliases)
+
+
+def _number_in_metric_window(alias: re.Match, number: re.Match) -> bool:
+    if number.start() >= alias.end():
+        return number.start() - alias.end() <= _FIGURE_WINDOW_AFTER
+    if number.end() <= alias.start():
+        return alias.start() - number.end() <= _FIGURE_WINDOW_BEFORE
+    return False
+
+
 def prose_states_metric_figure(text: str, metric: str) -> bool:
-    """True when prose (or flattened structured keys) puts a number next to a metric."""
+    """True when prose (or flattened structured keys) states a figure for a metric.
+
+    Customers, revenue, and burn use the same 24/16 digit window as every other
+    metric. A number in that window is ignored only when the word immediately
+    before it is top/step/steps, or it is the count in "N of your ... items".
+    """
     if not text:
         return False
-    for alias in _METRIC_PROSE.get(metric, (metric,)):
-        escaped = re.escape(alias)
-        if re.search(rf"{escaped}.{{0,24}}{_NUMBER_TOKEN}", text, re.I):
-            return True
-        if re.search(rf"{_NUMBER_TOKEN}.{{0,16}}{escaped}", text, re.I):
-            return True
+    exempt = metric in _INFLECTED_PROSE
+    numbers = list(_NUMBER_RE.finditer(text))
+    for pattern in _alias_patterns(metric):
+        for alias in pattern.finditer(text):
+            for number in numbers:
+                if not _number_in_metric_window(alias, number):
+                    continue
+                if exempt and _number_is_window_exempt(text, number):
+                    continue
+                return True
     return False
 
 
