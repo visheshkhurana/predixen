@@ -16,10 +16,17 @@ from server.services.notifications import (
     parse_changelog,
     NOTIFICATION_RECIPIENTS
 )
+from server.api.admin import require_platform_admin
 from server.core.db import get_db
+from server.core.security import get_current_user
 from server.models.email_event import EmailEvent
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+# Everything here sends mail or exposes recipients/subjects, so it is platform-admin
+# only. The exceptions are /resend-webhook and /track/{id}, which Resend and mail
+# clients call without a session, and /changelog, which any signed-in user may read.
+ADMIN_ONLY = [Depends(require_platform_admin)]
 
 TRANSPARENT_GIF = base64.b64decode(
     "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
@@ -41,7 +48,7 @@ class NotificationResponse(BaseModel):
     recipients: List[str]
 
 
-@router.post("/feature", response_model=NotificationResponse)
+@router.post("/feature", response_model=NotificationResponse, dependencies=ADMIN_ONLY)
 async def notify_feature_update(request: FeatureNotificationRequest):
     """
     Send email notification about a new feature or platform change.
@@ -72,13 +79,13 @@ async def notify_feature_update(request: FeatureNotificationRequest):
         )
 
 
-@router.get("/recipients")
+@router.get("/recipients", dependencies=ADMIN_ONLY)
 async def get_notification_recipients():
     """Get the list of notification recipients."""
     return {"recipients": NOTIFICATION_RECIPIENTS}
 
 
-@router.post("/publish")
+@router.post("/publish", dependencies=ADMIN_ONLY)
 async def trigger_publish_notification() -> Dict[str, Any]:
     """
     Manually trigger a publish notification.
@@ -102,7 +109,7 @@ async def trigger_publish_notification() -> Dict[str, Any]:
         }
 
 
-@router.get("/changelog")
+@router.get("/changelog", dependencies=[Depends(get_current_user)])
 async def get_changelog() -> Dict[str, Any]:
     """
     Get the parsed changelog with latest version info.
@@ -115,7 +122,7 @@ class EarlyMemberInviteRequest(BaseModel):
     invited_by: str = "Nikita Luther, Founder"
 
 
-@router.post("/early-member-invite")
+@router.post("/early-member-invite", dependencies=ADMIN_ONLY)
 async def trigger_early_member_invite(request: EarlyMemberInviteRequest) -> Dict[str, Any]:
     """
     Send early member invitation emails individually to each recipient.
@@ -202,7 +209,7 @@ async def handle_resend_webhook(event: Dict[str, Any], db: Session = Depends(get
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/email-stats/{email_id}")
+@router.get("/email-stats/{email_id}", dependencies=ADMIN_ONLY)
 async def get_email_stats(email_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get classification and event info for a specific email."""
     record = db.query(EmailEvent).filter(EmailEvent.email_id == email_id).first()
@@ -220,7 +227,7 @@ async def get_email_stats(email_id: str, db: Session = Depends(get_db)) -> Dict[
     }
 
 
-@router.get("/email-stats")
+@router.get("/email-stats", dependencies=ADMIN_ONLY)
 async def get_all_email_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get all tracked email events with classifications."""
     records = db.query(EmailEvent).order_by(EmailEvent.created_at.desc()).limit(100).all()
@@ -271,7 +278,7 @@ class DigestSubscriptionRequest(BaseModel):
     enabled: bool = True
 
 
-@router.post("/digest/send")
+@router.post("/digest/send", dependencies=ADMIN_ONLY)
 async def send_digest(request: DigestRequest):
     """
     Send a weekly KPI digest email to a user.
@@ -301,7 +308,7 @@ class TestDigestRequest(BaseModel):
     email: EmailStr
 
 
-@router.post("/digest/test")
+@router.post("/digest/test", dependencies=ADMIN_ONLY)
 async def send_test_digest(request: TestDigestRequest):
     """
     Send a test digest email with sample data.

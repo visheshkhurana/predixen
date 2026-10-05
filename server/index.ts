@@ -13,6 +13,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
+import { legacyRedirects } from "./middleware/legacyRedirects";
 
 const app = express();
 app.disable("x-powered-by");
@@ -35,6 +36,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+app.use(legacyRedirects());
 
 app.use((req, res, next) => {
   const isEmbed = req.path.startsWith("/embed/");

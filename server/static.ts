@@ -38,14 +38,22 @@ export function serveStatic(app: Express) {
 
   app.use("*", (req, res) => {
     const url = req.originalUrl;
-    if (url === "/robots.txt" || url === "/sitemap.xml") {
+    const pathname = url.split("?")[0].split("#")[0];
+    if (pathname === "/robots.txt" || pathname === "/sitemap.xml") {
       res.status(404).end();
+      return;
+    }
+    // Missing hashed assets must 404. Falling through to the SPA shell made
+    // deploy-landed's control probe (fake /assets/index-DEPLOYMONITOR-CONTROL-MISS.js)
+    // always 200 HTML → perpetual control-failed email spam every ~10 min.
+    if (pathname.startsWith("/assets/")) {
+      res.status(404).type("text/plain").send("Not Found");
       return;
     }
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Type", "text/html");
 
-    const enrichedHtml = injectSEO(indexHtml, url.split("?")[0].split("#")[0]);
+    const enrichedHtml = injectSEO(indexHtml, pathname);
     res.send(enrichedHtml);
   });
 }

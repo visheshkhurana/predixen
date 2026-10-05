@@ -6,12 +6,18 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
+from server.core.company_access import get_user_company
 from server.core.db import get_db
-from server.models.company import Company
+from server.core.security import get_current_user
+from server.models.user import User
 from server.integrations.accounting import get_accounting_integration
 from server.integrations.crm import get_crm_integration
 
-router = APIRouter(prefix="/integrations", tags=["integrations"])
+router = APIRouter(
+    prefix="/integrations",
+    tags=["integrations"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class ConnectRequest(BaseModel):
@@ -31,14 +37,12 @@ class IntegrationStatus(BaseModel):
 def get_integration_status(
     company_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get status of all integrations for a company.
     """
-    from server.models.user import User
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     demo_user = db.query(User).filter(User.id == company.user_id, User.email == "demo@founderconsole.ai").first()
     if demo_user:
@@ -149,13 +153,12 @@ async def connect_accounting(
     company_id: int,
     request: ConnectRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Connect an accounting integration.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     integration = get_accounting_integration(request.provider)
     if not integration:
@@ -180,13 +183,12 @@ async def connect_crm(
     company_id: int,
     request: ConnectRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Connect a CRM integration.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     integration = get_crm_integration(request.provider)
     if not integration:
@@ -211,13 +213,12 @@ async def sync_accounting(
     company_id: int,
     provider: str = "quickbooks",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Sync data from accounting integration.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     integration = get_accounting_integration(provider)
     if not integration:
@@ -238,13 +239,12 @@ async def sync_crm(
     company_id: int,
     provider: str = "hubspot",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Sync data from CRM integration.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     integration = get_crm_integration(provider)
     if not integration:
@@ -265,13 +265,12 @@ async def get_pipeline_metrics(
     company_id: int,
     provider: str = "hubspot",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get pipeline metrics from CRM.
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     integration = get_crm_integration(provider)
     if not integration:
@@ -298,13 +297,12 @@ async def connect_payments(
     company_id: int,
     request: ConnectRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Connect a payments integration (e.g., Stripe).
     """
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     if request.provider not in ["stripe"]:
         raise HTTPException(
@@ -325,15 +323,14 @@ async def sync_payments(
     company_id: int,
     provider: str = "stripe",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Sync data from payments integration.
     """
     from datetime import datetime
     
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    company = get_user_company(db, company_id, current_user)
     
     if provider not in ["stripe"]:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
