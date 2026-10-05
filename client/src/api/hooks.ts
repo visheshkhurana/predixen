@@ -7,7 +7,30 @@ import {
   peekSimulationAttribution,
   consumeSimulationAttribution,
   TRUTH_SCAN_SIM_SOURCE,
+  OVERVIEW_SUGGESTED_ACTION_FROM,
+  type SimulationAttribution,
 } from '@/lib/truthScanSuggestedActions';
+
+function suggestedActionEventProps(attr: SimulationAttribution | null) {
+  if (!attr) return null;
+  if (attr.source === TRUTH_SCAN_SIM_SOURCE) {
+    return {
+      source: TRUTH_SCAN_SIM_SOURCE,
+      from: attr.from,
+      action_id: attr.action_id,
+      action_type: attr.action_type,
+    };
+  }
+  if (attr.source === OVERVIEW_SUGGESTED_ACTION_FROM) {
+    return {
+      source: OVERVIEW_SUGGESTED_ACTION_FROM,
+      from: attr.from,
+      action_id: attr.action_id,
+      action_type: attr.action_type,
+    };
+  }
+  return null;
+}
 
 /**
  * Every query key that depends on a company's financial data.
@@ -181,13 +204,10 @@ export function useRunSimulation() {
   
   return useMutation({
     mutationFn: async ({ scenarioId, nSims, seed }: { scenarioId: number; nSims?: number; seed?: number }) => {
-      const attr = peekSimulationAttribution();
-      if (attr?.source === TRUTH_SCAN_SIM_SOURCE) {
+      const suggestedProps = suggestedActionEventProps(peekSimulationAttribution());
+      if (suggestedProps) {
         trackEvent('simulation_started', {
-          source: TRUTH_SCAN_SIM_SOURCE,
-          from: attr.from,
-          action_id: attr.action_id,
-          action_type: attr.action_type,
+          ...suggestedProps,
           scenario_id: scenarioId,
         });
       }
@@ -197,18 +217,11 @@ export function useRunSimulation() {
       queryClient.invalidateQueries({ queryKey: ['simulations', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['timeseries', scenarioId] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
-      const attr = consumeSimulationAttribution();
+      const suggestedProps = suggestedActionEventProps(consumeSimulationAttribution());
       trackEvent('simulation_run', {
         scenario_id: scenarioId,
         n_sims: nSims || 1000,
-        ...(attr?.source === TRUTH_SCAN_SIM_SOURCE
-          ? {
-              source: TRUTH_SCAN_SIM_SOURCE,
-              from: attr.from,
-              action_id: attr.action_id,
-              action_type: attr.action_type,
-            }
-          : {}),
+        ...(suggestedProps ?? {}),
       });
       const company = useFounderStore.getState().currentCompany;
       if (company?.id != null && company.is_sample === false) {

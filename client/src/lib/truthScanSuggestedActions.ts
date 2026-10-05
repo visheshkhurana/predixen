@@ -9,8 +9,14 @@
 
 export const TRUTH_SCAN_SIM_SOURCE = 'truth_scan';
 export const TRUTH_SCAN_SIM_FROM = 'truth_scan_suggested_action';
+/** Query `from` and simulation_started.source for the /overview card. */
+export const OVERVIEW_SUGGESTED_ACTION_FROM = 'overview_suggested_action';
 export const SIM_ATTRIBUTION_KEY = 'fc_sim_attribution';
 export const SUGGESTED_ACTIONS_MAX = 3;
+
+export type SuggestedActionLinkFrom =
+  | typeof TRUTH_SCAN_SIM_SOURCE
+  | typeof OVERVIEW_SUGGESTED_ACTION_FROM;
 
 export type SuggestedActionType =
   | 'retention'
@@ -51,14 +57,14 @@ export type SuggestedAction = {
 };
 
 export type SimulationAttribution = {
-  source: typeof TRUTH_SCAN_SIM_SOURCE;
-  from: typeof TRUTH_SCAN_SIM_FROM;
+  source: SuggestedActionLinkFrom;
+  from: typeof TRUTH_SCAN_SIM_FROM | typeof OVERVIEW_SUGGESTED_ACTION_FROM;
   action_id: string;
   action_type: SuggestedActionType;
 };
 
 export type ScenarioPrefill = {
-  from: typeof TRUTH_SCAN_SIM_SOURCE;
+  from: SuggestedActionLinkFrom;
   actionId: string;
   actionType: SuggestedActionType;
   name: string;
@@ -250,6 +256,7 @@ export function generateSuggestedActions(metrics: any, _flags: any[] = []): Sugg
 export function buildSimulateUrl(
   action: SuggestedAction,
   companyId?: string | number,
+  linkFrom: SuggestedActionLinkFrom = TRUTH_SCAN_SIM_SOURCE,
 ): string {
   const params = new URLSearchParams();
   Object.entries(action.scenarioParams).forEach(([key, value]) => {
@@ -257,11 +264,25 @@ export function buildSimulateUrl(
       params.append(key, String(value));
     }
   });
+  // scenarioParams bakes from=truth_scan. Override so /overview can be compared.
+  params.set('from', linkFrom);
   if (companyId != null && companyId !== '') {
     params.set('company', String(companyId));
   }
   const qs = params.toString();
   return `/simulate${qs ? `?${qs}` : ''}`;
+}
+
+export function resolveOverviewSuggestedAction(input: {
+  enabled: boolean;
+  isSample: boolean | undefined;
+  scan: { metrics?: unknown; flags?: unknown[] } | null | undefined;
+}): SuggestedAction | null {
+  if (!input.enabled) return null;
+  if (input.isSample !== false) return null;
+  if (!input.scan) return null;
+  const actions = generateSuggestedActions(input.scan.metrics, (input.scan.flags ?? []) as any[]);
+  return actions[0] ?? null;
 }
 
 function parseNumber(raw: string | null, fallback = 0): number {
@@ -286,14 +307,15 @@ function asGoal(raw: string | null): SimulationGoal {
 export function parseSimulatePrefill(search: string): ScenarioPrefill | null {
   const raw = search.startsWith('?') ? search.slice(1) : search;
   const params = new URLSearchParams(raw);
-  if (params.get('from') !== TRUTH_SCAN_SIM_SOURCE) return null;
+  const from = params.get('from');
+  if (from !== TRUTH_SCAN_SIM_SOURCE && from !== OVERVIEW_SUGGESTED_ACTION_FROM) return null;
 
   const actionId = params.get('action') || 'action-unknown';
   const actionType = (params.get('action_type') || 'runway') as SuggestedActionType;
   const name = params.get('name') || 'Truth Scan Scenario';
 
   return {
-    from: TRUTH_SCAN_SIM_SOURCE,
+    from,
     actionId,
     actionType,
     name,
@@ -314,6 +336,14 @@ export function parseSimulatePrefill(search: string): ScenarioPrefill | null {
 }
 
 export function attributionFromPrefill(prefill: ScenarioPrefill): SimulationAttribution {
+  if (prefill.from === OVERVIEW_SUGGESTED_ACTION_FROM) {
+    return {
+      source: OVERVIEW_SUGGESTED_ACTION_FROM,
+      from: OVERVIEW_SUGGESTED_ACTION_FROM,
+      action_id: prefill.actionId,
+      action_type: prefill.actionType,
+    };
+  }
   return {
     source: TRUTH_SCAN_SIM_SOURCE,
     from: TRUTH_SCAN_SIM_FROM,
@@ -337,7 +367,12 @@ export function peekSimulationAttribution(): SimulationAttribution | null {
     const raw = window.sessionStorage.getItem(SIM_ATTRIBUTION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SimulationAttribution;
-    if (parsed?.source !== TRUTH_SCAN_SIM_SOURCE) return null;
+    if (
+      parsed?.source !== TRUTH_SCAN_SIM_SOURCE &&
+      parsed?.source !== OVERVIEW_SUGGESTED_ACTION_FROM
+    ) {
+      return null;
+    }
     return parsed;
   } catch {
     return null;

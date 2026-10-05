@@ -5,7 +5,7 @@ import { flushPostHogQueue, type PostHogClient, type QueuedPostHogCall } from ".
 // previously configured at build time pointed at a nonexistent project, so
 // PostHog rejected every event with 401 and no analytics were ever ingested.
 const POSTHOG_KEY = 'phc_C3jjovUPQChwDJoJdCp6E7adYRKBYSPETq5bNJw7pt6M';
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
+const POSTHOG_HOST = import.meta.env?.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 type PostHogSdk = PostHogClient & {
   init: (apiKey: string, config: Record<string, unknown>) => void;
