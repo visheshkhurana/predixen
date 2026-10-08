@@ -21,6 +21,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { trackFunnel } from "@/lib/funnel";
+import { useViewedOnce } from "@/hooks/use-viewed-once";
 
 const STORAGE_KEY = "fc_survival_sim_count";
 
@@ -515,6 +516,9 @@ function EmailResultPanel({ results }: { results: SimResults }) {
   // after a 2xx, matching the calculator.
   const [email, setEmail] = useState("");
   const [sendState, setSendState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const leadFormRef = useViewedOnce("lead_form_viewed", {
+    location: "survival-simulator",
+  });
 
   const p50 = results.runway.p50;
   const monthlyBurn = results.inputs.monthly_expenses - results.inputs.monthly_revenue;
@@ -575,7 +579,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
               Your survival grade, median runway and 12-month odds, sent to you so you can
               forward it to a co-founder or investor. No account needed.
             </p>
-            <form onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
               <Input
                 type="email"
                 required

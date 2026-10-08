@@ -54,6 +54,9 @@ jobs:
       - name: analytics-single-identity tests
         run: npx tsx server/tests/analytics-single-identity.test.ts
 
+      - name: lead-form-viewed tests
+        run: npx tsx server/tests/lead-form-viewed.test.ts
+
       - name: session-401-redirect tests
         run: npx tsx --test server/tests/session-401-redirect.test.ts
 
