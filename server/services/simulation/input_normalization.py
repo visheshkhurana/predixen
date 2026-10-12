@@ -159,16 +159,22 @@ def normalize_simulation_inputs(
 def inputs_for_simulation_request(request: Any) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
     """Normalise a SimulationV2Request.
 
-    Only fields the client actually sent are treated as entered. Fields filled
-    by the pydantic defaults are assumed. An object with no field-set metadata
-    has unknown origin, so every field is assumed.
+    Fields the client actually sent are entered. Pydantic defaults, omitted
+    fields, and explicit nulls are assumed (canned baseline). When the request
+    has no ``model_fields_set``, every non-None field it carries is entered
+    and missing or null fields fall back to the canned baseline.
     """
     fields_set = getattr(request, "model_fields_set", None)
-    if fields_set is None:
-        return normalize_simulation_inputs()
-
     explicit: dict[str, Any] = {}
-    for name in CANNED_BASELINE:
-        if name in fields_set:
-            explicit[name] = getattr(request, name)
+    if fields_set is None:
+        for name in CANNED_BASELINE:
+            value = getattr(request, name, None)
+            if value is not None:
+                explicit[name] = value
+    else:
+        for name in CANNED_BASELINE:
+            if name in fields_set:
+                value = getattr(request, name, None)
+                if value is not None:
+                    explicit[name] = value
     return normalize_simulation_inputs(request_fields=explicit)

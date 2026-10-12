@@ -8,6 +8,8 @@ a value.
 
 from datetime import datetime, timezone
 
+from pydantic import ValidationError
+
 from server.api.simulation_v2 import SimulationV2Request, build_simulation_v2_state
 from server.services.simulation.input_normalization import (
     CANNED_BASELINE,
@@ -131,13 +133,81 @@ def test_unknown_origin_does_not_downgrade_a_founder_value():
     assert provenance["monthly_revenue"] == {"kind": "entered"}
 
 
-def test_request_without_field_metadata_is_assumed():
-    class Bare:
-        monthly_revenue = 50000
+def test_missing_field_set_treats_carried_non_null_values_as_entered():
+    """No model_fields_set: non-None values are entered, nulls stay canned."""
 
-    _, provenance = inputs_for_simulation_request(Bare())
-    assert provenance["monthly_revenue"] == {"kind": "assumed"}
+    class Bare:
+        monthly_revenue = 12345
+        monthly_burn = 0
+        cash_balance = None
+
+    values, provenance = inputs_for_simulation_request(Bare())
+    assert values["monthly_revenue"] == 12345
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert values["monthly_burn"] == 0
+    assert provenance["monthly_burn"] == {"kind": "entered"}
+    assert values["cash_balance"] == 500000
+    assert provenance["cash_balance"] == {"kind": "assumed"}
+    assert values["growth_rate"] == 0.05
+    assert provenance["growth_rate"] == {"kind": "assumed"}
     assert provenance["team_morale"] == {"kind": "assumed"}
+
+
+def test_omitted_mrr_burn_cash_growth_are_assumed_canned_values():
+    request = SimulationV2Request(
+        total_rounds=12,
+        customers=20,
+        team_size=4,
+        churn_rate=0.01,
+        funding_climate=0.2,
+        market_growth=0.4,
+        market_volatility=0.2,
+    )
+    assert "monthly_revenue" not in request.model_fields_set
+    assert "monthly_burn" not in request.model_fields_set
+    assert "cash_balance" not in request.model_fields_set
+    assert "growth_rate" not in request.model_fields_set
+
+    values, provenance = inputs_for_simulation_request(request)
+    assert values["monthly_revenue"] == 50000
+    assert provenance["monthly_revenue"] == {"kind": "assumed"}
+    assert values["monthly_burn"] == 80000
+    assert provenance["monthly_burn"] == {"kind": "assumed"}
+    assert values["cash_balance"] == 500000
+    assert provenance["cash_balance"] == {"kind": "assumed"}
+    assert values["growth_rate"] == 0.05
+    assert provenance["growth_rate"] == {"kind": "assumed"}
+    assert provenance["customers"] == {"kind": "entered"}
+    assert values["customers"] == 20
+
+
+def test_explicit_null_is_assumed_not_entered():
+    """Explicit null is assumed. The schema rejects JSON null on float fields,
+    so this uses a request that carries None the way a nullable payload would.
+    """
+    payload = {
+        "monthly_revenue": None,
+        "monthly_burn": None,
+        "cash_balance": None,
+        "growth_rate": None,
+    }
+    try:
+        request = SimulationV2Request.model_validate(payload)
+    except ValidationError:
+        request = SimulationV2Request.model_construct(**payload)
+
+    assert request.monthly_revenue is None
+    assert "monthly_revenue" in request.model_fields_set
+    values, provenance = inputs_for_simulation_request(request)
+    assert values["monthly_revenue"] == 50000
+    assert provenance["monthly_revenue"] == {"kind": "assumed"}
+    assert values["monthly_burn"] == 80000
+    assert provenance["monthly_burn"] == {"kind": "assumed"}
+    assert values["cash_balance"] == 500000
+    assert provenance["cash_balance"] == {"kind": "assumed"}
+    assert values["growth_rate"] == 0.05
+    assert provenance["growth_rate"] == {"kind": "assumed"}
+    assert provenance["monthly_revenue"]["kind"] != "entered"
 
 
 def test_synced_record_passes_through_source_and_synced_at():
