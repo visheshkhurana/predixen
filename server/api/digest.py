@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from server.core.db import get_db
 from server.core.security import get_current_user
@@ -86,7 +90,7 @@ def send_monthly_digest(
         raise HTTPException(status_code=404, detail="Company not found")
 
     user = db.query(User).filter(User.id == current_user.id).first()
-    email = user.username if user else None
+    email = (user.email if user else None) or getattr(current_user, "email", None)
     if not email:
         raise HTTPException(status_code=400, detail="No email found for user")
 
@@ -110,6 +114,25 @@ def send_monthly_digest(
     if not risks:
         risks.append("No critical risks detected")
 
+    metrics = {
+        "mrr": mrr,
+        "cash": cash,
+        "burn": burn,
+        "runway": runway,
+        "risks": risks,
+    }
+
+    pref = db.query(NotificationPreference).filter(
+        NotificationPreference.user_id == current_user.id,
+    ).first()
+    if pref is not None and pref.monthly_digest is False:
+        logger.info(
+            "lifecycle email skipped user_id=%s kind=digest campaign=monthly_digest reason=digest_disabled",
+            current_user.id,
+        )
+        return {"sent": False, "skipped": True, "reason": "digest_disabled", "to": email, "metrics": metrics}
+
+    from server.email.lifecycle_guard import page_unsubscribe_url
     html = _build_digest_html(
         company_name=company.name,
         mrr=mrr,
@@ -117,38 +140,33 @@ def send_monthly_digest(
         burn=burn,
         runway=runway,
         risks=risks,
+        unsubscribe_url=page_unsubscribe_url(current_user.id),
     )
 
     try:
-        from server.email.service import _send_email_sync
-        result = _send_email_sync(
-            sender="FounderConsole Digest <digest@founderconsole.ai>",
+        from server.email.service import deliver_lifecycle_email
+        result = deliver_lifecycle_email(
             to=email,
             subject=f"Monthly Digest — {company.name} | {datetime.utcnow().strftime('%b %Y')}",
-            html=html,
+            html_content=html,
+            kind="digest",
+            campaign="monthly_digest",
+            user_id=current_user.id,
+            db=db,
         )
         return {
-            "sent": True,
+            "sent": bool(result.get("success")),
+            "skipped": bool(result.get("skipped")),
+            "reason": result.get("reason"),
             "to": email,
-            "metrics": {
-                "mrr": mrr,
-                "cash": cash,
-                "burn": burn,
-                "runway": runway,
-                "risks": risks,
-            }
+            "metrics": metrics,
+            **({} if result.get("success") or result.get("skipped") else {"error": result.get("error")}),
         }
     except Exception as e:
         return {
             "sent": False,
             "error": str(e),
-            "metrics": {
-                "mrr": mrr,
-                "cash": cash,
-                "burn": burn,
-                "runway": runway,
-                "risks": risks,
-            }
+            "metrics": metrics,
         }
 
 
@@ -160,7 +178,7 @@ def _fmt(val):
     return f"${val:.0f}"
 
 
-def _build_digest_html(company_name, mrr, cash, burn, runway, risks):
+def _build_digest_html(company_name, mrr, cash, burn, runway, risks, unsubscribe_url=None):
     risk_items = "".join(
         f'<tr><td style="padding:6px 12px;color:#f59e0b;font-size:14px;">&#9888; {r}</td></tr>'
         for r in risks
@@ -208,6 +226,7 @@ def _build_digest_html(company_name, mrr, cash, burn, runway, risks):
   </td></tr>
   <tr><td style="padding:20px 40px;border-top:1px solid #334155;">
     <p style="margin:0;color:#64748b;font-size:12px;text-align:center;">FounderConsole &mdash; AI-powered financial simulation for startups</p>
+    <p style="margin:8px 0 0;color:#64748b;font-size:12px;text-align:center;"><a href="{unsubscribe_url or 'https://founderconsole.ai/unsubscribe'}" style="color:#64748b;">Unsubscribe</a></p>
   </td></tr>
 </table>
 </td></tr>

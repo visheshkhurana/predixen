@@ -17,13 +17,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from server.core.db import SessionLocal
+from server.email.lifecycle_guard import evaluate_for_user, page_unsubscribe_url, record_lifecycle_event
 
 logger = logging.getLogger(__name__)
 
 APP_URL = os.getenv("APP_BASE_URL", "https://founderconsole.ai")
 
 
-def _wrap(title: str, body_html: str, cta_label: str, cta_url: str) -> str:
+def _wrap(title: str, body_html: str, cta_label: str, cta_url: str, unsubscribe_url: str) -> str:
     return f"""<!doctype html>
 <html><body style="margin:0;padding:0;background:#0a0a0a;color:#e4e4e7;font-family:-apple-system,Segoe UI,Roboto,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:24px 0;">
@@ -39,6 +40,8 @@ def _wrap(title: str, body_html: str, cta_label: str, cta_url: str) -> str:
       </td></tr>
       <tr><td style="padding:16px 32px 24px;border-top:1px solid #27272a;font-size:12px;color:#71717a;">
         FounderConsole &middot; AI financial intelligence for founders<br/>
+        <a href="{unsubscribe_url}" style="color:#71717a;">Unsubscribe</a>
+        &middot;
         <a href="{APP_URL}/account/notifications" style="color:#71717a;">Manage emails</a>
       </td></tr>
     </table>
@@ -47,7 +50,7 @@ def _wrap(title: str, body_html: str, cta_label: str, cta_url: str) -> str:
 </body></html>"""
 
 
-def _step_welcome(name: Optional[str]) -> tuple[str, str]:
+def _step_welcome(name: Optional[str], unsubscribe_url: str) -> tuple[str, str]:
     greeting = f"Welcome aboard, {name}." if name else "Welcome aboard."
     body = f"""<p>{greeting}</p>
 <p>FounderConsole gives you investor-grade financial diligence in minutes, not weeks.
@@ -59,18 +62,18 @@ Here's the fastest path to value:</p>
 </ol>
 <p>Tomorrow we'll show you the single highest-leverage move most founders miss in week one.</p>"""
     return ("Welcome to FounderConsole &mdash; here's your first move",
-            _wrap("Welcome to FounderConsole", body, "Open your dashboard", f"{APP_URL}/dashboard"))
+            _wrap("Welcome to FounderConsole", body, "Open your dashboard", f"{APP_URL}/dashboard", unsubscribe_url))
 
 
-def _step_truth_scan() -> tuple[str, str]:
+def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>Most founders we onboard discover at least one number in their model that doesn't match their bank account.</p>
 <p>Truth Scan compares what you reported against your raw data and flags discrepancies in three colors: green (clean), amber (worth reviewing), red (action required).</p>
 <p>It takes <strong>about 5 minutes</strong>. Founders typically find $5K&ndash;$50K of unaccounted spend on first run.</p>"""
     return ("Run your first Truth Scan today (5 min)",
-            _wrap("Find what your numbers are hiding", body, "Run Truth Scan", f"{APP_URL}/truth-scan"))
+            _wrap("Find what your numbers are hiding", body, "Run Truth Scan", f"{APP_URL}/truth-scan", unsubscribe_url))
 
 
-def _step_simulator() -> tuple[str, str]:
+def _step_simulator(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>You've seen your numbers. Now stress them.</p>
 <p>The Simulation Engine runs 1,000 Monte Carlo paths across your burn, growth, and gross margin to answer the only question that matters: <strong>how many months until you run out of cash &mdash; and what changes that?</strong></p>
 <p>Try one of these scenarios in two clicks:</p>
@@ -80,10 +83,10 @@ def _step_simulator() -> tuple[str, str]:
   <li>What if you raise $1M today?</li>
 </ul>"""
     return ("Stress-test your runway in 60 seconds",
-            _wrap("Simulate the scenarios that scare you", body, "Open Simulation Console", f"{APP_URL}/simulate"))
+            _wrap("Simulate the scenarios that scare you", body, "Open Simulation Console", f"{APP_URL}/simulate", unsubscribe_url))
 
 
-def _step_copilot() -> tuple[str, str]:
+def _step_copilot(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>Your Fund Flow Copilot has read your numbers, your simulations, and 200+ benchmark companies in your stage.</p>
 <p>Ask it the questions you'd normally pay a consultant for:</p>
 <ul>
@@ -93,10 +96,10 @@ def _step_copilot() -> tuple[str, str]:
 </ul>
 <p>Every answer is sourced and ranked. No hallucinations &mdash; only what your data supports.</p>"""
     return ("Ask your Copilot the question that's keeping you up at night",
-            _wrap("Talk to your Copilot", body, "Open Copilot", f"{APP_URL}/copilot"))
+            _wrap("Talk to your Copilot", body, "Open Copilot", f"{APP_URL}/copilot", unsubscribe_url))
 
 
-def _step_fundraising() -> tuple[str, str]:
+def _step_fundraising(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>When investors ask for your model, your cap table, and your story &mdash; you should have them in one tab.</p>
 <p>Fundraising OS gives you:</p>
 <ul>
@@ -106,10 +109,10 @@ def _step_fundraising() -> tuple[str, str]:
 </ul>
 <p>Even if you're not raising right now, set this up once and you'll never scramble again.</p>"""
     return ("Be raise-ready before you need to be",
-            _wrap("Fundraising OS, ready in 10 minutes", body, "Open Fundraising OS", f"{APP_URL}/fundraising"))
+            _wrap("Fundraising OS, ready in 10 minutes", body, "Open Fundraising OS", f"{APP_URL}/fundraising", unsubscribe_url))
 
 
-def _step_feedback() -> tuple[str, str]:
+def _step_feedback(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>You've been on FounderConsole for a week. We'd love 90 seconds of your honest reaction.</p>
 <p>Specifically:</p>
 <ul>
@@ -120,7 +123,7 @@ def _step_feedback() -> tuple[str, str]:
 <p>Reply to this email &mdash; it goes straight to me. Every reply is read.</p>
 <p>&mdash; The FounderConsole team</p>"""
     return ("How was your first week?",
-            _wrap("Tell us what to build next", body, "Reply to this email", f"mailto:hello@founderconsole.ai"))
+            _wrap("Tell us what to build next", body, "Reply to this email", "mailto:hello@founderconsole.ai", unsubscribe_url))
 
 
 @dataclass
@@ -142,6 +145,46 @@ SEQUENCE: List[Step] = [
 
 
 MAX_ATTEMPTS = 3
+
+# Claim-before-send. A second worker sees success TRUE or attempts >= MAX and
+# gets no RETURNING row, so the step is not sent twice. Cap/opt-out skips must
+# release this claim (see _release_unsent_claim) so the step is retried later.
+CLAIM_SQL = """
+            INSERT INTO onboarding_email_log (user_id, step_key, success, attempts, sent_at)
+            VALUES (:uid, :step, NULL, 1, NOW())
+            ON CONFLICT (user_id, step_key) DO UPDATE
+                SET attempts = onboarding_email_log.attempts + 1,
+                    sent_at = NOW()
+                WHERE onboarding_email_log.success IS NOT TRUE
+                  AND onboarding_email_log.attempts < :maxa
+            RETURNING id
+        """
+
+
+def _release_unsent_claim(db: Session, user_id: int, step_key: str) -> None:
+    """Undo a claim that never delivered. success=TRUE rows are left alone."""
+    row = db.execute(
+        text("""
+            UPDATE onboarding_email_log
+               SET attempts = attempts - 1,
+                   success = NULL,
+                   error = NULL
+             WHERE user_id = :uid AND step_key = :step
+               AND success IS NULL
+             RETURNING attempts
+        """),
+        {"uid": user_id, "step": step_key},
+    ).fetchone()
+    if row is not None and int(row[0]) <= 0:
+        db.execute(
+            text("""
+                DELETE FROM onboarding_email_log
+                 WHERE user_id = :uid AND step_key = :step
+                   AND success IS NULL
+            """),
+            {"uid": user_id, "step": step_key},
+        )
+    db.commit()
 
 
 def ensure_table(engine) -> None:
@@ -173,35 +216,53 @@ def ensure_table(engine) -> None:
 
 
 async def _send_step(user_id: int, email: str, name: Optional[str], step: Step, db: Session) -> bool:
-    """Claim-before-send. Returns True only if this call actually delivered."""
-    from server.email.service import send_email
+    """Claim-before-send. Returns True only if this call actually delivered.
+
+    Opt-out and the frequency cap are checked before the claim so a skip does
+    not burn an attempt. If the choke point still refuses after the claim
+    (a concurrent send filled the cap), the claim is released and the step
+    stays eligible for a later tick.
+    """
+    from server.email.service import send_lifecycle_email
+
+    campaign = f"onboarding_{step.key}"
+    try:
+        decision = evaluate_for_user(db, user_id)
+    except Exception:
+        logger.exception("onboarding guard failed closed for user %s step %s", user_id, step.key)
+        return False
+    if not decision.allow:
+        record_lifecycle_event(db, user_id, "onboarding", campaign, f"skipped_{decision.reason}", decision.reason)
+        return False
 
     # 1. Atomically claim the (user, step) slot. If another worker already
     #    holds it (success TRUE or attempts >= MAX), we skip.
     claim = db.execute(
-        text("""
-            INSERT INTO onboarding_email_log (user_id, step_key, success, attempts, sent_at)
-            VALUES (:uid, :step, NULL, 1, NOW())
-            ON CONFLICT (user_id, step_key) DO UPDATE
-                SET attempts = onboarding_email_log.attempts + 1,
-                    sent_at = NOW()
-                WHERE onboarding_email_log.success IS NOT TRUE
-                  AND onboarding_email_log.attempts < :maxa
-            RETURNING id
-        """),
+        text(CLAIM_SQL),
         {"uid": user_id, "step": step.key, "maxa": MAX_ATTEMPTS},
     ).fetchone()
     db.commit()
     if not claim:
         return False  # already sent or attempts exhausted
 
-    # 2. Build + send.
+    # 2. Build + send through the lifecycle choke point.
     try:
+        unsubscribe_url = page_unsubscribe_url(user_id)
         if step.needs_name:
-            subject, html = step.builder(name)
+            subject, html = step.builder(name, unsubscribe_url)
         else:
-            subject, html = step.builder()
-        result = await send_email(email, subject, html, campaign=f"onboarding_{step.key}")
+            subject, html = step.builder(unsubscribe_url)
+        result = await send_lifecycle_email(
+            email,
+            subject,
+            html,
+            kind="onboarding",
+            campaign=campaign,
+            user_id=user_id,
+        )
+        if result.get("skipped"):
+            _release_unsent_claim(db, user_id, step.key)
+            return False
         success = bool(result.get("success"))
         db.execute(
             text("""
@@ -255,6 +316,8 @@ async def process_pending(now: Optional[datetime] = None) -> dict:
     try:
         for step in SEQUENCE:
             cutoff = now - timedelta(days=step.delay_days)
+            # Recently capped users stay eligible, but they should not fill the
+            # LIMIT and block everyone else. The next tick after the hour retries them.
             rows = db.execute(
                 text("""
                     SELECT u.id, u.email, COALESCE(u.display_name, '') AS name
@@ -269,9 +332,27 @@ async def process_pending(now: Optional[datetime] = None) -> dict:
                       )
                       AND u.email NOT LIKE '%@example.com'
                       AND u.email NOT LIKE '%+test%'
+                      AND COALESCE((
+                        SELECT np.email_enabled
+                        FROM notification_preferences np
+                        WHERE np.user_id = u.id
+                      ), TRUE) = TRUE
+                      AND NOT EXISTS (
+                        SELECT 1 FROM lifecycle_email_log g
+                        WHERE g.user_id = u.id
+                          AND g.campaign = :campaign
+                          AND g.status = 'skipped_capped'
+                          AND g.created_at >= :recent
+                      )
                     LIMIT 100
                 """),
-                {"step": step.key, "cutoff": cutoff, "maxa": MAX_ATTEMPTS},
+                {
+                    "step": step.key,
+                    "cutoff": cutoff,
+                    "maxa": MAX_ATTEMPTS,
+                    "campaign": f"onboarding_{step.key}",
+                    "recent": now - timedelta(hours=1),
+                },
             ).fetchall()
             for row in rows:
                 ok = await _send_step(row.id, row.email, row.name or None, step, db)

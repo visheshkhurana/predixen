@@ -40,6 +40,7 @@ def _register_critical_routers(app: FastAPI):
     from server.api import oauth as oauth_api
 
     from server.api import feedback as feedback_api
+    from server.api import email_unsubscribe as email_unsubscribe_api
 
     app.include_router(auth.router)
     app.include_router(oauth_api.router)
@@ -49,6 +50,7 @@ def _register_critical_routers(app: FastAPI):
     app.include_router(billing_api.router)
     app.include_router(onboarding_api.router)
     app.include_router(feedback_api.router)
+    app.include_router(email_unsubscribe_api.router)
 
     logger.info(f"Critical routes registered in {time.time() - t0:.1f}s")
 
@@ -293,6 +295,12 @@ async def _run_deferred_startup():
             logger.warning(f"AI governance init skipped: {e}")
 
         try:
+            from server.core.migrations import ensure_lifecycle_email_tables
+            ensure_lifecycle_email_tables(engine)
+        except Exception as e:
+            logger.warning(f"Lifecycle email tables ensure skipped: {e}")
+
+        try:
             from server.email.onboarding_sequence import ensure_table, run_scheduler_loop
             ensure_table(engine)
             asyncio.create_task(run_scheduler_loop(interval_seconds=600))
@@ -440,6 +448,9 @@ app.add_middleware(CSRFProtectionMiddleware, exempt_paths=[
     "/auth/refresh",
     "/companies/*/seed-sample",
     "/billing/webhook",  # Stripe webhook — authenticated by signature, not session
+    # RFC 8058 one-click POST has no session and no CSRF header.
+    "/email/unsubscribe",
+    "/api/email/unsubscribe",
 ])
 
 app.add_middleware(

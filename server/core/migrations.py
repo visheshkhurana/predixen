@@ -1028,6 +1028,7 @@ def run_migrations(engine: Engine) -> None:
     ensure_copilot_feedback_table(engine)
     ensure_agent_simulation_runs_table(engine)
     ensure_subscription_trial_columns(engine)
+    ensure_lifecycle_email_tables(engine)
     logger.info("Database migrations completed successfully")
 
 
@@ -1768,6 +1769,51 @@ def ensure_agent_simulation_runs_table(engine: Engine) -> None:
             pass
         conn.commit()
     logger.info("Agent simulation runs table migration complete")
+
+
+def ensure_lifecycle_email_tables(engine: Engine) -> None:
+    """Preference row for opt-out, plus the lifecycle send/skip ledger.
+
+    notification_preferences is created by SQLAlchemy metadata on a full
+    schema build. CREATE IF NOT EXISTS covers boots that skip create_all.
+    Existing rows are left alone.
+    """
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                company_id INTEGER,
+                email_enabled BOOLEAN DEFAULT TRUE,
+                email_address VARCHAR,
+                alert_types JSON,
+                thresholds JSON,
+                frequency VARCHAR DEFAULT 'immediate',
+                monthly_digest BOOLEAN DEFAULT TRUE,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS lifecycle_email_log (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                kind VARCHAR(32) NOT NULL,
+                campaign VARCHAR(120),
+                status VARCHAR(32) NOT NULL,
+                reason VARCHAR(120),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_lifecycle_email_log_cap "
+            "ON lifecycle_email_log (user_id, status, created_at)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user "
+            "ON notification_preferences (user_id)"
+        ))
+        conn.commit()
+    logger.info("Lifecycle email tables ensured")
 
 
 def ensure_subscription_trial_columns(engine: Engine) -> None:

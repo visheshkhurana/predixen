@@ -16,6 +16,8 @@ import random
 from typing import Optional, Tuple
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 
 PLATFORM_DOMAINS = [
     "founderconsole.ai",
@@ -252,6 +254,115 @@ async def send_email(
     return await asyncio.to_thread(
         _send_email_sync, to, subject, html_content, from_email,
         recipient_id, campaign, utm_params
+    )
+
+
+def deliver_lifecycle_email(
+    to: str,
+    subject: str,
+    html_content: str,
+    *,
+    kind: str,
+    campaign: Optional[str] = None,
+    user_id: Optional[int] = None,
+    from_email: Optional[str] = None,
+    db=None,
+) -> dict:
+    """Single choke point for onboarding, activity, and digest mail.
+
+    Opt-out and the per-user cap are applied here, before Resend. Transactional
+    callers keep using send_email / _send_email_sync and never enter this
+    function. LIFECYCLE_EMAIL_GUARD=off skips both checks.
+    """
+    from server.core.db import SessionLocal
+    from server.email.lifecycle_guard import (
+        LIFECYCLE_KINDS,
+        evaluate_for_user,
+        lifecycle_list_unsubscribe_headers,
+        record_lifecycle_event,
+        user_id_for_email,
+    )
+
+    if kind not in LIFECYCLE_KINDS:
+        raise ValueError(f"not a lifecycle kind: {kind}")
+
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
+    try:
+        uid = user_id if user_id is not None else user_id_for_email(db, to)
+        if uid is None:
+            logger.info(
+                "lifecycle email skipped reason=unknown_user kind=%s campaign=%s",
+                kind,
+                campaign,
+            )
+            return {"success": False, "skipped": True, "reason": "unknown_user"}
+
+        try:
+            decision = evaluate_for_user(db, uid)
+        except Exception:
+            logger.exception("lifecycle guard failed closed user_id=%s kind=%s", uid, kind)
+            return {"success": False, "skipped": True, "reason": "guard_error"}
+
+        if not decision.allow:
+            record_lifecycle_event(
+                db,
+                uid,
+                kind,
+                campaign,
+                f"skipped_{decision.reason}",
+                decision.reason,
+            )
+            return {"success": False, "skipped": True, "reason": decision.reason}
+
+        result = _send_email_sync(
+            to,
+            subject,
+            html_content,
+            from_email=from_email,
+            recipient_id=str(uid),
+            campaign=campaign,
+            headers=lifecycle_list_unsubscribe_headers(uid),
+        )
+        if result.get("success"):
+            record_lifecycle_event(db, uid, kind, campaign, "sent", None)
+        else:
+            record_lifecycle_event(
+                db,
+                uid,
+                kind,
+                campaign,
+                "failed",
+                str(result.get("error") or "")[:120] or None,
+            )
+        return result
+    finally:
+        if owns_session:
+            db.close()
+
+
+async def send_lifecycle_email(
+    to: str,
+    subject: str,
+    html_content: str,
+    *,
+    kind: str,
+    campaign: Optional[str] = None,
+    user_id: Optional[int] = None,
+    from_email: Optional[str] = None,
+) -> dict:
+    """Async wrapper around the lifecycle choke point. Does not touch transactional mail."""
+    return await asyncio.to_thread(
+        lambda: deliver_lifecycle_email(
+            to,
+            subject,
+            html_content,
+            kind=kind,
+            campaign=campaign,
+            user_id=user_id,
+            from_email=from_email,
+        )
     )
 
 
