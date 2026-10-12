@@ -1432,30 +1432,24 @@ function AgentSimulationConsole() {
     abortRef.current = controller;
 
     try {
-      // Leave canned baselines off the body. The server fills the same
-      // numbers and marks them assumed. Company figures stay on the request.
-      const payload: Record<string, number> = {
-        total_rounds: numRounds,
-        funding_climate: fundingClimate,
-        market_growth: marketGrowth,
-        market_volatility: marketVolatility,
-      };
-      if (baseMetrics) {
-        payload.monthly_revenue = baseMetrics.mrr ?? 50000;
-        payload.monthly_burn = baseMetrics.burnRate ?? 80000;
-        payload.cash_balance = baseMetrics.cashOnHand ?? 500000;
-        payload.growth_rate = Math.min(1.0, Math.max(-0.5, (baseMetrics.monthlyGrowthRate ?? 5) > 1 ? (baseMetrics.monthlyGrowthRate ?? 5) / 100 : (baseMetrics.monthlyGrowthRate ?? 0.05)));
-        if (baseMetrics.headcount) {
-          payload.team_size = baseMetrics.headcount;
-        }
-      }
-
       const res = await fetch('/api/simulation/v2/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          total_rounds: numRounds,
+          monthly_revenue: baseMetrics?.mrr ?? 50000,
+          monthly_burn: baseMetrics?.burnRate ?? 80000,
+          cash_balance: baseMetrics?.cashOnHand ?? 500000,
+          customers: 50,
+          team_size: baseMetrics?.headcount || 10,
+          growth_rate: Math.min(1.0, Math.max(-0.5, (baseMetrics?.monthlyGrowthRate ?? 5) > 1 ? (baseMetrics?.monthlyGrowthRate ?? 5) / 100 : (baseMetrics?.monthlyGrowthRate ?? 0.05))),
+          churn_rate: 0.03,
+          funding_climate: fundingClimate,
+          market_growth: marketGrowth,
+          market_volatility: marketVolatility,
+        }),
       });
 
       if (!res.ok) {
