@@ -27,20 +27,10 @@ CANNED_BASELINE: dict[str, Any] = {
     "market_volatility": 0.1,
 }
 
-# simulate-workspace.tsx can fill these with a client-side fallback
-# (mrr ?? 50000, burnRate ?? 80000, cashOnHand ?? 500000, monthlyGrowthRate ?? 5,
-# customers: 50, churn_rate: 0.03, headcount || 10). Leave them out of
-# input_provenance until App Engineer's panel PR only sends non-null fields.
-# Set this to frozenset() to publish them again.
-PROVENANCE_OMIT_UNTIL_PANEL_PR = frozenset({
-    "monthly_revenue",
-    "monthly_burn",
-    "cash_balance",
-    "growth_rate",
-    "customers",
-    "churn_rate",
-    "team_size",
-})
+# /simulate now sends only non-null founder metrics and shows input_provenance
+# on the result, so these fields are classified. Kept as an empty set so a
+# future caller can omit a name again without changing the filter.
+PROVENANCE_OMIT_UNTIL_PANEL_PR = frozenset()
 
 # Hardcoded on the v2 CompanyState. They are not request fields. Their origin
 # is unknown to the caller, so they are assumed.

@@ -25,6 +25,9 @@ import { SimTerminalDrawer } from '@/components/ui/sim-terminal-drawer';
 import { SimSkeleton } from '@/components/ui/sim-skeleton';
 import { SimBackgroundOrbs } from '@/components/ui/sim-background-orbs';
 import { SimEventCard } from '@/components/ui/sim-event-card';
+import { SimulationInputsPanel } from '@/components/simulation-inputs-panel';
+import { buildSimulationV2Payload } from '@/lib/simulation/v2Request';
+import { valuesFromSimulationResult, type InputProvenanceMap } from '@/lib/simulation/inputProvenance';
 
 interface AccuracyRecord {
   id: number;
@@ -1365,6 +1368,8 @@ function AgentSimulationConsole() {
   const [report, setReport] = useState<V2Report | null>(null);
   const [completedRounds, setCompletedRounds] = useState(0);
   const [simulationId, setSimulationId] = useState<string | null>(null);
+  const [inputProvenance, setInputProvenance] = useState<InputProvenanceMap | null>(null);
+  const [inputValues, setInputValues] = useState<Record<string, number>>({});
   const abortRef = useRef<AbortController | null>(null);
   const eventFeedRef = useRef<HTMLDivElement>(null);
 
@@ -1424,6 +1429,8 @@ function AgentSimulationConsole() {
     setLiveState(null);
     setCompletedRounds(0);
     setSimulationId(null);
+    setInputProvenance(null);
+    setInputValues({});
     setTerminalLogs([]);
     addLog('Starting MiroFish-style multi-agent simulation...');
 
@@ -1437,19 +1444,12 @@ function AgentSimulationConsole() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         signal: controller.signal,
-        body: JSON.stringify({
-          total_rounds: numRounds,
-          monthly_revenue: baseMetrics?.mrr ?? 50000,
-          monthly_burn: baseMetrics?.burnRate ?? 80000,
-          cash_balance: baseMetrics?.cashOnHand ?? 500000,
-          customers: 50,
-          team_size: baseMetrics?.headcount || 10,
-          growth_rate: Math.min(1.0, Math.max(-0.5, (baseMetrics?.monthlyGrowthRate ?? 5) > 1 ? (baseMetrics?.monthlyGrowthRate ?? 5) / 100 : (baseMetrics?.monthlyGrowthRate ?? 0.05))),
-          churn_rate: 0.03,
-          funding_climate: fundingClimate,
-          market_growth: marketGrowth,
-          market_volatility: marketVolatility,
-        }),
+        body: JSON.stringify(buildSimulationV2Payload(baseMetrics, {
+          totalRounds: numRounds,
+          fundingClimate,
+          marketGrowth,
+          marketVolatility,
+        })),
       });
 
       if (!res.ok) {
@@ -1506,6 +1506,16 @@ function AgentSimulationConsole() {
               case 'complete': {
                 const result = msg.result;
                 setSimulationId(result.simulation_id);
+                setInputProvenance(
+                  result.input_provenance && typeof result.input_provenance === 'object' && !Array.isArray(result.input_provenance)
+                    ? result.input_provenance as InputProvenanceMap
+                    : null,
+                );
+                setInputValues(valuesFromSimulationResult(result, {
+                  fundingClimate,
+                  marketGrowth,
+                  marketVolatility,
+                }));
                 setReport(result.report as V2Report);
                 setLiveState(result.final_state as V2CompanyState);
                 if (result.agents) setAgents(result.agents);
@@ -1591,6 +1601,12 @@ function AgentSimulationConsole() {
             </Button>
           </div>
         </div>
+
+        {isComplete && (
+          <div className="px-4 pb-3">
+            <SimulationInputsPanel provenance={inputProvenance} values={inputValues} />
+          </div>
+        )}
 
         {agents.length > 0 && (
           <div className="px-4 pb-3 overflow-x-auto">
