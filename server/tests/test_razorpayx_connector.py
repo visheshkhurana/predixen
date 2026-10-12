@@ -1,6 +1,7 @@
 """RazorpayX catalog id, payroll mapping, and failed-sync recording."""
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -11,14 +12,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from server.api.connectors import _sample_for, router
+from server.api.connectors import _sample_for, _status_row, router
 from server.connectors.base import ConnectorConfig
 from server.connectors.razorpayx import (
     ACCOUNT_NUMBER_REQUIRED,
     NO_SALARY_PAYOUTS,
     RazorpayXConnector,
     financials_from_razorpayx,
+    redact_account_logs,
+    redact_account_number,
 )
+from server.core.encryption import decrypt_credentials, mask_account_number
 from server.connectors.registry import ConnectorRegistry
 from server.core.db import Base, get_db
 from server.core.security import get_current_user
@@ -299,6 +303,11 @@ def test_successful_sync_writes_payroll_and_headcount(client, monkeypatch):
 
     connectors, records = _read(Session, company_id)
     assert connectors["razorpayx"]["last_error"] is None
+    stored = connectors["razorpayx"]["credentials"]
+    assert isinstance(stored, str)
+    assert "2323230000000000" not in stored
+    assert decrypt_credentials(stored)["account_number"] == "2323230000000000"
+    assert "account_number" not in (connectors["razorpayx"].get("settings") or {})
     assert connectors["razorpayx"]["last_sync"]
     assert len(records) == 1
     record = records[0]
@@ -378,3 +387,198 @@ def test_failed_sync_is_recorded_and_stays_connected(client):
     assert rows["razorpayx"]["connected"] is True
     assert rows["razorpayx"]["error"]
     assert "account_number" in rows["razorpayx"]["error"]
+
+
+ACCOUNT = "9182736450192837"
+ACCOUNT_PREFIX = ACCOUNT[:-4]
+
+
+def _assert_account_hidden(text: str):
+    assert ACCOUNT not in text
+    assert ACCOUNT_PREFIX not in text
+
+
+class _LeakingPayouts(_FakeClient):
+    """Razorpay's error description and the httpx log both echo the account number."""
+
+    async def get(self, path, params=None):
+        _FakeClient.calls.append((path, params))
+        if path == "/payouts":
+            account = (params or {}).get("account_number", "")
+            logging.getLogger("httpx").error(
+                "HTTP Request: GET https://api.razorpay.com/v1/payouts?account_number=%s&from=1",
+                account,
+            )
+            return _Response(
+                400,
+                {"error": {"description": f"Invalid account {account} for payouts"}},
+            )
+        return _Response(200, {"entity": "collection", "count": 0, "items": []})
+
+
+class _RaisingPayouts(_FakeClient):
+    async def get(self, path, params=None):
+        _FakeClient.calls.append((path, params))
+        if path == "/payouts":
+            account = (params or {}).get("account_number", "")
+            try:
+                raise RuntimeError(
+                    f"GET https://api.razorpay.com/v1/payouts?account_number={account}&from=1"
+                )
+            except RuntimeError:
+                logging.getLogger("httpx").exception("payout request failed")
+                raise
+        return _Response(200, {"entity": "collection", "count": 0, "items": []})
+
+
+def test_redact_account_number_keeps_last_four_only():
+    leaked = f"account_number={ACCOUNT} Invalid account {ACCOUNT}"
+    redacted = redact_account_number(leaked, ACCOUNT)
+    _assert_account_hidden(redacted)
+    assert mask_account_number(ACCOUNT) == "••••2837"
+    assert "••••2837" in redacted
+    assert mask_account_number("1234") == "****"
+    assert redact_account_number(f"account_number={ACCOUNT}") == f"account_number={'••••2837'}"
+
+
+def test_log_filter_strips_account_from_httpx_logs_and_tracebacks(caplog):
+    caplog.set_level(logging.DEBUG)
+    with redact_account_logs(ACCOUNT):
+        logging.getLogger("httpx").error(
+            "HTTP Request: GET https://api.razorpay.com/v1/payouts?account_number=%s",
+            ACCOUNT,
+        )
+        try:
+            raise RuntimeError(f"boom account_number={ACCOUNT}")
+        except RuntimeError:
+            logging.getLogger("server.connectors.razorpayx").exception("sync blew up")
+    _assert_account_hidden(caplog.text)
+    assert "••••2837" in caplog.text
+
+
+def test_connect_masks_account_and_stores_it_encrypted(client, monkeypatch):
+    http, Session = client
+
+    async def _authenticated(self):
+        return True
+
+    monkeypatch.setattr(RazorpayXConnector, "authenticate", _authenticated)
+    company_id = _company(Session, {})
+    response = http.post(
+        f"/connectors/companies/{company_id}/connect",
+        json={
+            "provider_id": "razorpayx",
+            "credentials": {"api_key": "rzp_test", "api_secret": "test-secret"},
+            "settings": {"account_number": ACCOUNT, "environment": "test"},
+        },
+    )
+    assert response.status_code == 200, response.text
+    _assert_account_hidden(response.text)
+    assert response.json()["account_hint"] == "••••2837"
+
+    connectors, _records = _read(Session, company_id)
+    stored = connectors["razorpayx"]["credentials"]
+    settings = connectors["razorpayx"].get("settings") or {}
+    assert isinstance(stored, str)
+    _assert_account_hidden(stored)
+    assert "account_number" not in settings
+    assert settings.get("environment") == "test"
+    assert decrypt_credentials(stored)["account_number"] == ACCOUNT
+
+    status = http.get(f"/connectors/companies/{company_id}/status")
+    assert status.status_code == 200
+    _assert_account_hidden(status.text)
+    rows = {row["provider_id"]: row for row in status.json()["connectors"]}
+    assert rows["razorpayx"]["account_hint"] == "••••2837"
+    assert rows["razorpayx"]["connected"] is True
+
+    stored_row = _status_row(
+        "razorpayx",
+        {
+            "connected": True,
+            "last_error": f"Invalid account {ACCOUNT}",
+            "credentials": {"account_number": ACCOUNT, "api_secret": "test-secret"},
+            "records_synced": 0,
+        },
+    )
+    _assert_account_hidden(stored_row["error"])
+    assert stored_row["account_hint"] == "••••2837"
+    assert "••••2837" in stored_row["error"]
+    assert "api_secret" not in stored_row
+    assert "test-secret" not in str(stored_row)
+
+
+def test_sync_error_hides_account_in_response_logs_and_last_error(client, monkeypatch, caplog):
+    http, Session = client
+    caplog.set_level(logging.DEBUG)
+    _FakeClient.calls = []
+    monkeypatch.setattr("server.connectors.razorpayx.httpx.AsyncClient", _LeakingPayouts)
+    company_id = _company(
+        Session,
+        {
+            "razorpayx": {
+                "connected": True,
+                "credentials": {
+                    "api_key": "rzp_test",
+                    "api_secret": "test-secret",
+                    "account_number": ACCOUNT,
+                },
+                "settings": {"account_number": ACCOUNT},
+            }
+        },
+    )
+    response = http.post(f"/connectors/companies/{company_id}/sync/razorpayx")
+    assert response.status_code == 400, response.text
+    _assert_account_hidden(response.text)
+    assert "••••2837" in response.text
+    assert "Invalid account" in response.text
+
+    connectors, records = _read(Session, company_id)
+    assert records == []
+    last_error = connectors["razorpayx"]["last_error"]
+    assert last_error
+    _assert_account_hidden(last_error)
+    assert "••••2837" in last_error
+    stored = connectors["razorpayx"]["credentials"]
+    assert isinstance(stored, str)
+    _assert_account_hidden(stored)
+    assert decrypt_credentials(stored)["account_number"] == ACCOUNT
+    assert "account_number" not in (connectors["razorpayx"].get("settings") or {})
+    _assert_account_hidden(caplog.text)
+
+    status = http.get(f"/connectors/companies/{company_id}/status")
+    _assert_account_hidden(status.text)
+    rows = {row["provider_id"]: row for row in status.json()["connectors"]}
+    _assert_account_hidden(rows["razorpayx"]["error"])
+    assert rows["razorpayx"]["account_hint"] == "••••2837"
+    assert "••••2837" in rows["razorpayx"]["error"]
+
+
+def test_transport_exception_does_not_log_or_store_the_account(client, monkeypatch, caplog):
+    http, Session = client
+    caplog.set_level(logging.DEBUG)
+    _FakeClient.calls = []
+    monkeypatch.setattr("server.connectors.razorpayx.httpx.AsyncClient", _RaisingPayouts)
+    company_id = _company(
+        Session,
+        {
+            "razorpayx": {
+                "connected": True,
+                "credentials": {
+                    "api_key": "rzp_test",
+                    "api_secret": "test-secret",
+                    "account_number": ACCOUNT,
+                },
+            }
+        },
+    )
+    response = http.post(f"/connectors/companies/{company_id}/sync/razorpayx")
+    assert response.status_code == 400, response.text
+    _assert_account_hidden(response.text)
+    assert "before payroll numbers could be read" in response.text
+
+    connectors, _records = _read(Session, company_id)
+    last_error = connectors["razorpayx"]["last_error"]
+    _assert_account_hidden(last_error)
+    assert "before payroll numbers could be read" in last_error
+    _assert_account_hidden(caplog.text)

@@ -684,6 +684,7 @@ export default function IntegrationsPage() {
       last_sync: string | null;
       records_synced: number;
       error: string | null;
+      account_hint?: string | null;
     }>;
   }>({
     queryKey: ["/api/connectors/companies", companyId, "status"],
@@ -869,6 +870,7 @@ export default function IntegrationsPage() {
               lastSync={lastSync ?? null}
               syncDetails={syncDetails}
               isSyncing={isSyncing}
+              accountHint={connectorInfo?.account_hint}
             />
           )}
 
@@ -1337,14 +1339,22 @@ export default function IntegrationsPage() {
 function SyncStatusDisplay({ 
   lastSync, 
   syncDetails, 
-  isSyncing 
+  isSyncing,
+  accountHint,
 }: { 
   lastSync: string | null; 
   syncDetails?: SyncDetails;
   isSyncing: boolean;
+  accountHint?: string | null;
 }) {
   return (
     <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+      {accountHint && (
+        <div className="flex items-center gap-2 text-sm" data-testid="saved-account-hint">
+          <Shield className="h-4 w-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Account {accountHint}</span>
+        </div>
+      )}
       {isSyncing ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm">

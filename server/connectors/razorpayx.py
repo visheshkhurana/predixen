@@ -17,10 +17,15 @@ Docs:
 """
 
 import logging
+import re
+import traceback
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
+
+from server.core.encryption import mask_account_number
 
 from .base import (
     AuthType,
@@ -55,6 +60,72 @@ NO_SALARY_PAYOUTS = (
     "RazorpayX returned no processed payouts with purpose 'salary', so payroll was not written. "
     + PAYROLL_API_UNAVAILABLE
 )
+
+_ACCOUNT_QUERY = re.compile(r"(account[_-]?number=)([A-Za-z0-9]+)", re.IGNORECASE)
+_LOGGERS_TO_SCRUB = (
+    "httpx",
+    "httpcore",
+    "server.connectors.razorpayx",
+    "server.api.connectors",
+)
+
+
+def redact_account_number(text: Any, account_number: Optional[str] = None) -> str:
+    """Remove a full RazorpayX account number from text that might be logged or returned."""
+    if text is None:
+        return ""
+    rendered = text if isinstance(text, str) else str(text)
+    known = str(account_number or "").strip()
+    if len(known) > 4 and known in rendered:
+        rendered = rendered.replace(known, mask_account_number(known))
+    return _ACCOUNT_QUERY.sub(lambda match: match.group(1) + mask_account_number(match.group(2)), rendered)
+
+
+class _AccountRedactionFilter(logging.Filter):
+    """Scrub account numbers from a log record, including formatted args and tracebacks."""
+
+    def __init__(self, account_number: str):
+        super().__init__()
+        self.account_number = account_number
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            rendered = record.getMessage()
+        except Exception:
+            rendered = str(record.msg)
+        record.msg = redact_account_number(rendered, self.account_number)
+        record.args = ()
+        if record.exc_info:
+            record.exc_text = redact_account_number(
+                "".join(traceback.format_exception(*record.exc_info)),
+                self.account_number,
+            )
+            record.exc_info = None
+        return True
+
+
+@contextmanager
+def redact_account_logs(account_number: str) -> Iterator[None]:
+    """Hide the account number from this process's logs while RazorpayX is on the network.
+
+    Handler filters catch records that propagate to the root logger (including httpx).
+    Logger filters catch records emitted directly by those loggers.
+    """
+    filt = _AccountRedactionFilter(account_number or "")
+    loggers = [logging.getLogger(), *(logging.getLogger(name) for name in _LOGGERS_TO_SCRUB)]
+    handlers: List[logging.Handler] = []
+    for candidate in loggers:
+        candidate.addFilter(filt)
+        for handler in list(candidate.handlers):
+            handler.addFilter(filt)
+            handlers.append(handler)
+    try:
+        yield
+    finally:
+        for candidate in loggers:
+            candidate.removeFilter(filt)
+        for handler in handlers:
+            handler.removeFilter(filt)
 
 
 class RazorpayXApiError(Exception):
@@ -141,7 +212,7 @@ def financials_from_razorpayx(
     }
 
 
-def _describe_failure(response: httpx.Response) -> str:
+def _describe_failure(response: httpx.Response, account_number: str = "") -> str:
     description = ""
     try:
         body = response.json()
@@ -152,10 +223,12 @@ def _describe_failure(response: httpx.Response) -> str:
         if isinstance(error, dict) and error.get("description"):
             description = str(error["description"])
     if response.status_code in (401, 403):
-        return "RazorpayX rejected the API key or secret."
-    if description:
-        return f"RazorpayX request failed ({response.status_code}): {description}"
-    return f"RazorpayX request failed ({response.status_code})."
+        message = "RazorpayX rejected the API key or secret."
+    elif description:
+        message = f"RazorpayX request failed ({response.status_code}): {description}"
+    else:
+        message = f"RazorpayX request failed ({response.status_code})."
+    return redact_account_number(message, account_number)
 
 
 @ConnectorRegistry.register
@@ -198,30 +271,34 @@ class RazorpayXConnector(BaseConnector):
         return self._client
 
     async def _collect(self, path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        client = await self._get_client()
-        items: List[Dict[str, Any]] = []
-        skip = 0
-        for _ in range(MAX_PAGES):
-            page_params = {**params, "count": PAGE_SIZE, "skip": skip}
-            response = await client.get(path, params=page_params)
-            if response.status_code != 200:
-                raise RazorpayXApiError(_describe_failure(response))
-            body = response.json()
-            batch = body.get("items") if isinstance(body, dict) else None
-            if not isinstance(batch, list):
-                raise RazorpayXApiError(f"RazorpayX {path} response did not include an items list.")
-            items.extend(item for item in batch if isinstance(item, dict))
-            if len(batch) < PAGE_SIZE:
-                return items
-            skip += PAGE_SIZE
-        return items
+        with redact_account_logs(self._account_number):
+            client = await self._get_client()
+            items: List[Dict[str, Any]] = []
+            skip = 0
+            for _ in range(MAX_PAGES):
+                page_params = {**params, "count": PAGE_SIZE, "skip": skip}
+                response = await client.get(path, params=page_params)
+                if response.status_code != 200:
+                    raise RazorpayXApiError(_describe_failure(response, self._account_number))
+                body = response.json()
+                batch = body.get("items") if isinstance(body, dict) else None
+                if not isinstance(batch, list):
+                    raise RazorpayXApiError(f"RazorpayX {path} response did not include an items list.")
+                items.extend(item for item in batch if isinstance(item, dict))
+                if len(batch) < PAGE_SIZE:
+                    return items
+                skip += PAGE_SIZE
+            return items
+
+    def _safe(self, message: str) -> str:
+        return redact_account_number(message, self._account_number)
 
     def _fail(self, sync_started: datetime, message: str) -> SyncResult:
         return SyncResult(
             success=False,
             provider_id=self.PROVIDER_ID,
             sync_type="full",
-            errors=[message],
+            errors=[self._safe(message)],
             sync_started=sync_started,
             sync_completed=datetime.utcnow(),
         )
@@ -231,10 +308,11 @@ class RazorpayXConnector(BaseConnector):
         if not self._api_key or not self._api_secret:
             return False
         try:
-            client = await self._get_client()
-            response = await client.get("/contacts", params={"count": 1})
+            with redact_account_logs(self._account_number):
+                client = await self._get_client()
+                response = await client.get("/contacts", params={"count": 1})
         except Exception as exc:
-            logger.error("RazorpayX authentication error: %s", exc)
+            logger.error("RazorpayX authentication error: %s", self._safe(str(exc)))
             return False
         if response.status_code == 200:
             self._authenticated = True
@@ -273,7 +351,7 @@ class RazorpayXConnector(BaseConnector):
         end_date: Optional[datetime] = None,
     ) -> List[PayrollRunRecord]:
         if not self._account_number:
-            raise RazorpayXApiError(ACCOUNT_NUMBER_REQUIRED)
+            raise RazorpayXApiError(self._safe(ACCOUNT_NUMBER_REQUIRED))
         params: Dict[str, Any] = {"account_number": self._account_number}
         if start_date is not None:
             params["from"] = int(start_date.timestamp())
@@ -313,18 +391,20 @@ class RazorpayXConnector(BaseConnector):
                 "Authentication failed. Check the RazorpayX API key and secret.",
             )
         try:
-            contacts = await self._collect("/contacts", {"type": "employee"})
-            payouts = await self._collect(
-                "/payouts",
-                {
-                    "account_number": self._account_number,
-                    "from": payout_window_start(),
-                },
-            )
+            with redact_account_logs(self._account_number):
+                contacts = await self._collect("/contacts", {"type": "employee"})
+                payouts = await self._collect(
+                    "/payouts",
+                    {
+                        "account_number": self._account_number,
+                        "from": payout_window_start(),
+                    },
+                )
         except RazorpayXApiError as exc:
             return self._fail(sync_started, str(exc))
         except Exception as exc:
-            logger.error("RazorpayX sync failed: %s", exc)
+            with redact_account_logs(self._account_number):
+                logger.error("RazorpayX sync failed: %s", exc)
             return self._fail(
                 sync_started,
                 "RazorpayX sync failed before payroll numbers could be read.",
