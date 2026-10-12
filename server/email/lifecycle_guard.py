@@ -1,15 +1,17 @@
-"""Opt-out and frequency cap for product/lifecycle email.
+"""Opt-out, frequency cap, and hold expiry for covered product email.
 
-Lifecycle mail is the onboarding drip, activity triggers, and the monthly
-digest. Password reset and address verification do not come through here.
+Every send names an explicit category. Password reset, email verification,
+and receipts are transactional: they skip the cap, the unsubscribe check,
+hold expiry, and List-Unsubscribe headers. Lifecycle (onboarding and activity),
+digest, and briefing are covered by both the cap and RFC 8058 unsubscribe.
 
 Opt-out is stored on NotificationPreference.email_enabled (and monthly_digest
 is cleared at the same time so the digest toggle matches). EmailEvent stays a
 delivery log; it has no preference column.
 
-The send choke point is deliver_lifecycle_email in server.email.service. It
-calls evaluate_for_user before Resend. LIFECYCLE_EMAIL_GUARD=off skips both
-the opt-out check and the cap so a bad deploy can be undone without a revert.
+The send choke point is deliver_lifecycle_email in server.email.service.
+LIFECYCLE_GUARDS=off skips opt-out, the cap, and hold expiry so a bad deploy
+can be undone without a revert. Covered mail still carries List-Unsubscribe.
 Unsubscribe links keep working either way.
 """
 from __future__ import annotations
@@ -19,6 +21,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -35,17 +38,46 @@ from server.models.workspace import NotificationPreference
 
 logger = logging.getLogger(__name__)
 
-# Conservative relative to the 6-step / 7-day drip and to activity bursts
-# (simulation, document, and decision mail can otherwise fire on every run).
-# 2 per rolling 24h lets that day's drip step through plus one activity or
-# digest email. 5 per rolling 7 days is one under the full drip, so extra
-# activity defers later onboarding steps instead of stacking on top.
+# One shared rolling counter per user for covered mail (lifecycle, digest,
+# briefing). Transactional mail is not counted.
+# 2 per rolling 24h: activity mail can fire several times in one sitting.
+# Two leaves room for two distinct product notices the same day; a third waits.
+# 5 per rolling 7 days is a ceiling, not a quota. It stops a week of activity
+# reports stacking on other product mail. Sends older than 7 days drop out of
+# the window. Held mail waits and is retried until its template max delay.
 DEFAULT_MAX_PER_24H = 2
 DEFAULT_MAX_PER_7D = 5
 
-LIFECYCLE_KINDS = frozenset({"onboarding", "activity", "digest"})
+CATEGORY_TRANSACTIONAL = "transactional"
+CATEGORY_LIFECYCLE = "lifecycle"
+CATEGORY_DIGEST = "digest"
+CATEGORY_BRIEFING = "briefing"
+COVERED_CATEGORIES = frozenset({CATEGORY_LIFECYCLE, CATEGORY_DIGEST, CATEGORY_BRIEFING})
+TRANSACTIONAL_TEMPLATES = frozenset({"password_reset", "email_verification", "receipt"})
+
+# How long a covered template may sit after it became due. Past this, drop it.
+# The day-1 onboarding step (truth_scan) is due one day after signup and may
+# wait one more day — it does not go out days late.
+TEMPLATE_MAX_HOLD = {
+    "onboarding_welcome": timedelta(days=1),
+    "onboarding_truth_scan": timedelta(days=1),
+    "onboarding_simulator": timedelta(days=1),
+    "onboarding_copilot": timedelta(days=2),
+    "onboarding_fundraising": timedelta(days=2),
+    "onboarding_feedback": timedelta(days=2),
+    "activity_simulation": timedelta(hours=12),
+    "activity_document": timedelta(hours=12),
+    "activity_decision": timedelta(hours=12),
+    "monthly_digest": timedelta(days=3),
+    "weekly_briefing": timedelta(days=2),
+}
+
 TOKEN_PURPOSE = "lifecycle-unsub-v1"
 _SKIP_DEDUPE = timedelta(hours=1)
+_UNSUB_HREF = re.compile(
+    r"""href=(['"])[^'"]*/unsubscribe(?:\?[^'"]*)?\1""",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -57,8 +89,12 @@ class GuardDecision:
 
 
 def guard_enabled() -> bool:
-    raw = os.getenv("LIFECYCLE_EMAIL_GUARD", "on").strip().lower()
-    return raw not in {"0", "off", "false", "no"}
+    """LIFECYCLE_GUARDS is the kill switch. The previous name still works if unset."""
+    if "LIFECYCLE_GUARDS" in os.environ:
+        raw = os.environ["LIFECYCLE_GUARDS"]
+    else:
+        raw = os.getenv("LIFECYCLE_EMAIL_GUARD", "on")
+    return raw.strip().lower() not in {"0", "off", "false", "no"}
 
 
 def _int_env(name: str, default: int) -> int:
@@ -101,6 +137,30 @@ def decide(
     return GuardDecision(True, "ok", sends_24h, sends_7d)
 
 
+def assert_category(category: str) -> None:
+    if category == CATEGORY_TRANSACTIONAL or category in COVERED_CATEGORIES:
+        return
+    raise ValueError(f"unknown email category: {category}")
+
+
+def assert_template(category: str, template: str) -> None:
+    assert_category(category)
+    if category == CATEGORY_TRANSACTIONAL:
+        if template not in TRANSACTIONAL_TEMPLATES:
+            raise ValueError(f"unknown transactional template: {template}")
+        return
+    if template not in TEMPLATE_MAX_HOLD:
+        raise ValueError(f"unknown covered template: {template}")
+
+
+def is_past_max_hold(template: str, due_at: datetime, now: Optional[datetime] = None) -> bool:
+    """True when now is after due_at plus that template's maximum delay."""
+    if template not in TEMPLATE_MAX_HOLD:
+        raise ValueError(f"unknown covered template: {template}")
+    now = now or datetime.utcnow()
+    return now > due_at + TEMPLATE_MAX_HOLD[template]
+
+
 def _signing_key() -> bytes:
     return settings.SECRET_KEY.encode("utf-8")
 
@@ -141,23 +201,74 @@ def app_base_url() -> str:
     return os.getenv("APP_BASE_URL", "https://founderconsole.ai").rstrip("/")
 
 
+def https_base_url() -> str:
+    """List-Unsubscribe must be HTTPS. An http base is rewritten, not left as-is."""
+    base = app_base_url()
+    lowered = base.lower()
+    if lowered.startswith("https://"):
+        return base
+    if lowered.startswith("http://"):
+        return "https://" + base[len("http://"):]
+    return "https://" + base.lstrip("/")
+
+
+@dataclass(frozen=True)
+class UnsubscribeLinks:
+    """One signing. The footer page and the one-click header share this token."""
+    token: str
+    page_url: str
+    one_click_url: str
+
+
+def unsubscribe_links(user_id: int) -> UnsubscribeLinks:
+    token = sign_unsubscribe_token(user_id)
+    quoted = quote(token, safe="")
+    base = https_base_url()
+    return UnsubscribeLinks(
+        token=token,
+        page_url=f"{base}/unsubscribe?token={quoted}",
+        one_click_url=f"{base}/api/email/unsubscribe?token={quoted}",
+    )
+
+
 def page_unsubscribe_url(user_id: int) -> str:
-    token = quote(sign_unsubscribe_token(user_id), safe="")
-    return f"{app_base_url()}/unsubscribe?token={token}"
+    return unsubscribe_links(user_id).page_url
 
 
 def one_click_unsubscribe_url(user_id: int) -> str:
     """Public URL mail clients POST to. Express strips the /api prefix."""
-    token = quote(sign_unsubscribe_token(user_id), safe="")
-    return f"{app_base_url()}/api/email/unsubscribe?token={token}"
+    return unsubscribe_links(user_id).one_click_url
+
+
+def list_unsubscribe_headers(links: UnsubscribeLinks) -> dict:
+    return {
+        "List-Unsubscribe": f"<{links.one_click_url}>",
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    }
 
 
 def lifecycle_list_unsubscribe_headers(user_id: int) -> dict:
-    url = one_click_unsubscribe_url(user_id)
-    return {
-        "List-Unsubscribe": f"<{url}>",
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-    }
+    return list_unsubscribe_headers(unsubscribe_links(user_id))
+
+
+def stamp_unsubscribe_footer(html: str, page_url: str) -> str:
+    """Point every unsubscribe href at this send's page URL, or append one."""
+    replaced = False
+
+    def _sub(match: re.Match) -> str:
+        nonlocal replaced
+        replaced = True
+        quote_char = match.group(1)
+        return f"href={quote_char}{page_url}{quote_char}"
+
+    updated = _UNSUB_HREF.sub(_sub, html or "")
+    if replaced:
+        return updated
+    link = f'<p><a href="{page_url}">Unsubscribe</a></p>'
+    idx = updated.lower().rfind("</body>")
+    if idx >= 0:
+        return updated[:idx] + link + updated[idx:]
+    return updated + link
 
 
 def mask_email(email: str) -> str:
@@ -254,16 +365,17 @@ def record_lifecycle_event(
     reason_s = (reason or "")[:120] or None
     status_s = status[:32]
     kind_s = kind[:32]
+    verb = "dropped" if status_s == "dropped_expired" else status_s
     logger.info(
         "lifecycle email %s user_id=%s kind=%s campaign=%s reason=%s",
-        status_s,
+        verb,
         user_id,
         kind_s,
         campaign_s,
         reason_s,
     )
     try:
-        if status_s.startswith("skipped"):
+        if status_s.startswith("skipped") or status_s == "dropped_expired":
             recent = (
                 db.query(LifecycleEmailLog)
                 .filter(

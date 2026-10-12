@@ -17,7 +17,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from server.core.db import SessionLocal
-from server.email.lifecycle_guard import evaluate_for_user, page_unsubscribe_url, record_lifecycle_event
+from server.email.lifecycle_guard import (
+    evaluate_for_user,
+    guard_enabled,
+    is_past_max_hold,
+    page_unsubscribe_url,
+    record_lifecycle_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +152,10 @@ SEQUENCE: List[Step] = [
 
 MAX_ATTEMPTS = 3
 
-# Claim-before-send. A second worker sees success TRUE or attempts >= MAX and
-# gets no RETURNING row, so the step is not sent twice. Cap/opt-out skips must
-# release this claim (see _release_unsent_claim) so the step is retried later.
+# Claim-before-send. A second worker sees success TRUE, a dropped row, or
+# attempts >= MAX and gets no RETURNING row, so the step is not sent twice.
+# Cap/opt-out skips must release this claim (see _release_unsent_claim) so the
+# step is retried later. A dropped row is never reclaimed.
 CLAIM_SQL = """
             INSERT INTO onboarding_email_log (user_id, step_key, success, attempts, sent_at)
             VALUES (:uid, :step, NULL, 1, NOW())
@@ -157,7 +164,20 @@ CLAIM_SQL = """
                     sent_at = NOW()
                 WHERE onboarding_email_log.success IS NOT TRUE
                   AND onboarding_email_log.attempts < :maxa
+                  AND onboarding_email_log.dropped_at IS NULL
             RETURNING id
+        """
+
+MARK_DROPPED_SQL = """
+            INSERT INTO onboarding_email_log
+                (user_id, step_key, success, attempts, sent_at, dropped_at, error)
+            VALUES (:uid, :step, FALSE, 0, NOW(), NOW(), 'expired')
+            ON CONFLICT (user_id, step_key) DO UPDATE
+                SET dropped_at = NOW(),
+                    success = FALSE,
+                    error = 'expired'
+                WHERE onboarding_email_log.success IS NOT TRUE
+                  AND onboarding_email_log.dropped_at IS NULL
         """
 
 
@@ -207,6 +227,9 @@ def ensure_table(engine) -> None:
                 "ALTER TABLE onboarding_email_log ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0"
             ))
             conn.execute(text(
+                "ALTER TABLE onboarding_email_log ADD COLUMN IF NOT EXISTS dropped_at TIMESTAMP"
+            ))
+            conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS idx_onboarding_log_user ON onboarding_email_log(user_id)"
             ))
             conn.commit()
@@ -215,24 +238,44 @@ def ensure_table(engine) -> None:
             logger.warning(f"onboarding_email_log table create skipped: {e}")
 
 
+def _mark_onboarding_dropped(db: Session, user_id: int, step_key: str) -> None:
+    """Permanent drop. success stays false so this is not counted as delivered."""
+    db.execute(text(MARK_DROPPED_SQL), {"uid": user_id, "step": step_key})
+    db.commit()
+
+
+def _step_due_at(db: Session, user_id: int, step: Step) -> datetime:
+    from server.models.user import User
+
+    user = db.query(User).filter(User.id == user_id).first()
+    created = user.created_at if user is not None and user.created_at else datetime.utcnow()
+    return created + timedelta(days=step.delay_days)
+
+
 async def _send_step(user_id: int, email: str, name: Optional[str], step: Step, db: Session) -> bool:
     """Claim-before-send. Returns True only if this call actually delivered.
 
-    Opt-out and the frequency cap are checked before the claim so a skip does
-    not burn an attempt. If the choke point still refuses after the claim
-    (a concurrent send filled the cap), the claim is released and the step
-    stays eligible for a later tick.
+    Opt-out, the frequency cap, and hold expiry are checked before the claim
+    so a skip does not burn an attempt. A step past its max delay is marked
+    dropped and is not retried. If the choke point still refuses after the
+    claim (a concurrent send filled the cap), the claim is released and the
+    step stays eligible for a later tick.
     """
     from server.email.service import send_lifecycle_email
 
     campaign = f"onboarding_{step.key}"
+    due_at = _step_due_at(db, user_id, step)
     try:
+        if guard_enabled() and is_past_max_hold(campaign, due_at):
+            _mark_onboarding_dropped(db, user_id, step.key)
+            record_lifecycle_event(db, user_id, "lifecycle", campaign, "dropped_expired", "expired")
+            return False
         decision = evaluate_for_user(db, user_id)
     except Exception:
         logger.exception("onboarding guard failed closed for user %s step %s", user_id, step.key)
         return False
     if not decision.allow:
-        record_lifecycle_event(db, user_id, "onboarding", campaign, f"skipped_{decision.reason}", decision.reason)
+        record_lifecycle_event(db, user_id, "lifecycle", campaign, f"skipped_{decision.reason}", decision.reason)
         return False
 
     # 1. Atomically claim the (user, step) slot. If another worker already
@@ -256,10 +299,15 @@ async def _send_step(user_id: int, email: str, name: Optional[str], step: Step, 
             email,
             subject,
             html,
-            kind="onboarding",
+            category="lifecycle",
+            template=campaign,
             campaign=campaign,
             user_id=user_id,
+            due_at=due_at,
         )
+        if result.get("reason") == "expired":
+            _mark_onboarding_dropped(db, user_id, step.key)
+            return False
         if result.get("skipped"):
             _release_unsent_claim(db, user_id, step.key)
             return False
@@ -328,7 +376,11 @@ async def process_pending(now: Optional[datetime] = None) -> dict:
                       AND COALESCE(u.is_active, TRUE) = TRUE
                       AND (
                         l.id IS NULL
-                        OR (l.success IS NOT TRUE AND l.attempts < :maxa)
+                        OR (
+                          l.success IS NOT TRUE
+                          AND l.attempts < :maxa
+                          AND l.dropped_at IS NULL
+                        )
                       )
                       AND u.email NOT LIKE '%@example.com'
                       AND u.email NOT LIKE '%+test%'

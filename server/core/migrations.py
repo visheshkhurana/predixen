@@ -1812,6 +1812,14 @@ def ensure_lifecycle_email_tables(engine: Engine) -> None:
             "CREATE INDEX IF NOT EXISTS idx_notification_preferences_user "
             "ON notification_preferences (user_id)"
         ))
+        try:
+            conn.execute(text(
+                "ALTER TABLE onboarding_email_log "
+                "ADD COLUMN IF NOT EXISTS dropped_at TIMESTAMP"
+            ))
+        except Exception:
+            # The onboarding log is created by ensure_table on scheduler boot.
+            pass
         conn.commit()
     logger.info("Lifecycle email tables ensured")
 

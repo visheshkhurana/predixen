@@ -1,14 +1,17 @@
-"""Lifecycle unsubscribe and the per-user send cap.
+"""Lifecycle unsubscribe, the per-user send cap, and hold expiry.
 
 Opt-out lives on NotificationPreference. The send choke point is
-deliver_lifecycle_email. Onboarding still claims a row before send, and a
-cap or opt-out skip releases that claim instead of burning the step.
+deliver_lifecycle_email, and every call names a category. Onboarding still
+claims a row before send. A cap skip releases that claim. A step past its
+max delay is marked dropped and is not claimed again.
 """
 from __future__ import annotations
 
 import asyncio
 import base64
+import re
 from datetime import datetime, timedelta
+from urllib.parse import unquote
 
 import pytest
 from fastapi import FastAPI
@@ -31,6 +34,7 @@ from server.email.service import (
     deliver_lifecycle_email,
     send_email_verification,
     send_password_reset_email,
+    send_receipt_email,
 )
 from server.email.templates import render_simulation_report_template
 from server.models.email_event import LifecycleEmailLog
@@ -69,6 +73,7 @@ def _engine():
                 success BOOLEAN,
                 error TEXT,
                 attempts INTEGER NOT NULL DEFAULT 0,
+                dropped_at TIMESTAMP,
                 UNIQUE(user_id, step_key)
             )
         """))
@@ -77,7 +82,7 @@ def _engine():
 
 @pytest.fixture
 def db(monkeypatch):
-    monkeypatch.setenv("LIFECYCLE_EMAIL_GUARD", "on")
+    monkeypatch.setenv("LIFECYCLE_GUARDS", "on")
     monkeypatch.setenv("LIFECYCLE_EMAIL_MAX_PER_24H", "2")
     monkeypatch.setenv("LIFECYCLE_EMAIL_MAX_PER_7D", "5")
     engine = _engine()
@@ -160,7 +165,8 @@ def test_opted_out_lifecycle_does_not_send(db, monkeypatch):
         "ada@example.com",
         "Your simulation",
         "<p>hi</p>",
-        kind="activity",
+        category="lifecycle",
+        template="activity_simulation",
         campaign="activity_simulation",
         user_id=user.id,
         db=db,
@@ -186,7 +192,8 @@ def test_cap_blocks_the_next_lifecycle_send_and_ignores_old_mail(db, monkeypatch
         "ada@example.com",
         "Digest",
         "<p>old window</p>",
-        kind="digest",
+        category="digest",
+        template="monthly_digest",
         campaign="monthly_digest",
         user_id=user.id,
         db=db,
@@ -203,7 +210,8 @@ def test_cap_blocks_the_next_lifecycle_send_and_ignores_old_mail(db, monkeypatch
         "ada@example.com",
         "Another",
         "<p>cap</p>",
-        kind="activity",
+        category="lifecycle",
+        template="activity_simulation",
         campaign="activity_simulation",
         user_id=user.id,
         db=db,
@@ -225,7 +233,8 @@ def test_week_cap_blocks_even_when_the_day_window_is_clear(db, monkeypatch):
         "bea@example.com",
         "Step",
         "<p>x</p>",
-        kind="onboarding",
+        category="lifecycle",
+        template="onboarding_welcome",
         campaign="onboarding_welcome",
         user_id=user.id,
         db=db,
@@ -234,7 +243,7 @@ def test_week_cap_blocks_even_when_the_day_window_is_clear(db, monkeypatch):
 
 
 def test_kill_switch_lets_opted_out_mail_through(db, monkeypatch):
-    monkeypatch.setenv("LIFECYCLE_EMAIL_GUARD", "off")
+    monkeypatch.setenv("LIFECYCLE_GUARDS", "off")
     user = _user(db, "cy@example.com")
     db.add(NotificationPreference(user_id=user.id, email_enabled=False))
     db.commit()
@@ -247,28 +256,73 @@ def test_kill_switch_lets_opted_out_mail_through(db, monkeypatch):
         "cy@example.com",
         "Hi",
         "<p>x</p>",
-        kind="digest",
+        category="digest",
+        template="monthly_digest",
         campaign="monthly_digest",
         user_id=user.id,
         db=db,
     )
     assert result["success"] is True
     assert len(calls) == 1
+    assert calls[0]["headers"]["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert calls[0]["headers"]["List-Unsubscribe"].startswith("<https://")
 
 
-def test_transactional_mail_stays_outside_the_choke_point(monkeypatch):
-    def boom(*args, **kwargs):
-        raise AssertionError("transactional mail entered the lifecycle choke point")
+def test_transactional_mail_skips_cap_opt_out_and_unsubscribe_headers(db, monkeypatch):
+    user = _user(db, "ada@example.com")
+    db.add(NotificationPreference(user_id=user.id, email_enabled=False, monthly_digest=False))
+    db.commit()
+    _sent(db, user.id, datetime.utcnow(), n=5)
+    calls = []
 
-    monkeypatch.setattr("server.email.service.deliver_lifecycle_email", boom)
-    sent = []
-    monkeypatch.setattr(
-        "server.email.service._send_email_sync",
-        lambda *a, **k: sent.append(a[1]) or {"success": True, "message_id": "t"},
-    )
+    def fake_send(*args, **kwargs):
+        calls.append({"subject": args[1], "headers": kwargs.get("headers"), "html": args[2]})
+        return {"success": True, "message_id": "t"}
+
+    monkeypatch.setattr("server.email.service._send_email_sync", fake_send)
     asyncio.run(send_password_reset_email("ada@example.com", "reset-token"))
     asyncio.run(send_email_verification("ada@example.com", "verify-token"))
-    assert sent == ["Reset Your FounderConsole Password", "Verify Your FounderConsole Email"]
+    asyncio.run(send_receipt_email("ada@example.com", "<p>Paid $20</p>"))
+    assert [c["subject"] for c in calls] == [
+        "Reset Your FounderConsole Password",
+        "Verify Your FounderConsole Email",
+        "Your FounderConsole receipt",
+    ]
+    for call in calls:
+        assert not call["headers"]
+        assert "List-Unsubscribe" not in call["html"]
+
+    for category, template in (
+        ("lifecycle", "activity_simulation"),
+        ("digest", "monthly_digest"),
+        ("briefing", "weekly_briefing"),
+    ):
+        blocked = deliver_lifecycle_email(
+            "ada@example.com",
+            template,
+            "<p>covered</p>",
+            category=category,
+            template=template,
+            user_id=user.id,
+            db=db,
+        )
+        assert blocked["skipped"] is True
+        assert blocked["reason"] == "opted_out"
+    assert len(calls) == 3
+
+
+def test_unknown_category_is_rejected(db):
+    user = _user(db, "ada@example.com")
+    with pytest.raises(ValueError, match="unknown email category"):
+        deliver_lifecycle_email(
+            "ada@example.com",
+            "Hi",
+            "<p>x</p>",
+            category="nurture",
+            template="password_reset",
+            user_id=user.id,
+            db=db,
+        )
 
 
 def test_unsubscribe_post_is_scoped_to_the_token_user(db):
@@ -406,6 +460,174 @@ def test_onboarding_cap_after_claim_releases_and_can_send_later(db, monkeypatch)
         {"u": user.id},
     ).fetchone()
     assert row[0] in (True, 1)
+
+
+def _token_in(value: str) -> str:
+    match = re.search(r"[?&]token=([^&\"'<>]+)", value)
+    assert match, value
+    return unquote(match.group(1))
+
+
+def test_covered_sends_use_one_https_token_for_header_and_footer(db, monkeypatch):
+    monkeypatch.setenv("APP_BASE_URL", "http://founderconsole.ai")
+    monkeypatch.setenv("LIFECYCLE_EMAIL_MAX_PER_24H", "10")
+    monkeypatch.setenv("LIFECYCLE_EMAIL_MAX_PER_7D", "10")
+    user = _user(db, "ada@example.com")
+    calls = []
+
+    def fake_send(*args, **kwargs):
+        calls.append({"html": args[2], "headers": kwargs.get("headers")})
+        return {"success": True, "message_id": "m"}
+
+    monkeypatch.setattr("server.email.service._send_email_sync", fake_send)
+    stale = '<html><body><a href="http://founderconsole.ai/unsubscribe?token=someone-else">Unsubscribe</a></body></html>'
+    for category, template in (
+        ("lifecycle", "onboarding_truth_scan"),
+        ("digest", "monthly_digest"),
+        ("briefing", "weekly_briefing"),
+    ):
+        result = deliver_lifecycle_email(
+            "ada@example.com",
+            template,
+            stale,
+            category=category,
+            template=template,
+            user_id=user.id,
+            db=db,
+            due_at=datetime.utcnow(),
+        )
+        assert result["success"] is True
+
+    assert len(calls) == 3
+    app = FastAPI()
+    app.include_router(unsubscribe_router)
+    Session = sessionmaker(bind=db.get_bind())
+
+    def override():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override
+    client = TestClient(app)
+
+    for call in calls:
+        headers = call["headers"]
+        assert headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+        header_url = headers["List-Unsubscribe"]
+        assert header_url.startswith("<https://")
+        assert header_url.endswith(">")
+        assert "http://" not in header_url
+        header_token = _token_in(header_url)
+        footer_token = _token_in(call["html"])
+        assert header_token == footer_token
+        assert verify_unsubscribe_token(header_token) == user.id
+        assert "someone-else" not in call["html"]
+
+    posted = client.post(
+        "/email/unsubscribe",
+        params={"token": _token_in(calls[0]["headers"]["List-Unsubscribe"])},
+    )
+    assert posted.status_code == 200
+    assert posted.request.headers.get("authorization") is None
+
+    db.expire_all()
+    pref = db.query(NotificationPreference).filter_by(user_id=user.id).one()
+    assert not pref.email_enabled
+    assert not pref.monthly_digest
+
+
+def test_day1_onboarding_past_max_hold_is_dropped_and_not_retried(db, monkeypatch):
+    user = _user(db, "ada@example.com")
+    user.created_at = datetime.utcnow() - timedelta(days=4)
+    db.commit()
+    step = SEQUENCE[1]
+    assert step.key == "truth_scan"
+    assert step.delay_days == 1
+    calls = []
+
+    async def should_not_send(*args, **kwargs):
+        calls.append(kwargs)
+        raise AssertionError("expired step was sent")
+
+    monkeypatch.setattr("server.email.service.send_lifecycle_email", should_not_send)
+    assert asyncio.run(_send_step(user.id, user.email, None, step, db)) is False
+    assert calls == []
+    row = db.execute(
+        text("""
+            SELECT success, attempts, dropped_at
+            FROM onboarding_email_log
+            WHERE user_id = :u AND step_key = :s
+        """),
+        {"u": user.id, "s": step.key},
+    ).fetchone()
+    assert row[0] in (False, 0)
+    assert int(row[1]) == 0
+    assert row[2] is not None
+    drop = db.query(LifecycleEmailLog).filter(LifecycleEmailLog.user_id == user.id).one()
+    assert drop.status == "dropped_expired"
+    assert drop.reason == "expired"
+
+    assert asyncio.run(_send_step(user.id, user.email, None, step, db)) is False
+    assert calls == []
+    claimed = db.execute(
+        text(CLAIM_SQL),
+        {"uid": user.id, "step": step.key, "maxa": 3},
+    ).fetchone()
+    assert claimed is None
+    still = db.execute(
+        text("SELECT COUNT(*) FROM onboarding_email_log WHERE dropped_at IS NOT NULL")
+    ).scalar()
+    assert still == 1
+
+
+def test_capped_onboarding_inside_max_hold_stays_retryable(db, monkeypatch):
+    user = _user(db, "ada@example.com")
+    step = SEQUENCE[1]
+    _sent(db, user.id, datetime.utcnow(), n=2)
+
+    async def should_not_send(*args, **kwargs):
+        raise AssertionError("capped step was sent")
+
+    monkeypatch.setattr("server.email.service.send_lifecycle_email", should_not_send)
+    assert asyncio.run(_send_step(user.id, user.email, None, step, db)) is False
+    assert db.execute(text("SELECT COUNT(*) FROM onboarding_email_log")).scalar() == 0
+    skip = db.query(LifecycleEmailLog).filter(LifecycleEmailLog.status == "skipped_capped").one()
+    assert skip.reason == "capped"
+    assert db.query(LifecycleEmailLog).filter(LifecycleEmailLog.status == "dropped_expired").count() == 0
+
+
+def test_activity_past_max_hold_is_dropped(db, monkeypatch):
+    user = _user(db, "ada@example.com")
+
+    def should_not_send(*args, **kwargs):
+        raise AssertionError("expired activity mail was sent")
+
+    monkeypatch.setattr("server.email.service._send_email_sync", should_not_send)
+    result = deliver_lifecycle_email(
+        "ada@example.com",
+        "Simulation",
+        "<p>late</p>",
+        category="lifecycle",
+        template="activity_simulation",
+        user_id=user.id,
+        due_at=datetime.utcnow() - timedelta(hours=13),
+        db=db,
+    )
+    assert result["dropped"] is True
+    assert result["reason"] == "expired"
+    drop = db.query(LifecycleEmailLog).one()
+    assert drop.status == "dropped_expired"
+
+
+def test_weekly_briefing_send_names_briefing_category():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "api" / "smart_alerts.py").read_text()
+    assert 'category="briefing"' in source
+    assert 'template="weekly_briefing"' in source
+    assert "send_lifecycle_email(" in source
 
 
 def test_activity_template_footer_uses_the_signed_link():

@@ -46,7 +46,8 @@ async def _send_activity_email(to: str, subject: str, html: str, campaign: str):
             to=to,
             subject=subject,
             html_content=html,
-            kind="activity",
+            category="lifecycle",
+            template=campaign,
             campaign=campaign,
         )
         if result.get("success"):
