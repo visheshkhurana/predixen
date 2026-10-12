@@ -241,16 +241,12 @@ const integrationBenefits: Record<string, { dataImported: string[]; permissions:
   },
   razorpayx_payroll: {
     dataImported: [
-      "Employee salary data",
-      "PF/ESI contributions",
-      "TDS deductions",
-      "Reimbursements",
-      "Monthly payroll runs",
+      "Processed salary payouts (INR)",
+      "Active employee contacts",
     ],
     permissions: [
-      "Read employee data",
-      "Access payroll records",
-      "View compliance details",
+      "Read RazorpayX contacts",
+      "Read RazorpayX payouts",
     ],
   },
   greythr: {
@@ -424,8 +420,8 @@ const payrollProviders: IntegrationProvider[] = [
   {
     id: "razorpayx_payroll",
     name: "RazorpayX Payroll",
-    description: "Automated payroll and compliance for Indian startups",
-    features: ["Employee Salaries", "Statutory Payments (PF, ESI, TDS)", "Reimbursements", "Payslips"],
+    description: "Salary payouts and employee contacts from RazorpayX",
+    features: ["Processed salary payouts", "Employee headcount", "INR payroll cost"],
   },
   {
     id: "greythr",
@@ -789,7 +785,11 @@ export default function IntegrationsPage() {
   type IntegrationType = "accounting" | "crm" | "payments" | "payroll" | "erp" | "captable";
   
   const getConnectorInfo = (providerId: string) => {
-    return connectorStatus?.connectors?.find(c => c.provider_id === providerId);
+    const ids = providerId === "razorpayx" || providerId === "razorpayx_payroll"
+      ? ["razorpayx", "razorpayx_payroll"]
+      : [providerId];
+    const matches = connectorStatus?.connectors?.filter(c => ids.includes(c.provider_id)) ?? [];
+    return matches.find(c => c.connected) ?? matches[0];
   };
   
   const connectorBackedIds = ["razorpayx_payroll", "greythr", "keka", "zoho_books", "tally", "plaid", "hubspot", "gusto", "xero", "stripe", "quickbooks", "shopify", "woocommerce", "salesforce", "google_analytics", "pipedrive", "close_crm", "mixpanel", "mercury", "brex", "ramp", "freshbooks", "wave", "bench", "chargebee", "recurly", "rippling", "deel", "netsuite", "profitwell", "amplitude"];
@@ -1208,7 +1208,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
               <div className="p-2 bg-background rounded-full shrink-0">
                 {connectorStatus?.connectors?.some(c => 
-                  ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                  ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                 ) ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
@@ -1219,7 +1219,7 @@ export default function IntegrationsPage() {
                 <p className="font-medium">Payroll</p>
                 <p className="text-sm text-muted-foreground truncate">
                   {connectorStatus?.connectors?.find(c => 
-                    ["razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
+                    ["razorpayx", "razorpayx_payroll", "greythr", "keka", "gusto"].includes(c.provider_id) && c.connected
                   )?.provider_id?.replace(/_/g, " ") || "Not connected"}
                 </p>
               </div>
@@ -1385,8 +1385,9 @@ function SyncStatusDisplay({
 
 const providerCredentialFields: Record<string, { field: string; label: string; placeholder: string }[]> = {
   razorpayx_payroll: [
-    { field: "api_key", label: "API Key", placeholder: "Enter RazorpayX API Key" },
-    { field: "api_secret", label: "API Secret", placeholder: "Enter RazorpayX API Secret" },
+    { field: "api_key", label: "API Key", placeholder: "RazorpayX Key Id" },
+    { field: "api_secret", label: "API Secret", placeholder: "RazorpayX Key Secret" },
+    { field: "account_number", label: "Account number", placeholder: "Customer Identifier or current account number" },
   ],
   greythr: [
     { field: "api_access_id", label: "API Access ID", placeholder: "Enter GreytHR Access ID" },

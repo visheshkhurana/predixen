@@ -35,6 +35,74 @@ load_all_connectors()
 
 logger = logging.getLogger(__name__)
 
+
+def _family_ids(provider_id: str) -> List[str]:
+    return ConnectorRegistry.provider_ids_for(provider_id)
+
+
+def _connected_storage_id(connectors: Dict[str, Any], provider_id: str) -> Optional[str]:
+    """Storage key that holds a live connection for this provider or an alias."""
+    requested = connectors.get(provider_id)
+    if isinstance(requested, dict) and requested.get("connected"):
+        return provider_id
+    for candidate in _family_ids(provider_id):
+        config = connectors.get(candidate)
+        if isinstance(config, dict) and config.get("connected"):
+            return candidate
+    return None
+
+
+def _status_config(connectors: Dict[str, Any], provider_id: str) -> Dict[str, Any]:
+    storage_id = _connected_storage_id(connectors, provider_id)
+    if storage_id:
+        config = connectors.get(storage_id)
+        if isinstance(config, dict):
+            return config
+    config = connectors.get(provider_id)
+    return config if isinstance(config, dict) else {}
+
+
+def _record_provider_id(provider_id: str) -> str:
+    """Id written on FinancialRecord.source_type. Aliases share the canonical id."""
+    return ConnectorRegistry.canonical_provider_id(provider_id)
+
+
+def _sample_for(provider_id: str) -> Optional[Dict[str, Any]]:
+    if provider_id in SAMPLE_DATA:
+        return SAMPLE_DATA[provider_id]
+    return SAMPLE_DATA.get(ConnectorRegistry.canonical_provider_id(provider_id))
+
+
+def _record_sync_failure(db: Session, company_id: int, storage_id: str, message: str) -> None:
+    """Persist last_error after a failed sync. The connection stays connected."""
+    try:
+        db.rollback()
+    except Exception:
+        logger.exception("rollback before recording sync error failed")
+    try:
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if company is None:
+            return
+        connectors = (company.metadata_json or {}).get("connectors") or {}
+        current = connectors.get(storage_id)
+        if not isinstance(current, dict):
+            return
+        updated = dict(current)
+        updated["last_error"] = message[:500]
+        save_metadata_value(
+            db,
+            company,
+            ("connectors", storage_id),
+            updated,
+            commit=True,
+        )
+    except Exception:
+        logger.exception("failed to record connector sync error")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
 
@@ -173,7 +241,10 @@ async def list_catalog(
     if company_id:
         from server.models.company import Company
         try:
-            company = db.query(Company).filter(Company.id == company_id).first()
+            company = db.query(Company).filter(
+                Company.id == company_id,
+                Company.user_id == current_user.id,
+            ).first()
             if company and company.metadata_json:
                 company_connectors = company.metadata_json.get("connectors", {})
         except Exception:
@@ -189,7 +260,7 @@ async def list_catalog(
             continue
         
         install_status = None
-        conn_meta = company_connectors.get(p["id"])
+        conn_meta = _status_config(company_connectors, p["id"])
         if conn_meta and conn_meta.get("connected"):
             install_status = {
                 "connector_id": p["id"],
@@ -283,7 +354,7 @@ async def get_connector_status(
     statuses = []
     seen_ids = set()
     for provider_id in ConnectorRegistry.get_available_providers():
-        config = connectors_config.get(provider_id, {})
+        config = _status_config(connectors_config, provider_id)
         statuses.append({
             "provider_id": provider_id,
             "connected": config.get("connected", False),
@@ -402,8 +473,10 @@ async def disconnect_provider(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     
-    if provider_id in (company.metadata_json or {}).get("connectors", {}):
-        delete_metadata_value(db, company, ("connectors", provider_id))
+    connectors = (company.metadata_json or {}).get("connectors", {})
+    for candidate in _family_ids(provider_id):
+        if candidate in connectors:
+            delete_metadata_value(db, company, ("connectors", candidate))
 
     return {
         "success": True,
@@ -433,109 +506,98 @@ async def sync_provider(
     
     metadata = company.metadata_json or {}
     connectors = metadata.get("connectors", {})
-    
-    if provider_id not in connectors or not connectors[provider_id].get("connected"):
+    storage_id = _connected_storage_id(connectors, provider_id)
+
+    if not storage_id:
         raise HTTPException(status_code=400, detail=f"Provider {provider_id} is not connected")
-    
+
     connector_class = ConnectorRegistry.get_connector_class(provider_id)
     if not connector_class:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider_id}")
-    
-    # Get stored credentials and decrypt them
-    stored_config = connectors[provider_id]
+
+    stored_config = connectors[storage_id]
     stored_credentials = stored_config.get("credentials", {})
+    connector = None
 
-    # Decrypt credentials if they're encrypted (string)
-    if isinstance(stored_credentials, str):
-        try:
-            credentials_dict = decrypt_credentials(stored_credentials)
-        except Exception as e:
-            logger.error(f"Failed to decrypt credentials for {provider_id}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to decrypt stored credentials. Configuration may be corrupted.",
-            )
-    else:
-        # Fallback for plaintext credentials (migration scenario)
-        credentials_dict = stored_credentials or {}
-
-    config = ConnectorConfig(
-        provider_id=provider_id,
-        company_id=company_id,
-        credentials=credentials_dict,
-        settings=stored_config.get("settings", {}),
-    )
-    
-    connector = connector_class(config)
-    
     try:
-        # STEP 1: Fetch data from connector (no DB changes yet)
+        if isinstance(stored_credentials, str):
+            try:
+                credentials_dict = decrypt_credentials(stored_credentials)
+            except Exception as e:
+                logger.error(f"Failed to decrypt credentials for {provider_id}: {e}")
+                raise RuntimeError(
+                    "Failed to decrypt stored credentials. Configuration may be corrupted."
+                )
+        else:
+            credentials_dict = stored_credentials or {}
+
+        config = ConnectorConfig(
+            provider_id=connector_class.PROVIDER_ID,
+            company_id=company_id,
+            credentials=credentials_dict,
+            settings=stored_config.get("settings") or {},
+        )
+        connector = connector_class(config)
+
         result = await connector.sync_all()
 
-        # STEP 2: Validate synced data BEFORE any DB commits
-        if not result.success and result.errors:
-            error_msg = f"Connector sync validation failed: {result.errors[0]}"
+        if not result.success:
+            error_msg = result.errors[0] if result.errors else "Connector sync failed"
             logger.warning(f"Sync validation error for {provider_id}: {error_msg}")
-            raise ValueError(error_msg)
+            raise ValueError(f"Connector sync validation failed: {error_msg}")
 
-        # STEP 3: Build and validate financial records
         financial_record = None
-        if result.success and result.metadata.get("financials"):
+        if result.metadata.get("financials"):
             financials = result.metadata["financials"]
             today = datetime.utcnow().date()
-            financial_record = _build_financial_record(company_id, provider_id, connector.PROVIDER_NAME, financials, today)
+            # Canonical id keeps source_type stable when the caller used an alias.
+            record_provider_id = _record_provider_id(provider_id)
+            financial_record = _build_financial_record(
+                company_id, record_provider_id, connector.PROVIDER_NAME, financials, today
+            )
 
-            # Validate financial record has meaningful data
             if (financial_record.revenue is None and
                 financial_record.cash_balance is None and
                 financial_record.payroll is None and
                 financial_record.opex is None):
                 raise ValueError("Financial record must contain at least one financial metric (revenue, cash_balance, payroll, or opex)")
 
-        # STEP 4: All validations passed, now commit in single transaction
+        updated = dict(connectors[storage_id])
+        updated["last_sync"] = datetime.utcnow().isoformat()
+        updated["records_synced"] = result.records_synced
+        updated["last_error"] = None
+
+        logger.info(
+            f"Sync completed for provider {provider_id}, company {company_id}: "
+            f"{result.records_synced} records synced"
+        )
+
+        # commit=False: the sync status must land in the same transaction as
+        # the FinancialRecord below, so the caller's commit owns both.
+        save_metadata_value(
+            db,
+            company,
+            ("connectors", storage_id),
+            updated,
+            commit=False,
+        )
+
+        if financial_record:
+            db.add(financial_record)
+            from server.services.sample_data import on_real_financials_written
+            on_real_financials_written(db, company_id, commit=False)
+
+        db.commit()
+
         try:
-            # Update sync status in metadata
-            connectors[provider_id]["last_sync"] = datetime.utcnow().isoformat()
-            connectors[provider_id]["records_synced"] = result.records_synced
-            connectors[provider_id]["last_error"] = None  # Clear previous errors on success
-
-            logger.info(
-                f"Sync completed for provider {provider_id}, company {company_id}: "
-                f"{result.records_synced} records synced"
-            )
-
-            # commit=False: the sync status must land in the same transaction as
-            # the FinancialRecord below, so the caller's commit owns both.
-            save_metadata_value(
-                db,
-                company,
-                ("connectors", provider_id),
-                connectors[provider_id],
-                commit=False,
-            )
-
-            if financial_record:
-                db.add(financial_record)
-                from server.services.sample_data import on_real_financials_written
-                on_real_financials_written(db, company_id, commit=False)
-
-            db.commit()
-
-            try:
-                from server.services.digital_twin import emit_twin_event
-                emit_twin_event(db, company_id, "connector_sync", f"connector:{provider_id}", {
-                    "provider": provider_id,
-                    "records_synced": result.records_synced,
-                    "has_financial_record": financial_record is not None,
-                })
-            except Exception:
-                db.rollback()
-
-        except Exception as commit_error:
-            # STEP 5: Rollback on commit error
+            from server.services.digital_twin import emit_twin_event
+            emit_twin_event(db, company_id, "connector_sync", f"connector:{provider_id}", {
+                "provider": provider_id,
+                "records_synced": result.records_synced,
+                "has_financial_record": financial_record is not None,
+            })
+        except Exception:
             db.rollback()
-            logger.error(f"Failed to commit sync data for {provider_id}: {commit_error}")
-            raise ValueError(f"Database commit failed: {str(commit_error)}")
 
         return {
             "success": result.success,
@@ -547,17 +609,16 @@ async def sync_provider(
         }
 
     except ValueError as validation_error:
-        # Validation error - ensure rollback
-        db.rollback()
         logger.error(f"Sync validation error for {provider_id}: {validation_error}")
+        _record_sync_failure(db, company_id, storage_id, str(validation_error))
         raise HTTPException(status_code=400, detail=str(validation_error))
     except Exception as e:
-        # Unexpected error - ensure rollback
-        db.rollback()
         logger.error(f"Sync error for {provider_id}: {e}")
+        _record_sync_failure(db, company_id, storage_id, str(e))
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        await connector.close()
+        if connector is not None:
+            await connector.close()
 
 
 @router.get("/companies/{company_id}/sync-history")
@@ -586,7 +647,8 @@ async def get_sync_history(
     )
     
     if provider_id:
-        query = query.filter(FinancialRecord.source_type == f"connector_{provider_id}")
+        source_types = [f"connector_{pid}" for pid in _family_ids(provider_id)]
+        query = query.filter(FinancialRecord.source_type.in_(source_types))
     
     records = query.order_by(FinancialRecord.created_at.desc()).limit(limit).all()
     
@@ -836,15 +898,16 @@ async def test_with_sample_data(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    sample = SAMPLE_DATA.get(provider_id)
+    sample = _sample_for(provider_id)
     if not sample:
         raise HTTPException(status_code=400, detail=f"No sample data available for {provider_id}")
 
     today = datetime.utcnow().date()
     connector_class = ConnectorRegistry.get_connector_class(provider_id)
     provider_name = connector_class.PROVIDER_NAME if connector_class else provider_id
+    record_provider_id = _record_provider_id(provider_id)
 
-    record = _build_financial_record(company_id, provider_id, provider_name, sample, today)
+    record = _build_financial_record(company_id, record_provider_id, provider_name, sample, today)
     db.add(record)
 
     save_metadata_value(
@@ -863,7 +926,7 @@ async def test_with_sample_data(
 
     stored = db.query(FinancialRecord).filter(
         FinancialRecord.company_id == company_id,
-        FinancialRecord.source_type == f"connector_{provider_id}",
+        FinancialRecord.source_type == f"connector_{record_provider_id}",
     ).order_by(FinancialRecord.created_at.desc()).first()
 
     verification = {}
