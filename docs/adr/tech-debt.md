@@ -43,3 +43,13 @@ Seeded 2026-10-05 from files confirmed in the repo. Counts below cite the comman
 - owner role: Engineering Lead
 - cost if left alone: npm metadata, lockfile headers, and scripts identify a template name while the running app identifies as FounderConsole.
 - exit condition: `package.json` `name` is a name chosen for this product, and it is no longer `rest-express`.
+
+## TD-005
+
+- id: TD-005
+- area/path: entry bundle shell (`client/src/main.tsx` `react-dom/client` and `HelmetProvider` from `react-helmet-async`; render-blocking `client/src/index.css` emitted as `index-*.css`; `client/src/lib/queryClient.ts` `@tanstack/query-core`; `client/src/lib/utils.ts` `tailwind-merge`; `client/src/components/admin/AdminLayout.tsx`; `client/src/components/ui/scroll-area.tsx`)
+- what the debt is: Entry bundle is 547,284 B raw / 170,287 B gzip after PR #61, which lazy-loaded `@radix-ui/react-select`. Before that it was 567,205 / 175,772. The render-blocking CSS `index-*.css` is 208,715 raw / 31,709 gzip. What remains is the shell path: `react-dom`, `@tanstack/query-core` and `tailwind-merge`, the `react-helmet-async` provider, and the smaller `AdminLayout` / scroll-area.
+- why it was taken: Any further cut needs a structural change, such as route-level shell splitting or moving the helmet provider. It is deferred by Eng Lead.
+- owner role: App Engineer
+- cost if left alone: The entry bundle stays 547,284 B raw / 170,287 B gzip, and render-blocking `index-*.css` stays 208,715 raw / 31,709 gzip, because the remaining shell path is still on the first load.
+- exit condition: A structural change, such as route-level shell splitting or moving the helmet provider, cuts the remaining shell path (`react-dom`, `@tanstack/query-core` and `tailwind-merge`, the `react-helmet-async` provider, and the smaller `AdminLayout` / scroll-area) out of the entry bundle.
