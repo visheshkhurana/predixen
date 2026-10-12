@@ -182,5 +182,15 @@ class FinancialRecord(Base):
     
     source_type = Column(String(20), nullable=True)
     extraction_summary = Column(Text, nullable=True)
-    
+
+    # Sync provenance. `source` is a canonical connector id only
+    # (tally, razorpayx, stripe, zoho_books, csv_import) — never an account
+    # number, credential, or other identifier. `synced_at` is a UTC ISO-8601
+    # timestamp. `synced_fields` names the input columns that sync actually
+    # supplied, so derived numbers are not labeled as synced. Manual rows
+    # leave all three null.
+    source = Column(String(64), nullable=True)
+    synced_at = Column(String(40), nullable=True)
+    synced_fields = Column(JSON, nullable=True)
+
     company = relationship("Company", back_populates="financial_records")

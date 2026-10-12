@@ -30,6 +30,7 @@ from server.models.financial import FinancialRecord
 
 from server.connectors import ConnectorRegistry, ConnectorConfig, load_all_connectors
 from server.connectors.base import ProviderCategory
+from server.services.input_provenance import provided_input_fields, stamp_sync_provenance
 
 load_all_connectors()
 
@@ -721,12 +722,24 @@ def _build_financial_record(company_id: int, provider_id: str, provider_name: st
     else:
         period_start, period_end = declared_period
 
+    # Stamp only fields the connector payload actually contained. Derived
+    # margin, burn, and runway stay on the row but are not listed. When revenue
+    # and COGS are both present the stored gross margin is recomputed here, so
+    # it is not treated as a value the connector sent.
+    provided = provided_input_fields(financials)
+    if revenue is not None and cogs is not None:
+        provided = [name for name in provided if name != "gross_margin"]
+    provenance = stamp_sync_provenance(provider_id, provided)
+
     record = FinancialRecord(
         company_id=company_id,
         period_start=period_start,
         period_end=period_end,
         source_type=f"connector_{provider_id}",
         extraction_summary=financials.get("extraction_summary", f"Synced from {provider_name}"),
+        source=provenance["source"],
+        synced_at=provenance["synced_at"],
+        synced_fields=provenance["synced_fields"],
         revenue=revenue,
         cogs=cogs,
         opex=opex,
