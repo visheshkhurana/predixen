@@ -16,6 +16,7 @@ from server.core.company_access import get_user_company
 from server.models import User
 from server.lib.llm.openai_client import get_openai_client
 from server.services.simulation.engine import SimulationEngine
+from server.services.simulation.input_normalization import inputs_for_simulation_request
 from server.services.simulation.types import CompanyState, AgentAction
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,39 @@ def _sse_event(event_type: str, data: dict) -> str:
     return f"data: {payload}\n\n"
 
 
+def build_simulation_v2_state(normalized: dict) -> tuple[CompanyState, dict, int]:
+    """Build the engine inputs from normalised values.
+
+    The formulas match the historical inline construction: ARR is 12x revenue,
+    and runway is cash / burn, or 999 when burn is not positive.
+    """
+    monthly_revenue = normalized["monthly_revenue"]
+    monthly_burn = normalized["monthly_burn"]
+    cash_balance = normalized["cash_balance"]
+    initial_state = CompanyState(
+        mrr=monthly_revenue,
+        arr=monthly_revenue * 12,
+        burn_rate=monthly_burn,
+        cash=cash_balance,
+        runway_months=cash_balance / monthly_burn if monthly_burn > 0 else 999,
+        customers=normalized["customers"],
+        churn_rate=normalized["churn_rate"],
+        team_size=normalized["team_size"],
+        team_morale=normalized["team_morale"],
+        product_quality=normalized["product_quality"],
+        market_fit=normalized["market_fit"],
+        brand_reputation=normalized["brand_reputation"],
+        investor_confidence=normalized["investor_confidence"],
+        growth_rate=normalized["growth_rate"],
+    )
+    scenario_params = {
+        "funding_climate": normalized["funding_climate"],
+        "market_growth": normalized["market_growth"],
+        "market_volatility": normalized["market_volatility"],
+    }
+    return initial_state, scenario_params, normalized["total_rounds"]
+
+
 @router.post("/simulation/v2/run")
 async def run_simulation_v2_sse(
     request: SimulationV2Request,
@@ -52,28 +86,8 @@ async def run_simulation_v2_sse(
     if not client:
         raise HTTPException(status_code=503, detail="LLM service not configured")
 
-    initial_state = CompanyState(
-        mrr=request.monthly_revenue,
-        arr=request.monthly_revenue * 12,
-        burn_rate=request.monthly_burn,
-        cash=request.cash_balance,
-        runway_months=request.cash_balance / request.monthly_burn if request.monthly_burn > 0 else 999,
-        customers=request.customers,
-        churn_rate=request.churn_rate,
-        team_size=request.team_size,
-        team_morale=0.7,
-        product_quality=0.5,
-        market_fit=0.5,
-        brand_reputation=0.5,
-        investor_confidence=0.5,
-        growth_rate=request.growth_rate,
-    )
-
-    scenario_params = {
-        "funding_climate": request.funding_climate,
-        "market_growth": request.market_growth,
-        "market_volatility": request.market_volatility,
-    }
+    normalized, input_provenance = inputs_for_simulation_request(request)
+    initial_state, scenario_params, total_rounds = build_simulation_v2_state(normalized)
 
     engine = SimulationEngine(llm_client=client, model="gpt-5-mini")
 
@@ -91,7 +105,7 @@ async def run_simulation_v2_sse(
                 engine.run_simulation(
                     initial_state=initial_state,
                     scenario_params=scenario_params,
-                    total_rounds=request.total_rounds,
+                    total_rounds=total_rounds,
                     progress_callback=progress_callback,
                     event_callback=event_callback,
                 ),
@@ -119,6 +133,7 @@ async def run_simulation_v2_sse(
                 "rounds": result.rounds,
                 "all_actions": [a.to_dict() for a in result.all_actions],
                 "agents": agents_data,
+                "input_provenance": input_provenance,
             }
 
             _results_store[result.simulation_id] = complete_data
