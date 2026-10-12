@@ -134,3 +134,52 @@ Call order from `run_migrations` (1000–1052). "Idempotent" means a second run 
 `source VARCHAR(64)`, `synced_at VARCHAR(40)`, and `synced_fields JSON` are items in the first helper (36–40), applied at 56–68. They are nullable, have no default, and add no index. A second run skips them when the catalog already lists them. Postgres uses `IF NOT EXISTS`. That step does not depend on Drizzle and does not rewrite `financial_records` on PostgreSQL 11+.
 
 Shipping those three columns by setting `RUN_MIGRATIONS=true` also runs the other 49 helpers.
+
+## Manual prod schema step
+
+Engineering Lead's decision: after #64 merges, add the three columns by hand in the Railway Postgres console. Do not set `RUN_MIGRATIONS=true`. Do not change `ensure_simulation_accuracy_tables` in this PR. Modeling & AI owns that failure.
+
+These types match the model, Alembic revision `b7d3e1a04c21`, and `ensure_financial_record_columns`: `source VARCHAR(64)`, `synced_at VARCHAR(40)`, `synced_fields JSON`. All three are nullable and have no default. On PostgreSQL 11+ that is a metadata-only add: no heap rewrite. `ALTER TABLE` still needs `ACCESS EXCLUSIVE`. `lock_timeout` makes the statement fail in 5 seconds instead of waiting behind a live sync.
+
+```sql
+BEGIN;
+SET lock_timeout = '5s';
+ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS source VARCHAR(64);
+ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS synced_at VARCHAR(40);
+ALTER TABLE financial_records ADD COLUMN IF NOT EXISTS synced_fields JSON;
+COMMIT;
+```
+
+Verify:
+
+```sql
+SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'financial_records'
+  AND column_name IN ('source', 'synced_at', 'synced_fields')
+ORDER BY column_name;
+```
+
+Expected three rows:
+
+```text
+column_name   | data_type         | character_maximum_length | is_nullable | column_default
+--------------+-------------------+--------------------------+-------------+---------------
+source        | character varying | 64                       | YES         |
+synced_at     | character varying | 40                       | YES         |
+synced_fields | json              |                          | YES         |
+```
+
+`column_default` is null. `information_schema` reports `VARCHAR` as `character varying`. `JSON` stays `json`, not `jsonb`.
+
+Rollback. The running code tolerates these columns being missing: connector sync still commits, `get_input_provenance_sources` returns `{}`, and one static warning is logged. Dropping them does not require a code revert.
+
+```sql
+BEGIN;
+SET lock_timeout = '5s';
+ALTER TABLE financial_records DROP COLUMN IF EXISTS source;
+ALTER TABLE financial_records DROP COLUMN IF EXISTS synced_at;
+ALTER TABLE financial_records DROP COLUMN IF EXISTS synced_fields;
+COMMIT;
+```
