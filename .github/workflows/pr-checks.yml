@@ -78,6 +78,9 @@ jobs:
       - name: entry-bundle no static posthog-js
         run: npx tsx server/tests/entry-no-posthog-js.test.ts
 
+      - name: company switcher select chunk failure
+        run: npx tsx server/tests/company-switcher-select-load.test.ts
+
       - name: runway-industry SSR tests
         run: npx tsx --test server/tests/runway-industry-ssr.test.ts
 
