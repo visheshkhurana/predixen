@@ -20,25 +20,58 @@ from server.services.simulation.input_normalization import (
 )
 
 
-def test_client_fallback_fields_never_appear_in_provenance():
-    """simulate-workspace.tsx fallbacks stay out of the map, with no value matching."""
-    payloads = [
-        {},
-        {"request_fields": {name: 1 for name in PROVENANCE_OMIT_UNTIL_PANEL_PR}},
-        {"company_entered": {name: 2 for name in PROVENANCE_OMIT_UNTIL_PANEL_PR}},
-        {
-            "sync_records": {
-                name: {"value": 3, "source": "stripe", "synced_at": "2026-01-01T00:00:00Z"}
-                for name in PROVENANCE_OMIT_UNTIL_PANEL_PR
-            }
-        },
-        {"origins": {name: "unknown" for name in PROVENANCE_OMIT_UNTIL_PANEL_PR}},
-        {"request_fields": {name: None for name in PROVENANCE_OMIT_UNTIL_PANEL_PR}},
-    ]
-    for kwargs in payloads:
-        _, provenance = normalize_simulation_inputs(**kwargs)
-        for name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-            assert name not in provenance
+PUBLISHED_FIELDS = (
+    "monthly_revenue",
+    "monthly_burn",
+    "cash_balance",
+    "growth_rate",
+    "customers",
+    "churn_rate",
+    "team_size",
+)
+
+
+def test_omit_set_is_empty_and_seven_fields_are_classified():
+    """The panel is live, so revenue, burn, cash, growth, customers, churn and headcount are labelled."""
+    assert PROVENANCE_OMIT_UNTIL_PANEL_PR == frozenset()
+
+    _, assumed = normalize_simulation_inputs()
+    for name in PUBLISHED_FIELDS:
+        assert assumed[name] == {"kind": "assumed"}
+
+    _, entered = normalize_simulation_inputs(
+        request_fields={name: 1 for name in PUBLISHED_FIELDS}
+    )
+    for name in PUBLISHED_FIELDS:
+        assert entered[name] == {"kind": "entered"}
+
+    _, stored = normalize_simulation_inputs(
+        company_entered={name: 2 for name in PUBLISHED_FIELDS}
+    )
+    for name in PUBLISHED_FIELDS:
+        assert stored[name] == {"kind": "entered"}
+
+    _, synced = normalize_simulation_inputs(
+        sync_records={
+            name: {"value": 3, "source": "stripe", "synced_at": "2026-01-01T00:00:00Z"}
+            for name in PUBLISHED_FIELDS
+        }
+    )
+    for name in PUBLISHED_FIELDS:
+        assert synced[name]["kind"] == "synced"
+        assert synced[name]["source"] == "stripe"
+
+    _, unknown = normalize_simulation_inputs(
+        origins={name: "unknown" for name in PUBLISHED_FIELDS}
+    )
+    for name in PUBLISHED_FIELDS:
+        assert unknown[name] == {"kind": "assumed"}
+
+    _, explicit_null = normalize_simulation_inputs(
+        request_fields={name: None for name in PUBLISHED_FIELDS}
+    )
+    for name in PUBLISHED_FIELDS:
+        assert explicit_null[name] == {"kind": "assumed"}
 
     request = SimulationV2Request(
         monthly_revenue=111,
@@ -51,8 +84,8 @@ def test_client_fallback_fields_never_appear_in_provenance():
         funding_climate=0.2,
     )
     values, provenance = inputs_for_simulation_request(request)
-    for name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-        assert name not in provenance
+    for name in PUBLISHED_FIELDS:
+        assert provenance[name] == {"kind": "entered"}
         assert values[name] == getattr(request, name)
     assert provenance["funding_climate"] == {"kind": "entered"}
     assert provenance["total_rounds"] == {"kind": "assumed"}
@@ -69,10 +102,7 @@ def test_every_canned_baseline_is_assumed():
 
     for name, expected in CANNED_BASELINE.items():
         assert values[name] == expected
-        if name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-            assert name not in provenance
-        else:
-            assert provenance[name] == {"kind": "assumed"}
+        assert provenance[name] == {"kind": "assumed"}
 
     for name, expected in IMPLIED_ASSUMPTIONS.items():
         assert values[name] == expected
@@ -87,10 +117,7 @@ def test_empty_request_uses_canned_baselines_as_assumed():
     for name, expected in CANNED_BASELINE.items():
         assert values[name] == expected
         assert getattr(request, name) == expected
-        if name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-            assert name not in provenance
-        else:
-            assert provenance[name] == {"kind": "assumed"}
+        assert provenance[name] == {"kind": "assumed"}
 
 
 def test_founder_request_fields_are_entered_and_other_fields_stay_assumed():
@@ -105,16 +132,16 @@ def test_founder_request_fields_are_entered_and_other_fields_stay_assumed():
     assert values["monthly_revenue"] == 12345
     assert values["cash_balance"] == 999
     assert values["team_size"] == 4
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["cash_balance"] == {"kind": "entered"}
+    assert provenance["team_size"] == {"kind": "entered"}
     assert provenance["funding_climate"] == {"kind": "entered"}
 
     for name, expected in CANNED_BASELINE.items():
         if name in ("monthly_revenue", "cash_balance", "team_size", "funding_climate"):
             continue
         assert values[name] == expected
-        if name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-            assert name not in provenance
-        else:
-            assert provenance[name] == {"kind": "assumed"}
+        assert provenance[name] == {"kind": "assumed"}
 
 
 def test_explicit_default_value_is_still_entered():
@@ -125,10 +152,10 @@ def test_explicit_default_value_is_still_entered():
     assert values["monthly_revenue"] == 50000
     assert values["monthly_burn"] == 80000
     assert values["cash_balance"] == 500000
-    assert "monthly_revenue" not in provenance
-    assert "monthly_burn" not in provenance
-    assert "cash_balance" not in provenance
-    assert "customers" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["monthly_burn"] == {"kind": "entered"}
+    assert provenance["cash_balance"] == {"kind": "entered"}
+    assert provenance["customers"] == {"kind": "assumed"}
     assert provenance["total_rounds"] == {"kind": "assumed"}
 
 
@@ -145,10 +172,10 @@ def test_stored_company_data_is_entered():
     assert values["cash_balance"] == 250000
     assert values["monthly_revenue"] == 0
     assert values["monthly_burn"] == 80000
-    assert "team_size" not in provenance
-    assert "cash_balance" not in provenance
-    assert "monthly_revenue" not in provenance
-    assert "monthly_burn" not in provenance
+    assert provenance["team_size"] == {"kind": "entered"}
+    assert provenance["cash_balance"] == {"kind": "entered"}
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["monthly_burn"] == {"kind": "assumed"}
     assert provenance["total_rounds"] == {"kind": "assumed"}
 
 
@@ -162,9 +189,9 @@ def test_unknown_origin_is_assumed():
         }
     )
 
-    assert "monthly_revenue" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "assumed"}
     assert values["monthly_revenue"] == 50000
-    assert "cash_balance" not in provenance
+    assert provenance["cash_balance"] == {"kind": "assumed"}
     assert values["cash_balance"] == 500000
     assert provenance["not_a_field"] == {"kind": "assumed"}
     assert "not_a_field" not in values
@@ -182,7 +209,7 @@ def test_unknown_origin_does_not_downgrade_a_founder_value():
     assert values["funding_climate"] == 0.2
     assert provenance["funding_climate"] == {"kind": "entered"}
     assert values["monthly_revenue"] == 77
-    assert "monthly_revenue" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
 
 
 def test_missing_field_set_treats_carried_non_null_values_as_entered():
@@ -200,10 +227,10 @@ def test_missing_field_set_treats_carried_non_null_values_as_entered():
     assert values["monthly_burn"] == 0
     assert values["cash_balance"] == 500000
     assert values["growth_rate"] == 0.05
-    assert "monthly_revenue" not in provenance
-    assert "monthly_burn" not in provenance
-    assert "cash_balance" not in provenance
-    assert "growth_rate" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["monthly_burn"] == {"kind": "entered"}
+    assert provenance["cash_balance"] == {"kind": "assumed"}
+    assert provenance["growth_rate"] == {"kind": "assumed"}
     assert values["funding_climate"] == 0.2
     assert provenance["funding_climate"] == {"kind": "entered"}
     assert values["market_growth"] == 0.5
@@ -232,8 +259,11 @@ def test_omitted_mrr_burn_cash_growth_are_assumed_canned_values():
     assert values["cash_balance"] == 500000
     assert values["growth_rate"] == 0.05
     assert values["customers"] == 20
-    for name in ("monthly_revenue", "monthly_burn", "cash_balance", "growth_rate", "customers", "team_size", "churn_rate"):
-        assert name not in provenance
+    for name in ("monthly_revenue", "monthly_burn", "cash_balance", "growth_rate"):
+        assert provenance[name] == {"kind": "assumed"}
+    assert provenance["customers"] == {"kind": "entered"}
+    assert provenance["team_size"] == {"kind": "entered"}
+    assert provenance["churn_rate"] == {"kind": "entered"}
     assert provenance["funding_climate"] == {"kind": "entered"}
     assert provenance["total_rounds"] == {"kind": "entered"}
 
@@ -261,7 +291,8 @@ def test_explicit_null_is_assumed_not_entered():
     assert values["cash_balance"] == 500000
     assert values["growth_rate"] == 0.05
     for name in ("monthly_revenue", "monthly_burn", "cash_balance", "growth_rate"):
-        assert name not in provenance
+        assert provenance[name] == {"kind": "assumed"}
+        assert provenance[name]["kind"] != "entered"
 
 
 def test_synced_record_passes_through_source_and_synced_at():
@@ -313,9 +344,13 @@ def test_synced_record_passes_through_source_and_synced_at():
     assert values["monthly_revenue"] == 42000
     assert values["customers"] == 12
     assert values["team_size"] == 9
-    assert "monthly_revenue" not in provenance
-    assert "customers" not in provenance
-    assert "team_size" not in provenance
+    assert provenance["monthly_revenue"] == {
+        "kind": "synced",
+        "source": "stripe",
+        "synced_at": "2026-01-02T03:04:05Z",
+    }
+    assert provenance["customers"] == {"kind": "synced"}
+    assert provenance["team_size"] == {"kind": "synced"}
 
 
 def test_synced_zero_is_kept():
@@ -345,7 +380,7 @@ def test_sync_record_without_a_number_does_not_claim_the_canned_baseline():
         }
     )
     assert values["monthly_revenue"] == 50000
-    assert "monthly_revenue" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "assumed"}
     assert values["funding_climate"] == 0.6
     assert provenance["funding_climate"] == {"kind": "assumed"}
 
@@ -382,8 +417,13 @@ def test_founder_request_beats_sync_and_company_and_sync_beats_company():
     assert values["customers"] == 4
     assert values["monthly_burn"] == 6
     assert values["team_size"] == 10
-    for name in PROVENANCE_OMIT_UNTIL_PANEL_PR:
-        assert name not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["customers"] == {"kind": "entered"}
+    assert provenance["monthly_burn"] == {"kind": "synced", "source": "stripe"}
+    assert provenance["cash_balance"] == {"kind": "assumed"}
+    assert provenance["growth_rate"] == {"kind": "assumed"}
+    assert provenance["churn_rate"] == {"kind": "assumed"}
+    assert provenance["team_size"] == {"kind": "assumed"}
 
 
 def test_claimed_entered_or_synced_without_a_value_stays_assumed():
@@ -395,7 +435,7 @@ def test_claimed_entered_or_synced_without_a_value_stays_assumed():
     assert values["market_growth"] == 0.5
     assert provenance["market_growth"] == {"kind": "assumed"}
     assert values["monthly_revenue"] == 50000
-    assert "monthly_revenue" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "assumed"}
 
 
 def test_normalised_inputs_match_historical_state_math():
@@ -436,7 +476,13 @@ def test_normalised_inputs_match_historical_state_math():
         "market_volatility": request.market_volatility,
     }
     assert total_rounds == request.total_rounds
-    assert "monthly_burn" not in provenance
+    assert provenance["monthly_revenue"] == {"kind": "entered"}
+    assert provenance["monthly_burn"] == {"kind": "entered"}
+    assert provenance["cash_balance"] == {"kind": "entered"}
+    assert provenance["customers"] == {"kind": "entered"}
+    assert provenance["team_size"] == {"kind": "entered"}
+    assert provenance["growth_rate"] == {"kind": "entered"}
+    assert provenance["churn_rate"] == {"kind": "entered"}
     assert provenance["funding_climate"] == {"kind": "entered"}
     assert provenance["team_morale"] == {"kind": "assumed"}
 
@@ -466,9 +512,11 @@ def test_default_request_state_matches_historical_fallbacks():
         "market_volatility": 0.1,
     }
     assert total_rounds == 24
-    visible = (set(CANNED_BASELINE) | set(IMPLIED_ASSUMPTIONS)) - PROVENANCE_OMIT_UNTIL_PANEL_PR
+    assert PROVENANCE_OMIT_UNTIL_PANEL_PR == frozenset()
+    visible = set(CANNED_BASELINE) | set(IMPLIED_ASSUMPTIONS)
     assert set(provenance) >= visible
-    assert PROVENANCE_OMIT_UNTIL_PANEL_PR.isdisjoint(provenance)
+    for name in PUBLISHED_FIELDS:
+        assert provenance[name] == {"kind": "assumed"}
     assert all(item["kind"] == "assumed" for item in provenance.values())
 
 
@@ -490,6 +538,43 @@ def test_provenance_does_not_replace_existing_response_keys():
 
     for key, value in existing.items():
         assert complete[key] == value
-    assert "monthly_revenue" not in complete["input_provenance"]
-    assert "monthly_burn" not in complete["input_provenance"]
+    assert complete["input_provenance"]["monthly_revenue"] == {"kind": "entered"}
+    assert complete["input_provenance"]["monthly_burn"] == {"kind": "assumed"}
     assert complete["input_provenance"]["total_rounds"] == {"kind": "assumed"}
+
+
+def test_null_base_metrics_are_not_entered():
+    """mrr, burn, cash and growth omitted by the client come back assumed, not entered.
+
+    This is the request /simulate builds when those baseMetrics are null.
+    customers and churn are not posted either; the engine's canned defaults apply.
+    """
+    payload = {
+        "total_rounds": 12,
+        "funding_climate": 0.6,
+        "market_growth": 0.5,
+        "market_volatility": 0.1,
+    }
+    for key in (
+        "monthly_revenue",
+        "monthly_burn",
+        "cash_balance",
+        "growth_rate",
+        "customers",
+        "churn_rate",
+        "team_size",
+    ):
+        assert key not in payload
+
+    request = SimulationV2Request.model_validate(payload)
+    values, provenance = inputs_for_simulation_request(request)
+    assert values["monthly_revenue"] == 50000
+    assert values["monthly_burn"] == 80000
+    assert values["cash_balance"] == 500000
+    assert values["growth_rate"] == 0.05
+    assert values["customers"] == 50
+    assert values["churn_rate"] == 0.03
+    assert values["team_size"] == 10
+    for name in ("monthly_revenue", "monthly_burn", "cash_balance", "growth_rate", "customers", "churn_rate", "team_size"):
+        assert provenance[name] == {"kind": "assumed"}
+        assert provenance[name]["kind"] != "entered"
