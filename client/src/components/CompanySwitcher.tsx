@@ -180,7 +180,7 @@ export function CompanySwitcher() {
 
   const companyList = (companies || []) as Company[];
 
-  const handleEditClick = async (e: React.MouseEvent, company: Company) => {
+  const handleEditClick = (e: React.MouseEvent, company: Company) => {
     e.stopPropagation();
     setSelectedCompany(company);
     setEditForm({
@@ -192,9 +192,28 @@ export function CompanySwitcher() {
       data_sharing_enabled: company.data_sharing_enabled || false,
     });
     setOpen(false);
-    const mod = selectMod ?? (await import('@/components/ui/select'));
-    setSelectMod(mod);
+    // Open immediately. The industry/stage/currency fields render Skeleton
+    // until the select chunk arrives. Waiting on import() first meant a
+    // stale-chunk 404 did nothing and rejected an unhandled promise.
     setEditDialogOpen(true);
+    if (selectMod) return;
+    import('@/components/ui/select')
+      .then((mod) => {
+        // vite:preloadError calls preventDefault, which swallows the
+        // rejection and resolves this promise with undefined. Treat that
+        // the same as a failed chunk.
+        if (!mod?.Select) {
+          throw new Error('select chunk missing');
+        }
+        setSelectMod(mod);
+      })
+      .catch(() => {
+        toast({
+          title: 'Error',
+          description: "The editor couldn't load. Refresh the page and try again.",
+          variant: 'destructive',
+        });
+      });
   };
 
   const handleDeleteClick = (e: React.MouseEvent, company: Company) => {
