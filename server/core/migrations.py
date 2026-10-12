@@ -1,5 +1,6 @@
 """Database migration helpers for adding new columns to existing tables."""
 import logging
+import re
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -1647,9 +1648,93 @@ def ensure_cross_company_patterns_table(engine: Engine) -> None:
     logger.info("Cross-company patterns table migration complete")
 
 
+_CREATE_INDEX_RE = re.compile(
+    r"^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\b",
+    re.IGNORECASE,
+)
+_INDEX_PARENT_RE = re.compile(
+    r"\bON\s+(?:ONLY\s+)?(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(",
+    re.IGNORECASE,
+)
+_REFERENCES_PARENT_RE = re.compile(
+    r"\bREFERENCES\s+(?:[A-Za-z_][A-Za-z0-9_]*\.)?([A-Za-z_][A-Za-z0-9_]*)",
+    re.IGNORECASE,
+)
+
+
+def _referenced_parent_tables(statement: str) -> list[str]:
+    """Parent tables named by a CREATE TABLE REFERENCES clause or a CREATE INDEX."""
+    if _CREATE_INDEX_RE.search(statement):
+        match = _INDEX_PARENT_RE.search(statement)
+        return [match.group(1)] if match else []
+    parents: list[str] = []
+    for name in _REFERENCES_PARENT_RE.findall(statement):
+        if name not in parents:
+            parents.append(name)
+    return parents
+
+
+def _catalog_table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = :table_name
+              AND table_type = 'BASE TABLE'
+            """
+        ),
+        {"table_name": table_name.lower()},
+    ).first()
+    return row is not None
+
+
+def _skip_simulation_accuracy_if_parent_missing(conn, statement: str) -> bool:
+    """Return True when the statement was not run because a parent table is missing."""
+    missing = [
+        name
+        for name in _referenced_parent_tables(statement)
+        if not _catalog_table_exists(conn, name)
+    ]
+    if not missing:
+        return False
+    logger.warning(
+        "Skipping simulation accuracy migration statement; referenced parent table %s is missing",
+        ", ".join(missing),
+    )
+    return True
+
+
+def _variance_pct_json_needs_jsonb_alter(conn) -> bool:
+    """True only when information_schema shows the column exists and is not jsonb."""
+    row = conn.execute(
+        text(
+            """
+            SELECT data_type, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'simulation_accuracy'
+              AND column_name = 'variance_pct_json'
+            """
+        )
+    ).first()
+    if row is None:
+        return False
+    kinds = {(row[0] or "").lower(), (row[1] or "").lower()}
+    return "jsonb" not in kinds
+
+
 def ensure_simulation_accuracy_tables(engine: Engine) -> None:
-    with engine.connect() as conn:
-        conn.execute(text("""
+    """Create simulation accuracy tables without an unconditional JSONB rewrite.
+
+    ALTER COLUMN ... TYPE JSONB runs only when information_schema shows
+    variance_pct_json exists and is not already jsonb. Issuing it anyway can
+    abort the Postgres transaction or rewrite the table under an exclusive lock,
+    so the churn-column adds and the commit never land.
+    """
+    create_statements = (
+        """
             CREATE TABLE IF NOT EXISTS simulation_accuracy (
                 id SERIAL PRIMARY KEY,
                 company_id INTEGER NOT NULL,
@@ -1668,8 +1753,8 @@ def ensure_simulation_accuracy_tables(engine: Engine) -> None:
                 accuracy_score FLOAT,
                 computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        """))
-        conn.execute(text("""
+        """,
+        """
             CREATE TABLE IF NOT EXISTS calibration_biases (
                 id SERIAL PRIMARY KEY,
                 company_id INTEGER NOT NULL,
@@ -1681,27 +1766,55 @@ def ensure_simulation_accuracy_tables(engine: Engine) -> None:
                 applied_at TIMESTAMP WITH TIME ZONE,
                 computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
-        """))
-        try:
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_company ON simulation_accuracy(company_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_run ON simulation_accuracy(simulation_run_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sim_accuracy_computed ON simulation_accuracy(computed_at)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_company ON calibration_biases(company_id)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cal_biases_active ON calibration_biases(company_id, is_active)"))
-        except Exception:
-            pass
-        try:
-            conn.execute(text("""
+        """,
+    )
+    index_statements = (
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_company ON simulation_accuracy(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_run ON simulation_accuracy(simulation_run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sim_accuracy_computed ON simulation_accuracy(computed_at)",
+        "CREATE INDEX IF NOT EXISTS ix_cal_biases_company ON calibration_biases(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_cal_biases_active ON calibration_biases(company_id, is_active)",
+    )
+    alter_variance_sql = """
                 ALTER TABLE simulation_accuracy
                 ALTER COLUMN variance_pct_json TYPE JSONB USING variance_pct_json::jsonb
-            """))
-        except Exception:
-            pass
+            """
+    with engine.connect() as conn:
+        postgresql = conn.dialect.name == "postgresql"
+        for statement in create_statements:
+            if postgresql and _skip_simulation_accuracy_if_parent_missing(conn, statement):
+                continue
+            conn.execute(text(statement))
+        # Read the catalog before creating indexes. A failed index aborts the
+        # Postgres transaction; a later information_schema query would then raise
+        # even though the old code swallowed that failure.
+        if postgresql and not _catalog_table_exists(conn, "simulation_accuracy"):
+            logger.warning(
+                "Skipping simulation accuracy column changes; referenced parent table simulation_accuracy is missing"
+            )
+            apply_column_changes = False
+            needs_jsonb_alter = False
+        else:
+            apply_column_changes = True
+            needs_jsonb_alter = (not postgresql) or _variance_pct_json_needs_jsonb_alter(conn)
         try:
-            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS predicted_churn FLOAT"))
-            conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS actual_churn FLOAT"))
+            for statement in index_statements:
+                if postgresql and _skip_simulation_accuracy_if_parent_missing(conn, statement):
+                    continue
+                conn.execute(text(statement))
         except Exception:
             pass
+        if apply_column_changes:
+            if needs_jsonb_alter:
+                try:
+                    conn.execute(text(alter_variance_sql))
+                except Exception:
+                    pass
+            try:
+                conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS predicted_churn FLOAT"))
+                conn.execute(text("ALTER TABLE simulation_accuracy ADD COLUMN IF NOT EXISTS actual_churn FLOAT"))
+            except Exception:
+                pass
         conn.commit()
     logger.info("Simulation accuracy and calibration biases tables migration complete")
 
