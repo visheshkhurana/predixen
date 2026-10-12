@@ -1,5 +1,6 @@
 """Connector sync provenance: source and synced_at, never a guess."""
 
+import logging
 from datetime import date, datetime
 from pathlib import Path
 
@@ -15,8 +16,10 @@ from server.core.db import Base
 from server.models.company import Company
 from server.models.financial import FinancialRecord
 from server.services.input_provenance import (
+    MISSING_PROVENANCE_COLUMNS_WARNING,
     get_input_provenance_sources,
     parse_utc_timestamp,
+    reset_provenance_column_state,
     stamp_sync_provenance,
 )
 
@@ -373,6 +376,121 @@ def test_migration_up_down_up(tmp_path, monkeypatch):
 
     command.upgrade(config, "head")
     assert _column_names(url) == restored
+
+
+def test_sync_leaves_source_out_when_provenance_columns_are_missing(caplog):
+    """A connector write still commits when the live table has no provenance columns."""
+    reset_provenance_column_state()
+    caplog.set_level(logging.WARNING, logger="server.services.input_provenance")
+
+    engine = create_engine("sqlite:///:memory:")
+    FinancialRecord.__table__.create(engine)
+    with engine.begin() as connection:
+        for name in ("source", "synced_at", "synced_fields"):
+            connection.execute(text(f"ALTER TABLE financial_records DROP COLUMN {name}"))
+    db = sessionmaker(bind=engine)()
+    try:
+        record = _build_financial_record(
+            42,
+            "stripe",
+            "Stripe",
+            {
+                "revenue": 95000,
+                "api_key": "sk_live_secret",
+                "account_number": "000123456789",
+                "email": "founder@example.com",
+            },
+            TODAY,
+        )
+        db.add(record)
+        db.commit()
+
+        stored = db.query(FinancialRecord).filter(FinancialRecord.company_id == 42).one()
+        stored.revenue = 96000
+        stored.source = "stripe"
+        stored.synced_at = "2026-10-12T00:00:00Z"
+        stored.synced_fields = ["revenue"]
+        db.commit()
+
+        revenue = db.execute(text("SELECT revenue FROM financial_records")).scalar()
+        assert revenue == 96000
+        assert get_input_provenance_sources(42, db) == {}
+        assert get_input_provenance_sources(42, db) == {}
+    finally:
+        db.close()
+        engine.dispose()
+
+    warnings = [
+        rec
+        for rec in caplog.records
+        if rec.name == "server.services.input_provenance" and rec.levelno >= logging.WARNING
+    ]
+    assert len(warnings) == 1
+    assert warnings[0].getMessage() == MISSING_PROVENANCE_COLUMNS_WARNING
+    leaked = ("95000", "96000", "sk_live_secret", "000123456789", "founder@example.com", "42")
+    assert all(secret not in warnings[0].getMessage() for secret in leaked)
+
+    # The missing-column flush trims null-insert bookkeeping on the mapper.
+    # A later database that has the columns must still store a real source.
+    migrated = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(migrated, tables=[Company.__table__, FinancialRecord.__table__])
+    migrated_db = sessionmaker(bind=migrated)()
+    try:
+        company = _company(migrated_db, "after-unmigrated")
+        saved = _save_connector_record(
+            migrated_db, company.id, "tally", {"revenue": 10}, "2026-10-12T00:00:00Z"
+        )
+        assert saved.source == "tally"
+        assert get_input_provenance_sources(company.id, migrated_db)["revenue"]["source"] == "tally"
+    finally:
+        migrated_db.close()
+        migrated.dispose()
+
+
+def test_startup_migration_and_alembic_agree_on_provenance_columns(tmp_path, monkeypatch):
+    """startup migrations.py and revision b7d3e1a04c21 can run in either order."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    from server.core.migrations import ensure_financial_record_columns
+
+    url = f"sqlite:///{tmp_path / 'startup.db'}"
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE financial_records (
+                id INTEGER PRIMARY KEY,
+                company_id INTEGER NOT NULL,
+                period_start DATE NOT NULL,
+                period_end DATE NOT NULL,
+                revenue FLOAT
+            )
+        """))
+        connection.execute(text(
+            "INSERT INTO financial_records (id, company_id, period_start, period_end, revenue) "
+            "VALUES (1, 7, '2026-10-01', '2026-10-31', 95000)"
+        ))
+    ensure_financial_record_columns(engine)
+    ensure_financial_record_columns(engine)
+    after_startup = _column_names(url)
+    assert {"source", "synced_at", "synced_fields"} <= after_startup
+    engine.dispose()
+
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")
+    assert _column_names(url) == after_startup
+
+    command.downgrade(config, "base")
+    assert {"source", "synced_at", "synced_fields"}.isdisjoint(_column_names(url))
+    assert _scalar(url, "SELECT revenue FROM financial_records WHERE id = 1") == 95000
+
+    engine = create_engine(url)
+    ensure_financial_record_columns(engine)
+    engine.dispose()
+    assert {"source", "synced_at", "synced_fields"} <= _column_names(url)
+    command.upgrade(config, "head")
+    command.upgrade(config, "head")
+    assert {"source", "synced_at", "synced_fields"} <= _column_names(url)
+    assert _scalar(url, "SELECT revenue FROM financial_records WHERE id = 1") == 95000
 
 
 def test_migration_upgrade_when_columns_already_present(tmp_path, monkeypatch):

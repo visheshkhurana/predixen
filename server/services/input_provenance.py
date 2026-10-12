@@ -15,21 +15,43 @@ A field is returned only when the latest value for that field is a sync whose
 connector id and timestamp are both known, and the connector actually supplied
 that field. Manual rows, unknown ids, derived numbers, and ties between
 different origins are left out.
+
+If the live table has no ``source`` / ``synced_at`` / ``synced_fields`` columns
+yet, sync writes still commit and this helper returns an empty map. A single
+static warning is logged. Nothing about the company or the amounts is logged.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import inspect
+from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.orm import Session, undefer
 
 from server.core.db import SessionLocal
 from server.models.financial import FinancialRecord
+
+logger = logging.getLogger(__name__)
+
+# Logged once per process when financial_records has no provenance columns.
+# Static text only: no company id, no amounts, no SQL, no exception text.
+MISSING_PROVENANCE_COLUMNS_WARNING = (
+    "financial_records is missing sync provenance columns "
+    "(source, synced_at, synced_fields); connector sync will continue "
+    "without recording where values came from"
+)
+
+_PROVENANCE_ATTRIBUTES = ("source", "synced_at", "synced_fields")
+_provenance_columns_present: Dict[int, bool] = {}
+_provenance_columns_absent: Dict[int, bool] = {}
+_missing_columns_warned = False
 
 # Columns a connector or csv import can supply directly. Derived totals
 # (gross profit, runway, operating income) are not inputs.
@@ -69,6 +91,80 @@ _EXTRA_CANONICAL_SOURCES = frozenset({"csv_import", "razorpayx"})
 _UTC_ISO = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$"
 )
+
+
+def reset_provenance_column_state() -> None:
+    """Clear the process-local column cache and the one-time warning flag.
+
+    Tests that drop columns on an engine already seen as migrated call this.
+    Production caches a result per engine for the life of the process.
+    """
+    global _missing_columns_warned
+    _missing_columns_warned = False
+    _provenance_columns_present.clear()
+    _provenance_columns_absent.clear()
+
+
+def _engine_of(bind: Any) -> Any:
+    return getattr(bind, "engine", bind)
+
+
+def _warn_missing_provenance_columns() -> None:
+    global _missing_columns_warned
+    if _missing_columns_warned:
+        return
+    _missing_columns_warned = True
+    logger.warning(MISSING_PROVENANCE_COLUMNS_WARNING)
+
+
+def provenance_columns_available(bind: Any) -> bool:
+    """True when ``financial_records`` has source, synced_at, and synced_fields.
+
+    A missing table is not cached: the same engine may create it later.
+    A confirmed absence is cached per engine so later syncs skip the catalog
+    lookup. The warning is static and is emitted at most once per process.
+    """
+    engine = _engine_of(bind)
+    key = id(engine)
+    if _provenance_columns_present.get(key) is True:
+        return True
+    if _provenance_columns_absent.get(key) is True:
+        return False
+    try:
+        inspector = inspect(bind)
+        if not inspector.has_table(FinancialRecord.__tablename__):
+            return False
+        names = {column["name"] for column in inspector.get_columns(FinancialRecord.__tablename__)}
+    except Exception:
+        _warn_missing_provenance_columns()
+        return False
+    present = all(name in names for name in _PROVENANCE_ATTRIBUTES)
+    if present:
+        _provenance_columns_present[key] = True
+        return True
+    _provenance_columns_absent[key] = True
+    _warn_missing_provenance_columns()
+    return False
+
+
+def omit_provenance_if_columns_missing(mapper, connection, state) -> None:
+    """Drop provenance bindings so INSERT/UPDATE does not name missing columns.
+
+    SQLAlchemy otherwise sends explicit NULL for nullable string columns that
+    were left unset, which fails when the live table has not been migrated.
+    Values already assigned on the instance are removed from this flush only.
+    """
+    if provenance_columns_available(connection):
+        return
+    table = FinancialRecord.__table__
+    current = mapper._insert_cols_as_none.get(table)
+    if current:
+        trimmed = current.difference(_PROVENANCE_ATTRIBUTES)
+        if trimmed != current:
+            mapper._insert_cols_as_none[table] = trimmed
+    for key in _PROVENANCE_ATTRIBUTES:
+        state.dict.pop(key, None)
+        state.committed_state.pop(key, None)
 
 
 def utc_now_iso() -> str:
@@ -152,12 +248,23 @@ def get_input_provenance_sources(
     owns_session = db is None
     session = db if db is not None else SessionLocal()
     try:
+        if not provenance_columns_available(session.get_bind()):
+            return {}
         records = (
             session.query(FinancialRecord)
+            .options(
+                undefer(FinancialRecord.source),
+                undefer(FinancialRecord.synced_at),
+                undefer(FinancialRecord.synced_fields),
+            )
             .filter(FinancialRecord.company_id == company_id)
             .all()
         )
         return _provenance_from_records(records)
+    except (OperationalError, ProgrammingError):
+        session.rollback()
+        _warn_missing_provenance_columns()
+        return {}
     finally:
         if owns_session:
             session.close()
