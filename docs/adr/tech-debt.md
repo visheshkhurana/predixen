@@ -52,4 +52,4 @@ Seeded 2026-10-05 from files confirmed in the repo. Counts below cite the comman
 - why it was taken: Any further cut needs a structural change, such as route-level shell splitting or moving the helmet provider. It is deferred by Eng Lead.
 - owner role: App Engineer
 - cost if left alone: The entry bundle stays 547,284 B raw / 170,287 B gzip, and render-blocking `index-*.css` stays 208,715 raw / 31,709 gzip, because the remaining shell path is still on the first load.
-- exit condition: A structural change, such as route-level shell splitting or moving the helmet provider, cuts the remaining shell path (`react-dom`, `@tanstack/query-core` and `tailwind-merge`, the `react-helmet-async` provider, and the smaller `AdminLayout` / scroll-area) out of the entry bundle.
+- exit condition: Entry chunk gzip ≤ 150 KB, with AdminLayout, scroll-area and the react-helmet-async provider out of the entry chunk; react-dom, react-query and tailwind-merge are accepted shell cost.
