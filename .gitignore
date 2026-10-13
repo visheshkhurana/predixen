@@ -42,3 +42,4 @@ attached_assets/Pasted-Below-is-a-copy-paste-AI-prompt*
 server/models/__pycache__/
 roleplay-data/
 .claude/
+.gstack/
