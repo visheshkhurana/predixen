@@ -6,6 +6,9 @@ import { blogPosts, blogPostContent } from "./seo-data";
 // eight vertical pages cannot drift between what the page renders and what a
 // crawler is served.
 import { RUNWAY_INDUSTRIES, RUNWAY_RELATED_FREE_TOOLS } from "../client/src/data/runway-industries";
+// Same rule as runway-industries above: import the shared data so the Q&A a crawler is
+// served and the FAQPage markup beside it cannot drift from what the page renders.
+import { founderFaqs } from "../client/src/data/founder-faqs";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -126,6 +129,10 @@ function buildRunwayCalculatorBodyContent(): string {
 <p>Also try the <a href="/default-alive">default alive or default dead</a> test and the <a href="/survival-simulator">startup survival simulator</a> — both free, no account required. Explore <a href="/features">features</a> when you want the full product. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
 <h2>Industry runway calculators</h2>
 <ul>${industryLinks}</ul>
+<h2>Founder questions about runway, burn and fundraising</h2>
+${founderFaqs
+  .map((f) => `<h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p>`)
+  .join("\n")}
 </article>`;
 }
 
@@ -985,6 +992,14 @@ function getPageMeta(path: string): PageMeta | null {
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web",
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: founderFaqs.map((f) => ({
+          "@type": "Question",
+          name: f.question,
+          acceptedAnswer: { "@type": "Answer", text: f.answer },
+        })),
       }],
     };
   }
