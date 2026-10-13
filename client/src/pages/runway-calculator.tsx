@@ -76,6 +76,16 @@ export default function RunwayCalculatorPage() {
   // the question", and it is the signal ad platforms should optimise toward —
   // waiting for signups gives them almost no data to learn from.
   const usageTracked = useRef(false);
+
+  // The prompt further down is only for the visitor who actually ran the
+  // numbers. The 26-of-28 who bounce off the pre-filled example keep the free
+  // tool and nothing else. It starts false, so the prompt is also absent from
+  // the prerendered HTML and costs the crawlers nothing.
+  const [hasRunNumbers, setHasRunNumbers] = useState(false);
+  const signupPromptRef = useViewedOnce<HTMLDivElement>("signup_prompt_viewed", {
+    location: "runway-calculator",
+  });
+
   useEffect(() => {
     if (usageTracked.current) return;
     const touched =
@@ -85,6 +95,7 @@ export default function RunwayCalculatorPage() {
       growthRate !== DEFAULTS.growthRate;
     if (!touched) return;
     usageTracked.current = true;
+    setHasRunNumbers(true);
     trackFunnel("calculator_used", { calculator: "runway" });
   }, [cash, revenue, expenses, growthRate]);
 
@@ -423,6 +434,44 @@ export default function RunwayCalculatorPage() {
           </div>
         </div>
       </section>
+
+      {hasRunNumbers && (
+        <section className="border-b" data-testid="section-signup-prompt">
+          <div className="mx-auto max-w-6xl px-4 py-12">
+            <div
+              ref={signupPromptRef}
+              className="rounded-xl border bg-card/50 p-6 max-w-2xl mx-auto"
+            >
+              <h3
+                className="text-lg font-semibold text-foreground"
+                data-testid="text-signup-prompt-heading"
+              >
+                That is an average, not a date.
+              </h3>
+              <p className="mt-2 text-sm text-muted-foreground" data-testid="text-signup-prompt-body">
+                Your {results.runwayMonths >= 36 ? "36+ months" : `${results.runwayMonths} months`} of
+                runway assumes every month from here looks like the last one. Real revenue and costs
+                move. FounderConsole runs Monte Carlo simulations over your real financial data and
+                shows the month your cash actually runs out — and the chance it is sooner.
+              </p>
+              <Button asChild className="mt-4" data-testid="button-signup-prompt">
+                <Link
+                  href="/auth?tab=register"
+                  onClick={() =>
+                    trackFunnel("signup_prompt_click", {
+                      location: "runway-calculator",
+                      runway_months: results.runwayMonths,
+                    })
+                  }
+                >
+                  See when my cash really runs out
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 pt-12">
