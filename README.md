@@ -129,13 +129,27 @@ Response:
 
 ### Python Tests
 
+The Python environment is not committed. Create it once from the repo root:
+
+```bash
+bash scripts/setup_python_env.sh   # creates .venv from pyproject.toml deps
+```
+
+Then run the tests with the venv interpreter:
+
 ```bash
 # Run pytest from repo root
-pytest
+.venv/bin/python -m pytest server/tests
 
 # With verbose output
-pytest -v
+.venv/bin/python -m pytest server/tests -v
 ```
+
+`python3.11` or newer works. The script uses `uv` when it is installed and `pip` otherwise.
+
+The QA lab (`python qa-lab/runner/qa_runner.py`) needs a database that already has the
+schema; it does not create one. Start the server once (`npm run dev`) against the same
+`DATABASE_URL`, or point it at an existing development database, before running it.
 
 ### TypeScript Type Check
 
