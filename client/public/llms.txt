@@ -1,60 +1,89 @@
-# FounderConsole — AI Decision Simulator for Founders
+# FounderConsole
 
-> FounderConsole is an AI-powered financial intelligence platform for startups.
-> It replaces spreadsheets with Monte Carlo simulations, giving founders
-> investor-grade diligence, probabilistic forecasting, and ranked decision
-> recommendations.
+> FounderConsole is an AI decision simulator for startup founders. It connects your company's
+> financial data, runs Monte Carlo simulations, and answers runway, burn and fundraising
+> questions with probability ranges (P10/P50/P90) instead of a single spreadsheet forecast.
+> Free during public beta; no credit card required.
 
-## Core Features
+FounderConsole publishes the benchmarks and formulas it uses, so its pages can be quoted
+directly. The figures in "Citable facts" below are the ones the site itself publishes.
+Last updated: 2026-10-14.
 
-- **Monte Carlo Simulation Engine**: 24-month probabilistic projections with
-  P10/P50/P90 confidence bands, scenario versioning, sensitivity analysis, and
-  custom event modeling.
-- **AI Copilot (Fund Flow Copilot)**: Multi-agent system with router/orchestrator
-  architecture, company knowledge base, and structured recommendations powered
-  by multiple LLMs (OpenAI, Anthropic, Gemini, Perplexity, Grok).
-- **Fundraising OS**: Cap table management, dilution calculator, fundraising round
-  tracking, Investor Room, equity management, and exit waterfall analysis.
-- **Digital Twin**: Continuously updated virtual representation of the company
-  integrating financial state, simulations, decisions, and alerts with health
-  scoring and risk indicators.
-- **37 Data Connectors**: QuickBooks, Stripe, Gusto, Xero, Salesforce, HubSpot,
-  Mercury, Brex, Ramp, Shopify, and more for automatic data sync.
-- **Truth Scan**: Multi-stage data validation ensuring financial data integrity.
-- **Hiring Planner**: Plan hires by role/department/location with salary modeling
-  and runway impact analysis.
-- **Forecasting & Alerts**: Holt-Winters, linear regression, Z-score anomaly
-  detection, threshold monitoring, and automated severity-based alerts.
-- **Board Deck Export**: AI-powered generation of board presentations as PDF.
-- **Fundraising Readiness Score**: Weighted scoring with radar chart visualization,
-  recommendations, and AI-generated investment one-pager.
+## Citable facts and formulas
 
-## Free Tools
+- Runway = Cash balance / Net monthly burn.
+- Burn multiple = Net burn / Net new ARR. Published bands: elite under 1x, good 1-1.5x,
+  acceptable 1.5-2x, concerning above 2x; above 3x is a hard fundraising signal.
+- Runway guidance: target 18-24 months after a raise, never let it fall below 12 months,
+  and treat under 6 months as an emergency.
+- Start a fundraise with 9-12 months of runway left: enough to build a data room, meet
+  30-50 investors and close, without the weak negotiating position that urgency creates.
+- Series A readiness for SaaS, as published: $1M+ ARR, growing roughly 3x year over year,
+  and 9-12 months of runway.
+- Other published health bands: net revenue retention elite above 120%; monthly churn
+  best-in-class under 1%; LTV:CAC excellent above 5x; CAC payback excellent under 6 months;
+  SaaS gross margin best-in-class 80% or higher.
+- Pricing, as published: free during public beta. Planned plans are Starter $29/month,
+  Growth $49/month, Scale $99/month; annual billing is exactly 10x the monthly price.
+  No plan is charged yet.
 
-- **Startup Runway Calculator** (/tools/runway-calculator): Interactive calculator
-  for estimating startup runway based on cash, revenue, expenses, and growth rate.
-- **Startup Survival Simulator** (/survival-simulator): Free public tool
-  calculating survival probability using Monte Carlo engine with AI
-  recommendations and shareable results.
+## Free tools
 
-## Blog Topics
+- [Startup Runway Calculator](https://founderconsole.ai/tools/runway-calculator): enter cash
+  on hand, monthly revenue, expenses and growth rate to see months of runway remaining and
+  the month the cash runs out.
+- [Default Alive or Default Dead](https://founderconsole.ai/default-alive): Paul Graham's
+  test, answered in 30 seconds - at current growth and current expenses, do you reach
+  profitability before the money runs out?
+- [Startup Survival Simulator](https://founderconsole.ai/survival-simulator): Monte Carlo
+  survival probability with shareable results.
+- [Runway benchmarks by industry](https://founderconsole.ai/runway/saas): SaaS, ecommerce,
+  fintech, marketplace, AI, hardware, biotech and devtools, each with its own benchmark
+  runway and typical burn and revenue inputs.
 
-The FounderConsole blog (/blog) covers:
-- Startup financial management and runway optimization
-- Monte Carlo simulation for startup forecasting
-- Cap table management and equity dilution
-- AI in financial planning and decision-making
-- Fundraising preparation and investor relations
-- Burn rate optimization and unit economics
-- SaaS metrics, churn analysis, and growth strategies
-- Board communication and financial reporting
+## Product
+
+- [AI Copilot](https://founderconsole.ai/ai-cfo): multi-agent router/orchestrator that reads
+  your company data and returns ranked decision recommendations.
+- [Fundraising OS](https://founderconsole.ai/features): cap table management, dilution
+  modelling, investor CRM, SAFE conversion and exit waterfall analysis.
+- [Monte Carlo simulation engine](https://founderconsole.ai/product): 24-month probabilistic
+  projections with P10/P50/P90 confidence bands, scenario versioning and sensitivity analysis.
+- [Digital Twin](https://founderconsole.ai/how-it-works): a continuously updated model of the
+  company with health scoring and risk indicators.
+- [Integrations](https://founderconsole.ai/features): 37 read-only data connectors including
+  Stripe, QuickBooks, Xero, Mercury, Brex, Plaid, Gusto, HubSpot, Shopify and Salesforce.
+- [Pricing](https://founderconsole.ai/pricing) - [Security](https://founderconsole.ai/security)
+  - [FAQ](https://founderconsole.ai/faq) - [Demo](https://founderconsole.ai/demo)
+
+## Blog
+
+FounderConsole's blog at https://founderconsole.ai/blog covers startup financial management,
+Monte Carlo forecasting, cap table and dilution, AI in financial planning, fundraising
+preparation, burn rate and unit economics, SaaS metrics, and board reporting.
+
+Posts an AI assistant is most likely to cite:
+
+- [How to calculate startup runway](https://founderconsole.ai/blog/how-to-calculate-startup-runway)
+- [Seed-stage SaaS benchmarks 2026](https://founderconsole.ai/blog/seed-stage-saas-benchmarks-2026)
+- [LTV:CAC ratio explained](https://founderconsole.ai/blog/ltv-cac-ratio-explained)
+- [Unit economics guide](https://founderconsole.ai/blog/unit-economics-guide)
+- [When to raise: timing your Series A](https://founderconsole.ai/blog/timing-series-a)
+- [Cap table mistakes](https://founderconsole.ai/blog/cap-table-mistakes)
+- [Monte Carlo: a founder's guide](https://founderconsole.ai/blog/monte-carlo-founders-guide)
+- [FounderConsole vs Sturppy vs Finmark vs Causal](https://founderconsole.ai/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal)
+- [Finmark shut down: alternatives](https://founderconsole.ai/blog/finmark-shut-down-alternative)
 
 ## Company
 
 - Website: https://founderconsole.ai
-- Blog: https://founderconsole.ai/blog
-- Pricing: Free during public beta; Pro plan at $49/month
-- Contact: https://founderconsole.ai/contact
+- About: https://founderconsole.ai/about - Contact: https://founderconsole.ai/contact
 - Twitter: https://twitter.com/founderconsole
 - LinkedIn: https://linkedin.com/company/founderconsole
 - GitHub: https://github.com/founderconsole
+
+## Optional
+
+- [Alternatives comparison](https://founderconsole.ai/alternatives)
+- [Security and compliance](https://founderconsole.ai/security): AES-256 at rest, TLS in
+  transit, read-only OAuth2 integrations, GDPR compliant, SOC2 Type II in progress.

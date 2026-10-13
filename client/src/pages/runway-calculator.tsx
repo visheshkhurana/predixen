@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useSEO } from "@/lib/seo";
+import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 import {
@@ -169,22 +170,33 @@ export default function RunwayCalculatorPage() {
     description:
       "Calculate your startup runway in seconds. Enter cash on hand, monthly revenue, expenses, and growth rate to see how many months until you need to raise. Free interactive tool with chart.",
     path: "/tools/runway-calculator",
-    jsonLd: {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      name: "Startup Runway Calculator",
-      url: "https://founderconsole.ai/tools/runway-calculator",
-      applicationCategory: "BusinessApplication",
-      operatingSystem: "Web",
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      description:
-        "Free interactive runway calculator for startup founders. Enter your financials and instantly see months of runway remaining, projected cash balance, and runway date.",
-      creator: {
-        "@type": "Organization",
-        name: "FounderConsole",
-        url: "https://founderconsole.ai",
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "Startup Runway Calculator",
+        url: "https://founderconsole.ai/tools/runway-calculator",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        description:
+          "Free interactive runway calculator for startup founders. Enter your financials and instantly see months of runway remaining, projected cash balance, and runway date.",
+        creator: {
+          "@type": "Organization",
+          name: "FounderConsole",
+          url: "https://founderconsole.ai",
+        },
       },
-    },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: founderFaqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.question,
+          acceptedAnswer: { "@type": "Answer", text: faq.answer },
+        })),
+      },
+    ],
   });
 
   const chartHeight = 200;
@@ -542,6 +554,18 @@ export default function RunwayCalculatorPage() {
             <p className="text-muted-foreground leading-relaxed mb-4">
               All features are free during the public beta. Connect your data, run your first simulation, and get a defensible runway forecast in under five minutes — no spreadsheets required.
             </p>
+
+            <h3 className="text-xl font-semibold text-foreground mt-8 mb-3" data-testid="text-seo-heading-faq">
+              Founder Questions About Runway, Burn and Fundraising
+            </h3>
+            <div className="space-y-6">
+              {founderFaqs.map((faq, i) => (
+                <div key={i} data-testid={`text-founder-faq-${i}`}>
+                  <h4 className="font-semibold text-foreground mb-2">{faq.question}</h4>
+                  <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
+                </div>
+              ))}
+            </div>
           </article>
         </div>
       </section>
