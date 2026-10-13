@@ -775,6 +775,32 @@ app.use(
   })
 );
 
+// Proxy lead-gen webhook receivers (/webhooks/lead-gen/{ingest,event,simulation})
+// to FastAPI. Without this the paths are not matched by any route and fall
+// through to the SPA catch-all, which answers 200 text/html — so n8n's POST
+// never reaches the HMAC-verified receiver and the lead is silently dropped.
+// The body is streamed, not parsed, so the bytes FastAPI hashes are the bytes
+// n8n signed. Must stay above express.json() below, which consumes the stream.
+app.use(
+  "/webhooks/lead-gen",
+  createProxyMiddleware({
+    target: FASTAPI_URL,
+    changeOrigin: true,
+    timeout: 30000,
+    proxyTimeout: 30000,
+    pathRewrite: (path) => `/webhooks/lead-gen${path}`,
+    on: {
+      error: (err: Error, req, res) => {
+        console.error("Lead-gen webhook proxy error:", err.message);
+        if ('writeHead' in res && typeof res.writeHead === 'function') {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Lead-gen webhook service unavailable", detail: "Internal proxy error" }));
+        }
+      },
+    },
+  })
+);
+
 
 declare module "http" {
   interface IncomingMessage {
