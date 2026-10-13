@@ -1,3 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Flat layout with several top-level directories (server, client, qa-lab, ...).
+# Only main.py is a real top-level module; without this setuptools refuses to build.
+py-modules = ["main"]
+
 [project]
 name = "repl-nix-workspace"
 version = "0.1.0"
@@ -8,6 +17,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "email-validator>=2.3.0",
     "fastapi>=0.128.0",
+    "httpx>=0.28.1",
     "numpy>=2.4.0",
     "openai>=2.14.0",
     "openpyxl>=3.1.5",
