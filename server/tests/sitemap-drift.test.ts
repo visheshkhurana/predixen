@@ -3,25 +3,31 @@
  *
  * Run from the repo root: `npm run test:sitemap`, or `npx tsx server/tests/sitemap-drift.test.ts`.
  *
- * The point of this file is the two controls at the end. Every assertion above them
+ * The point of this file is the three controls at the end. Every assertion above them
  * passes on `main` today, because `main`'s sitemap happens to be in sync - so on its own
  * this file would be a green step that cannot fail, which is the same defect class as the
- * `llms.txt` check: a test that only ever says yes. The positive control proves the test
- * notices a post that is missing from the sitemap, and the negative control proves it
- * notices a sitemap entry with no post behind it. Delete either and this file stops being
- * evidence.
+ * `llms.txt` check: a test that only ever says yes. The first control proves the test
+ * notices a post that is missing from the sitemap, the second proves it notices a sitemap
+ * entry with no post behind it, and the third proves the same for a declared non-blog
+ * route. Delete any of them and this file stops being evidence.
+ *
+ * The non-blog half is checked in both directions, because a list declared in the
+ * generator can drift from the app in either: every declared route must be one `App.tsx`
+ * actually registers, and every non-blog `<loc>` in the file must be declared.
  */
 
 import { readFileSync } from "fs";
 import {
   BLOG_PREFIX,
   ORIGIN,
+  PUBLIC_ROUTES,
   SITEMAP_FILE,
   SITEMAP_LOC_FLOOR,
   loadPosts,
   parsePostDate,
   parseSitemap,
   renderSitemap,
+  routeLoc,
   syncSitemap,
   type Post,
 } from "../../scripts/generate-sitemap.ts";
@@ -97,13 +103,59 @@ check(
   `unique ${new Set(locs).size} of ${locs.length}`,
 );
 
+// ---------------------------------------------------------------------------
+// The non-blog half: the declared routes and the app must agree.
+// ---------------------------------------------------------------------------
+
+const declaredLocs = PUBLIC_ROUTES.map((r) => routeLoc(r.path));
+const nonBlogLocs = locs.filter((l) => !l.startsWith(`${ORIGIN}${BLOG_PREFIX}`));
+
+const undeclared = sameSet(declaredLocs.slice().sort(), nonBlogLocs.slice().sort());
+check(
+  "every declared route has a <loc>, and every non-blog <loc> is declared",
+  undeclared.length === 0,
+  undeclared.join("\n        "),
+);
+
+// A declared path that the app does not register is a sitemap entry for a page nobody
+// serves. Matched literally (`path="/pricing"`) or through a dynamic parent, so
+// `/runway/saas` counts as covered by `/runway/:slug`.
+const appSource = readFileSync("client/src/App.tsx", "utf8");
+const appPaths = [...appSource.matchAll(/path="([^"]*)"/g)].map((m) => m[1]);
+
+function segments(p: string): string[] {
+  return p.split("/").filter((s) => s.length > 0);
+}
+
+function registered(path: string): boolean {
+  const want = segments(path);
+  return appPaths.some((candidate) => {
+    const have = segments(candidate);
+    return (
+      have.length === want.length &&
+      have.every((seg, i) => seg === want[i] || seg.startsWith(":"))
+    );
+  });
+}
+
+const unregistered = PUBLIC_ROUTES.map((r) => r.path).filter((p) => !registered(p));
+check(
+  "every declared route is a route App.tsx registers",
+  unregistered.length === 0,
+  `no matching <Route path> for: ${unregistered.join(", ")}`,
+);
+
 // In sync: regenerating changes nothing. On main this is the whole of the "no diff"
 // claim - the PR does not move the file.
 const inSync = syncSitemap(xml, posts);
 check(
   "regenerating an in-sync sitemap is a no-op",
-  inSync.added.length === 0 && inSync.removed.length === 0 && inSync.xml === xml,
-  `added ${JSON.stringify(inSync.added)} removed ${JSON.stringify(inSync.removed)}`,
+  inSync.added.length === 0 &&
+    inSync.removed.length === 0 &&
+    inSync.addedRoutes.length === 0 &&
+    inSync.xml === xml,
+  `added ${JSON.stringify(inSync.added)} removed ${JSON.stringify(inSync.removed)} ` +
+    `addedRoutes ${JSON.stringify(inSync.addedRoutes)}`,
 );
 
 // ---------------------------------------------------------------------------
@@ -147,6 +199,33 @@ const NEW_DATE = "2026-10-14";
   check("NEGATIVE CONTROL: a post with no page loses its <loc>", ok,
     `dropped ${dropped.slug}: removed ${JSON.stringify(res.removed)} ` +
     `added ${JSON.stringify(res.added)} count ${parseSitemap(res.xml).length} (was ${locs.length})`);
+}
+
+// The same control for the non-blog half: a page ships, nobody edits the XML, and the
+// route has to appear anyway. This is the failure Sentinel's M1 named - the three
+// `/tools/` pages HAG-163 adds would otherwise ship absent from the sitemap.
+{
+  const TARGET = "/tools/runway-calculator";
+  const targetLoc = routeLoc(TARGET);
+  const route = PUBLIC_ROUTES.find((r) => r.path === TARGET);
+  if (!route) throw new Error(`${TARGET} is not declared in PUBLIC_ROUTES`);
+
+  const without = renderSitemap(entries.filter((e) => e.loc !== targetLoc));
+  const res = syncSitemap(without, posts);
+  const back = parseSitemap(res.xml).find((e) => e.loc === targetLoc)?.block ?? "";
+
+  const ok =
+    res.addedRoutes.length === 1 &&
+    res.addedRoutes[0] === TARGET &&
+    res.added.length === 0 &&
+    res.removed.length === 0 &&
+    parseSitemap(res.xml).length === locs.length &&
+    back.includes(`<loc>${targetLoc}</loc>`) &&
+    back.includes(`<lastmod>${route.lastmod}</lastmod>`);
+
+  check("POSITIVE CONTROL: a declared route missing from the file is added", ok,
+    `addedRoutes ${JSON.stringify(res.addedRoutes)} added ${JSON.stringify(res.added)} ` +
+    `count ${parseSitemap(res.xml).length} (was ${locs.length})\n        block: ${JSON.stringify(back)}`);
 }
 
 // A date the file has never seen must fail loudly rather than be guessed at.

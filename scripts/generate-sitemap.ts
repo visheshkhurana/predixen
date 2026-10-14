@@ -11,11 +11,21 @@
  *
  *   - Every BLOG route is generated from `client/src/data/blog-posts.ts`. Add a post
  *     there and its entry appears; remove one and its entry goes away.
- *   - The other routes (/, /features, /runway/*, ...) are still a hand-maintained list
- *     in the sitemap file itself. They are not derived from anything, because the app
- *     has no single route manifest to derive them from. They are held in place by the
- *     44-entry floor and the uniqueness/origin checks in
- *     `server/tests/sitemap-drift.test.ts`, and nothing here removes them.
+ *   - Every non-blog route is generated from `PUBLIC_ROUTES` below. Add a route there
+ *     and its entry appears in the file; the generator no longer depends on someone
+ *     remembering to hand-edit the XML.
+ *
+ * `PUBLIC_ROUTES` is declared here rather than derived, because the app has no single
+ * route manifest to derive it from. What keeps it honest is the test half, in
+ * `server/tests/sitemap-drift.test.ts`: every declared path must be a route
+ * `client/src/App.tsx` actually registers (literally, or through a dynamic parent such
+ * as `/runway/:slug`), and every non-blog `<loc>` in the file must be declared. The
+ * remaining gap, stated rather than hidden: a route that is registered in App.tsx but
+ * never declared here is not detected, so adding a page is still two edits - the
+ * `<Route>` and its entry below. That gap is what Sentinel found in the posts-only
+ * version of this generator (M1, `hive/reports/sentinel-review-pr79.md`); it is now one
+ * line of data per page instead of a hand-edit of the XML, and the two checks above stop
+ * the list and the file drifting apart in either direction.
  *
  * Existing entries are preserved byte for byte. In particular `lastmod` is NOT the
  * post's `date` field: 5 of the 16 published posts have a `lastmod` that differs from
@@ -50,6 +60,57 @@ export const SITEMAP_FILE = resolve(ROOT, "client/public/sitemap.xml");
  */
 export const SITEMAP_LOC_FLOOR = 44;
 
+export interface PublicRoute {
+  /** Path only, no origin: `/features`, `/tools/runway-calculator`. */
+  path: string;
+  /**
+   * Used ONLY when the entry has to be created. An entry already in the file keeps the
+   * `lastmod` it has, byte for byte - so editing this value never rewrites the sitemap.
+   */
+  lastmod: string;
+  changefreq: string;
+  priority: string;
+}
+
+/**
+ * Every non-blog route the app serves to the public. This is the list the generator
+ * writes entries for; see the docblock for what keeps it in step with `App.tsx`.
+ *
+ * Deliberately absent: the app's authenticated routes (`/dashboard`, `/settings`, ...),
+ * `/login`-style aliases, and anything under `App.tsx`'s private Switch. A sitemap lists
+ * pages a crawler may index, not every path wouter can match.
+ */
+export const PUBLIC_ROUTES: readonly PublicRoute[] = [
+  { path: "/", lastmod: "2026-03-17", changefreq: "weekly", priority: "1.0" },
+  { path: "/features", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
+  { path: "/product", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.8" },
+  { path: "/ai-cfo", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.8" },
+  { path: "/pricing", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.7" },
+  { path: "/about", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.7" },
+  { path: "/compare", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/customers", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/use-cases", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/how-it-works", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/alternatives", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/signup", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/security", lastmod: "2026-09-16", changefreq: "monthly", priority: "0.7" },
+  { path: "/blog", lastmod: "2026-08-10", changefreq: "weekly", priority: "0.8" },
+  { path: "/default-alive", lastmod: "2026-08-08", changefreq: "monthly", priority: "0.9" },
+  { path: "/faq", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  { path: "/tools/runway-calculator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
+  { path: "/contact", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
+  { path: "/demo", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
+  { path: "/survival-simulator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
+  { path: "/runway/saas", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/ecommerce", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/fintech", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/marketplace", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/ai", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/hardware", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/biotech", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+  { path: "/runway/devtools", lastmod: "2026-05-13", changefreq: "monthly", priority: "0.8" },
+];
+
 const HEADER =
   '<?xml version="1.0" encoding="UTF-8"?>\n' +
   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
@@ -81,6 +142,8 @@ export interface SyncResult {
   xml: string;
   added: string[];
   removed: string[];
+  /** Declared non-blog paths that had no entry and were added, in declaration order. */
+  addedRoutes: string[];
 }
 
 /** Split a sitemap file into its `<url>` entries, verbatim, in file order. */
@@ -168,26 +231,57 @@ function blogBlock(slug: string, lastmod: string): string {
   ].join("\n");
 }
 
+export function routeLoc(path: string): string {
+  return `${ORIGIN}${path}`;
+}
+
 /**
- * Bring one sitemap in line with the posts.
+ * The block written for a declared route that has no entry yet. Multi-line, matching the
+ * shape of the routes already in the file - including the eight `/runway/*` ones, which
+ * on disk are single-line. That difference only shows up if one of them is ever deleted
+ * and re-added; nothing here rewrites a shape that is already written.
+ */
+function routeBlock(route: PublicRoute): string {
+  return [
+    "  <url>",
+    `    <loc>${routeLoc(route.path)}</loc>`,
+    `    <lastmod>${route.lastmod}</lastmod>`,
+    `    <changefreq>${route.changefreq}</changefreq>`,
+    `    <priority>${route.priority}</priority>`,
+    "  </url>",
+  ].join("\n");
+}
+
+/**
+ * Bring one sitemap in line with the posts and the declared public routes.
  *
  * Every unmodified entry keeps its exact bytes, so an unchanged input is a no-op and
  * `git diff` stays empty. Entry order on disk is preserved: a new post's entry is
  * inserted directly after the last existing blog entry, not appended to the file and not
  * re-sorted, because the blog block on disk is deliberately in reverse-chronological
  * order and re-sorting it would rewrite all 16 entries.
+ *
+ * Nothing is ever removed for being undeclared. A non-blog `<loc>` with no route behind
+ * it is a real defect, but deleting it is a decision about the site, not about keeping a
+ * generator's output consistent - so it is left for the drift test to fail on, loudly,
+ * rather than silently rewritten here.
  */
-export function syncSitemap(xml: string, posts: Post[]): SyncResult {
+export function syncSitemap(
+  xml: string,
+  posts: Post[],
+  routes: readonly PublicRoute[] = PUBLIC_ROUTES,
+): SyncResult {
   const entries = parseSitemap(xml);
   const wanted = new Map(posts.map((p) => [blogLoc(p.slug), p] as const));
 
   const added: string[] = [];
   const removed: string[] = [];
+  const addedRoutes: string[] = [];
   const kept: SitemapEntry[] = [];
 
   for (const entry of entries) {
     if (!isBlogLoc(entry.loc)) {
-      kept.push(entry); // a hand-maintained route: never touched
+      kept.push(entry); // a non-blog route: never rewritten, lastmod and all
       continue;
     }
     if (wanted.has(entry.loc)) {
@@ -219,7 +313,15 @@ export function syncSitemap(xml: string, posts: Post[]): SyncResult {
     );
   }
 
-  return { xml: renderSitemap(kept), added, removed };
+  // Declared non-blog routes that have no entry yet. Appended at the end, in declaration
+  // order: appending is the one placement that cannot disturb the order of the routes
+  // already in the file. An entry that is already present is not touched at all.
+  const presentRoutes = new Set(entries.map((e) => e.loc));
+  const missingRoutes = routes.filter((r) => !presentRoutes.has(routeLoc(r.path)));
+  addedRoutes.push(...missingRoutes.map((r) => r.path));
+  kept.push(...missingRoutes.map((r) => ({ loc: routeLoc(r.path), block: routeBlock(r) })));
+
+  return { xml: renderSitemap(kept), added, removed, addedRoutes };
 }
 
 /**
@@ -229,12 +331,19 @@ export function syncSitemap(xml: string, posts: Post[]): SyncResult {
  * rather than writing if the result would fall below the floor - a generator bug must
  * not be able to delete a route that is still being served.
  */
-export function generateSitemap(): { written: boolean; count: number; added: string[]; removed: string[] } {
+export function generateSitemap(): {
+  written: boolean;
+  count: number;
+  added: string[];
+  removed: string[];
+  addedRoutes: string[];
+} {
   const before = readFileSync(SITEMAP_FILE, "utf8");
-  const { xml, added, removed } = syncSitemap(before, loadPosts());
+  const { xml, added, removed, addedRoutes } = syncSitemap(before, loadPosts());
 
   for (const slug of removed) console.log(`removed  ${BLOG_PREFIX}${slug} (no such post)`);
   for (const slug of added) console.log(`added    ${BLOG_PREFIX}${slug}`);
+  for (const path of addedRoutes) console.log(`added    ${path} (declared route, had no <loc>)`);
 
   const count = parseSitemap(xml).length;
   if (count < SITEMAP_LOC_FLOOR) {
@@ -245,11 +354,11 @@ export function generateSitemap(): { written: boolean; count: number; added: str
 
   if (xml === before) {
     console.log(`sitemap.xml unchanged: ${count} <loc> entries`);
-    return { written: false, count, added, removed };
+    return { written: false, count, added, removed, addedRoutes };
   }
   writeFileSync(SITEMAP_FILE, xml);
   console.log(`sitemap.xml written: ${count} <loc> entries`);
-  return { written: true, count, added, removed };
+  return { written: true, count, added, removed, addedRoutes };
 }
 
 const invoked = process.argv[1] ? resolve(process.argv[1]) : "";
