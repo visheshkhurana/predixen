@@ -91,8 +91,9 @@ shows you how many months until you run out of cash &mdash; and which lever move
   <li>What if you cut 20% of headcount?</li>
   <li>What if you raise $1M today?</li>
 </ul>
-<p>Run one and <strong>save it</strong>. Two saved scenarios side by side is the fastest way to see
-which decision your next board meeting actually turns on.</p>"""
+<p>Run one and read the outcome: the runway date the paths converge on, the cash timeline behind it,
+and in the What-If Explorer the one variable that moves that date most. A couple of minutes, and you can
+re-run it every time an input changes.</p>"""
     return ("What would change your runway date?",
             _wrap("Stress-test the scenarios that scare you", body, "Open Simulation Console",
                   f"{APP_URL}/simulate", unsubscribe_url))
