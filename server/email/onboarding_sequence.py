@@ -59,16 +59,17 @@ def _wrap(title: str, body_html: str, cta_label: str, cta_url: str, unsubscribe_
 def _step_welcome(name: Optional[str], unsubscribe_url: str) -> tuple[str, str]:
     greeting = f"Welcome aboard, {name}." if name else "Welcome aboard."
     body = f"""<p>{greeting}</p>
-<p>FounderConsole gives you investor-grade financial diligence in minutes, not weeks.
-Here's the fastest path to value:</p>
-<ol>
-  <li><strong>Run Truth Scan</strong> on your numbers (5 min) &mdash; we find every red flag.</li>
-  <li><strong>Simulate runway</strong> across 1,000 Monte Carlo paths.</li>
-  <li><strong>Get a ranked decision list</strong> from your AI Copilot.</li>
-</ol>
-<p>Tomorrow we'll show you the single highest-leverage move most founders miss in week one.</p>"""
-    return ("Welcome to FounderConsole &mdash; here's your first move",
-            _wrap("Welcome to FounderConsole", body, "Open your dashboard", f"{APP_URL}/dashboard", unsubscribe_url))
+<p>You joined FounderConsole to answer one question: how long your cash lasts, and what changes it.
+That answer takes about five minutes.</p>
+<p><strong>The one thing worth doing today:</strong> open the runway calculator, put in your real burn
+and balance, and <strong>save the scenario</strong>. Saving it is what turns a number you looked at once
+into a number you can come back to, change, and defend in a board meeting.</p>
+<p>Everything else here builds on that saved scenario: the 1,000-path simulation, the ranked decision
+list, the diligence pack for your next round.</p>
+<p>Tomorrow I'll show you the single highest-leverage move most founders miss in week one.</p>"""
+    return ("Your first five minutes on FounderConsole",
+            _wrap("Start with one saved scenario", body, "Open the runway calculator",
+                  f"{APP_URL}/tools/runway-calculator", unsubscribe_url))
 
 
 def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
@@ -80,16 +81,20 @@ def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
 
 
 def _step_simulator(unsubscribe_url: str) -> tuple[str, str]:
-    body = """<p>You've seen your numbers. Now stress them.</p>
-<p>The Simulation Engine runs 1,000 Monte Carlo paths across your burn, growth, and gross margin to answer the only question that matters: <strong>how many months until you run out of cash &mdash; and what changes that?</strong></p>
-<p>Try one of these scenarios in two clicks:</p>
+    body = """<p>You've seen your runway number. The useful question is what changes it.</p>
+<p>The Simulation Engine runs 1,000 Monte Carlo paths across your burn, growth and gross margin, and
+shows you how many months until you run out of cash &mdash; and which lever moves that date the most.</p>
+<p>Try the three scenarios founders actually face:</p>
 <ul>
   <li>What if growth slows 30%?</li>
   <li>What if you cut 20% of headcount?</li>
   <li>What if you raise $1M today?</li>
-</ul>"""
-    return ("Stress-test your runway in 60 seconds",
-            _wrap("Simulate the scenarios that scare you", body, "Open Simulation Console", f"{APP_URL}/simulate", unsubscribe_url))
+</ul>
+<p>Run one and <strong>save it</strong>. Two saved scenarios side by side is the fastest way to see
+which decision your next board meeting actually turns on.</p>"""
+    return ("What would change your runway date?",
+            _wrap("Stress-test the scenarios that scare you", body, "Open Simulation Console",
+                  f"{APP_URL}/simulate", unsubscribe_url))
 
 
 def _step_copilot(unsubscribe_url: str) -> tuple[str, str]:
@@ -119,17 +124,21 @@ def _step_fundraising(unsubscribe_url: str) -> tuple[str, str]:
 
 
 def _step_feedback(unsubscribe_url: str) -> tuple[str, str]:
-    body = """<p>You've been on FounderConsole for a week. We'd love 90 seconds of your honest reaction.</p>
-<p>Specifically:</p>
+    body = """<p>You've had FounderConsole for a week. Two things &mdash; the first takes a minute.</p>
+<p><strong>If you haven't saved a scenario yet</strong>, that is the step that makes the rest of it
+work. Open the runway calculator and save one with your real numbers; everything after that reads off
+it.</p>
+<p><strong>Then tell me the truth.</strong> Three questions:</p>
 <ul>
   <li>What got you to your first "aha" moment?</li>
   <li>What confused you?</li>
   <li>What would you pay for that we don't have yet?</li>
 </ul>
-<p>Reply to this email &mdash; it goes straight to me. Every reply is read.</p>
+<p>Reply to this email &mdash; it goes straight to me, and every reply is read.</p>
 <p>&mdash; The FounderConsole team</p>"""
     return ("How was your first week?",
-            _wrap("Tell us what to build next", body, "Reply to this email", "mailto:hello@founderconsole.ai", unsubscribe_url))
+            _wrap("What would make this worth paying for?", body, "Reply to this email",
+                  "mailto:hello@founderconsole.ai", unsubscribe_url))
 
 
 @dataclass
