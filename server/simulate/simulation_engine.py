@@ -50,6 +50,12 @@ DEFAULT_SCENARIOS = {
     },
 }
 
+# `runway.distribution` is a truncated HEAD of the run, not the run itself: it carries
+# the first RUNWAY_DISTRIBUTION_LIMIT values of a run that is `n_simulations` long
+# (1000 by default). The limit is named here so the payload can say how many values it
+# actually carries, and so a consumer can tell a sample from a whole run.
+RUNWAY_DISTRIBUTION_LIMIT = 100
+
 @dataclass
 class SimulationInputs:
     baseline_revenue: float
@@ -215,12 +221,17 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
             "survival_rate": float(np.sum(runway_months > m) / n)
         })
     
+    runway_distribution = runway_months.tolist()[:RUNWAY_DISTRIBUTION_LIMIT]
+
     return {
         "runway": {
             "p10": round(runway_p10, 1),
             "p50": round(runway_p50, 1),
             "p90": round(runway_p90, 1),
-            "distribution": runway_months.tolist()[:100]
+            "distribution": runway_distribution,
+            "distribution_n": len(runway_distribution),
+            "distribution_of_n": n,
+            "distribution_truncated": len(runway_distribution) < n
         },
         "survival": {
             "6m": round(survival_6m * 100, 1),
