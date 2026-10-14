@@ -118,6 +118,13 @@ jobs:
       - name: security SSR tests
         run: npx tsx --test server/tests/security-ssr.test.ts
 
+      # HAG-162. Load-bearing beyond its own subject: it also re-reads
+      # client/src/App.tsx and fails when a route appears that
+      # server/known-routes.ts does not cover, which is what stops the 404
+      # allowlist from rotting as pages are added.
+      - name: unknown-route 404 tests
+        run: npx tsx --test server/tests/unknown-routes-404.test.ts
+
       - name: auth-critical-routes tests
         run: npx tsx server/tests/auth-critical-routes.test.ts
 
