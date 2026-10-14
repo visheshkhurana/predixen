@@ -1,0 +1,72 @@
+# Dependabot version updates.
+#
+# Why this file exists: this repository had no dependency feed of any kind. A
+# scan on 2026-10-14 measured 780 distinct packages / 852 entries, 22 npm
+# packages carrying advisories (1 critical, 28 high, 28 moderate, 5 low) and 19
+# of the 81 packages in uv.lock carrying OSV advisories. Nothing watched any of
+# it, so an advisory reached production silently and stayed there.
+#
+# THIS FILE ONLY COVERS VERSION UPDATES. It does not turn on the advisory feed.
+# Dependabot *alerts* and *security* updates are repository settings, not
+# settings in this file, and both are currently OFF for this repo (measured:
+# GET /repos/.../vulnerability-alerts -> 404, GET .../automated-security-fixes
+# -> {"enabled": false}). Until they are enabled, this file keeps the
+# dependencies fresh but nobody is told when an advisory lands. See the PR body.
+#
+# Two ecosystems, one per lockfile at the repository root:
+#   npm -> package.json + package-lock.json
+#   uv  -> pyproject.toml + uv.lock
+#
+# `github-actions` and `docker` are deliberately NOT listed. They are real
+# supply-chain surfaces here (.github/workflows/*.yml pins third-party actions;
+# Dockerfile pins a base image) but neither appears in the measured advisory
+# set, and every entry added here is another PR in front of a single reviewer.
+# Adding them is a one-line change whenever it is wanted.
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    # Keeps the queue in front of the one human merger small on purpose.
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # Minor and patch bumps arrive as one PR instead of one PR per package:
+      # 780 packages would otherwise be an unusable review queue. Majors are
+      # deliberately left OUT of the group so a breaking change is its own PR
+      # with its own CI run, rather than a footnote in a 40-package diff.
+      # Security updates are never grouped by Dependabot, by design.
+      npm-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      uv-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    # NOTE: no `versioning-strategy` here, and that is deliberate rather than an
+    # omission. The uv ecosystem does not support the option
+    # (dependabot/dependabot-core#12162); it always applies `increase`, which
+    # rewrites the lower bound in pyproject.toml to the newly resolved version.
+    # Setting it would be dead config that reads as intent.
