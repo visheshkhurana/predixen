@@ -61,14 +61,15 @@ def _step_welcome(name: Optional[str], unsubscribe_url: str) -> tuple[str, str]:
     body = f"""<p>{greeting}</p>
 <p>You joined FounderConsole to answer one question: how long your cash lasts, and what changes it.
 That answer takes about five minutes.</p>
-<p><strong>The one thing worth doing today:</strong> open the runway calculator, put in your real burn
-and balance, and <strong>save the scenario</strong>. Saving it is what turns a number you looked at once
-into a number you can come back to, change, and defend in a board meeting.</p>
-<p>Everything else here builds on that saved scenario: the 1,000-path simulation, the ranked decision
+<p><strong>The one thing worth doing today:</strong> open the runway calculator and put in your real
+burn and balance. It reads straight back to you: your monthly net burn, your months of runway, the date
+the cash runs out and your projected cash balance. Five minutes, and you have the number the rest of
+this week is about.</p>
+<p>Everything else here builds on that runway number: the 1,000-path simulation, the ranked decision
 list, the diligence pack for your next round.</p>
 <p>Tomorrow I'll show you the single highest-leverage move most founders miss in week one.</p>"""
     return ("Your first five minutes on FounderConsole",
-            _wrap("Start with one saved scenario", body, "Open the runway calculator",
+            _wrap("Start with your real runway number", body, "Open the runway calculator",
                   f"{APP_URL}/tools/runway-calculator", unsubscribe_url))
 
 
@@ -125,9 +126,9 @@ def _step_fundraising(unsubscribe_url: str) -> tuple[str, str]:
 
 def _step_feedback(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>You've had FounderConsole for a week. Two things &mdash; the first takes a minute.</p>
-<p><strong>If you haven't saved a scenario yet</strong>, that is the step that makes the rest of it
-work. Open the runway calculator and save one with your real numbers; everything after that reads off
-it.</p>
+<p><strong>If you haven't put your real numbers in yet</strong>, that is the step that makes the rest
+of it work. Open the runway calculator and enter your burn and balance; it shows your months of runway
+and the date the money runs out, and everything after it reads off that number.</p>
 <p><strong>Then tell me the truth.</strong> Three questions:</p>
 <ul>
   <li>What got you to your first "aha" moment?</li>
