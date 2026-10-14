@@ -1,0 +1,147 @@
+"""HAG-233: the free runway calculator is reachable above the fold on `/`.
+
+Why this file is Python rather than a `.test.ts`: `pr-checks.yml` lists every
+TypeScript test file by hand as its own step, and that workflow is on the hold
+list, so a new `.test.ts` would not run in CI at all. `pytest.ini` sets
+`testpaths = server/tests`, so this file is collected automatically with no
+workflow change. It is the half of the coverage that actually executes.
+
+What is being guarded. `/` already linked /tools/runway-calculator in two
+places — the footer (`MarketingLayout`) and the server-rendered homepage body
+(`buildLandingBodyContent`) — so the card's original premise, "add the link",
+was already satisfied for a crawler. The real gap was a human looking at the
+hero, who saw two buttons and no way in without creating an account. A change
+that adds a third invisible link cannot be measured, so the assertions below pin
+the three things that make this one measurable and honest:
+
+  1. the link is inside `Hero()`, i.e. above the fold — not a footer or midpage
+     link, which is what the card explicitly ruled out;
+  2. its click is emitted as `cta_click` with a location no other call site
+     uses, or the hero's clicks are indistinguishable from the signup button's
+     and the experiment cannot be read;
+  3. the "input submitted" half of the required instrumentation already exists
+     as `calculator_used` in runway-calculator.tsx, and HAG-245 forbids touching
+     that file while #88 is open — so this pins both lines and proves they are
+     still exactly as they were.
+"""
+
+import re
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+LANDING = REPO_ROOT / "client/src/pages/landing.tsx"
+CALCULATOR = REPO_ROOT / "client/src/pages/runway-calculator.tsx"
+MARKETING_LAYOUT = REPO_ROOT / "client/src/components/marketing/MarketingLayout.tsx"
+PRERENDER = REPO_ROOT / "server/seo-prerender.ts"
+
+CALC_PATH = "/tools/runway-calculator"
+
+
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def hero_slice() -> str:
+    """Just the `Hero()` component: the part of `/` a visitor sees first."""
+    src = read(LANDING)
+    start = src.index("function Hero() {")
+    end = src.index("function HowItWorks() {", start)
+    return src[start:end]
+
+
+def test_the_hero_links_the_calculator():
+    hero = hero_slice()
+    assert f'href="{CALC_PATH}"' in hero, "the hero has no link to the free calculator"
+
+
+def test_the_link_is_above_the_fold_not_another_footer_link():
+    # The card ruled out "another footer-or-midpage link", so being inside
+    # Hero() is the requirement, and the demo mock sits below it.
+    src = read(LANDING)
+    hero = hero_slice()
+    assert f'href="{CALC_PATH}"' in hero
+    # "<TwinDashboardDemo />" (the usage, not the import at the top of the file)
+    # is the demo mock that sits below the button row.
+    assert src.index(f'href="{CALC_PATH}"') < src.index("<TwinDashboardDemo />")
+
+
+def test_the_link_appears_once_in_the_component():
+    # One link, so the metric has exactly one cause. A second copy on the page
+    # would make a rise in calculator visitors unattributable.
+    assert read(LANDING).count(f'href="{CALC_PATH}"') == 1
+
+
+def test_the_click_is_instrumented_with_a_location_of_its_own():
+    hero = hero_slice()
+    assert 'trackFunnel("cta_click", { location: "hero-calculator" })' in hero, (
+        "the new CTA is not instrumented"
+    )
+    # Distinct from the signup button's location. If these ever collapse to the
+    # same string the experiment silently stops being readable.
+    assert 'location: "hero"' in hero
+    assert "hero-calculator" != "hero"
+
+
+def test_the_cta_can_be_driven_by_the_qa_lab():
+    # A testid is what makes the link clickable from a script rather than by
+    # eye, which is the difference between a checked change and a claimed one.
+    hero = hero_slice()
+    assert 'data-testid="link-hero-runway-calculator"' in hero
+    assert 'data-testid="text-hero-calculator-prompt"' in hero
+
+
+def test_the_input_submitted_half_is_already_instrumented_and_unchanged():
+    # The card asked for two events: CTA click and input submitted. The second
+    # already exists, fires once per session on the first edit away from the
+    # defaults, and is in a file HAG-245 fences off while #88 is open. So it is
+    # pinned rather than written.
+    src = read(CALCULATOR)
+    assert 'trackFunnel("calculator_used", { calculator: "runway" })' in src
+    assert "if (usageTracked.current) return;" in src, "the once-per-session guard moved"
+    assert "if (!touched) return;" in src, "the 'input actually changed' guard moved"
+
+
+def test_the_hero_copy_was_not_rewritten():
+    # Constraint from the card: do not touch the hero copy. The headline and
+    # subtitle are byte-pinned so a later edit has to be deliberate.
+    src = read(LANDING)
+    assert '["The Flight Simulator", false],' in src
+    assert '["for Founders", true],' in src
+    assert (
+        "Know your real runway, pressure-test every big decision before you commit, and get AI strategy\n"
+        "          you can take to your board. Run your startup like a simulation."
+    ) in src
+    assert 'data-testid="button-hero-start-simulation"' in src
+
+
+def test_the_new_line_claims_only_what_outreach_already_claims():
+    # OUTREACH.md's approved claim, and the only one: public beta, free, the
+    # calculator needs no login. No number, no price, no discount, no promise
+    # this page cannot keep.
+    hero = hero_slice()
+    block = hero[hero.index('data-testid="text-hero-calculator-prompt"') :]
+    block = block[: block.index("</motion.p>")]
+    # The visible words only: text nodes between tags. The surrounding JSX
+    # carries `underline-offset-4`, so scanning the raw block for digits would
+    # fail on a Tailwind class rather than on a claim.
+    text = " ".join(re.findall(r">([^<>{}]+)<", block))
+    assert "needs no login" in text
+    for banned in ("$", "%", "trial", "discount", "guarantee", "30-day", "free beta"):
+        assert banned not in text, f"the new line makes an unapproved claim: {banned}"
+    assert not any(ch.isdigit() for ch in text), f"the new line quotes a number: {text!r}"
+
+
+def test_the_crawler_path_is_untouched():
+    # The change is a prominence change, not a new route. The homepage body a
+    # non-JS crawler reads must keep linking the calculator.
+    src = read(PRERENDER)
+    body = src[src.index("function buildLandingBodyContent") :]
+    body = body[: body.index("function buildBlogListBodyContent")]
+    assert f'href="{CALC_PATH}"' in body
+
+
+def test_the_footer_link_is_still_there():
+    # Added, not moved. If the footer link had been removed instead, a rise in
+    # calculator visitors would measure the move, not the prominence.
+    assert f'href: "{CALC_PATH}"' in read(MARKETING_LAYOUT)
