@@ -2819,7 +2819,7 @@ export default function ScenariosPage() {
                       <DistributionView
                         title="Runway Distribution"
                         description={
-                          `Months until cash runs out, one value per simulated path from this run (${runwayPaths.total.toLocaleString()} paths).` +
+                          `Months until cash runs out, one value per simulated path from this run (${runwayPaths.total.toLocaleString()} of ${(runIterations ?? runwayPaths.total).toLocaleString()} paths).` +
                           (runwayPaths.survived > 0
                             ? ` ${runwayPaths.survived.toLocaleString()} of them never ran out within the 24-month horizon and are counted here rather than plotted, because a single 999-month bar would flatten the rest of the axis.`
                             : '')
@@ -2832,7 +2832,7 @@ export default function ScenariosPage() {
                         <CardHeader>
                           <CardTitle className="text-lg">Runway Distribution</CardTitle>
                           <CardDescription>
-                            All {runwayPaths.total.toLocaleString()} simulated paths in this run stayed cash-positive
+                            All {runwayPaths.total.toLocaleString()} of the {(runIterations ?? runwayPaths.total).toLocaleString()} simulated paths in this run stayed cash-positive
                             through the 24-month horizon, so there is no spread of run-out months to plot.
                           </CardDescription>
                         </CardHeader>
