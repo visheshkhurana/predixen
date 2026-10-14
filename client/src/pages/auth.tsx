@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, type RouteComponentProps } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,14 +13,29 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { identifyUser } from '@/lib/posthog';
 
 
-const identifyUser = (userId: number, email: string) => {
+// GA4 identity only. This used to be called `identifyUser`, which described a job it
+// was not doing: it never touched PostHog. PostHog was identified only when App.tsx's
+// effect reacted to the store, i.e. AFTER the signup conversion events below — so
+// `signup_completed` was captured against the anonymous device distinct id while every
+// later event from the same person carried the user id. One person, three ids: the
+// device id, the PostHog user id, and the GA4 user_id set here.
+const identifyGA4 = (userId: number, email: string) => {
   if (typeof window !== 'undefined' && (window as any).gtag) {
     (window as any).gtag('config', 'G-NJKW0TGC4C', { user_id: String(userId) });
     (window as any).gtag('set', 'user_properties', { user_email: email });
     (window as any).gtag('event', 'login', { method: 'email' });
   }
+};
+
+// One call site, one identity, in the order the funnel needs: PostHog first so the
+// conversion events that follow are attributed to the user, then GA4. Both destinations
+// key on the same string, which is what makes this a single person rather than three.
+const identifyEverywhere = (userId: number, email: string, role?: string) => {
+  identifyUser(userId, email, role);
+  identifyGA4(userId, email);
 };
 
 // Signup is the key conversion for a free-first launch — fire it through
@@ -100,8 +115,16 @@ export default function AuthPage({
   }, []);
 
   // Funnel: fire signup_view once when the register tab is shown.
+  //
+  // It used to fire on every transition INTO the register tab, because the effect's
+  // only guard was `activeTab === 'register'` — so a visitor who toggled
+  // Login / Register / Login / Register produced two signup_view events from one
+  // visit, and the top of the funnel was counted twice for exactly the visitors who
+  // were undecided. The ref makes "once" true: once per page load, on first show.
+  const signupViewed = useRef(false);
   useEffect(() => {
-    if (activeTab === 'register') {
+    if (activeTab === 'register' && !signupViewed.current) {
+      signupViewed.current = true;
       trackFunnel('signup_view', {});
     }
   }, [activeTab]);
@@ -177,7 +200,7 @@ export default function AuthPage({
     try {
       const result = await api.auth.login(loginForm.email, loginForm.password);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyEverywhere(result.user_id, result.email, result.role);
 
       let userCompanies: any[] = [];
       try {
@@ -234,7 +257,7 @@ export default function AuthPage({
     try {
       const result = await api.auth.register(registerForm.email, registerForm.password);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyEverywhere(result.user_id, result.email, result.role);
       trackSignup(result.user_id, result.email);
       toast({ title: 'Account created!' });
       setLocation('/onboarding');
@@ -258,7 +281,7 @@ export default function AuthPage({
     try {
       const result = await api.auth.login('demo@founderconsole.ai', 'demo123');
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
-      identifyUser(result.user_id, result.email);
+      identifyEverywhere(result.user_id, result.email, result.role);
       
       try {
         const companies = await api.companies.list();

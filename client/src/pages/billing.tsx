@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSubscription, usePlans, useStartTrial, useSubscribe, useBillingPortal, type PlanData } from '@/hooks/use-subscription';
 import { useToast } from '@/hooks/use-toast';
 import { trackEvent } from '@/lib/posthog';
+import { buildPurchaseProperties, isPurchaseResolvable } from '@/lib/purchase-properties';
 import { Check, Sparkles, Zap, Crown, ArrowRight, Clock, CreditCard, AlertCircle, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -128,6 +129,41 @@ function PlanCard({
   );
 }
 
+const PENDING_CHECKOUT_KEY = 'fc_pending_checkout';
+
+interface PendingCheckout {
+  planId: string;
+  checkoutId: string;
+  startedAt: string;
+}
+
+/** A local correlation id for one checkout attempt. Not a Stripe identifier. */
+function newCheckoutId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  } catch {
+    // fall through to the timestamp form
+  }
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function readPendingCheckout(): PendingCheckout | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_CHECKOUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingCheckout>;
+    if (typeof parsed?.planId !== 'string' || typeof parsed?.checkoutId !== 'string') return null;
+    return {
+      planId: parsed.planId,
+      checkoutId: parsed.checkoutId,
+      startedAt: parsed.startedAt ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function BillingPage() {
   const { data: sub, isLoading: subLoading } = useSubscription();
   const { data: plansData, isLoading: plansLoading } = usePlans();
@@ -142,36 +178,91 @@ export default function BillingPage() {
   const isLoading = subLoading || plansLoading;
 
   // Handle return from Stripe checkout (?checkout=success|cancelled)
+  //
+  // The purchase event used to fire with `method` and nothing else — no value, no
+  // currency, no plan — on the theory that "plan/value enrichment happens server-side
+  // via the Stripe webhook". On the server it does; on the ad platforms it cannot. GA4
+  // will not treat an event as a revenue key event without a `value` and a matching
+  // `currency`, and an ad platform cannot bid on a conversion it cannot price. So the
+  // one conversion this product is actually paid for arrived with no number attached,
+  // on every plan, which is why spend could never be turned into a cost per purchase.
+  //
+  // The event now fires once, with the value the server reports for the subscription,
+  // falling back to the plan catalogue, and it does NOT fire until one of the two has a
+  // price. If both settle with nothing it fires an explicit zero that says so, rather
+  // than waiting forever or quietly reporting a free conversion.
+  const purchaseFired = useRef(false);
+
+  // Read the checkout result once, then strip it from the URL. The result is copied into
+  // state rather than read inside the firing effect, because that effect has to re-run
+  // when the subscription arrives — by which time the query string is already gone.
+  const [checkoutReturn, setCheckoutReturn] = useState<'success' | 'cancelled' | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const result = params.get('checkout');
     if (!result) return;
-    if (result === 'success') {
-      // Purchase conversion — fires to GA4 (mark "purchase_subscription" as a key
-      // event / import to Google Ads) and PostHog. Plan/value enrichment happens
-      // server-side via the Stripe webhook; this is the client-side ad signal.
-      try {
-        (window as any).gtag?.('event', 'purchase_subscription', { method: 'stripe_checkout' });
-        trackEvent('purchase_subscription', { method: 'stripe_checkout' });
-        import('@/lib/metaPixel').then(m => m.metaTrack('Subscribe', { method: 'stripe_checkout' })).catch(() => {});
-      } catch {}
-      toast({
-        title: 'Payment successful 🎉',
-        description: 'Your subscription is active. It may take a few seconds to reflect here.',
-      });
-      // Webhook may lag a moment behind the redirect — refetch shortly after.
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
-      }, 2500);
-    } else if (result === 'cancelled') {
-      toast({ title: 'Checkout cancelled', description: 'No charge was made.' });
-    }
     window.history.replaceState({}, '', window.location.pathname);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (result === 'cancelled') {
+      toast({ title: 'Checkout cancelled', description: 'No charge was made.' });
+      return;
+    }
+    if (result === 'success') setCheckoutReturn('success');
+  }, [toast]);
+
+  useEffect(() => {
+    if (checkoutReturn !== 'success' || purchaseFired.current) return;
+
+    const pending = readPendingCheckout();
+    const fromSubscription = typeof sub?.plan_price === 'number' ? sub.plan_price : null;
+    const fromCatalogue = pending
+      ? plans.find((pl) => pl.id === pending.planId)?.price_monthly ?? null
+      : null;
+    const settled = !subLoading && !plansLoading;
+
+    const input = {
+      planId: pending?.planId,
+      checkoutId: pending?.checkoutId,
+      subscriptionPrice: fromSubscription,
+      cataloguePrice: fromCatalogue,
+    };
+
+    // Wait for whichever query is still in flight before concluding there is no price.
+    if (!isPurchaseResolvable(input, settled)) return;
+    purchaseFired.current = true;
+
+    const properties = buildPurchaseProperties(input);
+    try {
+      (window as any).gtag?.('event', 'purchase_subscription', properties);
+      trackEvent('purchase_subscription', properties);
+      import('@/lib/metaPixel')
+        .then((m) => m.metaTrack('Subscribe', { method: 'stripe_checkout', value: properties.value, currency: 'USD' }))
+        .catch(() => {});
+    } catch {}
+    toast({
+      title: 'Payment successful 🎉',
+      description: 'Your subscription is active. It may take a few seconds to reflect here.',
+    });
+    // Webhook may lag a moment behind the redirect — refetch shortly after.
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+    }, 2500);
+  }, [checkoutReturn, sub, plans, subLoading, plansLoading, queryClient, toast]);
 
   const handleSelectPlan = (planId: string) => {
     setSelectedPlan(planId);
+    // The redirect to Stripe leaves the page, so the plan the visitor picked has to be
+    // written down before we go, and read back when they return. `checkoutId` is a local
+    // correlation id: it survives the round trip and makes a reload of the success URL
+    // idempotent. It is NOT the Stripe session id — returning that needs a server-side
+    // change to the redirect URL, which is not this card.
+    try {
+      window.sessionStorage.setItem(
+        PENDING_CHECKOUT_KEY,
+        JSON.stringify({ planId, checkoutId: newCheckoutId(), startedAt: new Date().toISOString() }),
+      );
+    } catch {
+      // private mode / blocked storage: the event still fires, with an empty transaction_id
+    }
     subscribe.mutate(
       { planId },
       {
