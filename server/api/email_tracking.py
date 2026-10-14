@@ -1,7 +1,5 @@
 import os
 import uuid
-import hmac
-import hashlib
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -12,29 +10,11 @@ from sqlalchemy import func, case, and_
 
 from server.core.db import get_db
 from server.models.email_event import EmailEvent, EmailLinkClick, EmailFeedback
+from server.services import resend_webhook as resend_webhook_sig
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/email-tracking", tags=["email-tracking"])
-
-WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
-
-
-def _verify_resend_signature(payload: bytes, signature: Optional[str]) -> bool:
-    if not WEBHOOK_SECRET:
-        return True
-    if not signature:
-        return False
-    try:
-        expected = hmac.new(
-            WEBHOOK_SECRET.encode(),
-            payload,
-            hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature)
-    except Exception:
-        return False
-
 
 class ResendWebhookPayload(BaseModel):
     type: str
@@ -44,12 +24,20 @@ class ResendWebhookPayload(BaseModel):
 
 @router.post("/webhooks/resend")
 async def resend_webhook(request: Request):
+    # Fail CLOSED. With no signing secret we cannot tell a real Resend event
+    # from a forged one, so we refuse the request instead of recording it
+    # unverified: everything below writes an EmailEvent row for any body.
+    # Verification happens before the body is parsed and before get_db().
     raw_body = await request.body()
-    svix_signature = request.headers.get("svix-signature") or request.headers.get("webhook-signature")
-    
-    if WEBHOOK_SECRET and not svix_signature:
-        raise HTTPException(status_code=401, detail="Missing webhook signature")
-    
+    secret = resend_webhook_sig.webhook_secret()
+    if not secret:
+        raise HTTPException(
+            status_code=503,
+            detail="RESEND_WEBHOOK_SECRET is not configured",
+        )
+    if not resend_webhook_sig.verify(secret, request.headers, raw_body):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
     body = await request.json()
     event_type = body.get("type", "")
     data = body.get("data", {})

@@ -266,6 +266,9 @@ Before pushing to `main`:
 2. Nothing in the diff is a production migration, or a same-day `scripts/db_backup.py` backup
    exists.
 3. Nobody is mid-incident: check Railway → Deployments for a rollback in the last few minutes.
+4. `RESEND_WEBHOOK_SECRET` is set in Railway. Both Resend receivers fail **closed**: with the
+   secret unset they return `503` and drop real delivery events rather than record them
+   unverified. Set it **before** the push, not after.
 
 After the push:
 

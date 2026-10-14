@@ -2,12 +2,13 @@
 API endpoints for notification management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import base64
+import json
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
@@ -20,6 +21,7 @@ from server.api.admin import require_platform_admin
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.email_event import EmailEvent
+from server.services import resend_webhook
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -196,12 +198,35 @@ def classify_email_event(event: Dict[str, Any], db: Session) -> None:
 
 
 @router.post("/resend-webhook")
-async def handle_resend_webhook(event: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, str]:
+async def handle_resend_webhook(request: Request, db: Session = Depends(get_db)) -> Dict[str, str]:
     """
     Receive Resend webhook events and classify email opens.
     Configure this endpoint in Resend dashboard:
     - Subscribe to: email.delivered, email.opened, email.clicked
+
+    This route has no session, so the Svix signature is the only thing that
+    separates a real Resend event from a forged one. It fails CLOSED: with no
+    RESEND_WEBHOOK_SECRET we cannot check the signature, so we refuse the event
+    instead of recording it unverified. Verification happens before the body is
+    parsed and before any DB write.
     """
+    body = await request.body()
+    secret = resend_webhook.webhook_secret()
+    if not secret:
+        raise HTTPException(
+            status_code=503,
+            detail="RESEND_WEBHOOK_SECRET is not configured",
+        )
+    if not resend_webhook.verify(secret, request.headers, body):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        event = json.loads(body or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
     try:
         classify_email_event(event, db)
         return {"status": "ok"}
