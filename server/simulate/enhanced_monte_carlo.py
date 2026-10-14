@@ -113,11 +113,20 @@ def run_enhanced_monte_carlo(
     horizon = config.horizon_months
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
-    adjusted_margin = inputs.gross_margin + inputs.gross_margin_delta_pct
+    # Clamp the INPUT margin, not the sampled one. The user's gross_margin is a
+    # real reported number and must survive intact; the old code clamped each
+    # monthly sample, which silently overwrote any input outside [10, 95] (e.g.
+    # a 0% or 100% gross-margin company) with the bound.
+    adjusted_margin = max(10, min(95, inputs.gross_margin + inputs.gross_margin_delta_pct))
     clamped_burn_change = max(-100, min(100, inputs.burn_reduction_pct))
     burn_reduction_mult = 1 - (clamped_burn_change / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
-    adjusted_churn = inputs.churn_change_pct
+    # churn_rate was declared on the inputs (default 5.0%) and never read: the
+    # churn level used by every simulation was the scenario DELTA alone, so a
+    # baseline with no churn scenario ran at 0% churn. The delta is in
+    # percentage points (see client/src/components/GuidedScenarioSlider.tsx,
+    # whose benchmarks name churn LEVELS against slider values), so the two add.
+    adjusted_churn = inputs.churn_rate + inputs.churn_change_pct
     adjusted_cac = inputs.cac * (1 + inputs.cac_change_pct / 100) if inputs.cac > 0 else 0
     fundraise_amount = max(0, inputs.fundraise_amount)
     fundraise_month = inputs.fundraise_month
@@ -149,10 +158,7 @@ def run_enhanced_monte_carlo(
         for month in range(horizon):
             growth_rate = rng.normal(current_growth, inputs.growth_sigma) / 100
             growth_rate = np.clip(growth_rate, -0.5, 0.5)
-            margin = np.clip(
-                rng.normal(current_margin, inputs.margin_sigma),
-                10, 95
-            ) / 100
+            margin = rng.normal(current_margin, inputs.margin_sigma) / 100
             churn_raw = rng.normal(current_churn, inputs.churn_sigma)
             churn = np.clip(churn_raw, -20, 50) / 100
             
@@ -289,7 +295,27 @@ def run_enhanced_monte_carlo(
         percentiles["max"] = np.max(data, axis=axis)
         return percentiles
     
+    # HAG-180: 999 is a "survived to horizon" CODE, not a runway in months.
+    # It is deliberately left in runway_months: distributions.runway and the four
+    # survival_* rates depend on it, and the frontend reads runway.pNN >= 900 to
+    # render "Sustainable"/"infinity" (client/src/pages/copilot.tsx:794-802,
+    # ScenarioCard.tsx:163 and ~10 more call sites). Keeping it in the percentile
+    # input is also the right answer for a right-censored variable: when the
+    # quantile lands in the sentinel mass, the honest answer is "sustainable",
+    # not the largest finite month count.
+    # What IS meaningless is mixing a symbol with months in mean/std_dev/min/max,
+    # so those are computed over the runs that actually ran out of cash, and the
+    # size of the sentinel mass is reported explicitly instead of being hidden
+    # inside an average.
+    SENTINEL_SURVIVED = 999
+    ran_out_of_cash = runway_months[runway_months != SENTINEL_SURVIVED]
+    sustainable_runs = int(np.sum(runway_months == SENTINEL_SURVIVED))
+
     runway_stats = compute_percentiles(runway_months)
+    if ran_out_of_cash.size:
+        censored_stats = compute_percentiles(ran_out_of_cash)
+        for key in ("mean", "std_dev", "min", "max"):
+            runway_stats[key] = censored_stats[key]
     breakeven_stats = compute_percentiles(breakeven_months)
     
     revenue_percentiles = []
@@ -351,7 +377,11 @@ def run_enhanced_monte_carlo(
             "mean": round(float(runway_stats["mean"]), 1),
             "stdDev": round(float(runway_stats["std_dev"]), 1),
             "min": round(float(runway_stats["min"]), 1),
-            "max": round(float(runway_stats["max"]), 1)
+            "max": round(float(runway_stats["max"]), 1),
+            # HAG-180: how much of the distribution is the 999 sentinel, reported
+            # explicitly instead of only being legible through p10/p50/p90.
+            "sustainableRuns": sustainable_runs,
+            "sustainableRate": round(sustainable_runs / n * 100, 1),
         },
         "survivalProbability": {
             "6m": round(survival_6m * 100, 1),
