@@ -10,6 +10,17 @@
 #
 # Do not wire RAILWAY_DATABASE_URL or any backup secret. Postgres-backed
 # pytest cases already skip when no local DB is reachable.
+#
+# The QA lab (qa-lab/runner/qa_runner.py) DOES run here, on a disposable SQLite
+# file under $RUNNER_TEMP. It seeds synthetic companies, so it needs a schema and
+# writes rows - that is why nothing ran it before, and why OPERATING-MODEL.md
+# could list it in the golden path for months while no process executed it. The
+# rows it writes live in the runner's own temporary directory: never production,
+# never a secret, discarded when the job ends.
+#
+# DATABASE_URL is set on the two QA-lab steps ONLY. It is deliberately NOT set on
+# `Run pytest`, so the Postgres-backed pytest cases keep skipping exactly as they
+# do today - changing that is a separate decision about a separate suite.
 name: pr-checks
 
 on:
@@ -168,3 +179,17 @@ jobs:
 
       - name: Run pytest
         run: uv run --no-sync pytest -ra
+
+      # Golden-path exit criterion 2's second half. qa_runner.py opens
+      # SessionLocal() and inserts - it never creates its own schema - so a
+      # database with no tables is the first thing it hits. init_qa_db.py is the
+      # schema half of server/main.py:210, for this throwaway file only.
+      - name: Create the QA lab's disposable database
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/qa-lab.db
+        run: uv run --no-sync python qa-lab/runner/init_qa_db.py
+
+      - name: QA lab (golden path, exit criterion 2)
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/qa-lab.db
+        run: uv run --no-sync python qa-lab/runner/qa_runner.py
