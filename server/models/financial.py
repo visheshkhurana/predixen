@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, Float, DateTime, Date, ForeignKey, String, Boolean, Enum, Text, Index, JSON, event
+from sqlalchemy.orm import deferred, relationship
 from datetime import datetime
 from server.core.db import Base
 import enum
@@ -182,5 +182,30 @@ class FinancialRecord(Base):
     
     source_type = Column(String(20), nullable=True)
     extraction_summary = Column(Text, nullable=True)
-    
+
+    # Sync provenance. `source` is a canonical connector id only
+    # (tally, razorpayx, stripe, zoho_books, csv_import) — never an account
+    # number, credential, or other identifier. `synced_at` is a UTC ISO-8601
+    # timestamp. `synced_fields` names the input columns that sync actually
+    # supplied, so derived numbers are not labeled as synced. Manual rows
+    # leave all three null.
+    #
+    # Deferred so a SELECT of this model still succeeds when the live table
+    # has not been migrated yet. The flush listener below omits the columns
+    # from INSERT/UPDATE in that case. Reads that need them undefer explicitly.
+    source = deferred(Column(String(64), nullable=True))
+    synced_at = deferred(Column(String(40), nullable=True))
+    synced_fields = deferred(Column(JSON, nullable=True))
+
     company = relationship("Company", back_populates="financial_records")
+
+
+def _omit_unmigrated_provenance(mapper, connection, state):
+    # Lazy import: this module is imported by the provenance service.
+    from server.services.input_provenance import omit_provenance_if_columns_missing
+
+    omit_provenance_if_columns_missing(mapper, connection, state)
+
+
+event.listen(FinancialRecord, "before_insert", _omit_unmigrated_provenance, raw=True)
+event.listen(FinancialRecord, "before_update", _omit_unmigrated_provenance, raw=True)
