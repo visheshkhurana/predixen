@@ -61,6 +61,7 @@ const SharedSimulationPage = lazy(() =>
 const AuthCallback = lazy(() => import("@/pages/auth-callback"));
 const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
 const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
+const UnsubscribePage = lazy(() => import("@/pages/unsubscribe"));
 const PrivacyPolicyPage = lazy(() => import("@/pages/privacy"));
 const TermsOfServicePage = lazy(() => import("@/pages/terms"));
 const OnboardingPage = lazy(() => import("@/pages/onboarding"));
@@ -340,6 +341,7 @@ function Router() {
         <Route path="/auth" component={AuthPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/verify-email" component={VerifyEmailPage} />
+        <Route path="/unsubscribe" component={UnsubscribePage} />
         <Route path="/privacy" component={PrivacyPolicyPage} />
         <Route path="/terms" component={TermsOfServicePage} />
       {/* /login means login. /register and /join still land on the register
@@ -515,11 +517,6 @@ function Router() {
         {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/account/notifications">
-        {() => <Redirect to="/settings" />}
-      </Route>
-      {/* Email footers still link here. Settings already has email-prefs;
-          this is a Switch alias only — not a tokenized legal unsubscribe page. */}
-      <Route path="/unsubscribe">
         {() => <Redirect to="/settings" />}
       </Route>
       <Route path="/settings">

@@ -16,6 +16,8 @@ import random
 from typing import Optional, Tuple
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 
 PLATFORM_DOMAINS = [
     "founderconsole.ai",
@@ -255,6 +257,160 @@ async def send_email(
     )
 
 
+def deliver_lifecycle_email(
+    to: str,
+    subject: str,
+    html_content: str,
+    *,
+    category: str,
+    template: str,
+    campaign: Optional[str] = None,
+    user_id: Optional[int] = None,
+    from_email: Optional[str] = None,
+    due_at: Optional[datetime] = None,
+    db=None,
+) -> dict:
+    """Classified send. category is required; it is never inferred.
+
+    transactional (password_reset, email_verification, receipt) skips the cap,
+    opt-out, hold expiry, and List-Unsubscribe. lifecycle, digest, and briefing
+    are covered by both the cap and RFC 8058. One token is signed per covered
+    send and used for the footer link and the List-Unsubscribe header.
+    LIFECYCLE_GUARDS=off skips opt-out, the cap, and expiry. Headers stay.
+    """
+    from server.core.db import SessionLocal
+    from server.email.lifecycle_guard import (
+        CATEGORY_TRANSACTIONAL,
+        COVERED_CATEGORIES,
+        assert_template,
+        evaluate_for_user,
+        guard_enabled,
+        is_past_max_hold,
+        list_unsubscribe_headers,
+        record_lifecycle_event,
+        stamp_unsubscribe_footer,
+        unsubscribe_links,
+        user_id_for_email,
+    )
+
+    assert_template(category, template)
+    tracked_as = campaign or template
+
+    if category == CATEGORY_TRANSACTIONAL:
+        return _send_email_sync(
+            to,
+            subject,
+            html_content,
+            from_email=from_email,
+            recipient_id=str(user_id) if user_id is not None else None,
+            campaign=tracked_as,
+        )
+
+    if category not in COVERED_CATEGORIES:
+        raise ValueError(f"unknown email category: {category}")
+
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
+    try:
+        uid = user_id if user_id is not None else user_id_for_email(db, to)
+        if uid is None:
+            logger.info(
+                "lifecycle email skipped reason=unknown_user category=%s template=%s",
+                category,
+                template,
+            )
+            return {"success": False, "skipped": True, "reason": "unknown_user"}
+
+        effective_due = due_at or datetime.utcnow()
+        try:
+            if guard_enabled() and is_past_max_hold(template, effective_due):
+                record_lifecycle_event(
+                    db,
+                    uid,
+                    category,
+                    tracked_as,
+                    "dropped_expired",
+                    "expired",
+                )
+                return {"success": False, "skipped": True, "dropped": True, "reason": "expired"}
+            decision = evaluate_for_user(db, uid)
+        except Exception:
+            logger.exception(
+                "lifecycle guard failed closed user_id=%s category=%s template=%s",
+                uid,
+                category,
+                template,
+            )
+            return {"success": False, "skipped": True, "reason": "guard_error"}
+
+        if not decision.allow:
+            record_lifecycle_event(
+                db,
+                uid,
+                category,
+                tracked_as,
+                f"skipped_{decision.reason}",
+                decision.reason,
+            )
+            return {"success": False, "skipped": True, "reason": decision.reason}
+
+        links = unsubscribe_links(uid)
+        stamped = stamp_unsubscribe_footer(html_content, links.page_url)
+        result = _send_email_sync(
+            to,
+            subject,
+            stamped,
+            from_email=from_email,
+            recipient_id=str(uid),
+            campaign=tracked_as,
+            headers=list_unsubscribe_headers(links),
+        )
+        if result.get("success"):
+            record_lifecycle_event(db, uid, category, tracked_as, "sent", None)
+        else:
+            record_lifecycle_event(
+                db,
+                uid,
+                category,
+                tracked_as,
+                "failed",
+                str(result.get("error") or "")[:120] or None,
+            )
+        return result
+    finally:
+        if owns_session:
+            db.close()
+
+
+async def send_lifecycle_email(
+    to: str,
+    subject: str,
+    html_content: str,
+    *,
+    category: str,
+    template: str,
+    campaign: Optional[str] = None,
+    user_id: Optional[int] = None,
+    from_email: Optional[str] = None,
+    due_at: Optional[datetime] = None,
+) -> dict:
+    """Async wrapper around the classified choke point."""
+    return await asyncio.to_thread(
+        lambda: deliver_lifecycle_email(
+            to,
+            subject,
+            html_content,
+            category=category,
+            template=template,
+            campaign=campaign,
+            user_id=user_id,
+            from_email=from_email,
+            due_at=due_at,
+        )
+    )
+
+
 async def send_invite_email(
     to_email: str,
     invite_token: str,
@@ -353,8 +509,14 @@ async def send_password_reset_email(
     )
     
     subject = "Reset Your FounderConsole Password"
-    
-    return await send_email(to_email, subject, html_content)
+
+    return await send_lifecycle_email(
+        to_email,
+        subject,
+        html_content,
+        category="transactional",
+        template="password_reset",
+    )
 
 
 async def send_email_verification(
@@ -372,8 +534,31 @@ async def send_email_verification(
     )
     
     subject = "Verify Your FounderConsole Email"
-    
-    return await send_email(to_email, subject, html_content)
+
+    return await send_lifecycle_email(
+        to_email,
+        subject,
+        html_content,
+        category="transactional",
+        template="email_verification",
+    )
+
+
+async def send_receipt_email(
+    to_email: str,
+    html_content: str,
+    *,
+    subject: str = "Your FounderConsole receipt",
+) -> dict:
+    """Payment receipt. Transactional: skips the cap and unsubscribe."""
+    return await send_lifecycle_email(
+        to_email,
+        subject,
+        html_content,
+        category="transactional",
+        template="receipt",
+        campaign="receipt",
+    )
 
 
 async def send_platform_update_email(

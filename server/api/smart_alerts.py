@@ -497,7 +497,7 @@ async def send_weekly_briefing(
 
     email_sent = False
     try:
-        from server.email.service import send_email
+        from server.email.service import send_lifecycle_email
         user_email = current_user.email
         subject = f"Weekly Briefing — {company.name}"
         html_content = f"""
@@ -523,8 +523,16 @@ async def send_weekly_briefing(
         </body>
         </html>
         """
-        email_result = await send_email(user_email, subject, html_content)
-        email_sent = bool(email_result)
+        email_result = await send_lifecycle_email(
+            user_email,
+            subject,
+            html_content,
+            category="briefing",
+            template="weekly_briefing",
+            campaign="weekly_briefing",
+            user_id=current_user.id,
+        )
+        email_sent = bool(email_result.get("success"))
     except Exception as e:
         logger.warning(f"Weekly briefing email failed: {e}")
 
