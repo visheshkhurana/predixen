@@ -16,13 +16,12 @@ without also restoring the lock would have turned a dead endpoint into a live
 disclosure of every address collected.
 """
 
-import hashlib
 import logging
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -30,6 +29,7 @@ from server.api.admin import require_platform_admin
 from server.core.db import get_db
 from server.models.lead import Lead
 from server.services.posthog import capture as posthog_capture
+from server.services.posthog import lead_distinct_id, sanitize_distinct_id
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,16 @@ class LeadCreate(BaseModel):
     runway_months: Optional[str] = Field(default=None, max_length=20)
     runway_date: Optional[str] = Field(default=None, max_length=40)
     monthly_burn: Optional[str] = Field(default=None, max_length=40)
+    # Browser PostHog distinct_id, when the page has one. Invalid values are
+    # dropped so a bad client cannot 422 a real lead.
+    distinct_id: Optional[str] = None
+
+    @field_validator("distinct_id", mode="before")
+    @classmethod
+    def _drop_invalid_distinct_id(cls, value: object) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        return sanitize_distinct_id(value)
 
 
 def _runway_email_html(data: LeadCreate) -> str:
@@ -95,8 +105,15 @@ async def _send_runway_email(data: LeadCreate) -> None:
 
 
 def _lead_distinct_id(email: str) -> str:
-    digest = hashlib.sha256(email.lower().strip().encode("utf-8")).hexdigest()[:32]
-    return f"lead:{digest}"
+    return lead_distinct_id(email)
+
+
+def _event_distinct_id(data: LeadCreate) -> tuple[str, str]:
+    """Browser id when the client sent one, otherwise the email hash."""
+    client_id = sanitize_distinct_id(data.distinct_id)
+    if client_id:
+        return client_id, "browser"
+    return _lead_distinct_id(str(data.email)), "email_hash"
 
 
 def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
@@ -106,14 +123,18 @@ def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
     zero lead_captured over 90d, even though the calculator chunk still calls
     trackFunnel("lead_captured") after a 2xx. Fire here after the row is
     committed so a successful POST always emits, independent of the browser.
-    Does not identify or reset anyone.
+    The distinct_id is the browser one when the page sent it, so the event
+    joins that visitor. Otherwise it is the email hash, which signup aliases
+    onto the account. Does not call identify or reset anyone.
     """
     try:
         location = (data.source or "website").strip() or "website"
+        distinct_id, distinct_id_source = _event_distinct_id(data)
         properties = {
             "location": location,
             "source": location,
             "created": created,
+            "distinct_id_source": distinct_id_source,
         }
         if data.runway_months:
             properties["runway_months"] = data.runway_months
@@ -121,7 +142,7 @@ def _emit_lead_captured(data: LeadCreate, created: bool) -> None:
             properties["plan"] = data.plan
         posthog_capture(
             "lead_captured",
-            _lead_distinct_id(str(data.email)),
+            distinct_id,
             properties,
         )
     except Exception:
