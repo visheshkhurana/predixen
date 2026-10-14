@@ -30,9 +30,15 @@ const footerProduct = [
   { label: "Pricing", href: "/pricing" },
   { label: "FAQ", href: "/faq" },
   { label: "Demo", href: "/demo" },
-  { label: "Get started", href: "/signup" },
+  // HAG-236: /signup has no form and no SSO, so the footer's "Get started" was a
+  // dead end. Point it at the real registration form, like every other signup CTA.
+  { label: "Get started", href: "/auth?tab=register" },
   { label: "Runway Calculator", href: "/tools/runway-calculator" },
   { label: "Survival Simulator", href: "/survival-simulator" },
+  // HAG-236: signup.tsx was the only inbound link to /default-alive in the repo.
+  // It gets a real site-wide link here so repointing "Get started" does not leave
+  // a working free tool reachable from nowhere (HAG-166 friction #3).
+  { label: "Default Alive Test", href: "/default-alive" },
 ];
 
 const footerCompany = [

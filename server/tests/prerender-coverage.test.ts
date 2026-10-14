@@ -292,16 +292,19 @@ for (const path of RUNWAY_PATHS) {
 }
 
 // /security was a blank SPA shell (ssr_chars=0). Body must be non-empty and
-// restates published FAQ/privacy claims with product / legal / signup hrefs.
+// restates published FAQ/privacy claims with product / legal / register hrefs.
 {
   const out = injectSEO(SHELL, "/security");
   const body = (out.match(/<div id="ssr-content"[^>]*>([\s\S]*)<\/div>\s*<\/div>/) || [, ""])[1];
   const txt = textOf(out);
+  // HAG-236 moved this page's "get started free" anchor from /signup to
+  // /auth?tab=register, because /signup cannot create an account. Not to be
+  // confused with the page list on line 19, where /signup is still a page.
   const hrefs = [
     "/product",
     "/privacy",
     "/terms",
-    "/signup",
+    "/auth?tab=register",
     "/contact",
   ];
   const hrefsOk = hrefs.every((h) => body.includes(`href="${h}"`));

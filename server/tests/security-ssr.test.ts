@@ -1,5 +1,5 @@
 // /security was a blank Googlebot shell (ssr_chars=0). Pin a non-empty
-// #ssr-content body plus product / privacy / terms / signup / contact hrefs.
+// #ssr-content body plus product / privacy / terms / register / contact hrefs.
 // Claims must mirror existing FAQ/privacy/about copy — no invented certs.
 //
 // Run: npx tsx --test server/tests/security-ssr.test.ts
@@ -25,11 +25,15 @@ function jsonLdBlocks(html: string): object[] {
   return blocks;
 }
 
+// HAG-236 moved this page's "get started free" anchor from /signup to
+// /auth?tab=register, because /signup cannot create an account. The href under
+// test moved with it. /signup is still a registered route, pinned as a page by
+// signup-ssr.test.ts and residual-dead-routes.test.ts.
 const REQUIRED_HREFS = [
   "/product",
   "/privacy",
   "/terms",
-  "/signup",
+  "/auth?tab=register",
   "/contact",
 ];
 
