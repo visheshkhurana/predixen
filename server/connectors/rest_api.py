@@ -28,7 +28,10 @@ class RestAPIConnector(BaseConnector):
     
     PROVIDER_ID = "rest_api"
     PROVIDER_NAME = "REST API"
-    CATEGORY = ProviderCategory.CRM
+    # The base class declares PROVIDER_CATEGORY, not CATEGORY, and the registry
+    # filters on PROVIDER_CATEGORY -- so the old `CATEGORY` spelling was dead
+    # code and this provider silently inherited the base default (PAYROLL).
+    PROVIDER_CATEGORY = ProviderCategory.CRM
     AUTH_TYPE = AuthType.API_KEY
     
     REQUIRED_CREDENTIALS = ["api_key"]
@@ -44,6 +47,47 @@ class RestAPIConnector(BaseConnector):
         self.method = config.settings.get("method", "GET")
         self.headers = config.settings.get("headers", {})
     
+    async def authenticate(self) -> bool:
+        """
+        Validate the credentials by making one real request to the endpoint.
+
+        This was the one abstract member the class never implemented, which made
+        it un-instantiable and took the whole provider catalogue down with it.
+        A generic REST connector has nothing to authenticate against except the
+        endpoint itself, so it issues the same call `test_connection` does with
+        the configured auth header and query param.
+
+        Returns False rather than raising, matching the other connectors.
+        """
+        if not self.endpoint_url:
+            logger.warning("REST API endpoint_url not provided")
+            return False
+
+        try:
+            import httpx
+
+            async with httpx.AsyncClient() as client:
+                response = await client.request(
+                    self.method,
+                    self.endpoint_url,
+                    headers=self._build_headers(),
+                    params=self._build_params(),
+                    timeout=10.0,
+                )
+
+            if response.status_code < 400:
+                self._authenticated = True
+                logger.info("REST API authentication successful")
+                return True
+
+            logger.warning(
+                f"REST API authentication failed: HTTP {response.status_code}"
+            )
+            return False
+        except Exception as e:
+            logger.error(f"REST API authentication failed: {e}")
+            return False
+
     async def test_connection(self) -> bool:
         """Test the connection to the REST API."""
         try:
