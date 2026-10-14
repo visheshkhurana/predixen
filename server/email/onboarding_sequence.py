@@ -61,16 +61,16 @@ def _step_welcome(name: Optional[str], unsubscribe_url: str) -> tuple[str, str]:
     body = f"""<p>{greeting}</p>
 <p>You joined FounderConsole to answer one question: how long your cash lasts, and what changes it.
 That answer takes about five minutes.</p>
-<p><strong>The one thing worth doing today:</strong> open the runway calculator and put in your real
-burn and balance. It reads straight back to you: your monthly net burn, your months of runway, the date
-the cash runs out and your projected cash balance. Five minutes, and you have the number the rest of
-this week is about.</p>
+<p><strong>The one thing worth doing today:</strong> open Data Input and enter your real burn and
+balance. It computes straight back: your net burn rate (monthly expenses minus revenue) and your months
+of runway (cash on hand divided by net burn). Five minutes, and you have the number the rest of this
+week is about.</p>
 <p>Everything else here builds on that runway number: the 1,000-path simulation, the ranked decision
-list, the diligence pack for your next round.</p>
+list, Due Diligence Automation and the Investor Room for your next round.</p>
 <p>Tomorrow I'll show you the single highest-leverage move most founders miss in week one.</p>"""
     return ("Your first five minutes on FounderConsole",
-            _wrap("Start with your real runway number", body, "Open the runway calculator",
-                  f"{APP_URL}/tools/runway-calculator", unsubscribe_url))
+            _wrap("Start with your real runway number", body, "Open Data Input",
+                  f"{APP_URL}/data", unsubscribe_url))
 
 
 def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
@@ -88,7 +88,7 @@ shows you how many months until you run out of cash &mdash; and which lever move
 <p>Try the three scenarios founders actually face:</p>
 <ul>
   <li>What if growth slows 30%?</li>
-  <li>What if you cut 20% of headcount?</li>
+  <li>What if you cut your burn rate 20%?</li>
   <li>What if you raise $1M today?</li>
 </ul>
 <p>Run one and read the outcome: the runway date the paths converge on, the cash timeline behind it,
@@ -126,10 +126,11 @@ def _step_fundraising(unsubscribe_url: str) -> tuple[str, str]:
 
 
 def _step_feedback(unsubscribe_url: str) -> tuple[str, str]:
-    body = """<p>You've had FounderConsole for a week. Two things &mdash; the first takes a minute.</p>
+    body = f"""<p>You've had FounderConsole for a week. Two things &mdash; the first takes a minute.</p>
 <p><strong>If you haven't put your real numbers in yet</strong>, that is the step that makes the rest
-of it work. Open the runway calculator and enter your burn and balance; it shows your months of runway
-and the date the money runs out, and everything after it reads off that number.</p>
+of it work. Open <a href="{APP_URL}/data" style="color:#10b981;">Data Input</a> and enter your burn and
+balance; it computes your net burn rate and your months of runway, and everything after it reads off
+those numbers.</p>
 <p><strong>Then tell me the truth.</strong> Three questions:</p>
 <ul>
   <li>What got you to your first "aha" moment?</li>
