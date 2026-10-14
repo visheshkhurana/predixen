@@ -144,6 +144,7 @@ const DemoPage = lazy(() => import("@/pages/demo"));
 const RunwayCalculatorPage = lazy(() => import("@/pages/runway-calculator"));
 const DefaultAlivePage = lazy(() => import("@/pages/default-alive"));
 const BurnMultiplePage = lazy(() => import("@/pages/burn-multiple"));
+const DilutionPage = lazy(() => import("@/pages/dilution"));
 const AiCfoPage = lazy(() => import("@/pages/ai-cfo"));
 
 function AuthenticatedRoute({ component: Component, allowWithoutCompany = false }: { component: React.ComponentType; allowWithoutCompany?: boolean }) {
@@ -334,6 +335,7 @@ function Router() {
         <Route path="/faq">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><FAQPage /></Suspense>}</Route>
         <Route path="/ai-cfo">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><AiCfoPage /></Suspense>}</Route>
         <Route path="/tools/runway-calculator">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayCalculatorPage /></Suspense>}</Route>
+        <Route path="/tools/dilution">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DilutionPage /></Suspense>}</Route>
         <Route path="/default-alive">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><DefaultAlivePage /></Suspense>}</Route>
         <Route path="/tools/burn-multiple">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><BurnMultiplePage /></Suspense>}</Route>
         <Route path="/runway/:slug">{() => <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}><RunwayByIndustryPage /></Suspense>}</Route>

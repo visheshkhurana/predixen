@@ -160,6 +160,30 @@ function buildBurnMultipleBodyContent(): string {
 </article>`;
 }
 
+function buildDilutionBodyContent(): string {
+  // The formula and the choices are not written from memory here: they are the published
+  // derivation in `hive/reports/quant-forge-tools-maths.md` (Tool 2, Dilution), whose
+  // arithmetic is reproduced by `server/tests/quant_forge_tools_check.py`. The page itself
+  // is `client/src/pages/dilution.tsx`; this text is what a crawler reads, and
+  // `server/tests/dilution.test.ts` pins the arithmetic.
+  return `<article>
+<h1>Dilution Calculator</h1>
+<p>Enter one funding round — pre-money valuation, amount raised, shares outstanding and the option pool target — to see what the founders, the investor and the option pool each own afterwards.</p>
+<h2>How startup dilution works</h2>
+<p>The investor's share is the amount raised divided by the post-money valuation, and post-money is pre-money plus the raise. Raise $2M at an $8M pre-money valuation and the investor owns 20% of the $10M post-money company. That part is arithmetic and every calculator agrees on it.</p>
+<h3>The option pool shuffle</h3>
+<p>Investors usually require the company to leave the round with an unissued option pool already in place, typically 10% to 15% of post-money. That pool is created before the investment is priced, so those shares are carved out of the existing holders rather than the new investor. In the worked example on the page — 8,000,000 founder shares, a 1,000,000-share pool, an $8M pre-money valuation, a $2M raise and a 12% post-money pool target — the investor still owns exactly 20%, but the founders finish at 68% rather than the 71.1% the simple formula implies. The founders lose 32 percentage points, not 20, and the extra 12 points go to the pool.</p>
+<h2>The formulas</h2>
+<p>With F founder shares, E existing pool shares, T = F + E, V the pre-money valuation, R the amount raised and p the pool target as a fraction of post-money: k = 1 + R / V; the new pool shares are dP = max(0, (p * T * k - E) / (1 - p * k)); the shares the investor buys are N = R * (T + dP) / V; and the post-money share count is T + dP + N. The investor's share, N divided by the post-money total, always equals R / (V + R), whatever the pool target is.</p>
+<h2>The choices this calculator states, and what is not a choice</h2>
+<p>Textbook, not a choice: the investor's share is the raise divided by the post-money valuation. Chosen: the pool top-up is created pre-money, so it dilutes existing holders and never the new investor, which is standard US term-sheet practice. Chosen: the pool target is a percentage of post-money and the top-up never shrinks, because a tool must not quietly cancel options a company already granted.</p>
+<h2>When the arithmetic has no answer</h2>
+<p>If the pool target times k reaches 1, no share count satisfies it and the page reports the target as unreachable rather than printing a negative number of shares. A pool already at or above target creates no new pool shares, and the page says so. A negative pre-money valuation is rejected outright, and a pre-money valuation of exactly zero is shown as the investor taking 100% with a warning, because that is what the arithmetic gives.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/tools/burn-multiple">burn multiple calculator</a>, the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/default-alive">default alive or default dead</a> test — all free, no account required. When you're ready for a live cap table and forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
+</article>`;
+}
+
 function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1054,6 +1078,31 @@ function getPageMeta(path: string): PageMeta | null {
     };
   }
 
+  if (path === "/tools/dilution") {
+    return {
+      title: "Free Dilution Calculator with the Option Pool Shuffle | FounderConsole",
+      description: "Calculate startup dilution exactly: founder, investor and option pool ownership after one round. The option pool top-up is modelled pre-money, as term sheets require. Free, no account required.",
+      canonical: SITE_URL + "/tools/dilution",
+      bodyContent: buildDilutionBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "Dilution Calculator",
+        url: SITE_URL + "/tools/dilution",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
+          { "@type": "ListItem", position: 3, name: "Dilution calculator", item: `${SITE_URL}/tools/dilution` },
+        ],
+      }],
+    };
+  }
   if (path === "/embed/survival") {
     return {
       title: "Startup Runway Widget — FounderConsole",
