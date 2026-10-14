@@ -355,18 +355,15 @@ function Router() {
         {() => <Redirect to="/auth?tab=register" />}
       </Route>
       {/* cleya.ai leftover traffic (#44 defer). No matching/referral/apply
-          product exists — send visitors to a live marketing page, not 404.
-          HAG-236: /signup has no form and no SSO, so these went to a page that
-          could not create an account. They now land on the real form, like
-          /register and /join directly above. */}
+          product exists — send visitors to a live marketing page, not 404. */}
       <Route path="/apply">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/matches">
         {() => <Redirect to="/" />}
       </Route>
       <Route path="/referral">
-        {() => <Redirect to="/auth?tab=register" />}
+        {() => <Redirect to="/signup" />}
       </Route>
       <Route path="/onboarding">
         {() => <AuthenticatedRoute component={OnboardingPage} allowWithoutCompany />}
