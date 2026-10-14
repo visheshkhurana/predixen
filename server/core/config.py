@@ -1,4 +1,5 @@
 import os
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import List, Optional
@@ -16,9 +17,52 @@ def parse_optional_bool(env_var: str) -> Optional[bool]:
         return None
     return val.lower() == "true"
 
+# Built-in JWT signing key. Production must not boot with this value: anyone
+# who knows it can mint admin tokens. Blank and whitespace count as unset.
+DEFAULT_SESSION_SECRET = "founderconsole-secret-key-change-in-production"
+
+
+def resolve_signing_secret(session_secret: Optional[str], secret_key: Optional[str]) -> str:
+    """Pick the signing key. SESSION_SECRET wins when it is a real value.
+
+    An empty SESSION_SECRET is unset, not a key. SECRET_KEY is the legacy
+    env name for the same setting. The built-in default is returned only when
+    neither source has a usable value, so production startup can refuse it.
+    """
+    session = (session_secret or "").strip()
+    explicit = (secret_key or "").strip()
+    if session and session != DEFAULT_SESSION_SECRET:
+        return session
+    if explicit and explicit != DEFAULT_SESSION_SECRET:
+        return explicit
+    return DEFAULT_SESSION_SECRET
+
+
+def session_secret_is_usable(secret: Optional[str]) -> bool:
+    if secret is None:
+        return False
+    stripped = secret.strip()
+    return bool(stripped) and stripped != DEFAULT_SESSION_SECRET
+
+
+def enforce_production_session_secret(environment: str, secret: Optional[str]) -> None:
+    """Fail startup in production when SESSION_SECRET was never set."""
+    if environment != "production":
+        return
+    if session_secret_is_usable(secret):
+        return
+    raise RuntimeError(
+        "Refusing to start in production without a SESSION_SECRET. "
+        "Set SESSION_SECRET to a strong random value; a blank value and the "
+        "built-in fallback are not accepted."
+    )
+
 class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./founderconsole.db")
-    SECRET_KEY: str = os.getenv("SESSION_SECRET", "founderconsole-secret-key-change-in-production")
+    # Populated from the environment / .env. resolve_signing_secret copies a
+    # usable SESSION_SECRET onto SECRET_KEY, which is what signs JWTs.
+    SESSION_SECRET: str = ""
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))  # 8h default (was 15m — too short, bounced active users); 7-day refresh token still behind it
     MASTER_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("MASTER_TOKEN_EXPIRE_MINUTES", "30"))  # 30 min for admin
@@ -120,6 +164,12 @@ class Settings(BaseSettings):
         # that file instructs — fails startup with extra_forbidden.
         extra = "ignore"
 
+    @model_validator(mode="after")
+    def bind_signing_secret(self) -> "Settings":
+        resolved = resolve_signing_secret(self.SESSION_SECRET, self.SECRET_KEY)
+        object.__setattr__(self, "SECRET_KEY", resolved)
+        return self
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
@@ -130,9 +180,10 @@ import logging as _cfg_logging
 _cfg_logger = _cfg_logging.getLogger("server.core.config")
 
 if settings.is_production:
+    # Hard fail before the soft warnings. A missing SESSION_SECRET must not
+    # log "server will start" and then keep booting.
+    enforce_production_session_secret(settings.ENVIRONMENT, settings.SECRET_KEY)
     _config_errors = []
-    if settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
-        _config_errors.append("SESSION_SECRET env var is not set — using default key is insecure")
     if not settings.CORS_ORIGINS:
         _config_errors.append("CORS_ORIGINS env var is not set — no cross-origin requests allowed")
     if settings.ADMIN_MASTER_EMAIL and not settings.ADMIN_MASTER_PASSWORD_HASH:
@@ -148,10 +199,3 @@ if settings.is_production:
         _cfg_logger.warning(f"PRODUCTION CONFIG: {_err}")
     if _config_errors:
         _cfg_logger.warning(f"Found {len(_config_errors)} production config issue(s) — server will start but may be insecure")
-    # Hard guardrail: never boot production with the built-in default signing key.
-    # A forged SECRET_KEY lets anyone mint admin JWTs, so refuse to start instead of warning.
-    if settings.SECRET_KEY == "founderconsole-secret-key-change-in-production":
-        raise RuntimeError(
-            "Refusing to start in production with the default SECRET_KEY/SESSION_SECRET. "
-            "Set the SECRET_KEY (or SESSION_SECRET) environment variable to a strong random value."
-        )

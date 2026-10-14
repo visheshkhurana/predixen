@@ -81,6 +81,7 @@ from server.models.lead import Lead
 from server.models.scenario_template import ScenarioTemplate
 from server.models.simulation_accuracy import SimulationAccuracy, CalibrationBias
 from server.models.agent_simulation import AgentSimulationRun
+from server.models.stripe_reconciliation import StripeReconciliationEvent
 
 __all__ = [
     "User",
@@ -179,4 +180,5 @@ __all__ = [
     "SimulationAccuracy",
     "CalibrationBias",
     "AgentSimulationRun",
+    "StripeReconciliationEvent",
 ]

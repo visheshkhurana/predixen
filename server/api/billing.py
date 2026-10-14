@@ -1,3 +1,4 @@
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
@@ -239,9 +240,225 @@ def _user_id_from_customer(db: Session, customer_id: str) -> Optional[int]:
     return row[0] if row else None
 
 
+def _parse_user_id(value) -> Optional[int]:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        user_id = int(value)
+    except (TypeError, ValueError):
+        return None
+    if user_id <= 0:
+        return None
+    return user_id
+
+
+def _metadata_user_id(meta) -> Optional[int]:
+    if not isinstance(meta, dict):
+        return None
+    return _parse_user_id(meta.get("fc_user_id"))
+
+
+def _stripe_id(value) -> Optional[str]:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        return _stripe_id(value.get("id"))
+    return None
+
+
+def _user_exists(db: Session, user_id: int) -> bool:
+    row = db.execute(
+        text("SELECT 1 FROM users WHERE id = :uid"),
+        {"uid": user_id},
+    ).fetchone()
+    return row is not None
+
+
+def _accept_user_id(db: Session, user_id: Optional[int]) -> Optional[int]:
+    if user_id is None or not _user_exists(db, user_id):
+        return None
+    return user_id
+
+
+def _user_id_from_email(db: Session, email: Optional[str]) -> Optional[int]:
+    if not isinstance(email, str) or not email.strip():
+        return None
+    row = db.execute(
+        text("SELECT id FROM users WHERE lower(email) = lower(:email) LIMIT 1"),
+        {"email": email.strip()},
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _candidate_emails(obj: dict, customer: dict) -> list:
+    found = []
+    seen = set()
+    details = obj.get("customer_details") if isinstance(obj.get("customer_details"), dict) else {}
+    for raw in (
+        (customer or {}).get("email"),
+        details.get("email"),
+        obj.get("customer_email"),
+    ):
+        if not isinstance(raw, str):
+            continue
+        email = raw.strip()
+        if not email:
+            continue
+        key = email.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(email)
+    return found
+
+
+def _retrieve_customer(customer_id: str) -> dict:
+    try:
+        import stripe as _stripe
+        customer = stripe_billing.to_plain(_stripe.Customer.retrieve(customer_id)) or {}
+    except Exception as e:
+        logger.warning(f"Stripe customer retrieve failed for {customer_id}: {e}")
+        return {}
+    return customer if isinstance(customer, dict) else {}
+
+
+def _resolve_checkout_user(db: Session, obj: dict, sub_obj: dict) -> dict:
+    """Match a verified checkout to a local user.
+
+    Order: subscription metadata, client_reference_id, checkout session
+    metadata, an existing stripe_customer_id row, then the Stripe customer's
+    metadata and email, then the email collected on the checkout session.
+    A metadata id that does not match a users row falls through so a stale
+    id cannot block the email fallback.
+    """
+    customer_id = _stripe_id(obj.get("customer")) or _stripe_id(sub_obj.get("customer"))
+    customer: dict = {}
+    context = {"user_id": None, "customer_id": customer_id, "email": None, "customer": customer}
+
+    for candidate in (
+        _metadata_user_id(sub_obj.get("metadata")),
+        _parse_user_id(obj.get("client_reference_id")),
+        _metadata_user_id(obj.get("metadata")),
+    ):
+        user_id = _accept_user_id(db, candidate)
+        if user_id:
+            context["user_id"] = user_id
+            return context
+
+    if customer_id:
+        user_id = _accept_user_id(db, _user_id_from_customer(db, customer_id))
+        if user_id:
+            context["user_id"] = user_id
+            return context
+        customer = _retrieve_customer(customer_id)
+        context["customer"] = customer
+        user_id = _accept_user_id(db, _metadata_user_id(customer.get("metadata")))
+        if user_id:
+            context["user_id"] = user_id
+            return context
+
+    emails = _candidate_emails(obj, customer)
+    if emails:
+        context["email"] = emails[0]
+    for email in emails:
+        user_id = _user_id_from_email(db, email)
+        if user_id:
+            context["user_id"] = user_id
+            context["email"] = email
+            return context
+    return context
+
+
+def _persist_unresolved_checkout(db: Session, event: dict, obj: dict, sub_obj: dict, context: dict) -> None:
+    """Store a verified checkout we could not attach, so it can be reconciled.
+
+    The table is created on first use. Stripe retries this event while we
+    return non-2xx; the stripe_event_id unique key keeps those retries to one row.
+    """
+    from server.models.stripe_reconciliation import StripeReconciliationEvent
+
+    StripeReconciliationEvent.__table__.create(bind=db.get_bind(), checkfirst=True)
+    event_id = event.get("id") or (f"checkout:{obj.get('id')}" if obj.get("id") else None)
+    if not event_id:
+        raise RuntimeError("checkout event has no id to persist")
+
+    subscription_id = _stripe_id(obj.get("subscription")) or sub_obj.get("id")
+    payload = {
+        "event_id": event.get("id"),
+        "event_type": event.get("type"),
+        "checkout_session_id": obj.get("id"),
+        "subscription_id": subscription_id,
+        "customer_id": context.get("customer_id"),
+        "customer_email": context.get("email"),
+        "client_reference_id": obj.get("client_reference_id"),
+        "session_metadata": obj.get("metadata") or {},
+        "subscription_metadata": sub_obj.get("metadata") or {},
+        "customer_metadata": (context.get("customer") or {}).get("metadata") or {},
+    }
+    now = datetime.utcnow()
+    params = {
+        "eid": str(event_id),
+        "etype": event.get("type") or "checkout.session.completed",
+        "oid": obj.get("id"),
+        "cid": context.get("customer_id"),
+        "email": context.get("email"),
+        "payload": json.dumps(payload, default=str),
+        "reason": "unresolved_user",
+        "now": now,
+    }
+    db.execute(
+        text("""
+            INSERT INTO stripe_reconciliation_events
+                (stripe_event_id, event_type, stripe_object_id, customer_id, customer_email,
+                 payload_json, reason, status, created_at, updated_at)
+            VALUES
+                (:eid, :etype, :oid, :cid, :email, :payload, :reason, 'open', :now, :now)
+            ON CONFLICT (stripe_event_id) DO UPDATE SET
+                event_type = excluded.event_type,
+                stripe_object_id = excluded.stripe_object_id,
+                customer_id = excluded.customer_id,
+                customer_email = excluded.customer_email,
+                payload_json = excluded.payload_json,
+                reason = excluded.reason,
+                status = 'open',
+                updated_at = excluded.updated_at
+        """),
+        params,
+    )
+    db.commit()
+
+
+def _mark_checkout_reconciled(db: Session, event_id: Optional[str]) -> None:
+    """Close an open reconciliation row once a retry finally resolves the user."""
+    if not event_id:
+        return
+    try:
+        db.execute(
+            text("""
+                UPDATE stripe_reconciliation_events
+                SET status = 'resolved', updated_at = :now
+                WHERE stripe_event_id = :eid
+            """),
+            {"eid": str(event_id), "now": datetime.utcnow()},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
-    """Stripe webhook endpoint. CSRF-exempt; authenticated by signature."""
+    """Stripe webhook endpoint. CSRF-exempt; authenticated by signature.
+
+    checkout.session.completed is matched to a user via subscription metadata
+    (fc_user_id), client_reference_id, checkout session metadata, a stored
+    stripe customer id, the Stripe customer's metadata, then the customer or
+    session email. If none of those resolve to a local user, the event is
+    stored in stripe_reconciliation_events and this handler returns 500.
+
+    Stripe retries any non-2xx response. Returning {"received": true} would
+    acknowledge the paid checkout and the subscription would never be written.
+    """
     if not stripe_billing.stripe_enabled():
         raise HTTPException(status_code=503, detail="Payments not configured")
 
@@ -257,16 +474,15 @@ async def stripe_webhook(request: Request):
     # StripeObject (SDK v15+) is not a dict — normalize to plain dicts up front.
     obj = stripe_billing.to_plain(event["data"]["object"])
     db = SessionLocal()
+    unresolved_checkout = False
     try:
         if etype == "checkout.session.completed" and obj.get("mode") == "subscription":
             import stripe as _stripe
             sub_obj = stripe_billing.to_plain(_stripe.Subscription.retrieve(obj["subscription"]))
-            user_id = _user_id_from_subscription(sub_obj)
-            if user_id is None and obj.get("client_reference_id"):
-                try:
-                    user_id = int(obj["client_reference_id"])
-                except (TypeError, ValueError):
-                    user_id = None
+            if not isinstance(sub_obj, dict):
+                sub_obj = {}
+            resolved = _resolve_checkout_user(db, obj, sub_obj)
+            user_id = resolved.get("user_id")
             plan = (sub_obj.get("metadata") or {}).get("fc_plan")
             if not plan:
                 items = (sub_obj.get("items") or {}).get("data") or []
@@ -274,8 +490,21 @@ async def stripe_webhook(request: Request):
                     plan = stripe_billing.plan_from_price(items[0].get("price") or {})
             if user_id:
                 _upsert_subscription_from_stripe(db, user_id, sub_obj, plan)
+                _mark_checkout_reconciled(db, event.get("id"))
             else:
-                logger.error(f"Webhook: could not resolve user for checkout session {obj.get('id')}")
+                try:
+                    _persist_unresolved_checkout(db, event, obj, sub_obj, resolved)
+                except Exception:
+                    logger.exception(
+                        f"Webhook: failed to persist unresolved checkout session {obj.get('id')}"
+                    )
+                logger.error(
+                    "Webhook: checkout.session.completed "
+                    f"{obj.get('id')} (event {event.get('id')}) could not be matched to a user "
+                    f"(customer={resolved.get('customer_id')} email={resolved.get('email')}). "
+                    "Persisted for reconciliation; returning 500 so Stripe retries."
+                )
+                unresolved_checkout = True
 
         elif etype in ("customer.subscription.updated", "customer.subscription.deleted"):
             user_id = _user_id_from_subscription(obj) or _user_id_from_customer(db, obj.get("customer"))
@@ -303,6 +532,14 @@ async def stripe_webhook(request: Request):
                 logger.warning(f"Billing: payment failed for user {user_id} — marked past_due")
     finally:
         db.close()
+
+    if unresolved_checkout:
+        # Non-2xx on purpose. Stripe will not retry a 2xx, and the subscription
+        # row is still missing until a later delivery can be matched.
+        raise HTTPException(
+            status_code=500,
+            detail="Checkout could not be matched to a user and was saved for reconciliation. Stripe should retry.",
+        )
 
     return {"received": True}
 
