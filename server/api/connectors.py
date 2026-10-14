@@ -11,8 +11,8 @@ Provides endpoints for:
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime, date
 import logging
 import json
 
@@ -607,6 +607,73 @@ async def get_sync_history(
     }
 
 
+def _as_period_date(value: Any, field: str) -> date:
+    """
+    Normalise one end of a connector's declared reporting period to a `date`.
+
+    Connectors hold these as `datetime`, as `date`, or as JSON strings depending on
+    what their API handed back, so all of those are legitimate; anything else is a
+    connector bug and is refused rather than guessed at.
+    """
+    if isinstance(value, datetime):  # before `date`: datetime is a subclass of it
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).date()
+        except ValueError:
+            pass
+    raise ValueError(
+        f"Connector declared an unreadable {field}: {value!r}. "
+        f"Expected a date, a datetime, or an ISO-8601 string."
+    )
+
+
+def _declared_period(financials: Dict[str, Any]) -> Optional[Tuple[date, date]]:
+    """
+    The reporting period the connector says its own figures cover, or None.
+
+    `map_to_financials` returns a dict "compatible with FinancialRecord model" and
+    `_build_financial_record` copies named fields out of it, so a connector that knows
+    its window states it there, as `period_start` / `period_end`. This is the only way
+    the shared builder can know: the window is a property of how each connector fetched
+    its data, and the builder is handed figures, not the fetch.
+
+    Declaring it matters because `period_start` is not decoration. `truth_scan` buckets
+    its facts by `period_start.strftime("%Y-%m")` (truth_scan.py:308), so the date is
+    what makes a number monthly. A connector whose figures cover the last complete
+    calendar month, dated to a month still in progress, hands one month's movement to
+    the wrong bucket -- and a partial month's burn reads as a full month's.
+
+    Half a period, an unreadable end, or an inverted one is refused: a period that
+    cannot describe its own data is worse than no declaration, because it looks
+    authoritative downstream. The route turns a ValueError into a 400 and rolls back.
+    """
+    raw_start = financials.get("period_start")
+    raw_end = financials.get("period_end")
+
+    if raw_start is None and raw_end is None:
+        return None
+
+    if raw_start is None or raw_end is None:
+        raise ValueError(
+            "Connector declared half a reporting period: period_start and "
+            "period_end must be given together, or neither."
+        )
+
+    start = _as_period_date(raw_start, "period_start")
+    end = _as_period_date(raw_end, "period_end")
+
+    if end < start:
+        raise ValueError(
+            f"Connector declared an inverted reporting period: period_end {end} "
+            f"is before period_start {start}."
+        )
+
+    return start, end
+
+
 def _build_financial_record(company_id: int, provider_id: str, provider_name: str, financials: Dict[str, Any], today) -> FinancialRecord:
     revenue = financials.get("revenue")
     cogs = financials.get("cogs")
@@ -641,10 +708,23 @@ def _build_financial_record(company_id: int, provider_id: str, provider_name: st
     if mrr is not None and arr is None:
         arr = mrr * 12
 
+    # The period the connector says its figures cover wins. Falling back to the
+    # current calendar month is a claim nothing supports -- most connectors fetch a
+    # window of their own choosing (QuickBooks and Mercury default to 90 days,
+    # Stripe's breakdown is 12 months) -- but it is the historical default, and a
+    # connector that has not been taught to declare its window must not change
+    # behaviour here. See `_declared_period` for why the date is load-bearing.
+    declared_period = _declared_period(financials)
+    if declared_period is None:
+        period_start = today.replace(day=1)
+        period_end = today
+    else:
+        period_start, period_end = declared_period
+
     record = FinancialRecord(
         company_id=company_id,
-        period_start=today.replace(day=1),
-        period_end=today,
+        period_start=period_start,
+        period_end=period_end,
         source_type=f"connector_{provider_id}",
         extraction_summary=financials.get("extraction_summary", f"Synced from {provider_name}"),
         revenue=revenue,
