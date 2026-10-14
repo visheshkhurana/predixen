@@ -25,7 +25,14 @@ interface PageMeta {
   robots?: string;
   jsonLd?: object[];
   bodyContent?: string;
-  /** HTTP status the HTML response should carry. Omitted means 200. */
+  /**
+   * HTTP status the HTML response should carry. Omitted means 200.
+   *
+   * HAG-162 carried a separate boolean marker here. Main landed the same idea
+   * as this field, so the marker was dropped on rebase rather than kept as a
+   * second way to say the same thing: one field decides the status, and
+   * `pageHttpStatus` reads only this one.
+   */
   statusCode?: number;
 }
 
@@ -1543,12 +1550,64 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const NOT_FOUND_BODY = `
+<h1>Page not found</h1>
+<p>There is nothing at this address. It may have been renamed, or the link may
+have a typo in it.</p>
+<p>Try one of these instead:</p>
+<ul>
+  <li><a href="/">FounderConsole home</a></li>
+  <li><a href="/tools/runway-calculator">Free startup runway calculator</a></li>
+  <li><a href="/simulate">Simulate your scenarios</a></li>
+  <li><a href="/pricing">Pricing</a></li>
+  <li><a href="/blog">Blog</a></li>
+</ul>
+`;
+
+/**
+ * HAG-162. The shell for a path the client router does not know.
+ *
+ * `injectSEO` cannot be used here: with no `getPageMeta` entry it returns the
+ * shell byte-for-byte, which is the homepage -- homepage title, homepage
+ * canonical, `index, follow` -- so the 404 body would still have told Google it
+ * was the homepage. This builds the meta explicitly instead.
+ *
+ * The canonical is the requested URL itself, not the homepage. A self-canonical
+ * on a 404 is inert next to `noindex`, whereas a homepage canonical would be
+ * the duplicate-homepage signal this card exists to remove.
+ */
+export function injectNotFoundShell(html: string, pathname: string): string {
+  const safe = safePathname(pathname);
+  return renderMeta(html, {
+    title: "Page not found | FounderConsole",
+    description: `No page exists at ${safe}. Browse the free runway calculator, the simulator, pricing, or the blog.`,
+    canonical: SITE_URL + (safe || "/"),
+    robots: "noindex, follow",
+    bodyContent: NOT_FOUND_BODY,
+    statusCode: 404,
+  });
+}
+
+// The pathname reaches this function from the request line, so it is the only
+// attacker-controlled value in the meta. `renderMeta` escapes the description
+// but writes the canonical straight into an href, so the path is restricted to
+// the characters a URL path may contain and capped, which also stops a hostile
+// URL from being mirrored into a link tag at arbitrary length.
+const SAFE_PATH_CHARS = /[^A-Za-z0-9\-._~/%!$&'()*+,;=:@]/g;
+
+function safePathname(pathname: string): string {
+  return pathname.replace(SAFE_PATH_CHARS, "").slice(0, 200);
+}
+
 export function injectSEO(html: string, path: string): string {
   const meta = getPageMeta(path);
   if (!meta) {
     return html;
   }
+  return renderMeta(html, meta);
+}
 
+function renderMeta(html: string, meta: PageMeta): string {
   const ogType = meta.ogType || "website";
   const robots = meta.robots || "index, follow";
   const safeTitle = escapeHtml(meta.title);
