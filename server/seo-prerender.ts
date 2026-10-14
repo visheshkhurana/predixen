@@ -394,7 +394,7 @@ function buildSecurityBodyContent(): string {
 <h2>No data resale</h2>
 <p>We never sell your data to third parties. No data resale. Ever. The full legal text is on our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>.</p>
 <h2>Questions</h2>
-<p><a href="/contact">Contact us</a> if you have a privacy or security question. When you are ready to connect live data, <a href="/signup">get started free</a>.</p>
+<p><a href="/contact">Contact us</a> if you have a privacy or security question. When you are ready to connect live data, <a href="/auth?tab=register">get started free</a>.</p>
 </article>`;
 }
 
