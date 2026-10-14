@@ -58,7 +58,19 @@ class RestAPIConnector(BaseConnector):
         the configured auth header and query param.
 
         Returns False rather than raising, matching the other connectors.
+
+        The credential is checked *before* the request, as
+        `google_sheets.authenticate` does. Without it, `_build_headers` and
+        `_build_params` both skip the key (they guard with `if api_key and ...`),
+        so a credential-less instance sent a request with no authentication at
+        all -- and against a public endpoint that answered 200, it reported a
+        successful authentication it had never performed.
         """
+        if not self.config.credentials.get("api_key"):
+            # `REQUIRED_CREDENTIALS = ["api_key"]` means this is not optional.
+            logger.warning("REST API api_key not provided")
+            return False
+
         if not self.endpoint_url:
             logger.warning("REST API endpoint_url not provided")
             return False
@@ -75,7 +87,13 @@ class RestAPIConnector(BaseConnector):
                     timeout=10.0,
                 )
 
-            if response.status_code < 400:
+            # 2xx, not `< 400`: a 3xx is also a refusal. `httpx` is pinned at
+            # `>=0.28.1` and `AsyncClient()` defaults to `follow_redirects=False`,
+            # so `302 -> /login` -- how a protected API turns away an
+            # unauthenticated call -- arrives as the response, and `< 400`
+            # accepted it. Following the redirect would not help: the login page
+            # answers 200, which is not this connector's data either.
+            if 200 <= response.status_code < 300:
                 self._authenticated = True
                 logger.info("REST API authentication successful")
                 return True
