@@ -65,8 +65,8 @@ That answer takes about five minutes.</p>
 balance. It computes straight back: your net burn rate (monthly expenses minus revenue) and your months
 of runway (cash on hand divided by net burn). Five minutes, and you have the number the rest of this
 week is about.</p>
-<p>Everything else here builds on that runway number: the 1,000-path simulation, the ranked decision
-list, Due Diligence Automation and the Investor Room for your next round.</p>
+<p>Everything else here builds on that runway number: the Scenario Simulator, Decision
+Intelligence, Due Diligence Automation and the Investor Room for your next round.</p>
 <p>Tomorrow I'll show you the single highest-leverage move most founders miss in week one.</p>"""
     return ("Your first five minutes on FounderConsole",
             _wrap("Start with your real runway number", body, "Open Data Input",
@@ -83,18 +83,18 @@ def _step_truth_scan(unsubscribe_url: str) -> tuple[str, str]:
 
 def _step_simulator(unsubscribe_url: str) -> tuple[str, str]:
     body = """<p>You've seen your runway number. The useful question is what changes it.</p>
-<p>The Simulation Engine runs 1,000 Monte Carlo paths across your burn, growth and gross margin, and
-shows you how many months until you run out of cash &mdash; and which lever moves that date the most.</p>
+<p>The Scenario Simulator works through your burn, growth and gross margin round by round, and shows
+you how many months until you run out of cash &mdash; and which lever moves it the most.</p>
 <p>Try the three scenarios founders actually face:</p>
 <ul>
   <li>What if growth slows 30%?</li>
   <li>What if you cut your burn rate 20%?</li>
   <li>What if you raise $1M today?</li>
 </ul>
-<p>Run one and read the outcome: the runway date the paths converge on, the cash timeline behind it,
-and in the What-If Explorer the one variable that moves that date most. A couple of minutes, and you can
-re-run it every time an input changes.</p>"""
-    return ("What would change your runway date?",
+<p>Run one and read the outcome: how many months of runway you have left, the cash timeline behind
+it, and in the What-If Explorer the variable that moves your runway the most. A couple of minutes, and
+you can re-run it every time an input changes.</p>"""
+    return ("What moves your runway the most?",
             _wrap("Stress-test the scenarios that scare you", body, "Open Simulation Console",
                   f"{APP_URL}/simulate", unsubscribe_url))
 
