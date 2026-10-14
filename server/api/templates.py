@@ -24,6 +24,11 @@ router = APIRouter(
 )
 
 
+# Both paths are registered so /templates does not 307 to /templates/.
+# redirect_slashes builds that Location from the request host. Behind the
+# Express proxy the host is the internal bind and /api has already been
+# stripped, which leaked https://localhost:8001/templates/.
+@router.get("", include_in_schema=False)
 @router.get("/")
 def list_templates():
     """
