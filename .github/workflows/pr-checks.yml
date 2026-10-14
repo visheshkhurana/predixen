@@ -163,6 +163,14 @@ jobs:
           python-version: "3.11"
           enable-cache: true
 
+      # `uv sync --frozen` installs exactly what uv.lock says, which is the point -
+      # but it also means a lockfile that has drifted from pyproject.toml is
+      # invisible: CI would keep testing the old dependency set while the file
+      # that declares the requirements says something else. --frozen refuses to
+      # *update* the lock, it does not check that the lock is current.
+      - name: Lockfile matches pyproject.toml
+        run: uv lock --check
+
       - name: Install Python dependencies
         run: uv sync --frozen --no-dev --no-install-project
 
