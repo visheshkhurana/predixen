@@ -185,7 +185,7 @@ def verify_unsubscribe_token(token: str) -> Optional[int]:
     except Exception:
         return None
     user_part, sep, sig = raw.partition(".")
-    if not sep or not user_part.isdigit() or not sig:
+    if not sep or not (user_part.isascii() and user_part.isdigit()) or not sig:
         return None
     user_id = int(user_part)
     if user_id <= 0:
