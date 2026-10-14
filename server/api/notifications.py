@@ -2,12 +2,13 @@
 API endpoints for notification management.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import base64
+import json
 from server.services.notifications import (
     send_feature_notification, 
     send_publish_notification,
@@ -20,12 +21,14 @@ from server.api.admin import require_platform_admin
 from server.core.db import get_db
 from server.core.security import get_current_user
 from server.models.email_event import EmailEvent
+from server.services.resend_webhook import require_valid_signature
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 # Everything here sends mail or exposes recipients/subjects, so it is platform-admin
-# only. The exceptions are /resend-webhook and /track/{id}, which Resend and mail
-# clients call without a session, and /changelog, which any signed-in user may read.
+# only. The exceptions are /resend-webhook (Resend, authenticated by Svix signature
+# rather than a session) and /track/{id} (mail clients), and /changelog, which any
+# signed-in user may read.
 ADMIN_ONLY = [Depends(require_platform_admin)]
 
 TRANSPARENT_GIF = base64.b64decode(
@@ -196,12 +199,26 @@ def classify_email_event(event: Dict[str, Any], db: Session) -> None:
 
 
 @router.post("/resend-webhook")
-async def handle_resend_webhook(event: Dict[str, Any], db: Session = Depends(get_db)) -> Dict[str, str]:
+async def handle_resend_webhook(request: Request, db: Session = Depends(get_db)) -> Dict[str, str]:
     """
     Receive Resend webhook events and classify email opens.
     Configure this endpoint in Resend dashboard:
     - Subscribe to: email.delivered, email.opened, email.clicked
+
+    There is no session. The Svix signature is checked before the body is
+    parsed and before any write. A missing RESEND_WEBHOOK_SECRET fails closed
+    (503) in production; a missing or bad signature is 401.
     """
+    body = await request.body()
+    require_valid_signature(request.headers, body)
+
+    try:
+        event = json.loads(body or b"{}")
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
     try:
         classify_email_event(event, db)
         return {"status": "ok"}

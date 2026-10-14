@@ -141,9 +141,19 @@ def test_admin_can_read_email_stats():
     assert resp.json()["total_emails"] == 0
 
 
-def test_webhook_and_tracking_pixel_stay_public():
+def test_webhook_and_tracking_pixel_stay_public(monkeypatch):
+    monkeypatch.delenv("RESEND_WEBHOOK_SECRET", raising=False)
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
     client = _client(notifications_api.router, db=db)
     assert client.get("/api/notifications/track/abc").status_code == 200
-    assert client.post("/api/notifications/resend-webhook", json={"type": "email.delivered", "data": {}}).status_code == 200
+    # No user session is required, but an unsigned body is not accepted.
+    # With no signing secret the receiver fails closed (503) and writes nothing.
+    # Signature cases live in test_resend_webhook_signature.py.
+    resp = client.post(
+        "/api/notifications/resend-webhook",
+        json={"type": "email.delivered", "data": {}},
+    )
+    assert resp.status_code == 503
+    db.add.assert_not_called()
+    db.commit.assert_not_called()
