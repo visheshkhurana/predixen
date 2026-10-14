@@ -231,6 +231,13 @@ class BaseConnector(ABC):
         
         Returns a dict compatible with FinancialRecord model:
         - revenue, cogs, opex, payroll, cash_balance, etc.
+
+        A connector that knows the window its figures cover should also declare it as
+        `period_start` and `period_end` (both, in any of date/datetime/ISO-string form).
+        The shared builder uses that as the record's period; without it the record is
+        dated to the current calendar month, which may not be the window the figures
+        came from. `truth_scan` files facts by `period_start`, so that date decides
+        which month the numbers are read as. See `api/connectors._declared_period`.
         """
         result = {
             "source_type": f"connector_{self.PROVIDER_ID}",
