@@ -98,6 +98,7 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
   { path: "/default-alive", lastmod: "2026-08-08", changefreq: "monthly", priority: "0.9" },
   { path: "/faq", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
   { path: "/tools/runway-calculator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.8" },
+  { path: "/tools/burn-multiple", lastmod: "2026-10-15", changefreq: "monthly", priority: "0.8" },
   { path: "/contact", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.5" },
   { path: "/demo", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },
   { path: "/survival-simulator", lastmod: "2026-03-17", changefreq: "monthly", priority: "0.6" },

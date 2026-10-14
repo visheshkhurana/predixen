@@ -236,4 +236,10 @@
   <url><loc>https://founderconsole.ai/runway/hardware</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://founderconsole.ai/runway/biotech</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://founderconsole.ai/runway/devtools</loc><lastmod>2026-05-13</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url>
+    <loc>https://founderconsole.ai/tools/burn-multiple</loc>
+    <lastmod>2026-10-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
