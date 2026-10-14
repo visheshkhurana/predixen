@@ -23,6 +23,11 @@ the three things that make this one measurable and honest:
      as `calculator_used` in runway-calculator.tsx, and HAG-245 forbids touching
      that file while #88 is open — so this pins both lines and proves they are
      still exactly as they were.
+
+The claims assertion reads the whole visible line through `visible_text()`, not
+between tag boundaries: the JSX joining the prompt to its link is `{" "}`, which
+a `>`/`<` pattern cannot span, so the original extractor never saw the lead
+sentence. HAG-299 instance 3.
 """
 
 import re
@@ -36,6 +41,56 @@ MARKETING_LAYOUT = REPO_ROOT / "client/src/components/marketing/MarketingLayout.
 PRERENDER = REPO_ROOT / "server/seo-prerender.ts"
 
 CALC_PATH = "/tools/runway-calculator"
+
+
+def visible_text(jsx: str) -> str:
+    """The words a reader sees in a JSX block.
+
+    `re.findall(r">([^<>{}]+)<", block)` was this file's original extractor and
+    it was blind: the JSX between "Just want your runway?" and the link text is
+    `{" "}`, and a pattern that excludes `{` and `}` cannot span it, so no match
+    could start at the opening tag and the leading sentence was never scanned
+    while the assertion read as though it covered the whole line. HAG-299
+    instance 3.
+
+    This walks the block instead of pattern-matching across it. Brace depth, so
+    the `>` in `onClick={() => ...}` does not end the tag early; comments
+    dropped; `{" "}` kept as the space it renders as; every other expression
+    dropped, because an expression is not visible copy.
+    """
+    jsx = re.sub(r"\{/\*.*?\*/\}", " ", jsx, flags=re.S)
+    space_only = re.compile(r'\{\s*"(\s*)"\s*\}')
+    out: list[str] = []
+    i, depth, in_tag = 0, 0, False
+    while i < len(jsx):
+        ch = jsx[i]
+        if ch == "<" and depth == 0:
+            in_tag = True
+        elif ch == ">" and in_tag and depth == 0:
+            in_tag = False
+        elif ch == "{":
+            if depth == 0:
+                m = space_only.match(jsx, i)
+                if m:
+                    out.append(m.group(1))
+                    i = m.end()
+                    continue
+            depth += 1
+        elif ch == "}":
+            depth = max(0, depth - 1)
+        elif not in_tag and depth == 0:
+            out.append(ch)
+        i += 1
+    return re.sub(r"\s+", " ", "".join(out)).strip()
+
+
+def prompt_block() -> str:
+    """The one line this file exists to police: the hero's calculator prompt,
+    from just past its opening tag to just before its closing one."""
+    hero = hero_slice()
+    block = hero[hero.index('data-testid="text-hero-calculator-prompt"') :]
+    block = block[block.index(">") + 1 : block.index("</motion.p>")]
+    return block
 
 
 def read(path: Path) -> str:
@@ -119,17 +174,35 @@ def test_the_new_line_claims_only_what_outreach_already_claims():
     # OUTREACH.md's approved claim, and the only one: public beta, free, the
     # calculator needs no login. No number, no price, no discount, no promise
     # this page cannot keep.
-    hero = hero_slice()
-    block = hero[hero.index('data-testid="text-hero-calculator-prompt"') :]
-    block = block[: block.index("</motion.p>")]
-    # The visible words only: text nodes between tags. The surrounding JSX
-    # carries `underline-offset-4`, so scanning the raw block for digits would
-    # fail on a Tailwind class rather than on a claim.
-    text = " ".join(re.findall(r">([^<>{}]+)<", block))
+    text = visible_text(prompt_block())
+    # Pin the extractor itself, not just its output. The original one-line
+    # findall returned the link text and silently omitted this sentence, so the
+    # checks below ran on half the line. If the pass ever goes blind again,
+    # this fails first and says so. HAG-299 instance 3.
+    assert "Just want your runway?" in text, f"the text pass cannot see the lead sentence: {text!r}"
     assert "needs no login" in text
     for banned in ("$", "%", "trial", "discount", "guarantee", "30-day", "free beta"):
         assert banned not in text, f"the new line makes an unapproved claim: {banned}"
     assert not any(ch.isdigit() for ch in text), f"the new line quotes a number: {text!r}"
+
+
+def test_the_text_pass_reads_across_a_jsx_space_expression():
+    # The extractor's own guard, on a block shaped like the one it has to read:
+    # text, `{" "}`, a tag carrying an arrow-function prop, more text. Without
+    # this, the pass could go blind to a sentence again and every assertion
+    # built on it would keep passing on less text. Same shape as #86's
+    # `assert.ok(routes.length > 100)`: the guard must fail if it goes vacuous.
+    sample = """
+      Just want your runway?{" "}
+      <Link href="/x" onClick={() => trackFunnel("a", { b: "c" })}>
+        The free runway calculator needs no login
+      </Link>
+    """
+    text = visible_text(sample)
+    assert "Just want your runway?" in text, text
+    assert "needs no login" in text, text
+    assert "trackFunnel" not in text, "an expression leaked into visible copy"
+    assert "href" not in text, "an attribute leaked into visible copy"
 
 
 def test_the_crawler_path_is_untouched():
