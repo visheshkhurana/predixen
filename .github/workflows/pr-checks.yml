@@ -1,8 +1,9 @@
 # Release Manager check suite + pytest, against the checkout — never production.
 #
-# Runs on every PR to main (and on demand). The earlier dispatch-only hold was
-# about paid Actions minutes; predixen is a PUBLIC repo, and GitHub-hosted
-# runners are free for public repos, so gating every PR costs nothing.
+# Runs on every pull request regardless of base branch, on every push to main,
+# and on demand. The earlier dispatch-only hold was about paid Actions minutes;
+# predixen is a PUBLIC repo, and GitHub-hosted runners are free for public
+# repos, so gating every PR costs nothing.
 # `pull_request` (not `pull_request_target`) gets no secrets on fork PRs.
 #
 # Out of scope (they hit live founderconsole.ai / Railway):
@@ -13,8 +14,20 @@
 name: pr-checks
 
 on:
-  pull_request:
+  # A push to main is what deploys production - Railway builds from main on every
+  # push - so main's own head is the one commit that must be checked. Without
+  # this, the commit that ships is the only commit nothing checks: a green check
+  # attaches to a PR's head, not to the merge commit that lands. Measured before
+  # this change at main 57fece84: /commits/57fece84/check-runs -> total_count 0.
+  push:
     branches: [main]
+  # No `branches:` filter here, deliberately. Under `pull_request`, `branches`
+  # filters on the BASE branch, so `branches: [main]` silently skipped every
+  # stacked PR: GitHub scheduled no workflow and reported mergeable_state
+  # "clean", which means "no conflict", never "tested". Measured on PR #60's
+  # stacked head 7adfb9e6 while the PR read clean:
+  # /commits/7adfb9e6/check-runs -> total_count 0.
+  pull_request:
   workflow_dispatch: {}
 
 permissions:
