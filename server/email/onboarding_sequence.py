@@ -95,7 +95,7 @@ you how many months until you run out of cash &mdash; and which lever moves it t
 it, and in the What-If Explorer the variable that moves your runway the most. A couple of minutes, and
 you can re-run it every time an input changes.</p>"""
     return ("What moves your runway the most?",
-            _wrap("Stress-test the scenarios that scare you", body, "Open Simulation Console",
+            _wrap("Stress-test the scenarios that scare you", body, "Open Scenario Simulator",
                   f"{APP_URL}/simulate", unsubscribe_url))
 
 
