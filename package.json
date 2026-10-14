@@ -9,7 +9,9 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "launch:gate": "bash scripts/launch_gate.sh"
+    "launch:gate": "bash scripts/launch_gate.sh",
+    "generate:sitemap": "tsx scripts/generate-sitemap.ts",
+    "test:sitemap": "tsx server/tests/sitemap-drift.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

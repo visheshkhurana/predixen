@@ -127,6 +127,11 @@ jobs:
       - name: signup CTAs open the register tab
         run: npx tsx server/tests/signup-cta-register-tab.test.ts
 
+      - name: sitemap.xml is generated, not hand-edited
+        run: |
+          npm run generate:sitemap
+          git diff --exit-code -- client/public/sitemap.xml
+
       - name: Production build
         run: npm run build
         env:
@@ -140,6 +145,9 @@ jobs:
 
       - name: prerender coverage
         run: npx tsx server/tests/prerender-coverage.test.ts
+
+      - name: sitemap drift test
+        run: npx tsx server/tests/sitemap-drift.test.ts
 
   python:
     name: pytest
