@@ -136,6 +136,30 @@ ${founderFaqs
 </article>`;
 }
 
+function buildBurnMultipleBodyContent(): string {
+  // The formula and the benchmark bands are not written from memory here: they are the
+  // published formulas and sourced figures from `hive/reports/quant-forge-tools-maths.md`
+  // (Tool 1) and its source table `hive/reports/quant-benchmarks.md` (Table 1, burn
+  // multiple). The page itself is `client/src/pages/burn-multiple.tsx`; this text is what a
+  // crawler reads, and `server/tests/burn-multiple.test.ts` pins the arithmetic.
+  return `<article>
+<h1>Burn Multiple Calculator</h1>
+<p>Enter four ARR movements and two cash figures to get your burn multiple — how many dollars of net burn bought each dollar of net new ARR.</p>
+<h2>What the burn multiple measures</h2>
+<p>The burn multiple divides the cash a company consumed in a period by the recurring revenue it added in that same period. A burn multiple of 2.0 means the company spent two dollars of net burn for every one dollar of net new annual recurring revenue. Lower is better: it is a capital-efficiency ratio, not a growth rate.</p>
+<h3>The formulas</h3>
+<p>Net new ARR is new ARR plus expansion ARR, minus churned ARR, minus contraction ARR. Net burn is cash out minus cash in. The burn multiple is net burn divided by net new ARR. The result is not annualised and not averaged across the window: the ratio uses the whole period's net burn and whole period's net new ARR, and dividing both by the same number of months leaves the ratio unchanged.</p>
+<h3>The three reviewable choices on this page</h3>
+<p>First, this calculator uses net burn — cash out minus cash in — rather than gross burn, so revenue collected in the window offsets spend. Second, the default window is the trailing three complete months; monthly figures are noisy and a single month is not a trend. Third, if you supply your starting and ending ARR, the page checks that starting ARR plus net new ARR equals ending ARR, because a burn multiple computed from two different definitions of ARR is not a real number.</p>
+<h2>Where the numbers stop making sense</h2>
+<p>Burn multiple is undefined when a period added no net new ARR, and it is not a score at all when ARR is shrinking or when the period was cash-flow positive. The page reports those cases as "n/a" with the reason rather than printing an infinity, a negative ratio, or a misleading zero.</p>
+<h2>Burn multiple benchmarks</h2>
+<p>Two published sources inform the bands on this page. Scale VP's 2025 Whisper Numbers put the 2024 median burn multiple at 2.3x, down from 3.3x in 2023, with a 2025 outlook near 1.0x (<a href="https://www.scalevp.com/blog/2025-whisper-numbers-the-era-of-efficiency-is-here">scalevp.com</a>). Benchmarkit's 2025 B2B SaaS Performance Metrics reports figures below 1.0 at $25M to $50M ARR (<a href="https://www.benchmarkit.ai/2025benchmarks">benchmarkit.ai</a>). Neither source publishes a sample size, so both are directional rather than precise, and the page says so.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/default-alive">default alive or default dead</a> test — both free, no account required. When you're ready for live data and ongoing forecasts, <a href="/auth">sign up for FounderConsole</a>.</p>
+</article>`;
+}
+
 function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1000,6 +1024,32 @@ function getPageMeta(path: string): PageMeta | null {
           name: f.question,
           acceptedAnswer: { "@type": "Answer", text: f.answer },
         })),
+      }],
+    };
+  }
+
+  if (path === "/tools/burn-multiple") {
+    return {
+      title: "Free Burn Multiple Calculator | FounderConsole",
+      description: "Calculate your burn multiple in seconds: net new ARR against net burn, with the 2024 and 2025 SaaS benchmark bands. Free, no account required.",
+      canonical: SITE_URL + "/tools/burn-multiple",
+      bodyContent: buildBurnMultipleBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "Burn Multiple Calculator",
+        url: SITE_URL + "/tools/burn-multiple",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
+          { "@type": "ListItem", position: 3, name: "Burn multiple calculator", item: `${SITE_URL}/tools/burn-multiple` },
+        ],
       }],
     };
   }
