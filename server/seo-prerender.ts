@@ -184,6 +184,32 @@ function buildDilutionBodyContent(): string {
 </article>`;
 }
 
+function buildLtvCacBodyContent(): string {
+  // Formula, thresholds and the churn trap are not written from memory here: they are the
+  // published derivation in `hive/reports/quant-forge-tools-maths.md` (Tool 3, LTV:CAC) and
+  // the benchmarks in `hive/reports/quant-benchmarks.md` (Table 5), whose arithmetic is
+  // reproduced by `server/tests/quant_forge_tools_check.py`. The page itself is
+  // `client/src/pages/ltv-cac.tsx`; `server/tests/ltv-cac.test.ts` pins the arithmetic.
+  return `<article>
+<h1>LTV:CAC Calculator</h1>
+<p>Enter revenue per customer, gross margin, monthly churn, fully loaded sales and marketing spend, and the customers won in the same period, to see LTV, CAC, the LTV:CAC ratio and the months it takes to recover CAC.</p>
+<h2>How to read your LTV:CAC</h2>
+<p>LTV is what one customer is worth over their life, CAC is what you paid to win them, and the ratio is one divided by the other. The benchmark most often quoted is David Skok's: above 3x, sometimes as high as 7 or 8. In the worked example on the page — $500 a month per customer, an 80% gross margin, 2% monthly churn, $120,000 of fully loaded sales and marketing, and 24 customers won — LTV is $20,000, CAC is $5,000, and the ratio is 4.00x, which clears the benchmark.</p>
+<h3>Why the ratio alone is not enough</h3>
+<p>That same example takes 12.5 months to recover CAC. Skok calls the best businesses 5 to 7 months and profitability anemic once payback passes 12 months, so this company has a good ratio and a weak payback at the same time. That is not a contradiction, it is the cash-flow trap: the ratio is a lifetime figure while the payback is what the bank account feels, and a company can grow profitably on paper and still run out of cash. This calculator grades the two numbers separately for that reason.</p>
+<h2>The mistake that understates LTV</h2>
+<p>Monthly churn is not twelve times monthly. A 2% monthly churn compounds to 21.53% a year, not 24%, and because LTV is inversely proportional to churn, entering 24% into an annual formula gives an LTV of $20,000 where the compounded rate gives $22,296 — the naive route understates LTV by 11.5%. The naive answer is also the same number the correct monthly formula produces, so the error is invisible unless you track the unit. This tool accepts churn per month only and prints the compounded annual equivalent of whatever was entered.</p>
+<h2>The formulas</h2>
+<p>LTV = revenue per customer times gross margin divided by monthly churn. CAC = fully loaded sales and marketing divided by customers won in the same period. The ratio is LTV divided by CAC. Payback in months is CAC divided by the gross profit per customer per month.</p>
+<h2>The choices this calculator states, and what is not a choice</h2>
+<p>Textbook, not a choice: the ratio is LTV divided by CAC, and payback is CAC divided by gross profit per customer per month. Chosen: LTV is gross-profit based with monthly churn used as a simple decay rate, the form every free calculator and most founders already know, rather than a discounted-cash-flow LTV that would need a discount rate and a growth assumption. Chosen: CAC is fully loaded, because ad spend alone flatters every company that pays salaries. Chosen: churn is floored at 0.1% per month and the floor is labelled, because a churn of zero makes LTV infinite and would print the best possible score for a business that has not been running long enough to lose anyone.</p>
+<h2>When the answer is not a number</h2>
+<p>Win no new customers and there is nothing to divide the spend by, so the calculator reports no new customers rather than a CAC of zero. Spend nothing and there is no measurable acquisition cost to report. A zero gross margin is legitimate and gets a real answer: an LTV of zero and a statement that no marketing spend can ever pay back, rather than a division by zero.</p>
+<h2>Related free tools</h2>
+<p>Also try the <a href="/tools/dilution">dilution calculator</a>, the <a href="/tools/runway-calculator">startup runway calculator</a> and the <a href="/default-alive">default alive or default dead</a> test — all free, no account required. When you're ready to see whether growth is paying for itself against real numbers, <a href="/auth">sign up for FounderConsole</a>.</p>
+</article>`;
+}
+
 function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1099,6 +1125,31 @@ function getPageMeta(path: string): PageMeta | null {
           { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
           { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
           { "@type": "ListItem", position: 3, name: "Dilution calculator", item: `${SITE_URL}/tools/dilution` },
+        ],
+      }],
+    };
+  }
+  if (path === "/tools/ltv-cac") {
+    return {
+      title: "Free LTV:CAC Calculator with CAC Payback | FounderConsole",
+      description: "Calculate LTV, CAC, the LTV:CAC ratio and CAC payback months for SaaS. Graded separately against a named benchmark, because a good ratio with a bad payback is a cash-flow trap. Free, no account required.",
+      canonical: SITE_URL + "/tools/ltv-cac",
+      bodyContent: buildLtvCacBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        name: "LTV:CAC Calculator",
+        url: SITE_URL + "/tools/ltv-cac",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
+          { "@type": "ListItem", position: 3, name: "LTV:CAC calculator", item: `${SITE_URL}/tools/ltv-cac` },
         ],
       }],
     };
