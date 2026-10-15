@@ -82,7 +82,12 @@ class SimulationInputs:
     expense_shock_prob: float = 0.05
     expense_shock_magnitude: float = 0.15
 
-def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dict[str, Any]:
+def run_monte_carlo(
+    inputs: SimulationInputs,
+    seed: Optional[int] = None,
+    *,
+    distribution_limit: Optional[int] = RUNWAY_DISTRIBUTION_LIMIT,
+) -> Dict[str, Any]:
     rng = np.random.default_rng(seed)
     
     n = inputs.n_simulations
@@ -221,7 +226,14 @@ def run_monte_carlo(inputs: SimulationInputs, seed: Optional[int] = None) -> Dic
             "survival_rate": float(np.sum(runway_months > m) / n)
         })
     
-    runway_distribution = runway_months.tolist()[:RUNWAY_DISTRIBUTION_LIMIT]
+    # Default consumers still get the truncated head. Callers that publish a
+    # histogram (the public survival endpoint) pass distribution_limit=None so
+    # the chart is the whole run, not the first RUNWAY_DISTRIBUTION_LIMIT values.
+    full_runway = runway_months.tolist()
+    if distribution_limit is None:
+        runway_distribution = full_runway
+    else:
+        runway_distribution = full_runway[:distribution_limit]
 
     return {
         "runway": {

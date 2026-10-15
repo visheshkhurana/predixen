@@ -94,6 +94,9 @@ jobs:
       - name: runway-industry SSR tests
         run: npx tsx --test server/tests/runway-industry-ssr.test.ts
 
+      - name: soft 404 status for unknown tools and industries
+        run: npx tsx --test server/tests/soft-404-status.test.ts
+
       - name: compare SSR tests
         run: npx tsx --test server/tests/compare-ssr.test.ts
 

@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
-import { injectSEO } from "./seo-prerender";
+import { renderHtmlPage } from "./seo-prerender";
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
@@ -50,10 +50,10 @@ export function serveStatic(app: Express) {
       res.status(404).type("text/plain").send("Not Found");
       return;
     }
+    const page = renderHtmlPage(indexHtml, pathname);
+    res.status(page.status);
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Type", "text/html");
-
-    const enrichedHtml = injectSEO(indexHtml, pathname);
-    res.send(enrichedHtml);
+    res.send(page.html);
   });
 }

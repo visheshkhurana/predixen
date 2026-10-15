@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 print(f"[main.py] Importing FastAPI... (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 print(f"[main.py] FastAPI imported (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)
@@ -494,13 +494,21 @@ def demo_metrics():
         "message": "Sign up to see your real metrics"
     }
 
-@app.get("/metrics/internal")
+from server.core.security import get_current_user
+
+@app.get("/metrics/internal", dependencies=[Depends(get_current_user)])
 def internal_metrics():
+    """In-process timing summary. Internal, so it requires a session.
+
+    Failures stay generic: the previous handler returned str(e), which put
+    driver and query text on an unauthenticated 200.
+    """
     try:
         from server.core.observability import get_metrics_summary
         return {"metrics": get_metrics_summary()}
-    except Exception as e:
-        return {"metrics": {}, "error": str(e)}
+    except Exception:
+        logger.exception("internal metrics summary failed")
+        return {"metrics": {}, "error": "Internal metrics unavailable"}
 
 
 @app.get("/health")

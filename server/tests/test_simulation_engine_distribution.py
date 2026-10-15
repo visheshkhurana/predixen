@@ -1,11 +1,9 @@
 """`runway.distribution` is a truncated head of the run, and the payload now says so.
 
 `run_monte_carlo` returns the first `RUNWAY_DISTRIBUTION_LIMIT` runway values of a run
-that is `n_simulations` long - 1000 by default. The field is unread in the client
-(`git grep '\\.distribution' client/src` -> 0), but it is NOT unread on the server:
-`server/api/survival_simulator.py:84` builds a 20-bin histogram from it and returns that
-histogram under a hardcoded `"n_simulations": 1000` at `:132`. So the label is the only
-thing between a 100-value sample and a result that overstates its own sample tenfold.
+that is `n_simulations` long - 1000 by default - unless the caller passes
+`distribution_limit=None`. The public survival endpoint does that and histograms
+the full list. The default payload stays a labelled head for every other caller.
 
 These tests pin the label, not the sampling. They assert that the payload states how many
 values it carries, out of how many the run made, and whether it is short - and that the
@@ -80,11 +78,23 @@ def test_the_sample_is_the_head_of_the_run_not_a_random_draw_from_it():
     assert full == short
 
 
+def test_distribution_limit_none_returns_the_whole_run():
+    # The public survival histogram asks for this. The default stays truncated.
+    runway = run_monte_carlo(_inputs(1000), seed=7, distribution_limit=None)["runway"]
+
+    assert len(runway["distribution"]) == 1000
+    assert runway["distribution_n"] == 1000
+    assert runway["distribution_of_n"] == 1000
+    assert runway["distribution_truncated"] is False
+    assert runway["distribution"][:RUNWAY_DISTRIBUTION_LIMIT] == run_monte_carlo(
+        _inputs(1000), seed=7
+    )["runway"]["distribution"]
+
+
 def test_distribution_stays_a_list_because_its_existing_consumer_requires_one():
-    # `server/api/survival_simulator.py:84` passes this straight to
-    # `_build_histogram(values: list, n_bins=20)`, which does `np.array(values)`. The
-    # labels are additive for that reason: reshaping this field into a dict would break
-    # a consumer in a different file, silently.
+    # The survival endpoint passes this list straight to
+    # `_build_histogram(values: list, n_bins=20)`, which does `np.array(values)`.
+    # Reshaping the field into a dict would break that consumer.
     for n in (50, 1000):
         distribution = run_monte_carlo(_inputs(n), seed=7)["runway"]["distribution"]
         assert isinstance(distribution, list)
