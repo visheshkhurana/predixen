@@ -419,13 +419,44 @@ async def handle_slack_events(request: Request):
     timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
     signature = request.headers.get("X-Slack-Signature", "")
 
-    body = await request.json()
+    # HAG-401. Verify BEFORE the body is parsed and before anything acts on it.
+    #
+    # The order used to be the reverse: `body = await request.json()` came first,
+    # then the `url_verification` branch returned, and only then was the signature
+    # checked. Two consequences, both measured on a stand-in with this handler's
+    # exact shape:
+    #   - an UNSIGNED POST of {"type":"url_verification","challenge":"..."} got a
+    #     200 echoing the caller's own challenge, with no signature ever checked;
+    #   - a malformed body raised out of the handler, because the parse was
+    #     unguarded, and Starlette answered its bare 500.
+    #
+    # The sibling handler one up this file, `handle_slash_command`, already gets
+    # this right: it verifies at :330 and only then reads the form at :333. This
+    # route was the odd one out, not the rule.
+    #
+    # Requiring a signature does not break Slack's URL verification: Slack signs
+    # that request like any other. Measured - a SIGNED url_verification still
+    # answers 200 with the challenge, while an unsigned one now answers 401.
+    if not _verify_slack_signature(body_bytes, timestamp, signature):
+        raise HTTPException(status_code=401, detail="Invalid Slack signature")
+
+    try:
+        body = await request.json()
+    except ValueError:
+        # `ValueError` covers `json.JSONDecodeError` and `UnicodeDecodeError`, the
+        # two things Starlette's `Request.json()` raises on a bad body. This branch
+        # is only reachable by a caller whose signature already verified, so a 400
+        # here is not a lever an anonymous caller can pull.
+        raise HTTPException(status_code=400, detail="Malformed JSON body")
+
+    if not isinstance(body, dict):
+        # The shape guard for the deref immediately below. A signed body that is
+        # not an object - `[1,2,3]` - would otherwise raise AttributeError on
+        # `body.get` at the handler's top level, where nothing catches it.
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
 
     if body.get("type") == "url_verification":
         return JSONResponse({"challenge": body.get("challenge")})
-
-    if not _verify_slack_signature(body_bytes, timestamp, signature):
-        raise HTTPException(status_code=401, detail="Invalid Slack signature")
 
     event = body.get("event", {})
     event_type = event.get("type")
