@@ -241,10 +241,43 @@ test("the container's own liveness probe is not logged, but a real crawler on /h
   }
 });
 
+/**
+ * Response headers set by the HTTP layer per connection, not by the app.
+ *
+ * `Date` is a wall-clock stamp and `Connection`/`Keep-Alive` describe the socket,
+ * so two requests to two servers can never agree on them and comparing them
+ * would fail for a reason that has nothing to do with the middleware. Everything
+ * else is kept, `Content-Length` included: a differing length is exactly the
+ * kind of change this test exists to catch.
+ */
+const TRANSPORT_HEADERS = new Set(["date", "connection", "keep-alive"]);
+
+/** Derived from `fetch` rather than named `Response`, so this file needs no
+ *  global-type dependency to compile. */
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
+
+function headersOf(res: FetchResponse): Record<string, string> {
+  const out: Record<string, string> = {};
+  res.headers.forEach((value, key) => {
+    if (TRANSPORT_HEADERS.has(key.toLowerCase())) return;
+    out[key.toLowerCase()] = value;
+  });
+  return out;
+}
+
 test("the response is byte-identical with and without the middleware", async () => {
   // "Measurement only" is a claim about behaviour, so it is measured. Same app,
   // same routes, one with the middleware mounted and one without: every case a
-  // crawler exercises must come back the same status and the same body.
+  // crawler exercises must come back the same status, the same headers and the
+  // same body.
+  //
+  // The headers half is why this test exists at all. An earlier version of it
+  // compared status and body only, while the docstring above promises "It never
+  // touches the response — no status, no header, no body". The header is the one
+  // claim the old assertions could not see, so a `res.setHeader(...)` added to
+  // the middleware — the exact way this guarantee would break in practice —
+  // passed the suite. A test named for a property it does not measure is worse
+  // than no test, because it gets quoted as coverage.
   async function withAndWithout(ua: string, path: string) {
     const withMw = express();
     withMw.use(aiAgentLog({ write: () => {} }));
@@ -271,8 +304,8 @@ test("the response is byte-identical with and without the middleware", async () 
         fetch(b.base + path, { headers: { "user-agent": ua } }),
       ]);
       return {
-        a: { status: ra.status, body: await ra.text() },
-        b: { status: rb.status, body: await rb.text() },
+        a: { status: ra.status, headers: headersOf(ra), body: await ra.text() },
+        b: { status: rb.status, headers: headersOf(rb), body: await rb.text() },
       };
     } finally {
       a.server.close();
@@ -284,6 +317,7 @@ test("the response is byte-identical with and without the middleware", async () 
     for (const path of ["/tools/runway-calculator", "/no-such-page"]) {
       const { a, b } = await withAndWithout(ua, path);
       assert.equal(a.status, b.status, `${ua} ${path}: status changed`);
+      assert.deepEqual(a.headers, b.headers, `${ua} ${path}: a response header changed`);
       assert.equal(a.body, b.body, `${ua} ${path}: body changed`);
     }
   }
