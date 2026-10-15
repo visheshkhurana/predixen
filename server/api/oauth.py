@@ -11,6 +11,7 @@ from server.core.db import get_db
 from server.core.config import settings
 from server.core.security import create_access_token, set_auth_cookie, set_refresh_cookie, AUTH_COOKIE_NAME, AUTH_COOKIE_MAX_AGE
 from server.models.user import User, RefreshToken
+from server.services.posthog import sanitize_distinct_id
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,33 @@ def _get_base_url(request: Request) -> str:
     return "https://localhost:5000"
 
 
+def _remember_google_state(state: str, distinct_id: str | None) -> None:
+    """Keep the browser distinct_id beside the CSRF state, not in Google's URL."""
+    _oauth_states[state] = {
+        "provider": "google",
+        "distinct_id": sanitize_distinct_id(distinct_id),
+    }
+
+
+def _take_google_state(state: str | None) -> tuple[bool, str | None]:
+    """Return (valid, anonymous distinct_id).
+
+    A bare ``"google"`` value is an in-flight login from before distinct_id
+    was stored. It stays valid and aliases nothing.
+    """
+    if not state:
+        return False, None
+    stored = _oauth_states.pop(state, None)
+    if stored == "google":
+        return True, None
+    if isinstance(stored, dict) and stored.get("provider") == "google":
+        return True, sanitize_distinct_id(stored.get("distinct_id"))
+    return False, None
+
+
 def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: str,
-                               display_name: str = None, avatar_url: str = None) -> User:
+                               display_name: str = None, avatar_url: str = None,
+                               anonymous_distinct_id: str | None = None) -> User:
     user = db.query(User).filter(User.email == email).first()
     if user:
         if not user.oauth_provider:
@@ -88,7 +114,12 @@ def _get_or_create_oauth_user(db: Session, email: str, provider: str, oauth_id: 
 
     try:
         from server.services.activation import emit_signup_completed
-        emit_signup_completed(user_id=user.id, method="google")
+        emit_signup_completed(
+            user_id=user.id,
+            method="google",
+            email=user.email,
+            anonymous_distinct_id=anonymous_distinct_id,
+        )
     except Exception as e:
         logger.warning(f"signup_completed emit failed: {e}")
 
@@ -126,12 +157,12 @@ def _build_auth_redirect(request: Request, user: User, db: Session = None) -> Re
 
 
 @router.get("/google/start")
-def google_start(request: Request):
+def google_start(request: Request, distinct_id: str | None = None):
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Google OAuth is not configured")
 
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = "google"
+    _remember_google_state(state, distinct_id)
 
     base = _get_base_url(request)
     redirect_uri = f"{base}/api/auth/google/callback"
@@ -160,8 +191,8 @@ def google_callback(request: Request, code: str = None, state: str = None, error
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
 
-    stored = _oauth_states.pop(state, None)
-    if stored != "google":
+    ok, anonymous_distinct_id = _take_google_state(state)
+    if not ok:
         raise HTTPException(status_code=400, detail="Invalid OAuth state")
 
     base = _get_base_url(request)
@@ -206,6 +237,7 @@ def google_callback(request: Request, code: str = None, state: str = None, error
         oauth_id=profile.get("id", ""),
         display_name=profile.get("name"),
         avatar_url=profile.get("picture"),
+        anonymous_distinct_id=anonymous_distinct_id,
     )
     return _build_auth_redirect(request, user, db)
 

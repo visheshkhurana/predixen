@@ -21,6 +21,7 @@ import {
 import { Helmet } from "react-helmet-async";
 import { useToast } from "@/hooks/use-toast";
 import { trackFunnel } from "@/lib/funnel";
+import { getBrowserDistinctId } from "@/lib/posthog";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
 
 const STORAGE_KEY = "fc_survival_sim_count";
@@ -529,6 +530,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
     if (sendState === "sending" || !email.trim()) return;
     setSendState("sending");
     try {
+      const distinctId = await getBrowserDistinctId();
       const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -541,6 +543,7 @@ function EmailResultPanel({ results }: { results: SimResults }) {
           runway_months: String(p50),
           runway_date: runwayDate,
           monthly_burn: formatCurrency(monthlyBurn) + "/mo",
+          ...(distinctId ? { distinct_id: distinctId } : {}),
         }),
       });
       if (!res.ok) throw new Error(String(res.status));

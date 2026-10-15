@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { getBrowserDistinctId } from '@/lib/posthog';
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -224,7 +225,8 @@ export default function AuthPage() {
     
     setIsLoading(true);
     try {
-      const result = await api.auth.register(registerForm.email, registerForm.password);
+      const distinctId = await getBrowserDistinctId();
+      const result = await api.auth.register(registerForm.email, registerForm.password, distinctId);
       setUser({ id: result.user_id, email: result.email, role: result.role, is_platform_admin: result.is_platform_admin, is_email_verified: result.is_email_verified });
       identifyUser(result.user_id, result.email);
       trackSignup(result.user_id, result.email);
@@ -280,9 +282,13 @@ export default function AuthPage() {
     }
   };
 
-  const handleSocialLogin = (provider: 'google') => {
+  const handleSocialLogin = async (provider: 'google') => {
     setSocialLoadingProvider(provider);
-    window.location.assign(`/api/auth/${provider}/start`);
+    const distinctId = await getBrowserDistinctId();
+    const params = new URLSearchParams();
+    if (distinctId) params.set('distinct_id', distinctId);
+    const qs = params.toString();
+    window.location.assign(`/api/auth/${provider}/start${qs ? `?${qs}` : ''}`);
   };
 
   const capabilities = [
