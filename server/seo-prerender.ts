@@ -22,6 +22,14 @@ interface PageMeta {
   robots?: string;
   jsonLd?: object[];
   bodyContent?: string;
+  // HAG-162. Set by the branches that describe a page which does not exist --
+  // an unknown /blog/ slug, an unknown /runway/ vertical. Those metas already
+  // said "Page not found" and `noindex, follow`, but the response was still a
+  // 200, so the page was a soft 404: Google indexes it, then has to learn from
+  // the meta that it should not have. This flag is what `static.ts` reads to
+  // answer 404. It is an explicit marker rather than a test on the title
+  // string, so renaming a title cannot quietly turn the status back into a 200.
+  notFound?: boolean;
 }
 
 const landingFaqs = [
@@ -955,6 +963,7 @@ function getPageMeta(path: string): PageMeta | null {
         description: "This page does not exist. Browse the free runway calculator and industry benchmarks instead.",
         canonical: SITE_URL + "/tools/runway-calculator",
         robots: "noindex, follow",
+        notFound: true,
       };
     }
     return {
@@ -1218,6 +1227,7 @@ function getPageMeta(path: string): PageMeta | null {
       description: "The article you're looking for doesn't exist.",
       canonical: `${SITE_URL}/blog`,
       robots: "noindex, follow",
+      notFound: true,
     };
   }
 
@@ -1228,12 +1238,69 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** True when the path resolves to a page that does not exist (soft 404). */
+export function isNotFoundPath(pathname: string): boolean {
+  return getPageMeta(pathname)?.notFound === true;
+}
+
+const NOT_FOUND_BODY = `
+<h1>Page not found</h1>
+<p>There is nothing at this address. It may have been renamed, or the link may
+have a typo in it.</p>
+<p>Try one of these instead:</p>
+<ul>
+  <li><a href="/">FounderConsole home</a></li>
+  <li><a href="/tools/runway-calculator">Free startup runway calculator</a></li>
+  <li><a href="/simulate">Simulate your scenarios</a></li>
+  <li><a href="/pricing">Pricing</a></li>
+  <li><a href="/blog">Blog</a></li>
+</ul>
+`;
+
+/**
+ * HAG-162. The shell for a path the client router does not know.
+ *
+ * `injectSEO` cannot be used here: with no `getPageMeta` entry it returns the
+ * shell byte-for-byte, which is the homepage -- homepage title, homepage
+ * canonical, `index, follow` -- so the 404 body would still have told Google it
+ * was the homepage. This builds the meta explicitly instead.
+ *
+ * The canonical is the requested URL itself, not the homepage. A self-canonical
+ * on a 404 is inert next to `noindex`, whereas a homepage canonical would be
+ * the duplicate-homepage signal this card exists to remove.
+ */
+export function injectNotFoundShell(html: string, pathname: string): string {
+  const safe = safePathname(pathname);
+  return renderMeta(html, {
+    title: "Page not found | FounderConsole",
+    description: `No page exists at ${safe}. Browse the free runway calculator, the simulator, pricing, or the blog.`,
+    canonical: SITE_URL + (safe || "/"),
+    robots: "noindex, follow",
+    bodyContent: NOT_FOUND_BODY,
+    notFound: true,
+  });
+}
+
+// The pathname reaches this function from the request line, so it is the only
+// attacker-controlled value in the meta. `renderMeta` escapes the description
+// but writes the canonical straight into an href, so the path is restricted to
+// the characters a URL path may contain and capped, which also stops a hostile
+// URL from being mirrored into a link tag at arbitrary length.
+const SAFE_PATH_CHARS = /[^A-Za-z0-9\-._~/%!$&'()*+,;=:@]/g;
+
+function safePathname(pathname: string): string {
+  return pathname.replace(SAFE_PATH_CHARS, "").slice(0, 200);
+}
+
 export function injectSEO(html: string, path: string): string {
   const meta = getPageMeta(path);
   if (!meta) {
     return html;
   }
+  return renderMeta(html, meta);
+}
 
+function renderMeta(html: string, meta: PageMeta): string {
   const ogType = meta.ogType || "website";
   const robots = meta.robots || "index, follow";
   const safeTitle = escapeHtml(meta.title);
