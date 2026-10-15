@@ -1,4 +1,4 @@
-import { blogPosts, blogPostContent } from "./seo-data";
+import { blogPosts } from "./seo-data";
 // Relative, not the "@/" alias: this module is bundled by esbuild from
 // server/index.ts and a path alias is one more thing that can silently resolve
 // differently at build time. runway-industries.ts is pure data with no imports
@@ -25,6 +25,8 @@ interface PageMeta {
   robots?: string;
   jsonLd?: object[];
   bodyContent?: string;
+  /** HTTP status the HTML response should carry. Omitted means 200. */
+  statusCode?: number;
 }
 
 const landingFaqs = [
@@ -119,9 +121,8 @@ function renderInlineHtml(text: string): string {
 
 function buildBlogPostBodyContent(slug: string): string | null {
   const post = blogPosts.find((p) => p.slug === slug);
-  const content = blogPostContent[slug];
   if (!post) return null;
-  const paragraphs = content || [];
+  const paragraphs = post.content || [];
   const bodyParagraphs = paragraphs.map((p: string) => {
     if (p.startsWith("## ")) return `<h2>${escapeHtml(p.replace("## ", ""))}</h2>`;
     return `<p>${renderInlineHtml(p)}</p>`;
@@ -770,7 +771,36 @@ function buildIndustryBodyContent(slug: string): string | null {
 </article>`;
 }
 
+function stripTrailingSlash(path: string): string {
+  if (path.length > 1 && path.endsWith("/")) {
+    return path.replace(/\/+$/, "");
+  }
+  return path;
+}
+
+/** HTML status for a pathname. Unknown app routes stay 200 (the SPA shell). */
+export function pageHttpStatus(path: string): number {
+  return getPageMeta(path)?.statusCode ?? 200;
+}
+
+/** Status and body the SPA catch-all should send for one pathname. */
+export function renderHtmlPage(shell: string, path: string): { status: number; html: string } {
+  return { status: pageHttpStatus(path), html: injectSEO(shell, path) };
+}
+
+function notFoundMeta(canonical: string, description: string): PageMeta {
+  return {
+    title: "Page not found | FounderConsole",
+    description,
+    canonical,
+    robots: "noindex, follow",
+    statusCode: 404,
+    bodyContent: `<article><h1>Page not found</h1><p>${escapeHtml(description)}</p></article>`,
+  };
+}
+
 function getPageMeta(path: string): PageMeta | null {
+  path = stripTrailingSlash(path);
   if (path === "/" || path === "") {
     return {
       title: "FounderConsole — AI Decision Simulator for Founders",
@@ -1059,14 +1089,12 @@ function getPageMeta(path: string): PageMeta | null {
     const slug = path.slice("/runway/".length).replace(/\/+$/, "");
     const ind = RUNWAY_INDUSTRIES.find((i) => i.slug === slug);
     if (!ind) {
-      // Unknown vertical renders the app's not-found page. Saying "index" here
-      // would ask Google to index a 404 that answers with HTTP 200.
-      return {
-        title: "Page not found | FounderConsole",
-        description: "This page does not exist. Browse the free runway calculator and industry benchmarks instead.",
-        canonical: SITE_URL + "/tools/runway-calculator",
-        robots: "noindex, follow",
-      };
+      // Unknown vertical renders the app's not-found page. The HTML and the
+      // status must both be a 404 — noindex on a 200 is still a soft 404.
+      return notFoundMeta(
+        SITE_URL + "/tools/runway-calculator",
+        "This page does not exist. Browse the free runway calculator and industry benchmarks instead.",
+      );
     }
     return {
       title: `${ind.name} — Free Benchmarked Runway Tool | FounderConsole`,
@@ -1403,7 +1431,19 @@ function getPageMeta(path: string): PageMeta | null {
       description: "The article you're looking for doesn't exist.",
       canonical: `${SITE_URL}/blog`,
       robots: "noindex, follow",
+      statusCode: 404,
+      bodyContent: `<article><h1>Article not found</h1><p>The article you're looking for doesn't exist.</p></article>`,
     };
+  }
+
+  // Known tool slugs return above. Anything else under /tools is not a page:
+  // /tools, /tools/, and /tools/<unknown> used to fall through to the homepage
+  // shell with HTTP 200.
+  if (path === "/tools" || path.startsWith("/tools/")) {
+    return notFoundMeta(
+      SITE_URL + "/tools/runway-calculator",
+      "This page does not exist. Browse the free runway calculator instead.",
+    );
   }
 
   return null;

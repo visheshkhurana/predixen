@@ -137,3 +137,38 @@ def test_a_401_is_still_refused():
 
 def test_a_500_is_still_refused():
     assert authenticates(500) is False
+
+
+def _test_connection(status_code: int, credentials: Dict[str, Any] | None = None) -> bool:
+    FakeClient.calls = []
+    with patch("httpx.AsyncClient", lambda **kw: FakeClient(status_code, **kw)):
+        return asyncio.run(connector(credentials).test_connection())
+
+
+def test_connection_refuses_redirects():
+    """test_connection used `status < 400`, so 301/302 counted as a live API."""
+    for status_code in (301, 302, 303, 307, 308):
+        assert _test_connection(status_code) is False, f"HTTP {status_code} was accepted"
+
+    # The client must not follow the redirect onto a 200 login page.
+    seen: dict = {}
+
+    class RecordingClient(FakeClient):
+        def __init__(self, status_code: int = 302, **kwargs: Any):
+            super().__init__(status_code, **kwargs)
+            seen.update(kwargs)
+
+    with patch("httpx.AsyncClient", lambda **kw: RecordingClient(302, **kw)):
+        assert asyncio.run(connector().test_connection()) is False
+    assert seen.get("follow_redirects") is False
+
+
+def test_connection_accepts_2xx_and_refuses_the_rest():
+    assert _test_connection(200) is True
+    assert _test_connection(201) is True
+    assert _test_connection(299) is True
+    # The old `< 400` check accepted these.
+    assert _test_connection(300) is False
+    assert _test_connection(399) is False
+    assert _test_connection(401) is False
+    assert _test_connection(500) is False

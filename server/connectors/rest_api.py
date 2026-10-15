@@ -113,7 +113,11 @@ class RestAPIConnector(BaseConnector):
                 return False
             
             import httpx
-            async with httpx.AsyncClient() as client:
+            # Same rule as authenticate: 2xx only, and do not follow redirects.
+            # httpx defaults follow_redirects to False; passing it keeps a
+            # future default change from treating 302 -> /login as success.
+            # A 3xx is `< 400`, which is what this method used to accept.
+            async with httpx.AsyncClient(follow_redirects=False) as client:
                 headers = self._build_headers()
                 response = await client.request(
                     self.method,
@@ -121,7 +125,7 @@ class RestAPIConnector(BaseConnector):
                     headers=headers,
                     timeout=10.0
                 )
-                return response.status_code < 400
+                return 200 <= response.status_code < 300
         except Exception as e:
             logger.error(f"REST API connection test failed: {e}")
             return False

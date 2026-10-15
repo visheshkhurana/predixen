@@ -73,7 +73,10 @@ def run_survival_simulation(req: SurvivalSimRequest):
         n_simulations=1000,
     )
 
-    result = run_monte_carlo(inputs, seed=None)
+    # distribution_limit=None: the default payload keeps only the first 100
+    # runway values while this endpoint runs (and labels) 1000. Histogram the
+    # full run so the bin counts add up to n_simulations.
+    result = run_monte_carlo(inputs, seed=None, distribution_limit=None)
 
     net_burn = req.monthly_expenses - req.monthly_revenue
     simple_runway = round(req.cash_on_hand / net_burn, 1) if net_burn > 0 else 999
@@ -129,7 +132,7 @@ def run_survival_simulation(req: SurvivalSimRequest):
             for i in range(len(result["bands"]["revenue"]["p50"]))
         ],
         "recommendations": recommendations,
-        "n_simulations": 1000,
+        "n_simulations": result["n_simulations"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -70,13 +70,9 @@ test("every prerendered route that has a body carries the citation block", () =>
     `expected the majority of the ${PRERENDERED_PATHS.length} prerendered routes to emit a ` +
       `body, only ${withBody} did — a shrunken list must not be able to pass by walking itself`
   );
-  // HAG-311's two slugs. Named so this list has to SHRINK to empty when that fix lands
-  // rather than quietly grow a third entry.
-  assert.deepEqual(
-    noBody,
-    ["/blog/what-is-a-good-burn-multiple", "/blog/13-week-cash-flow-template"],
-    "the set of body-less routes changed"
-  );
+  // HAG-311: these two posts were in the sitemap and had no SSR body. The list
+  // has to stay empty — a new body-less route is the same split coming back.
+  assert.deepEqual(noBody, [], `body-less routes: ${noBody.join(", ")}`);
 });
 
 test("the block appears exactly once per route, the homepage included", () => {
