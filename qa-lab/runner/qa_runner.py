@@ -810,6 +810,21 @@ def main():
             print(f"  BUGS FOUND: {len(all_bugs)}")
         print("=" * 60)
 
+        # A process-level status, the same shape the sibling files already end with
+        # (`crawler_health.py:279`, `deploy_landed.py:572`): a caller that reads only
+        # the exit code can tell a pass from a fail. Until this line the script
+        # returned None, so the interpreter exited 0 on every run - `failed_total` was
+        # computed at :805 and only ever printed at :808, and there was no `raise`, no
+        # `sys.exit` and no `assert` between here and `.github/workflows/pr-checks.yml:219`,
+        # which runs it as a gate step. So 0/150 passing exited 0, and the step could
+        # not fail. That is the whole of the defect: an instrument whose reach is not
+        # the claim it makes.
+        #
+        # Inside the `try` on purpose: the `finally` below still closes the session,
+        # and `SystemExit` is a `BaseException`, not an `Exception`, so no handler in
+        # this file can swallow it even if one is added later.
+        raise SystemExit(1 if failed_total else 0)
+
     finally:
         db.close()
 

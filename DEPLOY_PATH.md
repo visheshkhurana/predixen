@@ -96,8 +96,13 @@ Other things that trigger a rebuild, all of which are deploys you should expect:
 - **A manual redeploy** from the Railway dashboard (**Deployments → ⋮ → Redeploy**).
 - A change to `railway.json` or the `Dockerfile` (they are in the image path, so they rebuild).
 
-**What is not a deploy trigger:** CI. `.github/workflows/pr-checks.yml` now runs on
-`pull_request` targeting `main` (PR #52, merged 2026-10-13T22:19:32Z). The `on:
+**What is not a deploy trigger:** CI. `.github/workflows/pr-checks.yml` runs on every pull
+request, on every push to `main`, and on demand (PR #125; PR #52 merged the first version,
+2026-10-13T22:19:32Z). This paragraph used to say `pull_request` targeting `main`, and that
+was wrong twice over: the clause carried a `branches:` filter, and under `pull_request`
+`branches` filters on the **base** branch, so every stacked PR was skipped silently while
+GitHub still reported it clean - "clean" means "no conflict", never "tested". The filter is
+gone, so a PR stacked on another PR's branch is checked like any other. The `on:
 workflow_dispatch: {}` line this paragraph used to quote, and its claim that paid Actions
 minutes were never approved, were both wrong - the repository is public, so standard
 `ubuntu-latest` runners cost nothing and there was never a spend decision. **A direct push to
