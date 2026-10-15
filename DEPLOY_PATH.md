@@ -96,11 +96,21 @@ Other things that trigger a rebuild, all of which are deploys you should expect:
 - **A manual redeploy** from the Railway dashboard (**Deployments → ⋮ → Redeploy**).
 - A change to `railway.json` or the `Dockerfile` (they are in the image path, so they rebuild).
 
-**What is not a deploy trigger:** CI. `.github/workflows/pr-checks.yml` is
-`on: workflow_dispatch: {}` only — no `push`, no `pull_request` — because paid GitHub Actions
-minutes were never approved (backlog item 4 / card HAG-154). Railway's build is not gated on any
-check passing. **Nothing stops a red commit from reaching production.** Until item 4 is resolved,
-the only gate between a branch and live traffic is a human reading the pull request.
+**What is not a deploy trigger:** CI. `.github/workflows/pr-checks.yml` runs on every pull
+request, on every push to `main`, and on demand (PR #125; PR #52 merged the first version,
+2026-10-13T22:19:32Z). This paragraph used to say `pull_request` targeting `main`, and that
+was wrong twice over: the clause carried a `branches:` filter, and under `pull_request`
+`branches` filters on the **base** branch, so every stacked PR was skipped silently while
+GitHub still reported it clean - "clean" means "no conflict", never "tested". The filter is
+gone, so a PR stacked on another PR's branch is checked like any other. The `on:
+workflow_dispatch: {}` line this paragraph used to quote, and its claim that paid Actions
+minutes were never approved, were both wrong - the repository is public, so standard
+`ubuntu-latest` runners cost nothing and there was never a spend decision. **A direct push to
+`main` is now checked, but still unguarded:** the `push:` trigger to `main` means committing
+straight to `main` starts a run - so the head is checked, but that run gates nothing.
+Railway's build is not gated on any check passing, so **nothing stops a red
+direct push from reaching production.** Nothing gates a branch against live traffic but a
+human reading the pull request - the check is a signal, not a gate.
 
 ## 2. How to roll back
 
@@ -248,10 +258,13 @@ failed to get runs: Get "https://api.github.com/repos/visheshkhurana/predixen/ac
 
 Two consequences, both worth a card:
 
-1. If the repo is private, a scheduled workflow consumes paid Actions minutes, which is the same
-   unapproved-spend blocker as card HAG-154. **The nightly backup may be dead for the same reason
-   `pr-checks.yml` is manual** — and unlike CI, nobody would notice, because a backup that does
-   not run produces no failure.
+1. **Withdrawn 2026-10-14 - both halves of this were false.** The repository is **public**
+   (`visibility: public`, measured 2026-10-14), so a scheduled workflow on `runs-on:
+   ubuntu-latest` consumes nothing: there is no unapproved spend and no HAG-154 blocker here.
+   And the backup is not dead - `GET /actions/workflows/railway-db-backup.yml/runs` ->
+   `total_count 84`, newest `38415935614 schedule 2026-10-13T14:44:15Z success`. **The only
+   part worth keeping is the last clause:** a backup that stops running produces no failure,
+   so it wants a monitor, not a spend decision.
 2. Railway Postgres has its own backups tab, but `RAILWAY_DEPLOYMENT.md` describes it as a paid
    feature ("Railway Postgres supports backups on paid plans"). If the plan does not include it,
    this GitHub workflow is the only copy, and it needs to be confirmed running.

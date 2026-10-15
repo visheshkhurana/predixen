@@ -1,8 +1,9 @@
 # Release Manager check suite + pytest, against the checkout — never production.
 #
-# Runs on every PR to main (and on demand). The earlier dispatch-only hold was
-# about paid Actions minutes; predixen is a PUBLIC repo, and GitHub-hosted
-# runners are free for public repos, so gating every PR costs nothing.
+# Runs on every pull request regardless of base branch, on every push to main,
+# and on demand. The earlier dispatch-only hold was about paid Actions minutes;
+# predixen is a PUBLIC repo, and GitHub-hosted runners are free for public
+# repos, so gating every PR costs nothing.
 # `pull_request` (not `pull_request_target`) gets no secrets on fork PRs.
 #
 # Out of scope (they hit live founderconsole.ai / Railway):
@@ -10,11 +11,34 @@
 #
 # Do not wire RAILWAY_DATABASE_URL or any backup secret. Postgres-backed
 # pytest cases already skip when no local DB is reachable.
+#
+# The QA lab (qa-lab/runner/qa_runner.py) DOES run here, on a disposable SQLite
+# file under $RUNNER_TEMP. It seeds synthetic companies, so it needs a schema and
+# writes rows - that is why nothing ran it before, and why OPERATING-MODEL.md
+# could list it in the golden path for months while no process executed it. The
+# rows it writes live in the runner's own temporary directory: never production,
+# never a secret, discarded when the job ends.
+#
+# DATABASE_URL is set on the two QA-lab steps ONLY. It is deliberately NOT set on
+# `Run pytest`, so the Postgres-backed pytest cases keep skipping exactly as they
+# do today - changing that is a separate decision about a separate suite.
 name: pr-checks
 
 on:
-  pull_request:
+  # A push to main is what deploys production - Railway builds from main on every
+  # push - so main's own head is the one commit that must be checked. Without
+  # this, the commit that ships is the only commit nothing checks: a green check
+  # attaches to a PR's head, not to the merge commit that lands. Measured before
+  # this change at main 57fece84: /commits/57fece84/check-runs -> total_count 0.
+  push:
     branches: [main]
+  # No `branches:` filter here, deliberately. Under `pull_request`, `branches`
+  # filters on the BASE branch, so `branches: [main]` silently skipped every
+  # stacked PR: GitHub scheduled no workflow and reported mergeable_state
+  # "clean", which means "no conflict", never "tested". Measured on PR #60's
+  # stacked head 7adfb9e6 while the PR read clean:
+  # /commits/7adfb9e6/check-runs -> total_count 0.
+  pull_request:
   workflow_dispatch: {}
 
 permissions:
@@ -149,6 +173,9 @@ jobs:
       - name: sitemap drift test
         run: npx tsx server/tests/sitemap-drift.test.ts
 
+      - name: api proxy routing test
+        run: npx tsx --test server/tests/api-proxy-routing.test.ts
+
   python:
     name: pytest
     runs-on: ubuntu-latest
@@ -163,8 +190,30 @@ jobs:
           python-version: "3.11"
           enable-cache: true
 
+      # `uv sync --frozen` installs exactly what uv.lock says, which is the point -
+      # but it also means a lockfile that has drifted from pyproject.toml is
+      # invisible: CI would keep testing the old dependency set while the file
+      # that declares the requirements says something else. --frozen refuses to
+      # *update* the lock, it does not check that the lock is current.
+      - name: Lockfile matches pyproject.toml
+        run: uv lock --check
+
       - name: Install Python dependencies
         run: uv sync --frozen --no-dev --no-install-project
 
       - name: Run pytest
         run: uv run --no-sync pytest -ra
+
+      # Golden-path exit criterion 2's second half. qa_runner.py opens
+      # SessionLocal() and inserts - it never creates its own schema - so a
+      # database with no tables is the first thing it hits. init_qa_db.py is the
+      # schema half of server/main.py:210, for this throwaway file only.
+      - name: Create the QA lab's disposable database
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/qa-lab.db
+        run: uv run --no-sync python qa-lab/runner/init_qa_db.py
+
+      - name: QA lab (golden path, exit criterion 2)
+        env:
+          DATABASE_URL: sqlite:///${{ runner.temp }}/qa-lab.db
+        run: uv run --no-sync python qa-lab/runner/qa_runner.py
