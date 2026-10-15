@@ -234,6 +234,41 @@ function buildLtvCacBodyContent(): string {
 </article>`;
 }
 
+function buildVsRunwaySpreadsheetBodyContent(): string {
+  // Comparison copy only — no competitor is named and no competitor claim is made,
+  // the same rule /alternatives states on the page itself. Everything asserted about
+  // FounderConsole here is already published on /compare and /features. The page is
+  // client/src/pages/vs-runway-calculator-vs-spreadsheet.tsx.
+  return `<article>
+<h1>Runway calculator vs spreadsheet: which one should you use?</h1>
+<p>A spreadsheet is the right tool for your first runway model, and it is still the right tool for a one-off static plan. It stops being the right tool at a specific point: when you need a range rather than a date, when an input changes and you have to re-derive the answer by hand, or when someone asks how confident you are in the number. This page is the honest comparison, including the rows where the spreadsheet wins.</p>
+<h2>The short answer</h2>
+<ul>
+<li>Use a spreadsheet if the model is yours, the plan is static, and nobody outside the company has to rely on the output.</li>
+<li>Use a calculator when you want the answer now, with benchmarked starting assumptions and no chance of a broken formula.</li>
+<li>Outgrow both when the question stops being "what is my runway?" and becomes "how likely is it that I run out, and what moves the date?" A single number — from a sheet or from a calculator — cannot answer that.</li>
+</ul>
+<h2>Side by side</h2>
+<p>Time to a first answer: a spreadsheet takes whatever it takes to build the model, tens of minutes to hours; the free calculator takes seconds with no account; FounderConsole takes minutes once data is connected. What you get back: the sheet returns one cash-out date from the assumptions you typed; the calculator returns months of runway and a cash-out date from benchmarked inputs; FounderConsole returns a distribution — P10/P50/P90 bands, not one date. When an input changes: you edit cells and re-check the downstream formula; on the calculator you change the field and the answer updates; in FounderConsole the forecast updates from your connected data. Formula risk: real in a sheet, where a hardcoded cell or a broken range silently changes the date; none you can introduce in either tool. Where the assumptions come from: you, from memory or the last plan; benchmarked starting inputs you can override; your own connected financials. Sharing it: attach the file and hope the reader finds the cell that matters; send a link; share the scenario with reasoning you can show a board. Cost: free if you already have it; free with no account; every feature free during early access.</p>
+<h2>Where the spreadsheet wins</h2>
+<p>It is your model. Nobody else's tool decides what a line item means, how you treat a grant, or whether a hire lands in month 3 or month 4. A spreadsheet handles the irregular thing — a deferred payment, a one-off invoice, a seasonal month — without asking you to bend it into someone's form. It works offline, it is on your machine, and for a static plan you intend to look at once, building the model is not wasted effort: it is how you learn your own business. All of that stays true.</p>
+<h2>Where the spreadsheet breaks</h2>
+<ul>
+<li><strong>It gives you a date, and a date reads like a fact.</strong> The arithmetic is a straight line: $120,000 in the bank against $20,000 of net burn is six months. Real burn is not a straight line, so the honest output is a range of dates and a probability of running out — which a single-cell answer cannot express, however correct the cell is.</li>
+<li><strong>It goes stale the day you build it.</strong> The model is correct as of the numbers you typed. The bank balance moves on Monday.</li>
+<li><strong>The failure is silent.</strong> A hardcoded cell, a drag that stopped one row short, a formula copied across a column it should not have been — the sheet still returns a number, and the number still looks fine. Nothing warns you.</li>
+<li><strong>It has no benchmark.</strong> A sheet will tell you what your assumptions imply. It will not tell you that the assumption itself is unusual for a company at your stage, because it has nothing to compare against.</li>
+<li><strong>Reading it is a skill.</strong> Handing the file to a board member or a new hire transfers the model, not the understanding — including the part where you know which three cells actually matter.</li>
+</ul>
+<h2>The honest limit of a free calculator</h2>
+<p>A calculator fixes the formula risk and the staleness, and it gives you a benchmarked starting point instead of a blank grid. What it does not fix is the thing at the top of that list: it still returns one number, because you are still entering one set of assumptions. Moving the arithmetic out of your spreadsheet is worth doing — but if the only change is that a website does the multiplication, you have not yet answered the question your investor is asking.</p>
+<h2>What a range looks like instead</h2>
+<p>FounderConsole runs Monte Carlo simulations over your own connected numbers — thousands of runs produce P10/P50/P90 bands, so runway is a distribution rather than a date, and you can see which assumption moves it. The AI copilot answers strategic questions against the same numbers, with reasoning you can show a board. What FounderConsole ships is already set out on <a href="/compare">compare</a> and <a href="/features">features</a>, and every feature is free during early access — see <a href="/pricing">pricing</a>.</p>
+<h2>Try the free side of the comparison first</h2>
+<p>No account required. Enter your cash, burn and revenue on the <a href="/tools/runway-calculator">startup runway calculator</a> and compare its answer with your sheet — if the two disagree, one of them has a broken assumption and it is worth knowing which. Paul Graham's <a href="/default-alive">default alive or default dead</a> test asks the harder question behind the arithmetic, and the <a href="/survival-simulator">startup survival simulator</a> estimates odds of survival rather than months. If you want industry-tuned starting inputs, start from the <a href="/runway/saas">SaaS runway calculator</a>. When you want the range rather than the date, <a href="/auth">get started free</a>.</p>
+</article>`;
+}
+
 function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -433,6 +468,8 @@ function buildCompareBodyContent(): string {
 </ul>
 <h2>The comparison we already published</h2>
 <p>Read <a href="/blog/founderconsole-vs-sturppy-vs-finmark-vs-causal">FounderConsole vs Sturppy vs Finmark vs Causal</a> for the sourced product-status notes. As of August 2026, Finmark has been sunset and Causal has been absorbed into an enterprise suite.</p>
+<h2>Spreadsheet or calculator?</h2>
+<p>If the question you are weighing is a spreadsheet against a purpose-built tool, we wrote that comparison out in full — including the parts where the <a href="/vs/runway-calculator-vs-spreadsheet">spreadsheet is the better choice</a>.</p>
 <h2>Related free tools</h2>
 <p>Try these with no account: the <a href="/tools/runway-calculator">startup runway calculator</a>, the <a href="/survival-simulator">startup survival simulator</a>, or the <a href="/default-alive">default alive test</a>. See the full product on <a href="/features">features</a>. When you are ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
 </article>`;
@@ -1174,6 +1211,30 @@ function getPageMeta(path: string): PageMeta | null {
           { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
           { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
           { "@type": "ListItem", position: 3, name: "LTV:CAC calculator", item: `${SITE_URL}/tools/ltv-cac` },
+        ],
+      }],
+    };
+  }
+  if (path === "/vs/runway-calculator-vs-spreadsheet") {
+    return {
+      title: "Runway Calculator vs Spreadsheet - Which Should You Use? | FounderConsole",
+      description: "Runway calculator or spreadsheet? A sheet gives you full control and one cash-out date; a calculator gives you a benchmarked answer in seconds. Where each one wins, and when you outgrow both.",
+      canonical: SITE_URL + "/vs/runway-calculator-vs-spreadsheet",
+      bodyContent: buildVsRunwaySpreadsheetBodyContent(),
+      jsonLd: [{
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: "Runway Calculator vs Spreadsheet - Which Should You Use? | FounderConsole",
+        description: "Where a spreadsheet wins for runway modelling, where it breaks, and what a calculator gives you instead.",
+        url: SITE_URL + "/vs/runway-calculator-vs-spreadsheet",
+        isPartOf: { "@type": "WebSite", name: "FounderConsole", url: SITE_URL },
+      }, {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Runway calculator", item: `${SITE_URL}/tools/runway-calculator` },
+          { "@type": "ListItem", position: 3, name: "Runway calculator vs spreadsheet", item: `${SITE_URL}/vs/runway-calculator-vs-spreadsheet` },
         ],
       }],
     };
