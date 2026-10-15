@@ -53,6 +53,19 @@ async def resend_webhook(request: Request):
 
     event_type = body.get("type", "")
     data = body.get("data", {})
+    # `:51` checks the ENVELOPE, not its contents. A signed body carrying
+    # {"data": "a string"} passes that guard and then raises AttributeError on the
+    # `.get()` below, because a str has no `.get`. That raise sits BETWEEN the parse
+    # guard and the db try, so it is caught by neither: it escapes this handler's own
+    # `except`, skips the rollback and the `logger.error` line, and answers 500 --
+    # the code that asks Resend to retry a body that can never succeed. Same class as
+    # `:51`, one level down, which is what "the guard is not sufficient one line
+    # below itself" names. 400, not 500: a signed body whose `data` is not an object
+    # is the caller's error, exactly like the envelope guard above it.
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=400, detail="Invalid webhook payload: data is not an object"
+        )
     email_id = data.get("email_id") or data.get("id", "")
     timestamp = body.get("created_at") or datetime.utcnow().isoformat()
 
@@ -130,7 +143,24 @@ async def resend_webhook(request: Request):
             event_record.click_count = (event_record.click_count or 0) + 1
             if not event_record.clicked_at:
                 event_record.clicked_at = ts
-            clicked_url = data.get("click", {}).get("link") or data.get("url", "")
+            # HAG-391 scope extension. The same class as the `data` guard above, one
+            # nesting level deeper: the envelope guard pins `body`, and the guard at
+            # :55 pins `data`, but nothing pins `click`, so the second `.get` below
+            # raised AttributeError on a signed delivery carrying `click` as a
+            # string, a list or a number. Here that raise is worse than above: this
+            # branch sits INSIDE the db try, so it is caught by the handler's own
+            # `except Exception` and answered 500 -- Resend redelivers a body that
+            # can never succeed. Deliberately tolerant rather than a 400: a 400
+            # raised here would be swallowed by that same `except Exception`
+            # (HTTPException is an Exception) and become the very 500 it exists to
+            # remove. A click with no usable link is a real event, so it is recorded
+            # as one. Measured: the old line raised AttributeError -- 'str' object
+            # has no attribute 'get' -- for {"click": "https://link.example/x"}; for
+            # {"click": {"link": ...}} and {"click": {...no link...}} the two
+            # expressions are equal.
+            click = data.get("click")
+            click_link = click.get("link") if isinstance(click, dict) else ""
+            clicked_url = click_link or data.get("url", "")
             if clicked_url:
                 urls = event_record.clicked_urls or []
                 urls.append({"url": clicked_url, "at": ts.isoformat()})
@@ -263,11 +293,11 @@ async def email_feedback_page(
 
 @router.post("/feedback")
 async def submit_feedback_api(request: Request):
-    # Same guard as the receiver above, and for the same reason: this parse sits
-    # above the try that opens two lines down, so a non-object body raised
-    # uncaught and answered 500 for a malformed request. Unlike the receiver
-    # there is no signature here and nothing to redeliver, so this one only
-    # fixes the status code; the `except` below is left as it is, deliberately.
+    # Same guards as the receiver above, and for the same reason: this parse sits
+    # above the try that opens below, so a non-object body raised uncaught and
+    # answered 500 for a malformed request. There is no signature here and nothing
+    # to redeliver, so the codes below are chosen for the caller reading the status,
+    # not to ask anyone for a retry.
     try:
         body = await request.json()
     except ValueError:
@@ -290,7 +320,16 @@ async def submit_feedback_api(request: Request):
         return {"status": "ok"}
     except Exception as e:
         db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Feedback save error: {e}")
+        # Non-2xx on purpose, for the same reason as the receiver's failure path
+        # above: a plain dict here is HTTP 200, which reports a row that was never
+        # written as recorded. The caller is a form, so the status is the only part
+        # of this response a generic client reads -- the message in the body was
+        # always correct and was always ignored by anything that checks `res.ok`.
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)},
+        )
     finally:
         db.close()
 
