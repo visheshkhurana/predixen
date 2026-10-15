@@ -123,6 +123,8 @@ export default function AuthPage({
         google_denied: 'Google sign-in was cancelled.',
         google_token_failed: 'Could not complete Google sign-in. Please try again.',
         google_no_email: 'No email found on your Google account.',
+        google_unverified_email: 'Your Google account email is not verified. Verify it with Google, then try again.',
+        google_account_mismatch: 'This email is already linked to a different Google account.',
       };
       toast({
         title: 'Sign-in issue',

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from server.core.db import get_db
 from server.core.security import get_current_user
+from server.core.company_access import get_user_company
 from server.models import User, Company
 from server.metrics.suggestions.service import SuggestionService
 from server.metrics.suggestions.capability import CapabilityDiscovery
@@ -18,10 +19,7 @@ router = APIRouter(prefix="/suggestions", tags=["suggestions"])
 
 def _get_company_or_404(company_id: int, user: User, db: Session) -> Company:
     """Get company and verify user has access."""
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return company
+    return get_user_company(db, company_id, user)
 
 
 class GenerateRequest(BaseModel):
