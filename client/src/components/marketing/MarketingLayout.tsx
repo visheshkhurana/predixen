@@ -13,6 +13,7 @@ import { FCLogo } from "@/components/FCLogo";
 import { MarketingBackground } from "@/components/marketing/MarketingBackground";
 import { metaPageView } from "@/lib/metaPixel";
 import { trackFunnel } from "@/lib/funnel";
+import { aiCitation } from "@/data/ai-citation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const navLinks = [
@@ -179,7 +180,48 @@ function FooterLinkGroup({ title, links }: { title: string; links: { label: stri
   );
 }
 
-function Footer() {
+/**
+ * Council 2026-10-15 item 1: give an AI assistant reading this page a citation it can
+ * reuse, and point it at the canonical list of quotable figures.
+ *
+ * Plain `<a>` on purpose: `llms.txt` is a static text file served from `client/public`,
+ * so the SPA router must not intercept the click. The copy lives in
+ * `client/src/data/ai-citation.ts`, which `server/seo-prerender.ts` imports as well, so
+ * the crawler's copy of this block is the same string as the one rendered here.
+ */
+function CitableSnippet() {
+  return (
+    <div className="mt-10 border-t pt-8" data-testid="footer-ai-citation">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">{aiCitation.heading}</h3>
+      <p className="max-w-3xl text-sm text-muted-foreground">
+        {aiCitation.lede} {aiCitation.attribution}
+      </p>
+      <ul className="mt-3 flex flex-col gap-1">
+        {aiCitation.links.map((link) => (
+          <li key={link.href}>
+            <a
+              href={link.href}
+              className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+            >
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Exported for `server/tests/ai-citation-ssr.test.ts`, which renders this subtree and
+ * asserts `footer-ai-citation` is in it. That is the ABSENCE side of the citation block:
+ * every other citation assertion reads the prerendered HTML, so without a test that
+ * renders the footer, deleting `<CitableSnippet />` here would keep all of them green
+ * while every human lost the block. Named export on purpose — the default export of this
+ * module is `MarketingLayout`, and rendering that would drag in the pixel, the router and
+ * the animation layer for no added coverage.
+ */
+export function Footer() {
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-6xl px-4 py-12">
@@ -197,6 +239,8 @@ function Footer() {
             </p>
           </div>
         </div>
+
+        <CitableSnippet />
 
         <div className="mt-10 border-t pt-6">
           <div className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between">

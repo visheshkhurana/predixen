@@ -9,6 +9,9 @@ import { RUNWAY_INDUSTRIES, RUNWAY_RELATED_FREE_TOOLS } from "../client/src/data
 // Same rule as runway-industries above: import the shared data so the Q&A a crawler is
 // served and the FAQPage markup beside it cannot drift from what the page renders.
 import { founderFaqs } from "../client/src/data/founder-faqs";
+// Same rule again: the "Cite FounderConsole" block a crawler is served and the one the
+// React footer renders come from one string, so they cannot drift.
+import { aiCitation } from "../client/src/data/ai-citation";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -34,6 +37,27 @@ const landingFaqs = [
   { q: "What is a startup digital twin?", a: "A digital twin is a continuously updated virtual representation of your company that reflects your current financial reality without manual updates." },
   { q: "How long does setup take?", a: "Most founders are up and running in under five minutes. Connect your primary data source and FounderConsole automatically builds your digital twin." },
 ];
+
+/**
+ * Council 2026-10-15 item 1, the crawler half: the block an AI assistant reading the served
+ * HTML can quote back. GPTBot does not run the bundle, so the React footer's copy of this
+ * does not exist for it — the crawler's only chance is the prerender.
+ *
+ * Emitted centrally in `injectSEO` for every route that has a `bodyContent`, not from one
+ * page builder. The first version of this called it from `buildLandingBodyContent()` alone
+ * and therefore reached 1 of the 46 prerendered routes that emit a body — the homepage
+ * only. Nothing in it is page-specific: `ai-citation.ts` carries no figures and points at
+ * `llms.txt` rather than restating it. So per-page placement had no reason behind it, and
+ * `/tools/runway-calculator` is the clearest cost — it is one of the block's own two links
+ * and it could not cite back.
+ *
+ * Module scope rather than a function local, because `injectSEO` is the only emit site now.
+ */
+const citationBlock = `<h2>${escapeHtml(aiCitation.heading)}</h2>
+<p>${escapeHtml(aiCitation.lede)} ${escapeHtml(aiCitation.attribution)}</p>
+<ul>${aiCitation.links
+  .map((l) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
+  .join("")}</ul>`;
 
 function buildLandingBodyContent(): string {
   const faqHtml = landingFaqs.map((f) =>
@@ -1434,7 +1458,12 @@ export function injectSEO(html: string, path: string): string {
     //
     // Bonus: if JS fails outright — stale chunk, blocked bundle, dead network —
     // the visitor now keeps a readable page instead of a white screen.
-    const preview = `<div id="ssr-content" style="max-width:46rem;margin:0 auto;padding:5rem 1.25rem;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.65;color:#1a1d24">${meta.bodyContent}</div>`;
+    // `${citationBlock}` is appended HERE, at the single point where every route with a
+    // bodyContent emits one, rather than from any individual page builder. That is what
+    // makes "every prerendered page can be cited" a property of the code rather than a
+    // list of routes somebody remembered to update — the failure mode `blogPosts` had in
+    // `seo-data.ts`, where a second hand-maintained list silently fell two posts behind.
+    const preview = `<div id="ssr-content" style="max-width:46rem;margin:0 auto;padding:5rem 1.25rem;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.65;color:#1a1d24">${meta.bodyContent}${citationBlock}</div>`;
     result = result.replace('<div id="root"></div>', `<div id="root">${preview}</div>`);
   }
 
