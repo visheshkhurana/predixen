@@ -6,7 +6,10 @@
 // other field in that log line is bounded: the path is a path, the method is one
 // of a handful of verbs, and the User-Agent is capped at `UA_ECHO_LIMIT`. The id
 // was not, so a single unauthenticated request carrying 5,000 characters
-// inflated a 167-byte line to 5,164 bytes, repeatable on every connection.
+// inflates one log line to 5,159 bytes, repeatable on every connection. (Line
+// overhead is 159 bytes, measured on the built bundle at two id lengths —
+// 10 chars gave 169 bytes, 64 gave 223. The figures here were 167/5,164 when
+// this file was written and could not be reproduced, so they were replaced.)
 //
 // Run: npx tsx --test server/tests/request-id.test.ts
 import test from "node:test";
