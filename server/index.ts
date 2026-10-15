@@ -10,11 +10,11 @@ import { registerTwilioRoutes } from "./twilio/routes";
 import { requireAuth } from "./middleware/requireAuth";
 import { existsSync } from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
 import { aiAgentLog } from "./middleware/aiAgentLog";
+import { requestId } from "./middleware/requestId";
 
 const app = express();
 app.disable("x-powered-by");
@@ -23,12 +23,12 @@ app.disable("x-powered-by");
 // like the same private address.
 app.set("trust proxy", true);
 
-app.use((req, res, next) => {
-  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
-  req.headers["x-request-id"] = requestId;
-  res.setHeader("X-Request-ID", requestId);
-  next();
-});
+/**
+ * Request correlation id. Minted here if absent; see
+ * `middleware/requestId.ts` for why the client-supplied value is capped at 64
+ * characters rather than trusted.
+ */
+app.use(requestId());
 
 // Counts AI-agent and crawler traffic, which PostHog structurally cannot see:
 // it attributes a pageview from `document.referrer`, and a crawler never runs

@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { GENERIC_BOT_UA } from "./botUserAgent";
 
 /**
  * Server-side classification of AI-agent and search-crawler traffic.
@@ -28,13 +29,14 @@ import type { Request, Response, NextFunction } from "express";
  * query string (which is where `/auth?email=…` style values live). `req.path`
  * drops the query string, which is why it is used rather than `originalUrl`.
  *
- * Related, and deliberately separate: `server/middleware/geoRestrict.ts` owns a
- * second User-Agent list. That one decides whether to serve or 403, and it is
- * strict about staying generous because a false positive there has cost real ad
- * money. This one only counts, so a false positive costs a log line and a false
- * negative costs an invisible agent. The two lists are not merged on purpose —
- * driving the gate from a measurement table would mean a logging edit could
- * change who gets served.
+ * Related: `server/middleware/geoRestrict.ts` decides whether to serve or 403,
+ * and it is strict about staying generous because a false positive there has
+ * cost real ad money. This one only counts, so a false positive costs a log line
+ * and a false negative costs an invisible agent. The two keep their own
+ * *decisions* — driving the gate from a measurement table would mean a logging
+ * edit could change who gets served — but they now share the generic non-browser
+ * heuristic itself, because it had diverged and this file's copy was the
+ * narrower one. See `botUserAgent.ts` for which way it may move and why.
  */
 
 export type UaClass = "ai_agent" | "search_crawler" | "ads_crawler" | "other_bot";
@@ -133,22 +135,20 @@ export const KNOWN_AGENTS: ReadonlyArray<{
   { token: "adidxbot", agent: "AdIdxBot", class: "ads_crawler" },
 ];
 
-/**
- * Backstop for a crawler that is not in the table, so a bot we have never heard
- * of shows up as *something* rather than as nothing.
- *
- * This is the one design decision here worth arguing about. A new agent — the
- * next ChatGPT-User — would otherwise be invisible, and "invisible" is
- * indistinguishable from "did not visit", which is the exact failure this whole
- * change exists to undo. So an unrecognised non-browser client is logged as
- * `other_bot` **with its User-Agent attached**, because the UA is the finding.
- *
- * It is narrower than `geoRestrict.ts`'s equivalent on purpose: that one may
- * err toward letting things through, this one only errs toward noise. It is
- * also noisier by nature, so the liveness probe is carved out below.
- */
-const GENERIC_BOT_UA =
-  /(bot\b|\bbot|crawler|spider|crawl|fetcher|scraper|headlesschrome|python-requests|curl\/|wget\/|axios\/|go-http-client|okhttp|libwww|undici|node-fetch)/i;
+// Backstop for a crawler that is not in the table, so a bot we have never heard
+// of shows up as *something* rather than as nothing.
+//
+// This is the one design decision here worth arguing about. A new agent — the
+// next ChatGPT-User — would otherwise be invisible, and "invisible" is
+// indistinguishable from "did not visit", which is the exact failure this whole
+// change exists to undo. So an unrecognised non-browser client is logged as
+// `other_bot` **with its User-Agent attached**, because the UA is the finding.
+//
+// The heuristic itself is shared with `geoRestrict.ts` — see `botUserAgent.ts`
+// for why it is the wider of the two lists that survived. It is noisier here
+// than there, because here a match is a log line rather than a gate decision,
+// so the liveness probe is carved out below. Used at `GENERIC_BOT_UA.test(s)`
+// in `classifyUserAgent`.
 
 /**
  * The container's own liveness probe, and the reason the backstop needs an
