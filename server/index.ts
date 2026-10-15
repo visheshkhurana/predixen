@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
+import { applyUpstreamRedirectRewrite } from "./proxy/rewriteUpstreamLocation";
 
 const app = express();
 app.disable("x-powered-by");
@@ -711,6 +712,12 @@ const apiProxy = createProxyMiddleware({
     "^/api": "",
   },
   on: {
+    proxyRes: (proxyRes, req) => {
+      applyUpstreamRedirectRewrite(proxyRes, req, {
+        upstreamOrigin: FASTAPI_URL,
+        publicPrefix: "/api",
+      });
+    },
     error: (err: Error, req, res) => {
       console.error("Proxy error:", err.message);
       if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -743,6 +750,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/notifications${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Notifications proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -764,6 +777,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/email-tracking${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Email tracking proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
@@ -790,6 +809,12 @@ app.use(
     proxyTimeout: 30000,
     pathRewrite: (path) => `/webhooks/lead-gen${path}`,
     on: {
+      proxyRes: (proxyRes, req) => {
+        applyUpstreamRedirectRewrite(proxyRes, req, {
+          upstreamOrigin: FASTAPI_URL,
+          publicPrefix: "",
+        });
+      },
       error: (err: Error, req, res) => {
         console.error("Lead-gen webhook proxy error:", err.message);
         if ('writeHead' in res && typeof res.writeHead === 'function') {
