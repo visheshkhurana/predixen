@@ -1,23 +1,161 @@
-export const blogPosts = [
-  { slug: "founderconsole-vs-sturppy-vs-finmark-vs-causal", title: "FounderConsole vs Sturppy vs Finmark vs Causal: Two of These No Longer Exist", excerpt: "This comparison had four live products in it when we wrote it. As of August 2026, Finmark has been sunset and Causal has been absorbed into an enterprise suite. Here's what is actually left for a seed-stage founder, and how the two survivors really compare.", date: "Aug 10, 2026", author: "Vishesh Khurana" },
-  { slug: "startup-fpa-tools-acquired-timeline", title: "Every Startup FP&A Tool Got Acquired. Here's the Timeline.", excerpt: "Finmark, Pry, Causal and Mosaic were all absorbed into larger companies. Last month Runway lost the runway.com domain to an AI video startup. A field guide to where each one went and why the seed-stage end of the market is now empty.", date: "Aug 8, 2026", author: "Vishesh Khurana" },
-  { slug: "finmark-shut-down-alternative", title: "Finmark Is Gone. Here's Where Your Runway Model Goes Next.", excerpt: "BILL sunset Finmark on 1 April 2026. Pry, Causal and Mosaic were absorbed too, and Runway just lost its domain. Here's what actually happened to startup FP&A — and what a seed-stage founder should do about it.", date: "Aug 8, 2026", author: "Vishesh Khurana" },
-  { slug: "how-to-calculate-startup-runway", title: "How to Calculate Startup Runway: The Complete Guide for Founders", excerpt: "Runway is the single most important number for any startup. This guide covers the basic formula, common pitfalls, and why Monte Carlo simulation gives you a more accurate picture than a spreadsheet ever could.", date: "Mar 15, 2026", author: "Vishesh Khurana" },
-  { slug: "seed-stage-saas-benchmarks-2026", title: "Seed-Stage SaaS Benchmarks 2026: What Good Looks Like", excerpt: "Updated benchmarks for seed-stage SaaS companies in 2026, covering ARR growth, net revenue retention, burn multiples, and the metrics that matter most for your next raise.", date: "Mar 12, 2026", author: "Vishesh Khurana" },
-  { slug: "best-ai-tools-startup-financial-planning", title: "7 Best AI Tools for Startup Financial Planning in 2026", excerpt: "A curated list of the best AI-powered tools for startup financial planning, from runway forecasting to board deck generation.", date: "Mar 8, 2026", author: "Vishesh Khurana" },
-  { slug: "what-if-analysis-for-startups", title: "What-If Analysis for Startups: A Founder's Guide", excerpt: "Learn how to use what-if analysis to test hiring plans, pricing changes, and fundraising timing before committing.", date: "Mar 5, 2026", author: "Vishesh Khurana" },
-  { slug: "board-deck-30-minutes", title: "How to Prepare a Board Deck in 30 Minutes", excerpt: "A step-by-step guide to preparing an investor-ready board deck in 30 minutes or less.", date: "Mar 3, 2026", author: "Vishesh Khurana" },
-  { slug: "digital-twin-for-startups", title: "Digital Twin for Startups: The Future of Founder Decision-Making", excerpt: "Learn what a digital twin is, how it applies to startups, and why having a live financial model of your company changes how you make decisions.", date: "Feb 28, 2026", author: "Vishesh Khurana" },
-  { slug: "ltv-cac-ratio-explained", title: "LTV:CAC Ratio Explained for SaaS Founders", excerpt: "The LTV:CAC ratio is one of the most important unit economics metrics for SaaS. This guide explains how to calculate it, what good looks like, and how to improve it.", date: "Feb 25, 2026", author: "Vishesh Khurana" },
-  { slug: "calculate-true-runway", title: "How to Calculate Your True Runway", excerpt: "A single forecast is a trap. Learn how to build defensible runway scenarios using confidence intervals instead of gut feel.", date: "Feb 24, 2026", author: "Nikita Kapoor" },
-  { slug: "monte-carlo-founders-guide", title: "Monte Carlo Simulations: A Founder's Guide", excerpt: "A plain-English explanation that turns Monte Carlo from intimidating to practical.", date: "Feb 18, 2026", author: "Arjun Rao" },
-  { slug: "cap-table-mistakes", title: "5 Cap Table Mistakes That Cost Founders Millions", excerpt: "From uncapped SAFEs to missing pro-rata rights — the most common equity mistakes early-stage founders make.", date: "Feb 10, 2026", author: "Priya Sharma" },
-  { slug: "timing-series-a", title: "When to Raise: Timing Your Series A", excerpt: "How confidence intervals help you avoid raising too early or too late.", date: "Jan 29, 2026", author: "Nikita Kapoor" },
-  { slug: "data-driven-culture", title: "Building a Data-Driven Culture", excerpt: "The best founders don't just track metrics — they build systems where every team member understands the numbers.", date: "Jan 15, 2026", author: "Dev Mehta" },
-  { slug: "unit-economics-guide", title: "The Founder's Guide to Unit Economics", excerpt: "LTV, CAC, payback period, and contribution margin explained with real startup examples.", date: "Jan 6, 2026", author: "Priya Sharma" },
-];
+import { blogPosts as clientBlogPosts } from "../client/src/data/blog-posts";
 
-export const blogPostContent: Record<string, string[]> = {
+/**
+ * The post list is DERIVED from the client data, never re-typed here.
+ *
+ * It used to be a hand-maintained copy, and it fell two posts behind: this file
+ * held 16 posts while `client/src/data/blog-posts.ts` held 18. The sitemap
+ * generator (`scripts/generate-sitemap.ts`) reads the client file, so it
+ * advertised all 18 - while `buildBlogPostBodyContent` in `seo-prerender.ts`
+ * looks a slug up in *this* list, missed the two newest, and served crawlers
+ * "Article not found" with `canonical -> /blog` at HTTP 200, for two URLs we had
+ * submitted. Both pages are correct in a browser, so there was no symptom.
+ *
+ * `seo-prerender.ts` already imports `runway-industries` and `founder-faqs` from
+ * the client for exactly this reason; the blog list was the one never converted.
+ * Deriving it means the prerender and the sitemap cannot disagree about which
+ * posts exist, and the next post to land prerenders on the day it ships.
+ *
+ * Only the fields the prerender reads are carried, so this is a projection of the
+ * client type rather than a second definition of it.
+ */
+/**
+ * The prerendered metadata for the 16 posts that predate the derivation, kept
+ * VERBATIM so this change does not alter one byte of a page that already worked.
+ *
+ * This is not a second post list and it is not a copy of the client's data - it
+ * is the prerender's own abridged presentation of those 16 posts, the same kind
+ * of editorial artifact as `abridgedBlogPostContent` below. It differs from the
+ * client's copy in `excerpt` on 12 of the 16 (the client's are longer and newer,
+ * e.g. board-deck-30-minutes ends "in 30 minutes or less." here and "...and how
+ * AI can help you get there faster." there).
+ *
+ * Carrying it means the LIST is derived - which is what HAG-311 needed, since a
+ * missing list entry is what served "Article not found" - while leaving the
+ * served <meta name="description"> exactly as it is. Whether those 12 excerpts
+ * should be refreshed to the client's current text is a scope decision that is
+ * NOT this fix; see the HAG-311 report.
+ *
+ * There is no entry for what-is-a-good-burn-multiple or
+ * 13-week-cash-flow-template: they were absent from the old list, which is the
+ * bug, so they take the client's fields - correctly - from the start.
+ */
+const prerenderPostMeta: Record<string, { title: string; excerpt: string; date: string; author: string }> = {
+  "founderconsole-vs-sturppy-vs-finmark-vs-causal": {
+    title: "FounderConsole vs Sturppy vs Finmark vs Causal: Two of These No Longer Exist",
+    excerpt: "This comparison had four live products in it when we wrote it. As of August 2026, Finmark has been sunset and Causal has been absorbed into an enterprise suite. Here's what is actually left for a seed-stage founder, and how the two survivors really compare.",
+    date: "Aug 10, 2026",
+    author: "Vishesh Khurana",
+  },
+  "startup-fpa-tools-acquired-timeline": {
+    title: "Every Startup FP&A Tool Got Acquired. Here's the Timeline.",
+    excerpt: "Finmark, Pry, Causal and Mosaic were all absorbed into larger companies. Last month Runway lost the runway.com domain to an AI video startup. A field guide to where each one went and why the seed-stage end of the market is now empty.",
+    date: "Aug 8, 2026",
+    author: "Vishesh Khurana",
+  },
+  "finmark-shut-down-alternative": {
+    title: "Finmark Is Gone. Here's Where Your Runway Model Goes Next.",
+    excerpt: "BILL sunset Finmark on 1 April 2026. Pry, Causal and Mosaic were absorbed too, and Runway just lost its domain. Here's what actually happened to startup FP&A — and what a seed-stage founder should do about it.",
+    date: "Aug 8, 2026",
+    author: "Vishesh Khurana",
+  },
+  "how-to-calculate-startup-runway": {
+    title: "How to Calculate Startup Runway: The Complete Guide for Founders",
+    excerpt: "Runway is the single most important number for any startup. This guide covers the basic formula, common pitfalls, and why Monte Carlo simulation gives you a more accurate picture than a spreadsheet ever could.",
+    date: "Mar 15, 2026",
+    author: "Vishesh Khurana",
+  },
+  "seed-stage-saas-benchmarks-2026": {
+    title: "Seed-Stage SaaS Benchmarks 2026: What Good Looks Like",
+    excerpt: "Updated benchmarks for seed-stage SaaS companies in 2026, covering ARR growth, net revenue retention, burn multiples, and the metrics that matter most for your next raise.",
+    date: "Mar 12, 2026",
+    author: "Vishesh Khurana",
+  },
+  "best-ai-tools-startup-financial-planning": {
+    title: "7 Best AI Tools for Startup Financial Planning in 2026",
+    excerpt: "A curated list of the best AI-powered tools for startup financial planning, from runway forecasting to board deck generation.",
+    date: "Mar 8, 2026",
+    author: "Vishesh Khurana",
+  },
+  "what-if-analysis-for-startups": {
+    title: "What-If Analysis for Startups: A Founder's Guide",
+    excerpt: "Learn how to use what-if analysis to test hiring plans, pricing changes, and fundraising timing before committing.",
+    date: "Mar 5, 2026",
+    author: "Vishesh Khurana",
+  },
+  "board-deck-30-minutes": {
+    title: "How to Prepare a Board Deck in 30 Minutes",
+    excerpt: "A step-by-step guide to preparing an investor-ready board deck in 30 minutes or less.",
+    date: "Mar 3, 2026",
+    author: "Vishesh Khurana",
+  },
+  "digital-twin-for-startups": {
+    title: "Digital Twin for Startups: The Future of Founder Decision-Making",
+    excerpt: "Learn what a digital twin is, how it applies to startups, and why having a live financial model of your company changes how you make decisions.",
+    date: "Feb 28, 2026",
+    author: "Vishesh Khurana",
+  },
+  "ltv-cac-ratio-explained": {
+    title: "LTV:CAC Ratio Explained for SaaS Founders",
+    excerpt: "The LTV:CAC ratio is one of the most important unit economics metrics for SaaS. This guide explains how to calculate it, what good looks like, and how to improve it.",
+    date: "Feb 25, 2026",
+    author: "Vishesh Khurana",
+  },
+  "calculate-true-runway": {
+    title: "How to Calculate Your True Runway",
+    excerpt: "A single forecast is a trap. Learn how to build defensible runway scenarios using confidence intervals instead of gut feel.",
+    date: "Feb 24, 2026",
+    author: "Nikita Kapoor",
+  },
+  "monte-carlo-founders-guide": {
+    title: "Monte Carlo Simulations: A Founder's Guide",
+    excerpt: "A plain-English explanation that turns Monte Carlo from intimidating to practical.",
+    date: "Feb 18, 2026",
+    author: "Arjun Rao",
+  },
+  "cap-table-mistakes": {
+    title: "5 Cap Table Mistakes That Cost Founders Millions",
+    excerpt: "From uncapped SAFEs to missing pro-rata rights — the most common equity mistakes early-stage founders make.",
+    date: "Feb 10, 2026",
+    author: "Priya Sharma",
+  },
+  "timing-series-a": {
+    title: "When to Raise: Timing Your Series A",
+    excerpt: "How confidence intervals help you avoid raising too early or too late.",
+    date: "Jan 29, 2026",
+    author: "Nikita Kapoor",
+  },
+  "data-driven-culture": {
+    title: "Building a Data-Driven Culture",
+    excerpt: "The best founders don't just track metrics — they build systems where every team member understands the numbers.",
+    date: "Jan 15, 2026",
+    author: "Dev Mehta",
+  },
+  "unit-economics-guide": {
+    title: "The Founder's Guide to Unit Economics",
+    excerpt: "LTV, CAC, payback period, and contribution margin explained with real startup examples.",
+    date: "Jan 6, 2026",
+    author: "Priya Sharma",
+  },
+};
+
+export const blogPosts = clientBlogPosts.map((p) => ({
+  slug: p.slug,
+  ...(prerenderPostMeta[p.slug] ?? {
+    title: p.title,
+    excerpt: p.excerpt,
+    date: p.date,
+    author: p.author,
+  }),
+}));
+
+/**
+ * Abridged bodies for the prerendered blog pages, keyed by slug. These are hand
+ * written and deliberately shorter than the client's own `content` array - a
+ * crawler is served the argument, not the whole article - so they are NOT
+ * derived, and nothing here should be replaced by the client copy.
+ */
+const abridgedBlogPostContent: Record<string, string[]> = {
   "startup-fpa-tools-acquired-timeline": [
     "In 2022 a seed-stage founder had five or six credible options for modelling runway. Today they have almost none — not because the products failed, but because every one of them was bought and moved upmarket.",
     "## The timeline",
@@ -180,4 +318,19 @@ export const blogPostContent: Record<string, string[]> = {
     "## The LTV:CAC Ratio",
     "Investors want to see LTV:CAC of at least 3:1.",
   ],
+};
+
+/**
+ * What the prerender actually reads: the abridged bodies where they exist,
+ * falling back to the post's own content everywhere else.
+ *
+ * The fallback is the guard, not a convenience. Before it, a post with no entry
+ * here prerendered as an article with a title, a byline and no body - and if it
+ * was also missing from the list above, as an "Article not found" page. Now a
+ * newly published post is served its real content on the first request, and the
+ * worst case is a longer page rather than an empty or wrong one.
+ */
+export const blogPostContent: Record<string, string[]> = {
+  ...Object.fromEntries(clientBlogPosts.map((p) => [p.slug, p.content])),
+  ...abridgedBlogPostContent,
 };
