@@ -63,17 +63,53 @@ def test_seo_data_imports_the_client_post_list():
 
 
 def test_seo_data_does_not_re_type_the_slugs():
-    """No hand-typed `slug: "..."` literal may survive in seo-data.ts.
+    """No `slug: "..."` FIELD literal may survive in seo-data.ts.
 
-    The client file is the only place a slug is spelled out. A literal here is
-    the drift vector itself, and it is what a well-meaning future edit would
+    This guards one of the two spellings a slug can take in this file: the
+    field, as it appears in a re-typed post object. A field literal is the
+    drift vector HAG-311 was, and it is what a well-meaning future edit would
     reach for.
+
+    It is NOT a claim that no slug is spelled out here at all -- that was the
+    sentence this docstring used to carry and it was false. `prerenderPostMeta`
+    and `abridgedBlogPostContent` are keyed by 16 slugs each, spelled out as
+    quoted keys, and they are deliberately hand-keyed editorial artifacts rather
+    than copies of the list. The keys are a different spelling, they are
+    covered by test_every_slug_keyed_here_is_a_real_client_slug below, and the
+    two tests together are what makes the pair of claims complete: this one
+    catches a re-typed field, that one catches an orphaned key.
     """
     src = source(SEO_DATA)
     literals = re.findall(r'slug:\s*"([^"]+)"', src)
     assert literals == [], (
         "server/seo-data.ts re-types blog slugs "
         f"{literals} -- derive them from ../client/src/data/blog-posts instead"
+    )
+
+
+def test_every_slug_keyed_here_is_a_real_client_slug():
+    """A slug spelled out as a map KEY must be a slug the client list has.
+
+    The invariant over the second spelling. An entry keyed by a slug that the
+    client post list does not contain is orphaned: it is never looked up, so
+    the post it was written for silently loses its pinned excerpt and reverts
+    from its abridged crawler body to the full client content. No other test
+    fails -- the page still renders, it just renders differently from the
+    editorial intent, which is the class of thing this file exists to catch.
+
+    The keys are allowed to exist; they are not allowed to go stale. This is
+    the assertion that fires the day someone renames a slug in
+    client/src/data/blog-posts.ts and leaves the two maps behind.
+    """
+    src = source(SEO_DATA)
+    client = set(client_slugs())
+    keyed = set(re.findall(r'^\s*"([^"]+)"\s*:', src, re.M))
+    orphans = sorted(keyed - client)
+    assert orphans == [], (
+        f"server/seo-data.ts keys hand-maintained maps on slugs the client post "
+        f"list does not have: {orphans} -- these entries are never reached, so "
+        f"those posts lose their pinned excerpt and abridged body; fix the key "
+        f"or derive the entry"
     )
 
 
