@@ -3,13 +3,18 @@
  *
  * Run from the repo root: `npm run test:sitemap`, or `npx tsx server/tests/sitemap-drift.test.ts`.
  *
- * The point of this file is the three controls at the end. Every assertion above them
+ * The point of this file is the four controls at the end. Every assertion above them
  * passes on `main` today, because `main`'s sitemap happens to be in sync - so on its own
  * this file would be a green step that cannot fail, which is the same defect class as the
  * `llms.txt` check: a test that only ever says yes. The first control proves the test
  * notices a post that is missing from the sitemap, the second proves it notices a sitemap
- * entry with no post behind it, and the third proves the same for a declared non-blog
- * route. Delete any of them and this file stops being evidence.
+ * entry with no post behind it, the third proves the same for a declared non-blog route,
+ * and the fourth proves the tag-balance check rejects the damaged file a same-anchor
+ * auto-merge produces. Delete any of them and this file stops being evidence.
+ *
+ * The fourth control is there because the first three did not catch that damage. On
+ * 2026-10-15 a rebase auto-merged two `<url>` blocks at one anchor into a file
+ * `ET.parse` rejects, and every check in this file reported `ok` on it.
  *
  * The non-blog half is checked in both directions, because a list declared in the
  * generator can drift from the app in either: every declared route must be one `App.tsx`
@@ -103,6 +108,25 @@ check(
   `unique ${new Set(locs).size} of ${locs.length}`,
 );
 
+// The tag balance, which is the check that was missing. Every assertion above passed on
+// a file that `ET.parse` rejects with `mismatched tag`, because this parser is line-based:
+// a stray `<url>` between one entry's open and its close is absorbed into that entry's
+// bytes, the entry count does not move, and the round trip above reproduces the damage
+// faithfully. Counting the tags is what the parser structurally cannot see, so the two
+// numbers are compared here against each other and against the entry count.
+//
+// This is also why the file is not asserted to be well-formed XML directly: a real parse
+// needs a dependency, and one is on the hold list. Two open tags against one close is the
+// shape a same-anchor auto-merge produces, and it is what this catches.
+const openTags = (xml.match(/<url>/g) ?? []).length;
+const closeTags = (xml.match(/<\/url>/g) ?? []).length;
+check(
+  "every <url> is closed, none is nested, and each entry is one <url>",
+  openTags === closeTags && openTags === entries.length && openTags === locs.length,
+  `<url> ${openTags} vs </url> ${closeTags}, parsed entries ${entries.length}, ` +
+    `<loc> ${locs.length}`,
+);
+
 // ---------------------------------------------------------------------------
 // The non-blog half: the declared routes and the app must agree.
 // ---------------------------------------------------------------------------
@@ -183,6 +207,29 @@ const NEW_DATE = "2026-10-14";
   check("POSITIVE CONTROL: a new post is added, with its date as lastmod", ok,
     `added ${JSON.stringify(res.added)} removed ${JSON.stringify(res.removed)} ` +
     `count ${rendered.length} (was ${locs.length})\n        block: ${JSON.stringify(block)}`);
+}
+
+// The control for the tag-balance check above: the same damaged file the `#107` rebase
+// produced - one anchor, both sides' `<url>`, two opens against one close - must be
+// rejected. Without this the balance check is a step that has only ever said yes on a
+// file that happened to be well-formed, which is the defect class this file was written
+// to avoid. It is built from the live file, so it also proves the damage is reachable
+// from the real input rather than from a hand-made string.
+{
+  const damaged = xml.replace("  <url>\n", "  <url>\n  <url>\n");
+  const dOpen = (damaged.match(/<url>/g) ?? []).length;
+  const dClose = (damaged.match(/<\/url>/g) ?? []).length;
+  let parserRejected = false;
+  try {
+    parseSitemap(damaged);
+  } catch {
+    parserRejected = true;
+  }
+  check(
+    "CONTROL: a duplicated <url> open fails the balance check and the parser",
+    dOpen !== dClose && !(dOpen === dClose && dOpen === entries.length) && parserRejected,
+    `damaged: <url> ${dOpen} vs </url> ${dClose}, parser threw: ${parserRejected}`,
+  );
 }
 
 {
