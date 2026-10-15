@@ -10,6 +10,8 @@ import { useSEO } from "@/lib/seo";
 import { founderFaqs } from "@/data/founder-faqs";
 import { trackFunnel } from "@/lib/funnel";
 import { useViewedOnce } from "@/hooks/use-viewed-once";
+import { SampleStartupPreview } from "@/components/tools/SampleStartupPreview";
+import { isSampleStartupPreviewEnabled } from "@/config/features";
 import {
   ArrowRight,
   Calculator,
@@ -138,6 +140,20 @@ export default function RunwayCalculatorPage() {
   const leadFormRef = useViewedOnce("lead_form_viewed", {
     location: "runway-calculator",
   });
+
+  // Target for the sample preview's "Unlock your personalized forecast" CTA.
+  // The preview hands control back here rather than opening a second capture
+  // form of its own: one email field on this page, one POST to /api/leads.
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  function focusEmailCapture() {
+    const el = emailInputRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Delay the focus until the smooth scroll has settled, or the browser
+    // drops the caret position the moment the page moves under it.
+    window.setTimeout(() => el.focus({ preventScroll: true }), 400);
+  }
 
   async function handleEmailResult(e: FormEvent) {
     e.preventDefault();
@@ -473,6 +489,14 @@ export default function RunwayCalculatorPage() {
         </section>
       )}
 
+      {isSampleStartupPreviewEnabled() && (
+        <section className="border-b" data-testid="section-sample-preview">
+          <div className="mx-auto max-w-6xl px-4 pt-12">
+            <SampleStartupPreview onUnlock={focusEmailCapture} />
+          </div>
+        </section>
+      )}
+
       <section className="border-b">
         <div className="mx-auto max-w-6xl px-4 pt-12">
           <div className="rounded-xl border bg-card/50 p-6 max-w-2xl mx-auto">
@@ -497,6 +521,7 @@ export default function RunwayCalculatorPage() {
                 </p>
                 <form ref={leadFormRef} onSubmit={handleEmailResult} className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <Input
+                    ref={emailInputRef}
                     type="email"
                     required
                     autoComplete="email"
