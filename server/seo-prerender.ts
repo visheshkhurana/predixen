@@ -9,6 +9,9 @@ import { RUNWAY_INDUSTRIES, RUNWAY_RELATED_FREE_TOOLS } from "../client/src/data
 // Same rule as runway-industries above: import the shared data so the Q&A a crawler is
 // served and the FAQPage markup beside it cannot drift from what the page renders.
 import { founderFaqs } from "../client/src/data/founder-faqs";
+// Same rule again: the "Cite this tool" block a crawler is served and the one the React
+// footer renders come from one string, so they cannot drift.
+import { aiCitation } from "../client/src/data/ai-citation";
 
 const SITE_URL = "https://founderconsole.ai";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -40,6 +43,17 @@ function buildLandingBodyContent(): string {
     `<section><h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p></section>`
   ).join("");
 
+  // Council 2026-10-15 item 1, the crawler half. The React footer renders the same block
+  // from `ai-citation.ts`; an assistant reading the served HTML (GPTBot does not run the
+  // bundle) would otherwise never see it, because the footer only exists after hydration.
+  const citationHtml = aiCitation.links
+    .map((l) => `<li><a href="${escapeHtml(l.href)}">${escapeHtml(l.label)}</a></li>`)
+    .join("");
+
+  const citationBlock = `<h2>${escapeHtml(aiCitation.heading)}</h2>
+<p>${escapeHtml(aiCitation.lede)} ${escapeHtml(aiCitation.attribution)}</p>
+<ul>${citationHtml}</ul>`;
+
   return `<article>
 <h1>FounderConsole — The Flight Simulator for Founders</h1>
 <p>FounderConsole is the AI-powered decision simulator for startup founders. Connect your company data, simulate the future, and get AI-powered decisions. Run your startup like a simulation.</p>
@@ -61,6 +75,7 @@ function buildLandingBodyContent(): string {
 ${faqHtml}
 <h2>Try a free tool first</h2>
 <p>No account required. Calculate <a href="/tools/runway-calculator">startup runway</a>, run Paul Graham's <a href="/default-alive">default alive test</a>, or estimate survival odds with the <a href="/survival-simulator">startup survival simulator</a>. See the full product on <a href="/features">features</a> and what's free during beta on <a href="/pricing">pricing</a>. When you're ready for live data and ongoing forecasts, <a href="/auth">get started free</a>.</p>
+${citationBlock}
 </article>`;
 }
 
