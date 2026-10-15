@@ -169,6 +169,26 @@ const LIVENESS_PATHS = new Set(["/health", "/healthz"]);
 const UA_ECHO_LIMIT = 120;
 
 /**
+ * Longest request id we will echo into a log line.
+ *
+ * The id is the other stranger-controlled field in the line, and it was
+ * unbounded while the User-Agent beside it was capped. One unauthenticated
+ * request carrying a 5,000-character `x-request-id` therefore inflated a single
+ * log line to kilobytes, repeatably, on every connection — and the module
+ * docstring above claims every field in the line is bounded, which was true of
+ * one of the two.
+ *
+ * Deliberately NOT a shared read of the limit `middleware/requestId.ts` applies
+ * to the response header, for two reasons. A middleware that logs a field has
+ * to bound it itself: "nothing unbounded reaches the log" is this file's
+ * invariant, and it should not hold only while a sibling is correct. And that
+ * file does not exist on every branch this one is stacked on, so importing the
+ * constant would make this file unbuildable on its own. The two values are the
+ * same on purpose, so neither silently truncates what the other decided.
+ */
+const ID_ECHO_LIMIT = 64;
+
+/**
  * Classify a User-Agent string. Pure — no request, no I/O — so it is testable
  * on its own and cannot be affected by what the request did.
  *
@@ -242,7 +262,9 @@ export function aiAgentLog(opts: AiAgentLogOptions = {}) {
     const path = req.path;
     const method = req.method;
     const requestId =
-      typeof req.headers["x-request-id"] === "string" ? req.headers["x-request-id"] : null;
+      typeof req.headers["x-request-id"] === "string"
+        ? req.headers["x-request-id"].slice(0, ID_ECHO_LIMIT)
+        : null;
 
     const started = now();
 

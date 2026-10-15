@@ -273,6 +273,38 @@ def test_the_backstop_carries_the_user_agent_and_the_table_does_not():
     assert "ua:" not in loop, "a table hit now echoes the raw User-Agent, which the token already names"
 
 
+def test_the_logged_request_id_is_capped_like_the_user_agent():
+    """The line's other stranger-controlled field - the half that was open.
+
+    `x-request-id` arrives from the client and is written into the log line
+    verbatim. The User-Agent beside it was capped and the id was not, so the
+    module docstring's claim to cover "the source invariants the TypeScript
+    file's claims rest on" was true of one field and not the other, and a single
+    unauthenticated request carrying a 5,000-character header inflated one line
+    to kilobytes. Sentinel measured that on #116 and this is its guard.
+
+    Both halves are asserted, because either one alone leaves the hole open: the
+    read has to cap, and the line has to be written from the capped local rather
+    than from the raw header.
+    """
+    src = strip_comments(read(MIDDLEWARE))
+
+    limit = re.search(r"const ID_ECHO_LIMIT\s*=\s*(\d+);", src)
+    assert limit, "ID_ECHO_LIMIT is gone"
+    assert int(limit.group(1)) > 0, "ID_ECHO_LIMIT is not a positive cap"
+
+    fn = braced_block(src, "export function aiAgentLog(")
+    assert 'req.headers["x-request-id"].slice(0, ID_ECHO_LIMIT)' in fn, (
+        "the request id is no longer capped, so an unbounded and stranger-controlled header "
+        "reaches the log line"
+    )
+
+    finish = braced_block(fn, 'res.on("finish", () => {')
+    assert "request_id: requestId," in finish, (
+        "the log line no longer writes the capped local, so the raw header can reach it"
+    )
+
+
 def test_the_middleware_is_actually_mounted():
     """A perfect classifier that is never registered logs nothing — and one
     registered in the wrong place logs the wrong page.
