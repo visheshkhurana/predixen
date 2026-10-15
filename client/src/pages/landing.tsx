@@ -247,6 +247,36 @@ function Hero() {
             <Link href="/demo">View Demo</Link>
           </Button>
         </motion.div>
+        {/*
+          Above the fold on purpose. The footer (MarketingLayout) and the
+          server-rendered homepage body have both linked /tools/runway-calculator
+          for a while, so this is not a missing link — it is a link nobody
+          scrolling the hero can see. A founder who is not ready to create an
+          account had no visible way in from here.
+
+          The claim is the one already written down in OUTREACH.md — free, public
+          beta, the calculator needs no login — and nothing else. It is a
+          separate `location` on purpose: reusing "hero" would make these clicks
+          indistinguishable from the signup button's, and the whole point is to
+          measure whether this one moves.
+        */}
+        <motion.p
+          initial={reduced ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="mt-6 text-sm text-muted-foreground"
+          data-testid="text-hero-calculator-prompt"
+        >
+          Just want your runway?{" "}
+          <Link
+            href="/tools/runway-calculator"
+            onClick={() => trackFunnel("cta_click", { location: "hero-calculator" })}
+            className="font-medium text-primary underline underline-offset-4 hover:no-underline"
+            data-testid="link-hero-runway-calculator"
+          >
+            The free runway calculator needs no login
+          </Link>
+        </motion.p>
         <motion.p
           initial={reduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
