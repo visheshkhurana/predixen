@@ -153,8 +153,34 @@ export interface SyncResult {
   addedRoutes: string[];
 }
 
-/** Split a sitemap file into its `<url>` entries, verbatim, in file order. */
+/**
+ * Split a sitemap file into its `<url>` entries, verbatim, in file order.
+ *
+ * This is deliberately a *strict* parse. It is line-based, so a tag it does not expect
+ * between `<url>` and `</url>` is carried inside the entry's bytes rather than rejected -
+ * which is exactly how a malformed file slipped past this module, the drift test and
+ * `generateSitemap()` at once (2026-10-15, the `#107` rebase: git auto-merged both
+ * sides' new `<url>` block at the same anchor and produced two opening tags against one
+ * closing one). The file stopped being parseable XML - `ET.parse` reported
+ * `mismatched tag` - while every check still read "ok", because the stray tag was
+ * absorbed into a neighbouring entry, the entry count never moved, and the round trip
+ * reproduced the damaged bytes exactly.
+ *
+ * So the two structural shapes a bad merge produces are rejected here rather than
+ * tolerated: a `<url>` that is never closed before the next `<url>` opens, and a block
+ * carrying more than one `<loc>`. Both name the line they are on, because the caller's
+ * only sane next move is to look at that line.
+ */
 export function parseSitemap(xml: string): SitemapEntry[] {
+  const opens = xml.match(/<url>/g)?.length ?? 0;
+  const closes = xml.match(/<\/url>/g)?.length ?? 0;
+  if (opens !== closes) {
+    throw new Error(
+      `sitemap: ${opens} <url> tags open but ${closes} close - the file is not ` +
+        `well-formed XML (this is what a bad auto-merge looks like)`,
+    );
+  }
+
   const lines = xml.split("\n");
   const entries: SitemapEntry[] = [];
 
@@ -172,6 +198,12 @@ export function parseSitemap(xml: string): SitemapEntry[] {
       const block: string[] = [];
       let j = i;
       for (; j < lines.length; j++) {
+        if (j > i && lines[j].trim() === "<url>") {
+          throw new Error(
+            `sitemap: <url> opened at line ${i + 1} is not closed before another ` +
+              `<url> at line ${j + 1}`,
+          );
+        }
         block.push(lines[j]);
         if (lines[j].trim() === "</url>") break;
       }
@@ -222,9 +254,15 @@ function isBlogLoc(loc: string): boolean {
 }
 
 function locOf(block: string, line: number): string {
-  const m = /<loc>([^<]+)<\/loc>/.exec(block);
-  if (!m) throw new Error(`sitemap: <url> entry near line ${line} has no <loc>`);
-  return m[1];
+  const all = [...block.matchAll(/<loc>([^<]+)<\/loc>/g)];
+  if (all.length === 0) throw new Error(`sitemap: <url> entry near line ${line} has no <loc>`);
+  if (all.length > 1) {
+    throw new Error(
+      `sitemap: <url> entry near line ${line} carries ${all.length} <loc> values - ` +
+        `one entry must hold exactly one, so two entries have been merged into one block`,
+    );
+  }
+  return all[0][1];
 }
 
 function blogBlock(slug: string, lastmod: string): string {
