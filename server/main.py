@@ -236,6 +236,13 @@ async def _run_deferred_startup():
         except Exception as e:
             logger.warning(f"Could not ensure competitor tables: {e}")
 
+        try:
+            from server.models.stripe_reconciliation import StripeReconciliationEvent
+            StripeReconciliationEvent.__table__.create(bind=engine, checkfirst=True)
+            logger.info("Ensured stripe reconciliation table exists")
+        except Exception as e:
+            logger.warning(f"Could not ensure stripe reconciliation table: {e}")
+
         if settings.should_run_migrations:
             logger.info("Running migrations...")
             from server.core.migrations import run_migrations
