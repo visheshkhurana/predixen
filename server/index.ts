@@ -14,7 +14,7 @@ import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
-import { aiAgentLog } from "./middleware/aiAgentLog";
+import { aiAgentLog, ID_ECHO_LIMIT } from "./middleware/aiAgentLog";
 
 const app = express();
 app.disable("x-powered-by");
@@ -24,7 +24,14 @@ app.disable("x-powered-by");
 app.set("trust proxy", true);
 
 app.use((req, res, next) => {
-  const requestId = (req.headers["x-request-id"] as string) || randomUUID();
+  // Capped here, at the point the id is generated or first read, using the one
+  // owner of the bound (`ID_ECHO_LIMIT`, exported by the middleware that logs
+  // it). Capping only on the log side made the response and the log disagree for
+  // every id over the limit: the response carried the raw value and the log
+  // carried its prefix, so an operator holding the response id could grep the log
+  // and find nothing. One cap, before either is written, is what makes them the
+  // same string.
+  const requestId = ((req.headers["x-request-id"] as string) || randomUUID()).slice(0, ID_ECHO_LIMIT);
   req.headers["x-request-id"] = requestId;
   res.setHeader("X-Request-ID", requestId);
   next();

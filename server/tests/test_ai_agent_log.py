@@ -289,7 +289,12 @@ def test_the_logged_request_id_is_capped_like_the_user_agent():
     """
     src = strip_comments(read(MIDDLEWARE))
 
-    limit = re.search(r"const ID_ECHO_LIMIT\s*=\s*(\d+);", src)
+    # `export ` is optional here on purpose: this test is about the log-side cap
+    # existing and being positive, not about where the constant is declared. The
+    # export itself is asserted by
+    # test_the_id_the_response_carries_is_the_id_the_log_records, which is the
+    # test that owns the one-owner question.
+    limit = re.search(r"(?:export\s+)?const ID_ECHO_LIMIT\s*=\s*(\d+);", src)
     assert limit, "ID_ECHO_LIMIT is gone"
     assert int(limit.group(1)) > 0, "ID_ECHO_LIMIT is not a positive cap"
 
@@ -363,6 +368,69 @@ def test_the_middleware_is_actually_mounted():
             f"aiAgentLog is registered AFTER {what} ({anchor!r}), so a request answered there "
             f"is never classified at all"
         )
+
+
+def test_the_id_the_response_carries_is_the_id_the_log_records():
+    """MEDIUM 1 on #118 — the cap was on the log side only, and that broke them apart.
+
+    `server/index.ts` writes the id onto the response as `X-Request-ID`, and
+    `aiAgentLog` writes it into the log line. When only the logger capped, a
+    65-character or 5,000-character id produced TWO different strings and nothing
+    said so: the response carried the raw value and the log carried its 64-char
+    prefix. An operator holding the id from a response would grep the log for it
+    and find nothing — the one thing a request id exists to prevent.
+
+    So what is asserted is that the bound has ONE OWNER and that both sides use
+    it: the constant is exported, the gateway imports it, the id is capped before
+    either write, and the same local feeds the request header, the response and
+    therefore the log. Asserting that two files each contain the number `64` would
+    pass today and drift the moment either is edited — the same defect one level
+    down, which is what this file is already about.
+    """
+    mw = strip_comments(read(MIDDLEWARE))
+    gateway = strip_comments(read(INDEX))
+
+    assert re.search(r"export const ID_ECHO_LIMIT\s*=\s*\d+;", mw), (
+        "ID_ECHO_LIMIT is not exported, so server/index.ts cannot use the one owner of this "
+        "bound and would have to keep a second copy of the number"
+    )
+    assert re.search(
+        r'import\s*\{[^}]*\bID_ECHO_LIMIT\b[^}]*\}\s*from\s*"\./middleware/aiAgentLog"',
+        gateway,
+    ), "server/index.ts does not import ID_ECHO_LIMIT from the middleware that defines it"
+
+    assign = re.search(r'req\.headers\["x-request-id"\]\s*=\s*([A-Za-z_$][\w$]*)\s*;', gateway)
+    echo = re.search(r'res\.setHeader\(\s*"X-Request-ID"\s*,\s*([A-Za-z_$][\w$]*)\s*\)', gateway)
+    assert assign, (
+        "the request header is no longer assigned from a local, so this test cannot tell which "
+        "value reaches the log"
+    )
+    assert echo, (
+        "server/index.ts no longer writes X-Request-ID, so this test can no longer prove the "
+        "response and the log carry the same value"
+    )
+    assert assign.group(1) == echo.group(1), (
+        f"the request header carries {assign.group(1)!r} and the response carries "
+        f"{echo.group(1)!r} — two values, so the log and the response can disagree"
+    )
+
+    name = assign.group(1)
+    capped = re.search(
+        rf"const\s+{re.escape(name)}\s*=[\s\S]{{0,200}}?\.slice\(\s*0\s*,\s*ID_ECHO_LIMIT\s*\)",
+        gateway,
+    )
+    assert capped, (
+        f"{name!r} reaches the response and the log, but it is not the capped value: the cap is "
+        f"applied somewhere other than the id that is echoed, which is how the log and the "
+        f"response came apart in the first place"
+    )
+
+    cap_at = gateway.find(".slice(0, ID_ECHO_LIMIT)")
+    echo_at = gateway.find('res.setHeader("X-Request-ID"')
+    assert cap_at < echo_at, (
+        "the response header is written before the id is capped, so the response carries the raw "
+        "value while the log carries its prefix"
+    )
 
 
 def test_the_logged_path_is_read_on_entry_and_carries_no_query_string():
