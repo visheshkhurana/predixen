@@ -169,6 +169,30 @@ const LIVENESS_PATHS = new Set(["/health", "/healthz"]);
 const UA_ECHO_LIMIT = 120;
 
 /**
+ * Longest request id we will echo into a log line — and, because `server/index.ts`
+ * imports this constant, the longest id the response is allowed to carry.
+ *
+ * The id is the other stranger-controlled field in the line, and it was
+ * unbounded while the User-Agent beside it was capped. One unauthenticated
+ * request carrying a 5,000-character `x-request-id` therefore inflated a single
+ * log line to kilobytes, repeatably, on every connection.
+ *
+ * EXPORTED, so the bound has ONE owner. Capping here alone was not enough and
+ * shipped a defect: `server/index.ts` writes the id it read onto the response as
+ * `X-Request-ID`, so a capped log line and an uncapped response header disagreed
+ * for every id over the limit — an operator holding the response id would grep
+ * the log and find nothing. With the id capped once, where it is generated or
+ * first read, the value in the request header, the value on the response and the
+ * value in the log line are the same string by construction rather than by two
+ * files holding the same number and hoping.
+ *
+ * The read below still slices. That is not a duplicate of the gateway's cap: this
+ * file's invariant is that nothing unbounded reaches the log line, and it should
+ * hold whether or not whoever set the header remembered to bound it.
+ */
+export const ID_ECHO_LIMIT = 64;
+
+/**
  * Classify a User-Agent string. Pure — no request, no I/O — so it is testable
  * on its own and cannot be affected by what the request did.
  *
@@ -242,7 +266,9 @@ export function aiAgentLog(opts: AiAgentLogOptions = {}) {
     const path = req.path;
     const method = req.method;
     const requestId =
-      typeof req.headers["x-request-id"] === "string" ? req.headers["x-request-id"] : null;
+      typeof req.headers["x-request-id"] === "string"
+        ? req.headers["x-request-id"].slice(0, ID_ECHO_LIMIT)
+        : null;
 
     const started = now();
 
