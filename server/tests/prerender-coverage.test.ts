@@ -5,6 +5,10 @@ import {
   RUNWAY_INDUSTRIES,
   RUNWAY_RELATED_FREE_TOOLS,
 } from "../../client/src/data/runway-industries";
+// HAG-311: the REAL post list, the same one the sitemap generator reads. The
+// whole point of this section is that it is driven by the client data rather
+// than by a second copy, so a post added tomorrow is covered the day it lands.
+import { blogPosts } from "../../client/src/data/blog-posts";
 
 // The real built shell, not a hand-written stub. injectSEO REPLACES the
 // canonical and robots tags rather than inserting them, so a minimal shell
@@ -317,6 +321,69 @@ for (const path of RUNWAY_PATHS) {
   console.log(
     `${securityOk ? "PASS" : "FAIL"}  ${"/security".padEnd(26)} body=${txt.length}  hrefs=${hrefsOk}  jsonLd=${jsonOk}`,
   );
+}
+
+// HAG-311. Two blog URLs from the sitemap served "Article not found" with a
+// canonical pointing at /blog: HTTP 200, advertises nothing wrong to a status
+// check, and tells a search engine to index /blog instead of the post. The
+// cause was a SECOND, hand-maintained post list in server/seo-data.ts that had
+// fallen two posts behind the real one. It is derived now, so the list cannot
+// drift again — and this section is what proves it, per slug, from the same
+// data the sitemap generator reads.
+//
+// It guards both halves of the failure, because they are two different bugs
+// wearing the same symptom: a slug missing from the LIST falls through to the
+// not-found branch, while a slug present in the list but missing from
+// blogPostContent renders an article with a title, a byline and NO BODY.
+{
+  // The prerenderer escapes into HTML before it renders, so a title carrying a
+  // bare & ("Every Startup FP&A Tool Got Acquired") is served as &amp; and a
+  // comparison against the raw title fails on a page that is in fact correct.
+  // The first version of this check did exactly that and reported 17/18.
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  let blogFailures = 0;
+  for (const post of blogPosts) {
+    const path = `/blog/${post.slug}`;
+    const out = injectSEO(SHELL, path);
+    const txt = textOf(out);
+    const title = (out.match(/<title>([^<]*)<\/title>/) || [, ""])[1];
+    const canon = (out.match(/rel="canonical" href="([^"]*)"/) || [, ""])[1];
+    const notFound = out.includes("Article not found");
+    const titled = title === `${esc(post.title)} | FounderConsole`;
+    const selfCanon = canon === `https://founderconsole.ai${path}`;
+    const body = out.includes(`<h1>${esc(post.title)}</h1>`) && txt.length > 200;
+    const ok = !notFound && titled && selfCanon && body;
+    if (!ok) {
+      blogFailures++;
+      failures++;
+      console.log(`FAIL  ${path}`);
+      console.log(`        title=${title}  canonical=${canon}  chars=${txt.length}  notFound=${notFound}`);
+    }
+  }
+  console.log(
+    `${blogFailures === 0 ? "PASS" : "FAIL"}  blog posts: ${blogPosts.length - blogFailures}/${blogPosts.length} render their own article, title and self-canonical`,
+  );
+}
+
+// The count is asserted, not assumed: the loop above can only be as good as the
+// list it walks, and a list that silently shrank would pass every assertion in
+// it. 18 is the number the sitemap generator writes into client/public/
+// sitemap.xml, so this is the join between the two files.
+const EXPECTED_BLOG_POSTS = 18;
+console.log(
+  `${blogPosts.length === EXPECTED_BLOG_POSTS ? "PASS" : "FAIL"}  blog list has ${blogPosts.length} posts (expected ${EXPECTED_BLOG_POSTS}, the count the sitemap is built from)`,
+);
+if (blogPosts.length !== EXPECTED_BLOG_POSTS) failures++;
+
+// The two slugs Sentinel's golden path caught, named explicitly so the exact
+// regression from 2026-10-15 cannot come back under a refactor that happens to
+// keep the totals right.
+for (const slug of ["what-is-a-good-burn-multiple", "13-week-cash-flow-template"]) {
+  const out = injectSEO(SHELL, `/blog/${slug}`);
+  const ok = !out.includes("Article not found") && out.includes('rel="canonical" href="https://founderconsole.ai/blog/' + slug + '"');
+  console.log(`${ok ? "PASS" : "FAIL"}  golden-path slug /blog/${slug}`);
+  if (!ok) failures++;
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURES`);
