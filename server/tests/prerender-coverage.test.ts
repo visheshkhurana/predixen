@@ -376,6 +376,97 @@ console.log(
 );
 if (blogPosts.length !== EXPECTED_BLOG_POSTS) failures++;
 
+// HAG-374. The loop above asserts a FLOOR, and only a floor: the post's <h1> is
+// present and the page carries more than 200 characters. That is what it takes
+// to catch a page serving "Article not found", and it is all it claims -- a post
+// whose body was cut to a single paragraph passes it, and so does an abridged
+// override written against the wrong slug.
+//
+// This section is the other half. For every post, the served body must carry
+// EVERY paragraph of the client's own `content` array. Measured at the head
+// this was written on: 2 of 18 posts conserved in full, the other 16 being
+// served an abridged body from server/seo-data.ts. #131 removed that map, so
+// the same check now reads 18 of 18 -- the assertion got stronger, not weaker,
+// because there is no longer any post whose body is allowed to differ.
+//
+// The normalisation below is load-bearing, and it was arrived at by failing.
+// Comparing raw strings reports 0 of 18. Two fixtures cause it, and both are
+// properties of the renderer rather than losses: the extractor turns every HTML
+// tag into a space, so `<strong>x</strong>,` reads back as `x ,`; and a markdown
+// link `[t](/u)` is served as the rendered text `t`, never as its source. An
+// assertion written naively and then loosened until it went green would have
+// shipped a test that proves nothing, which is the failure this file exists to
+// catch.
+const decodeEntities = (s: string) =>
+  s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+   .replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+// Markdown source -> the characters the prerenderer actually emits: it strips
+// the markers (`## `, `**`) and renders a link as its own text.
+const stripMarkdown = (s: string) =>
+  s.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\*\*/g, "").replace(/^#+\s*/, "");
+// Whitespace carries no content here, because every tag collapsed to a space.
+const squash = (s: string) => decodeEntities(stripMarkdown(s)).replace(/\s+/g, "");
+
+// The abridged set is PINNED on purpose, and it is EMPTY as of #131.
+//
+// When this block was written, server/seo-data.ts kept 16 hand-shortened bodies
+// as an editorial artifact, a crawler being served the argument rather than the
+// whole article. #131 deleted that map: seo-data.ts is now a one-line
+// re-export of the client list, so every post is served its own full `content`
+// and nothing can be reduced. Measured on the rebased head: 18 of 18 conserve
+// in full, 0 reduced.
+//
+// The list stays, empty, because it is the guard rather than the record: a
+// future override that shortens a body has to be declared here and come past
+// this test, instead of silently changing what a live page serves.
+const ABRIDGED_BY_DESIGN: string[] = [];
+{
+  const abridged = new Set(ABRIDGED_BY_DESIGN);
+  const reduced: string[] = [];
+  const unexplained: string[] = [];
+  for (const post of blogPosts) {
+    const served = squash(textOf(injectSEO(SHELL, `/blog/${post.slug}`)));
+    // A shell that failed to extract would report every post as a content loss,
+    // which is the loudest possible way to be wrong. Say what it actually is.
+    if (served.length < 200) {
+      failures++;
+      console.log(`FAIL  /blog/${post.slug} extracted ${served.length} chars of body -- cannot judge conservation`);
+      continue;
+    }
+    const missing = post.content.filter((p) => {
+      const n = squash(p);
+      return n.length > 0 && !served.includes(n);
+    });
+    if (missing.length === 0) continue;
+    reduced.push(post.slug);
+    if (abridged.has(post.slug)) continue;
+    unexplained.push(post.slug);
+    failures++;
+    console.log(`FAIL  /blog/${post.slug} serves a REDUCED body and is not abridged by design`);
+    console.log(`        ${missing.length} of ${post.content.length} client paragraphs never reach the page`);
+    console.log(`        first loss: ${JSON.stringify(missing[0].slice(0, 110))}`);
+  }
+  console.log(
+    `${unexplained.length === 0 ? "PASS" : "FAIL"}  blog conservation: the ${
+      blogPosts.length - abridged.size
+    } un-abridged posts serve every client paragraph`,
+  );
+
+  // The exactness half, and the half a count cannot do. A set that quietly grew
+  // would hand a new post an override nobody chose; one that quietly shrank would
+  // take an editorial body away from a page that still expects it. Both are named
+  // rather than counted.
+  const newlyAbridged = reduced.filter((s) => !abridged.has(s));
+  const noLongerAbridged = ABRIDGED_BY_DESIGN.filter((s) => !reduced.includes(s));
+  const exact = newlyAbridged.length === 0 && noLongerAbridged.length === 0;
+  if (!exact) failures++;
+  console.log(
+    `${exact ? "PASS" : "FAIL"}  abridged set is exactly the ${ABRIDGED_BY_DESIGN.length} pinned (measured ${reduced.length})`,
+  );
+  if (newlyAbridged.length) console.log(`        abridged but not pinned: ${newlyAbridged.join(", ")}`);
+  if (noLongerAbridged.length) console.log(`        pinned but no longer abridged: ${noLongerAbridged.join(", ")}`);
+}
+
 // The two slugs Sentinel's golden path caught, named explicitly so the exact
 // regression from 2026-10-15 cannot come back under a refactor that happens to
 // keep the totals right.
