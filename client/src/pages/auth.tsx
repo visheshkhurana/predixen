@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, type RouteComponentProps } from 'wouter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,15 @@ function AnimatedMetric({ label, value, delay }: { label: string; value: string;
   );
 }
 
-export default function AuthPage() {
+export default function AuthPage({
+  initialTab = 'login',
+}: {
+  initialTab?: 'login' | 'register';
+  // /auth renders this through wouter's `component={AuthPage}` prop, which
+  // hands the component its route props. Declaring that here is what keeps the
+  // page routable while it accepts a prop of its own; /signup passes
+  // initialTab and /auth is unchanged. Nothing reads these.
+} & Partial<RouteComponentProps>) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { setUser, setCurrentCompany, setCompanies } = useFounderStore();
@@ -54,7 +62,7 @@ export default function AuthPage() {
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [socialLoadingProvider, setSocialLoadingProvider] = useState<'google' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState('login');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
@@ -422,7 +430,11 @@ export default function AuthPage() {
             </div>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value === 'register' ? 'register' : 'login')}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6 h-10 p-1 bg-muted/50" role="tablist">
               <TabsTrigger 
                 value="login" 

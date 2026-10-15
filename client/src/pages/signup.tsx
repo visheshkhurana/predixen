@@ -1,8 +1,34 @@
-import { Link } from "wouter";
-import { MarketingLayout } from "@/components/marketing/MarketingLayout";
-import { Button } from "@/components/ui/button";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { useSEO } from "@/lib/seo";
-import { ArrowRight } from "lucide-react";
+
+/**
+ * /signup — the create-account page, and it can now create an account.
+ *
+ * It used to be a marketing article whose only real control was a button to
+ * /auth?tab=register, so `/signup` was a URL that could not do the one thing
+ * its name promised. PR #80 repointed the footer's "Get started" away from it
+ * for exactly that reason, which left a canonical signup URL with almost no
+ * inbound links. Rendering the same component the /auth route renders, in
+ * register mode, makes the URL mean what it says and removes a click from the
+ * funnel — and it is the smaller change than deleting a registered route whose
+ * three pinned expectations would all have to move with it.
+ *
+ * `initialTab` is a default, not an override: /auth still opens on the login
+ * tab, and /auth?tab=register still opens on register, because AuthPage's own
+ * `?tab=` effect runs after this and wins.
+ *
+ * The server-rendered body lives in server/seo-prerender.ts
+ * (`buildSignupBodyContent`) and is deliberately unchanged. It is the view a
+ * crawler and a no-JS visitor get, and every link in it — the register funnel,
+ * /product, /features, /pricing, and the three free tools — is still a real and
+ * useful destination. `server/tests/signup-ssr.test.ts` pins that body; nothing
+ * here touches it, so it stays true rather than being edited to match.
+ *
+ * Lazy, like /auth is in App.tsx, so this page does not pull the auth bundle
+ * into every other route's chunk.
+ */
+const AuthPage = lazy(() => import("@/pages/auth"));
 
 export default function SignupPage() {
   useSEO({
@@ -22,64 +48,14 @@ export default function SignupPage() {
   });
 
   return (
-    <MarketingLayout>
-      <article className="mx-auto max-w-3xl px-4 py-16 md:py-20">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl" data-testid="text-signup-title">
-          Get started with FounderConsole
-        </h1>
-        <p className="mt-4 text-lg text-muted-foreground">
-          This is the create-account page. Create a free FounderConsole account when you want live connectors and ongoing runway forecasts. During early access every feature is free, and no credit card is required — the same terms already on{" "}
-          <Link href="/pricing" className="text-primary hover:underline" data-testid="link-signup-pricing">
-            pricing
-          </Link>
-          .
-        </p>
-
-        <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
-          Create a free account
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Sign up to connect your data (or upload a CSV), run Monte Carlo simulations with P10/P50/P90 bands, and ask the copilot against your own numbers. Read the{" "}
-          <Link href="/product" className="text-primary hover:underline" data-testid="link-signup-product">
-            product
-          </Link>{" "}
-          overview and the{" "}
-          <Link href="/features" className="text-primary hover:underline" data-testid="link-signup-features">
-            features
-          </Link>{" "}
-          catalog if you want more detail first.
-        </p>
-
-        <h2 className="mt-10 text-2xl font-semibold tracking-tight text-foreground">
-          Prefer a free tool first
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          No account required. Try the{" "}
-          <Link href="/tools/runway-calculator" className="text-primary hover:underline" data-testid="link-signup-runway">
-            startup runway calculator
-          </Link>
-          , the{" "}
-          <Link href="/survival-simulator" className="text-primary hover:underline" data-testid="link-signup-survival">
-            startup survival simulator
-          </Link>
-          , or the{" "}
-          <Link href="/default-alive" className="text-primary hover:underline" data-testid="link-signup-default-alive">
-            default alive test
-          </Link>
-          .
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <Button asChild data-testid="button-signup-register">
-            <Link href="/auth?tab=register">
-              Create a free account
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild variant="outline" data-testid="button-signup-runway">
-            <Link href="/tools/runway-calculator">Try the runway calculator</Link>
-          </Button>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </article>
-    </MarketingLayout>
+      }
+    >
+      <AuthPage initialTab="register" />
+    </Suspense>
   );
 }
