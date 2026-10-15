@@ -212,7 +212,16 @@ function CitableSnippet() {
   );
 }
 
-function Footer() {
+/**
+ * Exported for `server/tests/ai-citation-ssr.test.ts`, which renders this subtree and
+ * asserts `footer-ai-citation` is in it. That is the ABSENCE side of the citation block:
+ * every other citation assertion reads the prerendered HTML, so without a test that
+ * renders the footer, deleting `<CitableSnippet />` here would keep all of them green
+ * while every human lost the block. Named export on purpose — the default export of this
+ * module is `MarketingLayout`, and rendering that would drag in the pixel, the router and
+ * the animation layer for no added coverage.
+ */
+export function Footer() {
   return (
     <footer className="border-t bg-background">
       <div className="mx-auto max-w-6xl px-4 py-12">
