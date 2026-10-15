@@ -1,11 +1,18 @@
-"""The Python half of `server/tests/ai-agent-log.test.ts` — crawler classification.
+r"""The Python half of `server/tests/ai-agent-log.test.ts` — crawler classification.
 
 Why this file exists at all, and why it is not a copy of the TypeScript one. The
 TypeScript file is the better guard: it boots a real Express app twice, sends
 real requests, and asserts on the finished status and the emitted line, so it
 sees behaviour. **It also does not run.** `pr-checks.yml` names each TypeScript
 test file by hand as its own step, that workflow is on the hold list, and
-`ai-agent-log.test.ts` is named nowhere — it is the seventh such file. The
+`ai-agent-log.test.ts` is named nowhere: it is one of five `.test.ts` files in
+`server/tests` that no step runs — 32 exist there and 27 are named. Counted from
+the disk rather than remembered (`find server/tests -name '*.test.ts' | wc -l`
+against `grep -oE 'server/tests/[A-Za-z0-9._-]+\.test\.ts' .github/workflows/
+pr-checks.yml | sort -u | wc -l`): an earlier version of this sentence said "the
+seventh such file", and that number was never measured. Two more files under
+`client/src/lib/__tests__/` are in the same position, and no job installs a
+client runner at all. The
 pytest job (`uv sync` then `uv run pytest`) installs no npm packages, so it
 could not execute the middleware even if a step existed. The guard that protects
 this middleware on a pull request is therefore this file, or nothing.
@@ -38,6 +45,13 @@ INDEX = REPO_ROOT / "server/index.ts"
 # class — a table entry claiming it would be a crawler that a *known* token
 # failed to name, which is the case the backstop exists for.
 BACKSTOP_CLASS = "other_bot"
+
+# The only two members of `res` the middleware may mention, and why each one is
+# inert: `on` registers the finish listener that reports the status, and
+# `statusCode` is the read that gives it something to report. Nothing else on
+# the response object is reachable without the possibility of changing it, which
+# is why this is a closed set and not a list of forbidden names.
+ALLOWED_RES_MEMBERS = {"on", "statusCode"}
 
 
 def read(path: Path) -> str:
@@ -260,17 +274,63 @@ def test_the_backstop_carries_the_user_agent_and_the_table_does_not():
 
 
 def test_the_middleware_is_actually_mounted():
-    """A perfect classifier that is never registered logs nothing.
+    """A perfect classifier that is never registered logs nothing — and one
+    registered in the wrong place logs the wrong page.
 
     This is not hypothetical here: the middleware is a new file, and the only
     thing that makes it production behaviour is one line in the gateway. The TS
     test file boots its own app and so cannot see the real registration at all.
+
+    Presence is not the property that matters, though, and a search for
+    `app.use(aiAgentLog(` cannot see position. Express runs middleware in
+    registration order, so two positions are load-bearing:
+
+      * **after the request-id middleware.** `aiAgentLog` reads the id back out
+        of `req.headers["x-request-id"]`, so registered above that line every
+        log line carries `request_id: null` — a field that is right-looking and
+        always empty. Measured on the built bundle, not inferred.
+      * **before whatever answers the request.** Nearly every page is answered
+        by `serveStatic`, the SPA catch-all, or vite, all registered hundreds of
+        lines below. A layer below any of those never runs for the requests it
+        exists to count.
+
+    So this asserts order. Each anchor is asserted to *exist* first: a renamed
+    anchor would otherwise make the comparison vacuous, which is the same
+    failure as the one this test is fixing.
     """
     src = strip_comments(read(INDEX))
     assert 'from "./middleware/aiAgentLog"' in src, "server/index.ts no longer imports the middleware"
-    assert re.search(r"app\.use\(\s*aiAgentLog\(", src), (
+
+    mount = re.search(r"app\.use\(\s*aiAgentLog\(", src)
+    assert mount, (
         "server/index.ts no longer mounts aiAgentLog, so nothing is classified in production"
     )
+
+    id_mw = src.find('req.headers["x-request-id"] = requestId')
+    assert id_mw != -1, (
+        "the request-id middleware is gone from server/index.ts, so this test can no longer "
+        "prove the logger runs after it"
+    )
+    assert id_mw < mount.start(), (
+        "aiAgentLog is registered BEFORE the request-id middleware, so every log line carries "
+        "request_id: null — the logger reads that header, and it is only populated once the "
+        "middleware above it has run"
+    )
+
+    for anchor, what in (
+        ("serveStatic(app)", "static file serving"),
+        ('app.use("*"', "the SPA catch-all"),
+        ("setupVite(", "the dev server"),
+    ):
+        at = src.find(anchor)
+        assert at != -1, (
+            f"the {what} anchor ({anchor!r}) is gone from server/index.ts, so this test can no "
+            f"longer prove the logger is registered above it"
+        )
+        assert mount.start() < at, (
+            f"aiAgentLog is registered AFTER {what} ({anchor!r}), so a request answered there "
+            f"is never classified at all"
+        )
 
 
 def test_the_logged_path_is_read_on_entry_and_carries_no_query_string():
@@ -317,14 +377,30 @@ def test_the_middleware_touches_no_response_and_reads_no_header_but_two():
     src = strip_comments(read(MIDDLEWARE))
     fn = braced_block(src, "export function aiAgentLog(")
 
-    # Call syntax, not a substring: `res.status` also matches the *read*
-    # `status: res.statusCode`, which is exactly what this middleware must do.
-    # Matching the bare name would have made this assertion red on correct code
-    # and pushed the next person to weaken it.
-    for forbidden in ("res.setHeader", "res.status", "res.send", "res.write", "res.redirect", "res.end"):
-        assert f"{forbidden}(" not in fn, (
-            f"the middleware calls {forbidden}() — it is supposed to be measurement only"
-        )
+    # Every `res.<name>` the function mentions, against a CLOSED set of the two
+    # that cannot change a response — the same shape as the header assertion
+    # below, and for the same reason.
+    #
+    # What this replaces named six spellings of the mutation (`res.setHeader`,
+    # `res.send`, `res.write`, `res.redirect`, `res.end`, `res.status`). Six is
+    # the list of ways I happened to think of, not the class: `res.writeHead`,
+    # `res.flushHeaders`, `res.append` and `res.set` all pass it untouched, and
+    # the last two are the ones most likely to be typed by accident. A guard
+    # that catches one spelling of a mutation rather than the mutation is the
+    # defect this file exists to argue against, so it is written the closed way:
+    # a new call on `res` has to be added to the allowed set deliberately, or
+    # this reddens.
+    #
+    # Reading `res.X` rather than call syntax also handles the legitimate read
+    # (`res.statusCode`) without the special case the old note needed, which is
+    # why that note is gone.
+    res_members = set(re.findall(r"(?<![\w$.])res\.([A-Za-z_$][\w$]*)", fn))
+    assert res_members <= ALLOWED_RES_MEMBERS, (
+        f"the middleware touches the response beyond listening for 'finish' and reading the "
+        f"status code: {sorted(res_members - ALLOWED_RES_MEMBERS)}"
+    )
+    # That this listens for 'finish' at all is asserted separately, by the path
+    # test below — so a subset here cannot quietly lose the report.
 
     headers = set(re.findall(r'req\.headers\[\s*"([^"]+)"\s*\]', fn))
     assert headers <= {"user-agent", "x-request-id"}, (
