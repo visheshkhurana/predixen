@@ -25,10 +25,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SEO_DATA = REPO / "server" / "seo-data.ts"
+PRERENDER = REPO / "server" / "seo-prerender.ts"
 CLIENT_POSTS = REPO / "client" / "src" / "data" / "blog-posts.ts"
 
+# Either spelling satisfies "the list is taken from the client file": a local
+# binding (`import { blogPosts as X }`) or a re-export (`export { blogPosts }`).
+# main took the re-export in #131, which is one line shorter and leaves no
+# binding to drift; this test asserts the ORIGIN, which both spellings name.
 CLIENT_IMPORT = re.compile(
-    r'import\s*\{[^}]*\bblogPosts\s+as\s+\w+[^}]*\}\s*from\s*["\']\.\./client/src/data/blog-posts["\']'
+    r'(?:import|export)\s*\{[^}]*\bblogPosts\b[^}]*\}\s*from\s*["\']\.\./client/src/data/blog-posts["\']'
 )
 
 
@@ -63,11 +68,21 @@ def test_seo_data_imports_the_client_post_list():
 
 
 def test_seo_data_does_not_re_type_the_slugs():
-    """No hand-typed `slug: "..."` literal may survive in seo-data.ts.
+    """No `slug: "..."` FIELD literal may survive in seo-data.ts.
 
-    The client file is the only place a slug is spelled out. A literal here is
-    the drift vector itself, and it is what a well-meaning future edit would
+    This guards one of the two spellings a slug can take in this file: the
+    field, as it appears in a re-typed post object. A field literal is the
+    drift vector HAG-311 was, and it is what a well-meaning future edit would
     reach for.
+
+    It is NOT a claim that no slug is spelled out here at all -- that was the
+    sentence this docstring used to carry and it was false. `prerenderPostMeta`
+    and `abridgedBlogPostContent` are keyed by 16 slugs each, spelled out as
+    quoted keys, and they are deliberately hand-keyed editorial artifacts rather
+    than copies of the list. The keys are a different spelling, they are
+    covered by test_every_slug_keyed_here_is_a_real_client_slug below, and the
+    two tests together are what makes the pair of claims complete: this one
+    catches a re-typed field, that one catches an orphaned key.
     """
     src = source(SEO_DATA)
     literals = re.findall(r'slug:\s*"([^"]+)"', src)
@@ -77,57 +92,91 @@ def test_seo_data_does_not_re_type_the_slugs():
     )
 
 
+def test_every_slug_keyed_here_is_a_real_client_slug():
+    """A slug spelled out as a map KEY must be a slug the client list has.
+
+    The invariant over the second spelling. An entry keyed by a slug that the
+    client post list does not contain is orphaned: it is never looked up, so
+    the post it was written for silently loses its pinned excerpt and reverts
+    from its abridged crawler body to the full client content. No other test
+    fails -- the page still renders, it just renders differently from the
+    editorial intent, which is the class of thing this file exists to catch.
+
+    The keys are allowed to exist; they are not allowed to go stale. This is
+    the assertion that fires the day someone renames a slug in
+    client/src/data/blog-posts.ts and leaves the two maps behind.
+    """
+    src = source(SEO_DATA)
+    client = set(client_slugs())
+    keyed = set(re.findall(r'^\s*"([^"]+)"\s*:', src, re.M))
+    orphans = sorted(keyed - client)
+    assert orphans == [], (
+        f"server/seo-data.ts keys hand-maintained maps on slugs the client post "
+        f"list does not have: {orphans} -- these entries are never reached, so "
+        f"those posts lose their pinned excerpt and abridged body; fix the key "
+        f"or derive the entry"
+    )
+
+
 def test_every_client_slug_has_a_body_in_seo_data():
     """A slug in the list but missing from the bodies renders an EMPTY article.
 
     buildBlogPostBodyContent returns null only when the post is not found; a
-    missing entry in blogPostContent yields zero paragraphs, which is an article
-    with a title and a byline and no body. The derived fallback is what makes
-    that unreachable for a post the client list knows about.
+    post whose body resolves to nothing yields zero paragraphs, which is an
+    article with a title and a byline and no body.
+
+    After #131 the body is the client post's own `content` field, shipped down
+    the one chain the sitemap also reads: blog-posts.ts -> seo-data.ts
+    (re-export) -> seo-prerender.ts. So the invariant splits into the two
+    things that chain needs: the prerenderer must take its posts from
+    seo-data, and every post in the client list must actually carry content.
+    A hand-kept body map in seo-data was the old way of satisfying this, and
+    it is exactly what fell two posts behind.
+    """
+    prerender = source(PRERENDER)
+    assert re.search(
+        r'import\s*\{[^}]*\bblogPosts\b[^}]*\}\s*from\s*["\']\./seo-data["\']', prerender
+    ), (
+        "server/seo-prerender.ts must take blogPosts from ./seo-data, the module "
+        "that re-exports the client list -- a second list here is the HAG-311 bug"
+    )
+    client = source(CLIENT_POSTS)
+    slugs = client_slugs()
+    # `content` is a paragraph array in the client data (`content: [` ... `]`).
+    bodies = re.findall(r"^\s*content:\s*\[", client, re.M)
+    assert bodies, "could not find any content: array in the client post list"
+    assert not re.search(r"^\s*content:\s*\[\s*\]", client, re.M), (
+        "a client post declares an EMPTY content array, so it would prerender as "
+        "an article with a title and no body"
+    )
+    assert len(bodies) >= len(slugs), (
+        f"{len(slugs)} posts in the client list but only {len(bodies)} content "
+        "arrays; a post without content renders body-less"
+    )
+
+
+
+def test_no_second_post_list_lives_in_seo_data():
+    """The regression HAG-311 actually was: a COPY of the list in seo-data.ts.
+
+    The old file kept its own `blogPosts` array plus hand-written maps of
+    excerpt and body overrides (prerenderPostMeta, abridgedBlogPostContent,
+    blogPostContent), and it fell two posts behind the client list. #131
+    replaced the whole thing with a one-line re-export. This asserts the
+    replacement stayed a re-export: no local array, and no local body or
+    excerpt map, so a future edit cannot quietly reintroduce the copy that
+    drifted. The behaviour this protects -- every sitemap slug serving its own
+    article -- is measured per slug in prerender-coverage.test.ts.
     """
     src = source(SEO_DATA)
-    # The merged export must spread the client bodies before the abridged ones,
-    # so every real post has a body and the editorial overrides still win.
-    derived = re.search(
-        r"Object\.fromEntries\(\s*\w+\.map\(\s*\(\s*\w+\s*\)\s*=>\s*\[\s*\w+\.slug\s*,\s*\w+\.content\s*\]",
-        src,
+    assert not re.search(r"\b(?:const|let|var)\s+blogPosts\b", src), (
+        "server/seo-data.ts declares its own blogPosts -- that is the second copy "
+        "that fell two posts behind the sitemap under HAG-311; re-export the "
+        "client list instead"
     )
-    assert derived, (
-        "server/seo-data.ts must build a fallback body map from the client posts "
-        "(slug -> content) and merge the abridged bodies on top, so no post in "
-        "the list can render body-less"
-    )
-
-
-def test_the_abridged_bodies_were_kept_not_derived():
-    """The abridged bodies are an editorial artifact, not a stale copy.
-
-    Deriving them would rewrite the prerendered HTML of 16 correct pages. They
-    are shorter than the client by design (5 paragraphs against the client's 16
-    for ltv-cac-ratio-explained), so their presence must be explicit.
-    """
-    src = source(SEO_DATA)
-    assert "abridgedBlogPostContent" in src, (
-        "the deliberately abridged prerender bodies must stay a named, explicit "
-        "artifact -- replacing them with the client bodies silently changes the "
-        "served HTML of every post"
-    )
-    # The abridged map must still override the derived fallback, i.e. be spread
-    # AFTER it. If the order flips, the abridged copy is dead code and the
-    # pages change.
-    # Anchored at the line start so it cannot match `abridgedBlogPostContent`,
-    # which is the map declared just above and has no spreads in it at all.
-    merged = re.search(
-        r"\nexport const blogPostContent[^=]*=\s*\{(.*?)\n\};", src, re.S
-    )
-    assert merged, "could not find the blogPostContent export to check merge order"
-    body = merged.group(1)
-    order = re.findall(r"\.\.\.(\w+)", body)
-    assert len(order) == 2, f"expected exactly two spreads in blogPostContent, found {order}"
-    assert order[0] == "Object", (
-        f"the derived client bodies must be spread FIRST so the abridged bodies "
-        f"override them; found spreads {order}"
-    )
-    assert order[1] == "abridgedBlogPostContent", (
-        f"abridgedBlogPostContent must be spread second; found spreads {order}"
-    )
+    for name in ("abridgedBlogPostContent", "blogPostContent", "prerenderPostMeta"):
+        assert name not in src, (
+            f"server/seo-data.ts keeps a local {name}: a second, hand-maintained "
+            "copy of blog data is what drifted under HAG-311; read it from the "
+            "client list instead"
+        )
