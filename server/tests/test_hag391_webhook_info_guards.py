@@ -280,3 +280,88 @@ def test_the_comment_that_claimed_the_scoping_is_gone():
     assert "left as it is, deliberately" not in body, (
         "the comment still says the except was left alone; HAG-391 changed it, so the sentence is now false"
     )
+
+
+# --------------------------------------------------------------------------
+# Scope extension (god, 2026-10-15T15:54:43Z) — the same class one nesting
+# level deeper: `click` was dereferenced with no isinstance check at all
+# --------------------------------------------------------------------------
+
+
+def test_the_click_deref_is_guarded():
+    """`:133` (base `fafd268d`) — the guard the envelope `data` guard does not reach.
+
+    The envelope guard pins `body` and the guard above pins `data`; nothing pinned
+    `click`, so `data.get("click", {}).get("link")` ran `.get` on whatever arrived
+    under `click`. Measured directly, not inferred: with `{"click": "https://x"}`
+    the old expression raises `AttributeError: 'str' object has no attribute 'get'`.
+    """
+    body = handler_body(source(), "async def resend_webhook(")
+
+    def offset_of(needle: str, why: str) -> int:
+        # A missing needle must fail AS THE CLAIM, not as a bare ValueError from
+        # `.index` — the same reason the sibling test above spells this out.
+        assert needle in body, why
+        return body.index(needle)
+
+    assert 'data.get("click", {}).get("link")' not in body, (
+        "the unguarded `data.get(\"click\", {}).get(\"link\")` is still in the receiver: a signed "
+        "delivery whose `click` is a string makes the second `.get` raise AttributeError"
+    )
+    assign = offset_of('click = data.get("click")', "the `click` assignment is gone from the receiver")
+    guard = offset_of(
+        "isinstance(click, dict)",
+        "no isinstance(click, dict) guard — `click` is dereferenced unguarded, one level below `data`",
+    )
+    use = offset_of("clicked_url = click_link", "the guarded use of `click_link` is gone")
+    assert assign < guard < use, (
+        "the isinstance(click, dict) guard must sit between the assignment and the use, "
+        "otherwise the AttributeError it exists to prevent is still reachable"
+    )
+
+
+def test_the_click_guard_tolerates_a_bad_click_because_a_raise_there_becomes_the_500():
+    """Why this guard must NOT answer 400 the way the `data` guard above it does.
+
+    The click branch is inside the db `try`, and that `try`'s handler is a bare
+    `except Exception` at the end of the handler — which catches `HTTPException`
+    too, because it is an `Exception`. So a 400 raised at this site would be
+    swallowed and re-answered as our own 500, which is exactly the retry loop the
+    extension exists to remove. Both halves are measured here: that the site IS
+    inside such a handler (or the premise is gone and the rest means nothing), and
+    that the guard raises nothing.
+    """
+    src = source()
+    body = handler_body(src, "async def resend_webhook(")
+    assert "isinstance(click, dict)" in body, (
+        "no isinstance(click, dict) guard in the receiver — this test fails as its own claim, "
+        "not as a bare ValueError from `.index`"
+    )
+    guard_at = body.index("isinstance(click, dict)")
+    guard_line = line_of(src, "async def resend_webhook(") + body[:guard_at].count("\n")
+
+    spans = catching_line_spans(src)
+    assert any(lo <= guard_line <= hi for lo, hi in spans), (
+        f"the click guard at :{guard_line} is not inside a try that catches Exception — if that is "
+        "no longer true, the tolerance this test argues for has no basis and must be re-decided"
+    )
+
+    # Scoped to the click branch, and with comment lines stripped, on purpose. An
+    # earlier version of this test searched a fixed character window of the handler
+    # and failed ON ITS OWN PROSE — the guard's comment names HTTPException while
+    # explaining why it must not raise it. A text instrument that reads the
+    # explanation instead of the code measures the explanation; that is this floor's
+    # defect of the day, so the window is the branch and the comments are gone.
+    branch_start = body.index('elif event_type == "email.clicked":')
+    branch_end = body.index('elif event_type == "email.bounced":', branch_start)
+    branch = body[branch_start:branch_end]
+    assert "click_count" in branch and "clicked_url" in branch, (
+        "the extracted branch is not the click branch — the premise of this test is gone"
+    )
+    code = "\n".join(line for line in branch.splitlines() if not line.lstrip().startswith("#"))
+    assert not re.search(r"\braise\b|HTTPException", code), (
+        "the click branch must not raise: it sits inside the db try, where an HTTPException is an "
+        "Exception, so the handler's own `except Exception` would swallow a 400 and answer 500 — "
+        "the retry loop this extension exists to remove"
+    )
+
