@@ -14,6 +14,7 @@ import { randomUUID } from "crypto";
 import compression from "compression";
 import { geoRestrict } from "./middleware/geoRestrict";
 import { legacyRedirects } from "./middleware/legacyRedirects";
+import { aiAgentLog } from "./middleware/aiAgentLog";
 
 const app = express();
 app.disable("x-powered-by");
@@ -44,6 +45,14 @@ app.use((req, res, next) => {
   res.setHeader("X-Request-ID", requestId);
   next();
 });
+
+// Counts AI-agent and crawler traffic, which PostHog structurally cannot see:
+// it attributes a pageview from `document.referrer`, and a crawler never runs
+// the bundle. Registered here, above every route and every redirect, so a
+// crawler is counted whether it ends up on a page, a 301 or a 404 — the status
+// is what the line reports. Measurement only: it writes a log line and calls
+// next() without touching the response.
+app.use(aiAgentLog());
 
 app.use((req, res, next) => {
   const host = req.hostname || req.headers.host || "";
