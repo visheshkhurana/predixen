@@ -211,6 +211,20 @@ def provided_input_fields(payload: Mapping[str, Any]) -> List[str]:
     ]
 
 
+def clear_provenance(record: Any) -> None:
+    """Strip connector provenance from a row a manual write has just overwritten.
+
+    The contract above reports a field as synced only when the latest value for
+    it came from a sync. A manual save replaces every stored input value, so the
+    row must stop claiming one; leaving ``source`` and ``synced_at`` standing
+    presents typed numbers as connector-verified. All three columns go null --
+    the same shape ``stamp_sync_provenance`` returns for a non-sync, and the
+    shape the manual insert path already produces.
+    """
+    for name in _PROVENANCE_ATTRIBUTES:
+        setattr(record, name, None)
+
+
 def stamp_sync_provenance(
     provider_id: Any,
     provided_fields: Iterable[str],

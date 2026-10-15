@@ -16,6 +16,7 @@ from server.models.dataset import Dataset
 from server.models.financial import FinancialRecord
 from server.ingest.pdf_extractor import process_termina_pdf, extract_text_from_pdf
 from server.ingest.excel_extractor import process_termina_excel
+from server.services.input_provenance import clear_provenance
 
 logger = logging.getLogger(__name__)
 
@@ -943,6 +944,10 @@ async def save_financial_baseline(
                 setattr(existing_record, k, v)
         if existing_record.source_type == "sample":
             existing_record.source_type = "manual"
+        # A manual save replaces every input value on the row, so the connector
+        # provenance underneath them is no longer describing anything the row
+        # holds. Left standing it reports a hand-typed number as synced.
+        clear_provenance(existing_record)
         record = existing_record
     else:
         record = FinancialRecord(
