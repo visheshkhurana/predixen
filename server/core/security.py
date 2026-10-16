@@ -19,6 +19,8 @@ REFRESH_COOKIE_NAME = "refresh_token"
 AUTH_COOKIE_MAX_AGE = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
 REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 
+# Per-process cache of revoked jtis. The database (RevokedAccessToken) is the
+# source of truth; this only saves a query for tokens revoked in this process.
 _revoked_tokens: Set[str] = set()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -42,14 +44,94 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def revoke_token(jti: str):
-    """Revoke a token by its JTI (JWT ID)."""
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _from_epoch(value) -> Optional[datetime]:
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).replace(tzinfo=None)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def revoke_token(jti: str, db: Optional[Session] = None, user_id: Optional[int] = None,
+                 expires_at: Optional[datetime] = None):
+    """Revoke one access token by its JTI. Persisted when a db session is given."""
+    if not jti:
+        return
     _revoked_tokens.add(jti)
+    if db is None:
+        return
+    from server.models.session_revocation import RevokedAccessToken
+
+    if db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is None:
+        db.add(RevokedAccessToken(
+            jti=jti,
+            user_id=user_id,
+            expires_at=expires_at or (_utcnow_naive() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
+        ))
 
 
-def is_token_revoked(jti: str) -> bool:
+def revoke_token_string(token: Optional[str], db: Session) -> None:
+    """Revoke the access token in a cookie/header value, if it is one of ours."""
+    payload = decode_token(token) if token else None
+    if not payload or not payload.get("jti"):
+        return
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        user_id = None
+    revoke_token(payload["jti"], db=db, user_id=user_id, expires_at=_from_epoch(payload.get("exp")))
+
+
+def revoke_all_sessions(db: Session, user_id: int) -> None:
+    """End every session a user has: access tokens issued so far, and refresh tokens.
+
+    Used on password reset and suspension. The cutoff is floored to the second
+    because JWT ``iat`` is whole seconds; a token minted after this call (the
+    next login) has iat >= cutoff and stays valid.
+    """
+    from server.models.session_revocation import UserSessionCutoff
+    from server.models.user import RefreshToken
+
+    cutoff = _utcnow_naive().replace(microsecond=0)
+    row = db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first()
+    if row is None:
+        db.add(UserSessionCutoff(user_id=user_id, revoked_before=cutoff))
+    else:
+        row.revoked_before = cutoff
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user_id,
+        RefreshToken.revoked == False,  # noqa: E712
+    ).update({RefreshToken.revoked: True}, synchronize_session=False)
+
+
+def is_token_revoked(jti: str, db: Optional[Session] = None) -> bool:
     """Check if a token has been revoked."""
-    return jti in _revoked_tokens
+    if not jti:
+        return False
+    if jti in _revoked_tokens:
+        return True
+    if db is None:
+        return False
+    from server.models.session_revocation import RevokedAccessToken
+
+    if db.query(RevokedAccessToken).filter(RevokedAccessToken.jti == jti).first() is not None:
+        _revoked_tokens.add(jti)
+        return True
+    return False
+
+
+def _issued_before_cutoff(db: Session, user_id: int, iat) -> bool:
+    from server.models.session_revocation import UserSessionCutoff
+
+    row = db.query(UserSessionCutoff).filter(UserSessionCutoff.user_id == user_id).first()
+    if row is None:
+        return False
+    issued = _from_epoch(iat)
+    # A token with no iat predates this check; treat it as issued before any cutoff.
+    return issued is None or issued < row.revoked_before
 
 def decode_token(token: str) -> Optional[dict]:
     try:
@@ -133,7 +215,7 @@ async def get_current_user(
         )
 
     jti = payload.get("jti")
-    if jti and is_token_revoked(jti):
+    if jti and is_token_revoked(jti, db):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
@@ -161,6 +243,18 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        )
+
+    if user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is suspended",
+        )
+
+    if _issued_before_cutoff(db, user.id, payload.get("iat")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has ended. Please sign in again.",
         )
 
     user.is_platform_admin = False
