@@ -6,6 +6,7 @@ Stale entries are cleaned up by a background task every 5 minutes.
 """
 
 import os
+import re
 import asyncio
 import time
 from typing import Tuple, Optional
@@ -55,15 +56,31 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     - Admin auth endpoints (stricter)
     - Upload endpoints (file uploads)
     - Simulation endpoints (expensive Monte Carlo)
+    - LLM endpoints (each request spends a paid model call)
     - General API endpoints
     - Health check endpoints (no limit)
     """
 
     AUTH_PATHS = {"/auth/login", "/auth/register", "/auth/forgot-password"}
     ADMIN_AUTH_PATHS = {"/auth/admin/login"}
-    UPLOAD_PATHS = {"/csv-import", "/api/upload"}
+    UPLOAD_PATHS = {"/csv-import", "/upload"}
     HEALTH_PATHS = {"/health", "/"}
-    SIMULATION_PATHS = {"/api/simulations"}
+    # Express strips the /api prefix before proxying, so paths are matched
+    # after _normalize_path() removes it (both forms are accepted).
+    SIMULATION_PATHS = {"/simulations"}
+    SIMULATION_PATTERNS = (
+        re.compile(r"^/scenarios/[^/]+/simulate$"),
+        re.compile(r"^/companies/[^/]+/simulate(-[a-z-]+)?$"),
+        re.compile(r"^/companies/[^/]+/sensitivity-analysis$"),
+    )
+    LLM_PATTERNS = (
+        re.compile(r"^/companies/[^/]+/(chat|quick-chat)$"),
+        re.compile(r"^/companies/[^/]+/doc-generator/generate$"),
+        re.compile(r"^/companies/[^/]+/competitors/[^/]+/scan$"),
+        re.compile(r"^/lookup/company-from-website$"),
+        re.compile(r"^/simulation-copilot/(prompt|narrative)/[^/]+$"),
+        re.compile(r"^/explain-simulation$"),
+    )
 
     WINDOW_SECONDS = 60
 
@@ -75,6 +92,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         rate_limit_upload: int = 10,
         rate_limit_admin_login: int = 3,
         rate_limit_simulation: int = 10,
+        rate_limit_llm: int = 10,
     ):
         super().__init__(app)
 
@@ -83,11 +101,12 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.rate_limit_api = int(os.getenv("RATE_LIMIT_API", str(rate_limit_api)))
         self.rate_limit_upload = int(os.getenv("RATE_LIMIT_UPLOAD", str(rate_limit_upload)))
         self.rate_limit_simulation = int(os.getenv("RATE_LIMIT_SIMULATION", str(rate_limit_simulation)))
+        self.rate_limit_llm = int(os.getenv("RATE_LIMIT_LLM", str(rate_limit_llm)))
 
         logger.info(
             f"Rate limiter initialized - Auth: {self.rate_limit_auth}/min, "
             f"API: {self.rate_limit_api}/min, Upload: {self.rate_limit_upload}/min, "
-            f"Simulation: {self.rate_limit_simulation}/min"
+            f"Simulation: {self.rate_limit_simulation}/min, LLM: {self.rate_limit_llm}/min"
         )
 
     def _start_cleanup_task(self):
@@ -113,8 +132,19 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 return parts[-1]
         return request.client.host if request.client else "unknown"
 
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        """Drop a leading /api so direct and proxied requests share a bucket."""
+        if path == "/api":
+            return "/"
+        if path.startswith("/api/"):
+            path = path[4:]
+        if len(path) > 1:
+            path = path.rstrip("/") or "/"
+        return path
+
     def _get_category(self, request: Request) -> Tuple[str, int]:
-        path = request.url.path
+        path = self._normalize_path(request.url.path)
 
         if path in self.HEALTH_PATHS:
             return ("health", float('inf'))
@@ -125,12 +155,13 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         if path in self.AUTH_PATHS:
             return ("auth", self.rate_limit_auth)
 
-        if path in self.SIMULATION_PATHS:
-            return ("simulation", self.rate_limit_simulation)
-        if "/simulate" in path and path.startswith("/api/scenarios"):
+        if any(p.match(path) for p in self.LLM_PATTERNS):
+            return ("llm", self.rate_limit_llm)
+
+        if path in self.SIMULATION_PATHS or any(p.match(path) for p in self.SIMULATION_PATTERNS):
             return ("simulation", self.rate_limit_simulation)
 
-        if any(upload_path in path for upload_path in self.UPLOAD_PATHS):
+        if any(path == u or path.startswith(u + "/") for u in self.UPLOAD_PATHS):
             return ("upload", self.rate_limit_upload)
 
         return ("api", self.rate_limit_api)
@@ -185,7 +216,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         self._start_cleanup_task()
 
-        if request.url.path in self.HEALTH_PATHS:
+        if self._normalize_path(request.url.path) in self.HEALTH_PATHS:
             try:
                 return await call_next(request)
             except BaseException as exc:

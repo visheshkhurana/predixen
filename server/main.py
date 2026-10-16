@@ -460,6 +460,7 @@ app.add_middleware(
     rate_limit_api=settings.RATE_LIMIT_API,
     rate_limit_upload=settings.RATE_LIMIT_UPLOAD,
     rate_limit_simulation=settings.RATE_LIMIT_SIMULATION,
+    rate_limit_llm=settings.RATE_LIMIT_LLM,
 )
 
 app.add_middleware(
@@ -513,7 +514,6 @@ def internal_metrics():
 
 @app.get("/health")
 def health():
-    import datetime as _dt
     db_healthy = False
     try:
         db = SessionLocal()
@@ -532,17 +532,16 @@ def health():
         pass
 
     overall_status = "healthy" if db_healthy and _startup_state["ready"] else "degraded"
+    if _startup_state["error"]:
+        logger.warning("Health check: startup error recorded: %s", _startup_state["error"])
+    # Public endpoint: only the fields the deploy probe (services/deploy_landed.py)
+    # and the client status banner read. No version, environment, uptime or errors.
     return {
         "status": overall_status,
-        "version": APP_VERSION,
-        "environment": settings.ENVIRONMENT,
-        "uptime_seconds": round(time.time() - _process_start_time, 1),
-        "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "ready": _startup_state["ready"],
         "routers_loaded": _startup_state["routers_loaded"],
         "database": "connected" if db_healthy else "unavailable",
         "redis": "connected" if redis_healthy else "unavailable",
-        "startup_error": _startup_state["error"],
     }
 
 print(f"[main.py] Module load complete (+{time.time()-_t0:.1f}s)", file=sys.stderr, flush=True)

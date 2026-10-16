@@ -1,5 +1,7 @@
+import html as html_lib
 import os
 import uuid
+from urllib.parse import urlencode, urlparse
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
@@ -206,7 +208,11 @@ async def email_feedback_page(
             db.close()
 
     base_url = "/email-tracking/feedback"
-    params = f"email_id={email_id or ''}&email={email or ''}&campaign={campaign or ''}"
+    # Query values are user-controlled and land in an HTML attribute.
+    params = html_lib.escape(
+        urlencode({"email_id": email_id or "", "email": email or "", "campaign": campaign or ""}),
+        quote=True,
+    )
 
     if submitted:
         html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -406,13 +412,39 @@ async def email_analytics(
         db.close()
 
 
+WELCOME_DEFAULT_DEST = "https://founderconsole.ai"
+_WELCOME_ALLOWED_HOSTS = ("founderconsole.ai",)
+
+
+def safe_welcome_dest(dest: Optional[str]) -> str:
+    """Same-site relative paths or founderconsole.ai URLs only."""
+    if not dest or len(dest) > 2048:
+        return WELCOME_DEFAULT_DEST
+    d = dest.strip()
+    if any(ord(c) < 0x20 or c == "\\" for c in d):
+        return WELCOME_DEFAULT_DEST
+    if d.startswith("/") and not d.startswith("//"):
+        return d
+    parsed = urlparse(d)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme == "https"
+        and not parsed.username
+        and not parsed.password
+        and any(host == h or host.endswith("." + h) for h in _WELCOME_ALLOWED_HOSTS)
+    ):
+        return d
+    return WELCOME_DEFAULT_DEST
+
+
 @router.get("/welcome")
 async def welcome_redirect(
     request: Request,
     ref: Optional[str] = None,
     uid: Optional[str] = None,
-    dest: str = Query(default="https://founderconsole.ai")
+    dest: str = Query(default=WELCOME_DEFAULT_DEST)
 ):
+    dest = safe_welcome_dest(dest)
     db = next(get_db())
     try:
         from server.models.email_event import EmailLinkClick

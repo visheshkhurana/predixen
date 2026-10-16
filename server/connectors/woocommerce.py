@@ -31,6 +31,12 @@ from .base import (
     SyncResult,
 )
 from .registry import ConnectorRegistry
+from .url_safety import (
+    SAFE_CLIENT_KWARGS,
+    UnsafeURLError,
+    validate_public_url,
+    validate_public_url_async,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +64,13 @@ class WooCommerceConnector(BaseConnector):
         self._validate_store_url()
 
     def _validate_store_url(self):
+        """Structural check at construction; DNS is checked in _get_client."""
         if not self._store_url:
             return
-        parsed = urlparse(self._store_url)
-        if parsed.scheme not in ("https", "http"):
-            raise ValueError("WooCommerce store URL must use https:// or http://")
-        hostname = parsed.hostname or ""
-        blocked = ["localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254", "metadata.google.internal"]
-        if hostname in blocked or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
-            raise ValueError("WooCommerce store URL must be a public domain")
+        try:
+            validate_public_url(self._store_url, resolve=False)
+        except UnsafeURLError as exc:
+            raise ValueError(f"WooCommerce store URL rejected: {exc}") from exc
 
     def _get_base_url(self) -> str:
         return f"{self._store_url}/wp-json/wc/v3"
@@ -91,11 +95,13 @@ class WooCommerceConnector(BaseConnector):
                 params["consumer_key"] = self._consumer_key
                 params["consumer_secret"] = self._consumer_secret
 
+            await validate_public_url_async(self._store_url)
             self._client = httpx.AsyncClient(
                 base_url=self._get_base_url(),
                 timeout=30.0,
                 params=params,
                 headers=headers,
+                **SAFE_CLIENT_KWARGS,
             )
         return self._client
 

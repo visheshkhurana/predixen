@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_API: int = int(os.getenv("RATE_LIMIT_API", "60"))
     RATE_LIMIT_UPLOAD: int = int(os.getenv("RATE_LIMIT_UPLOAD", "10"))
     RATE_LIMIT_SIMULATION: int = int(os.getenv("RATE_LIMIT_SIMULATION", "10"))
+    RATE_LIMIT_LLM: int = int(os.getenv("RATE_LIMIT_LLM", "10"))
 
     # Database connection pool settings
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
