@@ -187,11 +187,36 @@ def _compute_readiness(
         months_to_peak = max(3, int((70 - overall) / 2))
     months_to_peak = max(1, min(months_to_peak, 18))
 
+    # A raise has to close before the cash runs out, so the window can never
+    # start later than cash-out minus the raise itself. Waiting for the score to
+    # "peak" past that point is advice to fundraise after the company is dead.
+    raise_duration = 4
+    start_month = months_to_peak
+    reasoning = (
+        f"Based on current trajectory, your score will peak in ~{months_to_peak} months. "
+        "Plan 4-6 months for the full fundraise process."
+    )
+    if runway_months > 0:
+        latest_start = int(runway_months - raise_duration)
+        if latest_start <= 0:
+            start_month = 0
+            reasoning = (
+                f"Runway is {runway_months:.1f} months, shorter than a typical "
+                f"{raise_duration}-month raise. Start now, and plan a bridge or burn cut in parallel."
+            )
+        elif start_month > latest_start:
+            start_month = latest_start
+            reasoning = (
+                f"Your score would peak in ~{months_to_peak} months, but with {runway_months:.1f} months "
+                f"of runway a {raise_duration}-month raise must start by month {latest_start} to close "
+                "before cash runs out."
+            )
+
     raise_window = {
-        "optimalStartMonth": months_to_peak,
-        "optimalEndMonth": months_to_peak + 3,
-        "estimatedDurationMonths": 4,
-        "reasoning": f"Based on current trajectory, your score will peak in ~{months_to_peak} months. Plan 4-6 months for the full fundraise process.",
+        "optimalStartMonth": start_month,
+        "optimalEndMonth": start_month + 3,
+        "estimatedDurationMonths": raise_duration,
+        "reasoning": reasoning,
     }
 
     return {
