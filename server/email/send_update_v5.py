@@ -264,7 +264,7 @@ def send_all():
         print()
 
     print("Done! Track results at:")
-    print(f"  {BASE_URL}/email-tracking/analytics?token=founderconsole-analytics-2026&campaign={CAMPAIGN}")
+    print(f"  {BASE_URL}/email-tracking/analytics?campaign={CAMPAIGN}")
 
 
 if __name__ == "__main__":

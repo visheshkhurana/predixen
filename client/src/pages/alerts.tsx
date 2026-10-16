@@ -44,7 +44,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
-import { cn } from "@/lib/utils";
+import { cn, formatRunwayInline, isRunwaySustainable } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -75,8 +75,8 @@ interface AlertRule {
 interface DriverHealth {
   metric: string;
   status: "healthy" | "warning" | "critical" | "unknown";
-  current_value: number;
-  historical_mean: number;
+  current_value: number | null;
+  historical_mean: number | null;
   z_score: number;
   trend_direction: "up" | "down" | "flat";
   alert_count: number;
@@ -227,7 +227,7 @@ function UnknownStatusCard() {
 
 function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> }) {
   const keyMetrics = [
-    { key: "runway_months", label: "Runway", unit: " months", format: (v: number) => v.toFixed(1) },
+    { key: "runway_months", label: "Runway", unit: " months", format: (v: number) => formatRunwayInline(v) },
     { key: "burn_multiple", label: "Burn Multiple", unit: "x", format: (v: number) => v.toFixed(2) },
     { key: "revenue_growth_mom", label: "Revenue Growth", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
     { key: "gross_margin", label: "Gross Margin", unit: "%", format: (v: number) => (v * 100).toFixed(1) },
@@ -254,7 +254,8 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="health-dashboard">
       {keyMetrics.map((metric) => {
         const health = drivers[metric.key];
-        const hasData = health && health.status !== "unknown";
+        const hasData =
+          health && health.status !== "unknown" && health.current_value != null;
 
         return (
           <Card key={metric.key} data-testid={`health-metric-${metric.key}`}>
@@ -273,9 +274,10 @@ function HealthDashboard({ drivers }: { drivers: Record<string, DriverHealth> })
                   <div className="flex items-end justify-between gap-4">
                     <div className="flex items-baseline gap-1">
                       <span className="text-2xl font-bold font-mono">
-                        {metric.format(health.current_value)}
+                        {metric.format(health.current_value as number)}
                       </span>
-                      {metric.unit && metric.key !== "net_burn" && (
+                      {metric.unit && metric.key !== "net_burn" &&
+                        !(metric.key === "runway_months" && isRunwaySustainable(health.current_value)) && (
                         <span className="text-sm text-muted-foreground">{metric.unit}</span>
                       )}
                     </div>
@@ -746,7 +748,9 @@ export default function AlertsPage() {
   const criticalCount = alerts.filter(a => a.severity === "critical" && !a.acknowledged).length;
   const warningCount = alerts.filter(a => a.severity === "warning" && !a.acknowledged).length;
 
-  const formatValue = (value: number, metric: string) => {
+  const formatValue = (value: number | null | undefined, metric: string) => {
+    if (value == null || !Number.isFinite(value)) return "N/A";
+    if (metric === "runway_months" && isRunwaySustainable(value)) return "Sustainable";
     if (metric.includes("margin") || metric.includes("rate")) {
       return `${(value * 100).toFixed(1)}%`;
     }
