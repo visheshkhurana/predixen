@@ -14,8 +14,12 @@ produce byte-identical tables.
 The dataset mapping below mirrors qa-lab/runner/qa_runner.py exactly on the
 baseline path (seed_financial_record applies the scale multiplier to revenue,
 opex, payroll, other_costs and cash_balance, but NOT to grossMarginPct). Every
-scenario delta is 0 and no churn_rate is passed, so the declared default of 5.0
-applies -- which is the whole point of the HAG-178 assertion.
+scenario delta is 0.
+
+churn_rate=5.0 is passed EXPLICITLY. It used to be the engine default; the
+default is now 0 (audit 10-16: a churn nobody entered is an invented input),
+and pinning 5.0 here keeps these goldens measuring the same company so the
+moves below are attributable to the engine change alone.
 """
 
 import json
@@ -43,24 +47,34 @@ SCALE_MULTIPLIERS = {
 
 DATASETS_PATH = Path(__file__).resolve().parents[2] / "qa-lab" / "datasets" / "all-datasets.json"
 
-# Golden p10/p50/p90 per dataset, measured with the three fixes applied. A move
-# in any of these is a behaviour change in the simulator and must be deliberate.
+# Golden p10/p50/p90 per dataset. A move in any of these is a behaviour change
+# in the simulator and must be deliberate.
+#
+# Audit 10-16 moved every row, for two reasons (old values in the comments):
+#  - runway is interpolated within the cash-out month instead of rounded UP to
+#    the month's end, so in-horizon values drop by up to 1.0 and stop being
+#    whole numbers (DS08 3/3/3 -> 2.4/2.7/3.0);
+#  - costs now carry cost_sigma noise (a per-path level plus monthly noise),
+#    so the cost-dominated datasets get a real spread instead of P10 = P90
+#    (DS06, DS11, DS13, DS15) and every RNG stream shifts.
+# Rows past the 24-month horizon (DS05, DS12) come from the tail extrapolation
+# and moved only by the RNG shift and the cost level (within 0.6 months).
 GOLDEN_RUNWAY = {
-    "DS01": (9.0, 10.0, 10.0),
-    "DS02": (19.0, 20.0, 22.0),
-    "DS03": (5.0, 5.0, 6.0),
-    "DS04": (5.0, 6.0, 6.0),
-    "DS05": (23.0, 24.8, 27.6),  # 8% margin, no longer floored to 10% (audit 10-15)
-    "DS06": (5.0, 5.0, 5.0),
-    "DS07": (7.0, 8.0, 9.0),
-    "DS08": (3.0, 3.0, 3.0),
-    "DS09": (12.0, 13.0, 14.0),
-    "DS10": (4.0, 4.0, 5.0),
-    "DS11": (6.0, 6.0, 6.0),
-    "DS12": (24.2, 26.8, 30.9),
-    "DS13": (5.0, 5.0, 5.0),
-    "DS14": (21.0, 24.0, 26.0),
-    "DS15": (8.0, 8.0, 8.0),  # 0% margin, no longer floored to 10% (audit 10-15)
+    "DS01": (8.5, 9.2, 9.9),     # was (9.0, 10.0, 10.0)
+    "DS02": (17.9, 20.0, 22.4),  # was (19.0, 20.0, 22.0)
+    "DS03": (4.0, 4.7, 5.4),     # was (5.0, 5.0, 6.0)
+    "DS04": (4.8, 5.1, 5.4),     # was (5.0, 6.0, 6.0)
+    "DS05": (22.3, 24.9, 28.2),  # was (23.0, 24.8, 27.6); 8% margin, not floored (audit 10-15)
+    "DS06": (4.1, 4.5, 4.9),     # was (5.0, 5.0, 5.0) -- degenerate
+    "DS07": (6.4, 7.6, 9.0),     # was (7.0, 8.0, 9.0)
+    "DS08": (2.4, 2.7, 3.0),     # was (3.0, 3.0, 3.0) -- degenerate
+    "DS09": (11.7, 12.7, 13.7),  # was (12.0, 13.0, 14.0)
+    "DS10": (3.4, 3.9, 4.5),     # was (4.0, 4.0, 5.0)
+    "DS11": (5.4, 5.8, 6.1),     # was (6.0, 6.0, 6.0) -- degenerate
+    "DS12": (23.8, 26.9, 30.9),  # was (24.2, 26.8, 30.9)
+    "DS13": (4.5, 4.7, 4.9),     # was (5.0, 5.0, 5.0) -- degenerate; no revenue, so cost noise is all the spread
+    "DS14": (20.5, 23.2, 26.5),  # was (21.0, 24.0, 26.0)
+    "DS15": (7.2, 7.5, 7.8),     # was (8.0, 8.0, 8.0) -- degenerate; 0% margin (audit 10-15)
 }
 
 
@@ -81,6 +95,7 @@ def _inputs_from_dataset(ds, **overrides):
         payroll=b["payroll"] * m,
         other_costs=b["otherCosts"] * m,
         cash_balance=b["cashBalance"] * m,
+        churn_rate=5.0,  # the old implicit default, now explicit (see module docstring)
     )
     kwargs.update(overrides)
     return EnhancedSimulationInputs(**kwargs)
@@ -108,6 +123,13 @@ def test_runway_percentiles_match_golden(ds):
 def test_runway_percentiles_are_ordered_and_positive(ds):
     runway = _run(_inputs_from_dataset(ds))["runway"]
     assert 0 < runway["p10"] <= runway["p50"] <= runway["p90"]
+
+
+@pytest.mark.parametrize("ds", _datasets(), ids=lambda d: d["id"])
+def test_runway_percentiles_are_not_degenerate(ds):
+    """Audit 10-16: with default sigmas no dataset collapses to one value."""
+    runway = _run(_inputs_from_dataset(ds))["runway"]
+    assert runway["p10"] < runway["p90"], runway
 
 
 @pytest.mark.parametrize("ds", _datasets(), ids=lambda d: d["id"])
@@ -190,11 +212,10 @@ def test_low_and_negative_margins_are_not_floored():
 def test_in_band_margin_is_untouched_by_the_clamp():
     """A change inside [10, 95] must still move the distribution.
 
-    Asserted on `mean`, not on a percentile. The runway percentiles are
-    quantized to whole months on this dataset (DS01 at 50% and 55% gross margin
-    both give p50 = 8.0), so a one-point percentile difference would be
-    asserting rounding, not sensitivity. `mean` is a continuous statistic of
-    the same 1000 seeded runs.
+    Asserted on `mean`, not on a percentile. The runway percentiles used to be
+    quantized to whole months (DS01 at 50% and 55% gross margin both gave
+    p50 = 8.0); they are interpolated now, but `mean` is still the more
+    sensitive continuous statistic of the same 1000 seeded runs.
     """
     ds = _datasets()[0]
     at_50 = _run(_inputs_from_dataset(ds, gross_margin=50))["runway"]

@@ -1,6 +1,6 @@
 from server.lib.lazy_imports import np
 from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 import uuid
 import logging
@@ -82,7 +82,11 @@ class EnhancedSimulationInputs:
     payroll: float
     other_costs: float
     cash_balance: float
-    churn_rate: float = 5.0
+    # Monthly revenue churn, in percent. Default 0: a churn level nobody entered
+    # is an invented input. Callers pass the company's real churn when known
+    # (resolve_baseline_financials()["churn"]). It was 5.0 from 98d4ffbc on,
+    # which silently shaved revenue for every company with no churn data.
+    churn_rate: float = 0.0
     cac: float = 0
     ltv: float = 0
     
@@ -96,10 +100,45 @@ class EnhancedSimulationInputs:
     cac_change_pct: float = 0
     
     events: List[ScenarioEvent] = field(default_factory=list)
-    
+
+    # Planned hires: [{"count": int, "start_month": int, "monthly_cost": float}]
+    # where monthly_cost is per hire (server/api/simulations.py HiringPlan).
+    # Each hire's cost is added to payroll from its start month (1 = the first
+    # simulated month) onwards, matching simulation_engine.run_monte_carlo.
+    hiring_plan: List[Dict[str, Any]] = field(default_factory=list)
+
     growth_sigma: float = 3.0
     margin_sigma: float = 2.0
     churn_sigma: float = 1.0
+    # Cost uncertainty, in percent of the cost line. Two parts, both driven by
+    # this one number: a per-path cost LEVEL drawn once (the entered costs are
+    # an estimate; the real run-rate is a bit above or below), and month-to-
+    # month noise as in the basic engine (simulation_engine cost_sigma): opex
+    # at 1x, payroll at 0.5x (salaries are sticky), other costs at 1.5x.
+    # Monthly noise alone averages out over a year (AlphaKids: 12.5/12.5/12.6),
+    # so the level term is what gives a cost-dominated company a real spread.
+    # Without either, P10 = P50 = P90 for any company with little revenue.
+    cost_sigma: float = 3.0
+
+
+def _hiring_cost_by_start_month(hiring_plan: List[Dict[str, Any]], horizon: int) -> Dict[int, float]:
+    """Monthly payroll added at each 1-based start month."""
+    added: Dict[int, float] = {}
+    for hire in hiring_plan or []:
+        try:
+            count = float(hire.get("count", 1) or 0)
+            monthly_cost = float(hire.get("monthly_cost", 0) or 0)
+            start = int(hire.get("start_month", 1) or 1)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        cost = max(0.0, count) * max(0.0, monthly_cost)
+        if cost <= 0:
+            continue
+        start = max(1, start)
+        if start > horizon:
+            continue
+        added[start] = added.get(start, 0.0) + cost
+    return added
 
 
 def run_enhanced_monte_carlo(
@@ -119,7 +158,14 @@ def run_enhanced_monte_carlo(
     # 0% margin into 10%. See server/core/units.py.
     adjusted_margin = clamp_gross_margin_pct(inputs.gross_margin + inputs.gross_margin_delta_pct)
     clamped_burn_change = max(-100, min(100, inputs.burn_reduction_pct))
+    # "Reduce burn X%" applies to opex, other costs AND payroll -- the basic
+    # engine (simulation_engine.py) always did; this one skipped payroll, so a
+    # payroll-heavy company's 20% cut moved runway by a fraction of that.
+    # Planned hires are added on top unreduced, as in the basic engine.
     burn_reduction_mult = 1 - (clamped_burn_change / 100)
+    base_payroll = inputs.payroll * burn_reduction_mult
+    hiring_additions = _hiring_cost_by_start_month(inputs.hiring_plan, horizon)
+    cost_sigma_frac = max(0.0, inputs.cost_sigma) / 100.0
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
     # churn_rate was declared on the inputs (default 5.0%) and never read: the
     # churn level used by every simulation was the scenario DELTA alone, so a
@@ -137,6 +183,7 @@ def run_enhanced_monte_carlo(
     cash_paths = np.zeros((n, horizon))
     burn_paths = np.zeros((n, horizon))
     runway_months = np.zeros(n)
+    ran_out = np.zeros(n, dtype=bool)
     breakeven_months = np.full(n, horizon + 1, dtype=float)
     
     event_occurrences = {event.id: 0 for event in inputs.events}
@@ -146,7 +193,8 @@ def run_enhanced_monte_carlo(
     for sim in range(n):
         revenue = adjusted_revenue
         cash = inputs.cash_balance
-        payroll = inputs.payroll
+        payroll = base_payroll
+        cost_level = max(0.0, rng.normal(1.0, cost_sigma_frac)) if cost_sigma_frac > 0 else 1.0
         current_growth = adjusted_growth
         current_margin = adjusted_margin
         current_churn = adjusted_churn
@@ -161,7 +209,9 @@ def run_enhanced_monte_carlo(
             margin = rng.normal(current_margin, inputs.margin_sigma) / 100
             churn_raw = rng.normal(current_churn, inputs.churn_sigma)
             churn = np.clip(churn_raw, -20, 50) / 100
-            
+
+            payroll += hiring_additions.get(month + 1, 0.0)
+
             for event in inputs.events:
                 if month + 1 == event.month:
                     if rng.random() < event.probability:
@@ -229,8 +279,18 @@ def run_enhanced_monte_carlo(
                 cash += fundraise_amount
             
             gross_profit = revenue * margin
-            total_opex = inputs.opex * burn_reduction_mult
-            total_other = inputs.other_costs * burn_reduction_mult
+            if cost_sigma_frac > 0:
+                opex_noise = max(0.0, rng.normal(1.0, cost_sigma_frac))
+                payroll_noise = max(0.0, rng.normal(1.0, cost_sigma_frac * 0.5))
+                other_noise = max(0.0, rng.normal(1.0, cost_sigma_frac * 1.5))
+            else:
+                opex_noise = payroll_noise = other_noise = 1.0
+            opex_noise *= cost_level
+            payroll_noise *= cost_level
+            other_noise *= cost_level
+            total_opex = inputs.opex * burn_reduction_mult * opex_noise
+            total_other = inputs.other_costs * burn_reduction_mult * other_noise
+            month_payroll = payroll * payroll_noise
             
             cac_cost = 0
             if adjusted_cac > 0 and inputs.cac > 0:
@@ -238,8 +298,9 @@ def run_enhanced_monte_carlo(
                 baseline_cac_cost = new_customers_estimate * inputs.cac
                 cac_cost = new_customers_estimate * adjusted_cac - baseline_cac_cost
             
-            net_cashflow = gross_profit - total_opex - payroll - total_other - cac_cost
-            
+            net_cashflow = gross_profit - total_opex - month_payroll - total_other - cac_cost
+
+            cash_before_flow = cash
             cash = cash + net_cashflow
             burn = max(0, -net_cashflow) if net_cashflow < 0 else 0
             
@@ -251,15 +312,26 @@ def run_enhanced_monte_carlo(
                 breakeven_months[sim] = month + 1
                 found_breakeven = True
             
-            if cash <= 0 and runway_months[sim] == 0:
-                runway_months[sim] = month + 1
-        
-        if runway_months[sim] == 0:
+            if cash <= 0 and not ran_out[sim]:
+                ran_out[sim] = True
+                # Interpolate within the month instead of rounding up to its
+                # end: whole-month runways collapsed P10/P50/P90 onto one
+                # integer. Cash flows evenly through the month, so cash hits
+                # zero cash_before_flow / burn of the way in.
+                if cash_before_flow > 0 and net_cashflow < 0:
+                    runway_months[sim] = month + cash_before_flow / -net_cashflow
+                else:
+                    runway_months[sim] = month + 1
+
+        if not ran_out[sim]:
             max_cap = 240
             final_cash = cash_paths[sim, horizon - 1]
             final_revenue = revenue_paths[sim, horizon - 1]
             
-            net_cf = final_revenue * (adjusted_margin / 100) - inputs.opex * burn_reduction_mult - payroll - inputs.other_costs * burn_reduction_mult
+            # payroll here already carries the burn reduction and every hire.
+            net_cf = final_revenue * (adjusted_margin / 100) - cost_level * (
+                inputs.opex * burn_reduction_mult + payroll + inputs.other_costs * burn_reduction_mult
+            )
             if net_cf >= 0 and final_cash > 0:
                 # Cash-flow positive (or breakeven) with cash on hand = the
                 # company sustains itself indefinitely. Emit the 999 sentinel
@@ -438,42 +510,11 @@ def run_sensitivity_analysis(
         min_value = param["minValue"]
         max_value = param["maxValue"]
         
-        low_inputs = EnhancedSimulationInputs(
-            baseline_revenue=inputs.baseline_revenue,
-            baseline_growth_rate=inputs.baseline_growth_rate,
-            gross_margin=inputs.gross_margin,
-            opex=inputs.opex,
-            payroll=inputs.payroll,
-            other_costs=inputs.other_costs,
-            cash_balance=inputs.cash_balance,
-            churn_rate=inputs.churn_rate,
-            pricing_change_pct=inputs.pricing_change_pct,
-            growth_uplift_pct=inputs.growth_uplift_pct,
-            burn_reduction_pct=inputs.burn_reduction_pct,
-            fundraise_month=inputs.fundraise_month,
-            fundraise_amount=inputs.fundraise_amount,
-            gross_margin_delta_pct=inputs.gross_margin_delta_pct,
-            events=inputs.events
-        )
-        
-        high_inputs = EnhancedSimulationInputs(
-            baseline_revenue=inputs.baseline_revenue,
-            baseline_growth_rate=inputs.baseline_growth_rate,
-            gross_margin=inputs.gross_margin,
-            opex=inputs.opex,
-            payroll=inputs.payroll,
-            other_costs=inputs.other_costs,
-            cash_balance=inputs.cash_balance,
-            churn_rate=inputs.churn_rate,
-            pricing_change_pct=inputs.pricing_change_pct,
-            growth_uplift_pct=inputs.growth_uplift_pct,
-            burn_reduction_pct=inputs.burn_reduction_pct,
-            fundraise_month=inputs.fundraise_month,
-            fundraise_amount=inputs.fundraise_amount,
-            gross_margin_delta_pct=inputs.gross_margin_delta_pct,
-            events=inputs.events
-        )
-        
+        # replace() copies every field (hiring plan, churn delta, sigmas); the
+        # old field-by-field copy silently dropped the ones it did not list.
+        low_inputs = replace(inputs)
+        high_inputs = replace(inputs)
+
         if param_name == "baseline_growth_rate":
             low_inputs.baseline_growth_rate = min_value
             high_inputs.baseline_growth_rate = max_value
