@@ -50,7 +50,7 @@ GOLDEN_RUNWAY = {
     "DS02": (19.0, 20.0, 22.0),
     "DS03": (5.0, 5.0, 6.0),
     "DS04": (5.0, 6.0, 6.0),
-    "DS05": (26.9, 30.2, 35.4),
+    "DS05": (23.0, 24.8, 27.6),  # 8% margin, no longer floored to 10% (audit 10-15)
     "DS06": (5.0, 5.0, 5.0),
     "DS07": (7.0, 8.0, 9.0),
     "DS08": (3.0, 3.0, 3.0),
@@ -60,7 +60,7 @@ GOLDEN_RUNWAY = {
     "DS12": (24.2, 26.8, 30.9),
     "DS13": (5.0, 5.0, 5.0),
     "DS14": (21.0, 24.0, 26.0),
-    "DS15": (9.0, 9.0, 9.0),
+    "DS15": (8.0, 8.0, 8.0),  # 0% margin, no longer floored to 10% (audit 10-15)
 }
 
 
@@ -173,12 +173,18 @@ def test_margin_above_band_is_clamped_at_the_input():
     )
 
 
-def test_margin_below_band_is_clamped_at_the_input():
-    """0% gross margin clamps to 10 and behaves exactly as 10 does."""
+def test_low_and_negative_margins_are_not_floored():
+    """0% and negative margins are real and must be simulated as given.
+
+    The old [10, 95] input clamp ran a 0% (or -56%) margin company at +10%,
+    overstating its runway. Lower margin, shorter runway, all the way down.
+    """
     ds = [d for d in _datasets() if d["id"] == "DS15"][0]
-    at_0 = _run(_inputs_from_dataset(ds, gross_margin=0))["runway"]
-    at_10 = _run(_inputs_from_dataset(ds, gross_margin=10))["runway"]
-    assert (at_0["p10"], at_0["p50"], at_0["p90"]) == (at_10["p10"], at_10["p50"], at_10["p90"])
+    means = [
+        _run(_inputs_from_dataset(ds, gross_margin=gm))["runway"]["mean"]
+        for gm in (10, 0, -56)
+    ]
+    assert means[0] > means[1] > means[2], means
 
 
 def test_in_band_margin_is_untouched_by_the_clamp():
