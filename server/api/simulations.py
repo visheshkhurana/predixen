@@ -30,6 +30,7 @@ from server.simulate.models import (
 )
 from dataclasses import asdict
 from typing import Union
+from server.core.units import clamp_gross_margin_pct, gross_margin_pct
 
 router = APIRouter(tags=["simulations"])
 
@@ -94,7 +95,10 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
     ))
     growth = extract_metric_value(metrics.get("revenue_growth_mom"), 0) or frv("mom_growth")
     cash = max(0.0, extract_metric_value(metrics.get("cash_balance"), 0) or frv("cash_balance"))
-    gross_margin = extract_metric_value(metrics.get("gross_margin"), 0) or frv("gross_margin")
+    # Engines take a percentage; legacy rows may hold a fraction.
+    gross_margin = gross_margin_pct(
+        extract_metric_value(metrics.get("gross_margin"), 0) or frv("gross_margin")
+    ) or 0.0
 
     opex = extract_metric_value(metrics.get("opex"), 0) or frv("opex")
     payroll = extract_metric_value(metrics.get("payroll"), 0) or frv("payroll")
@@ -106,8 +110,7 @@ def resolve_baseline_financials(metrics: Dict[str, Any], latest_record) -> Dict[
             # Monte Carlo net cashflow = gross_profit - (opex + payroll + other).
             # To make the simulated burn equal the computed net burn, set total
             # operating cost = net_burn + gross_profit, where gross_profit = revenue * gm.
-            gm_frac = gross_margin / 100.0 if gross_margin > 1 else gross_margin
-            gm_frac = max(0.0, min(1.0, gm_frac))
+            gm_frac = clamp_gross_margin_pct(gross_margin_pct(gross_margin) or 0.0) / 100.0
             gross_profit = revenue * gm_frac
             opex = net_burn + gross_profit
             payroll = 0.0
@@ -714,10 +717,9 @@ def _compute_fundraising_metrics(
     opex = resolved["opex"]
     payroll = resolved["payroll"]
     other_costs = resolved["other_costs"]
-    gm_value = resolved["gross_margin"]
-    gross_margin_pct = (gm_value / 100) if gm_value > 1 else gm_value
+    gm_frac = clamp_gross_margin_pct(gross_margin_pct(resolved["gross_margin"]) or 0.0) / 100.0
 
-    gross_profit = monthly_revenue * gross_margin_pct
+    gross_profit = monthly_revenue * gm_frac
     monthly_burn = max(0, opex + payroll + other_costs - gross_profit)
     
     pre_raise_runway = current_cash / monthly_burn if monthly_burn > 0 else 48

@@ -5,6 +5,7 @@ from datetime import datetime
 import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from server.core.units import clamp_gross_margin_pct
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +114,10 @@ def run_enhanced_monte_carlo(
     horizon = config.horizon_months
     
     adjusted_growth = inputs.baseline_growth_rate + inputs.growth_uplift_pct
-    # Clamp the INPUT margin, not the sampled one. The user's gross_margin is a
-    # real reported number and must survive intact; the old code clamped each
-    # monthly sample, which silently overwrote any input outside [10, 95] (e.g.
-    # a 0% or 100% gross-margin company) with the bound.
-    adjusted_margin = max(10, min(95, inputs.gross_margin + inputs.gross_margin_delta_pct))
+    # Clamp the INPUT margin, not the sampled one, and only to bounds wide
+    # enough for a real company: the previous [10, 95] still turned a -56% or
+    # 0% margin into 10%. See server/core/units.py.
+    adjusted_margin = clamp_gross_margin_pct(inputs.gross_margin + inputs.gross_margin_delta_pct)
     clamped_burn_change = max(-100, min(100, inputs.burn_reduction_pct))
     burn_reduction_mult = 1 - (clamped_burn_change / 100)
     adjusted_revenue = inputs.baseline_revenue * (1 + inputs.pricing_change_pct / 100)
