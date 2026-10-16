@@ -2,10 +2,18 @@
 Company lookup API using Perplexity AI to fetch business details from website.
 """
 import os
+import re
+import threading
+import time
+from collections import defaultdict, deque
+from urllib.parse import urlparse
+
 import httpx
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from typing import Optional
+
+from server.core.security import get_current_user
 
 router = APIRouter(prefix="/lookup", tags=["lookup"])
 
@@ -13,8 +21,66 @@ PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY")
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 
+MAX_WEBSITE_LENGTH = 255
+# Each call spends a paid LLM request, so it is capped per user.
+LOOKUP_RATE_LIMIT = int(os.environ.get("COMPANY_LOOKUP_RATE_LIMIT", "10"))
+LOOKUP_RATE_WINDOW_SECONDS = 3600
+
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))*\.[a-z]{2,63}$"
+)
+
+
+class _SlidingWindowLimiter:
+    """Small in-process per-key sliding window (per worker)."""
+
+    def __init__(self):
+        self._hits: dict = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def allow(self, key, limit: int, window: float) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            q = self._hits[key]
+            while q and now - q[0] >= window:
+                q.popleft()
+            if len(q) >= limit:
+                return False
+            q.append(now)
+            return True
+
+    def reset(self):
+        with self._lock:
+            self._hits.clear()
+
+
+_lookup_limiter = _SlidingWindowLimiter()
+
+
+def normalize_website(raw: str) -> str:
+    """Return https://<domain>[/path] or raise HTTPException(400)."""
+    website = (raw or "").strip()
+    if not website:
+        raise HTTPException(status_code=400, detail="Website URL is required")
+    if len(website) > MAX_WEBSITE_LENGTH:
+        raise HTTPException(status_code=400, detail="Website URL is too long")
+    if not website.lower().startswith(("http://", "https://")):
+        website = f"https://{website}"
+    parsed = urlparse(website)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme not in ("http", "https")
+        or parsed.username
+        or parsed.password
+        or not _DOMAIN_RE.match(host)
+        or any(ch.isspace() for ch in website)
+    ):
+        raise HTTPException(status_code=400, detail="Enter a valid website domain")
+    return website
+
+
 class WebsiteLookupRequest(BaseModel):
-    website: str
+    website: str = Field(..., max_length=MAX_WEBSITE_LENGTH)
 
 
 class CompanyDetails(BaseModel):
@@ -37,20 +103,26 @@ class WebsiteLookupResponse(BaseModel):
 
 
 @router.post("/company-from-website", response_model=WebsiteLookupResponse)
-async def lookup_company_from_website(request: WebsiteLookupRequest):
+async def lookup_company_from_website(
+    request: WebsiteLookupRequest,
+    current_user=Depends(get_current_user),
+):
     """
     Use Perplexity AI to fetch company details from a website URL.
     """
+    website = normalize_website(request.website)
+
+    if not _lookup_limiter.allow(
+        getattr(current_user, "id", None), LOOKUP_RATE_LIMIT, LOOKUP_RATE_WINDOW_SECONDS
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many company lookups. Please try again later.",
+            headers={"Retry-After": str(LOOKUP_RATE_WINDOW_SECONDS)},
+        )
+
     if not PERPLEXITY_API_KEY:
         raise HTTPException(status_code=500, detail="Perplexity API key not configured")
-    
-    website = request.website.strip()
-    if not website:
-        raise HTTPException(status_code=400, detail="Website URL is required")
-    
-    # Ensure URL has protocol
-    if not website.startswith(('http://', 'https://')):
-        website = f"https://{website}"
     
     prompt = f"""Analyze the company website at {website} and provide the following information in a structured format:
 
