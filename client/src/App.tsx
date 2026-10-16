@@ -406,7 +406,7 @@ function Router() {
       <Route path="/data">
         {() => <AuthenticatedRoute component={DataInputPage} />}
       </Route>
-      {/* Unmounted pages/dashboard.tsx still links here; live ingest is /data. */}
+      {/* Legacy alias kept for old bookmarks; live ingest is /data. */}
       <Route path="/ingest">
         {() => <Redirect to="/data" />}
       </Route>
