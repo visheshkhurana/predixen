@@ -285,13 +285,18 @@ def extract_metrics_with_patterns(pdf_text: str) -> Dict[str, Any]:
 def get_openai_client():
     """Get OpenAI client with validation."""
     from openai import OpenAI
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-    
+    from server.ingest.openai_config import resolve_openai_config
+    api_key, base_url = resolve_openai_config()
+
     if not api_key:
-        raise ValueError("OpenAI API key not configured. Please check environment settings.")
-    
-    return OpenAI(api_key=api_key, base_url=base_url)
+        raise ValueError(
+            "OpenAI API key not configured. Set OPENAI_API_KEY "
+            "(or AI_INTEGRATIONS_OPENAI_API_KEY)."
+        )
+
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url)
+    return OpenAI(api_key=api_key)
 
 
 def pdf_to_images(file_path: str, max_pages: int = 5) -> List[str]:
