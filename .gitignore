@@ -43,3 +43,18 @@ server/models/__pycache__/
 roleplay-data/
 .claude/
 .gstack/
+
+# Root-level scratch artifacts (screenshots, patches, exports). Anchored with a
+# leading slash so legitimate files in client/public, docs/, etc. are unaffected.
+/*.png
+/*.jpg
+/*.jpeg
+/*.patch
+/*.diff
+/*.mbox
+/*.docx
+/*.pptx
+/*.xlsx
+/*.pdf
+/_to_delete/
+/email_preview_*.html
