@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -177,10 +178,17 @@ export default function GoalsPage() {
               : "Set targets, track progress, and stay accountable to your key milestones."}
           </p>
         </div>
-        <Button data-testid="button-new-goal">
-          <Plus className="h-4 w-4 mr-2" />
-          New Goal
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span tabIndex={0}>
+              <Button data-testid="button-new-goal" disabled>
+                <Plus className="h-4 w-4 mr-2" />
+                New Goal
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Custom goals are coming soon</TooltipContent>
+        </Tooltip>
       </div>
 
       {!computed.hasData && (

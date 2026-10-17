@@ -168,8 +168,7 @@ export function StripeConnectModal({
                   size="icon"
                   className="absolute right-0 top-0 h-full"
                   onClick={() => setShowKey(!showKey)}
-                  data-testid="button-toggle-stripe-key"
-                >
+                  data-testid="button-toggle-stripe-key" aria-label={showKey ? "Hide key" : "Show key"}>
                   {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </Button>
               </div>

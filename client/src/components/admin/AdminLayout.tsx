@@ -66,8 +66,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
             variant="ghost" 
             size="icon" 
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            data-testid="button-toggle-sidebar"
-          >
+            data-testid="button-toggle-sidebar" aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
             {sidebarOpen ? <ChevronRight className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
         </div>
@@ -128,6 +127,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               size="icon"
               onClick={handleLogout}
               data-testid="button-admin-logout-icon"
+              aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </Button>

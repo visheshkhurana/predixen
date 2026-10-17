@@ -383,7 +383,7 @@ export default function DataVerification() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/data")} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/data")} data-testid="button-back" aria-label="Go back">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -409,6 +409,7 @@ export default function DataVerification() {
                   setTimeout(() => navigate("/data"), 500);
                 }}
                 data-testid="button-clear-cache"
+                aria-label="Clear cache"
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>

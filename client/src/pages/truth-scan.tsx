@@ -881,7 +881,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-quality">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-quality" aria-label={qualityExpanded ? "Collapse" : "Expand"}>
                     {qualityExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -959,7 +959,7 @@ export default function TruthScanPage() {
                   </Tooltip>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence">
+                  <Button variant="ghost" size="icon" data-testid="button-expand-confidence" aria-label={confidenceExpanded ? "Collapse" : "Expand"}>
                     {confidenceExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>

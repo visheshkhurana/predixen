@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { FadeIn } from "@/components/motion/animated-container";
+import { saveCopilotDraft, loadCopilotDraft, clearCopilotDraft } from "@/lib/copilotDraft";
 import { FloatingOrbsBackground } from "@/components/motion/floating-orbs-background";
 import { PageTransition } from "@/components/motion/page-transition-wrapper";
 import { useLocation } from 'wouter';
@@ -1245,7 +1246,12 @@ export default function CopilotPage() {
     });
   };
   
-  const [input, setInput] = useState('');
+  // Restore a question that was sent but never answered (e.g. the session
+  // expired mid-request and the user had to sign in again).
+  const [input, setInput] = useState(() => loadCopilotDraft() ?? '');
+  useEffect(() => {
+    clearCopilotDraft();
+  }, []);
   const [isTyping, setIsTyping] = useState(false);
   const [useApiMode, setUseApiMode] = useState(true);
   
@@ -1542,6 +1548,8 @@ Type **help** for a full list of what I can do.`,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
+    // Saved before the input is cleared so a 401 redirect cannot lose it.
+    saveCopilotDraft(messageText);
     setInput('');
     setIsTyping(true);
     
@@ -1618,6 +1626,7 @@ Type **help** for a full list of what I can do.`,
         if (response.pii_findings) {
           setLatestPiiFindings(response.pii_findings);
         }
+        clearCopilotDraft();
         setIsTyping(false);
       } catch (error: unknown) {
         console.error('Copilot API error:', error);
@@ -1625,6 +1634,12 @@ Type **help** for a full list of what I can do.`,
         let errorContent = '';
         let structuredFallback: CopilotApiResponse | undefined = undefined;
         const errMsg = error instanceof Error ? error.message : String(error ?? '');
+        if (errMsg.includes('401')) {
+          // Keep the saved draft for after sign-in, and put it back in the box.
+          setInput(messageText);
+        } else {
+          clearCopilotDraft();
+        }
 
         if (errMsg) {
           if (errMsg.includes('500')) {
@@ -1862,7 +1877,7 @@ Type **help** for a full list of what I can do.`,
   return (
     <PageTransition pageKey="copilot" className="relative">
       <FloatingOrbsBackground />
-      <FadeIn delay={0.05} duration={0.4} direction="none">
+      <FadeIn delay={0.05} duration={0.4}>
       <div className="relative h-[calc(100vh-4rem)] flex overflow-hidden">
       {/* Conversation History Sidebar */}
       {showConversationSidebar && (
@@ -1916,6 +1931,7 @@ Type **help** for a full list of what I can do.`,
                         handleDeleteConversation(conv.id);
                       }}
                       data-testid={`delete-conversation-${conv.id}`}
+                      aria-label="Delete conversation"
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -2220,6 +2236,7 @@ Type **help** for a full list of what I can do.`,
                     }
                   }}
                   placeholder="Type / for commands or ask a question..."
+                  aria-label="Ask the copilot a question"
                   disabled={isTyping}
                   data-testid="input-copilot"
                 />
@@ -2489,6 +2506,7 @@ Type **help** for a full list of what I can do.`,
                   onChange={(e) => setNewNoteContent(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addNote()}
                   placeholder="Add a note..."
+                  aria-label="New note"
                   data-testid="input-new-note"
                 />
                 <Button 
@@ -2497,6 +2515,7 @@ Type **help** for a full list of what I can do.`,
                   onClick={addNote}
                   disabled={!newNoteContent.trim()}
                   data-testid="button-add-note"
+                  aria-label="Add"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -2569,8 +2588,7 @@ Type **help** for a full list of what I can do.`,
             size="icon"
             className="h-14 w-14 rounded-full shadow-lg"
             onClick={() => setIsFabOpen(!isFabOpen)}
-            data-testid="button-fab"
-          >
+            data-testid="button-fab" aria-label={isFabOpen ? "Close menu" : "Open menu"}>
             {isFabOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
         </div>

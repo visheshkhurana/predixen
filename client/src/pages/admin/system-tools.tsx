@@ -11,49 +11,97 @@ import { Activity, Bot, Flag, Shield, AlertTriangle, Clock, RefreshCw, Zap, Brai
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+// Response shapes of the admin endpoints this page reads
+// (server/api/domain/system_router.py and ai_router.py /feedback/stats).
+type Row = Record<string, unknown>;
+interface EventsResponse { events?: Row[] }
+interface EventStatsResponse { total_events?: number; by_type?: Record<string, number> }
+interface FlagsResponse { flags?: Row[] }
+interface AgentsResponse { agents?: Row[] }
+interface AgentStatsResponse { total_requests?: number; agents?: Row[] }
+interface BriefingResponse {
+  message?: string;
+  summary?: string;
+  generated_at?: string;
+  state_snapshot?: {
+    mrr?: number | null;
+    monthly_burn?: number | null;
+    cash_balance?: number | null;
+    runway_months?: number | null;
+  };
+  suggestions?: Row[];
+}
+interface RisksResponse { risks?: Row[] }
+interface PlatformIntelResponse {
+  contributing_companies?: number;
+  total_companies?: number;
+  participation_rate?: number;
+  patterns_discovered?: number;
+  total_decisions_analyzed?: number;
+  total_financial_records?: number;
+  last_computed?: string | null;
+}
+interface FeedbackStatsResponse {
+  patterns?: {
+    total_feedback?: number;
+    total_helpful?: number;
+    overall_quality_score?: number;
+    by_response_type?: Record<string, Row>;
+  };
+  quality_scores?: Record<string, unknown>;
+  outcome_correlations?: Row[];
+  daily_trend?: Row[];
+}
+interface ResearchStatsResponse {
+  total_benchmarks?: number;
+  total_patterns?: number;
+  benchmarks_by_industry?: Record<string, number>;
+  patterns_by_type?: Record<string, number>;
+}
+
 export default function SystemToolsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("events");
   const [importJson, setImportJson] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: eventsData, isLoading: eventsLoading } = useQuery({
+  const { data: eventsData, isLoading: eventsLoading } = useQuery<EventsResponse>({
     queryKey: ["/api/system/events"],
   });
 
-  const { data: eventStats } = useQuery({
+  const { data: eventStats } = useQuery<EventStatsResponse>({
     queryKey: ["/api/system/events/stats"],
   });
 
-  const { data: flagsData, isLoading: flagsLoading } = useQuery({
+  const { data: flagsData, isLoading: flagsLoading } = useQuery<FlagsResponse>({
     queryKey: ["/api/system/flags"],
   });
 
-  const { data: agentsData, isLoading: agentsLoading } = useQuery({
+  const { data: agentsData, isLoading: agentsLoading } = useQuery<AgentsResponse>({
     queryKey: ["/api/system/agents"],
   });
 
-  const { data: agentStats } = useQuery({
+  const { data: agentStats } = useQuery<AgentStatsResponse>({
     queryKey: ["/api/system/agents/stats"],
   });
 
-  const { data: briefingData } = useQuery({
+  const { data: briefingData } = useQuery<BriefingResponse>({
     queryKey: ["/api/system/autopilot/briefing"],
   });
 
-  const { data: risksData } = useQuery({
+  const { data: risksData } = useQuery<RisksResponse>({
     queryKey: ["/api/system/autopilot/risks"],
   });
 
-  const { data: platformIntelData, isLoading: platformIntelLoading } = useQuery({
+  const { data: platformIntelData, isLoading: platformIntelLoading } = useQuery<PlatformIntelResponse>({
     queryKey: ["/api/system/platform-intelligence"],
   });
 
-  const { data: feedbackStats, isLoading: feedbackStatsLoading } = useQuery({
+  const { data: feedbackStats, isLoading: feedbackStatsLoading } = useQuery<FeedbackStatsResponse>({
     queryKey: ["/api/ai/feedback/stats"],
   });
 
-  const { data: researchStats, isLoading: researchStatsLoading } = useQuery({
+  const { data: researchStats, isLoading: researchStatsLoading } = useQuery<ResearchStatsResponse>({
     queryKey: ["/api/system/research-data-stats"],
   });
 
@@ -294,7 +342,7 @@ export default function SystemToolsPage() {
               <ScrollArea className="h-[400px]">
                 {eventsLoading ? (
                   <p className="text-muted-foreground">Loading events...</p>
-                ) : eventsData?.events?.length > 0 ? (
+                ) : eventsData?.events && eventsData.events.length > 0 ? (
                   <div className="space-y-2">
                     {eventsData.events.map((event: any) => (
                       <div key={event.id} className="flex items-center justify-between p-3 rounded-lg border border-border" data-testid={`event-row-${event.id}`}>
@@ -373,7 +421,7 @@ export default function SystemToolsPage() {
             </CardContent>
           </Card>
 
-          {agentStats?.agents?.length > 0 && (
+          {agentStats?.agents && agentStats.agents.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">Agent Usage (Last 7 Days)</CardTitle>
@@ -440,7 +488,7 @@ export default function SystemToolsPage() {
             </Button>
           </div>
 
-          {risksData?.risks?.length > 0 && (
+          {risksData?.risks && risksData.risks.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -501,7 +549,7 @@ export default function SystemToolsPage() {
                   )}
                 </div>
 
-                {briefingData.suggestions?.length > 0 && (
+                {briefingData.suggestions && briefingData.suggestions.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-semibold">Suggestions</h4>
                     {briefingData.suggestions.map((s: any, i: number) => (

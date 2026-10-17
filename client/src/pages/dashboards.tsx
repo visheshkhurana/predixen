@@ -162,7 +162,7 @@ export default function DashboardsPage() {
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-menu-${dashboard.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-menu-${dashboard.id}`} aria-label="More options">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>

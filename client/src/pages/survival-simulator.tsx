@@ -227,8 +227,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
         {showAdvanced && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 animate-in fade-in duration-200">
             <div className="space-y-2">
-              <Label className="text-sm">Planned Hires (next 12 months)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-planned-hires-next-12-months" className="text-sm">Planned Hires (next 12 months)</Label>
+              <Input id="survival-simulator-planned-hires-next-12-months"
                 data-testid="input-planned-hires"
                 type="number"
                 value={inputs.planned_hires}
@@ -237,8 +237,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Avg Monthly Cost per Hire</Label>
-              <Input
+              <Label htmlFor="survival-simulator-avg-monthly-cost-per-hire" className="text-sm">Avg Monthly Cost per Hire</Label>
+              <Input id="survival-simulator-avg-monthly-cost-per-hire"
                 data-testid="input-avg-hire-cost"
                 type="number"
                 value={inputs.avg_hire_cost}
@@ -247,8 +247,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Month (1-24)</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-month-1-24" className="text-sm">Fundraising Month (1-24)</Label>
+              <Input id="survival-simulator-fundraising-month-1-24"
                 data-testid="input-fundraising-month"
                 type="number"
                 value={inputs.fundraising_month ?? ""}
@@ -258,8 +258,8 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Fundraising Amount</Label>
-              <Input
+              <Label htmlFor="survival-simulator-fundraising-amount" className="text-sm">Fundraising Amount</Label>
+              <Input id="survival-simulator-fundraising-amount"
                 data-testid="input-fundraising-amount"
                 type="number"
                 value={inputs.fundraising_amount}

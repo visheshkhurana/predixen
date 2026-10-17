@@ -38,7 +38,7 @@ jobs:
       # agents/ORG-22.md ("82 errors counts as a pass") — a snapshot of main,
       # not a forever target. Fail only if the count rises. Prefer 0; if it
       # drops, lower this number.
-      TSC_ERROR_BUDGET: "82"
+      TSC_ERROR_BUDGET: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,6 +69,9 @@ jobs:
 
       - name: session-401-redirect tests
         run: npx tsx --test server/tests/session-401-redirect.test.ts
+
+      - name: Frontend audit UX guards (budget, no fake sync, query toasts, copilot draft)
+        run: npx tsx --test server/tests/frontend-audit-ux.test.ts
 
       - name: activation-path dead-route tests
         run: npx tsx server/tests/activation-dead-routes.test.ts

@@ -1397,8 +1397,8 @@ export default function ScenariosPage() {
           })()}
           <div className="flex items-center gap-2 mt-2 opacity-30 hover:opacity-100 focus-within:opacity-100 transition-opacity" data-testid="simulation-settings">
             <div className="flex items-center gap-1">
-              <Label className="text-[10px] text-muted-foreground/50 whitespace-nowrap">Seed:</Label>
-              <Input
+              <Label htmlFor="scenarios-seed" className="text-[10px] text-muted-foreground/50 whitespace-nowrap">Seed:</Label>
+              <Input id="scenarios-seed"
                 type="number"
                 placeholder="Random"
                 value={simSeed ?? ''}
@@ -1883,6 +1883,7 @@ export default function ScenariosPage() {
                   }}
                   title="Share via email"
                   data-testid="button-share-ai-decision"
+                  aria-label="Email"
                 >
                   <Mail className="h-4 w-4" />
                 </Button>
@@ -2054,10 +2055,6 @@ export default function ScenariosPage() {
                       filename={`${currentScenarioName.toLowerCase().replace(/\s/g, '-')}-report`}
                       onGeneratePDF={handleGeneratePDF}
                     />
-                    <Button variant="outline" size="sm" data-testid="button-discuss-team" onClick={() => toast({ title: 'Coming soon', description: 'Team discussion feature is in development.' })}>
-                      <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                      Discuss with Team
-                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2253,13 +2250,7 @@ export default function ScenariosPage() {
                   } as SensitivityRank));
 
                 return (
-                  <SensitivityRankPanel
-                    ranks={sortedRanks}
-                    onAdjustVariable={(variable) => {
-                      // This would scroll to parameter step in wizard
-                      toast({ title: 'Feature coming soon', description: `Adjust ${variable} in scenario wizard` });
-                    }}
-                  />
+                  <SensitivityRankPanel ranks={sortedRanks} />
                 );
               })()}
 
@@ -2317,7 +2308,7 @@ export default function ScenariosPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} onVariableClick={(variable) => toast({ title: `Analyzing: ${variable}`, description: 'Drill-down analysis coming soon' })} />
+                <TornadoChart baselineRunway={stressTestCurrentRunway} variables={calculateSensitivity(stressTestFinancialState)} />
                 <WhatIfExplorer baselineState={stressTestFinancialState} baselineResults={stressTestBaselineResults} calculateQuickImpact={(adj) => calculateWhatIfImpact(stressTestFinancialState, adj, stressTestBaselineResults)} onRunFullSimulation={() => toast({ title: 'Running Full Monte Carlo', description: 'Applying what-if adjustments to simulation...' })} />
               </div>
 
@@ -2607,7 +2598,7 @@ export default function ScenariosPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => setScenarioStack(prev => [...prev, s.id])} disabled={scenarioStack.includes(s.id)} data-testid={`button-add-stack-${s.id}`}>
+                                <Button variant="ghost" size="icon" onClick={() => setScenarioStack(prev => [...prev, s.id])} disabled={scenarioStack.includes(s.id)} data-testid={`button-add-stack-${s.id}`} aria-label="Layers">
                                   <Layers className="h-4 w-4" />
                                 </Button>
                                 <Button onClick={() => handleRunScenario(s.id)} disabled={isRunning && selectedScenarioId === s.id} data-testid={`button-run-scenario-${s.id}`}>
@@ -2649,7 +2640,8 @@ export default function ScenariosPage() {
                                     [newStack[idx - 1], newStack[idx]] = [newStack[idx], newStack[idx - 1]];
                                     setScenarioStack(newStack);
                                   }}
-                                  data-testid={`button-move-up-${id}`}>
+                                  data-testid={`button-move-up-${id}`}
+                                  aria-label="Move up">
                                   <ChevronUp className="h-3 w-3" />
                                 </Button>
                                 <Button variant="ghost" size="icon" disabled={idx === scenarioStack.length - 1}
@@ -2658,12 +2650,14 @@ export default function ScenariosPage() {
                                     [newStack[idx], newStack[idx + 1]] = [newStack[idx + 1], newStack[idx]];
                                     setScenarioStack(newStack);
                                   }}
-                                  data-testid={`button-move-down-${id}`}>
+                                  data-testid={`button-move-down-${id}`}
+                                  aria-label="Move down">
                                   <ChevronDown className="h-3 w-3" />
                                 </Button>
                                 <Button variant="ghost" size="icon"
                                   onClick={() => setScenarioStack(scenarioStack.filter(sid => sid !== id))}
-                                  data-testid={`button-remove-stack-${id}`}>
+                                  data-testid={`button-remove-stack-${id}`}
+                                  aria-label="Remove from stack">
                                   <X className="h-3 w-3" />
                                 </Button>
                               </div>

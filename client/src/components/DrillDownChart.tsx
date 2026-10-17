@@ -237,13 +237,13 @@ export function DrillDownChart({
               <TooltipContent>Toggle confidence bands</TooltipContent>
             </Tooltip>
             
-            <Button variant="outline" size="icon" onClick={handleZoomIn}>
+            <Button variant="outline" size="icon" onClick={handleZoomIn} aria-label="Zoom in">
               <ZoomIn className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handleZoomOut}>
+            <Button variant="outline" size="icon" onClick={handleZoomOut} aria-label="Zoom out">
               <ZoomOut className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" onClick={handleReset}>
+            <Button variant="outline" size="icon" onClick={handleReset} aria-label="Reset">
               <RotateCcw className="h-4 w-4" />
             </Button>
           </div>

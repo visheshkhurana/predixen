@@ -224,6 +224,7 @@ export function CustomEventBuilder({ events, onChange, horizonMonths = 24 }: Cus
                       size="icon"
                       onClick={() => removeEvent(event.id)}
                       data-testid={`button-remove-event-${index}`}
+                      aria-label="Remove event"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

@@ -369,6 +369,7 @@ export function TerminaPdfUpload({ companyId, onSuccess }: TerminaPdfUploadProps
                   onClick={clearFile}
                   className="ml-2"
                   data-testid="button-clear-file"
+                  aria-label="Clear file"
                 >
                   <X className="h-4 w-4" />
                 </Button>
