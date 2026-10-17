@@ -10,10 +10,17 @@ function b64urlDecode(s: string): Buffer {
   return Buffer.from(s, "base64");
 }
 
-function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
+export function verifyJwtHS256(token: string, secret: string): Record<string, any> | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [h, p, sig] = parts;
+  // Only HS256 is accepted; a header naming any other alg (e.g. "none") fails.
+  try {
+    const header = JSON.parse(b64urlDecode(h).toString("utf8"));
+    if (!header || header.alg !== "HS256") return null;
+  } catch {
+    return null;
+  }
   const expected = crypto.createHmac("sha256", secret).update(`${h}.${p}`).digest();
   const given = b64urlDecode(sig);
   if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return null;
@@ -27,23 +34,59 @@ function verifyJwtHS256(token: string, secret: string): Record<string, any> | nu
   return payload;
 }
 
-function getToken(req: Request): string | null {
-  const auth = req.headers["authorization"];
-  if (typeof auth === "string" && auth.startsWith("Bearer ")) return auth.slice(7).trim();
-  const cookie = req.headers["cookie"];
-  if (typeof cookie === "string") {
-    for (const part of cookie.split(";")) {
-      const idx = part.indexOf("=");
-      if (idx === -1) continue;
-      const k = part.slice(0, idx).trim();
-      if (k === "auth_token") return decodeURIComponent(part.slice(idx + 1).trim());
+/** The `auth_token` cookie value from a raw Cookie header, if present. */
+export function getAuthCookie(cookie: string | string[] | undefined): string | null {
+  if (typeof cookie !== "string") return null;
+  for (const part of cookie.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const k = part.slice(0, idx).trim();
+    if (k === "auth_token") {
+      try {
+        return decodeURIComponent(part.slice(idx + 1).trim());
+      } catch {
+        return null;
+      }
     }
   }
   return null;
 }
 
+/** Bearer token first, then the `auth_token` cookie. Works on any IncomingMessage. */
+export function getTokenFromHeaders(headers: Record<string, string | string[] | undefined>): string | null {
+  const auth = headers["authorization"];
+  if (typeof auth === "string" && auth.startsWith("Bearer ")) return auth.slice(7).trim();
+  return getAuthCookie(headers["cookie"]);
+}
+
+function getToken(req: Request): string | null {
+  return getTokenFromHeaders(req.headers);
+}
+
+export function getSessionSecret(): string | null {
+  return process.env.SECRET_KEY || process.env.SESSION_SECRET || null;
+}
+
+/**
+ * Verifies a backend-issued session token (signature + exp + non-empty sub).
+ * Returns the payload, or null when the token is invalid or auth is unconfigured.
+ */
+export function verifySessionToken(token: string | null | undefined): Record<string, any> | null {
+  if (!token) return null;
+  const secret = getSessionSecret();
+  if (!secret) return null;
+  const payload = verifyJwtHS256(token, secret);
+  if (!payload || payload.sub === undefined || payload.sub === null || payload.sub === "") return null;
+  return payload;
+}
+
+/** True for the master/admin claims that requirePlatformAdmin accepts without a DB lookup. */
+export function isMasterPayload(payload: Record<string, any>): boolean {
+  return payload.is_master === true || payload.admin === true || payload.sub === "master";
+}
+
 function readAuthPayload(req: Request, res: Response): Record<string, any> | null {
-  const secret = process.env.SECRET_KEY || process.env.SESSION_SECRET;
+  const secret = getSessionSecret();
   if (!secret) {
     res.status(500).json({ error: "Server auth not configured" });
     return null;
@@ -80,7 +123,7 @@ export async function requirePlatformAdmin(
   const payload = readAuthPayload(req, res);
   if (!payload) return;
 
-  if (payload.is_master === true || payload.admin === true || payload.sub === "master") {
+  if (isMasterPayload(payload)) {
     next();
     return;
   }

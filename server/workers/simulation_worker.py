@@ -196,7 +196,7 @@ def _execute_job(job_id: str, SessionLocal):
 
         logger.info(f"Job {job_id} completed in {elapsed_ms}ms (scenario {scenario.id})")
 
-        _broadcast_completion(scenario.id, result)
+        _broadcast_completion(scenario.id, result, getattr(scenario, "company_id", None))
 
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}", exc_info=True)
@@ -259,7 +259,7 @@ def _parse_events(events_data):
     return parsed
 
 
-def _broadcast_completion(scenario_id: int, results: Dict):
+def _broadcast_completion(scenario_id: int, results: Dict, company_id: Optional[int] = None):
     try:
         import httpx
 
@@ -268,6 +268,7 @@ def _broadcast_completion(scenario_id: int, results: Dict):
                 f"{NODE_SERVER_URL}/internal/broadcast/simulation",
                 json={
                     "scenarioId": scenario_id,
+                    "companyId": company_id,
                     "status": "completed",
                     "progress": 100,
                     "results": results,

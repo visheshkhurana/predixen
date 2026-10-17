@@ -1,6 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { IncomingMessage } from 'http';
+import { getAuthCookie, verifySessionToken } from './middleware/requireAuth';
+import { userCanAccessCompany, type CompanyAccessCheck } from './middleware/companyAccess';
 
 interface WSClient {
   ws: WebSocket;
@@ -76,48 +78,41 @@ function safeSend(ws: WebSocket, data: string | object, label: string = 'message
   }
 }
 
-export function setupWebSocketServer(httpServer: Server): WebSocketServer {
+interface AuthedRequest extends IncomingMessage {
+  wsAuth?: Record<string, any>;
+}
+
+export interface WebSocketServerOptions {
+  /** Override the company access check (tests inject a stub). */
+  canAccessCompany?: CompanyAccessCheck;
+}
+
+function parseCompanyId(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+export function setupWebSocketServer(httpServer: Server, options: WebSocketServerOptions = {}): WebSocketServer {
+  const canAccessCompany = options.canAccessCompany ?? userCanAccessCompany;
   const wss = new WebSocketServer({ 
     server: httpServer, 
     path: '/ws',
     verifyClient: (info, callback) => {
       try {
+        // Same-origin browsers send the auth_token cookie on the upgrade; a
+        // ?token= query param is still accepted for non-browser clients.
         const url = new URL(info.req.url || '', `http://${info.req.headers.host}`);
-        const token = url.searchParams.get('token');
+        const token = url.searchParams.get('token') || getAuthCookie(info.req.headers.cookie);
         if (!token) {
-          console.log('[WebSocket] Rejected: no token provided');
           callback(false, 401, 'Authentication required');
           return;
         }
-        if (token.length < 10) {
-          console.log('[WebSocket] Rejected: invalid token format');
-          callback(false, 401, 'Invalid token');
+        const payload = verifySessionToken(token);
+        if (!payload) {
+          callback(false, 401, 'Invalid or expired token');
           return;
         }
-        const parts = token.split('.');
-        if (parts.length !== 3) {
-          console.log('[WebSocket] Rejected: malformed JWT');
-          callback(false, 401, 'Invalid token format');
-          return;
-        }
-        try {
-          const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-          const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
-          if (!payload.sub) {
-            console.log('[WebSocket] Rejected: JWT missing sub claim');
-            callback(false, 401, 'Invalid token');
-            return;
-          }
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.log('[WebSocket] Rejected: JWT expired');
-            callback(false, 401, 'Token expired');
-            return;
-          }
-        } catch {
-          console.log('[WebSocket] Rejected: could not decode JWT payload');
-          callback(false, 401, 'Invalid token');
-          return;
-        }
+        (info.req as AuthedRequest).wsAuth = payload;
         callback(true);
       } catch (e) {
         console.error('[WebSocket] Auth error:', e);
@@ -139,25 +134,41 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
   console.log('[WebSocket] Server initialized on /ws');
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const auth = (req as AuthedRequest).wsAuth || {};
     const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const companyIdParam = url.searchParams.get('companyId');
-    const companyId = companyIdParam ? parseInt(companyIdParam, 10) : null;
+    const requestedCompanyId = parseCompanyId(url.searchParams.get('companyId'));
 
+    // companyId stays null until access to it has been verified, so no
+    // company-scoped broadcast reaches a socket on the strength of a claim.
     const client: WSClient = {
       ws,
-      companyId,
+      companyId: null,
       lastPing: Date.now(),
     };
 
     clients.set(ws, client);
-    console.log(`[WebSocket] Client connected (companyId: ${companyId}, total: ${clients.size})`);
+    console.log(`[WebSocket] Client connected (total: ${clients.size})`);
 
-    // Send connection confirmation message
-    safeSend(ws, {
-      type: 'connection',
-      payload: { connected: true, companyId },
-      timestamp: Date.now(),
-    }, 'connection-confirmation');
+    const subscribe = async (companyId: number | null): Promise<boolean> => {
+      if (companyId === null) return false;
+      const allowed = await canAccessCompany(auth, companyId);
+      if (allowed) {
+        client.companyId = companyId;
+      } else {
+        safeSend(ws, { type: 'error', payload: { error: 'forbidden', companyId }, timestamp: Date.now() }, 'subscribe-denied');
+      }
+      return allowed;
+    };
+
+    subscribe(requestedCompanyId)
+      .catch(() => false)
+      .then(() => {
+        safeSend(ws, {
+          type: 'connection',
+          payload: { connected: true, companyId: client.companyId },
+          timestamp: Date.now(),
+        }, 'connection-confirmation');
+      });
 
     ws.on('message', (data) => {
       try {
@@ -167,9 +178,9 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
           client.lastPing = Date.now();
           safeSend(ws, { type: 'pong', timestamp: Date.now() }, 'pong-response');
         } else if (message.type === 'subscribe') {
-          if (message.companyId) {
-            client.companyId = message.companyId;
-            console.log(`[WebSocket] Client subscribed to companyId: ${message.companyId}`);
+          const companyId = parseCompanyId(message.companyId);
+          if (companyId !== null) {
+            subscribe(companyId).catch(() => undefined);
           }
         }
       } catch (e) {
@@ -199,7 +210,7 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
     });
   });
 
-  setInterval(() => {
+  const pingTimer = setInterval(() => {
     const now = Date.now();
     clients.forEach((client, ws) => {
       if (now - client.lastPing > PING_INTERVAL + PING_TIMEOUT) {
@@ -223,6 +234,8 @@ export function setupWebSocketServer(httpServer: Server): WebSocketServer {
       }
     });
   }, PING_INTERVAL);
+  pingTimer.unref?.();
+  wss.on('close', () => clearInterval(pingTimer));
 
   return wss;
 }
@@ -256,7 +269,15 @@ export function broadcastMetricUpdate(companyId: number, metrics: Record<string,
   }
 }
 
-export function broadcastSimulationUpdate(scenarioId: number, status: 'running' | 'completed' | 'failed', progress?: number, results?: any): void {
+/**
+ * Sends a simulation status update to the clients subscribed to the company
+ * that owns the scenario. Nothing is sent when companyId is unknown.
+ */
+export function broadcastSimulationUpdate(companyId: number | null, scenarioId: number, status: 'running' | 'completed' | 'failed', progress?: number, results?: any): void {
+  if (companyId === null || !Number.isInteger(companyId) || companyId <= 0) {
+    console.warn(`[WebSocket] Simulation update for scenario ${scenarioId} dropped: company unknown`);
+    return;
+  }
   const message: SimulationUpdate = {
     type: 'simulation_complete',
     payload: { scenarioId, status, progress, results },
@@ -268,6 +289,7 @@ export function broadcastSimulationUpdate(scenarioId: number, status: 'running' 
   let failedCount = 0;
 
   clients.forEach((client) => {
+    if (client.companyId !== companyId) return;
     if (safeSend(client.ws, messageStr, `simulation-update-scenarioId-${scenarioId}`)) {
       sentCount++;
     } else {
