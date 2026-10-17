@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { broadcastMetricUpdate, broadcastSimulationUpdate, broadcastTruthScanUpdate, getConnectedClientsCount } from "./websocket";
+import { companyIdForScenario } from "./middleware/companyAccess";
 
 function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
   const secret = process.env.INTERNAL_API_SECRET;
@@ -37,12 +38,14 @@ export async function registerRoutes(
     res.json({ success: true, clients: getConnectedClientsCount() });
   });
 
-  app.post("/internal/broadcast/simulation", requireInternalAuth, (req: Request, res: Response) => {
+  app.post("/internal/broadcast/simulation", requireInternalAuth, async (req: Request, res: Response) => {
     const { scenarioId, status, progress, results } = req.body;
     if (!scenarioId || !status) {
       return res.status(400).json({ error: "Missing scenarioId or status" });
     }
-    broadcastSimulationUpdate(scenarioId, status, progress, results);
+    const given = Number(req.body.companyId);
+    const companyId = Number.isInteger(given) && given > 0 ? given : await companyIdForScenario(Number(scenarioId));
+    broadcastSimulationUpdate(companyId, scenarioId, status, progress, results);
     res.json({ success: true, clients: getConnectedClientsCount() });
   });
 
