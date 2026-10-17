@@ -155,6 +155,7 @@ export default function AdminEmailTracking() {
             onClick={() => refetch()}
             disabled={isFetching}
             data-testid="button-refresh"
+            aria-label="Refresh"
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           </Button>

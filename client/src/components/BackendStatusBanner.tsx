@@ -87,6 +87,7 @@ export function BackendStatusBanner() {
             className="h-7 w-7 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
             onClick={() => setDismissed(true)}
             data-testid="button-dismiss-banner"
+            aria-label="Dismiss"
           >
             <X className="h-3.5 w-3.5" />
           </Button>

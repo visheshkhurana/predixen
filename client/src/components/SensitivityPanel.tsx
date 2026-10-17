@@ -121,8 +121,8 @@ export function SensitivityPanel({ scenarioId, scenarioInputs }: SensitivityPane
                     {param.enabled && (
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <Label className="text-xs text-muted-foreground">Low</Label>
-                          <Input
+                          <Label htmlFor={`sensitivity-low-${param.name}`} className="text-xs text-muted-foreground">Low</Label>
+                          <Input id={`sensitivity-low-${param.name}`}
                             type="number"
                             value={param.minValue}
                             onChange={(e) =>
@@ -133,8 +133,8 @@ export function SensitivityPanel({ scenarioId, scenarioInputs }: SensitivityPane
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">Baseline</Label>
-                          <Input
+                          <Label htmlFor={`sensitivity-baseline-${param.name}`} className="text-xs text-muted-foreground">Baseline</Label>
+                          <Input id={`sensitivity-baseline-${param.name}`}
                             type="number"
                             value={param.baselineValue}
                             onChange={(e) =>
@@ -145,8 +145,8 @@ export function SensitivityPanel({ scenarioId, scenarioInputs }: SensitivityPane
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground">High</Label>
-                          <Input
+                          <Label htmlFor={`sensitivity-high-${param.name}`} className="text-xs text-muted-foreground">High</Label>
+                          <Input id={`sensitivity-high-${param.name}`}
                             type="number"
                             value={param.maxValue}
                             onChange={(e) =>

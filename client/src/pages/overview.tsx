@@ -1329,6 +1329,7 @@ export default function OverviewPage() {
             className="absolute top-3 right-3 h-7 w-7 opacity-40 hover:opacity-100"
             onClick={() => setBriefingDismissed(true)}
             data-testid="button-dismiss-briefing"
+            aria-label="Dismiss briefing"
           >
             <X className="h-3.5 w-3.5" />
           </Button>
@@ -2000,7 +2001,7 @@ export default function OverviewPage() {
                       )}
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`info-${item.metric}`}>
+                          <Button variant="ghost" size="icon" className="h-4 w-4 p-0" data-testid={`info-${item.metric}`} aria-label="More information">
                             <Info className="h-3 w-3 text-muted-foreground" />
                           </Button>
                         </TooltipTrigger>
@@ -2050,7 +2051,7 @@ export default function OverviewPage() {
               Quality of Growth Index
               <HoverCard>
                 <HoverCardTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="button-qog-info">
+                  <Button variant="ghost" size="icon" data-testid="button-qog-info" aria-label="Help">
                     <HelpCircle className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </HoverCardTrigger>

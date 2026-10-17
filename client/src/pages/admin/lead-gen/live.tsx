@@ -197,6 +197,7 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
             variant="ghost"
             className="h-7 w-7"
             asChild
+            aria-label="Open in new tab"
           >
             <a
               href={`https://vysheshk.app.n8n.cloud/workflow/${e.workflow_id}/executions/${e.id}`}

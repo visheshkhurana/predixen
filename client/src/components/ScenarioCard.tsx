@@ -140,7 +140,7 @@ export function ScenarioCard({
               </div>
             </div>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={isExpanded ? "Collapse" : "Expand"}>
                 {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>

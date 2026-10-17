@@ -13,6 +13,7 @@ import { SiGoogle } from 'react-icons/si';
 import { FCLogo } from "@/components/FCLogo";
 import { metaPageView, metaTrack } from '@/lib/metaPixel';
 import { trackFunnel } from '@/lib/funnel';
+import { readNextFromSearch } from "@/lib/loginNext";
 
 
 const identifyUser = (userId: number, email: string) => {
@@ -194,7 +195,8 @@ export default function AuthPage({
         setLocation('/onboarding');
         return;
       }
-      setLocation('/');
+      // Back to the page the session expired on (validated same-origin path).
+      setLocation(readNextFromSearch(window.location.search) ?? '/');
     } catch (err) {
       let description = 'An unexpected error occurred. Please try again.';
       if (err instanceof ApiError) {

@@ -904,6 +904,7 @@ export default function OnboardingPage() {
                                 if (uploadInputRef.current) uploadInputRef.current.value = '';
                               }}
                               data-testid="button-clear-onboarding-file"
+                              aria-label="Clear file"
                             >
                               <X className="h-4 w-4" />
                             </Button>

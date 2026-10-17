@@ -117,7 +117,7 @@ export function TornadoChart({ baselineRunway, variables, onVariableClick, testI
               fill="#EF4444" 
               radius={[4, 0, 0, 4]} 
               onClick={(data) => onVariableClick?.(data.name)} 
-              cursor="pointer"
+              cursor={onVariableClick ? "pointer" : undefined}
             >
               {sortedData.map((entry, index) => (
                 <Cell key={`low-${index}`} fill={entry.low < 0 ? '#EF4444' : '#10B981'} />
@@ -129,7 +129,7 @@ export function TornadoChart({ baselineRunway, variables, onVariableClick, testI
               fill="#10B981" 
               radius={[0, 4, 4, 0]} 
               onClick={(data) => onVariableClick?.(data.name)} 
-              cursor="pointer"
+              cursor={onVariableClick ? "pointer" : undefined}
             >
               {sortedData.map((entry, index) => (
                 <Cell key={`high-${index}`} fill={entry.high > 0 ? '#10B981' : '#EF4444'} />
