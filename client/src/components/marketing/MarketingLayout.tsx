@@ -105,7 +105,7 @@ function Header() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Button variant="outline" size="sm" asChild data-testid="button-watch-demo">
-            <Link href="/demo">Watch Demo</Link>
+            <Link href="/demo">See the Demo</Link>
           </Button>
           <Button size="sm" asChild data-testid="button-get-started">
             <Link href="/auth?tab=register" onClick={() => trackFunnel("cta_click", { location: "navbar" })}>Get Started Free</Link>
@@ -145,7 +145,7 @@ function Header() {
               </nav>
               <div className="mt-8 flex flex-col gap-2">
                 <Button variant="outline" asChild data-testid="button-mobile-watch-demo">
-                  <Link href="/demo" onClick={() => setOpen(false)}>Watch Demo</Link>
+                  <Link href="/demo" onClick={() => setOpen(false)}>See the Demo</Link>
                 </Button>
                 <Button asChild data-testid="button-mobile-get-started">
                   <Link href="/auth?tab=register" onClick={() => { setOpen(false); trackFunnel("cta_click", { location: "mobile-menu" }); }}>Get Started Free</Link>

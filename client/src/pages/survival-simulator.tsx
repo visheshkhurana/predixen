@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { simulatorPrefillFromSearch } from "@/lib/tools/simulatorPrefill";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,7 +119,11 @@ function SimulatorInputForm({ onSubmit, isLoading, gated }: {
   isLoading: boolean;
   gated: boolean;
 }) {
-  const [inputs, setInputs] = useState<SimInputs>(defaultInputs);
+  // Prefill from /embed/survival's CTA (?cash=&burn=&revenue=).
+  const [inputs, setInputs] = useState<SimInputs>(() => ({
+    ...defaultInputs,
+    ...(typeof window === "undefined" ? {} : simulatorPrefillFromSearch(window.location.search)),
+  }));
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const set = (key: keyof SimInputs, val: number | null) =>

@@ -172,7 +172,7 @@ export function ScenarioCompare() {
                     <Link href="/auth?tab=register">Get Started Free</Link>
                   </Button>
                   <Button variant="outline" asChild data-testid="button-scenario-watch-demo">
-                    <Link href="/demo">Watch Demo</Link>
+                    <Link href="/demo">See the Demo</Link>
                   </Button>
                 </div>
               </CardContent>

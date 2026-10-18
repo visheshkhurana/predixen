@@ -4,19 +4,21 @@ import { Button } from "@/components/ui/button";
 import { useSEO } from "@/lib/seo";
 import { Play, ArrowRight, CheckCircle } from "lucide-react";
 
-const chapters = [
-  { time: "0:00", label: "Connect data (Stripe, QuickBooks, Gusto, Mercury)" },
-  { time: "0:20", label: "Baseline forecast in real time" },
-  { time: "0:40", label: "Monte Carlo confidence intervals (P10/P50/P90)" },
-  { time: "1:05", label: "Explainability: what drives the risk" },
-  { time: "1:30", label: "Scenario comparison and decision scoring" },
-  { time: "2:00", label: "Investor-ready summary and reporting" },
+// There is no demo video, so these are the tour's stops, not video chapters with
+// timestamps.
+const tourStops = [
+  "Connect data (Stripe, QuickBooks, Gusto, Mercury)",
+  "Baseline forecast in real time",
+  "Monte Carlo confidence intervals (P10/P50/P90)",
+  "Explainability: what drives the risk",
+  "Scenario comparison and decision scoring",
+  "Investor-ready summary and reporting",
 ];
 
 export default function DemoPage() {
   useSEO({
     title: "Demo | FounderConsole",
-    description: "Watch the FounderConsole demo: connect data, forecast, simulate confidence intervals, decide.",
+    description: "Take the interactive FounderConsole tour: connect data, forecast, simulate confidence intervals, decide.",
     path: "/demo",
   });
 
@@ -57,15 +59,15 @@ export default function DemoPage() {
             </div>
 
             <div className="p-6">
-              <h2 className="text-base font-semibold text-foreground">Chapters</h2>
-              <ul className="mt-4 space-y-3">
-                {chapters.map((ch) => (
-                  <li key={ch.time} className="flex gap-3 text-sm" data-testid={`text-chapter-${ch.time.replace(":", "")}`}>
-                    <span className="font-mono text-primary shrink-0 w-10">{ch.time}</span>
-                    <span className="text-muted-foreground">{ch.label}</span>
+              <h2 className="text-base font-semibold text-foreground">What the tour covers</h2>
+              <ol className="mt-4 space-y-3">
+                {tourStops.map((label, i) => (
+                  <li key={label} className="flex gap-3 text-sm" data-testid={`text-tour-stop-${i + 1}`}>
+                    <span className="font-mono text-primary shrink-0 w-6">{i + 1}.</span>
+                    <span className="text-muted-foreground">{label}</span>
                   </li>
                 ))}
-              </ul>
+              </ol>
             </div>
           </div>
 

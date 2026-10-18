@@ -292,7 +292,7 @@ export function ConnectorDetailDrawer({ connector, open, onOpenChange, onConnect
                 <div>
                   <p className="font-medium text-sm">Secrets are encrypted at rest</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    All credentials are encrypted using AES-256 and stored securely.
+                    Credentials are encrypted with Fernet (AES-128-CBC with HMAC-SHA256) before they are stored.
                   </p>
                 </div>
               </div>

@@ -80,9 +80,9 @@ const features = [
     screenshot: "/images/features/data-connectors.png",
     headline: "Connect everything. Auto-sync.",
     description:
-      "37 real OAuth2 integrations with the tools founders already use. QuickBooks, Stripe, Gusto, Mercury, Brex, Plaid, and more. No CSV imports or screen scraping required.",
+      "37 data connectors for the tools founders already use. 16 connect with one-click OAuth (QuickBooks, Xero, Gusto, Brex, Plaid, HubSpot and more); the rest, including Stripe and Mercury, use an API key, a database connection or a file upload. No screen scraping.",
     bullets: [
-      "37 integrations with one-click OAuth connections",
+      "37 data connectors, 16 with one-click OAuth",
       "QuickBooks, Stripe, Gusto, Mercury, Brex, and Plaid supported",
       "Auto-sync keeps your data fresh without manual intervention",
       "Multi-currency handling across all connected sources",

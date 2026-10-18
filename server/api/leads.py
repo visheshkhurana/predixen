@@ -86,7 +86,12 @@ async def _send_runway_email(data: LeadCreate) -> None:
 
         await send_email(
             to=str(data.email),
-            subject=f"Your runway: {data.runway_months} months",
+            # The calculator sends "13.9", "36+" or "Profitable".
+            subject=(
+                f"Your runway: {data.runway_months} months"
+                if any(ch.isdigit() for ch in (data.runway_months or ""))
+                else f"Your runway: {data.runway_months}"
+            ),
             html_content=_runway_email_html(data),
             campaign="runway-calculator",
         )

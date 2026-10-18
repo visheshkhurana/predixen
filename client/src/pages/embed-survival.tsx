@@ -4,22 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Rocket, ArrowRight } from "lucide-react";
+import { simpleRunway, formatRunway, runwayVerdict, toNumber, type RunwayVerdict } from "@/lib/tools/runway";
 
-function calc(cash: number, burn: number, revenue: number) {
-  const net = Math.max(0, burn - revenue);
-  if (net === 0) return { months: 999, status: "Profitable", tone: "text-emerald-400" };
-  const months = Math.floor(cash / net);
-  if (months >= 18) return { months, status: "Healthy", tone: "text-emerald-400" };
-  if (months >= 12) return { months, status: "Watch", tone: "text-amber-400" };
-  if (months >= 6) return { months, status: "Raise soon", tone: "text-orange-400" };
-  return { months, status: "Critical", tone: "text-red-400" };
-}
+const TONE: Record<RunwayVerdict, string> = {
+  Profitable: "text-emerald-400",
+  Healthy: "text-emerald-400",
+  Watch: "text-amber-400",
+  "Raise soon": "text-orange-400",
+  Critical: "text-red-400",
+};
 
 export default function EmbedSurvivalWidget() {
-  const [cash, setCash] = useState(500000);
-  const [burn, setBurn] = useState(80000);
-  const [revenue, setRevenue] = useState(20000);
-  const r = calc(cash, burn, revenue);
+  // Text-held so clearing a field does not snap it to 0.
+  const [cashText, setCashText] = useState("500000");
+  const [burnText, setBurnText] = useState("80000");
+  const [revenueText, setRevenueText] = useState("20000");
+  const cash = toNumber(cashText);
+  const burn = toNumber(burnText);
+  const revenue = toNumber(revenueText);
+  // Same formula as /runway/:slug and /tools/runway-calculator.
+  const runway = simpleRunway(cash, burn, revenue);
+  const status = runwayVerdict(runway);
+  const r = { label: formatRunway(runway, "mo"), status, tone: TONE[status] };
 
   const targetUrl = `https://founderconsole.ai/survival-simulator?cash=${cash}&burn=${burn}&revenue=${revenue}&utm_source=embed&utm_medium=widget`;
 
@@ -38,20 +44,20 @@ export default function EmbedSurvivalWidget() {
           <div className="grid grid-cols-1 gap-3">
             <div>
               <Label htmlFor="e-cash" className="text-xs">Cash on hand ($)</Label>
-              <Input id="e-cash" type="number" value={cash}
-                onChange={(e) => setCash(Number(e.target.value) || 0)}
+              <Input id="e-cash" type="number" inputMode="decimal" value={cashText}
+                onChange={(e) => setCashText(e.target.value)}
                 data-testid="embed-input-cash" className="bg-zinc-800 border-zinc-700" />
             </div>
             <div>
               <Label htmlFor="e-burn" className="text-xs">Monthly burn ($)</Label>
-              <Input id="e-burn" type="number" value={burn}
-                onChange={(e) => setBurn(Number(e.target.value) || 0)}
+              <Input id="e-burn" type="number" inputMode="decimal" value={burnText}
+                onChange={(e) => setBurnText(e.target.value)}
                 data-testid="embed-input-burn" className="bg-zinc-800 border-zinc-700" />
             </div>
             <div>
               <Label htmlFor="e-rev" className="text-xs">Monthly revenue ($)</Label>
-              <Input id="e-rev" type="number" value={revenue}
-                onChange={(e) => setRevenue(Number(e.target.value) || 0)}
+              <Input id="e-rev" type="number" inputMode="decimal" value={revenueText}
+                onChange={(e) => setRevenueText(e.target.value)}
                 data-testid="embed-input-revenue" className="bg-zinc-800 border-zinc-700" />
             </div>
           </div>
@@ -60,7 +66,7 @@ export default function EmbedSurvivalWidget() {
             <div className="text-xs text-muted-foreground">Estimated runway</div>
             <div className="flex items-baseline justify-between mt-1">
               <div className="text-3xl font-bold" data-testid="embed-result-months">
-                {r.months >= 999 ? "Profitable" : `${r.months} mo`}
+                {r.label}
               </div>
               <div className={`text-sm font-medium ${r.tone}`} data-testid="embed-result-status">{r.status}</div>
             </div>

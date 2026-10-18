@@ -263,7 +263,7 @@ export default function PricingPage() {
               </p>
               <div className="mt-6">
                 <Button variant="outline" size="sm" asChild data-testid="button-pricing-demo">
-                  <Link href="/demo">Watch Demo</Link>
+                  <Link href="/demo">See the Demo</Link>
                 </Button>
               </div>
             </div>

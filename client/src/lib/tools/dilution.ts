@@ -27,8 +27,9 @@
  *
  * The headline the page exists to print: `investor_share` is exactly `R / (V_pre + R)`
  * whatever `p` is, while the founders are diluted by more than that — the pool comes
- * out of their side. In the maths file's worked example the founders lose 32 points,
- * not the 20 a simple calculator shows.
+ * out of their side. Founders are measured against what they held BEFORE the round
+ * (F / T), not against 100%: in the worked example they go 88.9% -> 68.0% (-20.9 points),
+ * where a calculator that ignores the pool top-up says 71.1%. The shuffle costs 3.1 points.
  *
  * Every degenerate input resolves to a plain-English reason. This file never returns
  * Infinity, never returns NaN, and never returns a negative share count.
@@ -65,7 +66,10 @@ export interface DilutionShares {
   investorShares: number;
   /** T + dP + N */
   postMoneyTotal: number;
-  /** V_pre / T — the price per share this round implies */
+  /**
+   * V_pre / (T + dP) — the round's price per share. The pool top-up is issued before the
+   * money, so the pre-money valuation is spread over T + dP shares, and N = R / price.
+   */
   pricePerShare: number;
   /** true when the pool was already at or above target and `dP` was clamped to 0 */
   poolClamped: boolean;
@@ -87,6 +91,14 @@ export interface DilutionResult {
    * the gap between it and `founderPct` is the point of the tool.
    */
   simpleInvestorPct: number;
+  /** F / T — the founders' share before the round; null when there are no shares */
+  founderPrePct: number | null;
+  /**
+   * What the founders would hold if the round only sold the investor their share and left
+   * the pool alone: `founderPrePct * (1 - simpleInvestorPct)`. The figure a simple
+   * calculator prints.
+   */
+  naiveFounderPct: number | null;
   /** non-fatal warnings: a zero pre-money, a clamped pool, no founder shares entered */
   notes: string[];
 }
@@ -99,11 +111,18 @@ const INVALID = (reason: string): DilutionResult => ({
   poolPct: null,
   investorPct: null,
   simpleInvestorPct: 0,
+  founderPrePct: null,
+  naiveFounderPct: null,
   notes: [],
 });
 
 /** An empty result that still carries the naive figure, for the unreachable case. */
-function unreachable(reason: string, simpleInvestorPct: number, notes: string[]): DilutionResult {
+function unreachable(
+  reason: string,
+  simpleInvestorPct: number,
+  founderPrePct: number | null,
+  notes: string[],
+): DilutionResult {
   return {
     outcome: "unreachable",
     reason,
@@ -112,6 +131,8 @@ function unreachable(reason: string, simpleInvestorPct: number, notes: string[])
     poolPct: null,
     investorPct: null,
     simpleInvestorPct,
+    founderPrePct,
+    naiveFounderPct: founderPrePct === null ? null : founderPrePct * (1 - simpleInvestorPct),
     notes,
   };
 }
@@ -152,6 +173,9 @@ export function computeDilution(input: DilutionInputs): DilutionResult {
   }
 
   const simpleInvestorPct = R / (V + R);
+  const sharesBefore = input.founder_shares + input.existing_pool_shares;
+  const founderPrePct = sharesBefore > 0 ? input.founder_shares / sharesBefore : null;
+  const naiveFounderPct = founderPrePct === null ? null : founderPrePct * (1 - simpleInvestorPct);
 
   // A zero pre-money is the one degenerate case the maths file asks to be SHOWN rather
   // than refused: the investor's money buys the whole company. There is no price per
@@ -165,6 +189,8 @@ export function computeDilution(input: DilutionInputs): DilutionResult {
       poolPct: 0,
       investorPct: 1,
       simpleInvestorPct,
+      founderPrePct,
+      naiveFounderPct,
       notes: [
         "A pre-money valuation of zero means the investor's money buys 100% of the company. Check that the valuation is really zero and not a blank field.",
       ],
@@ -202,6 +228,7 @@ export function computeDilution(input: DilutionInputs): DilutionResult {
     return unreachable(
       "Pool target unreachable at this raise size. Lower the pool target or raise more.",
       simpleInvestorPct,
+      founderPrePct,
       notes,
     );
   }
@@ -228,20 +255,23 @@ export function computeDilution(input: DilutionInputs): DilutionResult {
       newPoolShares: dP,
       investorShares: N,
       postMoneyTotal: post,
-      pricePerShare: V / T,
+      pricePerShare: V / (T + dP),
       poolClamped,
     },
     founderPct: F / post,
     poolPct: (E + dP) / post,
     investorPct: N / post,
     simpleInvestorPct,
+    founderPrePct,
+    naiveFounderPct,
     notes,
   };
 }
 
 /**
  * The maths file's worked example, used by the page as its pre-filled default and by the
- * test. Founders lose 32 points here: 20 to the investor, 12 to the pool.
+ * test. Founders go from 88.9% to 68.0% (-20.9 points); ignoring the pool top-up they
+ * would keep 71.1%, so the option pool shuffle costs them 3.1 points.
  */
 export const WORKED_EXAMPLE: DilutionInputs = {
   pre_money_valuation: 8_000_000,
