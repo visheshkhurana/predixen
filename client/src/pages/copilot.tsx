@@ -260,6 +260,7 @@ interface CopilotApiResponse {
       feasibility: string;
       time_to_implement: number;
     }>;
+    simulation_status?: { ran: boolean; reason?: string | null };
     simulations: Array<{
       scenario: string;
       runway: { p10: number; p50: number; p90: number };
@@ -693,7 +694,7 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const { decision_context, levers, simulations, risk_analysis, recommendation } = advisor;
+  const { decision_context, levers, simulations, risk_analysis, recommendation, simulation_status } = advisor;
 
   return (
     <div className="space-y-4 mt-4" data-testid="decision-advisor-panel">
@@ -764,6 +765,12 @@ function DecisionAdvisorPanel({ advisor }: { advisor: CopilotApiResponse['decisi
             <p className="text-xs text-muted-foreground italic">{recommendation.what_changes}</p>
           </CardContent>
         </Card>
+      )}
+
+      {(!simulations || simulations.length === 0) && simulation_status && !simulation_status.ran && (
+        <p className="text-xs text-muted-foreground italic" data-testid="text-no-simulation">
+          No simulation was run{simulation_status.reason ? ` (${simulation_status.reason})` : ''}.
+        </p>
       )}
 
       {simulations && simulations.length > 0 && (

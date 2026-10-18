@@ -132,10 +132,20 @@ class AgentAction:
         }
 
 
+def net_runway_months(cash: float, mrr: float, burn_rate: float) -> float:
+    """Runway on NET burn. ``burn_rate`` here is GROSS monthly spend (the engine
+    does ``cash += mrr - burn_rate``), so runway is cash / (burn_rate - mrr);
+    999 when revenue covers spend. Dividing by the gross figure understated
+    runway for any company with revenue."""
+    net = burn_rate - mrr
+    return cash / net if net > 0 else 999
+
+
 @dataclass
 class CompanyState:
     mrr: float = 0.0
     arr: float = 0.0
+    # GROSS monthly spend (all costs incl. COGS), not net burn.
     burn_rate: float = 0.0
     cash: float = 0.0
     runway_months: float = 0.0
@@ -203,7 +213,7 @@ class CompanyState:
                     lo, hi = CLAMP_RULES.get(field_name, (0.0, float("inf")))
                     setattr(self, field_name, max(lo, min(hi, new_val)))
         self.arr = self.mrr * 12
-        self.runway_months = self.cash / self.burn_rate if self.burn_rate > 0 else 999
+        self.runway_months = net_runway_months(self.cash, self.mrr, self.burn_rate)
 
 
 @dataclass

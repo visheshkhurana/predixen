@@ -9,6 +9,7 @@ from datetime import datetime
 from .types import (
     AgentPersona, AgentAction, AgentType, ActionType,
     CompanyState, SimulationConfig, SimulationResult, SimulationStatus,
+    net_runway_months,
 )
 from .agents import agent_decide
 from .agent_config import generate_agent_personas
@@ -171,6 +172,7 @@ class SimulationEngine:
         state.growth_rate = max(-0.1, min(0.5, state.growth_rate))
         state.churn_rate = max(0.0, min(0.2, state.churn_rate))
 
+        # burn_rate is GROSS spend; the client sends net burn + MRR (v2Request.ts).
         state.cash += state.mrr - state.burn_rate
 
         if state.growth_rate > 0 and state.customers > 0:
@@ -190,7 +192,7 @@ class SimulationEngine:
         state.customers = min(state.customers, 1_000_000)
 
         state.arr = state.mrr * 12
-        state.runway_months = state.cash / state.burn_rate if state.burn_rate > 0 else 999
+        state.runway_months = net_runway_months(state.cash, state.mrr, state.burn_rate)
 
     async def _call(self, callback, step, pct, msg):
         if asyncio.iscoroutinefunction(callback):

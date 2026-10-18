@@ -36,6 +36,7 @@ import {
   ArrowRight,
   Ban,
 } from "lucide-react";
+import { currentRunwayMonths, runwayAfterHires } from "@/lib/hiringRunway";
 
 interface RoleDefinition {
   id: string;
@@ -111,7 +112,7 @@ export default function HiringPlannerPage() {
   const [simResults, setSimResults] = useState<any>(null);
 
   const { data: truthScan, isLoading: truthScanLoading } = useQuery<any>({
-    queryKey: ["/api/companies", companyId, "truth-scan", "latest"],
+    queryKey: ["/api/companies", companyId, "truth", "latest"],
     enabled: !!companyId,
   });
 
@@ -197,21 +198,11 @@ export default function HiringPlannerPage() {
     return { totalMonthly, totalAnnual, totalHeadcount, oneTimeCosts };
   }, [hires]);
 
-  const currentRunway = useMemo(() => {
-    if (!truthScan?.metrics) return null;
-    const m = truthScan.metrics;
-    return m.runway_months ?? m.cash_runway_months ?? null;
-  }, [truthScan]);
+  const currentRunway = useMemo(() => currentRunwayMonths(truthScan), [truthScan]);
 
   const afterPlanRunway = useMemo(() => {
-    if (currentRunway === null || !truthScan?.metrics) return null;
-    const m = truthScan.metrics;
-    const currentBurn = m.net_burn ?? m.monthly_burn ?? m.total_monthly_expenses ?? 0;
-    const cash = m.cash_on_hand ?? m.cash_balance ?? 0;
-    if (currentBurn <= 0 || cash <= 0) return null;
-    const newBurn = currentBurn + costSummary.totalMonthly;
-    if (newBurn <= 0) return null;
-    return Math.round((cash / newBurn) * 10) / 10;
+    if (currentRunway === null) return null;
+    return runwayAfterHires(truthScan, costSummary.totalMonthly);
   }, [currentRunway, truthScan, costSummary.totalMonthly]);
 
   const handleQuickAction = (action: "engineers" | "sales" | "freeze") => {

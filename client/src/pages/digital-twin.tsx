@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
+import { formatRunwayMonths, twinSummary } from "@/lib/simulation/runwayFormat";
 import {
   Activity,
   Cpu,
@@ -31,6 +32,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+
+// Matches TWIN_ITERATIONS in server/services/digital_twin.py.
+const TWIN_ITERATIONS = 500;
 
 function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "N/A";
@@ -150,7 +154,7 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
     });
   };
 
-  const results = simMutation.data?.results;
+  const results = twinSummary(simMutation.data);
 
   return (
     <Card data-testid="simulation-explorer">
@@ -234,34 +238,40 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
           data-testid="button-run-simulation"
         >
           {simMutation.isPending ? (
-            <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Running 1,000 Simulations...</>
+            <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Running {TWIN_ITERATIONS} Simulations...</>
           ) : (
             <><Play className="h-4 w-4 mr-2" /> Run Monte Carlo Simulation</>
           )}
         </Button>
 
-        {results && (
+        {simMutation.isError && (
+          <p className="mt-4 text-sm text-red-400" data-testid="simulation-error">
+            The simulation could not run, so there are no results to show.
+          </p>
+        )}
+
+        {results && !simMutation.isError && (
           <div className="mt-4 space-y-3" data-testid="simulation-results">
             <div className="text-sm font-medium">Results</div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-center">
                 <div className="text-[10px] text-red-400 uppercase tracking-wider mb-1">P10 (Worst)</div>
                 <div className="text-lg font-bold font-mono text-red-400" data-testid="text-p10-runway">
-                  {results.p10_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p10_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
               <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3 text-center">
                 <div className="text-[10px] text-blue-400 uppercase tracking-wider mb-1">P50 (Median)</div>
                 <div className="text-lg font-bold font-mono text-blue-400" data-testid="text-p50-runway">
-                  {results.p50_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p50_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-center">
                 <div className="text-[10px] text-emerald-400 uppercase tracking-wider mb-1">P90 (Best)</div>
                 <div className="text-lg font-bold font-mono text-emerald-400" data-testid="text-p90-runway">
-                  {results.p90_runway?.toFixed(1) ?? "—"}
+                  {formatRunwayMonths(results.p90_runway)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">months</div>
               </div>
@@ -274,9 +284,9 @@ function SimulationExplorer({ companyId }: { companyId: number }) {
                 </span>
               </div>
             )}
-            {simMutation.data?.fallback && (
-              <p className="text-[11px] text-muted-foreground italic">
-                Using simplified model (enhanced Monte Carlo unavailable)
+            {results.iterations != null && (
+              <p className="text-[11px] text-muted-foreground">
+                {results.iterations.toLocaleString()} simulated paths over {results.horizon_months ?? 24} months
               </p>
             )}
           </div>

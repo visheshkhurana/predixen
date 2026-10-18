@@ -112,7 +112,8 @@ def api_run_twin_simulation(
     }
     result = run_twin_simulation(db, company_id, scenario_config)
     if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
+        status = 500 if result.get("error_code") == "simulation_failed" else 400
+        raise HTTPException(status_code=status, detail=result["error"])
     return result
 
 
